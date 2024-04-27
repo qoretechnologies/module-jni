@@ -498,7 +498,7 @@ protected:
 
     // Returns a param list of Java type corresponding to the Qore types
     DLLLOCAL jobject getJavaParamList(Env& env, jobject class_loader, const QoreExternalVariant& v,
-        unsigned& len, bool is_abstract = false);
+        unsigned& len, bool do_varargs, bool is_abstract = false);
 
     DLLLOCAL int addConstructorVariant(Env& env, jobject class_loader, const QoreClass& qcls,
         LocalReference<jobject>& bb, const QoreMethod& m, const QoreExternalMethodVariant& v, jclass parent_class,

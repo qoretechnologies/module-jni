@@ -1288,12 +1288,13 @@ jclass JniExternalProgramData::findJavaClass(const QoreClass& qc) {
 }
 
 jobject JniExternalProgramData::getJavaParamList(Env& env, jobject class_loader, const QoreExternalVariant& v,
-        unsigned& len, bool is_abstract) {
+        unsigned& len, bool do_varargs, bool is_abstract) {
     const type_vec_t& params = v.getParamTypeList();
     len = params.size();
-    if (params.empty() && (!(v.getCodeFlags() & QCF_USES_EXTRA_ARGS))) {
+    if (params.empty() && !do_varargs) {
         return nullptr;
     }
+    assert(len || (do_varargs && (v.getCodeFlags() & QCF_USES_EXTRA_ARGS)));
 
     printd(5, "JniExternalProgramData::getJavaParamList() %s %d param(s)\n", v.getSignatureText(),
         (int)params.size());
@@ -1309,14 +1310,13 @@ jobject JniExternalProgramData::getJavaParamList(Env& env, jobject class_loader,
         jarg.l = ptype;
         env.callBooleanMethod(plist, Globals::methodArrayListAdd, &jarg);
     }
-    if (v.getCodeFlags() & QCF_USES_EXTRA_ARGS) {
+    if (do_varargs) {
+        assert((v.getCodeFlags() & QCF_USES_EXTRA_ARGS));
         // add Object... as the final parameter
         jvalue jarg;
         LocalReference<jobject> jtype(get_type_def_from_class(env, (jclass)Globals::arrayClassObject));
         jarg.l = jtype;
         env.callBooleanMethod(plist, Globals::methodArrayListAdd, &jarg);
-    } else if (!len) {
-        return nullptr;
     }
 
     return plist.release();
@@ -1483,9 +1483,11 @@ int JniExternalProgramData::addConstructorVariant(Env& env, jobject class_loader
     printd(5, "JniExternalProgramData::addConstructorVariant() adding Java constructor %s %s::constructor(%s) {}\n",
         v.getAccessString(), qcls.getName(), v.getSignatureText());
 
+    bool varargs = v.getCodeFlags() & QCF_USES_EXTRA_ARGS ? true : false;
+
     // first get the params
     unsigned len;
-    LocalReference<jobject> params = getJavaParamList(env, class_loader, v, len);
+    LocalReference<jobject> params = getJavaParamList(env, class_loader, v, len, varargs);
 
     while (true) {
         if (!jph.checkVariant(params, QMT_CONSTRUCTOR)) {
@@ -1496,7 +1498,7 @@ int JniExternalProgramData::addConstructorVariant(Env& env, jobject class_loader
             jargs[3].j = reinterpret_cast<jlong>(&v);
             jargs[4].i = qore_jni_get_acc_visibility(v.getAccess());
             jargs[5].l = params;
-            jargs[6].z = v.getCodeFlags() & QCF_USES_EXTRA_ARGS;
+            jargs[6].z = varargs;
 
             printd(5, "JniExternalProgramData::addConstructorVariant() %s %s::constructor(%s): adding (len: %d " \
                 "params: %p)\n", v.getAccessString(), qcls.getName(), v.getSignatureText(), len, (jobject)params);
@@ -1510,6 +1512,12 @@ int JniExternalProgramData::addConstructorVariant(Env& env, jobject class_loader
             printd(5, "JniExternalProgramData::addConstructorVariant() %s %s::constructor(%s): " \
                 "skipping duplicate variant (len: %d)\n",
                 v.getAccessString(), qcls.getName(), v.getSignatureText(), len);
+        }
+
+        if (varargs) {
+            varargs = false;
+            params = getJavaParamList(env, class_loader, v, len, false);
+            continue;
         }
 
         if (!params || !len || !check_optional_last_param(env, v, params, len)) {
@@ -1526,9 +1534,12 @@ int JniExternalProgramData::addNormalMethodVariant(Env& env, jobject class_loade
     printd(5, "JniExternalProgramData::addNormalMethodVariant() adding Java normal method %s %s::%s(%s)\n",
         qore_type_get_name(v.getReturnTypeInfo()), qcls.getName(), m.getName(), v.getSignatureText());
 
+    bool varargs = v.getCodeFlags() & QCF_USES_EXTRA_ARGS ? true : false;
+    bool is_abstract = v.isAbstract();
+
     // first get the params
     unsigned len;
-    LocalReference<jobject> params = getJavaParamList(env, class_loader, v, len, v.isAbstract());
+    LocalReference<jobject> params = getJavaParamList(env, class_loader, v, len, varargs, is_abstract);
 
     QoreString jname;
     if (!strcmp(m.getName(), "getClass")) {
@@ -1558,7 +1569,7 @@ int JniExternalProgramData::addNormalMethodVariant(Env& env, jobject class_loade
             jargs[5].l = return_type;
             jargs[6].l = params;
             jargs[7].z = v.isAbstract();
-            jargs[8].z = !v.isAbstract() && (v.getCodeFlags() & QCF_USES_EXTRA_ARGS);
+            jargs[8].z = !v.isAbstract() && varargs;
 
             printd(5, "JniExternalProgramData::addNormalMethodVariant() %s %s::%s(%s): adding (len: %d)\n",
                 qore_type_get_name(v.getReturnTypeInfo()), qcls.getName(), m.getName(), v.getSignatureText(), len);
@@ -1574,8 +1585,14 @@ int JniExternalProgramData::addNormalMethodVariant(Env& env, jobject class_loade
                 qore_type_get_name(v.getReturnTypeInfo()), qcls.getName(), m.getName(), v.getSignatureText());
         }
 
+        if (varargs && !is_abstract) {
+            varargs = false;
+            params = getJavaParamList(env, class_loader, v, len, false);
+            continue;
+        }
+
         // issue #4570: only add one method per abstract variant
-        if (!params || !len || !check_optional_last_param(env, v, params, len) || v.isAbstract()) {
+        if (!params || !len || !check_optional_last_param(env, v, params, len) || is_abstract) {
             break;
         }
     }
@@ -1590,9 +1607,11 @@ int JniExternalProgramData::addStaticMethodVariant(Env& env, jobject class_loade
         v.getAccessString(), qore_type_get_name(v.getReturnTypeInfo()), qcls.getPath(), m.getName(),
         v.getSignatureText());
 
+    bool varargs = v.getCodeFlags() & QCF_USES_EXTRA_ARGS ? true : false;
+
     // first get the params
     unsigned len;
-    LocalReference<jobject> params = getJavaParamList(env, class_loader, v, len);
+    LocalReference<jobject> params = getJavaParamList(env, class_loader, v, len, varargs);
 
     while (true) {
         if (!jph.checkVariant(params, QMT_STATIC)) {
@@ -1607,7 +1626,7 @@ int JniExternalProgramData::addStaticMethodVariant(Env& env, jobject class_loade
             LocalReference<jobject> return_type = getJavaTypeDefinition(env, class_loader, v.getReturnTypeInfo());
             jargs[6].l = return_type;
             jargs[7].l = params;
-            jargs[8].z = v.getCodeFlags() & QCF_USES_EXTRA_ARGS;
+            jargs[8].z = varargs;
 
             printd(5, "JniExternalProgramData::addStaticMethodVariant() static %s %s %s::%s(%s): adding (len: %d) " \
                 "pgm: %p cpgm: %p varargs: %d\n",
@@ -1624,6 +1643,12 @@ int JniExternalProgramData::addStaticMethodVariant(Env& env, jobject class_loade
             printd(5, "JniExternalProgramData::addStaticMethodVariant() static %s %s::%s(%s): skipping duplicate " \
                 "variant (len: %d)\n", qore_type_get_name(v.getReturnTypeInfo()), qcls.getName(), m.getName(),
                 v.getSignatureText(), len);
+        }
+
+        if (varargs) {
+            varargs = false;
+            params = getJavaParamList(env, class_loader, v, len, false);
+            continue;
         }
 
         if (!params || !len || !check_optional_last_param(env, v, params, len)) {
@@ -1668,7 +1693,6 @@ int JniExternalProgramData::addMethods(Env& env, jobject class_loader, const Qor
         unsigned constructor_count = 0;
         while (i.next()) {
             const QoreMethod* m = i.getMethod();
-
             switch (m->getMethodType()) {
                 case MT_Constructor: {
                     if (other_base) {
@@ -1979,9 +2003,11 @@ int JniExternalProgramData::addFunctionVariant(Env& env, jobject class_loader, L
         "pgm: %p\n", qore_type_get_name(v.getReturnTypeInfo()), JniImportedFunctionClassName.c_str(), func.getName(),
         v.getSignatureText(), pgm);
 
+    bool varargs = v.getCodeFlags() & QCF_USES_EXTRA_ARGS ? true : false;
+
     // first get the params
     unsigned len;
-    LocalReference<jobject> params = getJavaParamList(env, class_loader, v, len);
+    LocalReference<jobject> params = getJavaParamList(env, class_loader, v, len, varargs);
 
     while (true) {
         if (!jph.checkVariant(params, QMT_STATIC)) {
@@ -1995,7 +2021,7 @@ int JniExternalProgramData::addFunctionVariant(Env& env, jobject class_loader, L
             LocalReference<jobject> return_type = getJavaTypeDefinition(env, class_loader, v.getReturnTypeInfo());
             jargs[5].l = (jobject)return_type;
             jargs[6].l = params;
-            jargs[7].z = v.getCodeFlags() & QCF_USES_EXTRA_ARGS;
+            jargs[7].z = varargs;
 
             printd(5, "JniExternalProgramData::addFunctionVariant() static public %s %s::%s(%s): adding (len: %d) " \
                 "rt: %p\n", qore_type_get_name(v.getReturnTypeInfo()), JniImportedFunctionClassName.c_str(),
@@ -2010,6 +2036,12 @@ int JniExternalProgramData::addFunctionVariant(Env& env, jobject class_loader, L
             printd(5, "JniExternalProgramData::addFunctionVariant() static %s %s::%s(%s): skipping duplicate " \
                 "variant (len: %d)\n", qore_type_get_name(v.getReturnTypeInfo()), JniImportedFunctionClassName.c_str(),
                 func.getName(), v.getSignatureText(), len);
+        }
+
+        if (varargs) {
+            varargs = false;
+            params = getJavaParamList(env, class_loader, v, len, false);
+            continue;
         }
 
         if (!params || !len || !check_optional_last_param(env, v, params, len)) {
