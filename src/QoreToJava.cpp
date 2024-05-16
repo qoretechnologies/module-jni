@@ -180,7 +180,17 @@ jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniEx
             case NT_FLOAT: {
                 if (env.isSameObject(cls, Globals::classDouble)
                     || env.isSameObject(cls, Globals::classPrimitiveDouble)) {
-                    return toAnyObject(env, value, jpc);
+                    jvalue arg;
+                    double v = value.getAsFloat();
+                    arg.d = v;
+                    return env.newObject(Globals::classDouble, Globals::ctorDouble, &arg).release();
+                }
+                if (env.isSameObject(cls, Globals::classFloat)
+                    || env.isSameObject(cls, Globals::classPrimitiveFloat)) {
+                    jvalue arg;
+                    double v = value.getAsFloat();
+                    arg.f = (float)v;
+                    return env.newObject(Globals::classFloat, Globals::ctorFloat, &arg).release();
                 }
                 break;
             }

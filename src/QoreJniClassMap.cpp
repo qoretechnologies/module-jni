@@ -1150,6 +1150,8 @@ void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* p
     Env env;
     //printd(LogLevel, "QoreJniClassMap::doMethods() qc: %p jc: %p\n", qc, jc);
 
+    bool abstract_class = jc->getModifiers() & JVM_ACC_ABSTRACT;
+
     LocalReference<jobjectArray> mArray = jc->getDeclaredMethods();
 
     for (jsize i = 0, e = env.getArrayLength(mArray); i < e; ++i) {
@@ -1208,7 +1210,7 @@ void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* p
                 continue;
             }
 
-            if (meth->isAbstract()) {
+            if (abstract_class && meth->isAbstract()) {
                 qc.addAbstractMethod(mname.c_str(), meth->getAccess(), meth->getFlags(), returnTypeInfo,
                     paramTypeInfo);
                 // do not add additional abstract variants for alternate parameter types

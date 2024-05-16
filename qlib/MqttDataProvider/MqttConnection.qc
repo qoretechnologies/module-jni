@@ -53,6 +53,7 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
                 },
             },
             "schemes": {
+                "mqtt": True,
                 "mqtttcp": True,
                 "mqttssl": True,
             },
@@ -163,7 +164,11 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
     */
     private setRealUrl(string url) {
         real_url = url;
-        real_url =~ s/^mqtt//;
+        if (url =~ /^mqtt:/) {
+            real_url =~ s/^mqtt:/tcp:/;
+        } else {
+            real_url =~ s/^mqtt//;
+        }
     }
 }
 }

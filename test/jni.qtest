@@ -278,6 +278,40 @@ public class Main inherits QUnit::Test {
         Program p;
         try {
             {
+                QoreJavaCompiler compiler();
+                hash<auto> sources = {
+                    "org.qore.test.JavaTest": "package org.qore.test;
+import qore.QoreTest;
+
+public class JavaTest extends QoreTest {
+    public JavaTest() throws Throwable {
+    }
+
+    public long get(long i) throws Throwable {
+        return super.get() + i;
+    }
+}",
+                };
+                p = new Program(PO_NEW_STYLE);
+                p.setScriptPath(get_script_path());
+                p.parse("
+class QoreTest {
+    int get() {
+        return 1;
+    }
+}
+", "qore");
+                hash<auto> cv = getClass(p, "QoreJavaCompiler").newObject(getJavaClassLoader(p)).compile(sources);
+                compiler::CompilerOutput newClassData = cv{"org.qore.test.JavaTest"};
+                binary fdata = newClassData.file.openInputStream().readAllBytes();
+                assertEq(True, fdata.size() > 0);
+                p.issueModuleCmd("jni", "define-class org/qore/test/JavaTest " + fdata.toBase64());
+                object obj = getClass(p, "JavaTest").newObject();
+                auto v = obj.get(1);
+                assertEq(Type::Int, v.type());
+                assertEq(2, v);
+            }
+            {
                 # compile and execute QoreDynamicTest19.java
                 QoreJavaCompiler compiler();
                 DiagnosticCollector diags();
@@ -399,6 +433,39 @@ public class Issue4593 extends qore.AbstractBase2 {
                 assertEq(url, rc.getURL());
             }
 %ifndef NO_PYTHON
+            {
+                QoreJavaCompiler compiler();
+                hash<auto> sources = {
+                    "org.qore.test.JavaTest": "package org.qore.test;
+import qore.PythonTest;
+
+public class JavaTest extends PythonTest {
+    public JavaTest() throws Throwable {
+    }
+
+    public long get(long i) throws Throwable {
+        return (long)super.get() + i;
+    }
+}",
+                };
+                p = new Program(PO_NEW_STYLE);
+                p.setScriptPath(get_script_path());
+                p.issueModuleCmd("python", "parse test.py # Python source
+class PythonTest:
+    def get(self) -> int:
+        return 1
+");
+                p.issueModuleCmd("python", "export-class PythonTest");
+                hash<auto> cv = getClass(p, "QoreJavaCompiler").newObject(getJavaClassLoader(p)).compile(sources);
+                compiler::CompilerOutput newClassData = cv{"org.qore.test.JavaTest"};
+                binary fdata = newClassData.file.openInputStream().readAllBytes();
+                assertEq(True, fdata.size() > 0);
+                p.issueModuleCmd("jni", "define-class org/qore/test/JavaTest " + fdata.toBase64());
+                object obj = getClass(p, "JavaTest").newObject();
+                auto v = obj.get(1);
+                assertEq(Type::Int, v.type());
+                assertEq(2, v);
+            }
             {
                 # compile and execute QoreDynamicTest14.java
                 QoreJavaCompiler compiler();
@@ -801,6 +868,14 @@ auto sub test() {
             printf("%s\n", get_exception_string(ex));
             rethrow;
         }
+    }
+
+    static Reflection::Class getClass(Program p, string name) {
+        return p.getExpression(sprintf("Reflection::Class::forName(%y)", name), "getClass()").eval();
+    }
+
+    static object getJavaClassLoader(Program p) {
+        return p.getExpression("jni::get_class_loader()", "QorusProgram::getJavaClassLoader()").eval();
     }
 
     argTest() {
