@@ -77,6 +77,7 @@ module MqttDataProvider {
             "desc": "An MQTT message is received; react to an MQTT message",
             "action_code": DPAT_EVENT,
             "action_val": MqttDataProvider::EVENT_MQTT_MESSAGE,
+            "output_type": MqttEventDataType,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{

@@ -65,4 +65,7 @@ public class MqttEventDataType inherits HashDataType {
         addQoreFields(Fields);
     }
 }
+
+#! Constant giving the MQTT event data type
+public const MqttEventDataType = new MqttEventDataType();
 }

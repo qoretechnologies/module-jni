@@ -84,6 +84,7 @@ module BusyLightDataProvider {
                     "preselected": True,
                 }
             ),
+            "output_type": BusyLightUpdateMessageDataType,
         });
     };
 }

@@ -322,7 +322,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         return {
             EVENT_MQTT_MESSAGE: <DataProviderMessageInfo>{
                 "desc": "This event is raised when an incoming MQTT message matching the subscription topic arrives",
-                "type": new MqttEventDataType(),
+                "type": MqttEventDataType,
             },
         };
     }
@@ -336,7 +336,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         return {
             MESSAGE_MQTT_MESSAGE: <DataProviderMessageInfo>{
                 "desc": "An outgoing MQTT message that will be published according to the message contents",
-                "type": new MqttMessageDataType(),
+                "type": MqttMessageDataType,
             },
         };
     }

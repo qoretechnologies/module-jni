@@ -61,4 +61,7 @@ public class MqttMessageDataType inherits HashDataType {
         addQoreFields(Fields);
     }
 }
+
+#! Constant giving the MQTT message data type
+public const MqttMessageDataType = new MqttMessageDataType();
 }

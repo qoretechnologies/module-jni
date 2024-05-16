@@ -64,7 +64,7 @@ public class BusyLightDataProvider inherits MqttDataProvider::AbstractFunctional
         return {
             MESSAGE_BL_UPDATE: <DataProviderMessageInfo>{
                 "desc": "Sends a message to update a Busylight",
-                "type": new BusyLightUpdateMessageDataType(),
+                "type": BusyLightUpdateMessageDataType,
             },
         };
     }
@@ -151,4 +151,6 @@ public class BusyLightUpdateMessageDataType inherits HashDataType {
             Fields.pairIterator();
     }
 }
+
+public const BusyLightUpdateMessageDataType = new BusyLightUpdateMessageDataType();
 }
