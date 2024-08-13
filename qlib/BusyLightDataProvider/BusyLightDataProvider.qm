@@ -78,7 +78,7 @@ module BusyLightDataProvider {
             "desc": "Update Busylight configuration",
             "action_code": DPAT_SEND_MESSAGE,
             "action_val": BusyLightDataProvider::MESSAGE_BL_UPDATE,
-            "convenience_options": DataProviderActionCatalog::getActionOptionFromFields(
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
                 BusyLightUpdateMessageDataType::Fields{"topic", "color", "on", "off"}, {
                     "required": True,
                     "preselected": True,

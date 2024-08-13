@@ -89,13 +89,12 @@ module MqttDataProvider {
             "desc": "Send an MQTT message",
             "action_code": DPAT_SEND_MESSAGE,
             "action_val": MqttDataProvider::MESSAGE_MQTT_MESSAGE,
-            "convenience_options": DataProviderActionCatalog::getActionOptionFromFields(
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
                 MqttMessageDataType::Fields{"topic", "payload"}, {
                     "required": True,
                     "preselected": True,
                 }
-            ),
-            "advanced_options": DataProviderActionCatalog::getActionOptionFromFields(
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
                 MqttMessageDataType::Fields{"qos", "retained"}
             ),
         });

@@ -82,14 +82,13 @@ module ExcelDataProvider {
             "desc": "Read Excel spreadsheet from a specific file location",
             "action_code": DPAT_FIND,
             "cls": "ExcelDataProvider::ExcelReadDataProvider",
-            "convenience_options": DataProviderActionCatalog::getActionOptionFromFields(
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ExcelReadDataProvider::ConstructorOptions{"path", "worksheet", "data_cells", "headers_cells", "header_names"}, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
-            ),
-            "advanced_options": DataProviderActionCatalog::getActionOptionFromFields(
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
                 ExcelReadDataProvider::ConstructorOptions - ("path", "worksheet", "data_cells", "headers_cells",
                     "header_names", "stream", "data"), {
                     "loc": "constructor",
@@ -106,14 +105,13 @@ module ExcelDataProvider {
             "desc": "Read Excel spreadsheet inline data",
             "action_code": DPAT_FIND,
             "cls": "ExcelDataProvider::ExcelReadDataProvider",
-            "convenience_options": DataProviderActionCatalog::getActionOptionFromFields(
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ExcelReadDataProvider::ConstructorOptions{"data", "worksheet", "data_cells", "headers_cells", "header_names"}, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
-            ),
-            "advanced_options": DataProviderActionCatalog::getActionOptionFromFields(
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
                 ExcelReadDataProvider::ConstructorOptions - ("path", "worksheet", "data_cells", "headers_cells",
                     "header_names", "stream", "data"), {
                     "loc": "constructor",
