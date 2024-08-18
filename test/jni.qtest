@@ -42,6 +42,8 @@
 
 %module-cmd(jni) import java.util.ArrayList
 
+%module-cmd(jni) import qore.Qore.SQL.AbstractSQLStatement
+
 %try-module python
 %define NO_PYTHON
 %endtry

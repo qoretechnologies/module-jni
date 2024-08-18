@@ -419,6 +419,12 @@ jclass QoreJniClassMap::findLoadClass(const char* jpath, QoreProgram* pgm) {
                 QoreString cpath(jpath);
                 cpath.replaceAll("/", ".");
                 //cpath.replaceAll("$", "__");
+
+                // do not create Qore classes for classes imported from Qore
+                if (cpath.startsWith("qore.") || cpath.startsWith("qoremod.")
+                    || cpath.startsWith("python.") || cpath.startsWith("pythonmod.")) {
+                    return cls->toLocal();
+                }
                 qc = findCreateQoreClass(env, cpath, jpath, cls.release(), base, pgm);
                 //printd(5, "findLoadClass() '%s': %p (created) pgm: %p\n", jpath, qc, pgm);
             } else {
@@ -665,6 +671,13 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClass(Env& env, const char* name, Q
     SimpleRefHolder<Class> cls(loadClass(env, jpath.c_str(), base, jpc));
 
     QoreString cname(name);
+
+    // do not create Qore classes for classes imported from Qore
+    if (cname.startsWith("qore.") || cname.startsWith("qoremod.")
+        || cname.startsWith("python.") || cname.startsWith("pythonmod.")) {
+        return nullptr;
+    }
+
     // create the class in the correct namespace
     return findCreateQoreClass(env, cname, jpath.c_str(), cls.release(), base, pgm);
 }
