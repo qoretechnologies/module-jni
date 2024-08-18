@@ -570,7 +570,8 @@ QoreClass* jni_class_handler(QoreNamespace* ns, const char* cname) {
 
     const QoreNamespace* jns = ns;
     while (true) {
-        printd(LogLevel, "jni_class_handler() ns: %p (%s) jns: %p (%s) cname: %s\n", ns, ns->getName(), jns, jns->getName(), cname);
+        printd(LogLevel, "jni_class_handler() ns: %p (%s) jns: %p (%s) cname: %s\n", ns, ns->getName(), jns,
+            jns->getName(), cname);
         jns = jns->getParent();
         assert(jns);
         if (!strcmp(jns->getName(), "Jni"))

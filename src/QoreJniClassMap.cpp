@@ -426,6 +426,7 @@ jclass QoreJniClassMap::findLoadClass(const char* jpath, QoreProgram* pgm) {
                     return cls->toLocal();
                 }
                 qc = findCreateQoreClass(env, cpath, jpath, cls.release(), base, pgm);
+                assert(qc);
                 //printd(5, "findLoadClass() '%s': %p (created) pgm: %p\n", jpath, qc, pgm);
             } else {
                 //printd(LogLevel, "findLoadClass() '%s': %p (cached 2)\n", jpath, qc);
@@ -488,7 +489,9 @@ QoreValue QoreJniClassMap::getValue(LocalReference<jobject>& obj, QoreProgram* p
     }
 
     assert(pgm);
-    return new QoreObject(qjcm.findCreateQoreClass(env, jc, pgm), pgm, new QoreJniPrivateData(obj));
+    QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
+    assert(qc);
+    return new QoreObject(qc, pgm, new QoreJniPrivateData(obj));
 }
 
 static LocalReference<jstring> get_dot_name(Env& env, const char* name) {
@@ -947,6 +950,7 @@ void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* pare
 
         QoreString cstr(chars.c_str());
         pc = findCreateQoreClass(env, cstr, jpath.c_str(), cls.release(), base, pgm);
+        assert(pc);
     }
 
     // only add if no other parent class already inherits the interface
@@ -1102,6 +1106,7 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
             bool base;
             SimpleRefHolder<Class> cls(loadClass(env, jname.c_str(), base, jpc));
             qc = findCreateQoreClass(env, cname, jname.c_str(), cls.release(), base, pgm);
+            assert(qc);
         }
     }
 
