@@ -35,6 +35,13 @@ QoreCodeDispatcher::QoreCodeDispatcher(const ResolvedCallReferenceNode *callback
     printd(LogLevel, "QoreCodeDispatcher::QoreCodeDispatcher(), this: %p\n", this);
 }
 
+class QoreThreadDetacher {
+public:
+    DLLLOCAL ~QoreThreadDetacher() {
+        qoreThreadAttacher.detach();
+    }
+};
+
 QoreCodeDispatcher::~QoreCodeDispatcher() {
     try {
         qoreThreadAttacher.attach();
@@ -42,6 +49,8 @@ QoreCodeDispatcher::~QoreCodeDispatcher() {
         printd(LogLevel, "~QoreCodeDispatcher() - unable to attach thread to Qore, this: %p", this);
         return;
     }
+    QoreThreadDetacher qtd;
+
     printd(LogLevel, "QoreCodeDispatcher::~QoreCodeDispatcher(), this: %p\n", this);
     ExceptionSink xsink;
     callback->deref(&xsink);
@@ -64,6 +73,7 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
         env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
         return nullptr;
     }
+    QoreThreadDetacher qtd;
 
     printd(LogLevel, "QoreCodeDispatcher::dispatch(), this: %p pgm: %p\n", this, pgm);
 
