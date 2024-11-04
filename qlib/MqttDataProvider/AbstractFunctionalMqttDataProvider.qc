@@ -228,11 +228,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     }
 
     destructor() {
-        if (client && client.isConnected()) {
-            client.disconnect();
-            debug("MQTT: Disconnected from %y", client.getServerURI());
-        }
-        delete client;
+        stop();
     }
 
     #! Called when all observers have been added to the object
@@ -240,6 +236,22 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     */
     observersReady() {
         start();
+    }
+
+    #! Called to stop generating events
+    /** Stops polling for new events
+    */
+    stopEvents() {
+        stop();
+    }
+
+    #! Disconnects the client and stops generating events
+    private stop() {
+        if (client && client.isConnected()) {
+            client.disconnect();
+            debug("MQTT: Disconnected from %y", client.getServerURI());
+        }
+        delete client;
     }
 
     #! Connects and starts receiving messages
