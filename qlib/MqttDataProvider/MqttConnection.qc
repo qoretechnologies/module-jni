@@ -29,9 +29,6 @@ public namespace MqttDataProvider {
 */
 public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
     public {
-        #! A string containing the real URL using a tcp/ssl scheme
-        string real_url;
-
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "MQTT Connection",
@@ -89,7 +86,6 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr) : AbstractConnectionWithInfo(config, attr) {
-        setRealUrl(url);
     }
 
     #! returns the string type name for the connection object
@@ -162,12 +158,14 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
 
         sets the real HTTP URL for HTTP-based connections
     */
-    private setRealUrl(string url) {
-        real_url = url;
-        if (url =~ /^mqtt:/) {
-            real_url =~ s/^mqtt:/tcp:/;
-        } else {
-            real_url =~ s/^mqtt//;
+    private setRealUrl(*string url) {
+        if (exists url) {
+            real_url = url;
+            if (url =~ /^mqtt:/) {
+                real_url =~ s/^mqtt:/tcp:/;
+            } else {
+                real_url =~ s/^mqtt//;
+            }
         }
     }
 }
