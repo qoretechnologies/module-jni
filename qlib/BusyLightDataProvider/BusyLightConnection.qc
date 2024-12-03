@@ -110,9 +110,11 @@ public class BusyLightConnection inherits MqttDataProvider::MqttConnection {
 
         sets the real HTTP URL for HTTP-based connections
     */
-    private setRealUrl(string url) {
-        real_url = url;
-        real_url =~ s/^bl//;
+    private setRealUrl(*string url) {
+        if (exists url) {
+            real_url = url;
+            real_url =~ s/^bl//;
+        }
     }
 }
 }
