@@ -105,10 +105,11 @@ MACRO(GENERATE_JAR _input _output)
 ENDMACRO(GENERATE_JAR)
 
 # adds a make rule for java -> jar generation using qjava2jar
-MACRO(MAKE_QJAR _output _classpath)
+MACRO(MAKE_QJAR _output _classpath _root)
     add_custom_command(
         OUTPUT ${_output}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar ${_output} ${ARGN} -cp ${_classpath}
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+            --root=${_root} ${_output} ${ARGN} -cp ${_classpath}
         DEPENDS ${module_name} ${ARGN}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
@@ -116,10 +117,29 @@ MACRO(MAKE_QJAR _output _classpath)
 ENDMACRO(MAKE_QJAR)
 
 set(EXCEL_JAR ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar)
-make_qjar(${EXCEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.0.0.jar ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelIterator.java)
+make_qjar(${EXCEL_JAR}
+    ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.0.0.jar
+    ${CMAKE_SOURCE_DIR}/src/java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelIterator.java
+)
 
 add_custom_target(qore-excel-jar
     DEPENDS ${EXCEL_JAR}
+)
+
+set(KAFKA_JAR ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar)
+make_qjar(${KAFKA_JAR}
+    ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar
+    ${CMAKE_SOURCE_DIR}/src/java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/
+)
+
+#${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/QoreJavaConfig.java
+#${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/QoreKafkaConsumer.java
+#${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/QoreKafkaProducer.java
+
+add_custom_target(qore-kafka-jar
+    DEPENDS ${KAFKA_JAR}
 )
 
 # adds a make rule for java -> class generation
@@ -353,7 +373,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 add_jar(qore-jni-compiler ${JAVA_JAR_COMPILER_SRC}
@@ -434,6 +454,7 @@ set(QMOD
     qlib/BusyLightDataProvider
     qlib/MqttDataProvider
     qlib/ExcelDataProvider
+    qlib/KafkaDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES ${QPP_SRC})
@@ -478,6 +499,7 @@ qore_user_modules("${QMOD}")
 qore_external_user_module("qlib/MqttDataProvider" "")
 qore_external_user_module("qlib/BusyLightDataProvider" "MqttDataProvider")
 qore_external_user_module("qlib/ExcelDataProvider" "")
+qore_external_user_module("qlib/KafkaDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 

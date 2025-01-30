@@ -102,6 +102,13 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
         return True;
     }
 
+    #! Returns the data provider application name this connection serves
+    /** @return the data provider application name this connection serves
+    */
+    *string getAppName() {
+        return "MQTT";
+    }
+
     #! Returns a @ref MqttDataProvider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 

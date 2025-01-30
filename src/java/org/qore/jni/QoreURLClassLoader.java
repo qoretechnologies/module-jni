@@ -389,8 +389,6 @@ public class QoreURLClassLoader extends URLClassLoader {
         QoreJavaFileObject file = classes.get(bin_name);
         if (file != null) {
             byte[] bytes = file.getByteCode();
-            //System.out.printf("QoreURLClassLoader.loadClass() %x: %s returning defineClass()\n", hashCode(),
-            //    bin_name);
             return defineClass(bin_name, bytes, 0, bytes.length);
         }
 

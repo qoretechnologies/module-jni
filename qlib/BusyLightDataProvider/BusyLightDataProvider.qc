@@ -34,7 +34,7 @@ public class BusyLightDataProvider inherits MqttDataProvider::AbstractFunctional
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "busylight",
-            "desc": "Parent data provider for Kuando Busylight messaging functionality",
+            "desc": "Data provider for Kuando Busylight messaging functionality",
         } + AbstractFunctionalMqttDataProvider::ProviderInfo;
 
         #! BusyLight update message type

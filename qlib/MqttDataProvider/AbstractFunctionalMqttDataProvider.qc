@@ -57,14 +57,14 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                     "reconnects",
                 "type": AbstractDataProviderTypeMap."bool",
                 "desc": "Sets whether the client and server should remember state across restarts and reconnects.\n"
-                    "- If set to `False` both the client and server will maintain state across restarts of the \n"
+                    "- If set to `False` both the client and server will maintain state across restarts of the "
                     "client, the server and the connection. As state is maintained:\n"
-                    "  - Message delivery will be reliable meeting the specified QOS even if the client, server or \n"
+                    "  - Message delivery will be reliable meeting the specified QOS even if the client, server or "
                     "connection are restarted.\n"
                     "  - The server will treat a subscription as durable.\n"
                     "- If set to `True` the client and server will not maintain state across restarts of the client, "
                     "the server or the connection. This means:\n"
-                    "  - Message delivery to the specified QOS cannot be maintained if the client, server or \n"
+                    "  - Message delivery to the specified QOS cannot be maintained if the client, server or "
                     "connection are restarted\n"
                     "  - The server will treat a subscription as non-durable",
                 "default_value": True,
@@ -94,10 +94,10 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                 "display_name": "Keep-Alive Interval",
                 "short_desc": "Sets the keep-alive interval in seconds",
                 "type": AbstractDataProviderTypeMap."int",
-                "desc": "Sets the \"keep alive\" interval. This value, measured in seconds, defines the maximum \n"
-                    "interval between messages sent or received. It enables the client to detect if the server is \n"
-                    "no longer available, without having to wait for the TCP/IP timeout. The client will ensure \n"
-                    "that at least one message travels across the network within each keep alive period. In the \n"
+                "desc": "Sets the \"keep alive\" interval. This value, measured in seconds, defines the maximum "
+                    "interval between messages sent or received. It enables the client to detect if the server is "
+                    "no longer available, without having to wait for the TCP/IP timeout. The client will ensure "
+                    "that at least one message travels across the network within each keep alive period. In the "
                     "absence of a data-related message during the time period, the client sends a very small "
                     "\"ping\" message, which the server will acknowledge. A value of `0` disables keepalive "
                     "processing in the client",

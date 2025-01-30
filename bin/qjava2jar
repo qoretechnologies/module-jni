@@ -56,7 +56,9 @@ class QJava2Jar {
             return;
         }
 
-        map printf("%s: %d bytes\n", $1.key, $1.value.size()), srcs.pairIterator();
+        if (!opts.quiet) {
+            map printf("%s: %d bytes source\n", $1.key, $1.value.size()), srcs.pairIterator();
+        }
 
         if (hstat(start_dir).type == "REGULAR") {
             start_dir = dirname(start_dir);
@@ -79,11 +81,15 @@ class QJava2Jar {
                 fn = base_dir + class_file_name;
             } else if (class_file_name =~ /\// && (string dir = dirname(class_file_name))
                 && (regex(start_dir, dir + "$"))) {
-                base_dir = start_dir;
-                splice base_dir, -dir.length();
-                fn = base_dir + class_file_name;
+                if (opts.root) {
+                    fn = opts.root + "/" + class_file_name;
+                } else {
+                    base_dir = start_dir;
+                    splice base_dir, -dir.length();
+                    fn = base_dir + class_file_name;
+                }
             } else {
-                fn = start_dir + "/" + class_file_name;
+                fn = (opts.root ?? start_dir) + "/" + class_file_name;
             }
             io::InputStream stream = i.value.file.openInputStream();
             on_exit stream.close();
@@ -112,7 +118,7 @@ class QJava2Jar {
         if (!absolute_path(jar_path)) {
             jar_path = normalize_dir(getcwd() + "/" + jar_path);
         }
-        chdir(base_dir ?? start_dir);
+        chdir(opts.root ?? base_dir ?? start_dir);
         string args = opts.quiet ? "cf" : "cvf";
         string cmd = sprintf("jar " + args + " %y %s", jar_path, file_list);
         if (!opts.quiet) {
@@ -149,12 +155,21 @@ class QJava2Jar {
             error(ERR_INVALID_SOURCE, "%s: can only handle .java files", path);
         }
         string key;
-        if (exists root) {
+        if (opts.root) {
+            if (path.equalPartialPath(opts.root)) {
+                key = path[opts.root.length() + 1..];
+                key =~ s/\/+/\//g;
+            } else {
+                throw "INVALID-PATH", sprintf("root path is %y which is not a prefix of %y", opts.root, path);
+            }
+        } else if (exists root) {
             key = path[root.length() + 1..];
         } else {
             key = basename(path);
         }
+
         key =~ s/\.java//;
+        key =~ s/\//./g;
 
         srcs{key} = File::readTextFile(path);
     }
@@ -172,6 +187,13 @@ class QJava2Jar {
 
     parseOptions() {
         int l = ARGV.size();
+        # scan for classpath
+        for (int i = 0; i < l; ++i) {
+            if (ARGV[i] == "-cp") {
+                Program::issueModuleCmd("jni", "add-classpath " + ARGV[i + 1]);
+            }
+        }
+
         for (int i = 0; i < l; ) {
             string arg = ARGV[i];
             if (arg == "-h" || arg == "--help") {
@@ -180,6 +202,30 @@ class QJava2Jar {
             }
             if (arg == "-q" || arg == "--quiet") {
                 opts.quiet = True;
+                splice ARGV, i, 1;
+                --l;
+                continue;
+            }
+            if (arg == "-r") {
+                opts.root = ARGV[i + 1];
+                splice ARGV, i, 2;
+                l -= 2;
+                continue;
+            }
+            if (arg == "--root") {
+                opts.root = ARGV[i + 1];
+                splice ARGV, i, 2;
+                l -= 2;
+                continue;
+            }
+            if (*string root = (arg =~ x/^-r=?(.*)/[0])) {
+                opts.root = root;
+                splice ARGV, i, 1;
+                --l;
+                continue;
+            }
+            if (*string root = (arg =~ x/^--root=?(.*)/[0])) {
+                opts.root = root;
                 splice ARGV, i, 1;
                 --l;
                 continue;
@@ -198,8 +244,9 @@ class QJava2Jar {
 
     static usage() {
         printf("%s: <jar name> <source directory>\n"
-            " -q,--quiet      suppress output\n"
-            " -h,--help       this help text\n"
+            " -r,--root=ARG     set the root dir for finding sources\n",
+            " -q,--quiet        suppress output\n"
+            " -h,--help         this help text\n"
             "\nCompiles all java sources in the given source directory tree to class files and packages\n"
             "the class files in a jar file.\n"
             "\n*NOTE*: Arguments not explicitly listed above should be in the format accepted by javac;\n"

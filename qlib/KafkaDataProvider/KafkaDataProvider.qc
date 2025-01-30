@@ -1,0 +1,121 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore KafkaDataProvider module definition
+
+/** KafkaDataProvider.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#! Contains all public definitions in the KafkaDataProvider module
+public namespace KafkaDataProvider {
+#! Event- and message-based data provider for KAFKA client-side events
+/**
+*/
+public class KafkaDataProvider inherits KafkaDataProviderBase {
+    public {
+        #! Provider info
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "kafka",
+            "desc": "Parent data provider for KAFKA messaging functionality",
+            "supports_children": True,
+            "children_can_support_apis": True,
+            "children_can_support_observers": True,
+            "constructor_options": ConstructorOptions,
+        };
+
+        #! Constructor options
+        const ConstructorOptions = {
+            "url": <DataProviderOptionInfo>{
+                "display_name": "Server",
+                "short_desc": "The server in host:port form to connect to",
+                "desc": "The server in host:port form to connect to",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+            },
+            "bootstrap.servers": <DataProviderOptionInfo>{
+                "display_name": "Bootstrap Servers",
+                "short_desc": "One or more additional servers to use to connect to the Kafka cluster",
+                "desc": "A list of `host:port` pair strings to use for establishing the initial "
+                    "connection to the Kafka cluster. The client will make use of all servers irrespective of which "
+                    "servers are specified here for bootstrapping; this list only impacts the initial "
+                    "hosts used to discover the full set of servers.\n\nThis list should be in the form "
+                    "`host1:port1,host2:port2,...\n\nSince these servers are just used for the initial "
+                    "connection to discover the full cluster membership (which may change dynamically), this "
+                    "list need not contain the full set of servers (you may want more than one, though, in case "
+                    "a server is down).",
+                "type": AbstractDataProviderTypeMap."list",
+            },
+        };
+
+        #! Child data provider map
+        const ChildMap = {
+            "consumer": Class::forName("KafkaConsumerDataProvider"),
+            "producer": Class::forName("KafkaProducerDataProvider"),
+        };
+    }
+
+    private {
+        *hash<auto> opts;
+    }
+
+    constructor(*hash<auto> opts) : KafkaDataProviderBase(new KafkaConnection({
+        "name": "kafka-connection",
+        "url": remove opts.url,
+        "opts": opts,
+    })) {
+    }
+
+    #! Creates the object from a connection object
+    constructor(KafkaConnection conn, *hash<auto> opts) : KafkaDataProviderBase(conn) {
+        self.opts = opts;
+    }
+
+    string getName() {
+        return "kafka";
+    }
+
+    #! Returns data provider static info
+    hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    #! Return data provider summary info
+    *list<hash<DataProvider::DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
+        return map $1.getConstant("ProviderSummaryInfo").getValue(), ChildMap.iterator();
+    }
+
+    #! Returns a list of child data provider names, if any
+    /** @return a list of child data provider names, if any
+    */
+    private *list<string> getChildProviderNamesImpl() {
+        return keys ChildMap;
+    }
+
+    #! Returns the given child provider or @ref nothing if the given child is unknown
+    /** @return the given child provider or @ref nothing if the given child is unknown
+
+        @see getChildProviderEx()
+    */
+    private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
+        if (*Class cls = ChildMap{name}) {
+            return cls.newObject(conn, opts);
+        }
+    }
+}
+}
