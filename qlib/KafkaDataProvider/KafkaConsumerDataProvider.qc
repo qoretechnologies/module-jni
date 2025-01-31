@@ -37,8 +37,8 @@ public namespace KafkaDataProvider {
 #! Event-based data provider for Kafka events
 /**
 */
-public class KafkaConsumerDataProvider inherits KafkaDataProviderBase, DataProvider::DelayedObservable,
-        DataProvider::Observer {
+public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDataProviderBase,
+        DataProvider::DelayedObservable {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -53,7 +53,7 @@ public class KafkaConsumerDataProvider inherits KafkaDataProviderBase, DataProvi
             "topics": <DataProviderOptionInfo>{
                 "display_name": "Topics",
                 "short_desc": "One or more topics to subscribe to; must be a list of strings",
-                "type": new ListDataType("KafkaTopicList", StringType),
+                "type": new SoftListDataType("KafkaTopicList", StringType),
                 "desc": "One or more topics to subscribe to; must be a list of strings",
                 "required": True,
             },
@@ -72,6 +72,61 @@ public class KafkaConsumerDataProvider inherits KafkaDataProviderBase, DataProvi
                 "desc": "Serializer class for key that implements the "
                     "`org.apache.kafka.common.serialization.Deserializer` interface",
                 "default_value": "org.apache.kafka.common.serialization.StringDeserializer",
+            },
+            "max.poll.interval.ms": <DataProviderOptionInfo>{
+                "display_name": "Max Poll Interval",
+                "short_desc": "The maximum delay in milliseconds between invocations of poll()",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "The maximum delay between invocations of `poll()` when using consumer group management. "
+                    "This places an upper bound on the amount of time that the consumer can be idle before fetching "
+                    "more records. If `poll()` is not called before expiration of this timeout, then the consumer is "
+                    "considered failed and the group will rebalance in order to reassign the partitions to another "
+                    "member. For consumers using a non-null `group.instance.id` which reach this timeout, partitions "
+                    "will not be immediately reassigned. Instead, the consumer will stop sending heartbeats and "
+                    "partitions will be reassigned after expiration of `session.timeout.ms`. This mirrors the "
+                    "behavior of a static consumer which has shutdown",
+                "default_value": 300000,
+            },
+            "enable.auto.commit": <DataProviderOptionInfo>{
+                "display_name": "Enable Auto Commit",
+                "short_desc": "If true the consumer's offset will be periodically committed in the background",
+                "type": AbstractDataProviderTypeMap."bool",
+                "desc": "If true the consumer's offset will be periodically committed in the background",
+                "default_value": True,
+            },
+            "auto.offset.reset": <DataProviderOptionInfo>{
+                "display_name": "Auto Offset Reset",
+                "short_desc": "What to do when there is no initial offset in Kafka or if the current offset does not "
+                    "exist any more on the server",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "What to do when there is no initial offset in Kafka or if the current offset does not exist "
+                    "any more on the server (e.g. because that data has been deleted).\n\n"
+                    "Note that altering partition numbers while setting this config to latest may cause message "
+                    "delivery loss since producers could start to send messages to newly added partitions (i.e. no "
+                    "initial offsets exist yet) before consumers reset their offsets",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "latest",
+                        "short_desc": "Automatically reset the offset to the latest offset",
+                        "desc": "Automatically reset the offset to the latest offset",
+                        "value": "latest",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "earliest",
+                        "short_desc": "Automatically reset the offset to the earliest offset",
+                        "desc": "Automatically reset the offset to the earliest offset",
+                        "value": "earliest",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "none",
+                        "short_desc": "Throw exception to the consumer if no previous offset is found for the "
+                            "consumer's group",
+                        "desc": "Throw exception to the consumer if no previous offset is found for the 0consumer's "
+                            "group",
+                        "value": "none",
+                    },
+                ),
+                "default_value": "latest",
             },
             "fetch.min.bytes": <DataProviderOptionInfo>{
                 "display_name": "Fetch Min Bytes",
@@ -142,13 +197,19 @@ public class KafkaConsumerDataProvider inherits KafkaDataProviderBase, DataProvi
 
     #! Creates the object from a connection object
     constructor(KafkaConnection conn, *hash<auto> options) : KafkaDataProviderBase(conn) {
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", options,
-            ImpliedArgumentHelper::get(){keys ConstructorOptions} + options);
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions,
+            ImpliedArgumentHelper::get(){keys ConstructorOptions} + options) + conn.getKafkaOptions();
         # add default values automatically
         map copts{$1.key} = $1.value.default_value, ConstructorOptions.pairIterator(),
             exists $1.value.default_value && !copts.hasKey($1.key);
         cons = new QoreKafkaConsumer(copts ?? {}, EVENT_KAFKA_MESSAGE);
         cons.registerObserver(self);
+    }
+
+    destructor() {
+        if (cons) {
+            stopEvents();
+        }
     }
 
     string getName() {
@@ -164,7 +225,10 @@ public class KafkaConsumerDataProvider inherits KafkaDataProviderBase, DataProvi
     /** This method is meant to trigger event generation
     */
     observersReady() {
-        cons.start();
+        background sub () {
+            cons.start();
+            delete cons;
+        }();
     }
 
     #! Called to stop generating events

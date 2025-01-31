@@ -410,7 +410,7 @@ public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWith
     }
 
     #! Returns options that can be used to create Kafka data providers
-    private hash<auto> getKafkaOptions() {
+    hash<auto> getKafkaOptions() {
         hash<auto> opts = self.opts + {
             "bootstrap.servers": real_url,
         };

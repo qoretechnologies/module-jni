@@ -42,13 +42,6 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
 
         #! Constructor options
         const ConstructorOptions = {
-            "topics": <DataProviderOptionInfo>{
-                "display_name": "Topics",
-                "short_desc": "One or more topics to subscribe to; must be a list of strings",
-                "type": new ListDataType("KafkaTopicList", StringType),
-                "desc": "One or more topics to subscribe to; must be a list of strings",
-                "required": True,
-            },
             "acks": <DataProviderOptionInfo>{
                 "display_name": "Acknowledgement Handling",
                 "short_desc": "Determines how the client handles acknowledgements from the server",
@@ -74,8 +67,8 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
                 "short_desc": "Serializer / deserializer class for Kafka messages",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "Serializer class for key that implements the "
-                    "`org.apache.kafka.common.serialization.Deserializer` interface",
-                "default_value": "org.apache.kafka.common.serialization.StringDeserializer",
+                    "`org.apache.kafka.common.serialization.Serializer` interface",
+                "default_value": "org.apache.kafka.common.serialization.StringSerializer",
             },
             "value.serializer": <DataProviderOptionInfo>{
                 "display_name": "Value Serializer",
@@ -148,8 +141,8 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
 
     #! Creates the object from constructor options
     constructor(KafkaConnection conn, *hash<auto> options) : KafkaDataProviderBase(conn) {
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", options,
-            ImpliedArgumentHelper::get(){keys ConstructorOptions} + options);
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions,
+            ImpliedArgumentHelper::get(){keys ConstructorOptions} + options) + conn.getKafkaOptions();
         # add default values automatically
         map copts{$1.key} = $1.value.default_value, ConstructorOptions.pairIterator(),
             exists $1.value.default_value && !copts.hasKey($1.key);

@@ -11,6 +11,7 @@ import org.apache.kafka.common.header.Header;
 import org.qore.jni.Hash;
 
 import qoremod.DataProvider.Observable;
+import qoremod.DataProvider.Observer;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -73,6 +74,7 @@ class QoreKafkaConsumer extends Observable {
             put("auto.commit.interval.ms", QoreJavaConfig.ConfType.INT);
             put("fetch.max.wait.ms", QoreJavaConfig.ConfType.INT);
             put("metrics.num.samples", QoreJavaConfig.ConfType.INT);
+            put("max.poll.interval.ms", QoreJavaConfig.ConfType.INT);
             put("sasl.login.refresh.buffer.seconds", QoreJavaConfig.ConfType.SHORT);
             put("sasl.login.refresh.min.period.seconds", QoreJavaConfig.ConfType.SHORT);
         }
@@ -84,6 +86,10 @@ class QoreKafkaConsumer extends Observable {
         topic_array = (String[])conf.get("topics");
         cons = createConsumer(conf);
         this.event_name = event_name;
+    }
+
+    public void registerObserver(Observer observer) throws Throwable {
+        super.registerObserver(observer);
     }
 
     /** Stops polling and closes the object
@@ -183,7 +189,7 @@ class QoreKafkaConsumer extends Observable {
                         ZonedDateTime ts_date = ZonedDateTime.ofInstant(Instant.ofEpochMilli(rec.timestamp()),
                             TimeZone.getDefault().toZoneId());
                         event.put("timestamp", ts_date);
-                        //System.out.printf("rec: %s\n", rec.toString());
+                        //System.out.printf("J %s -> %s\n", event_name, rec.toString());
                         event.put("topic", rec.topic());
                         notifyObservers(event_name, event);
                     }
@@ -191,7 +197,7 @@ class QoreKafkaConsumer extends Observable {
                     if (!quit.get()) {
                         throw e;
                     }
-                    System.out.printf("exiting KafkaConsumer event loop\n");
+                    //System.out.printf("exiting KafkaConsumer event loop\n");
                     break;
                 }
             }

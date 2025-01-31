@@ -41,7 +41,7 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
 
         #! Constructor options
         const ConstructorOptions = {
-            "url": <DataProviderOptionInfo>{
+            "server": <DataProviderOptionInfo>{
                 "display_name": "Server",
                 "short_desc": "The server in host:port form to connect to",
                 "desc": "The server in host:port form to connect to",
@@ -76,7 +76,7 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
 
     constructor(*hash<auto> opts) : KafkaDataProviderBase(new KafkaConnection({
         "name": "kafka-connection",
-        "url": remove opts.url,
+        "url": remove opts.server,
         "opts": opts,
     })) {
     }
