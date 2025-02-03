@@ -90,6 +90,14 @@ module KafkaDataProvider {
             "action_code": DPAT_EVENT,
             "action_val": KafkaConsumerDataProvider::EVENT_KAFKA_MESSAGE,
             "output_type": KafkaEventRecvDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KafkaConsumerDataProvider::ConstructorOptions{"topics",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                KafkaConsumerDataProvider::ConstructorOptions - ("topics")
+            ),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -100,8 +108,10 @@ module KafkaDataProvider {
             "short_desc": "Send a Kafka message",
             "desc": "Send a Kafka message",
             "action_code": DPAT_API,
-            "options": DataProviderActionCatalog::getActionOptionFromFields(KafkaEventDataType::Fields),
             "output_type": KafkaMessageResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KafkaProducerDataProvider::ConstructorOptions
+            ) + DataProviderActionCatalog::getActionOptionFromFields(KafkaEventDataType::Fields),
         });
     };
 }

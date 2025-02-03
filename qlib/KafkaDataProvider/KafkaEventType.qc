@@ -33,6 +33,8 @@ public class KafkaEventDataType inherits HashDataType {
                 "display_name": "Topic",
                 "type": StringType,
                 "desc": "The topic for the message",
+                "required": True,
+                "preselected": True,
             },
             "partition": {
                 "display_name": "Partition",
@@ -43,11 +45,15 @@ public class KafkaEventDataType inherits HashDataType {
                 "display_name": "Message Key",
                 "type": AutoType,
                 "desc": "The message key",
+                "required": True,
+                "preselected": True,
             },
             "value": {
                 "display_name": "Message Value",
                 "type": AutoType,
                 "desc": "The message value",
+                "required": True,
+                "preselected": True,
             },
         };
     }
