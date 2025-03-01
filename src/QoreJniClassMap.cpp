@@ -865,7 +865,6 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
 
 void QoreJniClassMap::addSuperClasses(JniQoreClass* qc, Class* jc, const char* jpath, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
-
     Class* parent = jc->getSuperClass();
 
     printd(LogLevel, "QoreJniClassMap::addSuperClasses() '%s' parent: %p\n", jpath, parent);
@@ -897,6 +896,7 @@ void QoreJniClassMap::addSuperClasses(JniQoreClass* qc, Class* jc, const char* j
 
 void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* parent, bool interface, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
+    QoreClassUserDataHolder udh(parent);
     //printd(LogLevel, "QoreJniClassMap::addSuperClass() %s parent: %p if: %d pgm: %p jpc: %p qcb: %p jo: %p\n",
     //  qc.getPath(), parent, interface, pgm, jpc, (jclass)Globals::classQoreJavaClassBase, parent->getJavaObject());
     // see if the parent class wraps a Qore class
@@ -938,9 +938,7 @@ void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* pare
     QoreString jpath(chars.c_str());
     jpath.replaceAll(".", "/");
     JniQoreClass* pc = find(jpath.c_str());
-    if (pc) {
-        parent->deref();
-    } else {
+    if (!pc) {
         // make sure we are not trying to create a Qore class for a dynamic class that already exists in Qore
         assert(!jpath.startsWith("qore"));
         assert(!jpath.startsWith("python"));
