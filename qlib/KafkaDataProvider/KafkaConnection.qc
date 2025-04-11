@@ -41,8 +41,9 @@ public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWith
                         "connection to the Kafka cluster to be used in addition to the main server provided in the "
                         "connection URL. The client will make use of all servers irrespective of which servers are "
                         "specified here for bootstrapping; this list only impacts the initial "
-                        "hosts used to discover the full set of servers.\n\nThis list should be in the form "
-                        "`host1:port1,host2:port2,...\n\nSince these servers are just used for the initial "
+                        "hosts used to discover the full set of servers.\n\n"
+                        "This list should be in the form `host1:port1,host2:port2,...`\n\n"
+                        "Since these servers are just used for the initial "
                         "connection to discover the full cluster membership (which may change dynamically), this "
                         "list need not contain the full set of servers (you may want more than one, though, in case "
                         "a server is down).",
