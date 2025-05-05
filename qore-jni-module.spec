@@ -56,7 +56,13 @@ This package contains the jni module for the Qore Programming Language.
 . /opt/rh/devtoolset-7/enable
 %endif
 export CXXFLAGS="%{?optflags}"
-cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DCMAKE_PREFIX_PATH=${_prefix}/lib64/cmake/Qore .
+%if 0%{?suse_version}
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib64/jvm/jre/lib/server
+cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DCMAKE_PREFIX_PATH=${_prefix}/lib64/cmake/Qore -DJAVA_AWT_LIBRARY=/usr/lib64/jvm/jre/lib/libjawt.so .
+%else
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/jvm/jre/lib:/usr/lib/jvm/jre/lib/server
+cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DCMAKE_PREFIX_PATH=${_prefix}/lib64/cmake/Qore -DJAVA_AWT_LIBRARY=/usr/lib/jvm/jre/lib/libjawt.so .
+%endif
 make %{?_smp_mflags}
 make %{?_smp_mflags} docs
 sed -i 's/#!\/usr\/bin\/env qore/#!\/usr\/bin\/qore/' test/*.qtest
