@@ -116,7 +116,8 @@ MACRO(MAKE_QJAR _output _classpath _root)
     )
 ENDMACRO(MAKE_QJAR)
 
-set(EXCEL_JAR ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar)
+# ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar
+set(EXCEL_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-excel.jar)
 make_qjar(${EXCEL_JAR}
     ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.0.0.jar
     ${CMAKE_SOURCE_DIR}/src/java
@@ -127,7 +128,11 @@ add_custom_target(qore-excel-jar
     DEPENDS ${EXCEL_JAR}
 )
 
-set(KAFKA_JAR ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar)
+# install the Excel jar file manually
+install(FILES ${EXCEL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/ExcelDataProvider/jar)
+
+# ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
+set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 make_qjar(${KAFKA_JAR}
     ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar
     ${CMAKE_SOURCE_DIR}/src/java
@@ -141,6 +146,9 @@ make_qjar(${KAFKA_JAR}
 add_custom_target(qore-kafka-jar
     DEPENDS ${KAFKA_JAR}
 )
+
+# install the Kafka jar file manually
+install(FILES ${KAFKA_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/KafkaDataProvider/jar)
 
 # adds a make rule for java -> class generation
 MACRO(ADD_JAVA_SOURCE _input)
