@@ -178,19 +178,19 @@ JniExternalProgramData* jni_get_context(QoreProgram*& pgm) {
     // next try to get the actual Program context of the current object
     QoreProgram* pgm0 = getProgram();
     if (pgm0 && pgm0 != pgm) {
-        pgm = pgm0;
-        jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+        jpc = static_cast<JniExternalProgramData*>(pgm0->getExternalData("jni"));
         if (jpc) {
+            pgm = pgm0;
             return jpc;
         }
     }
 
     // then try the Program context of the code
-    pgm0 = qore_get_call_program_context();
-    if (pgm0 && pgm0 != pgm) {
-        pgm = pgm0;
-        jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+    QoreProgram* pgm1 = qore_get_call_program_context();
+    if (pgm1 && pgm1 != pgm0 && pgm1 != pgm) {
+        jpc = static_cast<JniExternalProgramData*>(pgm1->getExternalData("jni"));
         if (jpc) {
+            pgm = pgm1;
             return jpc;
         }
     }
