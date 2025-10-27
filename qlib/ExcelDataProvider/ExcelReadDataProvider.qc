@@ -55,7 +55,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         };
 
         #! Search options
-        const SearchOptions = {
+        const SearchOptions = GenericRecordSearchOptions{"requires_result", "max_records"} + {
             "limit": <DataProviderOptionInfo>{
                 "display_name": "Record Limit",
                 "short_desc": "The maximum number of records to return",
