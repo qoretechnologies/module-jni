@@ -147,6 +147,11 @@ add_custom_target(qore-kafka-jar
     DEPENDS ${KAFKA_JAR}
 )
 
+# macOS appears to have a bug with initializing BSS when the Qore processes to build the jar files are launched in parallel, so we serialized it here
+if (APPLE)
+    add_dependencies(qore-kafka-jar qore-excel-jar)
+endif()
+
 # install the Kafka jar file manually
 install(FILES ${KAFKA_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/KafkaDataProvider/jar)
 
