@@ -119,7 +119,7 @@ ENDMACRO(MAKE_QJAR)
 # ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar
 set(EXCEL_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-excel.jar)
 make_qjar(${EXCEL_JAR}
-    ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.0.0.jar
+    ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar
     ${CMAKE_SOURCE_DIR}/src/java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelIterator.java
 )
