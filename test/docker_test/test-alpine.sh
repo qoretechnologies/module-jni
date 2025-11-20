@@ -46,27 +46,33 @@ if ! grep -q "^qore:x:${QORE_UID}" /etc/passwd; then
     adduser -u ${QORE_UID} -D -G qore -h /home/qore -s /bin/bash qore
 fi
 
-# download glassfish
 cd /home/qore
-git clone -b master --single-branch --depth 1 https://gitlab+deploy-token-7:eQb7E4YBX9jzcv6BFNog@git.qoretechnologies.com/infrastructure/glassfish4.git
-rm -rf glassfish4/.git
 
-# own everything by the qore user
-chown -R qore:qore ${MODULE_SRC_DIR} /home/qore
+if [ -n "$do_jms_test" ]; then
+    # download glassfish
+    git clone -b master --single-branch --depth 1 https://${GLASSFISH_REPO_AUTH}@git.qoretechnologies.com/infrastructure/glassfish4.git
+    rm -rf glassfish4/.git
 
-# start glassfish
-echo && echo "-- starting Payara --"
-gosu qore:qore ${PAYARA_HOME}/bin/asadmin start-domain domain1
-sleep 5
+    # own everything by the qore user
+    chown -R qore:qore ${MODULE_SRC_DIR} /home/qore
 
-# create Payara queue named abc, needed for the tests
-gosu qore:qore ${PAYARA_HOME}/bin/asadmin create-jms-resource --restype javax.jms.Queue abc
+    # start glassfish
+    echo && echo "-- starting Payara --"
+    gosu qore:qore ${PAYARA_HOME}/bin/asadmin start-domain domain1
+    sleep 5
+
+    # create Payara queue named abc, needed for the tests
+    gosu qore:qore ${PAYARA_HOME}/bin/asadmin create-jms-resource --restype javax.jms.Queue abc
+fi
 
 # run the tests
 export QORE_MODULE_DIR=${MODULE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
 cd ${MODULE_SRC_DIR}
 for test in test/*.qtest; do
-    # skip jms tests for now
+    # skip jms test
+    if [[ -z "$do_jms_test" && "$test" == test/jms.qtest ]]; then
+        continue
+    fi
     date
     gosu qore:qore qore $test -vv
     RESULTS="$RESULTS $?"
