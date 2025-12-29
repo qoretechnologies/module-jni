@@ -44,6 +44,8 @@ import java.util.Enumeration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 //! Main ClassLoader for Java <-> %Qore and Java <-> Python integration
 /** This ClassLoader supports dynamic imports from %Qore and Java using the following special packages:
@@ -61,11 +63,24 @@ import java.util.Collections;
 public class QoreURLClassLoader extends URLClassLoader {
     public static String INIT_PROP_NAME = "qore.QoreURLClassLoader.init";
 
+    //! Thread-local storage for the current classloader context
+    /** Using InheritableThreadLocal so that child threads inherit the parent's classloader context.
+        This is required for Java threads to work properly with Qore's context.
+        Call clearContext() to clean up when a thread is done with this classloader to allow
+        garbage collection.
+    */
     private static InheritableThreadLocal<QoreURLClassLoader> current =
         new InheritableThreadLocal<QoreURLClassLoader>();
+
     private HashSet<String> classPathElements = new HashSet<String>();
     private String classPath = new String();
-    private long pgm_ptr = 0;
+
+    //! Program pointer for the associated Qore Program
+    /** Using AtomicLong for thread-safe access to the program pointer.
+        A value of 0 indicates no program or that the program has been released.
+    */
+    private final AtomicLong pgm_ptr = new AtomicLong(0);
+
     private boolean enable_cache = false;
     // when used as the system class loader
     /** if true, we need to ensure that this object loads classes to make dynamic imports work
@@ -73,16 +88,19 @@ public class QoreURLClassLoader extends URLClassLoader {
     private boolean startup = false;
 
     //! for caching files during compilation
-    private final HashMap<String, QoreJavaFileObject> classes = new HashMap<String, QoreJavaFileObject>();
+    /** Using ConcurrentHashMap for thread-safe access */
+    private final ConcurrentHashMap<String, QoreJavaFileObject> classes = new ConcurrentHashMap<String, QoreJavaFileObject>();
 
     //! used to mark java class creation in progress; binary names used
-    private HashSet<String> classInProgress = new HashSet<String>();
+    private final ConcurrentHashMap<String, Boolean> classInProgress = new ConcurrentHashMap<String, Boolean>();
 
     //! cache of inner classes to resolve circular dependencies when injecting classes
-    private HashMap<String, byte[]> pendingClasses = new HashMap<String, byte[]>();
+    /** Using ConcurrentHashMap for thread-safe access */
+    private final ConcurrentHashMap<String, byte[]> pendingClasses = new ConcurrentHashMap<String, byte[]>();
 
     //! cache of classes when running as the boot classloader
-    private HashMap<String, Class<?>> classCache = new HashMap<String, Class<?>>();
+    /** Using ConcurrentHashMap for thread-safe access */
+    private final ConcurrentHashMap<String, Class<?>> classCache = new ConcurrentHashMap<String, Class<?>>();
 
     // when used to bootstrap Java
     private static boolean static_bootstrap = false;
@@ -154,7 +172,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         //super("QoreURLClassLoader", new URL[]{}, ClassLoader.getSystemClassLoader());
         super("QoreURLClassLoader", new URL[]{}, ClassLoader.getPlatformClassLoader());
         setContext();
-        pgm_ptr = p_ptr;
+        pgm_ptr.set(p_ptr);
         //System.out.printf("QoreURLClassLoader(long p_ptr: %x) this: %x\n", p_ptr, hashCode());
     }
 
@@ -162,7 +180,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     public QoreURLClassLoader(long p_ptr, ClassLoader parent) {
         super("QoreURLClassLoader", new URL[]{}, parent);
         // set the current classloader as the thread context classloader
-        pgm_ptr = p_ptr;
+        pgm_ptr.set(p_ptr);
         setContext();
         //System.out.printf("QoreURLClassLoader(long p_ptr: %x, ClassLoader parent: %s: %x) this: %x\n",
         //    p_ptr, (parent == null ? "null" : parent.getClass().getCanonicalName()),
@@ -235,8 +253,35 @@ public class QoreURLClassLoader extends URLClassLoader {
         return rv;
     }
 
-    public void clearCache() {
+    //! Clears the pending classes cache
+    /** This cache stores byte code for classes that are being injected.
+        @note This method only clears the pendingClasses cache; use clearAllCaches()
+        to clear all caches.
+    */
+    public void clearPendingClassesCache() {
         pendingClasses.clear();
+    }
+
+    //! Clears the pending classes cache (deprecated)
+    /** @deprecated Use clearPendingClassesCache() instead for clarity
+    */
+    @Deprecated
+    public void clearCache() {
+        clearPendingClassesCache();
+    }
+
+    //! Clears all caches in this classloader
+    /** This method clears:
+        - pendingClasses: byte code for classes being injected
+        - classCache: cached Class objects
+        - classes: QoreJavaFileObject cache for compilation
+        - classInProgress: classes currently being created
+    */
+    public void clearAllCaches() {
+        pendingClasses.clear();
+        classCache.clear();
+        classes.clear();
+        classInProgress.clear();
     }
 
     public byte[] removePendingByteCode(String bin_name) {
@@ -322,27 +367,46 @@ public class QoreURLClassLoader extends URLClassLoader {
         throw new ClassNotFoundException(String.format("unknown internal class '%s'", bin_name));
     }
 
+    //! Returns a list of internal classes in the given package
+    /** @param packageName the package name to search
+        @return a list of class names in the package
+        @note This method requires a valid program pointer.
+    */
     public ArrayList<String> getInternalClassesForPackage(String packageName) {
         ArrayList<String> rv = new ArrayList<String>();
-        getInternalClassesForPackage0(pgm_ptr, packageName, rv);
+        long ptr = pgm_ptr.get();
+        if (ptr != 0) {
+            getInternalClassesForPackage0(ptr, packageName, rv);
+        }
         //System.out.printf("getInternalClassesForPackage(%s) rv: '%s'\n", packageName, rv);
         return rv;
     }
 
-    public synchronized boolean checkInProgress(String bin_name) {
-        return classInProgress.contains(bin_name);
+    //! Check if a class is currently being created
+    /** Thread-safe using ConcurrentHashMap
+        @param bin_name the binary name of the class
+        @return true if the class is currently being created
+    */
+    public boolean checkInProgress(String bin_name) {
+        return classInProgress.containsKey(bin_name);
     }
 
-    private synchronized boolean markInProgress(String bin_name) {
-        if (classInProgress.contains(bin_name)) {
-            return true;
-        }
-        classInProgress.add(bin_name);
+    //! Mark a class as being created
+    /** Thread-safe using ConcurrentHashMap.putIfAbsent()
+        @param bin_name the binary name of the class
+        @return true if the class was already being created, false if it was marked
+    */
+    private boolean markInProgress(String bin_name) {
+        Boolean previous = classInProgress.putIfAbsent(bin_name, Boolean.TRUE);
         //debugLog("marked in progress " + bin_name);
-        return false;
+        return previous != null;
     }
 
-    private synchronized void removeInProgress(String bin_name) {
+    //! Remove a class from the in-progress set
+    /** Thread-safe using ConcurrentHashMap
+        @param bin_name the binary name of the class
+    */
+    private void removeInProgress(String bin_name) {
         classInProgress.remove(bin_name);
         //debugLog("removed in progress " + bin_name);
     }
@@ -553,30 +617,100 @@ public class QoreURLClassLoader extends URLClassLoader {
         return rv;
     }
 
+    //! Returns the program pointer
+    /** @return the program pointer value, or 0 if not set or cleared
+        @note The returned value may be 0 if the program has been released; use getValidPtr() if you need
+        to ensure the pointer is valid
+    */
     public long getPtr() {
-        return pgm_ptr;
+        return pgm_ptr.get();
     }
 
+    //! Returns the program pointer, throwing an exception if it's invalid
+    /** @return the program pointer value
+        @throws IllegalStateException if the program pointer is 0 (not set or cleared)
+    */
+    public long getValidPtr() {
+        long ptr = pgm_ptr.get();
+        if (ptr == 0) {
+            throw new IllegalStateException("Program pointer is not valid; the associated Qore Program " +
+                "may have been released");
+        }
+        return ptr;
+    }
+
+    //! Clears the program pointer
+    /** After calling this method, the classloader should not be used for operations
+        that require a valid Qore Program.
+    */
     public void clearProgramPtr() {
-        pgm_ptr = 0;
+        pgm_ptr.set(0);
     }
 
+    //! Returns the program pointer from the current thread's classloader context
+    /** @return the program pointer value
+        @throws NullPointerException if no classloader context is set for this thread
+    */
     public static long getProgramPtr() {
-        return current.get().pgm_ptr;
+        QoreURLClassLoader cl = current.get();
+        if (cl == null) {
+            throw new IllegalStateException("No classloader context set for current thread");
+        }
+        return cl.pgm_ptr.get();
     }
 
+    //! Sets the program pointer for the current thread's classloader context
+    /** @param ptr the program pointer value to set
+        @throws NullPointerException if no classloader context is set for this thread
+    */
     public static void setProgramPtr(long ptr) {
-        current.get().pgm_ptr = ptr;
+        QoreURLClassLoader cl = current.get();
+        if (cl == null) {
+            throw new IllegalStateException("No classloader context set for current thread");
+        }
+        cl.pgm_ptr.set(ptr);
     }
 
+    //! Returns the current thread's classloader context
+    /** @return the current classloader, or null if not set
+    */
     public static QoreURLClassLoader getCurrent() {
         return current.get();
     }
 
-    // sets the current classloader as the thread's contextual class loader
+    //! Sets this classloader as the current thread's context classloader
+    /** This method sets both the thread's context classloader and the thread-local reference
+        used by getCurrent() and other static methods.
+        @note Call clearContext() when done to allow garbage collection of the classloader.
+    */
     public void setContext() {
         Thread.currentThread().setContextClassLoader(this);
         current.set(this);
+    }
+
+    //! Clears the current thread's classloader context
+    /** This method should be called when a thread is done using this classloader
+        to allow garbage collection. This clears both the thread's context classloader
+        and the thread-local reference.
+    */
+    public void clearContext() {
+        if (current.get() == this) {
+            current.remove();
+        }
+        if (Thread.currentThread().getContextClassLoader() == this) {
+            Thread.currentThread().setContextClassLoader(getParent());
+        }
+    }
+
+    //! Static method to clear the current thread's classloader context
+    /** This method should be called when a thread is done using the current classloader
+        to allow garbage collection.
+    */
+    public static void clearCurrentContext() {
+        QoreURLClassLoader cl = current.get();
+        if (cl != null) {
+            cl.clearContext();
+        }
     }
 
     //! Adds a path to the classpath
@@ -660,16 +794,25 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Returns a list of classes in the given dynamic package
+    /** @param packageName the package name to search
+        @return a list of class names in the package
+        @note This method requires a valid program pointer; if the pointer is invalid,
+        delegation to the parent classloader is attempted.
+    */
     public ArrayList<String> getClassesInNamespace(String packageName) {
         ArrayList<String> rv = new ArrayList<String>();
         ClassModInfo info = new ClassModInfo(packageName, true);
-        getClassesInNamespace0(pgm_ptr, info.cls, info.mod, info.python, rv);
-        //System.out.printf("getClassesInNamespace(%s) pgm: %x cls: '%s' mod: '%s' rv: %s\n", packageName, pgm_ptr,
+        long ptr = pgm_ptr.get();
+        if (ptr != 0) {
+            getClassesInNamespace0(ptr, info.cls, info.mod, info.python, rv);
+        }
+        //System.out.printf("getClassesInNamespace(%s) pgm: %x cls: '%s' mod: '%s' rv: %s\n", packageName, ptr,
         //    info.cls, info.mod, rv);
 
         if (rv.size() == 0) {
             ClassLoader parent = getParent();
-            //System.out.printf("getClassesInNamespace() %s; parent is %s\n", packageName, parent.getClass().getName());
+            //System.out.printf("getClassesInNamespace() %s; parent is %s\n", packageName,
+            //    parent == null ? "null" : parent.getClass().getName());
             if (parent instanceof QoreURLClassLoader) {
                 return ((QoreURLClassLoader)parent).getClassesInNamespace(packageName);
             }
@@ -785,12 +928,18 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
     }
 
-    /**
-     *  Clears the compilation cache after compiling
-     */
+    //! Clears the compilation cache after compiling
+    /** This method clears the classCache and calls the native clearCompilationCache0
+        to clear native-side caches.
+        @note This method requires a valid program pointer.
+    */
     public void clearCompilationCache() {
         classCache.clear();
-        clearCompilationCache0(pgm_ptr);
+        classes.clear();
+        long ptr = pgm_ptr.get();
+        if (ptr != 0) {
+            clearCompilationCache0(ptr);
+        }
     }
 
     public synchronized byte[] generateByteCode(String bin_name) throws ClassNotFoundException {
@@ -826,13 +975,14 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
 
         byte[] rv = null;
-        if (pgm_ptr != 0) {
+        long ptr = pgm_ptr.get();
+        if (ptr != 0) {
             try {
                 //System.out.printf("QoreURLClassLoader.generateByteCodeIntern() this: %x pgm: %x '%s' cptr: %x\n",
-                //    hashCode(), pgm_ptr, bin_name, class_ptr);
-                rv = generateByteCode0(pgm_ptr, info.cls, bin_name, info.mod, info.python, class_ptr);
+                //    hashCode(), ptr, bin_name, class_ptr);
+                rv = generateByteCode0(ptr, info.cls, bin_name, info.mod, info.python, class_ptr);
                 //System.out.printf("QoreURLClassLoader.generateByteCodeIntern() this: %x pgm: %x '%s' cptr: %x " +
-                //    "rv: %s\n", hashCode(), pgm_ptr, bin_name, class_ptr, rv);
+                //    "rv: %s\n", hashCode(), ptr, bin_name, class_ptr, rv);
             } catch (ClassNotFoundException e) {
                 throw e;
             } catch (RuntimeException e) {
@@ -845,7 +995,8 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
         if (rv == null) {
             throw new ClassNotFoundException(String.format("could not find a Qore source class matching '%s' to " +
-                "create Java class '%s'", info.cls, bin_name));
+                "create Java class '%s'; program pointer: %s", info.cls, bin_name,
+                ptr == 0 ? "invalid" : "valid"));
         }
         // only put in the cache if the byte code is present
         pendingClasses.put(bin_name, rv);
@@ -876,7 +1027,8 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     private void setContextProgram(QoreURLClassLoader new_syscl) {
         BooleanWrapper created = new BooleanWrapper();
-        pgm_ptr = getContextProgram0(this, created, static_bootstrap);
+        long ptr = getContextProgram0(this, created, static_bootstrap);
+        pgm_ptr.set(ptr);
 
         if (created.val) {
             Runtime.getRuntime().addShutdownHook(new Thread() {

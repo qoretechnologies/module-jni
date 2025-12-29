@@ -415,4 +415,146 @@ public class QoreJavaApiTest {
         // Let the cleaner do its job (closure goes out of scope after this)
         return ptr1 != 0;
     }
+
+    // Tests for classloader management improvements
+
+    // Test clearContext() method
+    public static boolean testClearContext() {
+        QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
+        if (cl == null) {
+            return false;
+        }
+        // clearContext should work without throwing
+        cl.clearContext();
+        // After clearing, current should be null for this thread
+        // But we need to restore it for other tests, so set it back
+        cl.setContext();
+        return true;
+    }
+
+    // Test clearAllCaches() method
+    public static boolean testClearAllCaches() {
+        QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
+        if (cl == null) {
+            return false;
+        }
+        // This should work without throwing
+        cl.clearAllCaches();
+        return true;
+    }
+
+    // Test getValidPtr() throws when ptr is invalid
+    public static boolean testGetValidPtrThrows() {
+        QoreURLClassLoader cl = new QoreURLClassLoader(0);
+        try {
+            cl.getValidPtr();  // Should throw IllegalStateException
+            return false;  // Should not reach here
+        } catch (IllegalStateException e) {
+            return true;  // Expected
+        }
+    }
+
+    // Test getPtr() returns 0 when ptr is not set
+    public static boolean testGetPtrReturnsZero() {
+        QoreURLClassLoader cl = new QoreURLClassLoader(0);
+        return cl.getPtr() == 0;
+    }
+
+    // Test clearProgramPtr() makes getValidPtr() throw
+    public static boolean testClearProgramPtrMakesGetValidPtrThrow() {
+        QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
+        if (cl == null) {
+            return false;
+        }
+        long originalPtr = cl.getPtr();
+        if (originalPtr == 0) {
+            // Can't test this if ptr is already 0
+            return true;
+        }
+        // Save the ptr, clear it, test, then restore
+        cl.clearProgramPtr();
+        boolean threwException = false;
+        try {
+            cl.getValidPtr();
+        } catch (IllegalStateException e) {
+            threwException = true;
+        }
+        // Restore the ptr (can't actually do this from Java, so this test
+        // is only partial - we'll need to use a new classloader in subsequent tests)
+        return threwException;
+    }
+
+    // Test getProgramPtr() throws when no context is set
+    public static boolean testGetProgramPtrThrowsWhenNoContext() {
+        // Run in a new thread that has no context
+        final boolean[] result = {false};
+        Thread t = new Thread(() -> {
+            try {
+                QoreURLClassLoader.getProgramPtr();
+                result[0] = false;  // Should have thrown
+            } catch (IllegalStateException e) {
+                result[0] = true;  // Expected
+            }
+        });
+        t.start();
+        try {
+            t.join();
+        } catch (InterruptedException e) {
+            return false;
+        }
+        return result[0];
+    }
+
+    // Test clearCurrentContext() static method
+    public static boolean testClearCurrentContext() {
+        QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
+        if (cl == null) {
+            return true;  // Already cleared
+        }
+        QoreURLClassLoader.clearCurrentContext();
+        boolean cleared = QoreURLClassLoader.getCurrent() == null;
+        // Restore context for other tests
+        if (cl != null) {
+            cl.setContext();
+        }
+        return cleared;
+    }
+
+    // Test concurrent cache access
+    public static boolean testConcurrentCacheAccess() throws InterruptedException {
+        QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
+        if (cl == null) {
+            return false;
+        }
+
+        // Create multiple threads that access caches concurrently
+        final int NUM_THREADS = 10;
+        final int NUM_OPS = 100;
+        final boolean[] errors = {false};
+
+        Thread[] threads = new Thread[NUM_THREADS];
+        for (int i = 0; i < NUM_THREADS; i++) {
+            final int threadId = i;
+            threads[i] = new Thread(() -> {
+                try {
+                    for (int j = 0; j < NUM_OPS; j++) {
+                        // These operations should be thread-safe
+                        cl.checkInProgress("test.class." + threadId + "." + j);
+                        cl.getPendingClassesForPackage("test.package." + threadId);
+                    }
+                } catch (Exception e) {
+                    errors[0] = true;
+                }
+            });
+        }
+
+        for (Thread t : threads) {
+            t.start();
+        }
+        for (Thread t : threads) {
+            t.join();
+        }
+
+        return !errors[0];
+    }
 }
