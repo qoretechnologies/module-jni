@@ -55,6 +55,10 @@ public:
     DLLLOCAL virtual QoreClass* copyImport() {
         JniQoreClass* rv = new JniQoreClass;
         rv->jname = jname;
+        rv->setPublicMemberFlag();
+        rv->setGateAccessFlag();
+        rv->setLanguage("Java");
+        rv->setRelaxedAbstractMatch();
         return rv;
     }
 
