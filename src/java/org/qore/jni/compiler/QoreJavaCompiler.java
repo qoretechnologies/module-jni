@@ -72,7 +72,7 @@ import org.qore.jni.QoreJavaFileObject;
  * @author <a href="mailto:David.Biesack@sas.com">David J. Biesack</a>, adapted for %Qore by
  * <a href="mailto:david@qore.org">David Nichols</a>
  */
-public class QoreJavaCompiler<T> {
+public class QoreJavaCompiler<T> implements AutoCloseable {
     // Compiler requires source files with a ".java" extension:
     static final String JAVA_EXTENSION = ".java";
 
@@ -89,6 +89,9 @@ public class QoreJavaCompiler<T> {
 
     // The FileManager which will store source and class "files".
     private final FileManagerImpl javaFileManager;
+
+    // Flag to track if the compiler has been closed
+    private volatile boolean closed = false;
 
     /**
      * Construct a new instance which delegates to a new Qore classloader.
@@ -464,6 +467,50 @@ public class QoreJavaCompiler<T> {
      */
     public ClassLoader getClassLoader() {
         return javaFileManager.getClassLoader();
+    }
+
+    /**
+     * Closes the compiler and releases resources.
+     * <p>
+     * This method attempts to close the underlying {@link QoreURLClassLoader}
+     * and then clears its caches and program pointer. Any {@link IOException}
+     * thrown during {@code classLoader.close()} is intentionally ignored,
+     * because at this point the compiler is being disposed and the class loader
+     * is not expected to be used again.
+     * <p>
+     * This method is idempotent: calling it multiple times is safe. After
+     * calling this method, the compiler must not be used.
+     */
+    @Override
+    public void close() {
+        if (closed) {
+            return;
+        }
+        try {
+            if (classLoader != null) {
+                try {
+                    // Attempt to close the class loader first
+                    classLoader.close();
+                } catch (IOException e) {
+                    // Intentionally ignore close errors: the compiler is being
+                    // discarded, and there is no recovery action to take here.
+                } finally {
+                    // Ensure internal loader state is cleared even if close()
+                    // throws, so the compiler ends in a consistent state.
+                    classLoader.clearAllCaches();
+                    classLoader.clearProgramPtr();
+                }
+            }
+        } finally {
+            closed = true;
+        }
+    }
+
+    /**
+     * @return true if the compiler has been closed
+     */
+    public boolean isClosed() {
+        return closed;
     }
 }
 

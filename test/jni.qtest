@@ -241,6 +241,7 @@ public class Main inherits QUnit::Test {
         addTestCase("restclient test", \restClientTest());
         addTestCase("object lifecycle test", \objectLifecycleTest());
         addTestCase("cleaner api test", \cleanerApiTest());
+        addTestCase("classloader management test", \classloaderManagementTest());
         addTestCase("qore exception test", \qoreExceptionTest());
         addTestCase("call stack test", \callStackTest());
         addTestCase("closure test", \closureTest());
@@ -1132,6 +1133,33 @@ lorem ipsum\r
             code c = int sub (int x) { return x * 2; };
             assertTrue(QoreJavaApiTest::testClosureDoubleRelease(c));
         }
+    }
+
+    # Tests for classloader management improvements
+    classloaderManagementTest() {
+        # Test clearContext() method
+        assertTrue(QoreJavaApiTest::testClearContext());
+
+        # Test clearAllCaches() method
+        assertTrue(QoreJavaApiTest::testClearAllCaches());
+
+        # Test getValidPtr() throws when ptr is invalid
+        assertTrue(QoreJavaApiTest::testGetValidPtrThrows());
+
+        # Test getPtr() returns 0 when ptr is not set
+        assertTrue(QoreJavaApiTest::testGetPtrReturnsZero());
+
+        # Test clearProgramPtr() makes getValidPtr() throw
+        assertTrue(QoreJavaApiTest::testClearProgramPtrMakesGetValidPtrThrow());
+
+        # Test getProgramPtr() throws when no context is set
+        assertTrue(QoreJavaApiTest::testGetProgramPtrThrowsWhenNoContext());
+
+        # Test clearCurrentContext() static method
+        assertTrue(QoreJavaApiTest::testClearCurrentContext());
+
+        # Test concurrent cache access is thread-safe
+        assertTrue(QoreJavaApiTest::testConcurrentCacheAccess());
     }
 
     qoreExceptionTest() {

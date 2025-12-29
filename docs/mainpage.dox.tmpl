@@ -871,6 +871,27 @@ set_save_object_callback(callback);
     - fixed a bug where Java compiler diagnostics were output to stderr instead of being captured in the
       exception message
       (<a href="https://github.com/qoretechnologies/qore/issues/4925">issue 4925</a>)
+    - improved \c QoreURLClassLoader thread safety by using \c ConcurrentHashMap for all caches
+      (<a href="https://github.com/qoretechnologies/qore/issues/5047">issue 5047</a>)
+    - added \c getValidPtr() method to \c QoreURLClassLoader that throws an exception if the program
+      pointer is invalid
+      (<a href="https://github.com/qoretechnologies/qore/issues/5045">issue 5045</a>)
+    - added \c clearContext() method to \c QoreURLClassLoader for explicit thread context cleanup
+      (<a href="https://github.com/qoretechnologies/qore/issues/5040">issue 5040</a>)
+    - added \c clearAllCaches() method to \c QoreURLClassLoader for comprehensive cache cleanup
+      (<a href="https://github.com/qoretechnologies/qore/issues/5042">issue 5042</a>)
+    - \c QoreJavaCompiler now implements \c AutoCloseable for proper resource cleanup;
+      usage with try-with-resources:
+      @code{.java}
+      try (QoreJavaCompiler compiler = new QoreJavaCompiler(classLoader, options)) {
+          compiler.compile(className, sourceCode);
+      } // compiler.close() is called automatically
+      @endcode
+      (<a href="https://github.com/qoretechnologies/qore/issues/5038">issue 5038</a>)
+    - added validation of program pointer before use in native calls to prevent crashes with invalid pointers
+      (<a href="https://github.com/qoretechnologies/qore/issues/5039">issue 5039</a>)
+    - improved \c clearCompilationCache() to also clear the \c classes cache
+      (<a href="https://github.com/qoretechnologies/qore/issues/5042">issue 5042</a>)
 
     @subsection jni_2_4_0 jni Module Version 2.4.0
     - added the <a href="../../ExcepDataProvider/html/index.html">ExcepDataProvider</a> module to allow for reading
