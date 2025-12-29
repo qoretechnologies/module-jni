@@ -119,7 +119,7 @@ MACRO(MAKE_QJAR _output _classpath _root)
     add_custom_command(
         OUTPUT ${_output}
         COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${_root} ${_output} ${ARGN} -cp ${_classpath}
+            --root=${_root} -d ${CMAKE_CURRENT_BINARY_DIR} ${_output} ${ARGN} -cp ${_classpath}
         DEPENDS ${module_name} ${ARGN}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
@@ -155,7 +155,7 @@ if (APPLE)
     add_custom_command(
         OUTPUT ${KAFKA_JAR}
         COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${KAFKA_ROOT} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
+            --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
         DEPENDS ${module_name} ${KAFKA_SOURCES} ${EXCEL_JAR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
@@ -164,7 +164,7 @@ else()
     add_custom_command(
         OUTPUT ${KAFKA_JAR}
         COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${KAFKA_ROOT} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
+            --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
         DEPENDS ${module_name} ${KAFKA_SOURCES}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
