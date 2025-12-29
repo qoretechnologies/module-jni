@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,6 +41,8 @@
 
 #include <dlfcn.h>
 
+#include "jni-module.h"
+
 #include "defs.h"
 #include "Jvm.h"
 #include "QoreJniClassMap.h"
@@ -67,20 +69,21 @@ static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns);
 static void jni_module_delete();
 static void jni_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink);
 
-DLLEXPORT char qore_module_name[] = QORE_JNI_MODULE_NAME;
-DLLEXPORT char qore_module_version[] = PACKAGE_VERSION;
-DLLEXPORT char qore_module_description[] = "JNI module";
-DLLEXPORT char qore_module_author[] = "Qore Technologies, s.r.o.";
-DLLEXPORT char qore_module_url[] = "http://qore.org";
-DLLEXPORT int qore_module_api_major = QORE_MODULE_API_MAJOR;
-DLLEXPORT int qore_module_api_minor = QORE_MODULE_API_MINOR;
-DLLEXPORT qore_module_init_t qore_module_init = jni_module_init;
-DLLEXPORT qore_module_ns_init_t qore_module_ns_init = jni_module_ns_init;
-DLLEXPORT qore_module_delete_t qore_module_delete = jni_module_delete;
-DLLEXPORT qore_module_parse_cmd_t qore_module_parse_cmd = jni_module_parse_cmd;
-
-DLLEXPORT qore_license_t qore_module_license = QL_MIT;
-DLLEXPORT char qore_module_license_str[] = "MIT";
+void jni_qore_module_desc(QoreModuleInfo& mod_info) {
+    mod_info.name = QORE_JNI_MODULE_NAME;
+    mod_info.version = PACKAGE_VERSION;
+    mod_info.desc = "JNI module";
+    mod_info.author = "Qore Technologies, s.r.o.";
+    mod_info.url = "http://qore.org";
+    mod_info.api_major = QORE_MODULE_API_MAJOR;
+    mod_info.api_minor = QORE_MODULE_API_MINOR;
+    mod_info.init = jni_module_init;
+    mod_info.ns_init = jni_module_ns_init;
+    mod_info.del = jni_module_delete;
+    mod_info.parse_cmd = jni_module_parse_cmd;
+    mod_info.license = QL_MIT;
+    mod_info.license_str = "MIT";
+}
 
 // global type compatibility option
 DLLLOCAL bool jni_compat_types = false;
@@ -90,7 +93,8 @@ static bool jni_init_failed = false;
 // module cmd type
 using qore_jni_module_cmd_t = void (*) (const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 static void qore_jni_mc_import(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
-static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
+static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, QoreProgram* pgm,
+    JniExternalProgramData* jpc);
 static void qore_jni_mc_global_add_classpath(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 static void qore_jni_mc_add_classpath(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
@@ -272,7 +276,8 @@ extern "C" QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg,
     QoreNamespace* jns = pgm->getRootNS()->findLocalNamespace("Jni");
 
     QoreNamespace* ns = jns->findCreateNamespacePath(arg.c_str());
-    printd(LogLevel, "jni_module_find_create_java_namespace() nsp: '%s' ns: %p '%s'\n", arg.c_str(), ns, ns->getName());
+    printd(LogLevel, "jni_module_find_create_java_namespace() nsp: '%s' ns: %p '%s'\n", arg.c_str(), ns,
+        ns->getName());
     ns->setClassHandler(jni_class_handler);
 
     return ns;
@@ -364,14 +369,16 @@ static void qore_jni_mc_import(const QoreString& cmd_arg, QoreProgram* pgm, JniE
     }
 }
 
-static void qore_jni_mc_global_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
+static void qore_jni_mc_global_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm,
+        JniExternalProgramData* jpc) {
     QoreString arg(cmd_arg);
     q_env_subst(arg);
     printd(LogLevel, "qore_jni_mc_global_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
     jpc->addParentClasspath(arg.c_str());
 }
 
-static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
+static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, QoreProgram* pgm,
+        JniExternalProgramData* jpc) {
     SimpleRefHolder<QoreStringNode> cwd_str;
 
     assert(pgm);
@@ -394,7 +401,8 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
 
     cwd_str->concat('/');
 
-    printd(LogLevel, "qore_jni_mc_global_add_relative_classpath() arg: '%s' cwd: '%s'\n", arg.c_str(), cwd_str->c_str());
+    printd(LogLevel, "qore_jni_mc_global_add_relative_classpath() arg: '%s' cwd: '%s'\n", arg.c_str(),
+        cwd_str->c_str());
 
     jpc->addParentClasspath(cwd_str->c_str());
 }
@@ -532,7 +540,8 @@ static void qore_jni_mc_set_property(const QoreString& arg, QoreProgram* pgm, Jn
     // find end of property name
     qore_offset_t end = arg.find(' ');
     if (end == -1) {
-        throw QoreJniException("JNI-SET-PROPERTY-ERROR", "cannot find the end of the property name in the 'set-property' directive");
+        throw QoreJniException("JNI-SET-PROPERTY-ERROR", "cannot find the end of the property name in the "
+            "'set-property' directive");
     }
 
     QoreString property(&arg, end);

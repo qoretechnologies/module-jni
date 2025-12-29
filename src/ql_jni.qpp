@@ -337,9 +337,10 @@ binary get_byte_code(string class_name) {
     try {
         jni::Env env;
 
-        QoreProgram* pgm = jni_get_program_context();
-        JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+        QoreProgram* pgm = nullptr;
+        JniExternalProgramData* jpc = jni_get_context(pgm);
         assert(jpc);
+        assert(pgm);
 
         const QoreClass* cls = pgm->findClass(cn->c_str(), xsink);
         if (*xsink) {
