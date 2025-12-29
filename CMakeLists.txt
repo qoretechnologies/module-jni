@@ -143,11 +143,33 @@ install(FILES ${EXCEL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/ExcelDataProvide
 
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
-make_qjar(${KAFKA_JAR}
-    ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar
-    ${CMAKE_SOURCE_DIR}/src/java
-    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/
-)
+set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
+set(KAFKA_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(KAFKA_SOURCES ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/)
+
+# macOS appears to have a bug with initializing BSS when the Qore processes to build the jar files
+# are launched in parallel. Using add_dependencies() alone doesn't work because cmake doesn't
+# propagate target dependencies to custom command file dependencies. We need to add the Excel jar
+# as a file-level dependency for the Kafka jar custom command to ensure true serialization.
+if (APPLE)
+    add_custom_command(
+        OUTPUT ${KAFKA_JAR}
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+            --root=${KAFKA_ROOT} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
+        DEPENDS ${module_name} ${KAFKA_SOURCES} ${EXCEL_JAR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
+    )
+else()
+    add_custom_command(
+        OUTPUT ${KAFKA_JAR}
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+            --root=${KAFKA_ROOT} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
+        DEPENDS ${module_name} ${KAFKA_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
+    )
+endif()
 
 #${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/QoreJavaConfig.java
 #${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/QoreKafkaConsumer.java
@@ -156,11 +178,6 @@ make_qjar(${KAFKA_JAR}
 add_custom_target(qore-kafka-jar
     DEPENDS ${KAFKA_JAR}
 )
-
-# macOS appears to have a bug with initializing BSS when the Qore processes to build the jar files are launched in parallel, so we serialized it here
-if (APPLE)
-    add_dependencies(qore-kafka-jar qore-excel-jar)
-endif()
 
 # install the Kafka jar file manually
 install(FILES ${KAFKA_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/KafkaDataProvider/jar)
