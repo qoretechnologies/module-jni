@@ -793,6 +793,8 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
 
         // save class in namespace
         qc = new_qc.release();
+        // issue #5056: resolve abstract methods for copied class
+        qc->runtimeResolveAbstractMethods();
         ns->addSystemClass(qc);
     }
 
