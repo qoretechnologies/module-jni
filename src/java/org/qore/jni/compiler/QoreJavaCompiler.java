@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.StringWriter;
 
 import java.nio.charset.StandardCharsets;
 
@@ -326,6 +327,13 @@ public class QoreJavaCompiler<T> {
             final Map<String, CharSequence> classes,
             final DiagnosticCollector<JavaFileObject> diagnosticsList)
             throws QoreJavaCompilerException {
+        // Always use a DiagnosticCollector to capture compiler diagnostics
+        DiagnosticCollector<JavaFileObject> localDiagnostics = diagnosticsList;
+        if (localDiagnostics == null) {
+            localDiagnostics = new DiagnosticCollector<JavaFileObject>();
+        }
+        diagnostics = localDiagnostics;
+
         List<JavaFileObject> sources = new ArrayList<JavaFileObject>();
         for (Entry<String, CharSequence> entry : classes.entrySet()) {
             String qualifiedClassName = entry.getKey();
@@ -345,13 +353,20 @@ public class QoreJavaCompiler<T> {
                         className + JAVA_EXTENSION, source);
             }
         }
+        // Use a StringWriter to capture any compiler output that would otherwise go to stderr
+        StringWriter compilerOutput = new StringWriter();
         try {
             // Get a CompliationTask from the compiler and compile the sources
-            final CompilationTask task = compiler.getTask(null, javaFileManager, diagnostics,
+            final CompilationTask task = compiler.getTask(compilerOutput, javaFileManager, localDiagnostics,
                     options, null, sources);
             final Boolean result = task.call();
             if (result == null || !result) {
-                throw new QoreJavaCompilerException("Compilation failed.", classes.keySet(), diagnostics);
+                String outputStr = compilerOutput.toString();
+                String message = "Compilation failed.";
+                if (!outputStr.isEmpty()) {
+                    message += " Compiler output: " + outputStr;
+                }
+                throw new QoreJavaCompilerException(message, classes.keySet(), localDiagnostics);
             }
             try {
                 // For each class name in the output map, get compiled class and file data and put it in the output map
@@ -366,11 +381,11 @@ public class QoreJavaCompiler<T> {
                 }
                 return compiled;
             } catch (ClassNotFoundException e) {
-                throw new QoreJavaCompilerException(classes.keySet(), e, diagnostics);
+                throw new QoreJavaCompilerException(classes.keySet(), e, localDiagnostics);
             } catch (IllegalArgumentException e) {
-                throw new QoreJavaCompilerException(classes.keySet(), e, diagnostics);
+                throw new QoreJavaCompilerException(classes.keySet(), e, localDiagnostics);
             } catch (SecurityException e) {
-                throw new QoreJavaCompilerException(classes.keySet(), e, diagnostics);
+                throw new QoreJavaCompilerException(classes.keySet(), e, localDiagnostics);
             }
         } finally {
             classLoader.clearCompilationCache();
