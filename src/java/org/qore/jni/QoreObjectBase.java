@@ -1,5 +1,7 @@
 package org.qore.jni;
 
+import java.lang.ref.Cleaner;
+
 //! wrapper class for a %Qore object; this class holds a weak reference to the %Qore object
 /** Due to the different in garbage collecting approaches (%Qore's garbage collector being
     <a href="https://github.com/qorelanguage/qore/wiki/Prompt-Collection">deterministic</a> and Java's not),
@@ -11,17 +13,53 @@ package org.qore.jni;
     @since 1.2
  */
 public class QoreObjectBase {
-    //! a pointer to the Qore object
+    private static final Cleaner cleaner = Cleaner.create();
+
+    //! a pointer to the Qore object - kept for ByteBuddy compatibility
     protected long obj;
+
+    private final CleanupState state;
+    private final Cleaner.Cleanable cleanable;
+
+    // Separate class to hold state - must NOT reference outer object
+    private static class CleanupState implements Runnable {
+        private long ptr;
+
+        CleanupState(long ptr) {
+            this.ptr = ptr;
+        }
+
+        @Override
+        public synchronized void run() {
+            if (ptr != 0) {
+                pointerRelease0(ptr);
+                ptr = 0;
+            }
+        }
+
+        synchronized long getAndClear() {
+            long x = ptr;
+            ptr = 0;
+            return x;
+        }
+    }
 
     //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
     public QoreObjectBase(long qcptr, long mptr, long vptr, Object... args) throws Throwable {
-        obj = create0(qcptr, mptr, vptr, this, args);
+        this.state = new CleanupState(0);
+        this.cleanable = cleaner.register(this, state);
+        long ptr = create0(qcptr, mptr, vptr, this, args);
+        this.obj = ptr;
+        synchronized (state) {
+            state.ptr = ptr;
+        }
     }
 
     //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
     public QoreObjectBase(long obj) {
         this.obj = obj;
+        this.state = new CleanupState(obj);
+        this.cleanable = cleaner.register(this, state);
     }
 
     //! returns the pointer to the object
@@ -34,7 +72,9 @@ public class QoreObjectBase {
         to be released when finalized
      */
     public void release() {
-        long x = releasePointer();
+        long x = state.getAndClear();
+        obj = 0;
+        cleanable.clean();  // Deregister from cleaner
         if (x != 0) {
             release0(x);
         }
@@ -42,31 +82,17 @@ public class QoreObjectBase {
 
     //! runs the destructor
     public void destroy() {
-        long x = releasePointer();
+        long x = state.getAndClear();
+        obj = 0;
+        cleanable.clean();  // Deregister from cleaner
         if (x != 0) {
             destroy0(x);
         }
     }
 
-    //! releases the weak reference
-    @SuppressWarnings("deprecation")
-    @Override
-    protected void finalize() throws Throwable {
-        if (obj != 0) {
-            finalize0(obj);
-            obj = 0;
-        }
-    }
-
-    //! clears the internal pointer and returns the pointer value as a long
-    private long releasePointer() {
-        long x = obj;
-        obj = 0;
-        return x;
-    }
-
     private native long create0(long qcptr, long mptr, long vptr, Object self, Object... args);
     private native void release0(long obj_ptr);
     private native void destroy0(long obj_ptr);
-    private native void finalize0(long obj_ptr);
+    // Static native method for releasing weak reference (called by Cleaner via CleanupState)
+    private static native void pointerRelease0(long obj_ptr);
 }

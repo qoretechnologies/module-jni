@@ -173,7 +173,7 @@ static QoreStringNode* jni_module_init() {
 
     jni::jni_qore_init = true;
 
-    qore_set_module_option("jni", "jni-version", JNI_VERSION_10);
+    qore_set_module_option("jni", "jni-version", JNI_VERSION_21);
 
     QoreStringNode* err = qore_reassign_signals(sig_vec, QORE_JNI_MODULE_NAME, true);
     if (err) {

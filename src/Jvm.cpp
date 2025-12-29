@@ -40,7 +40,7 @@ QoreStringNode* Jvm::createVM() {
     assert(vm == nullptr);
 
     JavaVMInitArgs vm_args;
-    vm_args.version = JNI_VERSION_10;
+    vm_args.version = JNI_VERSION_21;
     vm_args.ignoreUnrecognized = false;
     vm_args.nOptions = 0;
 

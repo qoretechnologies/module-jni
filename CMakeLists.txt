@@ -5,7 +5,7 @@ set(module_name "jni")
 project(qore-jni-module)
 
 set (VERSION_MAJOR 2)
-set (VERSION_MINOR 4)
+set (VERSION_MINOR 5)
 set (VERSION_PATCH 0)
 
 set (BYTE_BUDDY_JAR ${CMAKE_SOURCE_DIR}/byte-buddy/byte-buddy-1.14.19.jar)
@@ -20,8 +20,8 @@ endif()
 find_package(Qore 2.0 REQUIRED)
 find_package(JNI REQUIRED)
 find_package(Java REQUIRED)
-if (${Java_VERSION_MAJOR} LESS 11)
-    message(FATAL_ERROR "This module requires Java 11+; the current Java version is ${Java_VERSION}.")
+if (${Java_VERSION_MAJOR} LESS 21)
+    message(FATAL_ERROR "This module requires Java 21+; the current Java version is ${Java_VERSION}.")
 endif()
 add_definitions(-DJAVA_VERSION_MAJOR=${Java_VERSION_MAJOR})
 include(UseJava)
@@ -64,19 +64,29 @@ MACRO(GENERATE_JAVA _input)
     string (REPLACE ";" " " JAVA_JAR_SRC_STR "${JAVA_JAR_SRC}")
 
     # generate rules for include files for inner classes (if any)
+    # - numeric args (1, 2, etc.) are anonymous inner classes
+    # - args starting with $ are named inner classes (e.g., $CleanupState)
+    # - other args are separate top-level classes in the same file
     foreach (it ${ARGN})
         #message(STATUS "IT: ${it}")
         if (${it} MATCHES "^[0-9]+$")
+            # Anonymous inner class (e.g., Hash$1)
             SET(_inc_infile ${_pkgdir}/${_base}$${it}.class)
             SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${_base}_${it}.inc)
+        elseif (${it} MATCHES "^\\$")
+            # Named inner class (e.g., QoreObjectBase$CleanupState) - strip leading $
+            string(SUBSTRING ${it} 1 -1 _inner_name)
+            SET(_inc_infile ${_pkgdir}/${_base}$${_inner_name}.class)
+            SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${_base}_${_inner_name}.inc)
         else()
+            # Separate top-level class in the same file (e.g., StaticEntry)
             SET(_inc_infile ${_pkgdir}/${it}.class)
             SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${it}.inc)
         endif()
         add_custom_command(
             OUTPUT ${_inc_outfile}
             COMMAND ${CMAKE_SOURCE_DIR}/make-inc ${_inc_infile} ${_inc_outfile}
-            DEPENDS jni-sentinel ${inc_infile}
+            DEPENDS jni-sentinel ${_inc_infile}
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
             VERBATIM
         )
@@ -236,14 +246,14 @@ set (JNI_BIN_FILES
 
 # Java sources built in to the binary module with an indication of inner classes, if any
 generate_java(org/qore/jni/QoreJavaApi.java)
-generate_java(org/qore/jni/QoreExceptionWrapper.java)
+generate_java(org/qore/jni/QoreExceptionWrapper.java $CleanupState)
 generate_java(org/qore/jni/QoreException.java)
-generate_java(org/qore/jni/QoreObjectBase.java)
+generate_java(org/qore/jni/QoreObjectBase.java $CleanupState)
 generate_java(org/qore/jni/QoreJavaClassBase.java)
 generate_java(org/qore/jni/QoreObject.java)
-generate_java(org/qore/jni/QoreClosure.java)
+generate_java(org/qore/jni/QoreClosure.java $CleanupState)
 generate_java(org/qore/jni/QoreObjectWrapper.java)
-generate_java(org/qore/jni/QoreInvocationHandler.java)
+generate_java(org/qore/jni/QoreInvocationHandler.java $CleanupState)
 generate_java(org/qore/jni/BooleanWrapper.java)
 generate_java(org/qore/jni/ClassModInfo.java)
 generate_java(org/qore/jni/QoreURLClassLoader.java 1 2)
@@ -320,7 +330,7 @@ add_java_compiler_source(org/qore/jni/compiler/CompilerOutput.java)
 #message(STATUS "MESSAGE Classes: ${JAVA_JAR_CLASSES}")
 #message(STATUS "MESSAGE Inc: ${QORE_INC_FILES}")
 
-set(CMAKE_JAVA_COMPILE_FLAGS -Xlint:unchecked -Xlint:deprecation -Xdiags:verbose)
+set(CMAKE_JAVA_COMPILE_FLAGS -Xlint:unchecked -Xlint:deprecation -Xdiags:verbose --release 21)
 
 add_custom_target(jni-sentinel
     DEPENDS ${JAVA_JAR_SRC} ${_qore_jni_sentinel}

@@ -1936,12 +1936,16 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 }
 
 #include "JavaClassQoreInvocationHandler.inc"
+#include "JavaClassQoreInvocationHandler_CleanupState.inc"
 #include "JavaClassQoreExceptionWrapper.inc"
+#include "JavaClassQoreExceptionWrapper_CleanupState.inc"
 #include "JavaClassQoreException.inc"
 #include "JavaClassQoreObjectBase.inc"
+#include "JavaClassQoreObjectBase_CleanupState.inc"
 #include "JavaClassQoreObject.inc"
 #include "JavaClassQoreJavaClassBase.inc"
 #include "JavaClassQoreClosure.inc"
+#include "JavaClassQoreClosure_CleanupState.inc"
 #include "JavaClassQoreObjectWrapper.inc"
 #include "JavaClassQoreClosureMarker.inc"
 #include "JavaClassQoreClosureMarkerImpl.inc"
@@ -2014,11 +2018,14 @@ static ucmap_t ucmap = {
     {"org.qore.jni.JavaClassBuilder$2", {java_org_qore_jni_JavaClassBuilder_2_class_len, java_org_qore_jni_JavaClassBuilder_2_class}},
     {"org.qore.jni.StaticEntry", {java_org_qore_jni_StaticEntry_class_len, java_org_qore_jni_StaticEntry_class}},
     {"org.qore.jni.QoreClosure", {java_org_qore_jni_QoreClosure_class_len, java_org_qore_jni_QoreClosure_class}},
+    {"org.qore.jni.QoreClosure$CleanupState", {java_org_qore_jni_QoreClosure_CleanupState_class_len, java_org_qore_jni_QoreClosure_CleanupState_class}},
     {"org.qore.jni.QoreClosureMarker", {java_org_qore_jni_QoreClosureMarker_class_len, java_org_qore_jni_QoreClosureMarker_class}},
     {"org.qore.jni.QoreClosureMarkerImpl", {java_org_qore_jni_QoreClosureMarkerImpl_class_len, java_org_qore_jni_QoreClosureMarkerImpl_class}},
     {"org.qore.jni.QoreException", {java_org_qore_jni_QoreException_class_len, java_org_qore_jni_QoreException_class}},
     {"org.qore.jni.QoreExceptionWrapper", {java_org_qore_jni_QoreExceptionWrapper_class_len, java_org_qore_jni_QoreExceptionWrapper_class}},
+    {"org.qore.jni.QoreExceptionWrapper$CleanupState", {java_org_qore_jni_QoreExceptionWrapper_CleanupState_class_len, java_org_qore_jni_QoreExceptionWrapper_CleanupState_class}},
     {"org.qore.jni.QoreInvocationHandler", {java_org_qore_jni_QoreInvocationHandler_class_len, java_org_qore_jni_QoreInvocationHandler_class}},
+    {"org.qore.jni.QoreInvocationHandler$CleanupState", {java_org_qore_jni_QoreInvocationHandler_CleanupState_class_len, java_org_qore_jni_QoreInvocationHandler_CleanupState_class}},
     {"org.qore.jni.QoreJavaApi", {java_org_qore_jni_QoreJavaApi_class_len, java_org_qore_jni_QoreJavaApi_class}},
     {"org.qore.jni.QoreJavaClassBase", {java_org_qore_jni_QoreJavaClassBase_class_len, java_org_qore_jni_QoreJavaClassBase_class}},
     {"org.qore.jni.QoreJavaDynamicApi", {java_org_qore_jni_QoreJavaDynamicApi_class_len, java_org_qore_jni_QoreJavaDynamicApi_class}},
@@ -2026,6 +2033,7 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreJavaObjectPtr", {java_org_qore_jni_QoreJavaObjectPtr_class_len, java_org_qore_jni_QoreJavaObjectPtr_class}},
     {"org.qore.jni.QoreObject", {java_org_qore_jni_QoreObject_class_len, java_org_qore_jni_QoreObject_class}},
     {"org.qore.jni.QoreObjectBase", {java_org_qore_jni_QoreObjectBase_class_len, java_org_qore_jni_QoreObjectBase_class}},
+    {"org.qore.jni.QoreObjectBase$CleanupState", {java_org_qore_jni_QoreObjectBase_CleanupState_class_len, java_org_qore_jni_QoreObjectBase_CleanupState_class}},
     {"org.qore.jni.QoreObjectWrapper", {java_org_qore_jni_QoreObjectWrapper_class_len, java_org_qore_jni_QoreObjectWrapper_class}},
     {"org.qore.jni.QoreRelativeTime", {java_org_qore_jni_QoreRelativeTime_class_len, java_org_qore_jni_QoreRelativeTime_class}},
     {"org.qore.jni.QoreURLClassLoader", {java_org_qore_jni_QoreURLClassLoader_class_len, java_org_qore_jni_QoreURLClassLoader_class}},
@@ -2120,7 +2128,7 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
 
 static JNINativeMethod invocationHandlerNativeMethods[2] = {
     {
-        const_cast<char*>("finalize0"),
+        const_cast<char*>("release0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(invocation_handler_finalize)
     },
@@ -2184,7 +2192,7 @@ static JNINativeMethod qoreJavaApiNativeMethods[] = {
 
 static JNINativeMethod qoreExceptionWrapperNativeMethods[] = {
     {
-        const_cast<char*>("finalize0"),
+        const_cast<char*>("release0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_exception_wrapper_finalize)
     },
@@ -2212,7 +2220,7 @@ static JNINativeMethod qoreObjectBaseNativeMethods[] = {
         reinterpret_cast<void*>(qore_object_destroy)
     },
     {
-        const_cast<char*>("finalize0"),
+        const_cast<char*>("pointerRelease0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_object_finalize)
     },
@@ -2258,7 +2266,7 @@ static JNINativeMethod qoreClosureNativeMethods[] = {
         reinterpret_cast<void*>(qore_closure_call_save)
     },
     {
-        const_cast<char*>("finalize0"),
+        const_cast<char*>("release0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_closure_finalize)
     },
@@ -2513,6 +2521,8 @@ bool Globals::init() {
     classQoreExceptionWrapper = findDefineClass(env, "org.qore.jni.QoreExceptionWrapper", nullptr,
         java_org_qore_jni_QoreExceptionWrapper_class, java_org_qore_jni_QoreExceptionWrapper_class_len).makeGlobal();
     env.registerNatives(classQoreExceptionWrapper, qoreExceptionWrapperNativeMethods, 2);
+    findDefineClass(env, "org.qore.jni.QoreExceptionWrapper$CleanupState", nullptr,
+        java_org_qore_jni_QoreExceptionWrapper_CleanupState_class, java_org_qore_jni_QoreExceptionWrapper_CleanupState_class_len);
     ctorQoreExceptionWrapper = env.getMethod(classQoreExceptionWrapper, "<init>", "(J)V");
     methodQoreExceptionWrapperGet = env.getMethod(classQoreExceptionWrapper, "get", "()J");
 
@@ -2553,6 +2563,8 @@ bool Globals::init() {
         java_org_qore_jni_QoreObjectBase_class, java_org_qore_jni_QoreObjectBase_class_len).makeGlobal();
     env.registerNatives(classQoreObjectBase, qoreObjectBaseNativeMethods,
         sizeof(qoreObjectBaseNativeMethods) / sizeof(JNINativeMethod));
+    findDefineClass(env, "org.qore.jni.QoreObjectBase$CleanupState", nullptr,
+        java_org_qore_jni_QoreObjectBase_CleanupState_class, java_org_qore_jni_QoreObjectBase_CleanupState_class_len);
     //printd(5, "QoreObjectBase: %p\n", (jclass)classQoreObjectBase);
 
     classQoreObject = findDefineClass(env, "org.qore.jni.QoreObject", nullptr, java_org_qore_jni_QoreObject_class,
@@ -2575,6 +2587,8 @@ bool Globals::init() {
         java_org_qore_jni_QoreClosure_class_len).makeGlobal();
     env.registerNatives(classQoreClosure, qoreClosureNativeMethods,
         sizeof(qoreClosureNativeMethods) / sizeof(JNINativeMethod));
+    findDefineClass(env, "org.qore.jni.QoreClosure$CleanupState", nullptr,
+        java_org_qore_jni_QoreClosure_CleanupState_class, java_org_qore_jni_QoreClosure_CleanupState_class_len);
     ctorQoreClosure = env.getMethod(classQoreClosure, "<init>", "(J)V");
     methodQoreClosureGet = env.getMethod(classQoreClosure, "get", "()J");
 
@@ -2636,6 +2650,8 @@ bool Globals::init() {
     classQoreInvocationHandler = findDefineClass(env, "org.qore.jni.QoreInvocationHandler", nullptr,
         java_org_qore_jni_QoreInvocationHandler_class, java_org_qore_jni_QoreInvocationHandler_class_len).makeGlobal();
     env.registerNatives(classQoreInvocationHandler, invocationHandlerNativeMethods, 2);
+    findDefineClass(env, "org.qore.jni.QoreInvocationHandler$CleanupState", nullptr,
+        java_org_qore_jni_QoreInvocationHandler_CleanupState_class, java_org_qore_jni_QoreInvocationHandler_CleanupState_class_len);
     ctorQoreInvocationHandler = env.getMethod(classQoreInvocationHandler, "<init>", "(J)V");
     methodQoreInvocationHandlerDestroy = env.getMethod(classQoreInvocationHandler, "destroy", "()V");
 
