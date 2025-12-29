@@ -451,44 +451,67 @@ public class QoreJavaApiTest {
             return false;  // Should not reach here
         } catch (IllegalStateException e) {
             return true;  // Expected
+        } finally {
+            try {
+                cl.close();
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
         }
     }
 
     // Test getPtr() returns 0 when ptr is not set
     public static boolean testGetPtrReturnsZero() {
         QoreURLClassLoader cl = new QoreURLClassLoader(0);
-        return cl.getPtr() == 0;
+        try {
+            return cl.getPtr() == 0;
+        } finally {
+            try {
+                cl.close();
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
+        }
     }
 
     // Test clearProgramPtr() makes getValidPtr() throw
+    // NOTE: This test uses a fresh classloader to avoid corrupting the shared
+    // current classloader state which would break subsequent tests
     public static boolean testClearProgramPtrMakesGetValidPtrThrow() {
-        QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
-        if (cl == null) {
-            return false;
-        }
-        long originalPtr = cl.getPtr();
-        if (originalPtr == 0) {
-            // Can't test this if ptr is already 0
-            return true;
-        }
-        // Save the ptr, clear it, test, then restore
-        cl.clearProgramPtr();
-        boolean threwException = false;
+        // Create a new classloader with a non-zero ptr for testing
+        QoreURLClassLoader cl = new QoreURLClassLoader(12345L);
         try {
-            cl.getValidPtr();
-        } catch (IllegalStateException e) {
-            threwException = true;
+            // Verify ptr is set
+            if (cl.getPtr() != 12345L) {
+                return false;
+            }
+            // Clear the ptr
+            cl.clearProgramPtr();
+            // Now getValidPtr() should throw
+            try {
+                cl.getValidPtr();
+                return false;  // Should have thrown
+            } catch (IllegalStateException e) {
+                return true;  // Expected
+            }
+        } finally {
+            try {
+                cl.close();
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
         }
-        // Restore the ptr (can't actually do this from Java, so this test
-        // is only partial - we'll need to use a new classloader in subsequent tests)
-        return threwException;
     }
 
     // Test getProgramPtr() throws when no context is set
+    // NOTE: With InheritableThreadLocal, child threads inherit parent context,
+    // so we need to clear it first in the new thread
     public static boolean testGetProgramPtrThrowsWhenNoContext() {
-        // Run in a new thread that has no context
+        // Run in a new thread that clears its inherited context first
         final boolean[] result = {false};
         Thread t = new Thread(() -> {
+            // Clear the inherited context
+            QoreURLClassLoader.clearCurrentContext();
             try {
                 QoreURLClassLoader.getProgramPtr();
                 result[0] = false;  // Should have thrown
@@ -514,9 +537,7 @@ public class QoreJavaApiTest {
         QoreURLClassLoader.clearCurrentContext();
         boolean cleared = QoreURLClassLoader.getCurrent() == null;
         // Restore context for other tests
-        if (cl != null) {
-            cl.setContext();
-        }
+        cl.setContext();
         return cleared;
     }
 

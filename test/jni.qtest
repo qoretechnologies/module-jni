@@ -1149,6 +1149,15 @@ lorem ipsum\r
         # Test getPtr() returns 0 when ptr is not set
         assertTrue(QoreJavaApiTest::testGetPtrReturnsZero());
 
+        # Test clearProgramPtr() makes getValidPtr() throw
+        assertTrue(QoreJavaApiTest::testClearProgramPtrMakesGetValidPtrThrow());
+
+        # Test getProgramPtr() throws when no context is set
+        assertTrue(QoreJavaApiTest::testGetProgramPtrThrowsWhenNoContext());
+
+        # Test clearCurrentContext() static method
+        assertTrue(QoreJavaApiTest::testClearCurrentContext());
+
         # Test concurrent cache access is thread-safe
         assertTrue(QoreJavaApiTest::testConcurrentCacheAccess());
     }

@@ -649,7 +649,7 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Returns the program pointer from the current thread's classloader context
     /** @return the program pointer value
-        @throws NullPointerException if no classloader context is set for this thread
+        @throws IllegalStateException if no classloader context is set for this thread
     */
     public static long getProgramPtr() {
         QoreURLClassLoader cl = current.get();
@@ -661,7 +661,7 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Sets the program pointer for the current thread's classloader context
     /** @param ptr the program pointer value to set
-        @throws NullPointerException if no classloader context is set for this thread
+        @throws IllegalStateException if no classloader context is set for this thread
     */
     public static void setProgramPtr(long ptr) {
         QoreURLClassLoader cl = current.get();
@@ -996,7 +996,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         if (rv == null) {
             throw new ClassNotFoundException(String.format("could not find a Qore source class matching '%s' to " +
                 "create Java class '%s'; program pointer: %s", info.cls, bin_name,
-                ptr == 0 ? "invalid" : "valid"));
+                ptr == 0 ? "0 (not set or cleared)" : "valid"));
         }
         // only put in the cache if the byte code is present
         pendingClasses.put(bin_name, rv);

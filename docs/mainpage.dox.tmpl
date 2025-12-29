@@ -880,7 +880,13 @@ set_save_object_callback(callback);
       (<a href="https://github.com/qoretechnologies/qore/issues/5040">issue 5040</a>)
     - added \c clearAllCaches() method to \c QoreURLClassLoader for comprehensive cache cleanup
       (<a href="https://github.com/qoretechnologies/qore/issues/5042">issue 5042</a>)
-    - \c QoreJavaCompiler now implements \c AutoCloseable for proper resource cleanup
+    - \c QoreJavaCompiler now implements \c AutoCloseable for proper resource cleanup;
+      usage with try-with-resources:
+      @code{.java}
+      try (QoreJavaCompiler compiler = new QoreJavaCompiler(classLoader, options)) {
+          compiler.compile(className, sourceCode);
+      } // compiler.close() is called automatically
+      @endcode
       (<a href="https://github.com/qoretechnologies/qore/issues/5038">issue 5038</a>)
     - added validation of program pointer before use in native calls to prevent crashes with invalid pointers
       (<a href="https://github.com/qoretechnologies/qore/issues/5039">issue 5039</a>)

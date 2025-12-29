@@ -471,22 +471,38 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
 
     /**
      * Closes the compiler and releases resources.
-     * This method clears the classloader's caches and program pointer.
-     * After calling this method, the compiler should not be used.
+     * <p>
+     * This method attempts to close the underlying {@link QoreURLClassLoader}
+     * and then clears its caches and program pointer. Any {@link IOException}
+     * thrown during {@code classLoader.close()} is intentionally ignored,
+     * because at this point the compiler is being disposed and the class loader
+     * is not expected to be used again.
+     * <p>
+     * This method is idempotent: calling it multiple times is safe. After
+     * calling this method, the compiler must not be used.
      */
     @Override
     public void close() {
-        if (!closed) {
-            closed = true;
+        if (closed) {
+            return;
+        }
+        try {
             if (classLoader != null) {
-                classLoader.clearAllCaches();
-                classLoader.clearProgramPtr();
                 try {
+                    // Attempt to close the class loader first
                     classLoader.close();
                 } catch (IOException e) {
-                    // Ignore close errors
+                    // Intentionally ignore close errors: the compiler is being
+                    // discarded, and there is no recovery action to take here.
+                } finally {
+                    // Ensure internal loader state is cleared even if close()
+                    // throws, so the compiler ends in a consistent state.
+                    classLoader.clearAllCaches();
+                    classLoader.clearProgramPtr();
                 }
             }
+        } finally {
+            closed = true;
         }
     }
 
