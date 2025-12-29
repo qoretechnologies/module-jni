@@ -858,6 +858,17 @@ set_save_object_callback(callback);
 
     @section jnireleasenotes jni Module Release Notes
 
+    @subsection jni_2_5_0 jni Module Version 2.5.0
+    - <b>breaking change</b>: updated to require Java 21+ for compatibility with Java 18+ where \c finalize() is
+      deprecated for removal
+      (<a href="https://github.com/qoretechnologies/qore/issues/5034">issue 5034</a>)
+    - replaced deprecated \c finalize() methods with \c java.lang.ref.Cleaner API in \c QoreObjectBase,
+      \c QoreClosure, \c QoreExceptionWrapper, and \c QoreInvocationHandler; this change makes calling
+      \c release() or \c destroy() multiple times safe (idempotent)
+      (<a href="https://github.com/qoretechnologies/qore/issues/5034">issue 5034</a>)
+    - fixed a CMake bug where inner class inc file dependencies were not tracked correctly due to a typo
+      (<a href="https://github.com/qoretechnologies/qore/issues/5034">issue 5034</a>)
+
     @subsection jni_2_4_0 jni Module Version 2.4.0
     - added the <a href="../../ExcepDataProvider/html/index.html">ExcepDataProvider</a> module to allow for reading
       record-based data from Excel spreadheets

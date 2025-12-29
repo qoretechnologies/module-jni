@@ -5,7 +5,7 @@
 %global user_module_dir %{mydatarootdir}/qore-modules/
 
 Name:           qore-jni-module
-Version:        2.4.0
+Version:        2.5.0
 Release:        1
 Summary:        Qorus Integration Engine - Qore jni module
 License:        MIT
@@ -20,7 +20,7 @@ BuildRequires:  cmake >= 3.5
 BuildRequires:  qore-devel >= 2.0
 BuildRequires:  qore-stdlib >= 2.0
 BuildRequires:  qore >= 2.0
-BuildRequires:  java-17-openjdk-devel
+BuildRequires:  java-21-openjdk-devel
 BuildRequires:  unzip
 BuildRequires:  doxygen
 
@@ -37,8 +37,8 @@ BuildRequires:  bzip2-devel
 Requires:       %{_bindir}/env
 Requires:       qore >= 1.0
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
-Requires:       java-17-openjdk-devel
-Requires:       java-17-openjdk
+Requires:       java-21-openjdk-devel
+Requires:       java-21-openjdk
 %if 0%{?el8}
 # disable automatic library dependencies due to broken java 11 lib handling in centos 8
 AutoReqProv: no
@@ -93,6 +93,11 @@ This RPM provides API documentation, test and example programs
 %doc docs/jni test/*.qtest test/*.jar test/*.java
 
 %changelog
+* Sat Dec 28 2024 David Nichols <david@qore.org>
+- updated to version 2.5.0
+- requires Java 21+ for compatibility with Java 25
+- replaced deprecated finalize() methods with java.lang.ref.Cleaner API
+
 * Sun Oct 1 2023 David Nichols <david@qore.org>
 - updated to version 2.4.0
 

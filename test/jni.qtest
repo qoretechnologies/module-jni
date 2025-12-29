@@ -240,6 +240,7 @@ public class Main inherits QUnit::Test {
         addTestCase("mailmessage test", \mailMessageTest());
         addTestCase("restclient test", \restClientTest());
         addTestCase("object lifecycle test", \objectLifecycleTest());
+        addTestCase("cleaner api test", \cleanerApiTest());
         addTestCase("qore exception test", \qoreExceptionTest());
         addTestCase("call stack test", \callStackTest());
         addTestCase("closure test", \closureTest());
@@ -1097,6 +1098,40 @@ lorem ipsum\r
         object obj = QoreJavaApiTest::testObjectTest();
         assertEq(2, object_cache.size());
         remove obj;
+    }
+
+    # Tests for Cleaner-based cleanup (Java 25 compatibility)
+    # These tests verify that release/destroy operations are idempotent
+    cleanerApiTest() {
+        # Test double release is safe
+        {
+            TestClass t();
+            assertTrue(QoreJavaApiTest::testDoubleRelease(t));
+        }
+
+        # Test double destroy is safe
+        {
+            TestClass t();
+            assertTrue(QoreJavaApiTest::testDoubleDestroy(t));
+        }
+
+        # Test release after destroy is safe
+        {
+            TestClass t();
+            assertTrue(QoreJavaApiTest::testReleaseAfterDestroy(t));
+        }
+
+        # Test destroy after release is safe
+        {
+            TestClass t();
+            assertTrue(QoreJavaApiTest::testDestroyAfterRelease(t));
+        }
+
+        # Test closure cleanup
+        {
+            code c = int sub (int x) { return x * 2; };
+            assertTrue(QoreJavaApiTest::testClosureDoubleRelease(c));
+        }
     }
 
     qoreExceptionTest() {

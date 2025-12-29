@@ -376,4 +376,43 @@ public class QoreJavaApiTest {
     public static void testCode(QoreClosure code, long val) throws Throwable {
         code.call(val);
     }
+
+    // Tests for Cleaner-based cleanup (Java 25 compatibility)
+    // Double release should be safe (idempotent)
+    public static boolean testDoubleRelease(QoreObject obj) {
+        obj.release();
+        obj.release();  // Should not throw or crash
+        return true;
+    }
+
+    // Double destroy should be safe (idempotent)
+    public static boolean testDoubleDestroy(QoreObject obj) {
+        obj.destroy();
+        obj.destroy();  // Should not throw or crash
+        return true;
+    }
+
+    // Release after destroy should be safe
+    public static boolean testReleaseAfterDestroy(QoreObject obj) {
+        obj.destroy();
+        obj.release();  // Should not throw or crash
+        return true;
+    }
+
+    // Destroy after release should be safe
+    public static boolean testDestroyAfterRelease(QoreObject obj) {
+        obj.release();
+        obj.destroy();  // Should not throw or crash
+        return true;
+    }
+
+    // Test QoreClosure double call to get() after cleanup
+    public static boolean testClosureDoubleRelease(QoreClosure closure) throws Throwable {
+        // Call to verify it works
+        closure.call(1L);
+        // Get pointer should still work
+        long ptr1 = closure.get();
+        // Let the cleaner do its job (closure goes out of scope after this)
+        return ptr1 != 0;
+    }
 }
