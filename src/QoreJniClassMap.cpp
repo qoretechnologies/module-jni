@@ -852,6 +852,11 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
         populateQoreClass(*qc, jc, pgm);
     }
 
+    // issue #5056: resolve abstract methods at runtime for classes created dynamically
+    // this is needed for JNI classes imported through Python where abstract method resolution
+    // that normally happens at parse time doesn't get called
+    qc->runtimeResolveAbstractMethods();
+
     // save class in namespace
     ns->addSystemClass(qc);
 
