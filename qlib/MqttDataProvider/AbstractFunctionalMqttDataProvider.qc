@@ -208,7 +208,8 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
         @debug {
-            LoggerWrapper::debug("AbstractFunctionalMqttDataProvider::constructor() options: %y", options);
+            LoggerWrapper::debug("AbstractFunctionalMqttDataProvider::constructor() url: %y client_id: %y",
+                options.url, options.client_id);
         }
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         hash<auto> cinfo = getClient(copts);

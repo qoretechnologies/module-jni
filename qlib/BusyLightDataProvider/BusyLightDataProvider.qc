@@ -50,7 +50,8 @@ public class BusyLightDataProvider inherits MqttDataProvider::AbstractFunctional
     #! Creates the object from constructor options
     constructor(*hash<auto> options) : AbstractFunctionalMqttDataProvider(options) {
         @debug {
-            LoggerWrapper::debug("BusyLightDataProvider::constructor() options: %y", options);
+            LoggerWrapper::debug("BusyLightDataProvider::constructor() url: %y client_id: %y",
+                options.url, options.client_id);
         }
     }
 

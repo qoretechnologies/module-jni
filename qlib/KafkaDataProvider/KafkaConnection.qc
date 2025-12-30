@@ -419,7 +419,8 @@ public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWith
             opts."bootstrap.servers" += "," + self.opts.bootstrap_servers.join(",");
         }
         @debug {
-            LoggerWrapper::debug("KafkaConnection::getKafkaOptions() returning: %y", opts);
+            LoggerWrapper::debug("KafkaConnection::getKafkaOptions() bootstrap.servers: %y",
+                opts."bootstrap.servers");
         }
         return opts;
     }
