@@ -25,6 +25,7 @@
 //------------------------------------------------------------------------------
 #include "Dispatcher.h"
 #include "Array.h"
+#include "Globals.h"
 #include "Method.h"
 #include "QoreToJava.h"
 
@@ -74,6 +75,8 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
         return nullptr;
     }
     QoreThreadDetacher qtd;
+
+    QoreJniStackLocationHelper slh;
 
     printd(LogLevel, "QoreCodeDispatcher::dispatch(), this: %p pgm: %p\n", this, pgm);
 

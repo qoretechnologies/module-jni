@@ -835,6 +835,8 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         return nullptr;
     }
 
+    QoreJniStackLocationHelper slh;
+
     ExceptionSink xsink;
     try {
         // set program context before converting arguments
@@ -867,11 +869,6 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
                 printd(5, "qore_object_closure_call_internal() %s::%s() (v: %p id: %d) %d arg(s) obj: %p\n",
                     m->getClassName(), m->getName(), v, m->getClass()->getID(), (int)len, obj);
                 val = obj->evalMethodVariant(*m, v, *qore_args, &xsink);
-
-                if (xsink) {
-                    QoreStringMaker desc("cls: '%s' mcls: '%s' valid: %d mvalid: %d", obj->getClassName(), m->getClass()->getName(), obj->isValid(), obj->validInstanceOfStrict(*m->getClass()));
-                    xsink.raiseException("INFO", desc.c_str());
-                }
 
                 // check for errors from objects with injected classes; make sure the error was raised due to
                 // injection issues
