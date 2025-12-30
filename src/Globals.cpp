@@ -835,6 +835,8 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         return nullptr;
     }
 
+    QoreJniStackLocationHelper slh;
+
     ExceptionSink xsink;
     try {
         // set program context before converting arguments
