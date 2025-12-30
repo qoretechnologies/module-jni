@@ -141,6 +141,9 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
 
     #! Creates the object from constructor options
     constructor(KafkaConnection conn, *hash<auto> options) : KafkaDataProviderBase(conn) {
+        @debug {
+            LoggerWrapper::debug("KafkaProducerDataProvider::constructor() options: %y", options);
+        }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions,
             DataProviderDataContextHelper::getHash(){keys ConstructorOptions} + options) + conn.getKafkaOptions();
         # add default values automatically
@@ -165,6 +168,9 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        @debug {
+            LoggerWrapper::debug("KafkaProducerDataProvider::doRequestImpl() req: %y", req);
+        }
         return prod.sendMessage(req);
     }
 

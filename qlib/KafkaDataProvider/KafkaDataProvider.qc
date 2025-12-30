@@ -79,6 +79,9 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
         "url": remove opts.server,
         "opts": opts,
     })) {
+        @debug {
+            LoggerWrapper::debug("KafkaDataProvider::constructor() opts: %y", self.opts);
+        }
     }
 
     #! Creates the object from a connection object

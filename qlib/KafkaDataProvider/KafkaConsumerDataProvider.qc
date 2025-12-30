@@ -197,6 +197,9 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
 
     #! Creates the object from a connection object
     constructor(KafkaConnection conn, *hash<auto> options) : KafkaDataProviderBase(conn) {
+        @debug {
+            LoggerWrapper::debug("KafkaConsumerDataProvider::constructor() options: %y", options);
+        }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions,
             DataProviderDataContextHelper::getHash(){keys ConstructorOptions} + options) + conn.getKafkaOptions();
         # add default values automatically

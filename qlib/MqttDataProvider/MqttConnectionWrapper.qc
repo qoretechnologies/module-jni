@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** MqttConnectionWrapper.qc Copyright 2022 - 2024 Qore Technologies, s.r.o.
+/** MqttConnectionWrapper.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
