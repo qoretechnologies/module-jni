@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** AbstractFunctionalMqttDataProvider.qc Copyright 2022 - 2024 Qore Technologies, s.r.o.
+/** AbstractFunctionalMqttDataProvider.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -207,6 +207,10 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        @debug {
+            LoggerWrapper::debug("AbstractFunctionalMqttDataProvider::constructor() url: %y client_id: %y",
+                options.url, options.client_id);
+        }
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         hash<auto> cinfo = getClient(copts);
         client = cinfo.client;

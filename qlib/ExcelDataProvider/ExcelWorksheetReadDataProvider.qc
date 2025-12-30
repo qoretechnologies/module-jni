@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore ExcelWorksheetReadDataProvider class definition
 
-/*  ExcelWorksheetReadDataProvider.qc Copyright 2021 - 2024 Qore Technologies, s.r.o.
+/*  ExcelWorksheetReadDataProvider.qc Copyright 2021 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),

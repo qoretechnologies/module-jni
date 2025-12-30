@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BusyLightDataProvider module definition
 
-/** BusyLightDataProvider.qc Copyright 2022 - 2024 Qore Technologies, s.r.o.
+/** BusyLightDataProvider.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -49,6 +49,10 @@ public class BusyLightDataProvider inherits MqttDataProvider::AbstractFunctional
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) : AbstractFunctionalMqttDataProvider(options) {
+        @debug {
+            LoggerWrapper::debug("BusyLightDataProvider::constructor() url: %y client_id: %y",
+                options.url, options.client_id);
+        }
     }
 
     string getName() {

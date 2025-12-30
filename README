@@ -2,6 +2,23 @@ JNI module for the Qore programming language.
 
 http://qore.org
 
+Building
+--------
+
+Requirements:
+- CMake 3.5 or later
+- Qore 2.0 or later
+- Java JDK 21 or later
+- BZip2 development libraries
+
+To build:
+
+    mkdir build
+    cd build
+    cmake ..
+    make
+    sudo make install
+
 macOS
 -----
 

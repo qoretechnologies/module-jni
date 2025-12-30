@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore ExcelReadDataProvider class definition
 
-/*  ExcelReadDataProvider.qc Copyright 2021 - 2024 Qore Technologies, s.r.o.
+/*  ExcelReadDataProvider.qc Copyright 2021 - 2025 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -194,6 +194,9 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw EXCEL-INVALID-LOCATION invalid excel location or range string
     */
     constructor(*hash<auto> options) {
+        @debug {
+            LoggerWrapper::debug("ExcelReadDataProvider::constructor() options: %y", options);
+        }
         *hash<auto> copts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, options));
         sheet = copts.worksheet ?? "";
         if (copts.path) {
