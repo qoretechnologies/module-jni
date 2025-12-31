@@ -109,6 +109,12 @@ QoreStringNode* JavaException::toString(bool clear) const {
         env->ExceptionClear();
     }
 
+    // Check if Globals is fully initialized - if not, we can't use the normal exception handling
+    // This can happen if an exception is thrown during Globals::init() before methodClassGetName is set
+    if (!Globals::methodClassGetName) {
+        return new QoreStringNode("Java exception occurred during JNI module initialization (before Globals fully initialized)");
+    }
+
     if (env->IsInstanceOf(throwable, Globals::classQoreExceptionWrapper)) {
         jlong l = env->CallLongMethod(throwable, Globals::methodQoreExceptionWrapperGet);
         if (l != 0) {
