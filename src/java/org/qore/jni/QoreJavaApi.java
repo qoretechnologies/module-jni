@@ -71,7 +71,7 @@ public class QoreJavaApi {
         //System.out.println("DBG: QoreJavaApi::initQoreBootstrap()");
         try {
             QoreURLClassLoader.getProgramPtr();
-        } catch (NullPointerException e0) {
+        } catch (NullPointerException | IllegalStateException e0) {
             // initialize jni module
             try {
                 // try to get a Qore context for a Java thread not associated with a Qore Program object
