@@ -25,7 +25,7 @@ public class QoreJavaApi {
         //System.out.println("DBG: QoreJavaApi::initQore()");
         try {
             QoreURLClassLoader.getProgramPtr();
-        } catch (NullPointerException e0) {
+        } catch (NullPointerException | IllegalStateException e0) {
             //ClassLoader ldr = QoreJavaApi.class.getClassLoader();
             //System.out.printf("QoreJavaApi.initQore() cl: %x (%s)\n", ldr.hashCode(),
             //  ldr.getClass().getCanonicalName());
