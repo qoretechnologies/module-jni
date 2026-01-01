@@ -105,14 +105,21 @@ QoreStringNode* JavaException::toString(bool clear) const {
     JNIEnv* env = Jvm::getEnv();         //not using the Env wrapper because we don't want any C++ exceptions here
     LocalReference<jthrowable> throwable = env->ExceptionOccurred();
     assert(throwable != nullptr);
-    if (clear) {
-        env->ExceptionClear();
-    }
 
     // Check if Globals is fully initialized - if not, we can't use the normal exception handling
     // This can happen if an exception is thrown during Globals::init() before methodClassGetName is set
     if (!Globals::methodClassGetName) {
+        // Print the exception stack trace to stderr for debugging before clearing
+        fprintf(stderr, "JNI module init exception (Globals not fully initialized):\n");
+        fflush(stderr);
+        env->ExceptionDescribe();
+        fflush(stderr);
+        env->ExceptionClear();
         return new QoreStringNode("Java exception occurred during JNI module initialization (before Globals fully initialized)");
+    }
+
+    if (clear) {
+        env->ExceptionClear();
     }
 
     if (env->IsInstanceOf(throwable, Globals::classQoreExceptionWrapper)) {
