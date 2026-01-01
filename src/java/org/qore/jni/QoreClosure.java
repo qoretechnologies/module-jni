@@ -10,7 +10,15 @@ import java.lang.ref.Cleaner;
     @since jni 1.2
 */
 public class QoreClosure implements QoreClosureMarkerImpl {
-    private static final Cleaner cleaner = Cleaner.create();
+    // issue #xxxx: use lazy initialization to avoid Cleaner.create() during bootstrap
+    // Cleaner.create() calls getSystemClassLoader() which fails during system class loader setup
+    private static class CleanerHolder {
+        private static final Cleaner cleaner = Cleaner.create();
+    }
+
+    private static Cleaner getCleaner() {
+        return CleanerHolder.cleaner;
+    }
 
     private final CleanupState state;
     private final Cleaner.Cleanable cleanable;
@@ -39,7 +47,7 @@ public class QoreClosure implements QoreClosureMarkerImpl {
     //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
     public QoreClosure(long obj) {
         this.state = new CleanupState(obj);
-        this.cleanable = cleaner.register(this, state);
+        this.cleanable = getCleaner().register(this, state);
     }
 
     //! returns the pointer to the object

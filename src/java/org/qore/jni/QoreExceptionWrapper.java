@@ -3,7 +3,15 @@ package org.qore.jni;
 import java.lang.ref.Cleaner;
 
 public class QoreExceptionWrapper extends RuntimeException {
-    private static final Cleaner cleaner = Cleaner.create();
+    // issue #xxxx: use lazy initialization to avoid Cleaner.create() during bootstrap
+    // Cleaner.create() calls getSystemClassLoader() which fails during system class loader setup
+    private static class CleanerHolder {
+        private static final Cleaner cleaner = Cleaner.create();
+    }
+
+    private static Cleaner getCleaner() {
+        return CleanerHolder.cleaner;
+    }
 
     private final CleanupState state;
     private final Cleaner.Cleanable cleanable;
@@ -28,7 +36,7 @@ public class QoreExceptionWrapper extends RuntimeException {
 
     QoreExceptionWrapper(long xsink) {
         this.state = new CleanupState(xsink);
-        this.cleanable = cleaner.register(this, state);
+        this.cleanable = getCleaner().register(this, state);
     }
 
     @Override

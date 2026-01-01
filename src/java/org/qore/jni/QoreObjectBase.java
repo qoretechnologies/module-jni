@@ -13,7 +13,15 @@ import java.lang.ref.Cleaner;
     @since 1.2
  */
 public class QoreObjectBase {
-    private static final Cleaner cleaner = Cleaner.create();
+    // issue #xxxx: use lazy initialization to avoid Cleaner.create() during bootstrap
+    // Cleaner.create() calls getSystemClassLoader() which fails during system class loader setup
+    private static class CleanerHolder {
+        private static final Cleaner cleaner = Cleaner.create();
+    }
+
+    private static Cleaner getCleaner() {
+        return CleanerHolder.cleaner;
+    }
 
     //! a pointer to the Qore object - kept for ByteBuddy compatibility
     protected long obj;
@@ -47,7 +55,7 @@ public class QoreObjectBase {
     //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
     public QoreObjectBase(long qcptr, long mptr, long vptr, Object... args) throws Throwable {
         this.state = new CleanupState(0);
-        this.cleanable = cleaner.register(this, state);
+        this.cleanable = getCleaner().register(this, state);
         long ptr = create0(qcptr, mptr, vptr, this, args);
         this.obj = ptr;
         synchronized (state) {
@@ -59,7 +67,7 @@ public class QoreObjectBase {
     public QoreObjectBase(long obj) {
         this.obj = obj;
         this.state = new CleanupState(obj);
-        this.cleanable = cleaner.register(this, state);
+        this.cleanable = getCleaner().register(this, state);
     }
 
     //! returns the pointer to the object
