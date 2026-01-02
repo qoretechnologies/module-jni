@@ -263,14 +263,14 @@ set (JNI_BIN_FILES
 
 # Java sources built in to the binary module with an indication of inner classes, if any
 generate_java(org/qore/jni/QoreJavaApi.java)
-generate_java(org/qore/jni/QoreExceptionWrapper.java $CleanupState $CleanerHolder)
+generate_java(org/qore/jni/QoreExceptionWrapper.java $CleanupState)
 generate_java(org/qore/jni/QoreException.java)
-generate_java(org/qore/jni/QoreObjectBase.java $CleanupState $CleanerHolder)
+generate_java(org/qore/jni/QoreObjectBase.java $CleanupState)
 generate_java(org/qore/jni/QoreJavaClassBase.java)
 generate_java(org/qore/jni/QoreObject.java)
-generate_java(org/qore/jni/QoreClosure.java $CleanupState $CleanerHolder)
+generate_java(org/qore/jni/QoreClosure.java $CleanupState)
 generate_java(org/qore/jni/QoreObjectWrapper.java)
-generate_java(org/qore/jni/QoreInvocationHandler.java $CleanupState $CleanerHolder)
+generate_java(org/qore/jni/QoreInvocationHandler.java $CleanupState)
 generate_java(org/qore/jni/BooleanWrapper.java)
 generate_java(org/qore/jni/ClassModInfo.java)
 generate_java(org/qore/jni/QoreURLClassLoader.java 1 2)

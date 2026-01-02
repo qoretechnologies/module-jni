@@ -3,14 +3,25 @@ package org.qore.jni;
 import java.lang.ref.Cleaner;
 
 public class QoreExceptionWrapper extends RuntimeException {
-    // issue #xxxx: use lazy initialization to avoid Cleaner.create() during bootstrap
+    // Use volatile + double-checked locking for truly lazy initialization
+    // The holder pattern doesn't work during bootstrap because native library loading
+    // triggers class initialization. This pattern ensures the Cleaner is only created
+    // when getCleaner() is actually called from a constructor.
     // Cleaner.create() calls getSystemClassLoader() which fails during system class loader setup
-    private static class CleanerHolder {
-        private static final Cleaner cleaner = Cleaner.create();
-    }
+    private static volatile Cleaner cleanerInstance;
 
     private static Cleaner getCleaner() {
-        return CleanerHolder.cleaner;
+        Cleaner c = cleanerInstance;
+        if (c == null) {
+            synchronized (QoreExceptionWrapper.class) {
+                c = cleanerInstance;
+                if (c == null) {
+                    c = Cleaner.create();
+                    cleanerInstance = c;
+                }
+            }
+        }
+        return c;
     }
 
     private final CleanupState state;
