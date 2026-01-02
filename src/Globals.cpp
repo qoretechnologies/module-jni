@@ -2361,6 +2361,9 @@ LocalReference<jclass> Globals::findDefineClass(Env& env, const char* name, jobj
         QoreString jname(name);
         jname.replaceAll(".", "/");
         if (already_initialized) {
+            // During bootstrap, classes from qore-jni.jar are already loaded by the app classloader
+            // We MUST use FindClass to get those classes so native methods are registered correctly
+            // If FindClass fails (class not found), fall back to DefineClass
             return env.findDefineClass(jname.c_str(), nullptr, buf, bufLen);
         } else {
             return env.defineClass(jname.c_str(), nullptr, buf, bufLen);
@@ -2501,6 +2504,10 @@ bool Globals::init() {
             Env::GetStringUtfChars strval(env, val);
             if (!strcmp(strval.c_str(), "true")) {
                 bootstrap = true;
+                // Set the static bootstrap flag early so findDefineClass() can use it
+                // During bootstrap, FindClass() for our classes will fail because the system
+                // classloader (QoreURLClassLoader) is still being initialized
+                Globals::bootstrap = true;
                 printd(5, "Globals::init() %s = %s\n", INIT_PROP_NAME, strval.c_str());
             }
         }

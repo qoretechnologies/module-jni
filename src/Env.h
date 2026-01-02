@@ -1317,6 +1317,12 @@ public:
         jclass c = env->FindClass(name);
         //if (c) { printd(5, "FOUND '%s': %p\n", name, c); }
         if (!c) {
+            // Clear any pending exception from FindClass before trying DefineClass
+            // This handles cases like bootstrap mode where FindClass might throw
+            // ExceptionInInitializerError due to getSystemClassLoader() being unavailable
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+            }
             c = env->DefineClass(name, loader, reinterpret_cast<const jbyte*>(buf), bufLen);
             if (!c) {
                 throw JavaException();
