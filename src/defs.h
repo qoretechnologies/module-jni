@@ -32,6 +32,7 @@
 #define QORE_JNI_DEFS_H_
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 
 #include "jni.h"
 

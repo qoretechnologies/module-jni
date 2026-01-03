@@ -37,6 +37,14 @@
 using namespace jni;
 
 Env::Env(bool set_context) {
+   // Check for interrupt before attaching to JVM
+   {
+      ExceptionSink xsink;
+      if (qore_check_io_interrupt(&xsink, "JVM attach")) {
+         throw XsinkException(xsink);
+      }
+   }
+
    bool new_attach;
    env = Jvm::attachAndGetEnv(new_attach);
    if (set_context && new_attach)
