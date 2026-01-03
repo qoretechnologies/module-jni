@@ -859,6 +859,9 @@ set_save_object_callback(callback);
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_5_0 jni Module Version 2.5.0
+    - added support for interruptible I/O for graceful termination of sandboxed programs; interrupt
+      checks are performed before JVM thread attachment
+      (<a href="https://github.com/qoretechnologies/qore/issues/5116">issue 5116</a>)
     - <b>breaking change</b>: updated to require Java 21+ for compatibility with Java 18+ where \c finalize() is
       deprecated for removal
       (<a href="https://github.com/qoretechnologies/qore/issues/5034">issue 5034</a>)
