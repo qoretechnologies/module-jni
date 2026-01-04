@@ -219,6 +219,13 @@ jmethodID Globals::methodKotlinMetadataHelperIsDataClass;
 jmethodID Globals::methodKotlinMetadataHelperIsFileFacade;
 jmethodID Globals::methodKotlinMetadataHelperIsKotlinRuntimeAvailable;
 
+GlobalReference<jclass> Globals::classKotlinScriptEngine;
+jmethodID Globals::methodKotlinScriptEngineIsAvailable;
+jmethodID Globals::methodKotlinScriptEngineGetInitError;
+jmethodID Globals::methodKotlinScriptEngineEval;
+jmethodID Globals::methodKotlinScriptEngineEvalWithBindings;
+jmethodID Globals::methodKotlinScriptEngineRetryInit;
+
 GlobalReference<jclass> Globals::classGraphicsEnvironment;
 jmethodID Globals::methodGraphicsEnvironmentIsHeadless;
 
@@ -3087,6 +3094,78 @@ void Globals::initKotlinMetadataHelper() {
     std::call_once(kotlinMetadataHelperInitFlag, doInitKotlinMetadataHelper);
 }
 
+static std::mutex kotlinScriptEngineMutex;
+static bool kotlinScriptEngineInitAttempted = false;
+
+void Globals::initKotlinScriptEngine() {
+    // If already initialized successfully, nothing to do
+    if (classKotlinScriptEngine) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(kotlinScriptEngineMutex);
+
+    // Double-check after acquiring lock
+    if (classKotlinScriptEngine) {
+        return;
+    }
+
+    // If we've already attempted and failed, don't retry automatically
+    // The user can call retryInit() to force a retry
+    if (kotlinScriptEngineInitAttempted) {
+        return;
+    }
+
+    kotlinScriptEngineInitAttempted = true;
+
+    Env env;
+    // Try to find the class - first try the builtin classloader, then the program classloader
+    try {
+        classKotlinScriptEngine = env.findClass("org/qore/jni/KotlinScriptEngine").makeGlobal();
+    } catch (jni::Exception& e) {
+        e.ignore();
+        // Try with the program classloader
+        JniExternalProgramData* jpc = jni_get_context();
+        if (jpc) {
+            try {
+                LocalReference<jstring> jname = env.newString("org.qore.jni.KotlinScriptEngine");
+                jvalue jarg;
+                jarg.l = jname;
+                classKotlinScriptEngine = env.callObjectMethod(jpc->getClassLoader(),
+                    methodQoreURLClassLoaderLoadClass, &jarg).as<jclass>().makeGlobal();
+            } catch (jni::Exception& e2) {
+                printd(5, "KotlinScriptEngine not available via program classloader\n");
+                e2.ignore();
+                kotlinScriptEngineInitAttempted = false;
+                return;
+            }
+        } else {
+            printd(5, "KotlinScriptEngine not available - no program context\n");
+            kotlinScriptEngineInitAttempted = false;
+            return;
+        }
+    }
+
+    try {
+        methodKotlinScriptEngineIsAvailable = env.getStaticMethod(classKotlinScriptEngine,
+            "isAvailable", "()Z");
+        methodKotlinScriptEngineGetInitError = env.getStaticMethod(classKotlinScriptEngine,
+            "getInitError", "()Ljava/lang/String;");
+        methodKotlinScriptEngineEval = env.getStaticMethod(classKotlinScriptEngine,
+            "eval", "(Ljava/lang/String;)Ljava/lang/Object;");
+        methodKotlinScriptEngineEvalWithBindings = env.getStaticMethod(classKotlinScriptEngine,
+            "evalWithBindings", "(Ljava/lang/String;Ljava/util/HashMap;)Ljava/lang/Object;");
+        methodKotlinScriptEngineRetryInit = env.getStaticMethod(classKotlinScriptEngine,
+            "retryInit", "()Z");
+    } catch (jni::Exception& e) {
+        // Failed to get methods - reset
+        printd(5, "KotlinScriptEngine method lookup failed\n");
+        e.ignore();
+        classKotlinScriptEngine = nullptr;
+        kotlinScriptEngineInitAttempted = false;
+    }
+}
+
 void Globals::cleanup() {
     // delete classes
     classThrowable = nullptr;
@@ -3126,6 +3205,7 @@ void Globals::cleanup() {
     classQoreURLClassLoader = nullptr;
     classJavaClassBuilder = nullptr;
     classKotlinMetadataHelper = nullptr;
+    classKotlinScriptEngine = nullptr;
     classGraphicsEnvironment = nullptr;
     classThread = nullptr;
     classHashMap = nullptr;

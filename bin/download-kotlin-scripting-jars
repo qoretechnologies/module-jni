@@ -1,0 +1,144 @@
+#!/bin/bash
+#
+# Downloads Kotlin JSR-223 scripting JARs from Maven Central.
+# These JARs are required for kotlin_eval() and the kotlin-eval module command.
+#
+# Usage: download-kotlin-scripting-jars [output-directory]
+#
+# If no output directory is specified, JARs are downloaded to the current directory.
+#
+# Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
+#
+
+set -e
+
+# Default Kotlin version - should match the installed kotlinc version
+KOTLIN_VERSION="${KOTLIN_VERSION:-2.1.0}"
+
+# Output directory
+OUTPUT_DIR="${1:-.}"
+
+# Maven Central base URL
+MAVEN_BASE="https://repo1.maven.org/maven2/org/jetbrains/kotlin"
+
+# Required JARs for JSR-223 scripting
+JARS=(
+    "kotlin-scripting-jsr223:kotlin-scripting-jsr223"
+    "kotlin-scripting-compiler-embeddable:kotlin-scripting-compiler-embeddable"
+    "kotlin-scripting-compiler-impl-embeddable:kotlin-scripting-compiler-impl-embeddable"
+    "kotlin-compiler-embeddable:kotlin-compiler-embeddable"
+    "kotlin-script-runtime:kotlin-script-runtime"
+    "kotlin-scripting-common:kotlin-scripting-common"
+    "kotlin-scripting-jvm:kotlin-scripting-jvm"
+    "kotlin-scripting-jvm-host:kotlin-scripting-jvm-host"
+)
+
+# Additional JARs from kotlinx (different Maven group)
+KOTLINX_JARS=(
+    "kotlinx-coroutines-core-jvm:1.8.1"
+)
+
+KOTLINX_BASE="https://repo1.maven.org/maven2/org/jetbrains/kotlinx"
+
+# Try to detect Kotlin version from kotlinc
+detect_kotlin_version() {
+    if command -v kotlinc &> /dev/null; then
+        local version=$(kotlinc -version 2>&1 | grep -oP 'kotlinc-jvm \K[0-9]+\.[0-9]+\.[0-9]+' || true)
+        if [ -n "$version" ]; then
+            echo "$version"
+            return
+        fi
+    fi
+    echo "$KOTLIN_VERSION"
+}
+
+# Download a JAR from Maven
+download_jar() {
+    local artifact="$1"
+    local name="$2"
+    local version="$3"
+    local url="${MAVEN_BASE}/${artifact}/${version}/${name}-${version}.jar"
+    local output="${OUTPUT_DIR}/${name}-${version}.jar"
+
+    if [ -f "$output" ]; then
+        echo "Already exists: $output"
+        return 0
+    fi
+
+    echo "Downloading: $name-$version.jar"
+    if curl -fsSL -o "$output" "$url"; then
+        echo "  -> $output"
+        return 0
+    else
+        echo "  FAILED to download: $url"
+        return 1
+    fi
+}
+
+# Download a kotlinx JAR from Maven
+download_kotlinx_jar() {
+    local name="$1"
+    local version="$2"
+    local url="${KOTLINX_BASE}/${name}/${version}/${name}-${version}.jar"
+    local output="${OUTPUT_DIR}/${name}-${version}.jar"
+
+    if [ -f "$output" ]; then
+        echo "Already exists: $output"
+        return 0
+    fi
+
+    echo "Downloading: $name-$version.jar"
+    if curl -fsSL -o "$output" "$url"; then
+        echo "  -> $output"
+        return 0
+    else
+        echo "  FAILED to download: $url"
+        return 1
+    fi
+}
+
+# Main
+main() {
+    local version=$(detect_kotlin_version)
+    echo "Kotlin version: $version"
+    echo "Output directory: $OUTPUT_DIR"
+    echo ""
+
+    mkdir -p "$OUTPUT_DIR"
+
+    local failed=0
+    echo "Downloading Kotlin scripting JARs..."
+    for jar_spec in "${JARS[@]}"; do
+        IFS=':' read -r artifact name <<< "$jar_spec"
+        if ! download_jar "$artifact" "$name" "$version"; then
+            ((failed++))
+        fi
+    done
+
+    echo ""
+    echo "Downloading kotlinx JARs..."
+    for jar_spec in "${KOTLINX_JARS[@]}"; do
+        IFS=':' read -r name ver <<< "$jar_spec"
+        if ! download_kotlinx_jar "$name" "$ver"; then
+            ((failed++))
+        fi
+    done
+
+    echo ""
+    if [ $failed -eq 0 ]; then
+        echo "All JARs downloaded successfully."
+        echo ""
+        echo "To use with Qore JNI module, add these JARs to the classpath:"
+        echo "  %module-cmd(jni) add-classpath ${OUTPUT_DIR}"
+        echo ""
+        echo "Or set CLASSPATH environment variable:"
+        echo "  export CLASSPATH=\"\$CLASSPATH:${OUTPUT_DIR}/*\""
+    else
+        echo "WARNING: $failed JAR(s) failed to download."
+        echo "Some JARs may not be available for Kotlin version $version."
+        echo "Try setting KOTLIN_VERSION environment variable to a different version."
+        exit 1
+    fi
+}
+
+main "$@"

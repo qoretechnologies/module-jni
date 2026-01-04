@@ -5,7 +5,7 @@ set(module_name "jni")
 project(qore-jni-module)
 
 set (VERSION_MAJOR 2)
-set (VERSION_MINOR 5)
+set (VERSION_MINOR 6)
 set (VERSION_PATCH 0)
 
 set (BYTE_BUDDY_JAR ${CMAKE_SOURCE_DIR}/byte-buddy/byte-buddy-1.14.19.jar)
@@ -260,6 +260,7 @@ set (JNI_BIN_FILES
     bin/qjava2jar
     bin/qjavac
     bin/qkotlinc
+    bin/download-kotlin-scripting-jars
 )
 
 # Java sources built in to the binary module with an indication of inner classes, if any
@@ -284,6 +285,7 @@ generate_java(org/qore/jni/JavaClassBuilder.java 1 2 StaticEntry)
 generate_java(org/qore/jni/QoreJavaFileObject.java)
 generate_java(org/qore/jni/QoreJavaObjectPtr.java)
 add_java_source(org/qore/jni/KotlinMetadataHelper.java)
+add_java_source(org/qore/jni/KotlinScriptEngine.java)
 generate_jar(${BYTE_BUDDY_JAR} JavaJarByteBuddy)
 
 # add Java sources without native methods

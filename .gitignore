@@ -6,3 +6,8 @@ build/
 .settings/
 
 test/qore-jni-test.jar
+
+# Build artifacts - compiled Java classes and generated JARs in dataprovider directories
+qlib/*/jar/*.jar
+src/java/org/qore/dataprovider/excel/*.class
+src/java/org/qore/dataprovider/kafka/*.class

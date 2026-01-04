@@ -229,6 +229,17 @@ public:
     DLLLOCAL static jmethodID methodKotlinMetadataHelperIsFileFacade;            // static boolean isFileFacade(Class<?>)
     DLLLOCAL static jmethodID methodKotlinMetadataHelperIsKotlinRuntimeAvailable; // static boolean isKotlinRuntimeAvailable()
 
+    // Kotlin script engine helper class
+    DLLLOCAL static GlobalReference<jclass> classKotlinScriptEngine;              // org.qore.jni.KotlinScriptEngine
+    DLLLOCAL static jmethodID methodKotlinScriptEngineIsAvailable;                // static boolean isAvailable()
+    DLLLOCAL static jmethodID methodKotlinScriptEngineGetInitError;               // static String getInitError()
+    DLLLOCAL static jmethodID methodKotlinScriptEngineEval;                       // static Object eval(String)
+    DLLLOCAL static jmethodID methodKotlinScriptEngineEvalWithBindings;           // static Object evalWithBindings(String, HashMap)
+    DLLLOCAL static jmethodID methodKotlinScriptEngineRetryInit;                  // static boolean retryInit()
+
+    // Lazily initialize the KotlinScriptEngine class (can retry if failed)
+    DLLLOCAL static void initKotlinScriptEngine();
+
     // to check for headless AWT to avoid importing classes that cannot be initialized when headless
     DLLLOCAL static GlobalReference<jclass> classGraphicsEnvironment;             // java.awt.GraphicsEnvironment
     DLLLOCAL static jmethodID methodGraphicsEnvironmentIsHeadless;                // boolean GraphicsEnvironment.isHeadless()

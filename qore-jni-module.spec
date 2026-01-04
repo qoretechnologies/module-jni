@@ -5,7 +5,7 @@
 %global user_module_dir %{mydatarootdir}/qore-modules/
 
 Name:           qore-jni-module
-Version:        2.5.0
+Version:        2.6.0
 Release:        1
 Summary:        Qorus Integration Engine - Qore jni module
 License:        MIT
@@ -39,6 +39,9 @@ Requires:       qore >= 1.0
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 Requires:       java-21-openjdk-devel
 Requires:       java-21-openjdk
+# Kotlin is optional - only needed for kotlin_eval() scripting support
+# Basic Kotlin class support works with just kotlin-stdlib in the classpath
+Suggests:       kotlin
 %if 0%{?el8}
 # disable automatic library dependencies due to broken java 11 lib handling in centos 8
 AutoReqProv: no
@@ -76,6 +79,7 @@ make DESTDIR=%{buildroot} install %{?_smp_mflags}
 %{_bindir}/qjava2jar
 %{_bindir}/qjavac
 %{_bindir}/qkotlinc
+%{_bindir}/download-kotlin-scripting-jars
 %dir /usr/share/qore/java
 /usr/share/qore/java/qore-jni-compiler.jar
 /usr/share/qore/java/qore-jni.jar
@@ -94,6 +98,13 @@ This RPM provides API documentation, test and example programs
 %doc docs/jni test/*.qtest test/*.jar test/*.java
 
 %changelog
+* Sat Jan 4 2026 David Nichols <david@qore.org>
+- updated to version 2.6.0
+- added full Kotlin language integration support
+- added kotlin_eval(), kotlin_scripting_available(), kotlin_scripting_retry() functions
+- added download-kotlin-scripting-jars script for downloading scripting JARs from Maven
+- added qkotlinc helper script for compiling Kotlin sources using Qore APIs
+
 * Sat Dec 28 2024 David Nichols <david@qore.org>
 - updated to version 2.5.0
 - requires Java 21+ for compatibility with Java 25
