@@ -3081,7 +3081,7 @@ void Globals::initKotlinMetadataHelper() {
             "isKotlinRuntimeAvailable", "()Z");
     } catch (jni::Exception& e) {
         // KotlinMetadataHelper not available - this is fine, Kotlin support will be limited
-        printd(5, "KotlinMetadataHelper not available: %s\n", e.what());
+        printd(5, "KotlinMetadataHelper not available\n");
         e.ignore();
     }
 }
