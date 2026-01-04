@@ -182,6 +182,14 @@ public:
         return mods & JVM_ACC_ABSTRACT;
     }
 
+    bool isSynthetic() const {
+        return mods & ACC_SYNTHETIC;
+    }
+
+    bool isBridge() const {
+        return mods & ACC_BRIDGE;
+    }
+
     int64 getFlags() const {
         // NOTE: do not set or return QCF_USES_EXTRA_ARGS when varargs is set; this causes a trailing "softlist auto" 
         // param to be created instead

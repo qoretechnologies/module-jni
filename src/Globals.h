@@ -46,6 +46,10 @@ enum class Type {
     Void, Boolean, Byte, Char, Short, Int, Long, Float, Double, Reference
 };
 
+// JVM access flags not in classfile_constants.h
+constexpr int ACC_BRIDGE = 0x0040;    // method
+constexpr int ACC_SYNTHETIC = 0x1000; // class, field, method, parameter
+
 DLLLOCAL extern bool jni_qore_init;
 DLLLOCAL extern bool jni_qore_init_done;
 
@@ -215,6 +219,15 @@ public:
     DLLLOCAL static jmethodID methodJavaClassBuilderGetTypeDescriptionCls;        // static TypeDescription getTypeDescription(Class<?>)
     DLLLOCAL static jmethodID methodJavaClassBuilderGetTypeDescriptionStr;        // static TypeDescription getTypeDescription(String)
     DLLLOCAL static jmethodID methodJavaClassBuilderFindBaseClassMethodConflict;  // static boolean findBaseClassMethodConflict(Class<?>, String, List<TypeDescription>, boolean)
+
+    // Kotlin metadata helper class
+    DLLLOCAL static GlobalReference<jclass> classKotlinMetadataHelper;           // org.qore.jni.KotlinMetadataHelper
+    DLLLOCAL static jmethodID methodKotlinMetadataHelperIsKotlinClass;           // static boolean isKotlinClass(Class<?>)
+    DLLLOCAL static jmethodID methodKotlinMetadataHelperGetKotlinKind;           // static int getKotlinKind(Class<?>)
+    DLLLOCAL static jmethodID methodKotlinMetadataHelperIsCompanionObject;       // static boolean isCompanionObject(Class<?>)
+    DLLLOCAL static jmethodID methodKotlinMetadataHelperIsDataClass;             // static boolean isDataClass(Class<?>)
+    DLLLOCAL static jmethodID methodKotlinMetadataHelperIsFileFacade;            // static boolean isFileFacade(Class<?>)
+    DLLLOCAL static jmethodID methodKotlinMetadataHelperIsKotlinRuntimeAvailable; // static boolean isKotlinRuntimeAvailable()
 
     // to check for headless AWT to avoid importing classes that cannot be initialized when headless
     DLLLOCAL static GlobalReference<jclass> classGraphicsEnvironment;             // java.awt.GraphicsEnvironment
@@ -407,6 +420,9 @@ public:
 
     // returns true if this is a Java bootstrap init
     DLLLOCAL static bool init();
+
+    // Lazily initialize the KotlinMetadataHelper class
+    DLLLOCAL static void initKotlinMetadataHelper();
 
     DLLLOCAL static void cleanup();
     DLLLOCAL static Type getType(jclass cls);

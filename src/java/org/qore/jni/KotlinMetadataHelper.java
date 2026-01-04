@@ -1,0 +1,184 @@
+/*
+    KotlinMetadataHelper.java
+
+    Qore Programming Language JNI Module
+
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+package org.qore.jni;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+
+/**
+ * Helper class for detecting and extracting Kotlin metadata from classes.
+ *
+ * This class provides methods to detect if a class is a Kotlin class and
+ * extract metadata about Kotlin-specific features like data classes,
+ * companion objects, and sealed classes.
+ *
+ * The detection is done via reflection, looking for the @kotlin.Metadata
+ * annotation that the Kotlin compiler adds to all Kotlin classes.
+ */
+public class KotlinMetadataHelper {
+    // Kotlin metadata annotation class name
+    private static final String KOTLIN_METADATA_ANNOTATION = "kotlin.Metadata";
+
+    // Cache the Metadata annotation class if available
+    private static Class<? extends Annotation> kotlinMetadataClass = null;
+    private static Method kindMethod = null;
+    private static boolean initialized = false;
+
+    // Kotlin metadata kind values
+    public static final int KIND_CLASS = 1;           // Regular class
+    public static final int KIND_FILE_FACADE = 2;     // File facade (top-level functions)
+    public static final int KIND_SYNTHETIC = 3;       // Synthetic class (companion object, etc.)
+    public static final int KIND_MULTI_FILE = 4;      // Multi-file class facade
+    public static final int KIND_UNKNOWN = -1;        // Unknown or not a Kotlin class
+
+    /**
+     * Initialize the helper by attempting to load the Kotlin Metadata annotation class.
+     */
+    @SuppressWarnings("unchecked")
+    private static synchronized void initialize() {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+
+        try {
+            kotlinMetadataClass = (Class<? extends Annotation>) Class.forName(KOTLIN_METADATA_ANNOTATION);
+            kindMethod = kotlinMetadataClass.getMethod("k");
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            // Kotlin runtime not available
+            kotlinMetadataClass = null;
+            kindMethod = null;
+        }
+    }
+
+    /**
+     * Check if the given class is a Kotlin class.
+     *
+     * @param cls the class to check
+     * @return true if the class has the @kotlin.Metadata annotation
+     */
+    public static boolean isKotlinClass(Class<?> cls) {
+        initialize();
+        if (kotlinMetadataClass == null) {
+            return false;
+        }
+        return cls.isAnnotationPresent(kotlinMetadataClass);
+    }
+
+    /**
+     * Get the Kotlin metadata kind for the given class.
+     *
+     * @param cls the class to check
+     * @return the kind value (1=class, 2=file facade, 3=synthetic, 4=multi-file), or -1 if not a Kotlin class
+     */
+    public static int getKotlinKind(Class<?> cls) {
+        initialize();
+        if (kotlinMetadataClass == null || kindMethod == null) {
+            return KIND_UNKNOWN;
+        }
+
+        Annotation metadata = cls.getAnnotation(kotlinMetadataClass);
+        if (metadata == null) {
+            return KIND_UNKNOWN;
+        }
+
+        try {
+            return (int) kindMethod.invoke(metadata);
+        } catch (Exception e) {
+            return KIND_UNKNOWN;
+        }
+    }
+
+    /**
+     * Check if the given class is a Kotlin companion object.
+     *
+     * @param cls the class to check
+     * @return true if the class is a companion object (kind=3 and name contains "$Companion")
+     */
+    public static boolean isCompanionObject(Class<?> cls) {
+        if (!isKotlinClass(cls)) {
+            return false;
+        }
+        // Companion objects have kind=3 (synthetic) and their name contains "$Companion"
+        int kind = getKotlinKind(cls);
+        String name = cls.getName();
+        return kind == KIND_SYNTHETIC && (name.endsWith("$Companion") || name.contains("$Companion$"));
+    }
+
+    /**
+     * Check if the given class is a Kotlin data class.
+     *
+     * Data classes are detected by checking for the presence of component functions
+     * (component1, component2, etc.) and the copy method, which are generated by
+     * the Kotlin compiler for data classes.
+     *
+     * @param cls the class to check
+     * @return true if the class appears to be a Kotlin data class
+     */
+    public static boolean isDataClass(Class<?> cls) {
+        if (!isKotlinClass(cls)) {
+            return false;
+        }
+
+        // Data classes have kind=1 (regular class)
+        if (getKotlinKind(cls) != KIND_CLASS) {
+            return false;
+        }
+
+        // Check for component1() method (data classes always have at least one component)
+        try {
+            cls.getMethod("component1");
+            // Also check for copy() method
+            Method[] methods = cls.getMethods();
+            for (Method m : methods) {
+                if (m.getName().equals("copy")) {
+                    return true;
+                }
+            }
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if the given class is a Kotlin file facade (top-level functions).
+     *
+     * @param cls the class to check
+     * @return true if the class is a file facade
+     */
+    public static boolean isFileFacade(Class<?> cls) {
+        return getKotlinKind(cls) == KIND_FILE_FACADE;
+    }
+
+    /**
+     * Check if Kotlin runtime is available.
+     *
+     * @return true if the Kotlin runtime is available
+     */
+    public static boolean isKotlinRuntimeAvailable() {
+        initialize();
+        return kotlinMetadataClass != null;
+    }
+}

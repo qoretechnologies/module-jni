@@ -1,0 +1,203 @@
+#!/usr/bin/env qore
+
+/** Used to compile Kotlin source files to class files with Qore JNI support
+
+    This script wraps the kotlinc compiler to automatically set up the classpath
+    for Qore JNI integration, enabling Kotlin code to call Qore APIs.
+
+    Arguments not explicitly processed by this script are passed directly to kotlinc.
+
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
+*/
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+
+%requires Util
+%requires process
+
+%exec-class QKotlinCompilerCmd
+
+class QKotlinCompilerCmd {
+    public {
+        const ERR_COMPILATION_FAILURE = 1;
+        const ERR_KOTLINC_NOT_FOUND   = 2;
+        const ERR_NO_SOURCES          = 3;
+
+        # Qore JNI JAR paths relative to the script location
+        const QoreJniJar = "../share/qore/java/qore-jni.jar";
+    }
+
+    private {
+        bool quiet = False;
+        string output_dir;
+        list<string> kotlin_sources = ();
+        list<string> extra_args = ();
+        string classpath;
+    }
+
+    constructor() {
+        parseOptions();
+
+        if (!kotlin_sources) {
+            usage();
+            set_return_value(0);
+            return;
+        }
+
+        # Find kotlinc
+        string kotlinc = findKotlinc();
+
+        # Build classpath
+        string qore_jar = get_script_dir() + DirSep + QoreJniJar;
+        if (!is_file(qore_jar)) {
+            stderr.printf("WARNING: Qore JNI JAR not found at %y\n", qore_jar);
+            qore_jar = "";
+        }
+
+        if (classpath) {
+            classpath = qore_jar + (qore_jar ? ":" : "") + classpath;
+        } else {
+            classpath = qore_jar;
+        }
+
+        # Build kotlinc command
+        list<string> cmd = (kotlinc,);
+
+        if (classpath) {
+            cmd += ("-cp", classpath);
+        }
+
+        if (output_dir) {
+            cmd += ("-d", output_dir);
+        }
+
+        cmd += extra_args;
+        cmd += kotlin_sources;
+
+        if (!quiet) {
+            printf("Compiling %d Kotlin source file%s...\n",
+                kotlin_sources.size(),
+                kotlin_sources.size() == 1 ? "" : "s");
+            printf("Command: %s\n", cmd.join(" "));
+        }
+
+        # Run kotlinc
+        hash<auto> result = Process::run(cmd[0], cmd[1..]);
+
+        if (result.stdout) {
+            print(result.stdout);
+        }
+        if (result.stderr) {
+            stderr.print(result.stderr);
+        }
+
+        if (result.exit_code != 0) {
+            if (!quiet) {
+                stderr.printf("Compilation failed with exit code %d\n", result.exit_code);
+            }
+            set_return_value(ERR_COMPILATION_FAILURE);
+            return;
+        }
+
+        if (!quiet) {
+            printf("Compilation successful\n");
+        }
+    }
+
+    private string findKotlinc() {
+        # Try to find kotlinc in PATH
+        hash<auto> result = Process::run("which", ("kotlinc",));
+        if (result.exit_code == 0) {
+            return trim(result.stdout);
+        }
+
+        # Try common locations
+        list<string> common_paths = (
+            "/usr/bin/kotlinc",
+            "/usr/local/bin/kotlinc",
+            "/snap/bin/kotlinc",
+            ENV.HOME + "/.sdkman/candidates/kotlin/current/bin/kotlinc",
+        );
+
+        foreach string path in (common_paths) {
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+
+        stderr.printf("ERROR: kotlinc not found. Please install Kotlin compiler.\n");
+        stderr.printf("Installation options:\n");
+        stderr.printf("  Ubuntu/Debian: snap install kotlin --classic\n");
+        stderr.printf("  Fedora/RHEL:   dnf install kotlin\n");
+        stderr.printf("  Alpine:        apk add kotlin\n");
+        stderr.printf("  Any (SDKMAN):  sdk install kotlin\n");
+        exit(ERR_KOTLINC_NOT_FOUND);
+        return "";  # unreachable
+    }
+
+    private parseOptions() {
+        int l = ARGV.size();
+        for (int i = 0; i < l; ) {
+            string arg = ARGV[i];
+            if (arg == "-h" || arg == "--help") {
+                usage();
+                exit(0);
+            }
+            if (arg == "-q" || arg == "--quiet") {
+                quiet = True;
+                ++i;
+                continue;
+            }
+            if (arg == "-cp" || arg == "-classpath") {
+                ++i;
+                if (i < l) {
+                    classpath = ARGV[i];
+                    ++i;
+                }
+                continue;
+            }
+            if (arg == "-d") {
+                ++i;
+                if (i < l) {
+                    output_dir = ARGV[i];
+                    ++i;
+                }
+                continue;
+            }
+            if (arg[0] != "-" && arg =~ /\.kt$/i) {
+                kotlin_sources += arg;
+                ++i;
+                continue;
+            }
+            # Pass through any other arguments to kotlinc
+            extra_args += arg;
+            ++i;
+        }
+    }
+
+    static usage() {
+        printf("Usage: %s [options] <source files...>\n"
+            "\n"
+            "Options:\n"
+            "  -d <DIR>           Output directory for compiled class files\n"
+            "  -cp,-classpath <P> Additional classpath (qore-jni.jar added automatically)\n"
+            "  -q,--quiet         Suppress output\n"
+            "  -h,--help          This help text\n"
+            "\n"
+            "This script wraps kotlinc to automatically include the Qore JNI JAR\n"
+            "in the classpath, enabling Kotlin code to call Qore APIs.\n"
+            "\n"
+            "All other arguments are passed directly to kotlinc.\n"
+            "\n"
+            "Example:\n"
+            "  %s -d output MyClass.kt\n"
+            "  %s -include-runtime -d myapp.jar *.kt\n",
+            get_script_name(),
+            get_script_name(),
+            get_script_name()
+        );
+    }
+}
