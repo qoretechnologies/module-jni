@@ -3098,14 +3098,9 @@ static std::mutex kotlinScriptEngineMutex;
 static bool kotlinScriptEngineInitAttempted = false;
 
 void Globals::initKotlinScriptEngine() {
-    // If already initialized successfully, nothing to do
-    if (classKotlinScriptEngine) {
-        return;
-    }
-
     std::lock_guard<std::mutex> lock(kotlinScriptEngineMutex);
 
-    // Double-check after acquiring lock
+    // If already initialized successfully, nothing to do
     if (classKotlinScriptEngine) {
         return;
     }

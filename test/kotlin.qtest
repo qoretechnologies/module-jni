@@ -315,7 +315,7 @@ public class KotlinTest inherits QUnit::Test {
         # Check for scripting JARs in common locations
         list<string> scriptingPaths = (
             "/tmp/kotlin-scripting",  # Downloaded by download-kotlin-scripting-jars script
-            ENV.HOME + "/.kotlin-scripting",
+            (ENV.HOME ?? "") + "/.kotlin-scripting",
             ENV.KOTLIN_SCRIPTING_JARS ?? "",
         );
 
@@ -367,8 +367,10 @@ public class KotlinTest inherits QUnit::Test {
             "/usr/share/kotlin",
             "/usr/lib/kotlin",
             "/usr/local/kotlin",
-            ENV.HOME + "/.sdkman/candidates/kotlin/current",
         );
+        if (ENV.HOME) {
+            homes += ENV.HOME + "/.sdkman/candidates/kotlin/current";
+        }
 
         foreach string home in (homes) {
             if (is_dir(home)) {
