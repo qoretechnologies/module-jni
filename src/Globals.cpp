@@ -39,6 +39,7 @@
 
 #include <bzlib.h>
 #include <dlfcn.h>
+#include <mutex>
 
 namespace jni {
 
@@ -1667,7 +1668,8 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
                 const char* cls_name = qc.getName();
 
                 // Skip Kotlin companion object inner classes (ending with $Companion or __Companion)
-                if (strstr(cls_name, "$Companion") || strstr(cls_name, "__Companion")) {
+                // Only filter when processing Kotlin classes to avoid affecting other languages
+                if (kotlin && (strstr(cls_name, "$Companion") || strstr(cls_name, "__Companion"))) {
                     printd(5, "+ skipping Kotlin companion object class %s\n", cls_name);
                     continue;
                 }
@@ -3055,35 +3057,34 @@ bool Globals::init() {
     return bootstrap;
 }
 
-static bool kotlinMetadataHelperInitialized = false;
+static std::once_flag kotlinMetadataHelperInitFlag;
 
-void Globals::initKotlinMetadataHelper() {
-    if (kotlinMetadataHelperInitialized) {
-        return;
-    }
-    kotlinMetadataHelperInitialized = true;
-
+static void doInitKotlinMetadataHelper() {
     Env env;
     // Try to find the class - it should be available through the classloader now
     try {
-        classKotlinMetadataHelper = env.findClass("org/qore/jni/KotlinMetadataHelper").makeGlobal();
-        methodKotlinMetadataHelperIsKotlinClass = env.getStaticMethod(classKotlinMetadataHelper,
+        Globals::classKotlinMetadataHelper = env.findClass("org/qore/jni/KotlinMetadataHelper").makeGlobal();
+        Globals::methodKotlinMetadataHelperIsKotlinClass = env.getStaticMethod(Globals::classKotlinMetadataHelper,
             "isKotlinClass", "(Ljava/lang/Class;)Z");
-        methodKotlinMetadataHelperGetKotlinKind = env.getStaticMethod(classKotlinMetadataHelper,
+        Globals::methodKotlinMetadataHelperGetKotlinKind = env.getStaticMethod(Globals::classKotlinMetadataHelper,
             "getKotlinKind", "(Ljava/lang/Class;)I");
-        methodKotlinMetadataHelperIsCompanionObject = env.getStaticMethod(classKotlinMetadataHelper,
+        Globals::methodKotlinMetadataHelperIsCompanionObject = env.getStaticMethod(Globals::classKotlinMetadataHelper,
             "isCompanionObject", "(Ljava/lang/Class;)Z");
-        methodKotlinMetadataHelperIsDataClass = env.getStaticMethod(classKotlinMetadataHelper,
+        Globals::methodKotlinMetadataHelperIsDataClass = env.getStaticMethod(Globals::classKotlinMetadataHelper,
             "isDataClass", "(Ljava/lang/Class;)Z");
-        methodKotlinMetadataHelperIsFileFacade = env.getStaticMethod(classKotlinMetadataHelper,
+        Globals::methodKotlinMetadataHelperIsFileFacade = env.getStaticMethod(Globals::classKotlinMetadataHelper,
             "isFileFacade", "(Ljava/lang/Class;)Z");
-        methodKotlinMetadataHelperIsKotlinRuntimeAvailable = env.getStaticMethod(classKotlinMetadataHelper,
+        Globals::methodKotlinMetadataHelperIsKotlinRuntimeAvailable = env.getStaticMethod(Globals::classKotlinMetadataHelper,
             "isKotlinRuntimeAvailable", "()Z");
     } catch (jni::Exception& e) {
         // KotlinMetadataHelper not available - this is fine, Kotlin support will be limited
         printd(5, "KotlinMetadataHelper not available\n");
         e.ignore();
     }
+}
+
+void Globals::initKotlinMetadataHelper() {
+    std::call_once(kotlinMetadataHelperInitFlag, doInitKotlinMetadataHelper);
 }
 
 void Globals::cleanup() {

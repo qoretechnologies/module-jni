@@ -24,9 +24,9 @@
 
 %exec-class KotlinTest
 
-# Find and add kotlin-stdlib.jar to classpath
-# Tries common installation locations and KOTLIN_HOME environment variable
-string sub find_kotlin_stdlib() {
+# Find kotlin-stdlib.jar in common installation locations
+# Returns the path if found, or NOTHING if not found
+*string sub find_kotlin_stdlib() {
     # Check KOTLIN_HOME first
     *string kotlin_home = ENV.KOTLIN_HOME;
     if (kotlin_home) {
@@ -53,13 +53,12 @@ string sub find_kotlin_stdlib() {
     }
 
     # Try to find via glob in /snap/kotlin/*/lib/
-    list<string> snap_paths = glob("/snap/kotlin/*/lib/kotlin-stdlib.jar");
+    *list<string> snap_paths = glob("/snap/kotlin/*/lib/kotlin-stdlib.jar");
     if (snap_paths) {
         return snap_paths[0];
     }
 
-    throw "KOTLIN-STDLIB-NOT-FOUND", "Cannot find kotlin-stdlib.jar. "
-        "Set KOTLIN_HOME environment variable or install Kotlin.";
+    return NOTHING;
 }
 
 # Test classes that Kotlin code can call back into
@@ -101,7 +100,12 @@ hash<auto> sub get_qore_library_info() {
 public class KotlinTest inherits QUnit::Test {
     constructor() : Test("Kotlin Integration Test", "1.0") {
         # Add kotlin-stdlib.jar to classpath at runtime
-        string kotlin_stdlib = find_kotlin_stdlib();
+        *string kotlin_stdlib = find_kotlin_stdlib();
+        if (!kotlin_stdlib) {
+            printf("SKIPPING: Kotlin stdlib not found - install Kotlin or set KOTLIN_HOME\n");
+            set_return_value(0);
+            return;
+        }
         object classloader = QoreURLClassLoader::getCurrent();
         classloader.addPath(kotlin_stdlib);
 
