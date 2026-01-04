@@ -75,6 +75,7 @@ make DESTDIR=%{buildroot} install %{?_smp_mflags}
 %{user_module_dir}
 %{_bindir}/qjava2jar
 %{_bindir}/qjavac
+%{_bindir}/qkotlinc
 %dir /usr/share/qore/java
 /usr/share/qore/java/qore-jni-compiler.jar
 /usr/share/qore/java/qore-jni.jar

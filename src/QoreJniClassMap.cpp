@@ -810,14 +810,14 @@ constexpr int ACC_FINAL = 0x0010; // class, field, method, parameter
 constexpr int ACC_SUPER = 0x0020; // class
 constexpr int ACC_SYNCHRONIZED = 0x0020; // method
 constexpr int ACC_VOLATILE = 0x0040; // field
-constexpr int ACC_BRIDGE = 0x0040; // method
+// ACC_BRIDGE defined in Globals.h
 constexpr int ACC_VARARGS = 0x0080; // method
 constexpr int ACC_TRANSIENT = 0x0080; // field
 constexpr int ACC_NATIVE = 0x0100; // method
 constexpr int ACC_INTERFACE = 0x0200; // class
 constexpr int ACC_ABSTRACT = 0x0400; // class, method
 constexpr int ACC_STRICT = 0x0800; // method
-constexpr int ACC_SYNTHETIC = 0x1000; // class, field, method, parameter
+// ACC_SYNTHETIC defined in Globals.h
 constexpr int ACC_ANNOTATION = 0x2000; // class
 constexpr int ACC_ENUM = 0x4000; // class(?) field inner
 constexpr int ACC_MANDATED = 0x8000; // parameter
@@ -1185,6 +1185,18 @@ void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* p
 
         QoreString mname;
         meth->getName(mname);
+
+        // Skip synthetic and bridge methods (Kotlin/compiler-generated)
+        if (meth->isSynthetic() || meth->isBridge()) {
+            printd(LogLevel, "+ skipping synthetic/bridge method %s.%s()\n", qc.getName(), mname.c_str());
+            continue;
+        }
+
+        // Skip Kotlin default parameter method variants (e.g., "methodName$default")
+        if (mname.find("$default") != std::string::npos) {
+            printd(LogLevel, "+ skipping Kotlin default param method %s.%s()\n", qc.getName(), mname.c_str());
+            continue;
+        }
 
         printd(LogLevel, "+ adding method %s.%s()\n", qc.getName(), mname.c_str());
 
@@ -2692,6 +2704,12 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
 
         QoreString fname;
         field->getName(fname);
+
+        // Skip synthetic fields (Kotlin/compiler-generated)
+        if (field->isSynthetic()) {
+            printd(LogLevel, "+ skipping synthetic field %s.%s\n", qc.getName(), fname.c_str());
+            continue;
+        }
 
         const QoreTypeInfo* fieldTypeInfo = field->getQoreTypeInfo(*this, pgm);
 

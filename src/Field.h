@@ -129,6 +129,10 @@ public:
         return mods & JVM_ACC_FINAL;
     }
 
+    DLLLOCAL bool isSynthetic() const {
+        return mods & ACC_SYNTHETIC;
+    }
+
     ClassAccess getAccess() const {
         ClassAccess access = Public;
 

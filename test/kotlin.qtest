@@ -1,0 +1,291 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    kotlin.qtest
+
+    Kotlin integration tests for the JNI module.
+    Tests both Qore calling Kotlin and Kotlin calling Qore.
+
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
+*/
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+%disable-warning non-existent-method-call
+
+%requires jni
+%module-cmd(jni) add-relative-classpath kotlin-test.jar
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+
+%requires QUnit
+
+%exec-class KotlinTest
+
+# Find and add kotlin-stdlib.jar to classpath
+# Tries common installation locations and KOTLIN_HOME environment variable
+string sub find_kotlin_stdlib() {
+    # Check KOTLIN_HOME first
+    *string kotlin_home = ENV.KOTLIN_HOME;
+    if (kotlin_home) {
+        string path = kotlin_home + "/lib/kotlin-stdlib.jar";
+        if (is_file(path)) {
+            return path;
+        }
+    }
+
+    # Common installation paths
+    list<string> paths = (
+        "/snap/kotlin/current/lib/kotlin-stdlib.jar",  # Ubuntu snap (current symlink)
+        "/snap/kotlin/94/lib/kotlin-stdlib.jar",       # Ubuntu snap (specific version)
+        "/usr/share/kotlin/lib/kotlin-stdlib.jar",     # Fedora/RHEL dnf
+        "/usr/lib/kotlin/lib/kotlin-stdlib.jar",       # Alternative Linux
+        "/usr/local/kotlin/lib/kotlin-stdlib.jar",     # Manual install
+        ENV.HOME + "/.sdkman/candidates/kotlin/current/lib/kotlin-stdlib.jar",  # SDKMAN
+    );
+
+    foreach string path in (paths) {
+        if (is_file(path)) {
+            return path;
+        }
+    }
+
+    # Try to find via glob in /snap/kotlin/*/lib/
+    list<string> snap_paths = glob("/snap/kotlin/*/lib/kotlin-stdlib.jar");
+    if (snap_paths) {
+        return snap_paths[0];
+    }
+
+    throw "KOTLIN-STDLIB-NOT-FOUND", "Cannot find kotlin-stdlib.jar. "
+        "Set KOTLIN_HOME environment variable or install Kotlin.";
+}
+
+# Test classes that Kotlin code can call back into
+class TestClass {
+    public {
+        string member = "mem";
+    }
+
+    string getString(string str = "default") {
+        return str + "-x";
+    }
+
+    static hash<auto> get(int val) {
+        return {
+            "key": "value",
+            "num": val,
+        };
+    }
+}
+
+class TestClass2 {
+    string getString(string str = "default") {
+        return str + "-y";
+    }
+}
+
+# Helper function for Kotlin to call
+string sub test_func() {
+    return "test_func_result";
+}
+
+# Get library info for testing
+hash<auto> sub get_qore_library_info() {
+    return {
+        "version": Qore::VersionString,
+    };
+}
+
+public class KotlinTest inherits QUnit::Test {
+    constructor() : Test("Kotlin Integration Test", "1.0") {
+        # Add kotlin-stdlib.jar to classpath at runtime
+        string kotlin_stdlib = find_kotlin_stdlib();
+        object classloader = QoreURLClassLoader::getCurrent();
+        classloader.addPath(kotlin_stdlib);
+
+        # Qore calling Kotlin tests
+        addTestCase("Simple Kotlin class test", \simpleKotlinTest());
+        addTestCase("Kotlin data class test", \dataClassTest());
+        addTestCase("Kotlin companion object test", \companionObjectTest());
+        addTestCase("Kotlin default parameters test", \defaultParamsTest());
+        addTestCase("Kotlin class detection test", \kotlinClassDetectionTest());
+
+        # Kotlin calling Qore tests (bidirectional)
+        addTestCase("Kotlin calling Qore function test", \kotlinCallQoreFunctionTest());
+        addTestCase("Kotlin calling Qore static method test", \kotlinCallQoreStaticMethodTest());
+        addTestCase("Kotlin creating Qore object test", \kotlinCreateQoreObjectTest());
+        addTestCase("Kotlin Hash interop test", \kotlinHashInteropTest());
+        addTestCase("Kotlin get Qore library info test", \kotlinGetQoreLibraryInfoTest());
+
+        set_return_value(main());
+    }
+
+    # =====================================================
+    # Qore calling Kotlin tests
+    # =====================================================
+
+    simpleKotlinTest() {
+        # Test basic Kotlin class instantiation
+        lang::Class cls = load_class("org/qore/jni/test/SimpleKotlinClass");
+        assertEq("org.qore.jni.test.SimpleKotlinClass", cls.getName());
+
+        object obj = cls.getDeclaredConstructor().newInstance();
+        assertEq("Hello from Kotlin!", obj.getMessage());
+    }
+
+    dataClassTest() {
+        # Test Kotlin data class
+        lang::Class cls = load_class("org/qore/jni/test/KotlinDataClass");
+        assertEq("org.qore.jni.test.KotlinDataClass", cls.getName());
+
+        # Create a data class instance using constructor with String and int
+        lang::Class stringClass = load_class("java/lang/String");
+        Constructor ctor = cls.getConstructor((stringClass, Integer::TYPE));
+        object obj = ctor.newInstance(("TestName", new Integer(42)));
+
+        # Test property access
+        assertEq("TestName", obj.getName());
+        assertEq(42, obj.getValue());
+
+        # Test component methods (generated by Kotlin for data classes)
+        assertEq("TestName", obj.component1());
+        assertEq(42, obj.component2());
+    }
+
+    companionObjectTest() {
+        # Test that companion object methods are accessible
+        lang::Class cls = load_class("org/qore/jni/test/KotlinTestClass");
+
+        # Create instance using constructor with int
+        Constructor ctor = cls.getConstructor((Integer::TYPE,));
+        object obj = ctor.newInstance((new Integer(123),));
+        assertEq(123, obj.getId());
+    }
+
+    defaultParamsTest() {
+        # Test Kotlin method with default parameters
+        lang::Class cls = load_class("org/qore/jni/test/KotlinTestClass");
+
+        # Create instance
+        Constructor ctor = cls.getConstructor((Integer::TYPE,));
+        object obj = ctor.newInstance((new Integer(42),));
+
+        # Call method with explicit parameter
+        assertEq("Hello, Qore! ID: 42", obj.greet("Qore"));
+
+        # Test add method
+        assertEq(15, obj.add(7, 8));
+    }
+
+    kotlinClassDetectionTest() {
+        # Test that Kotlin classes have the @kotlin.Metadata annotation
+        lang::Class kotlinCls = load_class("org/qore/jni/test/SimpleKotlinClass");
+
+        # Check for @kotlin.Metadata annotation
+        bool hasMetadata = False;
+        auto annotations = kotlinCls.getAnnotations();
+        foreach auto ann in (annotations) {
+            string annName = ann.annotationType().getName();
+            if (annName == "kotlin.Metadata") {
+                hasMetadata = True;
+                break;
+            }
+        }
+        assertTrue(hasMetadata, "Kotlin class should have @kotlin.Metadata annotation");
+
+        # Java class should not have Kotlin metadata
+        lang::Class javaCls = load_class("java/lang/String");
+        bool javaHasMetadata = False;
+        annotations = javaCls.getAnnotations();
+        foreach auto ann in (annotations) {
+            string annName = ann.annotationType().getName();
+            if (annName == "kotlin.Metadata") {
+                javaHasMetadata = True;
+                break;
+            }
+        }
+        assertFalse(javaHasMetadata, "Java class should not have @kotlin.Metadata annotation");
+    }
+
+    # =====================================================
+    # Kotlin calling Qore tests (bidirectional)
+    # =====================================================
+
+    kotlinCallQoreFunctionTest() {
+        # Test Kotlin calling a Qore function via QoreJavaApi.callFunction()
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        # Call the Kotlin static method that calls Qore's test_func()
+        auto result = cls.getMethod("callQoreFunction", (load_class("java/lang/String"),))
+            .invoke(NOTHING, ("test_func",));
+        assertEq("test_func_result", result);
+    }
+
+    kotlinCallQoreStaticMethodTest() {
+        # Test Kotlin calling a Qore static method via QoreJavaApi.callStaticMethod()
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        # Get the method - it takes String, String, and varargs Object[]
+        lang::Class stringClass = load_class("java/lang/String");
+        lang::Class objectArrayClass = load_class("[Ljava/lang/Object;");
+        Method method = cls.getMethod("callQoreStaticMethod", (stringClass, stringClass, objectArrayClass));
+
+        # Call TestClass.get(42)
+        auto result = method.invoke(NOTHING, ("TestClass", "get", (new Integer(42),)));
+        assertEq(Type::Hash, result.type());
+        hash<auto> h = result;
+        assertEq("value", h.key);
+        assertEq(42, h.num);
+    }
+
+    kotlinCreateQoreObjectTest() {
+        # Test Kotlin null-safety with Qore API
+        # (Qore object creation from Kotlin requires exported classes)
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        # Test the safeCallQoreFunction which uses Kotlin's null safety features
+        lang::Class stringClass = load_class("java/lang/String");
+        Method method = cls.getMethod("safeCallQoreFunction", (stringClass,));
+
+        # Call test_func via Kotlin with null-safe handling
+        auto result = method.invoke(NOTHING, ("test_func",));
+        assertEq("test_func_result", result);
+    }
+
+    kotlinHashInteropTest() {
+        # Test Kotlin creating a Hash and Qore reading it
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        # Call createHashForQore which creates a Hash in Kotlin
+        Method createMethod = cls.getMethod("createHashForQore", ());
+        auto result = createMethod.invoke(NOTHING, ());
+        assertEq(Type::Hash, result.type());
+        hash<auto> h = result;
+        assertEq("Kotlin", h.name);
+        assertEq(2, h.version);
+        assertTrue(h.enabled);
+
+        # Test Kotlin reading a Hash from Qore via the standard JNI conversion
+        # Qore hashes are automatically converted to Java HashMap when passed to Java/Kotlin
+        lang::Class hashClass = load_class("org/qore/jni/Hash");
+        Method readMethod = cls.getMethod("readHashFromQore", (hashClass,));
+
+        # Pass a Qore hash - it will be auto-converted to Java Hash
+        result = readMethod.invoke(NOTHING, ({"name": "Qore", "value": 123},));
+        assertEq("Qore:123", result);
+    }
+
+    kotlinGetQoreLibraryInfoTest() {
+        # Test Kotlin calling get_qore_library_info() like Java does
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("getQoreLibraryInfo", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(Type::Hash, result.type());
+        hash<auto> h = result;
+        assertTrue(h.hasKey("version"));
+        assertEq(Qore::VersionString, h.version);
+    }
+}

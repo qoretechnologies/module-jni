@@ -111,6 +111,48 @@ class QoreIteratorTest extends AbstractIterator {
 }
     @endcode
 
+    @par Kotlin Dynamic %Qore Import Example:
+    @code{.kt}
+// import ::Qore::Thread::Sequence as a Kotlin class
+import qore.Qore.Thread.Sequence
+
+// Kotlin class using Qore's Sequence
+class KotlinSequenceExample {
+    private val seq = Sequence()
+
+    fun getNextValue(): Long {
+        return seq.next()
+    }
+
+    fun getCurrentValue(): Long {
+        return seq.getCurrent()
+    }
+}
+
+// Kotlin data class example
+data class Person(val name: String, val age: Int)
+
+// Kotlin class with companion object and default parameters
+class KotlinHelper(val id: Int) {
+    // Method with default parameter
+    fun greet(name: String = "World"): String {
+        return "Hello, $name! ID: $id"
+    }
+
+    companion object {
+        const val VERSION = "1.0"
+
+        fun create(id: Int): KotlinHelper {
+            return KotlinHelper(id)
+        }
+    }
+}
+    @endcode
+
+    @note Kotlin classes can be compiled with \c qkotlinc to use Qore APIs, and loaded from %Qore using the standard
+    class loading mechanisms. Kotlin-specific features like synthetic methods, companion objects, and default parameter
+    variants are automatically filtered to provide a clean API.
+
     @par %Qore JMS Example:
     @code{.py}
  #!/usr/bin/env qore
@@ -581,6 +623,8 @@ Object obj = newClassData.cls.getDeclaredConstructor().newInstance();
       @verbatim qjavac -cp my-jar.jar MySource.java @endverbatim
     - The \c qjava2jar helper script can be used to compile Java sources using dynamic imports to a \c jar file;
       ex: @verbatim qjava2jar my-jar.jar source_path -cp some-api.jar:another-api.jar -nowarn @endverbatim
+    - The \c qkotlinc helper script can be used to compile Kotlin sources that use Qore APIs; ex
+      @verbatim qkotlinc -cp my-jar.jar MySource.kt @endverbatim
 
     @section jni_compat JNI Module Compatibility Options
 
@@ -857,6 +901,17 @@ set_save_object_callback(callback);
     jdbc driver when the internal URL string is passed to the internal Java JDBC call.
 
     @section jnireleasenotes jni Module Release Notes
+
+    @subsection jni_2_6_0 jni Module Version 2.6.0
+    - added Kotlin language integration support
+      (<a href="https://github.com/qoretechnologies/qore/issues/5131">issue 5131</a>)
+      - added \c kotlin.* and \c kotlinmod.* package prefixes for dynamic Kotlin class imports
+      - added automatic filtering of Kotlin synthetic members (\c ACC_SYNTHETIC, \c ACC_BRIDGE)
+      - added automatic filtering of Kotlin default parameter methods (\c $default variants)
+      - added automatic filtering of Kotlin companion object classes (\c $Companion)
+      - added \c KotlinMetadataHelper Java class for detecting Kotlin classes via \c @kotlin.Metadata annotation
+      - added \c qkotlinc helper script for compiling Kotlin sources that use Qore APIs
+    - added Kotlin integration tests
 
     @subsection jni_2_5_0 jni Module Version 2.5.0
     - added support for interruptible I/O for graceful termination of sandboxed programs; interrupt

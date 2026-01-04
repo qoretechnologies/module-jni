@@ -210,6 +210,14 @@ jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionCls;
 jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionStr;
 jmethodID Globals::methodJavaClassBuilderFindBaseClassMethodConflict;
 
+GlobalReference<jclass> Globals::classKotlinMetadataHelper;
+jmethodID Globals::methodKotlinMetadataHelperIsKotlinClass;
+jmethodID Globals::methodKotlinMetadataHelperGetKotlinKind;
+jmethodID Globals::methodKotlinMetadataHelperIsCompanionObject;
+jmethodID Globals::methodKotlinMetadataHelperIsDataClass;
+jmethodID Globals::methodKotlinMetadataHelperIsFileFacade;
+jmethodID Globals::methodKotlinMetadataHelperIsKotlinRuntimeAvailable;
+
 GlobalReference<jclass> Globals::classGraphicsEnvironment;
 jmethodID Globals::methodGraphicsEnvironmentIsHeadless;
 
@@ -1218,7 +1226,7 @@ int load_python_module(Env& env, QoreProgram* pgm) {
 }
 
 static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, jobject class_loader, jlong ptr,
-        jstring nspath, jstring jname, jstring module, jboolean python, jlong class_ptr) {
+        jstring nspath, jstring jname, jstring module, jboolean python, jboolean kotlin, jlong class_ptr) {
     assert(ptr);
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
     Env env(jenv);
@@ -1261,16 +1269,22 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
         QoreString modstr;
         if (module) {
             Env::GetStringUtfChars mod_str(env, module);
-            printd(5, "qore_url_classloader_generate_byte_code() mod: '%s' python: %d\n", mod_str.c_str(), python);
+            printd(5, "qore_url_classloader_generate_byte_code() mod: '%s' python: %d kotlin: %d\n", mod_str.c_str(),
+                python, kotlin);
             modstr = mod_str.c_str();
-            if (!python) {
+            if (!python && !kotlin) {
                 if (load_module(env, mod_str, pgm)) {
                     return nullptr;
                 }
-            } else {
+            } else if (python) {
                 qpath.insert("::", 0);
                 qpath.insert(mod_str.c_str(), 0);
                 qpath.insert("::Python::", 0);
+            } else {
+                // kotlin
+                qpath.insert("::", 0);
+                qpath.insert(mod_str.c_str(), 0);
+                qpath.insert("::Kotlin::", 0);
             }
         }
         printd(5, "qore_url_classloader_generate_byte_code() p: %p path: '%s' (mod: %p) class_loader: %x\n", pgm,
@@ -1422,18 +1436,20 @@ const QoreNamespace* get_module_root_ns(const char* name, QoreProgram* mod_pgm) 
     return rv;
 }
 
-static void get_java_pfx(QoreString& java_pfx, jboolean python, const char* mod_str, QoreString& py_path,
-        const char* qname) {
+static void get_java_pfx(QoreString& java_pfx, jboolean python, jboolean kotlin, const char* mod_str,
+        QoreString& lang_path, const char* qname) {
     assert(java_pfx.empty());
     if (*mod_str) {
         if (python) {
             java_pfx = "pythonmod.";
+        } else if (kotlin) {
+            java_pfx = "kotlinmod.";
         } else {
             java_pfx = "qoremod.";
         }
-        if (python) {
-            if (!py_path.empty()) {
-                java_pfx.concat(py_path.c_str());
+        if (python || kotlin) {
+            if (!lang_path.empty()) {
+                java_pfx.concat(lang_path.c_str());
                 java_pfx.concat('.');
             }
         } else {
@@ -1443,14 +1459,18 @@ static void get_java_pfx(QoreString& java_pfx, jboolean python, const char* mod_
     } else {
         if (python) {
             java_pfx = "python.";
-            java_pfx += py_path.c_str();
+            java_pfx += lang_path.c_str();
+            java_pfx += ".";
+        } else if (kotlin) {
+            java_pfx = "kotlin.";
+            java_pfx += lang_path.c_str();
             java_pfx += ".";
         } else {
             java_pfx = "qore.";
         }
     }
 
-    if (!python && *qname) {
+    if (!python && !kotlin && *qname) {
         if (!strncmp(qname, "::", 2)) {
             if (*(qname + 2)) {
                 java_pfx.concat(qname + 2);
@@ -1501,7 +1521,7 @@ const QoreNamespace* find_ns_path(const QoreNamespace* ns, const char* ns_path) 
 }
 
 static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jenv, jclass jcls, jlong ptr,
-        jstring qname, jstring module, jboolean python, jobject arraylist) {
+        jstring qname, jstring module, jboolean python, jboolean kotlin, jobject arraylist) {
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
     try {
@@ -1531,40 +1551,42 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
         nsname.set(qname);
     }
 
-    QoreString py_path;
+    QoreString lang_path;
 
-    if (python) {
+    if (python || kotlin) {
         if (module) {
             printd(5, "ms: '%s'\n", mod_str.c_str());
-            py_path.concat(mod_str.c_str());
+            lang_path.concat(mod_str.c_str());
             if (qname) {
-                py_path.concat('.');
+                lang_path.concat('.');
             }
         }
         if (qname) {
             printd(5, "q: '%s'\n", nsname.c_str());
-            if (!strncmp(nsname.c_str(), "::Python::", 10)) {
-                py_path.concat(nsname.c_str() + 10);
+            if (python && !strncmp(nsname.c_str(), "::Python::", 10)) {
+                lang_path.concat(nsname.c_str() + 10);
+            } else if (kotlin && !strncmp(nsname.c_str(), "::Kotlin::", 10)) {
+                lang_path.concat(nsname.c_str() + 10);
             } else {
-                py_path.concat(nsname.c_str());
+                lang_path.concat(nsname.c_str());
             }
-            if (py_path.find("::") >= 0) {
-                py_path.replaceAll("::", ".");
+            if (lang_path.find("::") >= 0) {
+                lang_path.replaceAll("::", ".");
             }
         }
     }
 
     printd(5, "qore_url_classloader_get_classes_in_namespace() qname: '%s' (%p) module: '%s' (%p) python: %d "
-        "py_path: '%s' pgm: %p jpc: %p\n", nsname.c_str(), qname, mod_str.c_str(), module, python, py_path.c_str(),
-        pgm, jpc);
+        "kotlin: %d lang_path: '%s' pgm: %p jpc: %p\n", nsname.c_str(), qname, mod_str.c_str(), module, python,
+        kotlin, lang_path.c_str(), pgm, jpc);
 
     if (python) {
         try {
             if (!python_module_import && load_python_module(env, pgm)) {
                 return nullptr;
             }
-            printd(5, "qore_url_classloader_get_classes_in_namespace() python import path: '%s'\n", py_path.c_str());
-            if (python_module_import(&xsink, pgm, py_path.c_str(), nullptr)) {
+            printd(5, "qore_url_classloader_get_classes_in_namespace() python import path: '%s'\n", lang_path.c_str());
+            if (python_module_import(&xsink, pgm, lang_path.c_str(), nullptr)) {
                 QoreToJava::wrapException(env, xsink);
                 return nullptr;
             }
@@ -1575,7 +1597,8 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
         }
     }
 
-    if (module && !python && load_module(env, mod_str, pgm)) {
+    // Note: kotlin classes are already Java classes, no special module loading needed for pre-compiled JARs
+    if (module && !python && !kotlin && load_module(env, mod_str, pgm)) {
         return nullptr;
     }
 
@@ -1587,12 +1610,12 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
         }
 
         const QoreNamespace* ns;
-        if (python) {
-            QoreString ns_path = py_path;
+        if (python || kotlin) {
+            QoreString ns_path = lang_path;
             ns_path.replaceAll(".", "::");
             ns = pgm->findNamespace(ns_path.c_str());
 #if QORE_VERSION_CODE >= 10013
-            if (!module) {
+            if (python && !module) {
                 ValueHolder pm(ns->getReferencedKeyValue("python_module"), nullptr);
                 printd(5, "python_module: '%s'\n", pm ? pm->get<QoreStringNode>()->c_str() : "n/a");
                 if (pm->getType() == NT_STRING) {
@@ -1600,8 +1623,8 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
                 }
             }
 #endif
-            printd(5, "qore_url_classloader_get_classes_in_namespace() py_path: '%s' => '%s' ns: %p\n",
-                py_path.c_str(), ns_path.c_str(), ns);
+            printd(5, "qore_url_classloader_get_classes_in_namespace() lang_path: '%s' => '%s' ns: %p\n",
+                lang_path.c_str(), ns_path.c_str(), ns);
         } else if (qname) {
             ns = pgm->findNamespace(nsname.c_str());
             printd(5, "qore_url_classloader_get_classes_in_namespace() qname: '%s' ns: %p\n", nsname.c_str(), ns);
@@ -1641,20 +1664,28 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
             QoreNamespaceClassIterator i(*ns);
             while (i.next()) {
                 const QoreClass& qc = i.get();
+                const char* cls_name = qc.getName();
+
+                // Skip Kotlin companion object inner classes (ending with $Companion or __Companion)
+                if (strstr(cls_name, "$Companion") || strstr(cls_name, "__Companion")) {
+                    printd(5, "+ skipping Kotlin companion object class %s\n", cls_name);
+                    continue;
+                }
+
                 std::string pname;
                 if (java_pfx.empty()) {
-                    get_java_pfx(java_pfx, python, mod_str.c_str(), py_path, nsname.c_str());
+                    get_java_pfx(java_pfx, python, kotlin, mod_str.c_str(), lang_path, nsname.c_str());
                 }
                 pname = java_pfx.c_str();
-                pname += qc.getName();
+                pname += cls_name;
                 printd(5, "pname: '%s'\n", pname.c_str());
 
 #ifdef DEBUG
                 std::string cnsn = qc.getNamespacePath();
-                printd(5, "CLASS %s (%p) nsp: '%s' (%s)\n", qc.getName(), &qc, cnsn.c_str(), pname.c_str());
+                printd(5, "CLASS %s (%p) nsp: '%s' (%s)\n", cls_name, &qc, cnsn.c_str(), pname.c_str());
 #endif
                 printd(5, "qore_url_classloader_get_classes_in_namespace() pgm: %p '%s': qc: %p (%s -> %s)\n",
-                    pgm, nsname.c_str(), &qc, qc.getName(), pname.c_str());
+                    pgm, nsname.c_str(), &qc, cls_name, pname.c_str());
                 assert(pname.find("::") == std::string::npos);
 
                 // add to the ArrayList<String> var
@@ -1668,7 +1699,7 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
             while (fi.next()) {
                 // if there is at least one, then create the special "$Functions" class
                 if (java_pfx.empty()) {
-                    get_java_pfx(java_pfx, python, mod_str.c_str(), py_path, nsname.c_str());
+                    get_java_pfx(java_pfx, python, kotlin, mod_str.c_str(), lang_path, nsname.c_str());
                 }
                 std::string pname = java_pfx.c_str();
                 pname += JniImportedFunctionClassName;
@@ -1686,7 +1717,7 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
             while (ci.next()) {
                 // if there is at least one, then create the special "$Constants" class
                 if (java_pfx.empty()) {
-                    get_java_pfx(java_pfx, python, mod_str.c_str(), py_path, nsname.c_str());
+                    get_java_pfx(java_pfx, python, kotlin, mod_str.c_str(), lang_path, nsname.c_str());
                 }
                 std::string pname = java_pfx.c_str();
                 pname += JniImportedConstantClassName;
@@ -2282,12 +2313,12 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
     },
     {
         const_cast<char*>("generateByteCode0"),
-        const_cast<char*>("(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ZJ)[B"),
+        const_cast<char*>("(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ZZJ)[B"),
         reinterpret_cast<void*>(qore_url_classloader_generate_byte_code),
     },
     {
         const_cast<char*>("getClassesInNamespace0"),
-        const_cast<char*>("(JLjava/lang/String;Ljava/lang/String;ZLjava/util/ArrayList;)V"),
+        const_cast<char*>("(JLjava/lang/String;Ljava/lang/String;ZZLjava/util/ArrayList;)V"),
         reinterpret_cast<void*>(qore_url_classloader_get_classes_in_namespace),
     },
     {
@@ -3015,10 +3046,44 @@ bool Globals::init() {
     methodJavaClassBuilderFindBaseClassMethodConflict = env.getStaticMethod(classJavaClassBuilder,
         "findBaseClassMethodConflict", "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/List;Z)Z");
 
+    // Note: KotlinMetadataHelper is lazily initialized by initKotlinMetadataHelper() when first needed
+    // This is because we can't load it until the classloader has access to qore-jni.jar
+
     classGraphicsEnvironment = env.findClass("java/awt/GraphicsEnvironment").makeGlobal();;
     methodGraphicsEnvironmentIsHeadless = env.getStaticMethod(classGraphicsEnvironment, "isHeadless", "()Z");
 
     return bootstrap;
+}
+
+static bool kotlinMetadataHelperInitialized = false;
+
+void Globals::initKotlinMetadataHelper() {
+    if (kotlinMetadataHelperInitialized) {
+        return;
+    }
+    kotlinMetadataHelperInitialized = true;
+
+    Env env;
+    // Try to find the class - it should be available through the classloader now
+    try {
+        classKotlinMetadataHelper = env.findClass("org/qore/jni/KotlinMetadataHelper").makeGlobal();
+        methodKotlinMetadataHelperIsKotlinClass = env.getStaticMethod(classKotlinMetadataHelper,
+            "isKotlinClass", "(Ljava/lang/Class;)Z");
+        methodKotlinMetadataHelperGetKotlinKind = env.getStaticMethod(classKotlinMetadataHelper,
+            "getKotlinKind", "(Ljava/lang/Class;)I");
+        methodKotlinMetadataHelperIsCompanionObject = env.getStaticMethod(classKotlinMetadataHelper,
+            "isCompanionObject", "(Ljava/lang/Class;)Z");
+        methodKotlinMetadataHelperIsDataClass = env.getStaticMethod(classKotlinMetadataHelper,
+            "isDataClass", "(Ljava/lang/Class;)Z");
+        methodKotlinMetadataHelperIsFileFacade = env.getStaticMethod(classKotlinMetadataHelper,
+            "isFileFacade", "(Ljava/lang/Class;)Z");
+        methodKotlinMetadataHelperIsKotlinRuntimeAvailable = env.getStaticMethod(classKotlinMetadataHelper,
+            "isKotlinRuntimeAvailable", "()Z");
+    } catch (jni::Exception& e) {
+        // KotlinMetadataHelper not available - this is fine, Kotlin support will be limited
+        printd(5, "KotlinMetadataHelper not available: %s\n", e.what());
+        e.ignore();
+    }
 }
 
 void Globals::cleanup() {
@@ -3059,6 +3124,7 @@ void Globals::cleanup() {
     classClassLoader = nullptr;
     classQoreURLClassLoader = nullptr;
     classJavaClassBuilder = nullptr;
+    classKotlinMetadataHelper = nullptr;
     classGraphicsEnvironment = nullptr;
     classThread = nullptr;
     classHashMap = nullptr;

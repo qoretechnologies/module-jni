@@ -587,11 +587,13 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Returns true if the given package name is dynamic
     static public boolean isDynamic(String bin_name) {
-        return bin_name.equals("qore") || bin_name.equals("python")
+        return bin_name.equals("qore") || bin_name.equals("python") || bin_name.equals("kotlin")
             || (bin_name.startsWith("qore.") && bin_name.length() > 5)
             || (bin_name.startsWith("qoremod.") && bin_name.length() > 8)
             || (bin_name.startsWith("python.") && bin_name.length() > 7)
-            || (bin_name.startsWith("pythonmod.") && bin_name.length() > 10);
+            || (bin_name.startsWith("pythonmod.") && bin_name.length() > 10)
+            || (bin_name.startsWith("kotlin.") && bin_name.length() > 7)
+            || (bin_name.startsWith("kotlinmod.") && bin_name.length() > 10);
     }
 
     protected Class<?> defineClassIntern(String name, byte[] byte_code, int off, int len) throws ClassFormatError {
@@ -804,7 +806,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         ClassModInfo info = new ClassModInfo(packageName, true);
         long ptr = pgm_ptr.get();
         if (ptr != 0) {
-            getClassesInNamespace0(ptr, info.cls, info.mod, info.python, rv);
+            getClassesInNamespace0(ptr, info.cls, info.mod, info.python, info.kotlin, rv);
         }
         //System.out.printf("getClassesInNamespace(%s) pgm: %x cls: '%s' mod: '%s' rv: %s\n", packageName, ptr,
         //    info.cls, info.mod, rv);
@@ -980,7 +982,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             try {
                 //System.out.printf("QoreURLClassLoader.generateByteCodeIntern() this: %x pgm: %x '%s' cptr: %x\n",
                 //    hashCode(), ptr, bin_name, class_ptr);
-                rv = generateByteCode0(ptr, info.cls, bin_name, info.mod, info.python, class_ptr);
+                rv = generateByteCode0(ptr, info.cls, bin_name, info.mod, info.python, info.kotlin, class_ptr);
                 //System.out.printf("QoreURLClassLoader.generateByteCodeIntern() this: %x pgm: %x '%s' cptr: %x " +
                 //    "rv: %s\n", hashCode(), ptr, bin_name, class_ptr, rv);
             } catch (ClassNotFoundException e) {
@@ -1043,9 +1045,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     static private native byte[] getCachedClass0(String bin_name);
     static private native byte[] getInternalClass0(String name);
     private native byte[] generateByteCode0(long ptr, String qname, String name, String qore_module, boolean python,
-        long class_ptr) throws Throwable;
+        boolean kotlin, long class_ptr) throws Throwable;
     static private native void getClassesInNamespace0(long ptr, String packageName, String mod, boolean python,
-        ArrayList<String> result);
+        boolean kotlin, ArrayList<String> result);
     static private native void getInternalClassesForPackage0(long ptr, String packageName, ArrayList<String> result);
     static private native long getContextProgram0(QoreURLClassLoader syscl, BooleanWrapper created, boolean finalize_init);
     static private native void shutdownContext0();

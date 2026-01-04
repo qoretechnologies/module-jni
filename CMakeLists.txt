@@ -259,6 +259,7 @@ ENDMACRO(ADD_JAVA_COMPILER_SOURCE)
 set (JNI_BIN_FILES
     bin/qjava2jar
     bin/qjavac
+    bin/qkotlinc
 )
 
 # Java sources built in to the binary module with an indication of inner classes, if any
@@ -282,6 +283,7 @@ generate_java(org/qore/jni/Hash.java 1 2 3 4 5 6 7 8 9 10)
 generate_java(org/qore/jni/JavaClassBuilder.java 1 2 StaticEntry)
 generate_java(org/qore/jni/QoreJavaFileObject.java)
 generate_java(org/qore/jni/QoreJavaObjectPtr.java)
+add_java_source(org/qore/jni/KotlinMetadataHelper.java)
 generate_jar(${BYTE_BUDDY_JAR} JavaJarByteBuddy)
 
 # add Java sources without native methods

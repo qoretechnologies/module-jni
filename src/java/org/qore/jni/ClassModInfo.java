@@ -26,6 +26,7 @@ class ClassModInfo {
     public String cls;
     public String mod;
     public boolean python;
+    public boolean kotlin;
 
     ClassModInfo(String bin_name) {
         init(bin_name, false);
@@ -42,7 +43,8 @@ class ClassModInfo {
         mod = null;
         cls = "::";
         python = false;
-        if (bin_name.equals("qore") || bin_name.equals("python")) {
+        kotlin = false;
+        if (bin_name.equals("qore") || bin_name.equals("python") || bin_name.equals("kotlin")) {
             return;
         } else if (bin_name.startsWith("qore.")) {
             cls += bin_name.substring(5);
@@ -77,6 +79,22 @@ class ClassModInfo {
                 cls = null;
                 //return;
             }
+        } else if (bin_name.startsWith("kotlin.")) {
+            kotlin = true;
+            cls += "Kotlin::";
+            cls += bin_name.substring(7);
+        } else if (bin_name.startsWith("kotlinmod.")) {
+            kotlin = true;
+            int end = is_package
+                ? bin_name.lastIndexOf(".")
+                : bin_name.indexOf(".", 11);
+            if (end >= 11 && end < (bin_name.length() - 1)) {
+                mod = bin_name.substring(10, end);
+                cls = bin_name.substring(end + 1);
+            } else {
+                mod = bin_name.substring(10);
+                cls = null;
+            }
         } else {
             cls += bin_name;
         }
@@ -88,6 +106,6 @@ class ClassModInfo {
 
     @Override
     public String toString() {
-        return String.format("ClassModInfo{cls=%s, mod=%s, python=%s}", cls, mod, python);
+        return String.format("ClassModInfo{cls=%s, mod=%s, python=%s, kotlin=%s}", cls, mod, python, kotlin);
     }
 }
