@@ -17,6 +17,7 @@
 %disable-warning non-existent-method-call
 
 %requires jni
+%module-cmd(jni) add-relative-classpath ../build/qore-jni.jar
 %module-cmd(jni) add-relative-classpath kotlin-test.jar
 %module-cmd(jni) import org.qore.jni.QoreURLClassLoader
 
@@ -122,6 +123,10 @@ public class KotlinTest inherits QUnit::Test {
         addTestCase("Kotlin creating Qore object test", \kotlinCreateQoreObjectTest());
         addTestCase("Kotlin Hash interop test", \kotlinHashInteropTest());
         addTestCase("Kotlin get Qore library info test", \kotlinGetQoreLibraryInfoTest());
+
+        # Kotlin scripting tests (requires kotlin-scripting JARs)
+        addTestCase("Kotlin scripting availability test", \kotlinScriptingAvailabilityTest());
+        addTestCase("Kotlin eval test", \kotlinEvalTest());
 
         set_return_value(main());
     }
@@ -291,5 +296,154 @@ public class KotlinTest inherits QUnit::Test {
         hash<auto> h = result;
         assertTrue(h.hasKey("version"));
         assertEq(Qore::VersionString, h.version);
+    }
+
+    # =====================================================
+    # Kotlin scripting tests
+    # =====================================================
+
+    private {
+        bool scriptingJarsLoaded = False;
+    }
+
+    # Try to load Kotlin scripting JARs from common locations
+    private bool tryLoadScriptingJars() {
+        if (scriptingJarsLoaded) {
+            return True;
+        }
+
+        # Check for scripting JARs in common locations
+        list<string> scriptingPaths = (
+            "/tmp/kotlin-scripting",  # Downloaded by download-kotlin-scripting-jars script
+            (ENV.HOME ?? "") + "/.kotlin-scripting",
+            ENV.KOTLIN_SCRIPTING_JARS ?? "",
+        );
+
+        object classloader = QoreURLClassLoader::getCurrent();
+
+        foreach string basePath in (scriptingPaths) {
+            if (!basePath || !is_dir(basePath)) {
+                continue;
+            }
+
+            *list<string> jars = glob(basePath + "/*.jar");
+            if (!jars) {
+                continue;
+            }
+
+            # Found JARs, try to load them
+            foreach string jar in (jars) {
+                classloader.addPath(jar);
+            }
+
+            # Also add kotlin-reflect if available
+            *string kotlin_home = find_kotlin_home();
+            if (kotlin_home) {
+                string reflectJar = kotlin_home + "/lib/kotlin-reflect.jar";
+                if (is_file(reflectJar)) {
+                    classloader.addPath(reflectJar);
+                }
+            }
+
+            scriptingJarsLoaded = True;
+            # Force retry of Kotlin scripting initialization now that JARs are loaded
+            kotlin_scripting_retry();
+            return True;
+        }
+
+        return False;
+    }
+
+    # Find KOTLIN_HOME directory
+    private *string find_kotlin_home() {
+        *string kotlin_home = ENV.KOTLIN_HOME;
+        if (kotlin_home && is_dir(kotlin_home)) {
+            return kotlin_home;
+        }
+
+        # Common locations
+        list<string> homes = (
+            "/snap/kotlin/current",
+            "/usr/share/kotlin",
+            "/usr/lib/kotlin",
+            "/usr/local/kotlin",
+        );
+        if (ENV.HOME) {
+            homes += ENV.HOME + "/.sdkman/candidates/kotlin/current";
+        }
+
+        foreach string home in (homes) {
+            if (is_dir(home)) {
+                return home;
+            }
+        }
+
+        # Try glob for snap
+        *list<string> snap_paths = glob("/snap/kotlin/*/lib");
+        if (snap_paths) {
+            return dirname(snap_paths[0]);
+        }
+
+        return NOTHING;
+    }
+
+    kotlinScriptingAvailabilityTest() {
+        # Test that kotlin_scripting_available() returns a boolean
+        # Without scripting JARs, it should return False
+        bool available = kotlin_scripting_available();
+        assertEq(Type::Boolean, available.type());
+
+        # Try to load scripting JARs
+        tryLoadScriptingJars();
+
+        # Check again - may or may not be True depending on whether JARs are present
+        available = kotlin_scripting_available();
+        assertEq(Type::Boolean, available.type());
+
+        if (!available) {
+            testSkip("Kotlin scripting JARs not available - skipping detailed scripting tests");
+        }
+    }
+
+    kotlinEvalTest() {
+        # Try to load scripting JARs first
+        tryLoadScriptingJars();
+
+        if (!kotlin_scripting_available()) {
+            testSkip("Kotlin scripting JARs not available - run download-kotlin-scripting-jars to enable");
+            return;
+        }
+
+        # Test basic arithmetic
+        assertEq(3, kotlin_eval("1 + 2"));
+
+        # Test string
+        assertEq("Hello, Qore!", kotlin_eval("\"Hello, Qore!\""));
+
+        # Test list operations
+        assertEq(6, kotlin_eval("listOf(1, 2, 3).sum()"));
+
+        # Test map creation
+        hash<auto> result = kotlin_eval("mapOf(\"a\" to 1, \"b\" to 2)");
+        assertEq(1, result.a);
+        assertEq(2, result.b);
+
+        # Test multiline script
+        string script = "
+            val x = 10
+            val y = 20
+            x + y
+        ";
+        assertEq(30, kotlin_eval(script));
+
+        # Test error handling
+        bool gotError = False;
+        try {
+            kotlin_eval("throw RuntimeException(\"test error\")");
+        } catch (hash<auto> ex) {
+            gotError = True;
+            assertTrue(ex.desc.find("test error") >= 0, "Exception should contain error message");
+        }
+        assertTrue(gotError, "kotlin_eval should throw on script errors");
     }
 }

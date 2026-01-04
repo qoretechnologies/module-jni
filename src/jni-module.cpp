@@ -104,6 +104,7 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
 static void qore_jni_mc_set_compat_types(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 static void qore_jni_mc_set_property(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 static void qore_jni_mc_mark_module_injected(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
+static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 
 // module cmds
 typedef std::map<std::string, qore_jni_module_cmd_t> mcmap_t;
@@ -118,6 +119,7 @@ static mcmap_t mcmap = {
     {"set-compat-types", qore_jni_mc_set_compat_types},
     {"set-property", qore_jni_mc_set_property},
     {"mark-module-injected", qore_jni_mc_mark_module_injected},
+    {"kotlin-eval", qore_jni_mc_kotlin_eval},
 };
 
 static void jni_thread_cleanup(void*) {
@@ -569,6 +571,51 @@ static void qore_jni_mc_mark_module_injected(const QoreString& arg, QoreProgram*
     assert(jpc);
 
     jpc->addInjectedModule(arg.c_str());
+}
+
+static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
+    assert(pgm);
+    assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
+    assert(jpc);
+
+    // Initialize the Kotlin script engine if not already done
+    Globals::initKotlinScriptEngine();
+
+    if (!Globals::classKotlinScriptEngine) {
+        throw QoreJniException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
+            "Kotlin scripting is not available - KotlinScriptEngine class not found");
+    }
+
+    jni::Env env;
+
+    // Check if scripting is available
+    jboolean available = env.callStaticBooleanMethod(Globals::classKotlinScriptEngine,
+        Globals::methodKotlinScriptEngineIsAvailable, nullptr);
+
+    if (!available) {
+        // Get the error message
+        LocalReference<jstring> errMsg = env.callStaticObjectMethod(Globals::classKotlinScriptEngine,
+            Globals::methodKotlinScriptEngineGetInitError, nullptr).as<jstring>();
+        if (errMsg) {
+            Env::GetStringUtfChars err(env, errMsg);
+            throw QoreJniException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
+                "Kotlin scripting is not available: %s", err.c_str());
+        } else {
+            throw QoreJniException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
+                "Kotlin scripting is not available - ensure kotlin-scripting-jsr223 JARs are in the classpath");
+        }
+    }
+
+    // Evaluate the Kotlin code
+    LocalReference<jstring> jscript = env.newString(arg.c_str());
+    std::vector<jvalue> jargs(1);
+    jargs[0].l = jscript;
+
+    LocalReference<jobject> result = env.callStaticObjectMethod(Globals::classKotlinScriptEngine,
+        Globals::methodKotlinScriptEngineEval, &jargs[0]);
+
+    // Result is discarded for module command - use kotlin_eval() function for return value
+    printd(5, "qore_jni_mc_kotlin_eval() executed Kotlin code successfully\n");
 }
 
 QoreClass* jni_class_handler(QoreNamespace* ns, const char* cname) {

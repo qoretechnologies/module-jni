@@ -56,6 +56,12 @@
         object of the given type and size
     |@ref Jni::org::qore::jni::set_save_object_callback() "set_save_object_callback()"|Sets the object lifecycle \
         management callback; see @ref jni_qore_object_lifecycle_management for more information
+    |@ref Jni::org::qore::jni::kotlin_eval() "kotlin_eval()"|Evaluates a Kotlin script at runtime and returns the \
+        result; requires kotlin-scripting JARs
+    |@ref Jni::org::qore::jni::kotlin_scripting_available() "kotlin_scripting_available()"|Returns @ref True if \
+        Kotlin scripting is available (kotlin-scripting JARs are in the classpath)
+    |@ref Jni::org::qore::jni::kotlin_scripting_retry() "kotlin_scripting_retry()"|Retries Kotlin scripting \
+        initialization after loading additional JARs at runtime
 
     @section jni_examples Examples
 
@@ -911,6 +917,11 @@ set_save_object_callback(callback);
       - added automatic filtering of Kotlin companion object classes (\c $Companion)
       - added \c KotlinMetadataHelper Java class for detecting Kotlin classes via \c @kotlin.Metadata annotation
       - added \c qkotlinc helper script for compiling Kotlin sources that use Qore APIs
+      - added \c kotlin_eval() function for runtime Kotlin scripting (requires kotlin-scripting-jsr223 JARs)
+      - added \c kotlin_scripting_available() function to check if scripting is available
+      - added \c kotlin_scripting_retry() function to retry scripting initialization after loading JARs
+      - added \c kotlin-eval module command for parse-time Kotlin evaluation
+      - added \c download-kotlin-scripting-jars script to download required JARs from Maven
     - added Kotlin integration tests
 
     @subsection jni_2_5_0 jni Module Version 2.5.0

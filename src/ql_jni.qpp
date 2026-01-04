@@ -360,4 +360,158 @@ binary get_byte_code(string class_name) {
         return QoreValue();
     }
 }
+
+//! Evaluates Kotlin script code and returns the result
+/** @par Example:
+    @code{.py}
+auto result = kotlin_eval("1 + 2");  // returns 3
+    @endcode
+
+    @param script the Kotlin script code to evaluate
+
+    @return the result of evaluating the script
+
+    @throws KOTLIN-SCRIPTING-NOT-AVAILABLE if the Kotlin scripting JARs are not available
+    @throws KOTLIN-EVAL-ERROR if there is an error evaluating the script
+
+    @note This function requires the following JARs to be in the classpath:
+    - kotlin-scripting-jsr223.jar
+    - kotlin-scripting-compiler-embeddable.jar
+    - kotlin-compiler-embeddable.jar
+    - kotlin-script-runtime.jar
+
+    These JARs are typically found in KOTLIN_HOME/lib/
+
+    @since jni 2.6
+*/
+auto kotlin_eval(string script) {
+    try {
+        jni::Env env;
+
+        // Initialize the Kotlin script engine if not already done
+        Globals::initKotlinScriptEngine();
+
+        if (!Globals::classKotlinScriptEngine) {
+            xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
+                "Kotlin scripting is not available - KotlinScriptEngine class not found");
+            return QoreValue();
+        }
+
+        // Check if scripting is available
+        jboolean available = env.callStaticBooleanMethod(Globals::classKotlinScriptEngine,
+            Globals::methodKotlinScriptEngineIsAvailable, nullptr);
+
+        if (!available) {
+            // Get the error message
+            LocalReference<jstring> errMsg = env.callStaticObjectMethod(Globals::classKotlinScriptEngine,
+                Globals::methodKotlinScriptEngineGetInitError, nullptr).as<jstring>();
+            if (errMsg) {
+                Env::GetStringUtfChars err(env, errMsg);
+                xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
+                    "Kotlin scripting is not available: %s", err.c_str());
+            } else {
+                xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
+                    "Kotlin scripting is not available - ensure kotlin-scripting-jsr223 JARs are in the classpath");
+            }
+            return QoreValue();
+        }
+
+        // Evaluate the Kotlin code
+        LocalReference<jstring> jscript = env.newString(script->c_str());
+        std::vector<jvalue> jargs(1);
+        jargs[0].l = jscript;
+
+        LocalReference<jobject> result = env.callStaticObjectMethod(Globals::classKotlinScriptEngine,
+            Globals::methodKotlinScriptEngineEval, &jargs[0]);
+
+        if (!result) {
+            return QoreValue();
+        }
+
+        // Convert Java result to Qore value
+        QoreProgram* pgm = jni_get_program_context();
+        return JavaToQore::convertToQore(std::move(result), pgm);
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+        return QoreValue();
+    }
+}
+
+//! Returns @ref True if Kotlin scripting is available
+/** @par Example:
+    @code{.py}
+if (kotlin_scripting_available()) {
+    auto result = kotlin_eval("println(\"Hello from Kotlin!\")");
+}
+    @endcode
+
+    @return @ref True if Kotlin scripting JARs are available and the script engine can be initialized
+
+    @note This function checks for the availability of the Kotlin JSR-223 scripting engine.
+    It requires the following JARs to be in the classpath:
+    - kotlin-scripting-jsr223.jar
+    - kotlin-scripting-compiler-embeddable.jar
+    - kotlin-compiler-embeddable.jar
+    - kotlin-script-runtime.jar
+
+    @since jni 2.6
+*/
+bool kotlin_scripting_available() {
+    try {
+        jni::Env env;
+
+        // Initialize the Kotlin script engine if not already done
+        Globals::initKotlinScriptEngine();
+
+        if (!Globals::classKotlinScriptEngine) {
+            return false;
+        }
+
+        // Check if scripting is available
+        return (bool)env.callStaticBooleanMethod(Globals::classKotlinScriptEngine,
+            Globals::methodKotlinScriptEngineIsAvailable, nullptr);
+    } catch (jni::Exception& e) {
+        // Ignore exceptions - just return false
+        e.ignore();
+        return false;
+    }
+}
+
+//! Forces a retry of Kotlin script engine initialization after loading additional JARs
+/** @par Example:
+    @code{.py}
+# Load JARs dynamically
+classloader.addPath("/path/to/kotlin-scripting-jsr223.jar");
+# Retry initialization
+if (kotlin_scripting_retry()) {
+    auto result = kotlin_eval("1 + 2");
+}
+    @endcode
+
+    @return @ref True if Kotlin scripting is now available, @ref False otherwise
+
+    @note This function is useful when Kotlin scripting JARs are loaded at runtime
+    after the initial availability check returned @ref False.
+
+    @since jni 2.6
+*/
+bool kotlin_scripting_retry() {
+    try {
+        jni::Env env;
+
+        // Initialize the Kotlin script engine if not already done
+        Globals::initKotlinScriptEngine();
+
+        if (!Globals::classKotlinScriptEngine) {
+            return false;
+        }
+
+        // Call retryInit to force re-initialization if it failed before
+        return (bool)env.callStaticBooleanMethod(Globals::classKotlinScriptEngine,
+            Globals::methodKotlinScriptEngineRetryInit, nullptr);
+    } catch (jni::Exception& e) {
+        e.ignore();
+        return false;
+    }
+}
 ///@}
