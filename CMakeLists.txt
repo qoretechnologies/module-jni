@@ -380,6 +380,8 @@ add_custom_command(
 add_custom_target(jni-compiler-sentinel
     DEPENDS ${JAVA_JAR_COMPILER_SRC} qore-jni.jar ${_qore_jni_compiler_sentinel}
 )
+# Ensure qore-jni.jar is built before compiling the compiler sources
+add_dependencies(jni-compiler-sentinel qore-jni-jar)
 
 add_jar_targets(
     org/qore/lang
