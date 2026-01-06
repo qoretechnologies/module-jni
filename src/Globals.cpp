@@ -529,9 +529,12 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 
-    QoreProgramContextHelper pch(pgm);
-
     ExceptionSink xsink;
+    QoreExternalProgramContextHelper pch(&xsink, pgm);
+    if (xsink) {
+        QoreToJava::wrapException(env, xsink);
+        return nullptr;
+    }
 
     jsize len = args ? env.getArrayLength(args) : 0;
     ReferenceHolder<QoreListNode> qore_args(&xsink);

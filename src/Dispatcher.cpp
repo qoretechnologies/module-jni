@@ -85,13 +85,16 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
         QoreProgram* pgm = callback->getProgram();
         JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 
+        // Set up full program context including tlpd for thread pool threads
+        QoreExternalProgramContextHelper pctx(&xsink, pgm);
+        if (xsink) {
+            QoreToJava::wrapException(xsink);
+            return nullptr;
+        }
+
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
         args->push(new QoreObject(QC_METHOD, pgm, new QoreJniPrivateData(method)), &xsink);
         if (jargs) {
-            // we need to set the Program context if executing in a new thread
-            // when creating arguments in case QoreClass
-            // objects must be created from Java objects
-            QoreExternalProgramCallContextHelper pch(pgm);
             ReferenceHolder<> val(&xsink);
             Array::getList(val, env, jargs, env.getObjectClass(jargs), pgm);
             args->push(val.release(), &xsink);
