@@ -18,6 +18,7 @@
 
 %requires jni
 %module-cmd(jni) add-relative-classpath ../build/qore-jni.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
 %module-cmd(jni) add-relative-classpath kotlin-test.jar
 %module-cmd(jni) import org.qore.jni.QoreURLClassLoader
 
@@ -91,6 +92,25 @@ string sub test_func() {
     return "test_func_result";
 }
 
+# Base class for dynamic import testing
+public class DynamicTestBase {
+    public {
+        string name;
+    }
+
+    constructor(string n) {
+        name = n;
+    }
+
+    string getName() {
+        return name;
+    }
+
+    string greet(string greeting) {
+        return sprintf("%s, %s!", greeting, name);
+    }
+}
+
 # Get library info for testing
 hash<auto> sub get_qore_library_info() {
     return {
@@ -127,6 +147,12 @@ public class KotlinTest inherits QUnit::Test {
         # Kotlin scripting tests (requires kotlin-scripting JARs)
         addTestCase("Kotlin scripting availability test", \kotlinScriptingAvailabilityTest());
         addTestCase("Kotlin eval test", \kotlinEvalTest());
+
+        # QoreKotlinCompiler tests (dynamic compilation with Qore imports)
+        addTestCase("QoreKotlinCompiler basic test", \kotlinCompilerBasicTest());
+        addTestCase("QoreKotlinCompiler dynamic import test", \kotlinCompilerDynamicImportTest());
+        addTestCase("QoreKotlinCompiler syntax error test", \kotlinCompilerSyntaxErrorTest());
+        addTestCase("QoreKotlinCompiler close idempotent test", \kotlinCompilerCloseIdempotentTest());
 
         set_return_value(main());
     }
@@ -445,5 +471,174 @@ public class KotlinTest inherits QUnit::Test {
             assertTrue(ex.desc.find("test error") >= 0, "Exception should contain error message");
         }
         assertTrue(gotError, "kotlin_eval should throw on script errors");
+    }
+
+    # =====================================================
+    # QoreKotlinCompiler tests (dynamic compilation)
+    # =====================================================
+
+    private {
+        bool compilerAvailable = False;
+        lang::Class compilerClass;
+    }
+
+    private bool ensureKotlinCompilerAvailable() {
+        if (compilerAvailable) {
+            return True;
+        }
+
+        *string kotlin_home = find_kotlin_home();
+        if (!kotlin_home) {
+            return False;
+        }
+
+        string kotlin_compiler_jar = kotlin_home + "/lib/kotlin-compiler.jar";
+        if (!is_file(kotlin_compiler_jar)) {
+            return False;
+        }
+
+        object classloader = QoreURLClassLoader::getCurrent();
+        classloader.addPath(kotlin_compiler_jar);
+
+        # Now import QoreKotlinCompiler
+        compilerClass = classloader.loadClass("org.qore.jni.compiler.QoreKotlinCompiler");
+        compilerAvailable = True;
+        return True;
+    }
+
+    kotlinCompilerBasicTest() {
+        if (!ensureKotlinCompilerAvailable()) {
+            testSkip("Kotlin compiler JAR not available");
+            return;
+        }
+
+        # Test basic compilation without dynamic imports
+        object compiler = compilerClass.getDeclaredConstructor().newInstance();
+        on_exit compiler.close();
+
+        string source = "
+class SimpleClass {
+    fun getMessage(): String = \"Hello from compiled Kotlin!\"
+
+    fun add(a: Int, b: Int): Int = a + b
+}
+";
+        hash<string, string> sources = {
+            "SimpleClass": source,
+        };
+
+        hash<string, binary> result = compiler.compile(sources);
+
+        # Verify we got bytecode
+        assertTrue(result.hasKey("SimpleClass"), "Should have SimpleClass bytecode");
+        assertTrue(result.SimpleClass.size() > 0, "SimpleClass bytecode should not be empty");
+
+        # Load and test the compiled class
+        object classloader = QoreURLClassLoader::getCurrent();
+        classloader.addPendingClass("SimpleClass", result.SimpleClass);
+        lang::Class cls = classloader.loadClass("SimpleClass");
+
+        object obj = cls.getDeclaredConstructor().newInstance();
+        assertEq("Hello from compiled Kotlin!", obj.getMessage());
+        assertEq(15, obj.add(7, 8));
+    }
+
+    kotlinCompilerDynamicImportTest() {
+        if (!ensureKotlinCompilerAvailable()) {
+            testSkip("Kotlin compiler JAR not available");
+            return;
+        }
+
+        # Test compilation with dynamic Qore imports
+        object compiler = compilerClass.getDeclaredConstructor().newInstance();
+        on_exit compiler.close();
+
+        # Kotlin source that imports a Qore class
+        string source = "
+import qore.DynamicTestBase
+
+class DynamicTestChild(name: String) : DynamicTestBase(name) {
+    fun getGreeting(): String = greet(\"Hello\")
+
+    fun getUpperName(): String = getName().uppercase()
+}
+";
+        hash<string, string> sources = {
+            "DynamicTestChild": source,
+        };
+
+        hash<string, binary> result = compiler.compile(sources);
+
+        # Verify we got bytecode
+        assertTrue(result.hasKey("DynamicTestChild"), "Should have DynamicTestChild bytecode");
+        assertTrue(result.DynamicTestChild.size() > 0, "DynamicTestChild bytecode should not be empty");
+
+        # Load and test the compiled class
+        object classloader = QoreURLClassLoader::getCurrent();
+        classloader.addPendingClass("DynamicTestChild", result.DynamicTestChild);
+        lang::Class cls = classloader.loadClass("DynamicTestChild");
+
+        # Create instance with constructor that takes String
+        lang::Class stringClass = load_class("java/lang/String");
+        Constructor ctor = cls.getConstructor((stringClass,));
+        object obj = ctor.newInstance(("World",));
+
+        # Test methods - these call through to the Qore base class
+        assertEq("Hello, World!", obj.getGreeting());
+        assertEq("WORLD", obj.getUpperName());
+    }
+
+    kotlinCompilerSyntaxErrorTest() {
+        if (!ensureKotlinCompilerAvailable()) {
+            testSkip("Kotlin compiler JAR not available");
+            return;
+        }
+
+        # Test that compilation errors are properly reported
+        object compiler = compilerClass.getDeclaredConstructor().newInstance();
+        on_exit compiler.close();
+
+        # Invalid Kotlin syntax - missing closing brace
+        string source = "
+class BrokenClass {
+    fun broken(): String {
+        return \"hello\"
+    // missing closing brace
+";
+        hash<string, string> sources = {
+            "BrokenClass": source,
+        };
+
+        bool gotError = False;
+        try {
+            compiler.compile(sources);
+        } catch (hash<ExceptionInfo> ex) {
+            gotError = True;
+            # Verify it's a compilation error
+            assertTrue(ex.err == "JNI-ERROR" || ex.desc.find("error") >= 0 || ex.desc.find("Error") >= 0,
+                "Should get a compilation error");
+        }
+        assertTrue(gotError, "Compilation of invalid syntax should throw an exception");
+    }
+
+    kotlinCompilerCloseIdempotentTest() {
+        if (!ensureKotlinCompilerAvailable()) {
+            testSkip("Kotlin compiler JAR not available");
+            return;
+        }
+
+        # Test that close() can be called multiple times without error
+        object compiler = compilerClass.getDeclaredConstructor().newInstance();
+
+        # Call close multiple times - should not throw
+        bool noError = True;
+        try {
+            compiler.close();
+            compiler.close();
+            compiler.close();
+        } catch (hash<ExceptionInfo> ex) {
+            noError = False;
+        }
+        assertTrue(noError, "close() should be idempotent - multiple calls should not throw");
     }
 }
