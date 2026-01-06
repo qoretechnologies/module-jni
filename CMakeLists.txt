@@ -26,6 +26,20 @@ endif()
 add_definitions(-DJAVA_VERSION_MAJOR=${Java_VERSION_MAJOR})
 include(UseJava)
 
+# Find Kotlin compiler for QoreKotlinCompiler support
+set(KOTLIN_HOME "$ENV{KOTLIN_HOME}")
+if (NOT KOTLIN_HOME)
+    set(KOTLIN_HOME "/opt/kotlin")
+endif()
+set(KOTLIN_COMPILER_JAR "${KOTLIN_HOME}/lib/kotlin-compiler.jar")
+if (EXISTS ${KOTLIN_COMPILER_JAR})
+    message(STATUS "Found Kotlin compiler: ${KOTLIN_COMPILER_JAR}")
+    set(HAVE_KOTLIN_COMPILER TRUE)
+else()
+    message(STATUS "Kotlin compiler not found at ${KOTLIN_COMPILER_JAR} - QoreKotlinCompiler will not be built")
+    set(HAVE_KOTLIN_COMPILER FALSE)
+endif()
+
 find_package(BZip2 REQUIRED)
 
 # Check for C++11
@@ -345,6 +359,10 @@ add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompiler.java JavaFileObj
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompilerException.java)
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaFileManager.java)
 add_java_compiler_source(org/qore/jni/compiler/CompilerOutput.java)
+if (HAVE_KOTLIN_COMPILER)
+    add_java_compiler_source(org/qore/jni/compiler/QoreKotlinCompiler.java)
+    add_java_compiler_source(org/qore/jni/compiler/QoreKotlinCompilerException.java)
+endif()
 
 #message(STATUS "MESSAGE Src: ${JAVA_JAR_SRC}")
 #message(STATUS "STR: ${JAVA_JAR_SRC_STR}")
@@ -367,10 +385,16 @@ add_custom_command(
     VERBATIM
 )
 
+# Set up classpath for compiler jar - include kotlin-compiler.jar if available
+set(COMPILER_CLASSPATH "qore-jni.jar")
+if (HAVE_KOTLIN_COMPILER)
+    set(COMPILER_CLASSPATH "${COMPILER_CLASSPATH}:${KOTLIN_COMPILER_JAR}")
+endif()
+
 add_custom_command(
     OUTPUT ${_qore_jni_compiler_sentinel} ${JAVA_JAR_COMPILER_CLASSES}
     COMMAND ${Java_JAVAC_EXECUTABLE} ${CMAKE_JAVA_COMPILE_FLAGS} -d ${CMAKE_CURRENT_BINARY_DIR}
-        ${JAVA_JAR_COMPILER_SRC} -cp qore-jni.jar
+        ${JAVA_JAR_COMPILER_SRC} -cp ${COMPILER_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E touch ${_qore_jni_compiler_sentinel}
     DEPENDS ${JAVA_JAR_COMPILER_SRC} qore-jni.jar
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -422,10 +446,17 @@ add_custom_target(qore-jni-jar
 add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
-add_jar(qore-jni-compiler ${JAVA_JAR_COMPILER_SRC}
-    INCLUDE_JARS qore-jni.jar
-    DEPENDS qore-jni.jar
-)
+if (HAVE_KOTLIN_COMPILER)
+    add_jar(qore-jni-compiler ${JAVA_JAR_COMPILER_SRC}
+        INCLUDE_JARS qore-jni.jar ${KOTLIN_COMPILER_JAR}
+        DEPENDS qore-jni.jar
+    )
+else()
+    add_jar(qore-jni-compiler ${JAVA_JAR_COMPILER_SRC}
+        INCLUDE_JARS qore-jni.jar
+        DEPENDS qore-jni.jar
+    )
+endif()
 
 add_dependencies(qore-jni-compiler qore-jni)
 

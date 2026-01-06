@@ -289,6 +289,16 @@ public class QoreURLClassLoader extends URLClassLoader {
         return rv;
     }
 
+    //! Returns a copy of all pending class names and their bytecode
+    /** This method returns all classes currently in the pending classes cache.
+        Used by QoreKotlinCompiler to retrieve all dynamically generated classes
+        including parent classes in the hierarchy.
+        @return A HashMap containing class binary names mapped to their bytecode
+    */
+    public HashMap<String, byte[]> getAllPendingClasses() {
+        return new HashMap<>(pendingClasses);
+    }
+
     public ArrayList<String> getPendingClassesForPackage(String packageName) {
         ArrayList<String> rv = new ArrayList<String>();
         pendingClasses.forEach((k, v) -> {
