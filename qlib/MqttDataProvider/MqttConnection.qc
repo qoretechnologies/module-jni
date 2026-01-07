@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** MqttConnection.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** MqttConnection.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -156,7 +156,7 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
         @debug {
             LoggerWrapper::debug("MqttConnection::getImpl() connect: %y rtopts: %y", connect, rtopts);
         }
-        hash<auto> copts = MqttDataProvider::getClient(orig_opts + {"url": real_url} + rtopts);
+        hash<auto> copts = MqttDataProvider::getClient(orig_opts + {"url": real_url} + rtopts, logger);
         if (connect) {
             copts.client.connect(copts.opts);
         }

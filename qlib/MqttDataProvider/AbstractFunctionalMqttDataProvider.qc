@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** AbstractFunctionalMqttDataProvider.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** AbstractFunctionalMqttDataProvider.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -212,7 +212,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                 options.url, options.client_id);
         }
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        hash<auto> cinfo = getClient(copts);
+        hash<auto> cinfo = getClient(copts, logger);
         client = cinfo.client;
         opts = cinfo.opts;
         topic = copts.subscription_topic;

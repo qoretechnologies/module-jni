@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** AbstractMqttDataProvider.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** AbstractMqttDataProvider.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -74,10 +74,12 @@ public class AbstractMqttDataProvider inherits DataProvider::AbstractDataProvide
     }
 
     #! Returns a client for the given options
-    static hash<auto> getClient(hash<auto> copts) {
+    static hash<auto> getClient(hash<auto> copts, *LoggerInterface logger) {
         @debug {
-            LoggerWrapper::debug("AbstractMqttDataProvider::getClient() url: %y client_id: %y", copts.url,
-                copts.client_id);
+            if (logger) {
+                logger.debug("AbstractMqttDataProvider::getClient() url: %y client_id: %y", copts.url,
+                    copts.client_id);
+            }
         }
         # create the client object
         MemoryPersistence persistence();
