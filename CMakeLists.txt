@@ -17,6 +17,13 @@ if (POLICY CMP0042)
     cmake_policy(SET CMP0042 NEW)
 endif()
 
+if(NOT Qore_DIR AND DEFINED ENV{QORE_GIT_ROOT})
+    # Prefer build-tree QoreConfig for local debug builds without install.
+    set(_qore_build_cmake "$ENV{QORE_GIT_ROOT}/qore/build/cmake")
+    if(EXISTS "${_qore_build_cmake}/QoreConfig.cmake")
+        set(Qore_DIR "${_qore_build_cmake}")
+    endif()
+endif()
 find_package(Qore 2.0 REQUIRED)
 find_package(JNI REQUIRED)
 find_package(Java REQUIRED)
