@@ -40,6 +40,8 @@
 
     # Common installation paths
     list<string> paths = (
+        "/opt/kotlin/lib/kotlin-stdlib.jar",          # Manual install (preferred)
+        "/opt/kotlinc/lib/kotlin-stdlib.jar",         # CI/alternate install dir
         "/snap/kotlin/current/lib/kotlin-stdlib.jar",  # Ubuntu snap (current symlink)
         "/snap/kotlin/94/lib/kotlin-stdlib.jar",       # Ubuntu snap (specific version)
         "/usr/share/kotlin/lib/kotlin-stdlib.jar",     # Fedora/RHEL dnf
@@ -389,6 +391,8 @@ public class KotlinTest inherits QUnit::Test {
 
         # Common locations
         list<string> homes = (
+            "/opt/kotlin",
+            "/opt/kotlinc",
             "/snap/kotlin/current",
             "/usr/share/kotlin",
             "/usr/lib/kotlin",
