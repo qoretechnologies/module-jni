@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -50,6 +50,26 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
     if (env.isInstanceOf(v, Globals::classZonedDateTime)) {
         LocalReference<jstring> date_str = env.callObjectMethod(v,
             Globals::methodZonedDateTimeToString, nullptr).as<jstring>();
+        Env::GetStringUtfChars chars(env, date_str);
+        return QoreValue(new DateTimeNode(chars.c_str()));
+    }
+
+    // issue #4892: LocalDateTime support for Kotlin/Java
+    // LocalDateTime.toString() returns ISO-8601 format like "2024-12-25T12:00:00"
+    // Note: LocalDateTime has no timezone info, so Qore will interpret it as a local/floating
+    // date-time in the current timezone context. Use ZonedDateTime if timezone preservation is needed.
+    if (env.isInstanceOf(v, Globals::classLocalDateTime)) {
+        LocalReference<jstring> date_str = env.callObjectMethod(v,
+            Globals::methodLocalDateTimeToString, nullptr).as<jstring>();
+        Env::GetStringUtfChars chars(env, date_str);
+        return QoreValue(new DateTimeNode(chars.c_str()));
+    }
+
+    // issue #4892: Instant support for Kotlin/Java
+    // Instant.toString() returns ISO-8601 format like "2024-12-25T12:00:00Z"
+    if (env.isInstanceOf(v, Globals::classInstant)) {
+        LocalReference<jstring> date_str = env.callObjectMethod(v,
+            Globals::methodInstantToString, nullptr).as<jstring>();
         Env::GetStringUtfChars chars(env, date_str);
         return QoreValue(new DateTimeNode(chars.c_str()));
     }
@@ -132,7 +152,12 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
         }
 
         ExceptionSink xsink;
-        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), &xsink);
+
+        // issue #4892: First pass - convert all entries and determine common value type
+        std::vector<std::pair<std::string, QoreValue>> entries;
+        qore_type_t common_type = -1;  // -1 means not yet determined
+        bool mixed_types = false;
+
         while (true) {
             if (!env.callBooleanMethod(i, Globals::methodIteratorHasNext, nullptr)) {
                 break;
@@ -146,6 +171,10 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
 
                 // if key is not a string, then we cannot convert it to Qore
                 if (!env.isInstanceOf(key, Globals::classString)) {
+                    // Clean up already converted entries
+                    for (auto& entry : entries) {
+                        entry.second.discard(&xsink);
+                    }
                     return qjcm.getValue(v, pgm, compat_types);
                 }
 
@@ -154,19 +183,71 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
 
                 ValueHolder val(convertToQore(value.release(), pgm, compat_types), &xsink);
                 if (xsink) {
-                    break;
+                    // Clean up already converted entries
+                    for (auto& entry : entries) {
+                        entry.second.discard(&xsink);
+                    }
+                    throw XsinkException(xsink);
+                }
+
+                // Track common type
+                qore_type_t val_type = val->getType();
+                if (common_type == -1) {
+                    common_type = val_type;
+                } else if (common_type != val_type) {
+                    mixed_types = true;
                 }
 
                 Env::GetStringUtfChars key_str(env, key.as<jstring>());
-                rv->setKeyValue(key_str.c_str(), val.release(), &xsink);
-                if (xsink) {
-                    break;
-                }
+                entries.emplace_back(key_str.c_str(), val.release());
             }
         }
 
-        if (xsink) {
-            throw XsinkException(xsink);
+        // Determine the type info based on common value type
+        const QoreTypeInfo* hash_value_type_info = autoTypeInfo;
+        if (!mixed_types && !entries.empty()) {
+            switch (common_type) {
+                case NT_INT:
+                    hash_value_type_info = bigIntTypeInfo;
+                    break;
+                case NT_STRING:
+                    hash_value_type_info = stringTypeInfo;
+                    break;
+                case NT_FLOAT:
+                    hash_value_type_info = floatTypeInfo;
+                    break;
+                case NT_BOOLEAN:
+                    hash_value_type_info = boolTypeInfo;
+                    break;
+                case NT_DATE:
+                    hash_value_type_info = dateTypeInfo;
+                    break;
+                case NT_NUMBER:
+                    hash_value_type_info = numberTypeInfo;
+                    break;
+                case NT_BINARY:
+                    hash_value_type_info = binaryTypeInfo;
+                    break;
+                // For complex types (hash, list, object), keep auto to avoid overly specific typing
+                default:
+                    hash_value_type_info = autoTypeInfo;
+                    break;
+            }
+        }
+
+        // Create typed hash and add entries
+        ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hash_value_type_info), &xsink);
+        for (size_t idx = 0; idx < entries.size(); ++idx) {
+            rv->setKeyValue(entries[idx].first.c_str(), entries[idx].second, &xsink);
+            if (xsink) {
+                // setKeyValue takes ownership on success, but on failure we must discard
+                // the current value and all remaining values
+                entries[idx].second.discard(&xsink);
+                for (size_t j = idx + 1; j < entries.size(); ++j) {
+                    entries[j].second.discard(&xsink);
+                }
+                throw XsinkException(xsink);
+            }
         }
 
         return rv.release();
@@ -177,7 +258,12 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
         jint size = env.callIntMethod(v, Globals::methodListSize, nullptr);
 
         ExceptionSink xsink;
-        ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), &xsink);
+
+        // issue #4892: First pass - convert all elements and determine common type
+        std::vector<QoreValue> elements;
+        elements.reserve(size);
+        qore_type_t common_type = -1;  // -1 means not yet determined
+        bool mixed_types = false;
 
         jint pos = 0;
         while (pos < size) {
@@ -189,14 +275,69 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
 
             ValueHolder val(convertToQore(value.release(), pgm, compat_types), &xsink);
             if (xsink) {
-                break;
+                // Clean up already converted elements
+                for (auto& elem : elements) {
+                    elem.discard(&xsink);
+                }
+                throw XsinkException(xsink);
             }
 
-            rv->push(val.release(), &xsink);
+            // Track common type
+            qore_type_t elem_type = val->getType();
+            if (common_type == -1) {
+                common_type = elem_type;
+            } else if (common_type != elem_type) {
+                mixed_types = true;
+            }
+
+            elements.push_back(val.release());
         }
 
-        if (xsink) {
-            throw XsinkException(xsink);
+        // Determine the type info based on common type
+        const QoreTypeInfo* list_type_info = autoTypeInfo;
+        if (!mixed_types && !elements.empty()) {
+            switch (common_type) {
+                case NT_INT:
+                    list_type_info = bigIntTypeInfo;
+                    break;
+                case NT_STRING:
+                    list_type_info = stringTypeInfo;
+                    break;
+                case NT_FLOAT:
+                    list_type_info = floatTypeInfo;
+                    break;
+                case NT_BOOLEAN:
+                    list_type_info = boolTypeInfo;
+                    break;
+                case NT_DATE:
+                    list_type_info = dateTypeInfo;
+                    break;
+                case NT_NUMBER:
+                    list_type_info = numberTypeInfo;
+                    break;
+                case NT_BINARY:
+                    list_type_info = binaryTypeInfo;
+                    break;
+                // For complex types (hash, list, object), keep auto to avoid overly specific typing
+                default:
+                    list_type_info = autoTypeInfo;
+                    break;
+            }
+        }
+
+        // Create typed list and add elements
+        ReferenceHolder<QoreListNode> rv(new QoreListNode(list_type_info), &xsink);
+        for (size_t idx = 0; idx < elements.size(); ++idx) {
+            rv->push(elements[idx], &xsink);
+            if (xsink) {
+                // push takes ownership on success, but on failure we must discard
+                // the current value and all remaining values
+                elements[idx].discard(&xsink);
+                for (size_t j = idx + 1; j < elements.size(); ++j) {
+                    elements[j].discard(&xsink);
+                }
+                throw XsinkException(xsink);
+            }
         }
 
         return rv.release();

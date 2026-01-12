@@ -369,7 +369,8 @@ void QoreJniClassMap::initIntern(QoreProgram* pgm) {
 
     qt2jmap[NT_NUMBER] = env.findClass("java/math/BigDecimal").makeGlobal();
     qt2jmap[NT_BINARY] = GlobalReference<jclass>((jclass)Globals::arrayClassByte);
-    qt2jmap[NT_HASH] = GlobalReference<jclass>((jclass)Globals::classHash);
+    // issue #4892: use Map interface to accept any Map implementation (HashMap, LinkedHashMap, etc.) from Java/Kotlin
+    qt2jmap[NT_HASH] = GlobalReference<jclass>((jclass)Globals::classMap);
     qt2jmap[NT_LIST] = env.findClass("[Ljava/lang/Object;").makeGlobal();
     qt2jmap[NT_NOTHING] = GlobalReference<jclass>((jclass)Globals::classPrimitiveVoid);
 

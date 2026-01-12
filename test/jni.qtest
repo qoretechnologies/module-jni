@@ -597,14 +597,15 @@ public class QoreDynamicTest17 extends AbstractTest2 {
 package org.qore.test;
 
 import qore.AbstractTest;
-import org.qore.jni.Hash;
+import java.util.Map;
 
 public class QoreDynamicTest18 extends AbstractTest {
     public QoreDynamicTest18() throws Throwable {
         super();
     }
 
-    public String test(String id, Hash info) throws Throwable {
+    @SuppressWarnings(\"rawtypes\")
+    public String test(String id, Map info) throws Throwable {
         return id + \"-\" + info.toString();
     }
 

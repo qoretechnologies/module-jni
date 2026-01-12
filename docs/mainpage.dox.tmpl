@@ -723,6 +723,8 @@ Object obj = newClassData.cls.getDeclaredConstructor().newInstance();
     |\c java.sql.Time|@ref date_type "date" (@ref absolute_dates "absolute date" based on \c 1970-01-01)
     |\c java.sql.Timestamp|@ref date_type "date" (@ref absolute_dates "absolute date")
     |\c java.time.ZonedDateTime|@ref date_type "date" (@ref absolute_dates "absolute date")
+    |\c java.time.LocalDateTime|@ref date_type "date" (@ref absolute_dates "absolute date", no timezone)
+    |\c java.time.Instant|@ref date_type "date" (@ref absolute_dates "absolute date", UTC)
     |<tt>@ref org.qore.jni.QoreRelativeTime</tt>|@ref date_type "date" (@ref relative_dates "relative date")
     |\c java.math.BigDecimal|@ref number_type "number"
     |\c java.lang.AbstractArray and arrays|@ref list_type "list"
@@ -922,6 +924,19 @@ set_save_object_callback(callback);
       - added \c kotlin_scripting_retry() function to retry scripting initialization after loading JARs
       - added \c kotlin-eval module command for parse-time Kotlin evaluation
       - added \c download-kotlin-scripting-jars script to download required JARs from Maven
+      - Kotlin's \c HashMap, \c LinkedHashMap, and other \c Map implementations can be passed directly
+        to %Qore methods expecting \c hash<auto> parameters; note that Java code using generated
+        bytecode for \c hash<auto> parameters will now see \c java.util.Map instead of
+        \c org.qore.jni.Hash in method signatures
+      - Kotlin/Java lists are converted to the most specific %Qore list type based on element types
+        (e.g., \c List<Integer> converts to \c list<int>); note that this means appending values of
+        different types to such lists will throw a runtime type error
+      - Kotlin/Java maps are converted to the most specific %Qore hash value type based on value types
+        (e.g., \c Map<String,Integer> converts to \c hash<string,int>); note that this means adding
+        values of different types to such hashes will throw a runtime type error
+      - automatic conversion of \c java.time.LocalDateTime and \c java.time.Instant to %Qore \c date type;
+        note that \c LocalDateTime has no timezone and will be interpreted as a local/floating date-time,
+        while \c Instant is always UTC
     - added Kotlin integration tests
 
     @subsection jni_2_5_0 jni Module Version 2.5.0
