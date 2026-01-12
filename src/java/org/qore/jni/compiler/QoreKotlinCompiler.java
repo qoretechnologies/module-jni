@@ -230,9 +230,51 @@ public class QoreKotlinCompiler implements AutoCloseable {
                 }
             };
 
-            // Run the compiler
+            // Run the compiler with stderr filtering to suppress JVM deprecation warnings
+            // from the Kotlin compiler's use of sun.misc.Unsafe
             K2JVMCompiler compiler = new K2JVMCompiler();
-            ExitCode exitCode = compiler.exec(messageCollector, Services.EMPTY, args);
+            ExitCode exitCode;
+            PrintStream originalErr = System.err;
+            try {
+                // Redirect stderr to filter out Kotlin compiler's JVM warnings
+                System.setErr(new PrintStream(new java.io.OutputStream() {
+                    private StringBuilder lineBuffer = new StringBuilder();
+
+                    @Override
+                    public void write(int b) throws IOException {
+                        if (b == '\n') {
+                            String line = lineBuffer.toString();
+                            // Filter out JVM deprecation warnings from Kotlin compiler
+                            if (!line.contains("sun.misc.Unsafe") &&
+                                !line.contains("terminally deprecated") &&
+                                !line.contains("will be removed in a future release") &&
+                                !line.contains("Please consider reporting this")) {
+                                originalErr.println(line);
+                            }
+                            lineBuffer.setLength(0);
+                        } else {
+                            lineBuffer.append((char) b);
+                        }
+                    }
+
+                    @Override
+                    public void flush() throws IOException {
+                        if (lineBuffer.length() > 0) {
+                            String line = lineBuffer.toString();
+                            if (!line.contains("sun.misc.Unsafe") &&
+                                !line.contains("terminally deprecated") &&
+                                !line.contains("will be removed in a future release") &&
+                                !line.contains("Please consider reporting this")) {
+                                originalErr.print(line);
+                            }
+                            lineBuffer.setLength(0);
+                        }
+                    }
+                }));
+                exitCode = compiler.exec(messageCollector, Services.EMPTY, args);
+            } finally {
+                System.setErr(originalErr);
+            }
 
             if (exitCode != ExitCode.OK) {
                 String msg = "Kotlin compilation failed";
@@ -356,7 +398,9 @@ public class QoreKotlinCompiler implements AutoCloseable {
             "qore.OMQ.UserApi.Workflow.QorusEventStep",
             "qore.OMQ.UserApi.Workflow.QorusSubworkflowStep",
             "qore.OMQ.UserApi.UserApi",
-            "qore.OMQ.OMQ"
+            "qore.OMQ.OMQ",
+            // Constants classes - contain module-level constants like WM_Normal, WM_Recovery, etc.
+            "qore.OMQ.$Constants"
         };
 
         for (String className : baseClasses) {
