@@ -49,6 +49,7 @@ import org.qore.jni.QoreURLClassLoader;
 public class QoreKotlinCompiler implements AutoCloseable {
     private final QoreURLClassLoader classLoader;
     private final List<String> options;
+    private final List<String> additionalBaseClasses = new ArrayList<>();
     private Path tempDir;
     private volatile boolean closed = false;
 
@@ -363,8 +364,8 @@ public class QoreKotlinCompiler implements AutoCloseable {
             }
         }
 
-        // Also load common Qorus base classes that might be needed
-        generateQorusBaseClassStubs();
+        // Load any additional base classes that were registered
+        loadAdditionalBaseClasses();
 
         // Now collect ALL pending classes that were generated (including parent classes)
         // and write them to the stubs directory
@@ -386,30 +387,39 @@ public class QoreKotlinCompiler implements AutoCloseable {
     }
 
     /**
-     * Load common Qorus base classes to trigger their bytecode generation.
+     * Load additional base classes to trigger their bytecode generation.
+     * These classes are loaded to make them available as stubs during compilation.
      */
-    private void generateQorusBaseClassStubs() {
-        // List of common base classes that Kotlin code might extend
-        String[] baseClasses = {
-            "qore.OMQ.UserApi.Service.QorusService",
-            "qore.OMQ.UserApi.Job.QorusJob",
-            "qore.OMQ.UserApi.Workflow.QorusNormalStep",
-            "qore.OMQ.UserApi.Workflow.QorusAsyncStep",
-            "qore.OMQ.UserApi.Workflow.QorusEventStep",
-            "qore.OMQ.UserApi.Workflow.QorusSubworkflowStep",
-            "qore.OMQ.UserApi.UserApi",
-            "qore.OMQ.OMQ",
-            // Constants classes - contain module-level constants like WM_Normal, WM_Recovery, etc.
-            "qore.OMQ.$Constants"
-        };
-
-        for (String className : baseClasses) {
+    private void loadAdditionalBaseClasses() {
+        for (String className : additionalBaseClasses) {
             try {
                 classLoader.loadClass(className);
             } catch (ClassNotFoundException e) {
                 // Class not available - that's OK, might not be needed
             }
         }
+    }
+
+    /**
+     * Add a base class to be loaded for stub generation.
+     *
+     * Call this method before compile() to ensure specific classes are available
+     * during Kotlin compilation. This is useful for application-specific classes
+     * like Qorus base classes (QorusService, QorusJob, etc.) or constants classes.
+     *
+     * @param className The fully qualified class name (e.g., "qore.OMQ.$Constants")
+     */
+    public void addBaseClass(String className) {
+        additionalBaseClasses.add(className);
+    }
+
+    /**
+     * Add multiple base classes to be loaded for stub generation.
+     *
+     * @param classNames Collection of fully qualified class names
+     */
+    public void addBaseClasses(java.util.Collection<String> classNames) {
+        additionalBaseClasses.addAll(classNames);
     }
 
     /**
