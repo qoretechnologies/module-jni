@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "*.tcc": "cpp",
+        "string": "cpp",
+        "vector": "cpp",
+        "unordered_map": "cpp",
+        "string_view": "cpp",
+        "safe_dslist": "cpp",
+        "new": "cpp"
+    }
+}
