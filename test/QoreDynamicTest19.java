@@ -4,9 +4,8 @@ package org.qore.test;
 import qoremod.DataProvider.Observer;
 import qoremod.reflection.Type;
 
-import java.util.Map;
+import org.qore.jni.Hash;
 
-@SuppressWarnings("rawtypes")
 class QoreDynamicTest19 extends Observer {
     QoreDynamicTest19() throws Throwable {
     }
@@ -15,7 +14,7 @@ class QoreDynamicTest19 extends Observer {
         return type.getName();
     }
 
-    public void update(String event_id, Map data_) {
+    public void update(String event_id, Hash data_) {
         // noop
     }
 }
