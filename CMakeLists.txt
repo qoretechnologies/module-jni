@@ -267,9 +267,16 @@ MACRO(ADD_JAVA_COMPILER_SOURCE _input)
     # generate rules for inner classes (if any)
     foreach (it ${ARGN})
         if (${it} MATCHES "^[0-9]+$")
+            # Anonymous inner class (numbered): e.g., "1" -> BaseClass$1.class
             SET(_inc_infile ${_pkgdir}/${_base}$${it}.class)
             SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${_base}_${it}.inc)
+        elseif (${it} MATCHES "^\\$")
+            # Named inner class (starts with $): e.g., "$SafeDiagnostic" -> BaseClass$SafeDiagnostic.class
+            SET(_inc_infile ${_pkgdir}/${_base}${it}.class)
+            string(SUBSTRING ${it} 1 -1 _inner_name)
+            SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${_base}_${_inner_name}.inc)
         else()
+            # Standalone package-private class in the same source file
             SET(_inc_infile ${_pkgdir}/${it}.class)
             SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${it}.inc)
         endif()
