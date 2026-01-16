@@ -269,6 +269,7 @@ public class Main inherits QUnit::Test {
         addTestCase("callback return value test", \testCallbackRetVal());
         addTestCase("special conversions test", \testSpecialConversions());
         addTestCase("api test", \testQoreJavaApi());
+        addTestCase("native access option test", \nativeAccessOptionTest());
 
         Qore::exit(main());
     }
@@ -881,6 +882,26 @@ auto sub test() {
 
     static object getJavaClassLoader(Program p) {
         return p.getExpression("jni::get_class_loader()", "QorusProgram::getJavaClassLoader()").eval();
+    }
+
+    nativeAccessOptionTest() {
+        bool has_native_access = Jni::org::qore::jni::native_access_option_enabled();
+
+        *string env_val = System::getenv("QORE_JNI_DISABLE_NATIVE_ACCESS");
+        bool disabled = False;
+        if (env_val) {
+            if (env_val == "1") {
+                disabled = True;
+            } else {
+                disabled = Boolean::parseBoolean(env_val);
+            }
+        }
+
+        if (disabled) {
+            assertEq(False, has_native_access);
+        } else {
+            assertEq(True, has_native_access);
+        }
     }
 
     argTest() {

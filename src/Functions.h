@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -37,6 +37,7 @@
 #include "ModifiedUtf8String.h"
 #include "InvocationHandler.h"
 #include "Globals.h"
+#include "Jvm.h"
 
 namespace jni {
 
@@ -134,6 +135,10 @@ public:
     static Array *newObjectArray(int64 size, const Class *cls) {
         Env env;
         return new Array(env.newObjectArray(size, cls->getJavaObject()));
+    }
+
+    static bool nativeAccessOptionEnabled() {
+        return Jvm::nativeAccessOptionEnabled();
     }
 
 private:

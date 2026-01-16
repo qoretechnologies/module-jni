@@ -50,6 +50,8 @@
     |@ref Jni::org::qore::jni::invoke_nonvirtual() "invoke_nonvirtual()"|Invokes a method with the given arguments \
         in a non-virtual way; meaning that even if the object provided is a child class, the method given in the \
         first argument is executed
+    |@ref Jni::org::qore::jni::native_access_option_enabled() "native_access_option_enabled()"|Returns @ref True if \
+        native access is enabled for unnamed modules when the JVM was initialized
     |@ref Jni::org::qore::jni::load_class() "load_class()"|Loads a Java class with given name and returns a \
         \c java::lang::Class object
     |@ref Jni::org::qore::jni::new_array() "new_array()"|Creates a @ref Jni::org::qore::jni::JavaArray "JavaArray" \
@@ -261,6 +263,8 @@ class KotlinHelper(val id: Int) {
     Heap sizes can be controlled by the following environment variables:
     - \c QORE_JNI_MIN_HEAP_SIZE: will set the <tt><b>-Xms</b></tt> JVM initialization option for the minimum heap size
     - \c QORE_JNI_MAX_HEAP_SIZE: will set the <tt><b>-Xmx</b></tt> JVM initialization option for the maximum heap size
+    - \c QORE_JNI_DISABLE_NATIVE_ACCESS: when set to \c 1, do not add
+      <tt><b>--enable-native-access=ALL-UNNAMED</b></tt> to JVM initialization options
 
     For example:
     @verbatim
@@ -938,6 +942,9 @@ set_save_object_callback(callback);
         note that \c LocalDateTime has no timezone and will be interpreted as a local/floating date-time,
         while \c Instant is always UTC
     - added Kotlin integration tests
+    - added default JVM native access enablement for unnamed modules; use
+      \c QORE_JNI_DISABLE_NATIVE_ACCESS=1 to suppress the option
+    - added \c native_access_option_enabled() to report native access enablement status
 
     @subsection jni_2_5_0 jni Module Version 2.5.0
     - added support for interruptible I/O for graceful termination of sandboxed programs; interrupt

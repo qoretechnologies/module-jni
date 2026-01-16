@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,7 @@ namespace jni {
 
 JavaVM* Jvm::vm = nullptr;
 thread_local JNIEnv* Jvm::env;
+bool Jvm::native_access_option_enabled = false;
 
 QoreStringNode* Jvm::createVM() {
     assert(vm == nullptr);
@@ -46,7 +47,9 @@ QoreStringNode* Jvm::createVM() {
 
     size_t num_options = 2;
     bool disable_jit = false;
-    QoreString min_heap, max_heap, debug_cmd;
+    bool enable_native_access = true;
+    bool native_access_explicit = false;
+    QoreString min_heap, max_heap, debug_cmd, native_access_opt;
     std::vector<std::string> strvec;
     // check QORE_JNI_DISABLE_JIT environment variable
     {
@@ -69,6 +72,14 @@ QoreStringNode* Jvm::createVM() {
     }
     {
         QoreString val;
+        if (!SystemEnvironment::get("QORE_JNI_DISABLE_NATIVE_ACCESS", val)) {
+            if (q_parse_bool(val.c_str())) {
+                enable_native_access = false;
+            }
+        }
+    }
+    {
+        QoreString val;
         if (!SystemEnvironment::get("QORE_JNI_DEBUG", val)) {
             int port = atoi(val.c_str());
             if (port > 0) {
@@ -81,6 +92,9 @@ QoreStringNode* Jvm::createVM() {
     {
         QoreString val;
         if (!SystemEnvironment::get("QORE_JNI_JVM_ARGS", val)) {
+            if (val.find("--enable-native-access") >= 0) {
+                native_access_explicit = true;
+            }
             ssize_t pos = 0;
             while (true) {
                 ssize_t i = val.find(' ', pos);
@@ -97,6 +111,10 @@ QoreStringNode* Jvm::createVM() {
             num_options += strvec.size();
         }
     }
+    if (enable_native_access && !native_access_explicit) {
+        ++num_options;
+    }
+    native_access_option_enabled = enable_native_access;
 #ifdef QORE_JNI_SUPPORT_CLASSPATH
     // this is disabled, because we use our own URLClassloader now to load all classes
     QoreString classpath;
@@ -130,6 +148,10 @@ QoreStringNode* Jvm::createVM() {
     if (!max_heap.empty()) {
         // set maximum heap size
         options[vm_args.nOptions++].optionString = (char*)max_heap.c_str();
+    }
+    if (enable_native_access && !native_access_explicit) {
+        native_access_opt = "--enable-native-access=ALL-UNNAMED";
+        options[vm_args.nOptions++].optionString = (char*)native_access_opt.c_str();
     }
     if (!strvec.empty()) {
         for (auto& str: strvec) {

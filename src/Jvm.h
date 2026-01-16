@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -102,6 +102,13 @@ public:
      */
     static void threadCleanup();
 
+    /**
+     * \brief Returns true if native access is enabled for unnamed modules.
+     */
+    static bool nativeAccessOptionEnabled() {
+        return native_access_option_enabled;
+    }
+
 private:
     /**
      * \brief This is a static class - no instances are allowed.
@@ -111,6 +118,7 @@ private:
 private:
     static JavaVM* vm;
     static thread_local JNIEnv* env;
+    static bool native_access_option_enabled;
 };
 
 } // namespace jni

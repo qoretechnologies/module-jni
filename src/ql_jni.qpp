@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,6 +51,14 @@ string get_version() {
         e.convert(xsink);
         return QoreValue();
     }
+}
+
+//! Returns true if native access is enabled for unnamed modules at JVM initialization.
+/**
+    @return true if native access is enabled for unnamed modules
+ */
+bool native_access_option_enabled() {
+    return jni::Functions::nativeAccessOptionEnabled();
 }
 
 //! Loads a Java class with given name.
