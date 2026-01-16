@@ -35,15 +35,25 @@ include(UseJava)
 
 # Find Kotlin compiler for QoreKotlinCompiler support
 set(KOTLIN_HOME "$ENV{KOTLIN_HOME}")
-if (NOT KOTLIN_HOME)
-    set(KOTLIN_HOME "/opt/kotlin")
+set(KOTLIN_COMPILER_JAR "")
+set(_kotlin_candidates "")
+if (KOTLIN_HOME)
+    list(APPEND _kotlin_candidates "${KOTLIN_HOME}")
+else()
+    list(APPEND _kotlin_candidates "/opt/kotlin" "/opt/kotlinc")
 endif()
-set(KOTLIN_COMPILER_JAR "${KOTLIN_HOME}/lib/kotlin-compiler.jar")
-if (EXISTS ${KOTLIN_COMPILER_JAR})
+foreach (_kotlin_dir IN LISTS _kotlin_candidates)
+    if (EXISTS "${_kotlin_dir}/lib/kotlin-compiler.jar")
+        set(KOTLIN_HOME "${_kotlin_dir}")
+        set(KOTLIN_COMPILER_JAR "${_kotlin_dir}/lib/kotlin-compiler.jar")
+        break()
+    endif()
+endforeach()
+if (KOTLIN_COMPILER_JAR)
     message(STATUS "Found Kotlin compiler: ${KOTLIN_COMPILER_JAR}")
     set(HAVE_KOTLIN_COMPILER TRUE)
 else()
-    message(STATUS "Kotlin compiler not found at ${KOTLIN_COMPILER_JAR} - QoreKotlinCompiler will not be built")
+    message(STATUS "Kotlin compiler not found - QoreKotlinCompiler will not be built")
     set(HAVE_KOTLIN_COMPILER FALSE)
 endif()
 
@@ -139,7 +149,7 @@ ENDMACRO(GENERATE_JAR)
 MACRO(MAKE_QJAR _output _classpath _root)
     add_custom_command(
         OUTPUT ${_output}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
             --root=${_root} -d ${CMAKE_CURRENT_BINARY_DIR} ${_output} ${ARGN} -cp ${_classpath}
         DEPENDS ${module_name} ${ARGN}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -175,7 +185,7 @@ set(KAFKA_SOURCES ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/)
 if (APPLE)
     add_custom_command(
         OUTPUT ${KAFKA_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
             --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
         DEPENDS ${module_name} ${KAFKA_SOURCES} ${EXCEL_JAR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -184,7 +194,7 @@ if (APPLE)
 else()
     add_custom_command(
         OUTPUT ${KAFKA_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. qore -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
             --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
         DEPENDS ${module_name} ${KAFKA_SOURCES}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -257,9 +267,16 @@ MACRO(ADD_JAVA_COMPILER_SOURCE _input)
     # generate rules for inner classes (if any)
     foreach (it ${ARGN})
         if (${it} MATCHES "^[0-9]+$")
+            # Anonymous inner class (numbered): e.g., "1" -> BaseClass$1.class
             SET(_inc_infile ${_pkgdir}/${_base}$${it}.class)
             SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${_base}_${it}.inc)
+        elseif (${it} MATCHES "^\\$")
+            # Named inner class (starts with $): e.g., "$SafeDiagnostic" -> BaseClass$SafeDiagnostic.class
+            SET(_inc_infile ${_pkgdir}/${_base}${it}.class)
+            string(SUBSTRING ${it} 1 -1 _inner_name)
+            SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${_base}_${_inner_name}.inc)
         else()
+            # Standalone package-private class in the same source file
             SET(_inc_infile ${_pkgdir}/${it}.class)
             SET(_inc_outfile ${CMAKE_CURRENT_BINARY_DIR}/JavaClass${it}.inc)
         endif()
@@ -363,7 +380,7 @@ add_java_compiler_source(org/qore/jni/compiler/CustomJavaFileObject.java)
 add_java_compiler_source(org/qore/jni/compiler/PackageInternalsFinder.java)
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaClassObject.java)
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompiler.java JavaFileObjectImpl FileManagerImpl)
-add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompilerException.java)
+add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompilerException.java $SafeDiagnostic)
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaFileManager.java)
 add_java_compiler_source(org/qore/jni/compiler/CompilerOutput.java)
 if (HAVE_KOTLIN_COMPILER)

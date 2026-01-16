@@ -16,6 +16,7 @@
 %module-cmd(jni) add-relative-classpath ../share/qore/java/qore-jni-compiler.jar
 
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompilerException
 %module-cmd(jni) import org.qore.jni.compiler.CompilerOutput
 %module-cmd(jni) import java.io.InputStream
 %module-cmd(jni) import java.io.FileOutputStream
@@ -67,8 +68,8 @@ class QJava2Jar {
         QoreJavaCompiler compiler(ARGV);
         DiagnosticCollector diags();
         on_error
-            map printf("%s:%d: %s\n", $1.getSource().getName(), $1.getLineNumber(), $1.getMessage()),
-                diags.getDiagnostics();
+            map printf("%s\n", $1),
+                QoreJavaCompilerException::extractDiagnosticMessages(diags);
         string file_list;
         hash<string, CompilerOutput> cv = compiler.compile(srcs, diags);
         string base_dir;
@@ -103,7 +104,16 @@ class QJava2Jar {
                     mkdir_ex(parent_dir, 0755, True);
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore "File exists" errors (race condition with parallel builds)
-                    if (ex.err != "DIR-CREATE-FAILURE" || !is_dir(parent_dir)) {
+                    bool ignore_error = False;
+                    if (ex.err == "DIR-CREATE-FAILURE" && ex.arg == 17) {
+                        int attempts = 0;
+                        while (!is_dir(parent_dir) && attempts < 50) {
+                            usleep(10ms);
+                            ++attempts;
+                        }
+                        ignore_error = is_dir(parent_dir);
+                    }
+                    if (!ignore_error && !is_dir(parent_dir)) {
                         rethrow;
                     }
                 }

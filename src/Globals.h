@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -283,6 +283,12 @@ public:
     DLLLOCAL static GlobalReference<jclass> classZonedDateTime;                   // java.time.ZonedDateTime
     DLLLOCAL static jmethodID methodZonedDateTimeParse;                           // ZonedDateTime.parse()
     DLLLOCAL static jmethodID methodZonedDateTimeToString;                        // ZonedDateTime.toString()
+
+    DLLLOCAL static GlobalReference<jclass> classLocalDateTime;                   // java.time.LocalDateTime
+    DLLLOCAL static jmethodID methodLocalDateTimeToString;                        // LocalDateTime.toString()
+
+    DLLLOCAL static GlobalReference<jclass> classInstant;                         // java.time.Instant
+    DLLLOCAL static jmethodID methodInstantToString;                              // Instant.toString()
 
     DLLLOCAL static GlobalReference<jclass> classQoreRelativeTime;                // org.qore.jni.QoreRelativeTime
     DLLLOCAL static jmethodID ctorQoreRelativeTime;                               // QoreRelativeTime(int, int, int, int, int, int, int)

@@ -92,8 +92,8 @@ class QJavaCompilerCmd {
             }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.arg instanceof QoreJavaCompilerException) {
-                map stderr.printf("%s:%d: %s\n", $1.getSource().getName(), $1.getLineNumber(), $1.getMessage()),
-                    diags.getDiagnostics();
+                map stderr.printf("%s\n", $1),
+                    QoreJavaCompilerException::extractDiagnosticMessages(diags);
                 stderr.printf("%s\n", get_exception_string(ex));
                 set_return_value(2);
                 return;

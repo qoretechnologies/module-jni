@@ -4,6 +4,7 @@ build/
 .project
 .classpath
 .settings/
+.vscode/
 
 test/qore-jni-test.jar
 

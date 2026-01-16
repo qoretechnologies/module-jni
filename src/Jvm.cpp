@@ -107,8 +107,13 @@ QoreStringNode* Jvm::createVM() {
     JavaVMOption options[num_options];
     // "reduced signals"
     options[vm_args.nOptions++].optionString = (char*)"-Xrs";
-    // thread stack size
-    QoreStringMaker thread_stack_size("-Xss%ldk", q_thread_get_stack_size() / 1024);
+    // thread stack size; use a minimum of 1MB if stack size is unknown/0
+    // (can happen when module links against a different libqore than the running executable)
+    size_t stack_size_kb = q_thread_get_stack_size() / 1024;
+    if (!stack_size_kb) {
+        stack_size_kb = 1024;  // 1MB minimum
+    }
+    QoreStringMaker thread_stack_size("-Xss%ldk", stack_size_kb);
     options[vm_args.nOptions++].optionString = (char*)thread_stack_size.c_str();
     if (disable_jit) {
         // disable JIT

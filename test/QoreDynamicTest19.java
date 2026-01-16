@@ -15,6 +15,6 @@ class QoreDynamicTest19 extends Observer {
     }
 
     public void update(String event_id, Hash data_) {
-        // nnop
+        // noop
     }
 }

@@ -29,6 +29,7 @@
 %module-cmd(jni) import org.qore.jni.test.QoreJavaApiTest
 
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompilerException
 %module-cmd(jni) import org.qore.jni.compiler.CompilerOutput
 
 %module-cmd(jni) import org.qore.lang.*
@@ -782,8 +783,8 @@ auto sub test() {
                 QoreJavaCompiler compiler();
                 DiagnosticCollector diags();
                 on_error
-                    map printf("%s:%d: %s\n", $1.getSource().getName(), $1.getLineNumber(), $1.getMessage()),
-                        diags.getDiagnostics();
+                    map printf("%s\n", $1),
+                        QoreJavaCompilerException::extractDiagnosticMessages(diags);
 
                 compiler::CompilerOutput newClassData = compiler.compile("org.qore.test.QoreDynamicTest2",
                     new String(File::readTextFile(get_script_dir() + "/QoreDynamicTest2.java")),

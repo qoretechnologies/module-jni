@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -267,6 +267,12 @@ jmethodID Globals::methodIteratorNext;
 GlobalReference<jclass> Globals::classZonedDateTime;
 jmethodID Globals::methodZonedDateTimeParse;
 jmethodID Globals::methodZonedDateTimeToString;
+
+GlobalReference<jclass> Globals::classLocalDateTime;
+jmethodID Globals::methodLocalDateTimeToString;
+
+GlobalReference<jclass> Globals::classInstant;
+jmethodID Globals::methodInstantToString;
 
 GlobalReference<jclass> Globals::classQoreRelativeTime;
 jmethodID Globals::ctorQoreRelativeTime;
@@ -2777,6 +2783,14 @@ bool Globals::init() {
         "(Ljava/lang/CharSequence;)Ljava/time/ZonedDateTime;");
     methodZonedDateTimeToString = env.getMethod(classZonedDateTime, "toString", "()Ljava/lang/String;");
 
+    // issue #4892: LocalDateTime support for Kotlin/Java date conversion
+    classLocalDateTime = env.findClass("java/time/LocalDateTime").makeGlobal();
+    methodLocalDateTimeToString = env.getMethod(classLocalDateTime, "toString", "()Ljava/lang/String;");
+
+    // issue #4892: Instant support for Kotlin/Java date conversion
+    classInstant = env.findClass("java/time/Instant").makeGlobal();
+    methodInstantToString = env.getMethod(classInstant, "toString", "()Ljava/lang/String;");
+
     classQoreRelativeTime = findDefineClass(env, "org.qore.jni.QoreRelativeTime", nullptr,
         java_org_qore_jni_QoreRelativeTime_class, java_org_qore_jni_QoreRelativeTime_class_len).makeGlobal();
     ctorQoreRelativeTime = env.getMethod(classQoreRelativeTime, "<init>", "(IIIIIII)V");
@@ -3215,6 +3229,8 @@ void Globals::cleanup() {
     classEntry = nullptr;
     classIterator = nullptr;
     classZonedDateTime = nullptr;
+    classLocalDateTime = nullptr;
+    classInstant = nullptr;
     classQoreRelativeTime = nullptr;
     classBigDecimal = nullptr;
     classArrays = nullptr;

@@ -40,6 +40,8 @@
 
     # Common installation paths
     list<string> paths = (
+        "/opt/kotlin/lib/kotlin-stdlib.jar",          # Manual install (preferred)
+        "/opt/kotlinc/lib/kotlin-stdlib.jar",         # CI/alternate install dir
         "/snap/kotlin/current/lib/kotlin-stdlib.jar",  # Ubuntu snap (current symlink)
         "/snap/kotlin/94/lib/kotlin-stdlib.jar",       # Ubuntu snap (specific version)
         "/usr/share/kotlin/lib/kotlin-stdlib.jar",     # Fedora/RHEL dnf
@@ -118,6 +120,183 @@ hash<auto> sub get_qore_library_info() {
     };
 }
 
+# Class for testing list/array parameter passing from Kotlin
+# This verifies that Kotlin's listOf(), arrayOf(), etc. work with Qore's list<auto>
+public class ListParamTest {
+    # Accept a list parameter and return its size
+    static int getListSize(list<auto> data) {
+        return data.size();
+    }
+
+    # Accept a list and return a string representation
+    static string describeList(list<auto> data) {
+        return sprintf("size=%d,first=%s,last=%s", data.size(),
+            data.size() > 0 ? string(data[0]) : "none",
+            data.size() > 0 ? string(data[data.size()-1]) : "none");
+    }
+
+    # Accept a list and return it with an element appended
+    static list<auto> appendToList(list<auto> data, auto element) {
+        return data + element;
+    }
+
+    # Accept a list and return element at index
+    static auto getElement(list<auto> data, int index) {
+        return data[index];
+    }
+
+    # Accept list of strings
+    static string joinStrings(list<string> data, string sep) {
+        return data.join(sep);
+    }
+
+    # Accept list of integers and return sum
+    static int sumIntegers(list<int> data) {
+        return foldl $1 + $2, data;
+    }
+
+    # Accept list of hashes
+    static int countHashListItems(list<hash<auto>> data) {
+        return data.size();
+    }
+
+    # Accept optional list
+    static string processOptionalList(*list<auto> data) {
+        if (!exists data) {
+            return "no_list";
+        }
+        return sprintf("has_list:%d", data.size());
+    }
+
+    # Accept nested list (list of lists)
+    static auto getNestedElement(list<auto> data, int i, int j) {
+        list<auto> inner = data[i];
+        return inner[j];
+    }
+}
+
+# Class for testing date/time parameter passing from Kotlin
+# This verifies that Kotlin/Java's java.time classes work with Qore's date type
+public class DateTimeParamTest {
+    # Accept a date and return formatted string
+    static string formatDate(date d) {
+        return format_date("YYYY-MM-DD HH:mm:SS", d);
+    }
+
+    # Accept a date and return the year
+    static int getYear(date d) {
+        return get_years(d);
+    }
+
+    # Accept a date and add days to it
+    static date addDays(date d, int num_days) {
+        return d + days(num_days);
+    }
+
+    # Accept a date and return if it's in the past
+    static bool isInPast(date d) {
+        return d < now();
+    }
+
+    # Accept optional date
+    static string processOptionalDate(*date d) {
+        if (!exists d) {
+            return "no_date";
+        }
+        return format_date("YYYY-MM-DD", d);
+    }
+
+    # Return current time for comparison
+    static date getCurrentTime() {
+        return now_us();
+    }
+
+    # Accept a relative time and return its components
+    static hash<auto> describeRelativeTime(date d) {
+        return {
+            "years": get_years(d),
+            "months": get_months(d),
+            "days": get_days(d),
+            "hours": get_hours(d),
+            "minutes": get_minutes(d),
+            "seconds": get_seconds(d),
+        };
+    }
+
+    # issue #4892: Format date with microseconds for LocalDateTime/Instant tests
+    static string formatDateWithMicros(date d) {
+        return format_date("YYYY-MM-DD HH:mm:SS.xx", d);
+    }
+
+    # issue #4892: Get epoch seconds for Instant tests
+    static int getEpochSeconds(date d) {
+        return get_epoch_seconds(d);
+    }
+}
+
+# Class for testing hash/Map parameter passing from Kotlin
+# This is the key test class for verifying that Kotlin's HashMap works with Qore's hash<auto>
+public class HashParamTest {
+    # Accept a hash parameter and return a string representation
+    static string processHash(hash<auto> data) {
+        return sprintf("keys=%d,name=%s,value=%s", data.size(), data.name ?? "null", string(data.value) ?? "null");
+    }
+
+    # Accept a hash and return it modified
+    static hash<auto> modifyHash(hash<auto> data) {
+        return data + {"modified": True, "timestamp": now_us()};
+    }
+
+    # Accept hash and return specific value
+    static auto getValue(hash<auto> data, string key) {
+        return data{key};
+    }
+
+    # Accept multiple hash parameters
+    static hash<auto> mergeHashes(hash<auto> h1, hash<auto> h2) {
+        return h1 + h2;
+    }
+
+    # Accept hash and return its size
+    static int getHashSize(hash<auto> data) {
+        return data.size();
+    }
+
+    # Accept optional hash (can be NOTHING)
+    static string processOptionalHash(*hash<auto> data) {
+        if (!exists data) {
+            return "no_data";
+        }
+        return sprintf("has_data:%d", data.size());
+    }
+
+    # Test nested hash
+    static auto getNestedValue(hash<auto> data, string key1, string key2) {
+        hash<auto> nested = data{key1};
+        return nested{key2};
+    }
+
+    # Accept hash with mixed value types
+    static string describeMixedHash(hash<auto> data) {
+        list<string> desc;
+        HashIterator i(data);
+        while (i.next()) {
+            desc += sprintf("%s=%s", i.getKey(), i.getValue().type());
+        }
+        return desc.join(",");
+    }
+
+    # Accept hash with typed int values - tests type narrowing
+    static int sumHashIntValues(hash<string, int> data) {
+        return foldl $1 + $2, data.values();
+    }
+
+    # Accept hash with typed string values - tests type narrowing
+    static string joinHashStringValues(hash<string, string> data, string sep) {
+        return data.values().join(sep);
+    }
+}
+
 public class KotlinTest inherits QUnit::Test {
     constructor() : Test("Kotlin Integration Test", "1.0") {
         # Add kotlin-stdlib.jar to classpath at runtime
@@ -143,6 +322,43 @@ public class KotlinTest inherits QUnit::Test {
         addTestCase("Kotlin creating Qore object test", \kotlinCreateQoreObjectTest());
         addTestCase("Kotlin Hash interop test", \kotlinHashInteropTest());
         addTestCase("Kotlin get Qore library info test", \kotlinGetQoreLibraryInfoTest());
+
+        # Kotlin HashMap/Map compatibility tests (issue #4892)
+        addTestCase("Kotlin HashMap to Qore hash test", \kotlinHashMapToQoreHashTest());
+        addTestCase("Kotlin LinkedHashMap to Qore hash test", \kotlinLinkedHashMapToQoreHashTest());
+        addTestCase("Kotlin empty Map to Qore hash test", \kotlinEmptyMapToQoreHashTest());
+        addTestCase("Kotlin Map with mixed value types test", \kotlinMapMixedValuesTest());
+        addTestCase("Kotlin nested Map test", \kotlinNestedMapTest());
+        addTestCase("Kotlin null Map handling test", \kotlinNullMapHandlingTest());
+        addTestCase("Kotlin HashMap int values type narrowing test", \kotlinHashMapIntValuesTest());
+        addTestCase("Kotlin HashMap string values type narrowing test", \kotlinHashMapStringValuesTest());
+
+        # Kotlin List/Array compatibility tests
+        addTestCase("Kotlin listOf to Qore list test", \kotlinListOfToQoreListTest());
+        addTestCase("Kotlin arrayListOf to Qore list test", \kotlinArrayListOfToQoreListTest());
+        addTestCase("Kotlin empty list test", \kotlinEmptyListToQoreListTest());
+        addTestCase("Kotlin list of integers test", \kotlinListOfIntegersTest());
+        addTestCase("Kotlin list of strings test", \kotlinListOfStringsTest());
+        addTestCase("Kotlin nested list test", \kotlinNestedListTest());
+        addTestCase("Kotlin null list handling test", \kotlinNullListHandlingTest());
+
+        # Kotlin Date/Time compatibility tests
+        # Supported types: ZonedDateTime, LocalDateTime, Instant (issue #4892)
+        addTestCase("Kotlin ZonedDateTime to Qore date test", \kotlinZonedDateTimeToQoreDateTest());
+        addTestCase("Kotlin ZonedDateTime year extraction test", \kotlinZonedDateTimeYearTest());
+        addTestCase("Kotlin ZonedDateTime add days test", \kotlinZonedDateTimeAddDaysTest());
+        addTestCase("Kotlin null date handling test", \kotlinNullDateHandlingTest());
+
+        # LocalDateTime tests (issue #4892)
+        addTestCase("Kotlin LocalDateTime to Qore date test", \kotlinLocalDateTimeToQoreDateTest());
+        addTestCase("Kotlin LocalDateTime year extraction test", \kotlinLocalDateTimeYearTest());
+        addTestCase("Kotlin LocalDateTime with microseconds test", \kotlinLocalDateTimeWithMicrosTest());
+
+        # Instant tests (issue #4892)
+        addTestCase("Kotlin Instant to Qore date test", \kotlinInstantToQoreDateTest());
+        addTestCase("Kotlin Instant year extraction test", \kotlinInstantYearTest());
+        addTestCase("Kotlin Instant epoch handling test", \kotlinInstantEpochTest());
+        addTestCase("Kotlin Instant with microseconds test", \kotlinInstantWithMicrosTest());
 
         # Kotlin scripting tests (requires kotlin-scripting JARs)
         addTestCase("Kotlin scripting availability test", \kotlinScriptingAvailabilityTest());
@@ -325,6 +541,285 @@ public class KotlinTest inherits QUnit::Test {
     }
 
     # =====================================================
+    # Kotlin HashMap/Map compatibility tests (issue #4892)
+    # These tests verify that Kotlin's native HashMap can be used
+    # with Qore methods that expect hash<auto> parameters
+    # =====================================================
+
+    kotlinHashMapToQoreHashTest() {
+        # Test that Kotlin's hashMapOf() result can be passed to Qore methods expecting hash<auto>
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        # Test passing HashMap to HashParamTest.processHash()
+        Method method = cls.getMethod("testHashMapToQoreHash", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq("keys=2,name=test,value=42", result);
+    }
+
+    kotlinLinkedHashMapToQoreHashTest() {
+        # Test that LinkedHashMap also works
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testLinkedHashMapToQoreHash", ());
+        auto result = method.invoke(NOTHING, ());
+        # LinkedHashMap preserves insertion order
+        assertEq(3, result);  # size of the map
+    }
+
+    kotlinEmptyMapToQoreHashTest() {
+        # Test passing empty HashMap
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testEmptyMapToQoreHash", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(0, result);  # empty map size
+    }
+
+    kotlinMapMixedValuesTest() {
+        # Test passing HashMap with mixed value types
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testMapWithMixedValues", ());
+        auto result = method.invoke(NOTHING, ());
+        # Result should describe the types of values
+        assertTrue(result.find("string=") >= 0 || result.find("String=") >= 0, "Should have string type");
+        assertTrue(result.find("int=") >= 0 || result.find("integer=") >= 0
+            || result.find("Int=") >= 0 || result.find("Integer=") >= 0, "Should have int type");
+        assertTrue(result.find("bool=") >= 0 || result.find("boolean=") >= 0
+            || result.find("Bool=") >= 0 || result.find("Boolean=") >= 0, "Should have bool type");
+    }
+
+    kotlinNestedMapTest() {
+        # Test passing nested HashMap (HashMap containing another HashMap)
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testNestedMapToQoreHash", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq("nested_value", result);
+    }
+
+    kotlinNullMapHandlingTest() {
+        # Test that null can be passed to optional hash parameters
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testNullMapHandling", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq("no_data", result);
+    }
+
+    kotlinHashMapIntValuesTest() {
+        # Test that HashMap<String, Int> is narrowed to hash<string, int>
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testHashMapIntValues", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(60, result);  # 10 + 20 + 30
+    }
+
+    kotlinHashMapStringValuesTest() {
+        # Test that HashMap<String, String> is narrowed to hash<string, string>
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testHashMapStringValues", ());
+        auto result = method.invoke(NOTHING, ());
+        # Note: HashMap doesn't preserve order, so we check for both possible orderings
+        assertTrue(result == "hello world" || result == "world hello",
+            sprintf("Expected 'hello world' or 'world hello', got '%s'", result));
+    }
+
+    # =====================================================
+    # Kotlin List/Array compatibility tests
+    # These tests verify that Kotlin's native list types can be used
+    # with Qore methods that expect list<auto> parameters
+    # =====================================================
+
+    kotlinListOfToQoreListTest() {
+        # Test that Kotlin's listOf() result can be passed to Qore methods expecting list<auto>
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testListOfToQoreList", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(3, result);  # size of list
+    }
+
+    kotlinArrayListOfToQoreListTest() {
+        # Test that ArrayList also works
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testArrayListToQoreList", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq("size=4,first=one,last=four", result);
+    }
+
+    kotlinEmptyListToQoreListTest() {
+        # Test passing empty list
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testEmptyListToQoreList", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(0, result);  # empty list size
+    }
+
+    kotlinListOfIntegersTest() {
+        # Test list of integers
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testListOfIntegers", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(55, result);  # sum of 1..10
+    }
+
+    kotlinListOfStringsTest() {
+        # Test list of strings
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testListOfStrings", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq("a,b,c,d", result);
+    }
+
+    kotlinNestedListTest() {
+        # Test nested list (list of lists)
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testNestedListToQoreList", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq("inner_value", result);
+    }
+
+    kotlinNullListHandlingTest() {
+        # Test that null can be passed to optional list parameters
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testNullListHandling", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq("no_list", result);
+    }
+
+    # =====================================================
+    # Kotlin Date/Time compatibility tests
+    # These tests verify that Kotlin/Java's java.time classes work
+    # with Qore's date type
+    # =====================================================
+
+    kotlinZonedDateTimeToQoreDateTest() {
+        # Test that ZonedDateTime works with Qore date formatting
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testZonedDateTimeToQoreDate", ());
+        auto result = method.invoke(NOTHING, ());
+        # Should return formatted date string
+        assertTrue(result =~ /^\d{4}-\d{2}-\d{2}/, "Should be formatted date");
+    }
+
+    kotlinZonedDateTimeYearTest() {
+        # Test extracting year from ZonedDateTime via Qore
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testZonedDateTimeYear", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(2024, result);  # year from the date
+    }
+
+    kotlinZonedDateTimeAddDaysTest() {
+        # Test adding days to ZonedDateTime via Qore
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testZonedDateTimeAddDays", ());
+        auto result = method.invoke(NOTHING, ());
+        # The result should contain the expected date after adding 10 days
+        assertTrue(result =~ /2024-01-11/, "Should be Jan 11 after adding 10 days to Jan 1");
+    }
+
+    kotlinNullDateHandlingTest() {
+        # Test that null can be passed to optional date parameters
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testNullDateHandling", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq("no_date", result);
+    }
+
+    # =====================================================
+    # Kotlin LocalDateTime tests (issue #4892)
+    # =====================================================
+
+    kotlinLocalDateTimeToQoreDateTest() {
+        # Test that LocalDateTime works with Qore date formatting
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testLocalDateTimeToQoreDate", ());
+        auto result = method.invoke(NOTHING, ());
+        # Should return formatted date string
+        assertTrue(result =~ /2024-12-25/, "Should contain the date");
+        assertTrue(result =~ /12:30:45/, "Should contain the time");
+    }
+
+    kotlinLocalDateTimeYearTest() {
+        # Test extracting year from LocalDateTime via Qore
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testLocalDateTimeYear", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(2024, result);  # year from the date
+    }
+
+    kotlinLocalDateTimeWithMicrosTest() {
+        # Test LocalDateTime with nanoseconds (converted to microseconds in Qore)
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testLocalDateTimeWithNanos", ());
+        auto result = method.invoke(NOTHING, ());
+        # Should return formatted date string with microseconds
+        assertTrue(result =~ /2024-03-15/, "Should contain the date");
+        assertTrue(result =~ /14:30:45/, "Should contain the time");
+    }
+
+    # =====================================================
+    # Kotlin Instant tests (issue #4892)
+    # =====================================================
+
+    kotlinInstantToQoreDateTest() {
+        # Test that Instant works with Qore date formatting
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testInstantToQoreDate", ());
+        auto result = method.invoke(NOTHING, ());
+        # Should return formatted date string
+        assertTrue(result =~ /2024-12-25/, "Should contain the date");
+        assertTrue(result =~ /12:00:00/, "Should contain the time");
+    }
+
+    kotlinInstantYearTest() {
+        # Test extracting year from Instant via Qore
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testInstantYear", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(2024, result);  # year from the date
+    }
+
+    kotlinInstantEpochTest() {
+        # Test Instant epoch handling - Instant.EPOCH should be 0 epoch seconds
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testInstantEpoch", ());
+        auto result = method.invoke(NOTHING, ());
+        assertEq(0, result);  # Instant.EPOCH is 1970-01-01T00:00:00Z
+    }
+
+    kotlinInstantWithMicrosTest() {
+        # Test Instant with nanoseconds (converted to microseconds in Qore)
+        lang::Class cls = load_class("org/qore/jni/test/KotlinQoreApiTest");
+
+        Method method = cls.getMethod("testInstantWithNanos", ());
+        auto result = method.invoke(NOTHING, ());
+        # Should return formatted date string with microseconds
+        assertTrue(result =~ /2024-03-15/, "Should contain the date");
+        assertTrue(result =~ /14:30:45/, "Should contain the time");
+    }
+
+    # =====================================================
     # Kotlin scripting tests
     # =====================================================
 
@@ -389,6 +884,8 @@ public class KotlinTest inherits QUnit::Test {
 
         # Common locations
         list<string> homes = (
+            "/opt/kotlin",
+            "/opt/kotlinc",
             "/snap/kotlin/current",
             "/usr/share/kotlin",
             "/usr/lib/kotlin",
