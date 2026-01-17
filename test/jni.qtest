@@ -1596,10 +1596,11 @@ lorem ipsum\r
         assertEq("default-x", val);
 
         # test new object creation and saving a strong reference in a Java thread
+        TestClass2::cnt = 0;
         assertEq("default-y", QoreJavaApiTest::testObject15());
         # ensure that thread-local data created from Java threads is destroyed when
         # the Java thread terminates
-        assertEq(2, TestClass2::cnt);
+        assertEq(1, TestClass2::cnt);
     }
 
     dateTest() {
