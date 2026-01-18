@@ -1195,7 +1195,7 @@ void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* p
         }
 
         // Skip Kotlin default parameter method variants (e.g., "methodName$default")
-        if (mname.find("$default") < mname.size()) {
+        if (mname.find("$default") != std::string::npos) {
             printd(LogLevel, "+ skipping Kotlin default param method %s.%s()\n", qc.getName(), mname.c_str());
             continue;
         }
