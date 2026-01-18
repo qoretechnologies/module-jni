@@ -47,6 +47,7 @@
         "/usr/share/kotlin/lib/kotlin-stdlib.jar",     # Fedora/RHEL dnf
         "/usr/lib/kotlin/lib/kotlin-stdlib.jar",       # Alternative Linux
         "/usr/local/kotlin/lib/kotlin-stdlib.jar",     # Manual install
+        "/opt/local/share/java/kotlin/lib/kotlin-stdlib.jar",  # MacPorts
         ENV.HOME + "/.sdkman/candidates/kotlin/current/lib/kotlin-stdlib.jar",  # SDKMAN
     );
 
@@ -890,6 +891,7 @@ public class KotlinTest inherits QUnit::Test {
             "/usr/share/kotlin",
             "/usr/lib/kotlin",
             "/usr/local/kotlin",
+            "/opt/local/share/java/kotlin",
         );
         if (ENV.HOME) {
             homes += ENV.HOME + "/.sdkman/candidates/kotlin/current";
