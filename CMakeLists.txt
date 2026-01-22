@@ -184,6 +184,46 @@ add_custom_target(qore-excel-jar
 # install the Excel jar file manually
 install(FILES ${EXCEL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/ExcelDataProvider/jar)
 
+# Word data provider jar
+set(WORD_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-word.jar)
+set(WORD_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/poi-ooxml-5.5.0.jar)
+set(WORD_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(WORD_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/)
+set(WORD_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordTestHelper.java
+)
+
+# macOS appears to have a bug with initializing BSS when the Qore processes to build the jar files
+# are launched in parallel. Use the Excel jar as a dependency to ensure serialization.
+if (APPLE)
+    add_custom_command(
+        OUTPUT ${WORD_JAR}
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+            --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR} -cp ${WORD_CLASSPATH}
+        DEPENDS ${module_name} ${WORD_SOURCES} ${EXCEL_JAR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
+    )
+else()
+    add_custom_command(
+        OUTPUT ${WORD_JAR}
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+            --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR} -cp ${WORD_CLASSPATH}
+        DEPENDS ${module_name} ${WORD_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
+    )
+endif()
+
+add_custom_target(qore-word-jar
+    DEPENDS ${WORD_JAR}
+)
+
+# install the Word jar file manually
+install(FILES ${WORD_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/WordDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -479,7 +519,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -568,6 +608,7 @@ set(QMOD
     qlib/MqttDataProvider
     qlib/ExcelDataProvider
     qlib/KafkaDataProvider
+    qlib/WordDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES ${QPP_SRC})
@@ -613,6 +654,7 @@ qore_external_user_module("qlib/MqttDataProvider" "")
 qore_external_user_module("qlib/BusyLightDataProvider" "MqttDataProvider")
 qore_external_user_module("qlib/ExcelDataProvider" "")
 qore_external_user_module("qlib/KafkaDataProvider" "")
+qore_external_user_module("qlib/WordDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 
