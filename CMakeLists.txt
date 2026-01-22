@@ -186,7 +186,7 @@ install(FILES ${EXCEL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/ExcelDataProvide
 
 # Word data provider jar
 set(WORD_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-word.jar)
-set(WORD_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/poi-ooxml-5.5.0.jar)
+set(WORD_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar)
 set(WORD_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(WORD_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/)
 set(WORD_SOURCES
