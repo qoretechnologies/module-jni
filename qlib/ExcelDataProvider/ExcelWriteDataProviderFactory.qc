@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore ExcelReadDataProviderFactory class definition
+#! Qore ExcelWriteDataProviderFactory class definition
 
-/** ExcelReadDataProviderFactory.qc Copyright 2021 - 2026 Qore Technologies, s.r.o.
+/** ExcelWriteDataProviderFactory.qc Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,17 +24,16 @@
 
 #! Contains all public definitions in the ExcelDataProvider module
 public namespace ExcelDataProvider {
-#! The read-only CSV data provider factory
-public class ExcelReadDataProviderFactory inherits AbstractDataProviderFactory {
+#! The Excel write data provider factory
+public class ExcelWriteDataProviderFactory inherits AbstractDataProviderFactory {
     private {
         #! Data provider type info
-        static Class cls = new Class("ExcelReadDataProvider");
+        static Class cls = new Class("ExcelWriteDataProvider");
 
         #! Factory info
         const FactoryInfo = <DataProviderFactoryInfo>{
-            "name": "excelread",
-            "desc": "MS Excel read data provider factory",
-            "children_can_support_records": True,
+            "name": "excelwrite",
+            "desc": "MS Excel write data provider factory",
         };
     }
 
@@ -49,7 +48,7 @@ public class ExcelReadDataProviderFactory inherits AbstractDataProviderFactory {
     /** @note the \c name and \c children attributes are not returned as they are dynamic attributes
     */
     private hash<DataProviderInfo> getProviderInfoImpl() {
-        return ExcelReadDataProvider::ProviderInfo;
+        return ExcelWriteDataProvider::ProviderInfo;
     }
 
     #! Returns the class for the data provider object

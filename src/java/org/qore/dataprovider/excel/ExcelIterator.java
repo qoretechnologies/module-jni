@@ -1,15 +1,34 @@
+/*  ExcelIterator.java Copyright 2021 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
 package org.qore.dataprovider.excel;
 
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.util.CellReference;
-
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFRow;
-import org.apache.poi.xssf.usermodel.XSSFCell;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -27,8 +46,13 @@ import java.time.zone.ZoneRulesException;
 import org.qore.jni.Hash;
 import org.qore.jni.QoreException;
 
-public class ExcelIterator extends qore.Qore.AbstractIterator {
-    private XSSFSheet sheet;
+/**
+ * Iterator for reading Excel files (both .xlsx and .xls formats).
+ * Implements Closeable to ensure proper resource cleanup.
+ */
+public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io.Closeable {
+    private Workbook workbook;
+    private Sheet sheet;
     private ArrayList<String> headers = new ArrayList<String>();
     private ZoneId zone = ZoneId.systemDefault();
     private int header_row_end = -1;
@@ -41,7 +65,8 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
     private long count = 0;
 
     public ExcelIterator(java.io.InputStream stream, String sheet_name) throws Throwable {
-        XSSFWorkbook workbook = new XSSFWorkbook(stream);
+        // WorkbookFactory.create() auto-detects the format (XSSF for .xlsx, HSSF for .xls)
+        workbook = WorkbookFactory.create(stream);
         if (sheet_name == null || sheet_name.isEmpty()) {
             sheet = workbook.getSheetAt(0);
             if (sheet == null) {
@@ -58,9 +83,8 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
                 }
             }
             if (sheet == null) {
-                throw new RuntimeException(String.format("sheet %s is unknown", sheet));
+                throw new RuntimeException(String.format("sheet %s is unknown", sheet_name));
             }
-            //System.out.printf("using sheet %s\n", sheet_name);
         }
     }
 
@@ -80,6 +104,12 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
         return headers;
     }
 
+    public void setHeadersToLower() {
+        for (int i = 0; i < headers.size(); ++i) {
+            headers.set(i, headers.get(i).toLowerCase());
+        }
+    }
+
     public void setHeaders(ArrayList<String> headers) {
         this.headers = headers;
     }
@@ -90,7 +120,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
 
     public void setHeaderCells(String col_start, int row_start, String col_end, int row_end) {
         header_row_end = row_end == -1 ? row_start : row_end;
-        XSSFRow row = sheet.getRow(row_start - 1);
+        Row row = sheet.getRow(row_start - 1);
         if (row == null) {
             return;
         }
@@ -105,7 +135,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
             end_cell = CellReference.convertColStringToIndex(col_end);
         }
         while (true) {
-            XSSFCell cell = row.getCell(cell_no);
+            Cell cell = row.getCell(cell_no);
             if (cell == null) {
                 break;
             }
@@ -177,7 +207,6 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
         }
         if (current_row != -1) {
             row_data = getRowData(current_row);
-            //System.out.format("current_row: %d (end_row: %d) row_data: %s\n", current_row, end_row, row_data);
             if (row_data == null) {
                 current_row = -1;
             } else {
@@ -186,7 +215,6 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
         } else if (row_data != null) {
             row_data = null;
         }
-        //System.out.format("current_row: %d (end_row: %d)\n", current_row, end_row);
         return current_row != -1;
     }
 
@@ -203,7 +231,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
     }
 
     private Hash getRowData(int rownum) {
-        XSSFRow row = sheet.getRow(rownum - 1);
+        Row row = sheet.getRow(rownum - 1);
         if (row == null) {
             return null;
         }
@@ -225,7 +253,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
         boolean found_data = false;
         Hash row_data = null;
         while (true) {
-            XSSFCell cell = row.getCell(cell_no);
+            Cell cell = row.getCell(cell_no);
             Object val;
 
             if (cell == null) {
@@ -268,7 +296,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
         return row_data;
     }
 
-    private Object cellToValue(XSSFCell cell) {
+    private Object cellToValue(Cell cell) {
         CellType type = cell.getCellType();
         if (type == CellType.BLANK) {
             return null;
@@ -303,18 +331,30 @@ public class ExcelIterator extends qore.Qore.AbstractIterator {
     }
 
     public static ArrayList<String> getWorksheets(java.io.InputStream stream) throws IOException {
-        Workbook wb = WorkbookFactory.create(stream);
-
-        ArrayList<String> rv = new ArrayList<String>();
-        for (int i = 0; i < wb.getNumberOfSheets(); ++i) {
-            rv.add(wb.getSheetName(i));
+        try (Workbook wb = WorkbookFactory.create(stream)) {
+            ArrayList<String> rv = new ArrayList<String>();
+            for (int i = 0; i < wb.getNumberOfSheets(); ++i) {
+                rv.add(wb.getSheetName(i));
+            }
+            return rv;
         }
-
-        return rv;
     }
 
     public static ArrayList<String> getWorksheets(String path) throws FileNotFoundException, IOException {
-        return getWorksheets(new FileInputStream(new File(path)));
+        try (FileInputStream fis = new FileInputStream(new File(path))) {
+            return getWorksheets(fis);
+        }
+    }
+
+    /**
+     * Closes the workbook and releases resources.
+     */
+    @Override
+    public void close() throws IOException {
+        if (workbook != null) {
+            workbook.close();
+            workbook = null;
+        }
     }
 }
 
@@ -338,7 +378,7 @@ class QoreInputStreamWrapper extends java.io.InputStream {
         return data[0];
     }
 
-    public int read​(byte[] b, int off, int len) throws IOException {
+    public int read(byte[] b, int off, int len) throws IOException {
         byte[] data;
         try {
             data = stream.read(len);
@@ -352,7 +392,7 @@ class QoreInputStreamWrapper extends java.io.InputStream {
         return data.length;
     }
 
-    public long skip​(long n) throws IOException {
+    public long skip(long n) throws IOException {
         byte[] data;
         try {
             data = stream.read(n);

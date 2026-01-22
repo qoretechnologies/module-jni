@@ -1,0 +1,786 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ExcelDataProvider.qtest Copyright 2021 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/ExcelDataProvider
+
+# Add classpaths for the test helper - must come after ExcelDataProvider to share its POI classpath
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/xmlbeans-5.3.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-collections4-4.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-lang3-3.18.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-math3-3.6.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/SparseBitSet-1.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/log4j-api-2.24.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/curvesapi-1.08.jar
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelTestHelper
+
+%exec-class ExcelDataProviderTest
+
+public class ExcelDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("ExcelDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/excel-test-data";
+
+        addTestCase("test setup", \testSetup());
+        addTestCase("basic read from path", \testBasicReadPath());
+        addTestCase("read from stream", \testReadStream());
+        addTestCase("read from binary data", \testReadBinaryData());
+        addTestCase("header_cells option", \testHeaderCells());
+        addTestCase("data_cells option", \testDataCells());
+        addTestCase("headers option", \testHeaders());
+        addTestCase("header_names option", \testHeaderNames());
+        addTestCase("tolwr option", \testTolwr());
+        addTestCase("timezone option", \testTimezone());
+        addTestCase("worksheet option", \testWorksheet());
+        addTestCase("cell range parsing", \testCellRangeParsing());
+        addTestCase("data types", \testDataTypes());
+        addTestCase("formula results", \testFormulas());
+        addTestCase("multi-sheet navigation", \testMultiSheet());
+        addTestCase("factory tests", \testFactory());
+        addTestCase("negative: invalid path", \testNegativeInvalidPath());
+        addTestCase("negative: invalid worksheet", \testNegativeInvalidWorksheet());
+        addTestCase("negative: invalid cell range", \testNegativeInvalidCellRange());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("edge case: empty worksheet", \testEdgeCaseEmptyWorksheet());
+        addTestCase("edge case: no headers", \testEdgeCaseNoHeaders());
+        addTestCase("edge case: special characters", \testEdgeCaseSpecialChars());
+        addTestCase("write: basic file write", \testWriteBasic());
+        addTestCase("write: with headers", \testWriteWithHeaders());
+        addTestCase("write: to binary data", \testWriteToBinary());
+        addTestCase("write: xls format", \testWriteXlsFormat());
+        addTestCase("write: factory", \testWriteFactory());
+        addTestCase("write: data only (no path/stream)", \testWriteDataOnly());
+        addTestCase("write: negative - path+stream conflict", \testWriteNegativePathStreamConflict());
+        addTestCase("write: negative - invalid format", \testWriteNegativeInvalidFormat());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("roundtrip: write and read", \testRoundtrip());
+
+        set_return_value(main());
+    }
+
+    testSetup() {
+        # Create test data directory and files
+        if (!is_dir(test_data_dir)) {
+            mkdir(test_data_dir);
+        }
+
+        # Create all test Excel files
+        ExcelTestHelper::createSimpleExcel(test_data_dir + "/simple.xlsx");
+        ExcelTestHelper::createMultiSheetExcel(test_data_dir + "/multi-sheet.xlsx");
+        ExcelTestHelper::createFormulasExcel(test_data_dir + "/formulas.xlsx");
+        ExcelTestHelper::createDatesExcel(test_data_dir + "/dates.xlsx");
+        ExcelTestHelper::createEmptyExcel(test_data_dir + "/empty.xlsx");
+        ExcelTestHelper::createNoHeadersExcel(test_data_dir + "/no-headers.xlsx");
+        ExcelTestHelper::createSpecialCharsExcel(test_data_dir + "/special-chars.xlsx");
+        ExcelTestHelper::createMixedCaseHeadersExcel(test_data_dir + "/mixed-case-headers.xlsx");
+        ExcelTestHelper::createOffsetDataExcel(test_data_dir + "/offset-data.xlsx");
+        ExcelTestHelper::createDataTypesExcel(test_data_dir + "/data-types.xlsx");
+
+        assertTrue(is_file(test_data_dir + "/simple.xlsx"), "simple.xlsx created");
+    }
+
+    testBasicReadPath() {
+        ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", {
+            "header_names": True,
+        });
+
+        assertEq("ExcelReadDataProvider", dp.getInfo().type);
+        assertTrue(dp.getInfo().supports_read);
+        assertTrue(dp.getInfo().has_record);
+
+        # Read all records
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 data rows");
+        assertEq("Alice", records[0].Name);
+        assertEq(30.0, records[0].Age);
+        assertEq("New York", records[0].City);
+
+        assertEq("Bob", records[1].Name);
+        assertEq(25.0, records[1].Age);
+
+        assertEq("Charlie", records[2].Name);
+        assertEq(35.0, records[2].Age);
+    }
+
+    testReadStream() {
+        FileInputStream fis(test_data_dir + "/simple.xlsx");
+        ExcelReadDataProvider dp(fis, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Alice", records[0].Name);
+    }
+
+    testReadBinaryData() {
+        binary data = ExcelTestHelper::createSimpleExcelBytes();
+
+        ExcelReadDataProvider dp({
+            "data": data,
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 data rows");
+        assertEq("Alice", records[0].Name);
+        assertEq(30.0, records[0].Age);
+    }
+
+    testHeaderCells() {
+        # Test with explicit header cells range
+        ExcelReadDataProvider dp(test_data_dir + "/offset-data.xlsx", {
+            "header_cells": "b3",
+            "data_cells": "b4:d5",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("A", records[0].Col1);
+        assertEq("B", records[0].Col2);
+        assertEq("C", records[0].Col3);
+        assertEq("D", records[1].Col1);
+    }
+
+    testDataCells() {
+        ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", {
+            "header_cells": "a1:c1",
+            "data_cells": "a2:c3",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        # Should only get 2 rows due to data_cells limit
+        assertEq(2, records.size());
+        assertEq("Alice", records[0].Name);
+        assertEq("Bob", records[1].Name);
+    }
+
+    testHeaders() {
+        ExcelReadDataProvider dp(test_data_dir + "/no-headers.xlsx", {
+            "headers": ("Field1", "Field2", "Field3"),
+            "data_cells": "a1",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("value1", records[0].Field1);
+        assertEq(100.0, records[0].Field2);
+        assertTrue(records[0].Field3);
+    }
+
+    testHeaderNames() {
+        # When header_names is true without header_cells, should default to row 1
+        ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertTrue(records[0].hasKey("Name"), "should have Name header");
+        assertEq("Alice", records[0].Name);
+    }
+
+    testTolwr() {
+        ExcelReadDataProvider dp(test_data_dir + "/mixed-case-headers.xlsx", {
+            "header_names": True,
+            "tolwr": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size());
+        # Headers should be converted to lowercase
+        assertTrue(records[0].hasKey("firstname"), "should have lowercase header 'firstname'");
+        assertTrue(records[0].hasKey("last_name"), "should have lowercase header 'last_name'");
+        assertTrue(records[0].hasKey("email_address"), "should have lowercase header 'email_address'");
+        assertEq("John", records[0].firstname);
+    }
+
+    testTimezone() {
+        ExcelReadDataProvider dp(test_data_dir + "/dates.xlsx", {
+            "header_names": True,
+            "timezone": "America/New_York",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertTrue(records[0].Date instanceof date, "Date should be a date type");
+    }
+
+    testWorksheet() {
+        ExcelReadDataProvider dp(test_data_dir + "/multi-sheet.xlsx", {
+            "worksheet": "Products",
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size());
+        assertEq("A001", records[0].SKU);
+        assertEq("Widget", records[0].Product);
+    }
+
+    testCellRangeParsing() {
+        # Test parseRange
+        hash<CellRangeInfo> range = ExcelReadDataProvider::parseRange("a1:e10");
+        assertEq("a", range.start.column);
+        assertEq(1, range.start.row);
+        assertEq("e", range.end.column);
+        assertEq(10, range.end.row);
+
+        # Test single cell (becomes a range with special end marker)
+        range = ExcelReadDataProvider::parseRange("b5");
+        assertEq("b", range.start.column);
+        assertEq(5, range.start.row);
+        assertEq("-", range.end.column);
+        assertEq(-1, range.end.row);
+
+        # Test row-only range
+        range = ExcelReadDataProvider::parseRange("1:5");
+        assertEq("-", range.start.column);
+        assertEq(1, range.start.row);
+        assertEq("-", range.end.column);
+        assertEq(5, range.end.row);
+
+        # Test parseCellLocation
+        hash<CellLocationInfo> loc = ExcelReadDataProvider::parseCellLocation("c3");
+        assertEq("c", loc.column);
+        assertEq(3, loc.row);
+    }
+
+    testDataTypes() {
+        ExcelReadDataProvider dp(test_data_dir + "/data-types.xlsx", {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+
+        # Check first row data types
+        assertEq("text", records[0].String);
+        assertEq(42.0, records[0].Integer);
+        assertEq(Type::Float, records[0].Float.type());
+        assertTrue(abs(records[0].Float - 3.14159) < 0.0001, "Float value should be approximately 3.14159");
+        assertTrue(records[0].Boolean);
+        assertTrue(records[0].Date instanceof date, "Date should be a date type");
+
+        # Check second row
+        assertEq("another", records[1].String);
+        assertFalse(records[1].Boolean);
+    }
+
+    testFormulas() {
+        ExcelReadDataProvider dp(test_data_dir + "/formulas.xlsx", {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+
+        # Formula results should be evaluated
+        assertEq(30.0, records[0].Sum, "10 + 20 = 30");
+        assertEq(200.0, records[0].Product, "10 * 20 = 200");
+
+        assertEq(8.0, records[1].Sum, "5 + 3 = 8");
+        assertEq(15.0, records[1].Product, "5 * 3 = 15");
+    }
+
+    testMultiSheet() {
+        ExcelReadDataProvider dp(test_data_dir + "/multi-sheet.xlsx", {
+            "header_names": True,
+        });
+
+        # Get child provider names (worksheets)
+        *list<string> sheets = dp.getChildProviderNames();
+
+        assertEq(3, sheets.size(), "should have 3 worksheets");
+        assertTrue(sheets.contains("Users"), "should contain 'Users' sheet");
+        assertTrue(sheets.contains("Products"), "should contain 'Products' sheet");
+        assertTrue(sheets.contains("Orders"), "should contain 'Orders' sheet");
+
+        # Get specific child provider - note: child providers need header_names option too
+        *AbstractDataProvider child = dp.getChildProvider("Products");
+        assertTrue(exists child, "should get Products child provider");
+
+        # The child provider already has the options from the parent
+        list<hash<auto>> records = map $1, child.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Widget", records[0].Product);
+    }
+
+    testFactory() {
+        ExcelReadDataProviderFactory factory();
+
+        assertEq("excelread", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": test_data_dir + "/simple.xlsx",
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(3, records.size());
+    }
+
+    testNegativeInvalidPath() {
+        # Invalid path should throw an exception
+        bool threw = False;
+        try {
+            ExcelReadDataProvider dp("/nonexistent/path/to/file.xlsx");
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.desc.contains("No such file") || ex.desc.contains("FileNotFoundException"),
+                "should mention file not found");
+        }
+        assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    testNegativeInvalidWorksheet() {
+        # Invalid worksheet should throw an exception
+        bool threw = False;
+        try {
+            ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", {
+                "worksheet": "NonexistentSheet",
+            });
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.desc.contains("unknown"), "should mention unknown sheet");
+        }
+        assertTrue(threw, "should throw exception for invalid worksheet");
+    }
+
+    testNegativeInvalidCellRange() {
+        # Invalid range format
+        assertThrows("EXCEL-INVALID-LOCATION", sub () {
+            ExcelReadDataProvider::parseRange("invalid");
+        });
+
+        # Start after end
+        assertThrows("EXCEL-INVALID-LOCATION", sub () {
+            ExcelReadDataProvider::parseRange("e1:a1");
+        });
+
+        # Invalid row number
+        assertThrows("EXCEL-INVALID-LOCATION", sub () {
+            ExcelReadDataProvider::parseCellLocation("a0");
+        });
+    }
+
+    testNegativeOptionConflicts() {
+        # Test headers and header_names conflict
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelReadDataProvider dp({
+                "path": test_data_dir + "/simple.xlsx",
+                "headers": ("A", "B", "C"),
+                "header_names": True,
+            });
+        });
+
+        # Test path and stream conflict
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.xlsx");
+            ExcelReadDataProvider dp({
+                "path": test_data_dir + "/simple.xlsx",
+                "stream": fis,
+            });
+        });
+
+        # Test path and data conflict
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelReadDataProvider dp({
+                "path": test_data_dir + "/simple.xlsx",
+                "data": <abcd>,
+            });
+        });
+    }
+
+    testEdgeCaseEmptyWorksheet() {
+        ExcelReadDataProvider dp(test_data_dir + "/empty.xlsx");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "empty worksheet should return no records");
+    }
+
+    testEdgeCaseNoHeaders() {
+        # Without headers option, we need to specify data_cells to tell where data starts
+        # Since no-headers.xlsx has raw data starting from row 1
+        ExcelReadDataProvider dp(test_data_dir + "/no-headers.xlsx", {
+            "data_cells": "a1",
+            "headers": ("Col1", "Col2", "Col3"),
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("value1", records[0].Col1);
+        assertEq(100.0, records[0].Col2);
+    }
+
+    testEdgeCaseSpecialChars() {
+        ExcelReadDataProvider dp(test_data_dir + "/special-chars.xlsx", {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Cafe", records[0].Name);
+        assertEq("Tokyo", records[1].Name);
+        assertEq("He said \"hello\"", records[2].Description);
+    }
+
+    testWriteBasic() {
+        string output_path = test_data_dir + "/write-test.xlsx";
+        on_exit unlink(output_path);
+
+        ExcelWriteDataProvider dp(output_path, {
+            "worksheet": "TestSheet",
+        });
+
+        # Write some records
+        dp.createRecord({"Name": "Alice", "Age": 30, "Active": True});
+        dp.createRecord({"Name": "Bob", "Age": 25, "Active": False});
+
+        # Commit to write the file
+        dp.commit();
+
+        # Read back and verify
+        ExcelReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("Alice", records[0].Name);
+        assertEq(30.0, records[0].Age);
+        assertTrue(records[0].Active);
+        assertEq("Bob", records[1].Name);
+        assertFalse(records[1].Active);
+    }
+
+    testWriteWithHeaders() {
+        string output_path = test_data_dir + "/write-headers-test.xlsx";
+        on_exit unlink(output_path);
+
+        ExcelWriteDataProvider dp(output_path, {
+            "headers": ("FirstName", "LastName", "Score"),
+        });
+
+        dp.createRecord({"FirstName": "John", "LastName": "Doe", "Score": 95.5});
+        dp.createRecord({"FirstName": "Jane", "LastName": "Smith", "Score": 87.3});
+
+        dp.commit();
+
+        # Verify with read
+        ExcelReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+        assertTrue(records[0].hasKey("FirstName"), "should have predefined header");
+        assertEq("John", records[0].FirstName);
+        assertEq(95.5, records[0].Score);
+    }
+
+    testWriteToBinary() {
+        ExcelWriteDataProvider dp({
+            "path": test_data_dir + "/write-binary-test.xlsx",
+        });
+
+        dp.createRecord({"Key": "value1", "Number": 100});
+        dp.createRecord({"Key": "value2", "Number": 200});
+
+        # Get data as binary before commit
+        binary data = dp.getData();
+
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Read back from binary
+        ExcelReadDataProvider rdp({
+            "data": data,
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("value1", records[0].Key);
+    }
+
+    testWriteXlsFormat() {
+        string output_path = test_data_dir + "/write-test.xls";
+        on_exit unlink(output_path);
+
+        ExcelWriteDataProvider dp(output_path, {
+            "format": "xls",
+        });
+
+        dp.createRecord({"Data": "test", "Value": 123});
+        dp.commit();
+
+        # Verify file exists
+        assertTrue(is_file(output_path), "xls file should be created");
+
+        # Read back
+        ExcelReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("test", records[0].Data);
+    }
+
+    testWriteFactory() {
+        string output_path = test_data_dir + "/write-factory-test.xlsx";
+        on_exit unlink(output_path);
+
+        ExcelWriteDataProviderFactory factory();
+
+        assertEq("excelwrite", factory.getInfo().name);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": output_path,
+            "worksheet": "FactorySheet",
+        });
+
+        dp.createRecord({"Test": "factory"});
+
+        # Verify can read back
+        ExcelReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("factory", records[0].Test);
+    }
+
+    testWriteDataOnly() {
+        # Test creating a provider without path or stream (for write-data action use case)
+        ExcelWriteDataProvider dp({
+            "worksheet": "DataSheet",
+            "headers": ("Name", "Value"),
+        });
+
+        assertEq("excel-data", dp.getName());
+
+        # Write records
+        dp.createRecord({"Name": "item1", "Value": 100});
+        dp.createRecord({"Name": "item2", "Value": 200});
+
+        # Get binary data
+        binary data = dp.getData();
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Verify by reading back
+        ExcelReadDataProvider rdp({
+            "data": data,
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("item1", records[0].Name);
+        assertEq(100.0, records[0].Value);
+        assertEq("item2", records[1].Name);
+        assertEq(200.0, records[1].Value);
+    }
+
+    testWriteNegativePathStreamConflict() {
+        # Test path constructor with stream option
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            ExcelWriteDataProvider dp(test_data_dir + "/test.xlsx", {
+                "stream": sos,
+            });
+        });
+
+        # Test path constructor with path option
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", sub () {
+            ExcelWriteDataProvider dp(test_data_dir + "/test.xlsx", {
+                "path": test_data_dir + "/other.xlsx",
+            });
+        });
+
+        # Test stream constructor with path option
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            ExcelWriteDataProvider dp(sos, {
+                "path": test_data_dir + "/test.xlsx",
+            });
+        });
+
+        # Test stream constructor with stream option
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            StringOutputStream sos2();
+            ExcelWriteDataProvider dp(sos, {
+                "stream": sos2,
+            });
+        });
+
+        # Test options constructor with both path and stream
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            ExcelWriteDataProvider dp({
+                "path": test_data_dir + "/test.xlsx",
+                "stream": sos,
+            });
+        });
+
+        # Note: options constructor with neither path nor stream is now valid
+        # for the write-data use case (user calls getData() to get binary)
+    }
+
+    testWriteNegativeInvalidFormat() {
+        # Test invalid format option
+        assertThrows("OPTION-VALUE-ERROR", sub () {
+            ExcelWriteDataProvider dp(test_data_dir + "/test.xlsx", {
+                "format": "invalid",
+            });
+        });
+
+        # Test empty format
+        assertThrows("OPTION-VALUE-ERROR", sub () {
+            ExcelWriteDataProvider dp(test_data_dir + "/test.xlsx", {
+                "format": "",
+            });
+        });
+    }
+
+    testActionRegistration() {
+        # Verify that actions are properly registered with correct properties
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Excel");
+        assertTrue(exists actions, "should have actions registered for Excel app");
+        assertTrue(actions.size() >= 4, "should have at least 4 actions (read, read-data, write, write-data)");
+
+        # Create a lookup hash for easier testing
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # Verify read action
+        assertTrue(action_map.hasKey("read"), "should have 'read' action");
+        assertEq("Read Excel Spreadsheet File", action_map."read".display_name);
+        assertTrue(action_map."read".options.hasKey("path"), "read action should have 'path' option");
+        assertTrue(action_map."read".options.hasKey("header_names"), "read action should have 'header_names' option");
+
+        # Verify read-data action
+        assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
+        assertEq("Read Excel Spreadsheet Inline Data", action_map."read-data".display_name);
+        assertTrue(action_map."read-data".options.hasKey("data"), "read-data action should have 'data' option");
+
+        # Verify write action
+        assertTrue(action_map.hasKey("write"), "should have 'write' action");
+        assertEq("Write Excel Spreadsheet File", action_map."write".display_name);
+        assertTrue(action_map."write".options.hasKey("path"), "write action should have 'path' option");
+        assertTrue(action_map."write".options.hasKey("format"), "write action should have 'format' option");
+        assertTrue(action_map."write".options.hasKey("headers"), "write action should have 'headers' option");
+
+        # Verify write-data action
+        assertTrue(action_map.hasKey("write-data"), "should have 'write-data' action");
+        assertEq("Create Excel Spreadsheet Data", action_map."write-data".display_name);
+        assertFalse(action_map."write-data".options.hasKey("path"), "write-data action should NOT have 'path' option");
+        assertTrue(action_map."write-data".options.hasKey("format"), "write-data action should have 'format' option");
+        assertTrue(action_map."write-data".options.hasKey("headers"), "write-data action should have 'headers' option");
+
+        # Verify format option has allowed_values
+        hash<auto> format_opt = action_map."write".options."format";
+        assertTrue(exists format_opt.allowed_values, "format option should have allowed_values");
+        assertEq(2, format_opt.allowed_values.size(), "format should have 2 allowed values");
+    }
+
+    testRoundtrip() {
+        string output_path = test_data_dir + "/roundtrip-test.xlsx";
+        on_exit unlink(output_path);
+
+        # Write complex data
+        ExcelWriteDataProvider wdp(output_path, {
+            "headers": ("Name", "Amount", "Date", "Active"),
+        });
+
+        date d = 2025-06-15T10:30:00Z;
+
+        wdp.createRecord({"Name": "Item1", "Amount": 99.99, "Date": d, "Active": True});
+        wdp.createRecord({"Name": "Item2", "Amount": 50.00, "Date": d, "Active": False});
+        wdp.createRecord({"Name": "Item3", "Amount": 0.01, "Date": d, "Active": True});
+
+        wdp.commit();
+
+        # Read back all data
+        ExcelReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Item1", records[0].Name);
+        assertEq(99.99, records[0].Amount);
+        assertTrue(records[0].Active);
+        assertEq("Item2", records[1].Name);
+        assertFalse(records[1].Active);
+        assertEq("Item3", records[2].Name);
+        assertEq(0.01, records[2].Amount);
+    }
+}

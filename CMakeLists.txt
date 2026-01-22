@@ -159,10 +159,22 @@ ENDMACRO(MAKE_QJAR)
 
 # ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar
 set(EXCEL_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-excel.jar)
-make_qjar(${EXCEL_JAR}
-    ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar
-    ${CMAKE_SOURCE_DIR}/src/java
+set(EXCEL_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar)
+set(EXCEL_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(EXCEL_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/)
+set(EXCEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${EXCEL_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${EXCEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${EXCEL_JAR} ${EXCEL_SOURCES_DIR} -cp ${EXCEL_CLASSPATH}
+    DEPENDS ${module_name} ${EXCEL_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
 )
 
 add_custom_target(qore-excel-jar

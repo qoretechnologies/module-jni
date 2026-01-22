@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore ExcelReadDataProvider class definition
 
-/*  ExcelReadDataProvider.qc Copyright 2021 - 2025 Qore Technologies, s.r.o.
+/*  ExcelReadDataProvider.qc Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -116,7 +116,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Timezone Region",
                 "short_desc": "The timezone region to use when parsing dates",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The timezone region to use when parsing dates (ex: `Europe/Prague`)",
+                "desc": "The timezone region to use when parsing dates",
+                "example_value": "Europe/Prague",
             },
             "tolwr": <DataProviderOptionInfo>{
                 "display_name": "Convert Headers to Lower Case",
@@ -135,7 +136,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     private {
-        #! The inpjut stream for the Excel data
+        #! The input stream for the Excel data
         InputStream i;
 
         #! the iterator object
@@ -198,21 +199,38 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
             LoggerWrapper::debug("ExcelReadDataProvider::constructor() options: %y", options);
         }
         *hash<auto> copts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, options));
+        # Validate mutual exclusion of headers and header_names
+        if (copts.headers && copts.header_names) {
+            error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_names\" options; use "
+                "either one or the other");
+        }
         sheet = copts.worksheet ?? "";
         if (copts.path) {
             if (copts.stream) {
                 error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
                     "one or the other");
             }
+            if (copts.data) {
+                error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"data\" and \"path\" options; use either "
+                    "one or the other");
+            }
             copts.path = substitute_env_vars(copts.path);
             name = path = copts.path;
         } else if (copts.stream) {
+            if (copts.data) {
+                error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"data\" and \"stream\" options; use either "
+                    "one or the other");
+            }
             i = copts.stream;
             name = sprintf("excel-stream=%s", i.uniqueHash());
+        } else if (copts.data) {
+            # Handle binary data input
+            i = new BinaryInputStream(copts.data);
+            name = sprintf("excel-data=%s", i.uniqueHash());
         }
-        self.opts = copts - ("stream", "path", "worksheet");
+        self.opts = copts - ("stream", "path", "worksheet", "data");
         if (!i && !path) {
-            # create a dummy interator with no input
+            # create a dummy iterator with no input
             i = new StringInputStream("");
             name = "excel";
             dummy = True;
@@ -301,8 +319,14 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (opts.header_cells) {
             it.setHeaderCells(opts.header_cells.start.column, opts.header_cells.start.row,
                 opts.header_cells.end.column, opts.header_cells.end.row);
+        } else if (opts.header_names) {
+            # Default to row 1 for headers when header_names is true and no header_cells specified
+            it.setHeaderCells("-", 1, "-", 1);
         } else if (opts.headers) {
             it.setHeaders(opts.headers);
+        }
+        if (opts.tolwr) {
+            it.setHeadersToLower();
         }
         if (opts.timezone) {
             it.setZone(opts.timezone);

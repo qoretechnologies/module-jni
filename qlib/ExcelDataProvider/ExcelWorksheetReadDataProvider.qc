@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore ExcelWorksheetReadDataProvider class definition
 
-/*  ExcelWorksheetReadDataProvider.qc Copyright 2021 - 2025 Qore Technologies, s.r.o.
+/*  ExcelWorksheetReadDataProvider.qc Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -108,8 +108,14 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
         if (opts.header_cells) {
             i.setHeaderCells(opts.header_cells.start.column, opts.header_cells.start.row,
                 opts.header_cells.end.column, opts.header_cells.end.row);
+        } else if (opts.header_names) {
+            # Default to row 1 for headers when header_names is true and no header_cells specified
+            i.setHeaderCells("-", 1, "-", 1);
         } else if (opts.headers) {
             i.setHeaders(opts.headers);
+        }
+        if (opts.tolwr) {
+            i.setHeadersToLower();
         }
         if (opts.timezone) {
             i.setZone(opts.timezone);

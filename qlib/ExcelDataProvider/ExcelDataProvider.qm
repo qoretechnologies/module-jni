@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ExcelDataProvider module definition
 
-/*  ExcelDataProvider.qm Copyright 2021 - 2025 Qore Technologies, s.r.o.
+/*  ExcelDataProvider.qm Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -53,23 +53,25 @@
 %module-cmd(jni) add-relative-classpath ./jar/SparseBitSet-1.3.jar
 
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelIterator
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelWriter
 
 module ExcelDataProvider {
-    version = "1.0";
-    desc = "user module providing a data provider API for Excel spreadsheets";
+    version = "1.1";
+    desc = "user module providing a data provider API for reading and writing Excel spreadsheets";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
-        # register the data provider factory
+        # register the data provider factories
         DataProvider::registerFactory(new ExcelReadDataProviderFactory());
+        DataProvider::registerFactory(new ExcelWriteDataProviderFactory());
 
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ExcelDataProvider::AppName,
             "display_name": "Excel Spreadsheets",
-            "short_desc": "Read data from Excel spreadsheets",
-            "desc": "Read data from Excel spreadsheets",
+            "short_desc": "Read and write Excel spreadsheets",
+            "desc": "Read and write Excel spreadsheets",
             "logo": ExcelWhiteLogo,
             "logo_file_name": "excel-logo.svg",
             "logo_mime_type": MimeTypeSvg,
@@ -87,13 +89,13 @@ module ExcelDataProvider {
             "action_code": DPAT_FIND,
             "cls": "ExcelDataProvider::ExcelReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                ExcelReadDataProvider::ConstructorOptions{"path", "worksheet", "data_cells", "headers_cells", "header_names"}, {
+                ExcelReadDataProvider::ConstructorOptions{"path", "worksheet", "data_cells", "header_cells", "header_names"}, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                ExcelReadDataProvider::ConstructorOptions - ("path", "worksheet", "data_cells", "headers_cells",
+                ExcelReadDataProvider::ConstructorOptions - ("path", "worksheet", "data_cells", "header_cells",
                     "header_names", "stream", "data"), {
                     "loc": "constructor",
                 }
@@ -110,14 +112,55 @@ module ExcelDataProvider {
             "action_code": DPAT_FIND,
             "cls": "ExcelDataProvider::ExcelReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                ExcelReadDataProvider::ConstructorOptions{"data", "worksheet", "data_cells", "headers_cells", "header_names"}, {
+                ExcelReadDataProvider::ConstructorOptions{"data", "worksheet", "data_cells", "header_cells", "header_names"}, {
                     "preselected": True,
                     "required": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                ExcelReadDataProvider::ConstructorOptions - ("path", "worksheet", "data_cells", "headers_cells",
+                ExcelReadDataProvider::ConstructorOptions - ("path", "worksheet", "data_cells", "header_cells",
                     "header_names", "stream", "data"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ExcelDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "display_name": "Write Excel Spreadsheet File",
+            "short_desc": "Write data to an Excel spreadsheet file",
+            "desc": "Write data to an Excel spreadsheet file at a specified path",
+            "action_code": DPAT_CREATE,
+            "cls": "ExcelDataProvider::ExcelWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ExcelWriteDataProvider::ConstructorOptions{"path", "worksheet", "headers", "format"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExcelWriteDataProvider::ConstructorOptions - ("path", "worksheet", "headers", "format", "stream"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ExcelDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "display_name": "Create Excel Spreadsheet Data",
+            "short_desc": "Create Excel spreadsheet data and return as binary",
+            "desc": "Create Excel spreadsheet data in memory and return it as binary data; useful for generating "
+                "Excel files without writing to disk",
+            "action_code": DPAT_CREATE,
+            "cls": "ExcelDataProvider::ExcelWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ExcelWriteDataProvider::ConstructorOptions{"worksheet", "headers", "format"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExcelWriteDataProvider::ConstructorOptions - ("path", "worksheet", "headers", "format", "stream"), {
                     "loc": "constructor",
                 }
             ),
@@ -131,14 +174,134 @@ module ExcelDataProvider {
 
     @section ExcelDataProviderintro Introduction to the ExcelDataProvider Module
 
-    The %ExcelDataProvider module provides a data provider API for Excel spreadsheets through the
-    @ref dataproviderintro "DataProvider" API.
+    The %ExcelDataProvider module provides a data provider API for reading and writing Excel spreadsheets
+    through the @ref dataproviderintro "DataProvider" API. It supports both modern Excel formats (.xlsx,
+    Excel 2007+) and legacy formats (.xls, Excel 97-2003).
 
     The following classes are provided by this module:
-    - @ref ExcelDataProvider::ExcelReadDataProvider "ExcelReadDataProvider"
-    - @ref ExcelDataProvider::ExcelReadDataProviderFactory "ExcelReadDataProviderFactory"
+    - @ref ExcelDataProvider::ExcelReadDataProvider "ExcelReadDataProvider" - for reading Excel files
+    - @ref ExcelDataProvider::ExcelReadDataProviderFactory "ExcelReadDataProviderFactory" - factory for read providers
+    - @ref ExcelDataProvider::ExcelWriteDataProvider "ExcelWriteDataProvider" - for writing Excel files
+    - @ref ExcelDataProvider::ExcelWriteDataProviderFactory "ExcelWriteDataProviderFactory" - factory for write providers
+    - @ref ExcelDataProvider::ExcelWorksheetReadDataProvider "ExcelWorksheetReadDataProvider" - for reading specific worksheets
+
+    @section ExcelDataProvider_reading Reading Excel Files
+
+    @subsection ExcelDataProvider_reading_basic Basic Reading
+
+    @code{.py}
+    %requires ExcelDataProvider
+
+    # Read from a file path
+    ExcelReadDataProvider dp("data.xlsx", {"header_names": True});
+    list<hash<auto>> records = map $1, dp.searchRecords();
+
+    # Read from a stream
+    FileInputStream fis("data.xlsx");
+    ExcelReadDataProvider dp2(fis, {"header_names": True});
+
+    # Read from binary data
+    binary data = File::readBinaryFile("data.xlsx");
+    ExcelReadDataProvider dp3({"data": data, "header_names": True});
+    @endcode
+
+    @subsection ExcelDataProvider_reading_options Read Options
+
+    - \c path: Path to the Excel file
+    - \c stream: Input stream for Excel data
+    - \c data: Binary Excel data
+    - \c worksheet: Name of the worksheet to read (default: first sheet)
+    - \c header_names: If \c True, use first row as header names
+    - \c header_cells: Cell range for headers (e.g., "a1:e1" or just "1" for row 1)
+    - \c data_cells: Cell range for data (e.g., "a2:e100")
+    - \c headers: List of header names to use
+    - \c tolwr: Convert header names to lowercase
+    - \c timezone: Timezone for date values
+
+    @subsection ExcelDataProvider_reading_multisheet Multi-Sheet Access
+
+    @code{.py}
+    ExcelReadDataProvider dp("workbook.xlsx");
+
+    # List all worksheets
+    list<string> sheets = dp.getChildProviderNames();
+
+    # Access specific worksheet
+    AbstractDataProvider sheet = dp.getChildProvider("Sheet2");
+    list<hash<auto>> records = map $1, sheet.searchRecords();
+    @endcode
+
+    @section ExcelDataProvider_writing Writing Excel Files
+
+    @subsection ExcelDataProvider_writing_basic Basic Writing
+
+    @code{.py}
+    %requires ExcelDataProvider
+
+    # Write to a file
+    ExcelWriteDataProvider dp("output.xlsx", {
+        "worksheet": "Data",
+        "headers": ("Name", "Age", "City"),
+    });
+
+    dp.createRecord({"Name": "Alice", "Age": 30, "City": "New York"});
+    dp.createRecord({"Name": "Bob", "Age": 25, "City": "Boston"});
+
+    dp.commit();  # Write the file
+    @endcode
+
+    @subsection ExcelDataProvider_writing_options Write Options
+
+    - \c path: Output file path
+    - \c stream: Output stream
+    - \c worksheet: Worksheet name (default: "Sheet1")
+    - \c headers: List of column headers
+    - \c format: Output format - "xlsx" (default) or "xls"
+    - \c streaming: Use streaming mode for large files (reduces memory usage)
+
+    @subsection ExcelDataProvider_writing_formats Output Formats
+
+    The write provider supports two formats:
+    - \c xlsx: Modern Excel format (Excel 2007+, default)
+    - \c xls: Legacy Excel format (Excel 97-2003)
+
+    @code{.py}
+    # Write legacy .xls format
+    ExcelWriteDataProvider dp("legacy.xls", {"format": "xls"});
+    @endcode
+
+    @section ExcelDataProvider_datatypes Supported Data Types
+
+    The module automatically handles the following Qore data types:
+    - Strings
+    - Integers and floats (as numeric cells)
+    - Booleans
+    - Dates (with timezone support)
+    - Formulas (read: evaluates to result; write: as calculated value)
+
+    @section ExcelDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c EXCEL-READ-OPTION-ERROR: Invalid read options or option conflicts
+    - \c EXCEL-WRITE-OPTION-ERROR: Invalid write options or option conflicts
+    - \c EXCEL-INVALID-LOCATION: Invalid cell range format
 
     @section ExcelDataProvider_relnotes Release Notes
+
+    @subsection ExcelDataProvider_v1_1 ExcelDataProvider v1.1
+    - added @ref ExcelDataProvider::ExcelWriteDataProvider "ExcelWriteDataProvider" for writing Excel files
+    - added @ref ExcelDataProvider::ExcelWriteDataProviderFactory "ExcelWriteDataProviderFactory"
+    - added support for XLS (Excel 97-2003) format in both read and write operations
+    - added \c tolwr option to convert header names to lowercase
+    - added \c header_names option that defaults to row 1 when no \c header_cells specified
+    - added \c data option to read from binary data
+    - added \c streaming option for memory-efficient large file writes
+    - added mutual exclusion validation for conflicting options
+    - fixed namespace in ExcelReadDataProviderFactory (was incorrectly CsvUtil)
+    - fixed typos in option names and comments
+    - fixed Java error message for unknown worksheet
+    - fixed resource leak in getWorksheets() methods
+    - updated copyright to 2026
 
     @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0
     - initial release of the module
