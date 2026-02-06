@@ -836,10 +836,16 @@ public class KotlinTest inherits QUnit::Test {
 
         # Check for scripting JARs in common locations
         list<string> scriptingPaths = (
-            "/tmp/kotlin-scripting",  # Downloaded by download-kotlin-scripting-jars script
+            "/tmp/kotlin-scripting",  # Legacy location
             (ENV.HOME ?? "") + "/.kotlin-scripting",
             ENV.KOTLIN_SCRIPTING_JARS ?? "",
         );
+
+        # Also check KOTLIN_HOME/lib/scripting (default for download-kotlin-scripting-jars)
+        *string kotlin_home = find_kotlin_home();
+        if (kotlin_home) {
+            scriptingPaths += kotlin_home + "/lib/scripting";
+        }
 
         object classloader = QoreURLClassLoader::getCurrent();
 
@@ -859,7 +865,6 @@ public class KotlinTest inherits QUnit::Test {
             }
 
             # Also add kotlin-reflect if available
-            *string kotlin_home = find_kotlin_home();
             if (kotlin_home) {
                 string reflectJar = kotlin_home + "/lib/kotlin-reflect.jar";
                 if (is_file(reflectJar)) {

@@ -49,6 +49,10 @@ QoreStringNode* Jvm::createVM() {
     bool disable_jit = false;
     bool enable_native_access = true;
     bool native_access_explicit = false;
+#if JAVA_VERSION_MAJOR >= 23
+    bool suppress_unsafe_warnings = true;
+    bool unsafe_warnings_explicit = false;
+#endif
     QoreString min_heap, max_heap, debug_cmd, native_access_opt;
     std::vector<std::string> strvec;
     // check QORE_JNI_DISABLE_JIT environment variable
@@ -78,6 +82,16 @@ QoreStringNode* Jvm::createVM() {
             }
         }
     }
+#if JAVA_VERSION_MAJOR >= 23
+    {
+        QoreString val;
+        if (!SystemEnvironment::get("QORE_JNI_DISABLE_UNSAFE_WARNING_SUPPRESSION", val)) {
+            if (q_parse_bool(val.c_str())) {
+                suppress_unsafe_warnings = false;
+            }
+        }
+    }
+#endif
     {
         QoreString val;
         if (!SystemEnvironment::get("QORE_JNI_DEBUG", val)) {
@@ -95,6 +109,11 @@ QoreStringNode* Jvm::createVM() {
             if (val.find("--enable-native-access") >= 0) {
                 native_access_explicit = true;
             }
+#if JAVA_VERSION_MAJOR >= 23
+            if (val.find("--sun-misc-unsafe-memory-access") >= 0) {
+                unsafe_warnings_explicit = true;
+            }
+#endif
             ssize_t pos = 0;
             while (true) {
                 ssize_t i = val.find(' ', pos);
@@ -106,14 +125,19 @@ QoreStringNode* Jvm::createVM() {
                 // add option
                 std::string opt(val.c_str() + pos, i - pos);
                 strvec.push_back(opt);
+                pos = i + 1;
             }
-            // add final option
             num_options += strvec.size();
         }
     }
     if (enable_native_access && !native_access_explicit) {
         ++num_options;
     }
+#if JAVA_VERSION_MAJOR >= 23
+    if (suppress_unsafe_warnings && !unsafe_warnings_explicit) {
+        ++num_options;
+    }
+#endif
     native_access_option_enabled = enable_native_access;
 #ifdef QORE_JNI_SUPPORT_CLASSPATH
     // this is disabled, because we use our own URLClassloader now to load all classes
@@ -153,6 +177,14 @@ QoreStringNode* Jvm::createVM() {
         native_access_opt = "--enable-native-access=ALL-UNNAMED";
         options[vm_args.nOptions++].optionString = (char*)native_access_opt.c_str();
     }
+#if JAVA_VERSION_MAJOR >= 23
+    QoreString unsafe_warning_opt;
+    if (suppress_unsafe_warnings && !unsafe_warnings_explicit) {
+        // suppress warnings about terminally deprecated sun.misc.Unsafe methods
+        unsafe_warning_opt = "--sun-misc-unsafe-memory-access=allow";
+        options[vm_args.nOptions++].optionString = (char*)unsafe_warning_opt.c_str();
+    }
+#endif
     if (!strvec.empty()) {
         for (auto& str: strvec) {
             //printd(5, "adding JVM pption: '%s'\n", str.c_str());
