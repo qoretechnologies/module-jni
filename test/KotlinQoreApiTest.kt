@@ -155,7 +155,7 @@ object KotlinQoreApiTest {
     @JvmStatic
     @Throws(Throwable::class)
     fun getQoreLibraryInfo(): HashMap<*, *> {
-        return QoreJavaApi.callFunction("get_qore_library_info") as HashMap<*, *>
+        return QoreJavaApi.callFunction("::get_qore_library_info") as HashMap<*, *>
     }
 
     /**

@@ -993,7 +993,7 @@ public class QoreArgTest extends ArgTest {
 
             msg.addTO(To);
 
-            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", EncBase64);
+            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", ContentEncoding::Base64);
             string r = msg.serialize();
 
             string refstr = "From: foo@bar.cz\r
@@ -1028,7 +1028,7 @@ bG9yZW0gaXBzdW0=\r
             msg.setBody("body");
             msg.addTO(To);
 
-            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", EncDefault);
+            msg.attach("foo.txt", MimeTypeText, "lorem ipsum", ContentEncoding::Default);
             string r = msg.serialize();
 
             string refstr = "From: foo@bar.cz\r

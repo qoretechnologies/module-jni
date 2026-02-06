@@ -13,10 +13,35 @@
 set -e
 
 # Default Kotlin version - should match the installed kotlinc version
-KOTLIN_VERSION="${KOTLIN_VERSION:-2.1.0}"
+KOTLIN_VERSION="${KOTLIN_VERSION:-2.3.0}"
 
-# Output directory
-OUTPUT_DIR="${1:-.}"
+# Find KOTLIN_HOME
+find_kotlin_home() {
+    if [ -n "$KOTLIN_HOME" ] && [ -d "$KOTLIN_HOME" ]; then
+        echo "$KOTLIN_HOME"
+        return
+    fi
+    for dir in /opt/kotlin /opt/kotlinc /usr/share/kotlin /usr/lib/kotlin /usr/local/kotlin; do
+        if [ -d "$dir/lib" ]; then
+            echo "$dir"
+            return
+        fi
+    done
+}
+
+# Output directory: use argument if provided, otherwise KOTLIN_HOME/lib/scripting
+if [ -n "$1" ]; then
+    OUTPUT_DIR="$1"
+else
+    _kotlin_home=$(find_kotlin_home)
+    if [ -n "$_kotlin_home" ]; then
+        OUTPUT_DIR="${_kotlin_home}/lib/scripting"
+    else
+        OUTPUT_DIR="."
+        echo "WARNING: KOTLIN_HOME not found; downloading to current directory"
+        echo "Set KOTLIN_HOME or pass an output directory as argument"
+    fi
+fi
 
 # Maven Central base URL
 MAVEN_BASE="https://repo1.maven.org/maven2/org/jetbrains/kotlin"
@@ -42,8 +67,18 @@ KOTLINX_BASE="https://repo1.maven.org/maven2/org/jetbrains/kotlinx"
 
 # Try to detect Kotlin version from kotlinc
 detect_kotlin_version() {
+    local kotlinc_cmd=""
     if command -v kotlinc &> /dev/null; then
-        local version=$(kotlinc -version 2>&1 | grep -oP 'kotlinc-jvm \K[0-9]+\.[0-9]+\.[0-9]+' || true)
+        kotlinc_cmd="kotlinc"
+    else
+        # Check KOTLIN_HOME and common locations
+        local kh=$(find_kotlin_home)
+        if [ -n "$kh" ] && [ -x "$kh/bin/kotlinc" ]; then
+            kotlinc_cmd="$kh/bin/kotlinc"
+        fi
+    fi
+    if [ -n "$kotlinc_cmd" ]; then
+        local version=$($kotlinc_cmd -version 2>&1 | grep -oP 'kotlinc-jvm \K[0-9]+\.[0-9]+\.[0-9]+' || true)
         if [ -n "$version" ]; then
             echo "$version"
             return
@@ -104,7 +139,11 @@ main() {
     echo "Output directory: $OUTPUT_DIR"
     echo ""
 
-    mkdir -p "$OUTPUT_DIR"
+    if ! mkdir -p "$OUTPUT_DIR" 2>/dev/null; then
+        echo "ERROR: Cannot create directory: $OUTPUT_DIR"
+        echo "Try running with sudo or specify a writable output directory"
+        exit 1
+    fi
 
     local failed=0
     echo "Downloading Kotlin scripting JARs..."
