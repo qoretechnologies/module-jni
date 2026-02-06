@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2016 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -64,8 +64,8 @@ sig_vec_t sig_vec = {
 #endif
 };
 
-static QoreStringNode* jni_module_init();
-static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns);
+static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void jni_module_delete();
 static void jni_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink);
 
@@ -167,9 +167,10 @@ QoreStringNode* jni_module_init_finalize(bool system) {
     return nullptr;
 }
 
-static QoreStringNode* jni_module_init() {
+static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     if (jni_init_failed) {
-        return new QoreStringNode("jni module initialization failed");
+        xsink.raiseException("MODULE-INIT-ERROR", "jni module initialization failed");
+        return;
     }
     printd(5, "jni_module_init()\n");
 
@@ -179,7 +180,8 @@ static QoreStringNode* jni_module_init() {
 
     QoreStringNode* err = qore_reassign_signals(sig_vec, QORE_JNI_MODULE_NAME, true);
     if (err) {
-        return err;
+        xsink.raiseException("MODULE-INIT-ERROR", err);
+        return;
     }
 
     ValueHolder jvm_ptr(qore_get_module_option("jni", "jvm-ptr"), nullptr);
@@ -204,7 +206,8 @@ static QoreStringNode* jni_module_init() {
         if (err) {
             jni_init_failed = true;
             err->prepend("Could not create the Java Virtual Machine: ");
-            return err;
+            xsink.raiseException("MODULE-INIT-ERROR", err);
+            return;
         }
     }
 
@@ -214,10 +217,12 @@ static QoreStringNode* jni_module_init() {
         throw;
     } catch (JavaException& e) {
         jni_init_failed = true;
-        return e.toString();
+        xsink.raiseException("MODULE-INIT-ERROR", e.toString());
+        return;
     } catch (Exception &e) {
         jni_init_failed = true;
-        return new QoreStringNode("JVM initialization failed due to an unknown error");
+        xsink.raiseException("MODULE-INIT-ERROR", "JVM initialization failed due to an unknown error");
+        return;
     }
 
     jni::setup_jdbc_driver();
@@ -225,15 +230,17 @@ static QoreStringNode* jni_module_init() {
     printd(5, "jni_module_init() initialized JVM\n");
 
     if (!bootstrap) {
-        return jni_module_init_finalize();
+        QoreStringNode* finalize_err = jni_module_init_finalize();
+        if (finalize_err) {
+            xsink.raiseException("MODULE-INIT-ERROR", finalize_err);
+        }
+        return;
     }
 
     jni::jni_qore_init_done = true;
-
-    return nullptr;
 }
 
-static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns) {
+static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {
     QoreProgram* pgm = getProgram();
     // we can ignore the first program to be initialized when bootstrapping
     if (bootstrap && !deferred_ns_init) {
