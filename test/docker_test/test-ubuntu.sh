@@ -59,6 +59,11 @@ if [ -n "$do_jms_test" ]; then
     gosu qore:qore ${PAYARA_HOME}/bin/asadmin create-jms-resource --restype javax.jms.Queue abc
 fi
 
+# copy built data provider JARs to source tree for testing
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-excel.jar ${MODULE_SRC_DIR}/qlib/ExcelDataProvider/jar/
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-word.jar ${MODULE_SRC_DIR}/qlib/WordDataProvider/jar/
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-kafka.jar ${MODULE_SRC_DIR}/qlib/KafkaDataProvider/jar/
+
 # run the tests
 export QORE_MODULE_DIR=${MODULE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
 cd ${MODULE_SRC_DIR}
