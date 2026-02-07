@@ -24,14 +24,7 @@
 
 # minimum required Qore version
 %requires qore >= 2.0
-# assume local scope for variables, do not use "$" signs
-%new-style
-# require type definitions everywhere
-%require-types
-# strict argument handling
-%strict-args
-# enable all warnings
-%enable-all-warnings
+%modern
 
 # import MQTT Paho Java Client Library: JAR must be added to the global classloader
 %module-cmd(jni) global-add-relative-classpath ./jar/org.eclipse.paho.client.mqttv3-1.2.5.jar

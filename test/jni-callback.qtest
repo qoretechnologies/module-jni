@@ -1,9 +1,6 @@
 #!/usr/bin/env qore
 
-%new-style
-%require-types
-%strict-args
-%enable-all-warnings
+%modern
 
 %requires jni
 %requires QUnit

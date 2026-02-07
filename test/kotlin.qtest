@@ -10,10 +10,7 @@
     Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 */
 
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+%modern
 %disable-warning non-existent-method-call
 
 %requires jni
