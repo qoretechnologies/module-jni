@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -40,7 +40,7 @@ public:
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override;
 
-    DLLLOCAL virtual QoreFunction* getFunction() override {
+    DLLLOCAL virtual QoreFunction* getFunction() const override {
         return nullptr;
     }
 
