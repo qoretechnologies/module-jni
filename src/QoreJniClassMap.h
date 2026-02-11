@@ -171,6 +171,13 @@ public:
     DLLLOCAL JniQoreClass* findCreateQoreClassInProgram(QoreString& name, const char* jpath, Class* c,
         QoreProgram* pgm = nullptr);
 
+    //! Ensures a base class is available in the calling Program's namespace
+    /** When a base class is already in the global cache, it may not yet be in the calling
+        Program's namespace. This method checks and adds it if needed.
+        @note Must be called with the global lock held.
+    */
+    DLLLOCAL void addClassToProgram(JniQoreClass* qc, const char* jpath, QoreProgram* pgm);
+
     DLLLOCAL static LocalReference<jclass> getPrimitiveType(qore_type_t t);
 
 protected:

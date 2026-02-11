@@ -654,10 +654,20 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClass(Env& env, const char* name, Q
     jpath.replaceAll(".", "/");
     jpath.replaceAll("__", "$");
 
-    // first try to find class
+    // first try to find class in the global cache
     JniQoreClass* rv = findInternal(jpath.c_str());
     if (rv) {
-        //printd(LogLevel, "QoreJniClassMap::findCreateQoreClass() '%s': %p\n", name, rv);
+        // check if the class is also in the calling Program's namespace
+        if (pgm) {
+            if (!jpc) {
+                jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+            }
+            if (jpc && !jpc->find(jpath.c_str())) {
+                // class is in global cache but NOT in our Program - add it directly
+                AutoLocker al(m);
+                addClassToProgram(rv, jpath.c_str(), pgm);
+            }
+        }
         return rv;
     }
     //printd(LogLevel, "QoreJniClassMap::findCreateQoreClass() '%s' not cached\n", name);
@@ -696,11 +706,13 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
     // we need to protect access to the default namespace and class map with a lock
     AutoLocker al(m);
 
-    // if we have the QoreClass already, then return it
+    // if we have the QoreClass already in the global cache, ensure it's also in the calling Program's namespace
     {
         JniQoreClass* qc = find(jpath);
-        if (qc)
+        if (qc) {
+            addClassToProgram(qc, jpath, pgm);
             return qc;
+        }
     }
 
     // workaround for the headless awt toolkit; we cannot initialize sun.awt.dnd.SunDropTargetEvent, because
@@ -756,51 +768,75 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
     // createClassInNamespace() will "save" qc in the namespace
     createClassInNamespace(ns, *default_jns, jpath, cls.release(), qc, *this, pgm);
 
+    // add to the calling Program's namespace
+    addClassToProgram(qc, jpath, pgm);
+    return qc;
+}
+
+void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, QoreProgram* pgm) {
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
-    // now add to the current Program's namespace
-    if (jpc) {
-        assert(pgm);
-        ExceptionSink xsink;
-        QoreExternalProgramContextHelper epch(&xsink, pgm);
-        if (xsink) {
-            throw XsinkException(xsink);
-        }
-
-        // grab current Program's parse lock before manipulating namespaces
-        CurrentProgramRuntimeExternalParseContextHelper pch;
-        if (!pch) {
-            throw BasicException("could not attach to deleted Qore Program when creating Qore class in base");
-        }
-
-        {
-            JniQoreClass* qc0 = jpc->find(jpath);
-            if (qc0) {
-                return qc0;
-            }
-        }
-
-        ns = jni_find_create_namespace(*jpc->getJniNamespace(), name.c_str(), sn);
-
-        // copy class for assignment
-        std::unique_ptr<JniQoreClass> new_qc(new JniQoreClass(*qc));
-        assert(new_qc->isSystem());
-
-        printd(LogLevel, "QoreJniClassMap::findCreateQoreClassInBase() jpc: %p '%s' qc: %p ns: %p '%s::%s'\n", jpc,
-            jpath, new_qc.get(), ns, ns->getName(), qc->getName());
-
-        assert(new_qc->getManagedUserData());
-
-        // create entry for class in map
-        jpc->add(jpath, new_qc.get());
-
-        // save class in namespace
-        qc = new_qc.release();
-        // issue #5056: resolve abstract methods for copied class
-        qc->runtimeResolveAbstractMethods();
-        ns->addSystemClass(qc);
+    if (!jpc) {
+        return;
     }
 
-    return qc;
+    // check if the class is already in the Program's namespace
+    {
+        JniQoreClass* qc0 = jpc->find(jpath);
+        if (qc0) {
+            return;
+        }
+    }
+
+    assert(pgm);
+    ExceptionSink xsink;
+    QoreExternalProgramContextHelper epch(&xsink, pgm);
+    if (xsink) {
+        throw XsinkException(xsink);
+    }
+
+    // grab current Program's parse lock before manipulating namespaces
+    CurrentProgramRuntimeExternalParseContextHelper pch;
+    if (!pch) {
+        throw BasicException("could not attach to deleted Qore Program when adding class to program");
+    }
+
+    // re-check under parse lock
+    {
+        JniQoreClass* qc0 = jpc->find(jpath);
+        if (qc0) {
+            return;
+        }
+    }
+
+    const char* sn;
+    QoreNamespace* ns = jni_find_create_namespace(*jpc->getJniNamespace(), qc->getJavaName().c_str(), sn);
+
+    // check if the class is already in the namespace (may have been added by another mechanism)
+    if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(sn))) {
+        // class already in namespace - just add the jpc mapping and return
+        jpc->add(jpath, existing);
+        printd(LogLevel, "QoreJniClassMap::addClassToProgram() '%s' already in namespace '%s', added jpc mapping\n",
+            jpath, ns->getName());
+        return;
+    }
+
+    // copy class for assignment
+    std::unique_ptr<JniQoreClass> new_qc(new JniQoreClass(*qc));
+    assert(new_qc->isSystem());
+
+    printd(LogLevel, "QoreJniClassMap::addClassToProgram() jpc: %p '%s' qc: %p ns: %p '%s::%s'\n", jpc,
+        jpath, new_qc.get(), ns, ns->getName(), qc->getName());
+
+    assert(new_qc->getManagedUserData());
+
+    // create entry for class in map
+    jpc->add(jpath, new_qc.get());
+
+    // save class in namespace
+    JniQoreClass* saved_qc = new_qc.release();
+    // issue #5056: resolve abstract methods for copied class
+    saved_qc->runtimeResolveAbstractMethods();
+    ns->addSystemClass(saved_qc);
 }
 
 // ACC opcodes
@@ -1069,6 +1105,11 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
         if (elem_type == objectTypeInfo) {
             return softAutoListTypeInfo;
         } else {
+            // Java object arrays (e.g. Integer[]) can contain null elements, so use or-nothing element type;
+            // Java primitive arrays (e.g. int[]) cannot contain null elements
+            if (!env.callBooleanMethod(elem_cls, Globals::methodClassIsPrimitive, nullptr)) {
+                elem_type = qore_get_or_nothing_type(elem_type);
+            }
             printd(5, "QoreJniClassMap::getQoreType() array type: '%s'\n", qore_type_get_name(elem_type));
             return qore_get_complex_softlist_type(elem_type);
         }

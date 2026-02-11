@@ -267,6 +267,9 @@ public class Main inherits QUnit::Test {
         addTestCase("special conversions test", \testSpecialConversions());
         addTestCase("api test", \testQoreJavaApi());
         addTestCase("native access option test", \nativeAccessOptionTest());
+        addTestCase("cross-program class sharing test", \crossProgramClassSharingTest());
+        addTestCase("cross-program inner class sharing test", \crossProgramInnerClassSharingTest());
+        addTestCase("multi-program class sharing test", \multiProgramClassSharingTest());
 
         Qore::exit(main());
     }
@@ -2274,6 +2277,68 @@ lorem ipsum\r
         o.set(NOTHING, new Integer(456));
         assertThrows("JNI-ERROR", "java.lang.IllegalArgumentException", \o.set());
         assertEq(456, load_class("org/qore/jni/test/StaticFields").getDeclaredField("i").get());
+    }
+
+    crossProgramClassSharingTest() {
+        # Integer is already in the global cache from the main program's JNI initialization
+        # Create a new Program and verify it works there too via addClassToProgram()
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%requires jni
+%module-cmd(jni) import java.lang.Integer
+
+auto sub test() {
+    Integer i(42);
+    return i.intValue();
+}
+", "test");
+        assertEq(42, p.callFunction("test"));
+    }
+
+    crossProgramInnerClassSharingTest() {
+        # Test that inner classes (AbstractMap$SimpleEntry -> AbstractMap__SimpleEntry)
+        # resolve correctly in a second Program via addClassToProgram() with getJavaName()
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%requires jni
+%module-cmd(jni) import java.util.AbstractMap
+%module-cmd(jni) import java.util.AbstractMap__SimpleEntry
+
+auto sub test() {
+    AbstractMap__SimpleEntry entry(\"key\", \"value\");
+    return entry.getKey() + \"=\" + entry.getValue();
+}
+", "test");
+        assertEq("key=value", p.callFunction("test"));
+    }
+
+    multiProgramClassSharingTest() {
+        # Two Programs using the same Integer from global cache simultaneously
+        Program p1(PO_NEW_STYLE);
+        p1.parse("
+%requires jni
+%module-cmd(jni) import java.lang.Integer
+
+auto sub test() {
+    Integer i(42);
+    return i.intValue();
+}
+", "test");
+
+        Program p2(PO_NEW_STYLE);
+        p2.parse("
+%requires jni
+%module-cmd(jni) import java.lang.Integer
+
+auto sub test() {
+    Integer i(99);
+    return i.intValue();
+}
+", "test");
+
+        # verify both Programs work independently
+        assertEq(42, p1.callFunction("test"));
+        assertEq(99, p2.callFunction("test"));
     }
 }
 
