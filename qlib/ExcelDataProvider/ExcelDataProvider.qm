@@ -65,6 +65,7 @@ module ExcelDataProvider {
             "display_name": "Excel Spreadsheets",
             "short_desc": "Read and write Excel spreadsheets",
             "desc": "Read and write Excel spreadsheets",
+            "groups": (DataProvider::AppGroup::Spreadsheets,),
             "logo": ExcelWhiteLogo,
             "logo_file_name": "excel-logo.svg",
             "logo_mime_type": MimeTypeSvg,

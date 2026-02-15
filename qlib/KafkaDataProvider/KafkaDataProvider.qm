@@ -66,6 +66,7 @@ module KafkaDataProvider {
             "display_name": "Kafka",
             "short_desc": "Kafka messaging",
             "desc": "Kafka messaging",
+            "groups": (DataProvider::AppGroup::Messaging,),
             "scheme": "kafka",
             "logo": KafkaLogoWhite,
             "logo_file_name": "kafka-logo.svg",

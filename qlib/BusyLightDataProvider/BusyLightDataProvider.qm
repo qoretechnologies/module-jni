@@ -55,6 +55,7 @@ module BusyLightDataProvider {
             "display_name": "MQTT Kuando Busylight",
             "short_desc": "MQTT Kuando Busylight devices (by Plenom)",
             "desc": "MQTT server for accessing Kuando Busylight devices (by Plenom)",
+            "groups": (DataProvider::AppGroup::Iot,),
             "scheme": "blssl",
             "logo": BusylightLogoWhite,
             "logo_file_name": "kuando-busylight-logo.svg",

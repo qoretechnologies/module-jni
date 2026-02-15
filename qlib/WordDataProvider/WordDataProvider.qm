@@ -65,6 +65,7 @@ module WordDataProvider {
             "display_name": "Word Documents",
             "short_desc": "Read and write Microsoft Word documents",
             "desc": "Read and write Microsoft Word documents (.docx format)",
+            "groups": (DataProvider::AppGroup::Documents,),
             "logo": WordLogo,
             "logo_file_name": "word-logo.svg",
             "logo_mime_type": MimeTypeSvg,

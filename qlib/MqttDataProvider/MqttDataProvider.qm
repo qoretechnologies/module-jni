@@ -54,6 +54,7 @@ module MqttDataProvider {
             "display_name": "MQTT",
             "short_desc": "MQTT server for fast and efficient messaging",
             "desc": "MQTT server for fast and efficient messaging",
+            "groups": (DataProvider::AppGroup::Messaging, DataProvider::AppGroup::Iot,),
             "scheme": "mqttssl",
             "logo": MqttLogo,
             "logo_file_name": "generic-mqtt-logo.svg",
