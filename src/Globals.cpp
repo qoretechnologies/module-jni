@@ -1387,7 +1387,7 @@ static const QoreNamespace* get_module_root_ns_intern(const char* name, QoreProg
         const QoreNamespace* ns = mod_pgm->findNamespace(n);
         if (ns) {
             const char* mod = ns->getModuleName();
-            if (mod && ~strcmp(mod, name)) {
+            if (mod && !strcmp(mod, name)) {
                 return ns;
             }
         }
