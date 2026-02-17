@@ -103,17 +103,14 @@ class QJava2Jar {
                 try {
                     mkdir_ex(parent_dir, 0755, True);
                 } catch (hash<ExceptionInfo> ex) {
-                    # ignore "File exists" errors (race condition with parallel builds)
-                    bool ignore_error = False;
                     if (ex.err == "DIR-CREATE-FAILURE" && ex.arg == 17) {
-                        int attempts = 0;
-                        while (!is_dir(parent_dir) && attempts < 50) {
-                            usleep(10ms);
-                            ++attempts;
+                        # EEXIST on an intermediate directory (race condition with parallel builds);
+                        # retry - the blocking intermediate dir now exists, so the retry will create
+                        # remaining subdirectories
+                        if (!is_dir(parent_dir)) {
+                            mkdir_ex(parent_dir, 0755, True);
                         }
-                        ignore_error = is_dir(parent_dir);
-                    }
-                    if (!ignore_error && !is_dir(parent_dir)) {
+                    } else {
                         rethrow;
                     }
                 }
