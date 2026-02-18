@@ -611,7 +611,7 @@ set(QMOD
     qlib/WordDataProvider
 )
 
-qore_wrap_qpp_value(QPP_SOURCES ${QPP_SRC})
+qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
 
 foreach (it ${QPP_SOURCES})
     GET_FILENAME_COMPONENT(_outfile ${it} NAME_WE)
@@ -657,6 +657,14 @@ qore_external_user_module("qlib/KafkaDataProvider" "")
 qore_external_user_module("qlib/WordDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
+
+# install qpp metadata files
+if (COMMAND qore_install_qpp_metadata)
+    qore_install_qpp_metadata(${module_name} ${QPP_META_SRC})
+else()
+    install(FILES ${QPP_META_SRC}
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+endif()
 
 qore_config_info()
 
