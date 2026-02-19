@@ -70,7 +70,7 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Content Type",
                 "short_desc": "Type of content to read",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Type of content to read: 'paragraphs' (default) or 'table'",
+                "desc": "Type of content to read: `paragraphs` (default) or `table`",
                 "default_value": "paragraphs",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "paragraphs", "desc": "Read document paragraphs"},
@@ -81,20 +81,20 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Table Index",
                 "short_desc": "Index of table to read (0-based)",
                 "type": AbstractDataProviderType::get(SoftIntType),
-                "desc": "Index of the table to read when content_type is 'table'; 0-based, default is 0",
+                "desc": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
                 "default_value": 0,
             },
             "header_row": <DataProviderOptionInfo>{
                 "display_name": "Header Row",
                 "short_desc": "First row contains headers",
                 "type": AbstractDataProviderType::get(SoftBoolType),
-                "desc": "If true, the first row of the table contains column headers; only applies to table mode",
+                "desc": "If `true`, the first row of the table contains column headers; only applies to table mode",
             },
             "headers": <DataProviderOptionInfo>{
                 "display_name": "Column Headers",
                 "short_desc": "Explicit list of column headers",
                 "type": AbstractDataProviderType::get(new Type("softlist<string>")),
-                "desc": "Explicit list of column headers for table mode; mutually exclusive with header_row",
+                "desc": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
             },
         };
     }

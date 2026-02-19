@@ -135,13 +135,13 @@ public class BusyLightUpdateMessageDataType inherits HashDataType {
                 "type": RgbColorDataType,
             },
             "on": {
-                "desc": "The length of time ON from 0 - 255",
+                "desc": "The length of time ON from `0` - `255`",
                 "short_desc": "The length of time ON from 0 - 255",
                 "type": IntType,
                 "default_value": 255,
             },
             "off": {
-                "desc": "The length of time OFF from 0 - 255",
+                "desc": "The length of time OFF from `0` - `255`",
                 "short_desc": "The length of time OFF from 0 - 255",
                 "type": IntType,
                 "default_value": 0,

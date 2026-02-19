@@ -53,7 +53,7 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
                 "display_name": "Worksheet Name",
                 "short_desc": "The name of the worksheet to create",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The name of the worksheet to create; default is 'Sheet1'",
+                "desc": "The name of the worksheet to create; default is `Sheet1`",
             },
             "headers": <DataProviderOptionInfo>{
                 "display_name": "Column Headers",
@@ -66,7 +66,7 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
                 "display_name": "Output Format",
                 "short_desc": "Excel format to use",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Excel format to use: 'xlsx' (default, Excel 2007+) or 'xls' (Excel 97-2003)",
+                "desc": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
                 "default_value": "xlsx",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "xlsx", "desc": "Excel 2007+ format (.xlsx)"},
@@ -78,7 +78,7 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
                 "short_desc": "Use streaming mode for large files",
                 "type": AbstractDataProviderType::get(SoftBoolType),
                 "desc": "If `true`, use SXSSF streaming mode for writing large files with reduced memory "
-                    "usage; only applies to 'xlsx' format",
+                    "usage; only applies to `xlsx` format",
             },
         };
     }

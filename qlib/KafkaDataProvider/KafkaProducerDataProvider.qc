@@ -48,7 +48,7 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "Determines how the client handles acknowledgements from the server:\n\n"
                     "- `0`: The producer will not wait for any acknowledgment from the server at all. The record "
-                    "will be immediately added to the socket buffer and  considered sent. No guarantee can be made "
+                    "will be immediately added to the socket buffer and considered sent. No guarantee can be made "
                     "that the server has received the record in this case, and the `retries` configuration will not "
                     "take effect (as the client won't generally know of any failures). The offset given back for "
                     "each record will always be set to `-1`\n\n"

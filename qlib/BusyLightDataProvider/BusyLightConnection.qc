@@ -32,8 +32,8 @@ public class BusyLightConnection inherits MqttDataProvider::MqttConnection {
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "BusyLight Connection",
-            "short_desc": "A connection to an BusyLight device",
-            "desc": "A connection to an BusyLight server",
+            "short_desc": "A connection to a BusyLight device",
+            "desc": "A connection to a BusyLight server",
             "cls": Class::forName("BusyLightConnection"),
             "options": MqttConnection::ConnectionScheme.options,
             "schemes": {

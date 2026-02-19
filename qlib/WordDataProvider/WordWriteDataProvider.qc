@@ -53,7 +53,7 @@ public class WordWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Content Type",
                 "short_desc": "Type of content to write",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Type of content to write: 'paragraphs' (default) or 'table'",
+                "desc": "Type of content to write: `paragraphs` (default) or `table`",
                 "default_value": "paragraphs",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "paragraphs", "desc": "Write paragraphs"},
