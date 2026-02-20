@@ -1419,6 +1419,12 @@ static bool check_optional_last_param(Env& env, const QoreExternalVariant& v, Lo
         return true;
     }
 
+    // auto type is effectively optional for Java overloads
+    if (qore_type_equal(qore_params[len], autoTypeInfo)) {
+        shorten_params(env, params, len);
+        return true;
+    }
+
     const arg_vec_t& def_args = v.getDefaultArgList();
     if (def_args.size() > len && def_args[len]) {
         shorten_params(env, params, len);

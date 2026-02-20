@@ -270,6 +270,7 @@ public class Main inherits QUnit::Test {
         addTestCase("cross-program class sharing test", \crossProgramClassSharingTest());
         addTestCase("cross-program inner class sharing test", \crossProgramInnerClassSharingTest());
         addTestCase("multi-program class sharing test", \multiProgramClassSharingTest());
+        addTestCase("auto param overload test", \autoParamOverloadTest());
 
         Qore::exit(main());
     }
@@ -2340,6 +2341,64 @@ auto sub test() {
         assertEq(42, p1.callFunction("test"));
         assertEq(99, p2.callFunction("test"));
     }
+
+    autoParamOverloadTest() {
+        try {
+            # compile and execute QoreDynamicTest20.java
+            QoreJavaCompiler compiler();
+            compiler::CompilerOutput newClassData = compiler.compile("org.qore.test.QoreDynamicTest20",
+                File::readTextFile(get_script_dir() + "/QoreDynamicTest20.java"));
+            binary fdata = newClassData.file.openInputStream().readAllBytes();
+            assertGt(0, fdata.size());
+
+            # test full constructor (string, auto, auto)
+            reflect::Method m = newClassData.cls.getMethod("testFullCtor");
+            auto obj = m.invoke();
+            assertEq("full", obj.getDesc());
+            assertEq(1, obj.getVal());
+            assertEq(2, obj.getExtra());
+
+            # test constructor with last auto param omitted (string, auto)
+            m = newClassData.cls.getMethod("testCtorOmitOne");
+            obj = m.invoke();
+            assertEq("omit1", obj.getDesc());
+            assertEq(42, obj.getVal());
+            assertEq(NOTHING, obj.getExtra());
+
+            # test constructor with both auto params omitted (string)
+            m = newClassData.cls.getMethod("testCtorOmitTwo");
+            obj = m.invoke();
+            assertEq("omit2", obj.getDesc());
+            assertEq(NOTHING, obj.getVal());
+            assertEq(NOTHING, obj.getExtra());
+
+            # test method with trailing auto param
+            m = newClassData.cls.getMethod("testMethodWithOpt");
+            auto result = m.invoke();
+            assertEq("helloworld", result);
+
+            # test method without trailing auto param
+            m = newClassData.cls.getMethod("testMethodWithoutOpt");
+            result = m.invoke();
+            assertEq("hello", result);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.typeCode() == NT_OBJECT) {
+                object arg = ex.arg;
+                while (arg && arg.hasCallableMethod("getCause")) {
+                    *object next = arg.getCause();
+                    if (next) {
+                        arg = next;
+                    } else {
+                        break;
+                    }
+                }
+                printf("%s\n", arg.toString());
+                arg.printStackTrace();
+            }
+            printf("%s\n", get_exception_string(ex));
+            rethrow;
+        }
+    }
 }
 
 class TestAppender inherits LoggerAppenderWithLayout {
@@ -2426,6 +2485,36 @@ class ArgTest {
 
     auto get() {
         return argv;
+    }
+}
+
+class AutoParamTest {
+    public {
+        string desc;
+        auto val;
+        auto extra;
+    }
+
+    constructor(string desc, auto val, auto extra) {
+        self.desc = desc;
+        self.val = val;
+        self.extra = extra;
+    }
+
+    string getDesc() {
+        return desc;
+    }
+
+    auto getVal() {
+        return val;
+    }
+
+    auto getExtra() {
+        return extra;
+    }
+
+    string staticTest(string s, auto opt) {
+        return s + (opt ? string(opt) : "");
     }
 }
 
