@@ -724,7 +724,7 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
 
     const QoreClass* cls = pgm->findClass(clsname.c_str(), &xsink);
     if (cls && !xsink) {
-        if (pgm->getParseOptions64() & cls->getDomain()) {
+        if (pgm->getParseOptions() & cls->getDomain()) {
             xsink.raiseException("CREATE-OBJECT-ERROR", "Program sandboxing restrictions do not allow access to " \
                 "the '%s' class", cls->getName());
         } else {
