@@ -93,8 +93,6 @@ Jni::java::lang::Class load_class(string name) {
     - for static method invocations, this function is identical to @ref invoke_nonvirtual()
  */
 Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) {
-    ReferenceHolder<QoreJniPrivateData> m_holder(method, xsink);
-    ReferenceHolder<QoreJniPrivateData> obj_holder(object, xsink);
     try {
         Env env;
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
@@ -120,8 +118,6 @@ Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateDa
     - for static method invocations, this function is identical to @ref invoke()
  */
 Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) {
-    ReferenceHolder<QoreJniPrivateData> m_holder(method, xsink);
-    ReferenceHolder<QoreJniPrivateData> obj_holder(object, xsink);
     try {
         Env env;
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(), Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
@@ -152,9 +148,6 @@ Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJ
     @endcode
  */
 Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocationHandler, Jni::java::lang::Class[QoreJniPrivateData] cls) {
-    SimpleRefHolder<jni::InvocationHandler> invocationHandlerHolder(invocationHandler);
-    SimpleRefHolder<QoreJniPrivateData> classHolder(cls);
-
     // get Qore class for Class object
     jni::Env env;
     jni::LocalReference<jstring> clsName = env.callObjectMethod(cls->getObject(), jni::Globals::methodClassGetName, nullptr).as<jstring>();
@@ -166,7 +159,7 @@ Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationH
     QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
 
     try {
-        return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(jni::Functions::implementInterface(nullptr, invocationHandler, jc)));
+        return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(jni::Functions::implementInterface(nullptr, *invocationHandler, jc)));
     } catch (jni::Exception& e) {
         e.convert(xsink);
         return QoreValue();
@@ -190,10 +183,6 @@ Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationH
     @endcode
  */
 Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] classLoader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocationHandler, Jni::java::lang::Class[QoreJniPrivateData] cls) {
-    SimpleRefHolder<QoreJniPrivateData> classLoaderHolder(classLoader);
-    SimpleRefHolder<jni::InvocationHandler> invocationHandlerHolder(invocationHandler);
-    SimpleRefHolder<QoreJniPrivateData> classHolder(cls);
-
     // get Qore class for Class object
     jni::Env env;
     jni::LocalReference<jstring> clsName = env.callObjectMethod(cls->getObject(), jni::Globals::methodClassGetName, nullptr).as<jstring>();
@@ -205,7 +194,7 @@ Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJni
     QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
 
     try {
-        return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(jni::Functions::implementInterface(classLoader->getObject(), invocationHandler, jc)));
+        return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(jni::Functions::implementInterface(classLoader->getObject(), *invocationHandler, jc)));
     } catch (jni::Exception& e) {
         e.convert(xsink);
         return QoreValue();
@@ -219,8 +208,6 @@ Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJni
     @return the allocated array
  */
 Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateData] cls, int size) {
-    ReferenceHolder<QoreJniPrivateData> holder(cls, xsink);
-
     try {
         return new QoreObject(QC_JAVAARRAY, jni::jni_get_program_context(), new Array(cls->makeLocal().as<jclass>(), size));
     } catch (jni::Exception& e) {
