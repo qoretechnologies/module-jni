@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -40,7 +40,7 @@ Env::Env(bool set_context) {
    // Check for interrupt before attaching to JVM
    {
       ExceptionSink xsink;
-      if (qore_check_io_interrupt(&xsink, "JVM attach")) {
+      if (qore_check_cancel(&xsink, "JVM attach")) {
          throw XsinkException(xsink);
       }
    }
