@@ -39,9 +39,14 @@ public class WordWriteDataProvider inherits DataProvider::AbstractDataProvider {
         const ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
                 "display_name": "Word Output Path",
-                "short_desc": "The path to write the Word document",
+                "short_desc": "The location to write the Word document",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The path to write the Word document; mutually exclusive with `stream`",
+                "desc": "The location for the output Word document data file; mutually exclusive with `stream`; "
+                    "the output location is handled by a call to "
+                    "[FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/"
+                    "manual/qorus/current/qore/modules/FileLocationHandler/html/"
+                    "class_file_location_handler_1_1_file_location_handler.html"
+                    "#a46f7e9cc0e76e0d7e30cae79513cd35)",
             },
             "stream": <DataProviderOptionInfo>{
                 "display_name": "Word Output Stream",
@@ -112,8 +117,8 @@ public class WordWriteDataProvider inherits DataProvider::AbstractDataProvider {
             error("WORD-WRITE-OPTION-ERROR", "cannot provide \"path\" option when path is given as first "
                 "argument");
         }
-        self.path = substitute_env_vars(path);
-        name = self.path;
+        self.path = path;
+        name = path;
         self.opts = copts - ("path", "stream");
         setupWriter();
     }
@@ -153,7 +158,7 @@ public class WordWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 error("WORD-WRITE-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
                     "one or the other");
             }
-            path = substitute_env_vars(copts.path);
+            path = copts.path;
             name = path;
         } else if (copts.stream) {
             stream = copts.stream;
@@ -215,13 +220,20 @@ public class WordWriteDataProvider inherits DataProvider::AbstractDataProvider {
         if (!writer) {
             return;
         }
+        on_exit {
+            writer.close();
+            delete writer;
+        }
         if (path) {
-            writer.writeToFile(path);
+            OutputStreamWrapper os = FileLocationHandler::getOutputStreamForLocation(path);
+            on_exit {
+                os.close();
+                os.waitForIo();
+            }
+            writer.writeToStream(os);
         } else if (stream) {
             writer.writeToStream(stream);
         }
-        writer.close();
-        delete writer;
     }
 
     #! Returns the data as binary

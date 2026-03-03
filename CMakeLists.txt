@@ -157,6 +157,12 @@ MACRO(MAKE_QJAR _output _classpath _root)
     )
 ENDMACRO(MAKE_QJAR)
 
+# Shared Qore stream adapter sources (compiled into each data provider jar)
+set(QORE_STREAM_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/jni/QoreInputStreamWrapper.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/jni/QoreOutputStreamWrapper.java
+)
+
 # ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar
 set(EXCEL_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-excel.jar)
 set(EXCEL_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar)
@@ -171,8 +177,9 @@ set(EXCEL_SOURCES
 add_custom_command(
     OUTPUT ${EXCEL_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-        --root=${EXCEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${EXCEL_JAR} ${EXCEL_SOURCES_DIR} -cp ${EXCEL_CLASSPATH}
-    DEPENDS ${module_name} ${EXCEL_SOURCES}
+        --root=${EXCEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${EXCEL_JAR} ${EXCEL_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${EXCEL_CLASSPATH}
+    DEPENDS ${module_name} ${EXCEL_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
@@ -201,8 +208,9 @@ if (APPLE)
     add_custom_command(
         OUTPUT ${WORD_JAR}
         COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR} -cp ${WORD_CLASSPATH}
-        DEPENDS ${module_name} ${WORD_SOURCES} ${EXCEL_JAR}
+            --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR}
+            ${QORE_STREAM_SOURCES} -cp ${WORD_CLASSPATH}
+        DEPENDS ${module_name} ${WORD_SOURCES} ${QORE_STREAM_SOURCES} ${EXCEL_JAR}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
     )
@@ -210,8 +218,9 @@ else()
     add_custom_command(
         OUTPUT ${WORD_JAR}
         COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR} -cp ${WORD_CLASSPATH}
-        DEPENDS ${module_name} ${WORD_SOURCES}
+            --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR}
+            ${QORE_STREAM_SOURCES} -cp ${WORD_CLASSPATH}
+        DEPENDS ${module_name} ${WORD_SOURCES} ${QORE_STREAM_SOURCES}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM
     )
@@ -223,6 +232,48 @@ add_custom_target(qore-word-jar
 
 # install the Word jar file manually
 install(FILES ${WORD_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/WordDataProvider/jar)
+
+# PowerPoint data provider jar
+set(POWERPOINT_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-powerpoint.jar)
+set(POWERPOINT_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar)
+set(POWERPOINT_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(POWERPOINT_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/powerpoint/)
+set(POWERPOINT_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/powerpoint/PowerPointIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/powerpoint/PowerPointWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/powerpoint/PowerPointTestHelper.java
+)
+
+# macOS appears to have a bug with initializing BSS when the Qore processes to build the jar files
+# are launched in parallel. Use the Excel jar as a dependency to ensure serialization.
+if (APPLE)
+    add_custom_command(
+        OUTPUT ${POWERPOINT_JAR}
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+            --root=${POWERPOINT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${POWERPOINT_JAR} ${POWERPOINT_SOURCES_DIR}
+            ${QORE_STREAM_SOURCES} -cp ${POWERPOINT_CLASSPATH}
+        DEPENDS ${module_name} ${POWERPOINT_SOURCES} ${QORE_STREAM_SOURCES} ${EXCEL_JAR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
+    )
+else()
+    add_custom_command(
+        OUTPUT ${POWERPOINT_JAR}
+        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+            --root=${POWERPOINT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${POWERPOINT_JAR} ${POWERPOINT_SOURCES_DIR}
+            ${QORE_STREAM_SOURCES} -cp ${POWERPOINT_CLASSPATH}
+        DEPENDS ${module_name} ${POWERPOINT_SOURCES} ${QORE_STREAM_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
+    )
+endif()
+
+add_custom_target(qore-powerpoint-jar
+    DEPENDS ${POWERPOINT_JAR}
+)
+
+# install the PowerPoint jar file manually
+install(FILES ${POWERPOINT_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/PowerPointDataProvider/jar)
 
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
@@ -519,7 +570,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -609,6 +660,7 @@ set(QMOD
     qlib/ExcelDataProvider
     qlib/KafkaDataProvider
     qlib/WordDataProvider
+    qlib/PowerPointDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -655,6 +707,7 @@ qore_external_user_module("qlib/BusyLightDataProvider" "MqttDataProvider")
 qore_external_user_module("qlib/ExcelDataProvider" "")
 qore_external_user_module("qlib/KafkaDataProvider" "")
 qore_external_user_module("qlib/WordDataProvider" "")
+qore_external_user_module("qlib/PowerPointDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 

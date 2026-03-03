@@ -70,7 +70,12 @@ public class WordIterator extends qore.Qore.AbstractIterator implements java.io.
      * @param tableIndex The index of the table to read (0-based, for table mode)
      */
     public WordIterator(java.io.InputStream stream, String mode, int tableIndex) throws Throwable {
-        this.document = new XWPFDocument(stream);
+        try {
+            this.document = new XWPFDocument(stream);
+        } catch (Throwable t) {
+            stream.close();
+            throw t;
+        }
         this.mode = mode != null ? mode : "paragraphs";
         this.tableIndex = tableIndex;
         this.headerRow = false;
@@ -86,7 +91,7 @@ public class WordIterator extends qore.Qore.AbstractIterator implements java.io.
      * @param tableIndex The index of the table to read (0-based, for table mode)
      */
     public WordIterator(qore.Qore.InputStream stream, String mode, int tableIndex) throws Throwable {
-        this(new QoreInputStreamWrapper(stream), mode, tableIndex);
+        this(new org.qore.jni.QoreInputStreamWrapper(stream), mode, tableIndex);
     }
 
     /**
@@ -282,7 +287,7 @@ public class WordIterator extends qore.Qore.AbstractIterator implements java.io.
      * @return The number of tables
      */
     public static int getTableCount(qore.Qore.InputStream stream) throws IOException {
-        return getTableCount(new QoreInputStreamWrapper(stream));
+        return getTableCount(new org.qore.jni.QoreInputStreamWrapper(stream));
     }
 
     /**
@@ -317,7 +322,7 @@ public class WordIterator extends qore.Qore.AbstractIterator implements java.io.
      * @return The full text content
      */
     public static String getFullText(qore.Qore.InputStream stream) throws IOException {
-        return getFullText(new QoreInputStreamWrapper(stream));
+        return getFullText(new org.qore.jni.QoreInputStreamWrapper(stream));
     }
 
     /**
@@ -344,57 +349,3 @@ public class WordIterator extends qore.Qore.AbstractIterator implements java.io.
     }
 }
 
-/**
- * Wrapper class to convert Qore InputStream to Java InputStream.
- */
-class QoreInputStreamWrapper extends java.io.InputStream {
-    private qore.Qore.InputStream stream;
-
-    public QoreInputStreamWrapper(qore.Qore.InputStream stream) {
-        this.stream = stream;
-    }
-
-    public int read() throws IOException {
-        byte[] data;
-        try {
-            data = stream.read(1);
-        } catch (Throwable e) {
-            throw new IOException(e);
-        }
-        if (data == null) {
-            return -1;
-        }
-        return data[0] & 0xFF;
-    }
-
-    public int read(byte[] b, int off, int len) throws IOException {
-        byte[] data;
-        try {
-            data = stream.read(len);
-        } catch (Throwable e) {
-            throw new IOException(e);
-        }
-        if (data == null) {
-            return -1;
-        }
-        System.arraycopy(data, 0, b, off, data.length);
-        return data.length;
-    }
-
-    public long skip(long n) throws IOException {
-        byte[] data;
-        try {
-            data = stream.read(n);
-        } catch (Throwable e) {
-            throw new IOException(e);
-        }
-        if (data == null) {
-            return 0;
-        }
-        return data.length;
-    }
-
-    public int available() throws IOException {
-        return 1;
-    }
-}

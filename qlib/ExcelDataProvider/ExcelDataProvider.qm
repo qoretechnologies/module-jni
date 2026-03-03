@@ -28,6 +28,7 @@
 
 # supports using the DataProvider module
 %requires(reexport) DataProvider
+%requires FileLocationHandler
 %requires Util
 
 %module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-excel.jar
@@ -83,9 +84,15 @@ module ExcelDataProvider {
             "action_code": DPAT_FIND,
             "cls": "ExcelDataProvider::ExcelReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                ExcelReadDataProvider::ConstructorOptions{"path", "worksheet", "data_cells", "header_cells", "header_names"}, {
+                ExcelReadDataProvider::ConstructorOptions{"path",}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExcelReadDataProvider::ConstructorOptions{"worksheet", "data_cells", "header_cells",
+                    "header_names"}, {
+                    "preselected": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
@@ -106,9 +113,15 @@ module ExcelDataProvider {
             "action_code": DPAT_FIND,
             "cls": "ExcelDataProvider::ExcelReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                ExcelReadDataProvider::ConstructorOptions{"data", "worksheet", "data_cells", "header_cells", "header_names"}, {
+                ExcelReadDataProvider::ConstructorOptions{"data",}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExcelReadDataProvider::ConstructorOptions{"worksheet", "data_cells", "header_cells",
+                    "header_names"}, {
+                    "preselected": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
@@ -128,7 +141,13 @@ module ExcelDataProvider {
             "action_code": DPAT_CREATE,
             "cls": "ExcelDataProvider::ExcelWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                ExcelWriteDataProvider::ConstructorOptions{"path", "worksheet", "headers", "format"}, {
+                ExcelWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                ExcelWriteDataProvider::ConstructorOptions{"worksheet", "headers", "format"}, {
                     "preselected": True,
                     "loc": "constructor",
                 }

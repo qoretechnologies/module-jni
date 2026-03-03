@@ -28,6 +28,7 @@
 
 # supports using the DataProvider module
 %requires(reexport) DataProvider
+%requires FileLocationHandler
 %requires Util
 
 %module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-word.jar
@@ -82,9 +83,14 @@ module WordDataProvider {
             "action_code": DPAT_FIND,
             "cls": "WordDataProvider::WordReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                WordReadDataProvider::ConstructorOptions{"path", "content_type", "table_index", "header_row"}, {
+                WordReadDataProvider::ConstructorOptions{"path",}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                WordReadDataProvider::ConstructorOptions{"content_type", "table_index", "header_row"}, {
+                    "preselected": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
@@ -104,9 +110,14 @@ module WordDataProvider {
             "action_code": DPAT_FIND,
             "cls": "WordDataProvider::WordReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                WordReadDataProvider::ConstructorOptions{"data", "content_type", "table_index", "header_row"}, {
+                WordReadDataProvider::ConstructorOptions{"data",}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                WordReadDataProvider::ConstructorOptions{"content_type", "table_index", "header_row"}, {
+                    "preselected": True,
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
@@ -126,7 +137,13 @@ module WordDataProvider {
             "action_code": DPAT_CREATE,
             "cls": "WordDataProvider::WordWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                WordWriteDataProvider::ConstructorOptions{"path", "content_type", "headers", "title"}, {
+                WordWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                WordWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {
                     "preselected": True,
                     "loc": "constructor",
                 }

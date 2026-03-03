@@ -36,11 +36,11 @@ import java.io.IOException;
 import java.io.Closeable;
 
 import java.math.BigDecimal;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
-import java.text.SimpleDateFormat;
 
 import org.qore.jni.Hash;
 
@@ -56,7 +56,6 @@ public class WordWriter implements Closeable {
     private int recordCount = 0;
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    private static final SimpleDateFormat SIMPLE_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     /**
      * Creates a new WordWriter.
@@ -211,7 +210,7 @@ public class WordWriter implements Closeable {
         } else if (value instanceof ZonedDateTime) {
             return ((ZonedDateTime) value).format(DATE_FORMAT);
         } else if (value instanceof Date) {
-            return SIMPLE_DATE_FORMAT.format((Date) value);
+            return ((Date) value).toInstant().atZone(ZoneId.systemDefault()).format(DATE_FORMAT);
         } else if (value instanceof BigDecimal) {
             return ((BigDecimal) value).toPlainString();
         } else {
@@ -237,6 +236,15 @@ public class WordWriter implements Closeable {
      */
     public void writeToStream(OutputStream stream) throws IOException {
         document.write(stream);
+    }
+
+    /**
+     * Writes the document to a Qore output stream.
+     *
+     * @param stream The Qore output stream to write to
+     */
+    public void writeToStream(qore.Qore.OutputStream stream) throws IOException {
+        writeToStream(new org.qore.jni.QoreOutputStreamWrapper(stream));
     }
 
     /**

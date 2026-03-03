@@ -218,6 +218,15 @@ public class ExcelWriter implements Closeable {
     }
 
     /**
+     * Writes the workbook to a Qore output stream.
+     *
+     * @param stream The Qore output stream to write to
+     */
+    public void writeToStream(qore.Qore.OutputStream stream) throws IOException {
+        writeToStream(new org.qore.jni.QoreOutputStreamWrapper(stream));
+    }
+
+    /**
      * Returns the workbook contents as bytes.
      *
      * @return The workbook as a byte array

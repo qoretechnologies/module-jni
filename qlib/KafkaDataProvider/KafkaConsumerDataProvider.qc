@@ -89,9 +89,9 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
             },
             "enable.auto.commit": <DataProviderOptionInfo>{
                 "display_name": "Enable Auto Commit",
-                "short_desc": "If true the consumer's offset will be periodically committed in the background",
+                "short_desc": "If True the consumer's offset will be periodically committed in the background",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If `true` the consumer's offset will be periodically committed in the background",
+                "desc": "If `True` the consumer's offset will be periodically committed in the background",
                 "default_value": True,
             },
             "auto.offset.reset": <DataProviderOptionInfo>{

@@ -29,6 +29,7 @@ class QJava2Jar {
     public {
         hash<auto> opts;
         string start_dir;
+        list<string> source_paths();
         string jar_path;
 
         const ERR_COMPILATION_FAILURE = 1;
@@ -40,14 +41,17 @@ class QJava2Jar {
 
     constructor() {
         parseOptions();
-        if (!start_dir || !jar_path) {
+        if (!source_paths || !jar_path) {
             usage();
             set_return_value(0);
             return;
         }
+        start_dir = source_paths[0];
 
         hash<string, string> srcs;
-        processPath(\srcs, start_dir);
+        foreach string path in (source_paths) {
+            processPath(\srcs, path);
+        }
 
         if (!srcs) {
             if (!opts.quiet) {
@@ -276,12 +280,19 @@ class QJava2Jar {
                 --l;
                 continue;
             }
+            if (arg == "-cp") {
+                # skip -cp and its value; they stay in ARGV for QoreJavaCompiler
+                i += 2;
+                continue;
+            }
             if (arg[0] != "-") {
                 if (jar_path) {
-                    start_dir = (extract ARGV, i, 1)[0];
-                    break;
+                    source_paths += (extract ARGV, i, 1)[0];
+                    --l;
+                    continue;
                 }
                 jar_path = (extract ARGV, i, 1)[0];
+                --l;
                 continue;
             }
             ++i;

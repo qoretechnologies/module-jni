@@ -90,7 +90,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Header Names?",
                 "short_desc": "Should header rows be used as output field names?",
                 "type": AbstractDataProviderType::get(SoftBoolType),
-                "desc": "If `true` then the object will parse the header names from the first header row, in this "
+                "desc": "If `True` then the object will parse the header names from the first header row, in this "
                     "case if `header_cells` is not set explicitly, it will be assumed to be the first row",
             },
             "headers": <DataProviderOptionInfo>{
@@ -98,13 +98,18 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "short_desc": "List of header / column names for the data iterated",
                 "type": AbstractDataProviderType::get(new Type("softlist<string>")),
                 "desc": "List of header / column names for the data iterated; if this is present, then "
-                    "`header_names` must be `false`",
+                    "`header_names` must be `False`",
             },
             "path": <DataProviderOptionInfo>{
                 "display_name": "Excel Input Path",
-                "short_desc": "The path to the Excel data",
+                "short_desc": "The location of the Excel data",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The path to the Excel data; mutually exclusive with `data` and `stream`",
+                "desc": "The location of the Excel data; mutually exclusive with `data` and `stream`; "
+                    "resolved with a call to "
+                    "[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/"
+                    "manual/qorus/current/qore/modules/FileLocationHandler/html/"
+                    "class_file_location_handler_1_1_file_location_handler.html"
+                    "#a29c2338efc901a6b8f24542505e2a094)",
             },
             "stream": <DataProviderOptionInfo>{
                 "display_name": "Excel Input Stream",
@@ -123,7 +128,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Convert Headers to Lower Case",
                 "short_desc": "Convert all header names to lower case",
                 "type": AbstractDataProviderType::get(SoftBoolType),
-                "desc": "If `true` (default `false`), all automatically-detected header names will be converted to "
+                "desc": "If `True` (default `False`), all automatically-detected header names will be converted to "
                     "lower case letters",
             },
             "worksheet": <DataProviderOptionInfo>{
@@ -142,9 +147,6 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         #! the iterator object
         ExcelIterator it;
 
-        #! The path to the Excel file
-        string path;
-
         #! The name of the object
         string name;
 
@@ -159,7 +161,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     #! Creates the ExcelReadDataProvider with the input data path and optionally an option hash
-    /** @param path the input file to iterate; will be subjected to environment variable substitution
+    /** @param path the location of the input file; resolved with a call to
+        @ref FileLocationHandler::getBinaryStreamFromLocation()
         @param opts a hash of optional options
 
         @throw EXCEL-READ-OPTION-ERROR invalid or unknown option; invalid data type for option; \c "header_names"
@@ -167,8 +170,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw EXCEL-INVALID-LOCATION invalid excel location or range string
     */
     constructor(string path, *hash<auto> opts) {
+        i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
-        self.path = substitute_env_vars(path);
         self.opts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, opts));
         sheet = self.opts.worksheet ?? "";
     }
@@ -214,8 +217,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                 error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"data\" and \"path\" options; use either "
                     "one or the other");
             }
-            copts.path = substitute_env_vars(copts.path);
-            name = path = copts.path;
+            i = FileLocationHandler::getBinaryStreamFromLocation(copts.path);
+            name = copts.path;
         } else if (copts.stream) {
             if (copts.data) {
                 error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"data\" and \"stream\" options; use either "
@@ -229,7 +232,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
             name = sprintf("excel-data=%s", i.uniqueHash());
         }
         self.opts = copts - ("stream", "path", "worksheet", "data");
-        if (!i && !path) {
+        if (!i) {
             # create a dummy iterator with no input
             i = new StringInputStream("");
             name = "excel";
@@ -311,11 +314,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (it) {
             return;
         }
-        if (path) {
-            it = new ExcelIterator(path, sheet);
-        } else {
-            it = new ExcelIterator(i, sheet);
-        }
+        it = new ExcelIterator(i, sheet);
         if (opts.header_cells) {
             it.setHeaderCells(opts.header_cells.start.column, opts.header_cells.start.row,
                 opts.header_cells.end.column, opts.header_cells.end.row);
@@ -365,17 +364,13 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (dummy) {
             return;
         }
-        # if we are dealing with a FileInputStream, then we have to reset it after reading the stream
-        # otherwise we have to read the entire stream into binary object and reset it with that
-        binary b;
-        if (!path) {
-            b = i.read(999999999) ?? binary();
+        # read the entire stream into a buffer so we can reset it for reuse
+        binary b = i.read(999999999) ?? binary();
+        i = new BinaryInputStream(b);
+        on_exit {
             i = new BinaryInputStream(b);
         }
-        on_exit if (!path) {
-            i = new BinaryInputStream(b);
-        }
-        return ExcelIterator::getWorksheets(i ?? path);
+        return ExcelIterator::getWorksheets(i);
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -384,7 +379,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
     private *AbstractDataProvider getChildProviderImpl(string child_name) {
         *hash<string, bool> sheets = map {$1: True}, getChildProviderNamesImpl();
         if (sheets{child_name}) {
-            return new ExcelWorksheetReadDataProvider(i ?? path, name, child_name, opts);
+            return new ExcelWorksheetReadDataProvider(i, name, child_name, opts);
         }
     }
 

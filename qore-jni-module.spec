@@ -104,6 +104,12 @@ This RPM provides API documentation, test and example programs
 - added kotlin_eval(), kotlin_scripting_available(), kotlin_scripting_retry() functions
 - added download-kotlin-scripting-jars script for downloading scripting JARs from Maven
 - added qkotlinc helper script for compiling Kotlin sources using Qore APIs
+- added ExcelDataProvider module for reading and writing Excel spreadsheets
+- added WordDataProvider module for reading and writing Word documents
+- added PowerPointDataProvider module for reading and writing PowerPoint presentations
+- added shared QoreInputStreamWrapper and QoreOutputStreamWrapper stream adapters
+- added streaming write support for all data providers via getOutputStreamForLocation()
+- enhanced qjava2jar to accept multiple source paths
 
 * Sat Dec 28 2024 David Nichols <david@qore.org>
 - updated to version 2.5.0

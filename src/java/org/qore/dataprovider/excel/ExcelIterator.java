@@ -65,8 +65,13 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     private long count = 0;
 
     public ExcelIterator(java.io.InputStream stream, String sheet_name) throws Throwable {
-        // WorkbookFactory.create() auto-detects the format (XSSF for .xlsx, HSSF for .xls)
-        workbook = WorkbookFactory.create(stream);
+        try {
+            // WorkbookFactory.create() auto-detects the format (XSSF for .xlsx, HSSF for .xls)
+            workbook = WorkbookFactory.create(stream);
+        } catch (Throwable t) {
+            stream.close();
+            throw t;
+        }
         if (sheet_name == null || sheet_name.isEmpty()) {
             sheet = workbook.getSheetAt(0);
             if (sheet == null) {
@@ -89,7 +94,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     }
 
     public ExcelIterator(qore.Qore.InputStream stream, String sheet_name) throws Throwable {
-        this(new QoreInputStreamWrapper(stream), sheet_name);
+        this(new org.qore.jni.QoreInputStreamWrapper(stream), sheet_name);
     }
 
     public ExcelIterator(String path, String sheet_name) throws Throwable {
@@ -327,7 +332,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     }
 
     public static ArrayList<String> getWorksheets(qore.Qore.InputStream stream) throws IOException {
-        return getWorksheets(new QoreInputStreamWrapper(stream));
+        return getWorksheets(new org.qore.jni.QoreInputStreamWrapper(stream));
     }
 
     public static ArrayList<String> getWorksheets(java.io.InputStream stream) throws IOException {
@@ -358,54 +363,3 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     }
 }
 
-class QoreInputStreamWrapper extends java.io.InputStream {
-    private qore.Qore.InputStream stream;
-
-    public QoreInputStreamWrapper(qore.Qore.InputStream stream) {
-        this.stream = stream;
-    }
-
-    public int read() throws IOException {
-        byte[] data;
-        try {
-            data = stream.read(1);
-        } catch (Throwable e) {
-            throw new IOException(e);
-        }
-        if (data == null) {
-            return -1;
-        }
-        return data[0];
-    }
-
-    public int read(byte[] b, int off, int len) throws IOException {
-        byte[] data;
-        try {
-            data = stream.read(len);
-        } catch (Throwable e) {
-            throw new IOException(e);
-        }
-        if (data == null) {
-            return -1;
-        }
-        System.arraycopy(data, 0, b, off, data.length);
-        return data.length;
-    }
-
-    public long skip(long n) throws IOException {
-        byte[] data;
-        try {
-            data = stream.read(n);
-        } catch (Throwable e) {
-            throw new IOException(e);
-        }
-        if (data == null) {
-            return 0;
-        }
-        return data.length;
-    }
-
-    public int available() throws IOException {
-        return 1;
-    }
-}

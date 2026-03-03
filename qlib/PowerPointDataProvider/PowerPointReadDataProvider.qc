@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# Qore WordReadDataProvider class definition
+# Qore PowerPointReadDataProvider class definition
 
-/*  WordReadDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  PowerPointReadDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,14 +22,14 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-#! the WordDataProvider namespace. All classes used in the WordDataProvider module should be inside this namespace
-public namespace WordDataProvider {
-#! Provides a data provider for reading Word documents (.docx format)
-public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
+#! the PowerPointDataProvider namespace. All classes used in the PowerPointDataProvider module should be inside this namespace
+public namespace PowerPointDataProvider {
+#! Provides a data provider for reading PowerPoint presentations (.pptx format)
+public class PowerPointReadDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "WordReadDataProvider",
+            "type": "PowerPointReadDataProvider",
             "supports_read": True,
             "has_record": True,
             "constructor_options": ConstructorOptions,
@@ -50,15 +50,15 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
         const ConstructorOptions = {
             "data": <DataProviderOptionInfo>{
                 "display_name": "Input Data",
-                "short_desc": "Word document data to process",
+                "short_desc": "PowerPoint presentation data to process",
                 "type": AbstractDataProviderTypeMap."data",
-                "desc": "Word document data to process; conflicts with `stream` and `path`",
+                "desc": "PowerPoint presentation data to process; conflicts with `stream` and `path`",
             },
             "path": <DataProviderOptionInfo>{
-                "display_name": "Word Input Path",
-                "short_desc": "The location of the Word document",
+                "display_name": "PowerPoint Input Path",
+                "short_desc": "The location of the PowerPoint file",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The location of the Word document data; mutually exclusive with `data` and `stream`; "
+                "desc": "The location of the PowerPoint data; mutually exclusive with `data` and `stream`; "
                     "resolved with a call to "
                     "[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/"
                     "manual/qorus/current/qore/modules/FileLocationHandler/html/"
@@ -66,34 +66,44 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
                     "#a29c2338efc901a6b8f24542505e2a094)",
             },
             "stream": <DataProviderOptionInfo>{
-                "display_name": "Word Input Stream",
-                "short_desc": "An input stream for Word data",
+                "display_name": "PowerPoint Input Stream",
+                "short_desc": "An input stream for PowerPoint data",
                 "type": AbstractDataProviderType::get(new Type("InputStream")),
-                "desc": "An input stream for Word data; mutually exclusive with `data` and `path`",
+                "desc": "An input stream for PowerPoint data; mutually exclusive with `data` and `path`",
             },
             "content_type": <DataProviderOptionInfo>{
                 "display_name": "Content Type",
                 "short_desc": "Type of content to read",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "Type of content to read: `paragraphs` (default) or `table`",
-                "default_value": "paragraphs",
+                "desc": "Type of content to read: `slides` (default) or `table`",
+                "default_value": "slides",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "paragraphs", "desc": "Read document paragraphs"},
+                    <AllowedValueInfo>{"value": "slides", "desc": "Read presentation slides"},
                     <AllowedValueInfo>{"value": "table", "desc": "Read a table as row data"},
                 ),
+            },
+            "slide_index": <DataProviderOptionInfo>{
+                "display_name": "Slide Index",
+                "short_desc": "Index of slide for table mode (0-based)",
+                "type": AbstractDataProviderType::get(SoftIntType),
+                "desc": "Index of the slide containing the table when `content_type` is `table`; 0-based, "
+                    "default is 0",
+                "default_value": 0,
             },
             "table_index": <DataProviderOptionInfo>{
                 "display_name": "Table Index",
                 "short_desc": "Index of table to read (0-based)",
                 "type": AbstractDataProviderType::get(SoftIntType),
-                "desc": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+                "desc": "Index of the table to read on the specified slide when `content_type` is `table`; "
+                    "0-based, default is 0",
                 "default_value": 0,
             },
             "header_row": <DataProviderOptionInfo>{
                 "display_name": "Header Row",
                 "short_desc": "First row contains headers",
                 "type": AbstractDataProviderType::get(SoftBoolType),
-                "desc": "If `True`, the first row of the table contains column headers; only applies to table mode",
+                "desc": "If `True`, the first row of the table contains column headers; only applies to "
+                    "table mode",
             },
             "headers": <DataProviderOptionInfo>{
                 "display_name": "Column Headers",
@@ -105,17 +115,20 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     private {
-        #! The input stream for the Word data
+        #! The input stream for the PowerPoint data
         InputStream i;
 
         #! the iterator object
-        WordIterator it;
+        PowerPointIterator it;
 
         #! The name of the object
         string name;
 
-        #! Content type (paragraphs or table)
+        #! Content type (slides or table)
         string content_type;
+
+        #! Slide index for table mode
+        int slide_index;
 
         #! Table index for table mode
         int table_index;
@@ -123,85 +136,88 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
         #! dummy iterator
         bool dummy;
 
-        #! Word iteration options
+        #! PowerPoint iteration options
         *hash<auto> opts;
     }
 
-    #! Creates the WordReadDataProvider with the input data path and optionally an option hash
+    #! Creates the PowerPointReadDataProvider with the input data path and optionally an option hash
     /** @param path the location of the input file; resolved with a call to
         @ref FileLocationHandler::getBinaryStreamFromLocation()
         @param opts a hash of optional options
 
-        @throw WORD-READ-OPTION-ERROR invalid or unknown option; invalid data type for option; \c "header_row"
+        @throw POWERPOINT-READ-OPTION-ERROR invalid or unknown option; invalid data type for option; \c "header_row"
         is @ref True "True" and \c "headers" is also present
     */
     constructor(string path, *hash<auto> opts) {
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
-        self.opts = checkOptions("WORD-READ-OPTION-ERROR", ConstructorOptions, opts);
-        content_type = self.opts.content_type ?? "paragraphs";
+        self.opts = checkOptions("POWERPOINT-READ-OPTION-ERROR", ConstructorOptions, opts);
+        content_type = self.opts.content_type ?? "slides";
+        slide_index = self.opts.slide_index ?? 0;
         table_index = self.opts.table_index ?? 0;
         validateOptions();
     }
 
-    #! Creates the WordReadDataProvider with the input data stream and optionally an option hash
+    #! Creates the PowerPointReadDataProvider with the input data stream and optionally an option hash
     /** @param stream the input stream to iterate
         @param opts a hash of optional options
 
-        @throw WORD-READ-OPTION-ERROR invalid or unknown option; invalid data type for option; \c "header_row"
+        @throw POWERPOINT-READ-OPTION-ERROR invalid or unknown option; invalid data type for option; \c "header_row"
         is @ref True "True" and \c "headers" is also present
     */
     constructor(InputStream stream, *hash<auto> opts) {
         i = stream;
-        self.opts = checkOptions("WORD-READ-OPTION-ERROR", ConstructorOptions, opts);
+        self.opts = checkOptions("POWERPOINT-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("stream=%s", stream.uniqueHash());
-        content_type = self.opts.content_type ?? "paragraphs";
+        content_type = self.opts.content_type ?? "slides";
+        slide_index = self.opts.slide_index ?? 0;
         table_index = self.opts.table_index ?? 0;
         validateOptions();
     }
 
     #! Creates the object from constructor options
     /**
-        @throw WORD-READ-OPTION-ERROR invalid or unknown option; invalid data type for option; \c "header_row"
+        @throw POWERPOINT-READ-OPTION-ERROR invalid or unknown option; invalid data type for option; \c "header_row"
         is @ref True "True" and \c "headers" is also present
     */
     constructor(*hash<auto> options) {
-        *hash<auto> copts = checkOptions("WORD-READ-OPTION-ERROR", ConstructorOptions, options);
+        *hash<auto> copts = checkOptions("POWERPOINT-READ-OPTION-ERROR", ConstructorOptions, options);
         # Validate mutual exclusion of headers and header_row
         if (copts.headers && copts.header_row) {
-            error("WORD-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_row\" options; use "
+            error("POWERPOINT-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_row\" options; use "
                 "either one or the other");
         }
-        content_type = copts.content_type ?? "paragraphs";
+        content_type = copts.content_type ?? "slides";
+        slide_index = copts.slide_index ?? 0;
         table_index = copts.table_index ?? 0;
         if (copts.path) {
             if (copts.stream) {
-                error("WORD-READ-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
+                error("POWERPOINT-READ-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
                     "one or the other");
             }
             if (copts.data) {
-                error("WORD-READ-OPTION-ERROR", "cannot provide both \"data\" and \"path\" options; use either "
+                error("POWERPOINT-READ-OPTION-ERROR", "cannot provide both \"data\" and \"path\" options; use either "
                     "one or the other");
             }
             i = FileLocationHandler::getBinaryStreamFromLocation(copts.path);
             name = copts.path;
         } else if (copts.stream) {
             if (copts.data) {
-                error("WORD-READ-OPTION-ERROR", "cannot provide both \"data\" and \"stream\" options; use either "
+                error("POWERPOINT-READ-OPTION-ERROR", "cannot provide both \"data\" and \"stream\" options; use either "
                     "one or the other");
             }
             i = copts.stream;
-            name = sprintf("word-stream=%s", i.uniqueHash());
+            name = sprintf("powerpoint-stream=%s", i.uniqueHash());
         } else if (copts.data) {
             # Handle binary data input
             i = new BinaryInputStream(copts.data);
-            name = sprintf("word-data=%s", i.uniqueHash());
+            name = sprintf("powerpoint-data=%s", i.uniqueHash());
         }
-        self.opts = copts - ("stream", "path", "data", "content_type", "table_index");
+        self.opts = copts - ("stream", "path", "data", "content_type", "slide_index", "table_index");
         if (!i) {
             # create a dummy iterator with no input
             i = new StringInputStream("");
-            name = "word";
+            name = "powerpoint";
             dummy = True;
         }
     }
@@ -209,7 +225,7 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
     #! Validates options for mutual exclusivity
     private validateOptions() {
         if (opts.headers && opts.header_row) {
-            error("WORD-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_row\" options; use "
+            error("POWERPOINT-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_row\" options; use "
                 "either one or the other");
         }
     }
@@ -224,7 +240,7 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (it) {
             return;
         }
-        it = new WordIterator(i, content_type, table_index);
+        it = new PowerPointIterator(i, content_type, slide_index, table_index);
         if (opts.header_row) {
             it.setHeaderRow(True);
         }
@@ -237,7 +253,8 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
     /** @param where_cond the search criteria
         @param search_options the search options after processing by validateSearchOptions()
     */
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
         checkIterator();
         return new DefaultRecordIterator(it, where_cond, search_options, getRecordType());
     }
@@ -248,15 +265,24 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
             return {};
         }
         checkIterator();
-        if (content_type == "paragraphs") {
+        if (content_type == "slides") {
             return {
-                "text": new QoreDataField("text", "Paragraph text content", AbstractDataProviderType::get(StringType)),
-                "style": new QoreDataField("style", "Paragraph style name", AbstractDataProviderType::get(StringType)),
+                "slide_number": new QoreDataField("slide_number", "Slide number (1-based)",
+                    AbstractDataProviderType::get(IntType)),
+                "title": new QoreDataField("title", "Slide title text",
+                    AbstractDataProviderType::get(StringType)),
+                "body": new QoreDataField("body", "Slide body text",
+                    AbstractDataProviderType::get(StringType)),
+                "notes": new QoreDataField("notes", "Speaker notes",
+                    AbstractDataProviderType::get(StringType)),
+                "layout": new QoreDataField("layout", "Slide layout name",
+                    AbstractDataProviderType::get(StringType)),
             };
         } else {
             # Table mode - return headers as fields
             return map {
-                $1: new QoreDataField($1, "Word table column " + $1, AbstractDataProviderType::anyDataType)
+                $1: new QoreDataField($1, "PowerPoint table column " + $1,
+                    AbstractDataProviderType::anyDataType)
             }, it.getHeaders();
         }
     }
@@ -266,4 +292,4 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
         return ProviderInfo;
     }
 }
-} # WordDataProvider namespace
+} # PowerPointDataProvider namespace

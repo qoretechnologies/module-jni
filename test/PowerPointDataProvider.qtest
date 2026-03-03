@@ -1,0 +1,760 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  PowerPointDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/PowerPointDataProvider
+
+# Add classpaths for the test helper - uses ExcelDataProvider jars for shared POI dependencies
+%module-cmd(jni) add-relative-classpath ../qlib/PowerPointDataProvider/jar/qore-dataprovider-powerpoint.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/xmlbeans-5.3.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-collections4-4.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-lang3-3.18.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-math3-3.6.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/SparseBitSet-1.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/log4j-api-2.24.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/curvesapi-1.08.jar
+%module-cmd(jni) import org.qore.dataprovider.powerpoint.PowerPointTestHelper
+%module-cmd(jni) import org.qore.dataprovider.powerpoint.PowerPointIterator
+
+%exec-class PowerPointDataProviderTest
+
+public class PowerPointDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("PowerPointDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/powerpoint-test-data";
+
+        addTestCase("test setup", \testSetup());
+        addTestCase("basic read slides from path", \testBasicReadSlidesPath());
+        addTestCase("read slides from stream", \testReadSlidesStream());
+        addTestCase("read slides from binary data", \testReadSlidesBinaryData());
+        addTestCase("read table with header_row", \testReadTableWithHeaderRow());
+        addTestCase("read table with explicit headers", \testReadTableWithExplicitHeaders());
+        addTestCase("read table by slide/table index", \testReadTableByIndex());
+        addTestCase("get slide count", \testGetSlideCount());
+        addTestCase("get table count", \testGetTableCount());
+        addTestCase("get full text", \testGetFullText());
+        addTestCase("factory tests", \testFactory());
+        addTestCase("negative: invalid path", \testNegativeInvalidPath());
+        addTestCase("negative: invalid slide index", \testNegativeInvalidSlideIndex());
+        addTestCase("negative: invalid table index", \testNegativeInvalidTableIndex());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("edge case: empty presentation", \testEdgeCaseEmptyPresentation());
+        addTestCase("edge case: no tables", \testEdgeCaseNoTables());
+        addTestCase("edge case: table empty cells", \testEdgeCaseTableEmptyCells());
+        addTestCase("edge case: special characters", \testEdgeCaseSpecialChars());
+        addTestCase("edge case: slides with notes", \testEdgeCaseSlidesWithNotes());
+        addTestCase("write: basic slides", \testWriteBasicSlides());
+        addTestCase("write: slides with layouts", \testWriteSlidesWithLayouts());
+        addTestCase("write: table to file", \testWriteTable());
+        addTestCase("write: with title", \testWriteWithTitle());
+        addTestCase("write: to binary data", \testWriteToBinary());
+        addTestCase("write: factory", \testWriteFactory());
+        addTestCase("write: data only (no path/stream)", \testWriteDataOnly());
+        addTestCase("write: negative - path+stream conflict", \testWriteNegativePathStreamConflict());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("roundtrip: write and read slides", \testRoundtripSlides());
+        addTestCase("roundtrip: write and read table", \testRoundtripTable());
+
+        set_return_value(main());
+    }
+
+    testSetup() {
+        # Create test data directory and files
+        if (!is_dir(test_data_dir)) {
+            mkdir(test_data_dir);
+        }
+
+        # Create all test PowerPoint files
+        PowerPointTestHelper::createSimplePresentation(test_data_dir + "/simple.pptx");
+        PowerPointTestHelper::createPresentationWithTable(test_data_dir + "/with-table.pptx");
+        PowerPointTestHelper::createPresentationWithMultipleTables(test_data_dir + "/multi-table.pptx");
+        PowerPointTestHelper::createEmptyPresentation(test_data_dir + "/empty.pptx");
+        PowerPointTestHelper::createPresentationWithStyles(test_data_dir + "/styled.pptx");
+        PowerPointTestHelper::createPresentationWithSpecialChars(test_data_dir + "/special-chars.pptx");
+        PowerPointTestHelper::createPresentationWithNotes(test_data_dir + "/with-notes.pptx");
+        PowerPointTestHelper::createPresentationWithTableEmptyCells(test_data_dir + "/empty-cells.pptx");
+        PowerPointTestHelper::createPresentationWithTableNoHeaders(test_data_dir + "/table-no-headers.pptx");
+
+        assertTrue(is_file(test_data_dir + "/simple.pptx"), "simple.pptx created");
+    }
+
+    testBasicReadSlidesPath() {
+        PowerPointReadDataProvider dp(test_data_dir + "/simple.pptx", {
+            "content_type": "slides",
+        });
+
+        assertEq("PowerPointReadDataProvider", dp.getInfo().type);
+        assertTrue(dp.getInfo().supports_read);
+        assertTrue(dp.getInfo().has_record);
+
+        # Read all records
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 slides");
+
+        # Check record structure
+        assertTrue(records[0].hasKey("slide_number"), "should have slide_number field");
+        assertTrue(records[0].hasKey("title"), "should have title field");
+        assertTrue(records[0].hasKey("body"), "should have body field");
+        assertTrue(records[0].hasKey("notes"), "should have notes field");
+        assertTrue(records[0].hasKey("layout"), "should have layout field");
+
+        # Check content
+        assertEq(1, records[0].slide_number);
+        assertEq("Introduction", records[0].title);
+        assertEq(2, records[1].slide_number);
+        assertEq("Main Content", records[1].title);
+        assertEq(3, records[2].slide_number);
+        assertEq("Conclusion", records[2].title);
+    }
+
+    testReadSlidesStream() {
+        FileInputStream fis(test_data_dir + "/simple.pptx");
+        PowerPointReadDataProvider dp(fis, {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Introduction", records[0].title);
+    }
+
+    testReadSlidesBinaryData() {
+        binary data = PowerPointTestHelper::createSimplePresentationBytes();
+
+        PowerPointReadDataProvider dp({
+            "data": data,
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 slides");
+        assertEq("Sample Slide", records[0].title);
+        assertEq("Second Slide", records[1].title);
+    }
+
+    testReadTableWithHeaderRow() {
+        PowerPointReadDataProvider dp(test_data_dir + "/with-table.pptx", {
+            "content_type": "table",
+            "slide_index": 0,
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 data rows (excluding header)");
+
+        # Check that headers are used as keys
+        assertTrue(records[0].hasKey("Name"), "should have Name column");
+        assertTrue(records[0].hasKey("Department"), "should have Department column");
+        assertTrue(records[0].hasKey("Salary"), "should have Salary column");
+
+        assertEq("Alice Smith", records[0].Name);
+        assertEq("Engineering", records[0].Department);
+        assertEq("75000", records[0].Salary);
+    }
+
+    testReadTableWithExplicitHeaders() {
+        PowerPointReadDataProvider dp(test_data_dir + "/table-no-headers.pptx", {
+            "content_type": "table",
+            "slide_index": 0,
+            "table_index": 0,
+            "headers": ("Col1", "Col2", "Col3"),
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertTrue(records[0].hasKey("Col1"), "should have Col1 header");
+        assertEq("Value1", records[0].Col1);
+    }
+
+    testReadTableByIndex() {
+        # Test reading table from second slide (index 1)
+        PowerPointReadDataProvider dp(test_data_dir + "/multi-table.pptx", {
+            "content_type": "table",
+            "slide_index": 1,
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 data rows in second slide table");
+
+        # Second slide table is Customers
+        assertTrue(records[0].hasKey("ID"), "should have ID column");
+        assertTrue(records[0].hasKey("Name"), "should have Name column");
+        assertTrue(records[0].hasKey("Country"), "should have Country column");
+    }
+
+    testGetSlideCount() {
+        int count = PowerPointIterator::getSlideCount(test_data_dir + "/simple.pptx");
+        assertEq(3, count, "should have 3 slides");
+
+        # Test with stream
+        FileInputStream fis(test_data_dir + "/simple.pptx");
+        count = PowerPointIterator::getSlideCount(fis);
+        assertEq(3, count, "should have 3 slides via stream");
+
+        # Test empty presentation
+        count = PowerPointIterator::getSlideCount(test_data_dir + "/empty.pptx");
+        assertEq(0, count, "empty presentation should have 0 slides");
+    }
+
+    testGetTableCount() {
+        int count = PowerPointIterator::getTableCount(test_data_dir + "/with-table.pptx", 0);
+        assertEq(1, count, "should have 1 table on slide 0");
+
+        # Test multi-table presentation
+        count = PowerPointIterator::getTableCount(test_data_dir + "/multi-table.pptx", 0);
+        assertEq(1, count, "should have 1 table on slide 0");
+
+        count = PowerPointIterator::getTableCount(test_data_dir + "/multi-table.pptx", 1);
+        assertEq(1, count, "should have 1 table on slide 1");
+
+        # Test slide with no tables
+        count = PowerPointIterator::getTableCount(test_data_dir + "/simple.pptx", 0);
+        assertEq(0, count, "simple slide should have 0 tables");
+    }
+
+    testGetFullText() {
+        string text = PowerPointIterator::getFullText(test_data_dir + "/simple.pptx");
+
+        assertTrue(text.contains("Introduction"), "should contain slide title");
+        assertTrue(text.contains("Welcome"), "should contain slide body");
+
+        # Test with stream
+        FileInputStream fis(test_data_dir + "/simple.pptx");
+        text = PowerPointIterator::getFullText(fis);
+        assertTrue(text.contains("Introduction"), "should contain title via stream");
+    }
+
+    testFactory() {
+        PowerPointReadDataProviderFactory factory();
+
+        assertEq("powerpointread", factory.getInfo().name);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": test_data_dir + "/simple.pptx",
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(3, records.size());
+    }
+
+    testNegativeInvalidPath() {
+        # Invalid path should throw an exception
+        bool threw = False;
+        try {
+            PowerPointReadDataProvider dp("/nonexistent/path/to/file.pptx");
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.desc.contains("No such file") || ex.desc.contains("FileNotFoundException"),
+                "should mention file not found");
+        }
+        assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    testNegativeInvalidSlideIndex() {
+        # Invalid slide index should return empty results for table mode
+        PowerPointReadDataProvider dp(test_data_dir + "/with-table.pptx", {
+            "content_type": "table",
+            "slide_index": 99,
+            "table_index": 0,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "should return empty for invalid slide index");
+    }
+
+    testNegativeInvalidTableIndex() {
+        # Invalid table index should return empty results
+        PowerPointReadDataProvider dp(test_data_dir + "/with-table.pptx", {
+            "content_type": "table",
+            "slide_index": 0,
+            "table_index": 99,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "should return empty for invalid table index");
+    }
+
+    testNegativeOptionConflicts() {
+        # Test headers and header_row conflict
+        assertThrows("POWERPOINT-READ-OPTION-ERROR", sub () {
+            PowerPointReadDataProvider dp({
+                "path": test_data_dir + "/with-table.pptx",
+                "content_type": "table",
+                "headers": ("A", "B", "C"),
+                "header_row": True,
+            });
+        });
+
+        # Test path and stream conflict
+        assertThrows("POWERPOINT-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.pptx");
+            PowerPointReadDataProvider dp({
+                "path": test_data_dir + "/simple.pptx",
+                "stream": fis,
+            });
+        });
+
+        # Test path and data conflict
+        assertThrows("POWERPOINT-READ-OPTION-ERROR", sub () {
+            PowerPointReadDataProvider dp({
+                "path": test_data_dir + "/simple.pptx",
+                "data": <abcd>,
+            });
+        });
+    }
+
+    testEdgeCaseEmptyPresentation() {
+        PowerPointReadDataProvider dp(test_data_dir + "/empty.pptx", {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "empty presentation should return no records");
+    }
+
+    testEdgeCaseNoTables() {
+        # Try to read table from slide without tables
+        PowerPointReadDataProvider dp(test_data_dir + "/simple.pptx", {
+            "content_type": "table",
+            "slide_index": 0,
+            "table_index": 0,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "slide without tables should return no records in table mode");
+    }
+
+    testEdgeCaseTableEmptyCells() {
+        PowerPointReadDataProvider dp(test_data_dir + "/empty-cells.pptx", {
+            "content_type": "table",
+            "slide_index": 0,
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        # Check that empty cells are handled
+        assertTrue(records[0].hasKey("Col1"));
+        assertTrue(records[0].hasKey("Col2"));
+        assertTrue(records[0].hasKey("Col3"));
+    }
+
+    testEdgeCaseSpecialChars() {
+        PowerPointReadDataProvider dp(test_data_dir + "/special-chars.pptx", {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 slides");
+
+        # Check for special characters in content
+        assertEq("Special Characters Test", records[0].title);
+        assertTrue(records[0].body.contains("Caf"), "should contain cafe text");
+    }
+
+    testEdgeCaseSlidesWithNotes() {
+        PowerPointReadDataProvider dp(test_data_dir + "/with-notes.pptx", {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 slides");
+
+        # First slide should have notes
+        assertEq("Slide With Notes", records[0].title);
+        assertTrue(records[0].notes.size() > 0, "first slide should have notes");
+        assertTrue(records[0].notes.contains("key points"), "notes should contain expected text");
+
+        # Second slide should have notes
+        assertTrue(records[1].notes.size() > 0, "second slide should have notes");
+
+        # Third slide should have empty notes
+        assertEq("No Notes Slide", records[2].title);
+    }
+
+    testWriteBasicSlides() {
+        string output_path = test_data_dir + "/write-slides.pptx";
+        on_exit unlink(output_path);
+
+        PowerPointWriteDataProvider dp(output_path, {
+            "content_type": "slides",
+        });
+
+        # Write some slides
+        dp.createRecord({"title": "First Slide", "body": "Content one"});
+        dp.createRecord({"title": "Second Slide", "body": "Content two"});
+        dp.createRecord({"title": "Third Slide", "body": "Content three"});
+
+        # Commit to write the file
+        dp.commit();
+
+        # Read back and verify
+        PowerPointReadDataProvider rdp(output_path, {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("First Slide", records[0].title);
+        assertEq("Second Slide", records[1].title);
+        assertEq("Third Slide", records[2].title);
+    }
+
+    testWriteSlidesWithLayouts() {
+        string output_path = test_data_dir + "/write-layouts.pptx";
+        on_exit unlink(output_path);
+
+        PowerPointWriteDataProvider dp(output_path, {
+            "content_type": "slides",
+        });
+
+        dp.createRecord({"title": "Title Only Slide", "layout": "TITLE_ONLY"});
+        dp.createRecord({"title": "Content Slide", "body": "Body content", "layout": "TITLE_AND_CONTENT"});
+
+        dp.commit();
+
+        # Verify file was created
+        assertTrue(is_file(output_path), "presentation should be created");
+
+        # Read back
+        PowerPointReadDataProvider rdp(output_path, {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("Title Only Slide", records[0].title);
+        assertEq("Content Slide", records[1].title);
+    }
+
+    testWriteTable() {
+        string output_path = test_data_dir + "/write-table.pptx";
+        on_exit unlink(output_path);
+
+        PowerPointWriteDataProvider dp(output_path, {
+            "content_type": "table",
+            "headers": ("Name", "Age", "City"),
+        });
+
+        dp.createRecord({"Name": "Alice", "Age": "30", "City": "New York"});
+        dp.createRecord({"Name": "Bob", "Age": "25", "City": "Los Angeles"});
+        dp.createRecord({"Name": "Charlie", "Age": "35", "City": "Chicago"});
+
+        dp.commit();
+
+        # Read back and verify
+        PowerPointReadDataProvider rdp(output_path, {
+            "content_type": "table",
+            "slide_index": 0,
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Alice", records[0].Name);
+        assertEq("30", records[0].Age);
+        assertEq("New York", records[0].City);
+    }
+
+    testWriteWithTitle() {
+        string output_path = test_data_dir + "/write-with-title.pptx";
+        on_exit unlink(output_path);
+
+        PowerPointWriteDataProvider dp(output_path, {
+            "content_type": "slides",
+            "title": "My Presentation Title",
+        });
+
+        dp.createRecord({"title": "Slide One", "body": "Some content."});
+
+        dp.commit();
+
+        # Read back
+        PowerPointReadDataProvider rdp(output_path, {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertTrue(records.size() >= 2, "should have title slide and content slide");
+        assertEq("My Presentation Title", records[0].title);
+    }
+
+    testWriteToBinary() {
+        PowerPointWriteDataProvider dp({
+            "content_type": "slides",
+        });
+
+        dp.createRecord({"title": "Binary test slide", "body": "Content"});
+
+        # Get data as binary before commit
+        binary data = dp.getData();
+
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Read back from binary
+        PowerPointReadDataProvider rdp({
+            "data": data,
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Binary test slide", records[0].title);
+    }
+
+    testWriteFactory() {
+        string output_path = test_data_dir + "/write-factory.pptx";
+        on_exit unlink(output_path);
+
+        PowerPointWriteDataProviderFactory factory();
+
+        assertEq("powerpointwrite", factory.getInfo().name);
+
+        # Create provider via factory
+        PowerPointWriteDataProvider dp = factory.create({
+            "path": output_path,
+            "content_type": "slides",
+        });
+
+        dp.createRecord({"title": "Factory test", "body": "Factory content"});
+        dp.commit();
+
+        # Read back
+        PowerPointReadDataProvider rdp(output_path, {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Factory test", records[0].title);
+    }
+
+    testWriteDataOnly() {
+        # Test creating a provider without path or stream (for write-data action use case)
+        PowerPointWriteDataProvider dp({
+            "content_type": "table",
+            "headers": ("Name", "Value"),
+        });
+
+        assertEq("powerpoint-data", dp.getName());
+
+        # Write records
+        dp.createRecord({"Name": "item1", "Value": "100"});
+        dp.createRecord({"Name": "item2", "Value": "200"});
+
+        # Get binary data
+        binary data = dp.getData();
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Verify by reading back
+        PowerPointReadDataProvider rdp({
+            "data": data,
+            "content_type": "table",
+            "slide_index": 0,
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("item1", records[0].Name);
+        assertEq("100", records[0].Value);
+    }
+
+    testWriteNegativePathStreamConflict() {
+        # Test path constructor with stream option
+        assertThrows("POWERPOINT-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            PowerPointWriteDataProvider dp(test_data_dir + "/test.pptx", {
+                "stream": sos,
+            });
+        });
+
+        # Test path constructor with path option
+        assertThrows("POWERPOINT-WRITE-OPTION-ERROR", sub () {
+            PowerPointWriteDataProvider dp(test_data_dir + "/test.pptx", {
+                "path": test_data_dir + "/other.pptx",
+            });
+        });
+
+        # Test options constructor with both path and stream
+        assertThrows("POWERPOINT-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            PowerPointWriteDataProvider dp({
+                "path": test_data_dir + "/test.pptx",
+                "stream": sos,
+            });
+        });
+    }
+
+    testActionRegistration() {
+        # Verify that actions are properly registered with correct properties
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("PowerPoint");
+        assertTrue(exists actions, "should have actions registered for PowerPoint app");
+        assertTrue(actions.size() >= 4,
+            "should have at least 4 actions (read, read-data, write, write-data)");
+
+        # Create a lookup hash for easier testing
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # Verify read action
+        assertTrue(action_map.hasKey("read"), "should have 'read' action");
+        assertEq("Read PowerPoint Presentation File", action_map."read".display_name);
+        assertTrue(action_map."read".options.hasKey("path"),
+            "read action should have 'path' option");
+        assertTrue(action_map."read".options.hasKey("content_type"),
+            "read action should have 'content_type' option");
+
+        # Verify read-data action
+        assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
+        assertEq("Read PowerPoint Presentation Inline Data", action_map."read-data".display_name);
+        assertTrue(action_map."read-data".options.hasKey("data"),
+            "read-data action should have 'data' option");
+
+        # Verify write action
+        assertTrue(action_map.hasKey("write"), "should have 'write' action");
+        assertEq("Write PowerPoint Presentation File", action_map."write".display_name);
+        assertTrue(action_map."write".options.hasKey("path"),
+            "write action should have 'path' option");
+        assertTrue(action_map."write".options.hasKey("headers"),
+            "write action should have 'headers' option");
+        assertTrue(action_map."write".options.hasKey("title"),
+            "write action should have 'title' option");
+
+        # Verify write-data action
+        assertTrue(action_map.hasKey("write-data"), "should have 'write-data' action");
+        assertEq("Create PowerPoint Presentation Data", action_map."write-data".display_name);
+        assertFalse(action_map."write-data".options.hasKey("path"),
+            "write-data action should NOT have 'path' option");
+        assertTrue(action_map."write-data".options.hasKey("headers"),
+            "write-data action should have 'headers' option");
+    }
+
+    testRoundtripSlides() {
+        string output_path = test_data_dir + "/roundtrip-slides.pptx";
+        on_exit unlink(output_path);
+
+        # Write slides
+        PowerPointWriteDataProvider wdp(output_path, {
+            "content_type": "slides",
+            "title": "Roundtrip Test",
+        });
+
+        wdp.createRecord({"title": "First Slide", "body": "First slide content"});
+        wdp.createRecord({"title": "Second Slide", "body": "Second slide content"});
+        wdp.createRecord({"title": "Third Slide", "body": "Third slide content"});
+
+        wdp.commit();
+
+        # Read back
+        PowerPointReadDataProvider rdp(output_path, {
+            "content_type": "slides",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertTrue(records.size() >= 4, "should have title + 3 slides");
+        assertEq("Roundtrip Test", records[0].title);
+        assertEq("First Slide", records[1].title);
+        assertEq("Second Slide", records[2].title);
+        assertEq("Third Slide", records[3].title);
+    }
+
+    testRoundtripTable() {
+        string output_path = test_data_dir + "/roundtrip-table.pptx";
+        on_exit unlink(output_path);
+
+        # Write table
+        PowerPointWriteDataProvider wdp(output_path, {
+            "content_type": "table",
+            "headers": ("Product", "Price", "Quantity"),
+        });
+
+        wdp.createRecord({"Product": "Widget", "Price": "9.99", "Quantity": "100"});
+        wdp.createRecord({"Product": "Gadget", "Price": "19.99", "Quantity": "50"});
+        wdp.createRecord({"Product": "Gizmo", "Price": "29.99", "Quantity": "25"});
+
+        wdp.commit();
+
+        # Read back
+        PowerPointReadDataProvider rdp(output_path, {
+            "content_type": "table",
+            "slide_index": 0,
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Widget", records[0].Product);
+        assertEq("9.99", records[0].Price);
+        assertEq("100", records[0].Quantity);
+        assertEq("Gadget", records[1].Product);
+        assertEq("Gizmo", records[2].Product);
+    }
+}
