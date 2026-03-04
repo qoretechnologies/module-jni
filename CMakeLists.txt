@@ -203,33 +203,19 @@ set(WORD_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordTestHelper.java
 )
 
-# macOS appears to have a bug with initializing BSS when the Qore processes to build the jar files
-# are launched in parallel. Use the Excel jar as a dependency to ensure serialization.
-if (APPLE)
-    add_custom_command(
-        OUTPUT ${WORD_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR}
-            ${QORE_STREAM_SOURCES} -cp ${WORD_CLASSPATH}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar
-        COMMAND ${CMAKE_COMMAND} -E copy ${WORD_JAR} ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/
-        DEPENDS ${module_name} ${WORD_SOURCES} ${QORE_STREAM_SOURCES} ${EXCEL_JAR}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        VERBATIM
-    )
-else()
-    add_custom_command(
-        OUTPUT ${WORD_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR}
-            ${QORE_STREAM_SOURCES} -cp ${WORD_CLASSPATH}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar
-        COMMAND ${CMAKE_COMMAND} -E copy ${WORD_JAR} ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/
-        DEPENDS ${module_name} ${WORD_SOURCES} ${QORE_STREAM_SOURCES}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        VERBATIM
-    )
-endif()
+# Serialize jar builds: all targets compile shared QoreInputStream/OutputStreamWrapper classes
+# to the same output directory, so parallel builds cause race conditions on any platform.
+add_custom_command(
+    OUTPUT ${WORD_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${WORD_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar
+    COMMAND ${CMAKE_COMMAND} -E copy ${WORD_JAR} ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/
+    DEPENDS ${module_name} ${WORD_SOURCES} ${QORE_STREAM_SOURCES} ${EXCEL_JAR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
 
 add_custom_target(qore-word-jar
     DEPENDS ${WORD_JAR}
@@ -249,33 +235,17 @@ set(POWERPOINT_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/powerpoint/PowerPointTestHelper.java
 )
 
-# macOS appears to have a bug with initializing BSS when the Qore processes to build the jar files
-# are launched in parallel. Use the Excel jar as a dependency to ensure serialization.
-if (APPLE)
-    add_custom_command(
-        OUTPUT ${POWERPOINT_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${POWERPOINT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${POWERPOINT_JAR} ${POWERPOINT_SOURCES_DIR}
-            ${QORE_STREAM_SOURCES} -cp ${POWERPOINT_CLASSPATH}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar
-        COMMAND ${CMAKE_COMMAND} -E copy ${POWERPOINT_JAR} ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar/
-        DEPENDS ${module_name} ${POWERPOINT_SOURCES} ${QORE_STREAM_SOURCES} ${EXCEL_JAR}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        VERBATIM
-    )
-else()
-    add_custom_command(
-        OUTPUT ${POWERPOINT_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${POWERPOINT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${POWERPOINT_JAR} ${POWERPOINT_SOURCES_DIR}
-            ${QORE_STREAM_SOURCES} -cp ${POWERPOINT_CLASSPATH}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar
-        COMMAND ${CMAKE_COMMAND} -E copy ${POWERPOINT_JAR} ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar/
-        DEPENDS ${module_name} ${POWERPOINT_SOURCES} ${QORE_STREAM_SOURCES}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        VERBATIM
-    )
-endif()
+add_custom_command(
+    OUTPUT ${POWERPOINT_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${POWERPOINT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${POWERPOINT_JAR} ${POWERPOINT_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${POWERPOINT_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar
+    COMMAND ${CMAKE_COMMAND} -E copy ${POWERPOINT_JAR} ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar/
+    DEPENDS ${module_name} ${POWERPOINT_SOURCES} ${QORE_STREAM_SOURCES} ${WORD_JAR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
 
 add_custom_target(qore-powerpoint-jar
     DEPENDS ${POWERPOINT_JAR}
