@@ -75,6 +75,8 @@ class QJava2Jar {
             map printf("%s\n", $1),
                 QoreJavaCompilerException::extractDiagnosticMessages(diags);
         string file_list;
+        # track class file paths for cleanup after jar creation
+        list<string> class_file_paths();
         hash<string, CompilerOutput> cv = compiler.compile(srcs, diags);
         string base_dir;
         foreach hash<auto> i in (cv.pairIterator()) {
@@ -135,6 +137,7 @@ class QJava2Jar {
             class_file_name = sprintf("%y", class_file_name);
             class_file_name =~ s/\$/\\$/g;
             file_list += class_file_name;
+            class_file_paths += fn;
             if (!opts.quiet) {
                 printf("wrote: %y\n", fn);
             }
@@ -153,6 +156,13 @@ class QJava2Jar {
         system(cmd);
         if (!opts.quiet) {
             printf("created %y: %d file%s\n", jar_path, cv.size(), cv.size() == 1 ? "" : "s");
+        }
+
+        # clean up intermediate .class files to prevent the JVM's system classloader from
+        # picking them up (its default classpath is "." which can conflict with our custom
+        # classloader's dynamic class generation)
+        foreach string cfp in (class_file_paths) {
+            unlink(cfp);
         }
     }
 
