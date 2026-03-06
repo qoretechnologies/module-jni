@@ -174,10 +174,15 @@ set(EXCEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelTestHelper.java
 )
 
+# Each data provider jar uses its own output subdirectory (-d jar-<name>) so that the shared
+# QoreInputStream/OutputStreamWrapper class files don't collide between parallel builds.
+# This eliminates the need for file-level cross-dependencies between jar custom commands,
+# which caused cmake's Makefile generator to duplicate the build rule in each dependent
+# target's build.make — leading to the same jar being built multiple times under make -jN.
 add_custom_command(
     OUTPUT ${EXCEL_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-        --root=${EXCEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${EXCEL_JAR} ${EXCEL_SOURCES_DIR}
+        --root=${EXCEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-excel ${EXCEL_JAR} ${EXCEL_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${EXCEL_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E copy ${EXCEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/
     DEPENDS ${module_name} ${EXCEL_SOURCES} ${QORE_STREAM_SOURCES}
@@ -203,16 +208,14 @@ set(WORD_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordTestHelper.java
 )
 
-# Serialize jar builds: all targets compile shared QoreInputStream/OutputStreamWrapper classes
-# to the same output directory, so parallel builds cause race conditions on any platform.
 add_custom_command(
     OUTPUT ${WORD_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-        --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${WORD_JAR} ${WORD_SOURCES_DIR}
+        --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-word ${WORD_JAR} ${WORD_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${WORD_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar
     COMMAND ${CMAKE_COMMAND} -E copy ${WORD_JAR} ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/
-    DEPENDS ${module_name} ${WORD_SOURCES} ${QORE_STREAM_SOURCES} ${EXCEL_JAR}
+    DEPENDS ${module_name} ${WORD_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
@@ -238,11 +241,11 @@ set(POWERPOINT_SOURCES
 add_custom_command(
     OUTPUT ${POWERPOINT_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-        --root=${POWERPOINT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${POWERPOINT_JAR} ${POWERPOINT_SOURCES_DIR}
+        --root=${POWERPOINT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-powerpoint ${POWERPOINT_JAR} ${POWERPOINT_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${POWERPOINT_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar
     COMMAND ${CMAKE_COMMAND} -E copy ${POWERPOINT_JAR} ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar/
-    DEPENDS ${module_name} ${POWERPOINT_SOURCES} ${QORE_STREAM_SOURCES} ${WORD_JAR}
+    DEPENDS ${module_name} ${POWERPOINT_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
@@ -260,29 +263,14 @@ set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.
 set(KAFKA_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(KAFKA_SOURCES ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/)
 
-# macOS appears to have a bug with initializing BSS when the Qore processes to build the jar files
-# are launched in parallel. Using add_dependencies() alone doesn't work because cmake doesn't
-# propagate target dependencies to custom command file dependencies. We need to add the Excel jar
-# as a file-level dependency for the Kafka jar custom command to ensure true serialization.
-if (APPLE)
-    add_custom_command(
-        OUTPUT ${KAFKA_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
-        DEPENDS ${module_name} ${KAFKA_SOURCES} ${EXCEL_JAR}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        VERBATIM
-    )
-else()
-    add_custom_command(
-        OUTPUT ${KAFKA_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
-            --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR} ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
-        DEPENDS ${module_name} ${KAFKA_SOURCES}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        VERBATIM
-    )
-endif()
+add_custom_command(
+    OUTPUT ${KAFKA_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-kafka ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
+    DEPENDS ${module_name} ${KAFKA_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
 
 #${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/QoreJavaConfig.java
 #${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/kafka/QoreKafkaConsumer.java

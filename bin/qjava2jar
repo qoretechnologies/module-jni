@@ -153,7 +153,11 @@ class QJava2Jar {
         if (!opts.quiet) {
             printf("cmd: %y\n", cmd);
         }
-        system(cmd);
+        int rc = system(cmd);
+        if (rc) {
+            stderr.printf("ERROR: jar command failed with exit code %d: %s\n", rc, cmd);
+            exit(ERR_COMPILATION_FAILURE);
+        }
         if (!opts.quiet) {
             printf("created %y: %d file%s\n", jar_path, cv.size(), cv.size() == 1 ? "" : "s");
         }
