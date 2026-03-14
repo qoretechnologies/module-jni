@@ -448,6 +448,52 @@ public class JavaClassBuilder {
         return InstrumentedType.Default.of(future_name, null, Modifier.PUBLIC);
     }
 
+    /** Check if a parent class has a final method with matching name and parameters.
+     *
+     *  This prevents creating Java methods that would override final methods in parent classes
+     *  (e.g., wait(), notify(), notifyAll(), getClass() from java.lang.Object), which would cause
+     *  IncompatibleClassChangeError at class load time.
+     *
+     *  @return true if the parent class has a final method with matching name and params
+     */
+    public static boolean isFinalBaseClassMethod(Class<?> parentClass, String name, List<TypeDescription> params) {
+        for (Method m : parentClass.getMethods()) {
+            if (!m.getName().equals(name) || !Modifier.isFinal(m.getModifiers())) {
+                continue;
+            }
+            // check params
+            Type[] mparams = m.getGenericParameterTypes();
+            if (mparams == null || mparams.length == 0) {
+                if (params == null || params.size() == 0) {
+                    return true;
+                }
+                continue;
+            }
+            if (params == null || mparams.length != params.size()) {
+                continue;
+            }
+            boolean ok = true;
+            for (int i = 0; i < mparams.length; ++i) {
+                Type mtype = mparams[i];
+                TypeDescription ptype = params.get(i);
+                if (mtype instanceof Class) {
+                    Class cls = (Class)mtype;
+                    if (!ptype.getCanonicalName().equals(cls.getCanonicalName())) {
+                        ok = false;
+                        break;
+                    }
+                } else if (!ptype.getCanonicalName().equals(mtype.getTypeName())) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Check a class for methods matching a name an TypeDescription list
      *
      */
