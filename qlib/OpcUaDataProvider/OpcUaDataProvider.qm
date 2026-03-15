@@ -410,15 +410,19 @@ module OpcUaDataProvider {
     Features supported include:
     - **Data change subscriptions**: monitor node values for changes with configurable sampling and
       publishing intervals
-    - **Read values**: read current values from OPC UA nodes
-    - **Write values**: write values to OPC UA nodes
-    - **Browse address space**: discover available nodes in the server's address space
+    - **Read values**: read single or multiple node values in batch
+    - **Write values**: write single or multiple node values in batch
+    - **Read attributes**: read node metadata (display name, data type, access level, etc.)
+    - **Browse address space**: discover available nodes with server-side pagination
     - **Call methods**: invoke methods on OPC UA server objects
+    - **Historical data**: read raw historical data with time range filtering
+    - **Server discovery**: discover available endpoints and server status
     - **Security**: configurable security policies (None, Basic256Sha256, Aes128_Sha256_RsaOaep,
       Aes256_Sha256_RsaPss) and message security modes (None, Sign, SignAndEncrypt)
-    - **Authentication**: Anonymous, Username/Password, and Certificate authentication
-    - **Connection lifecycle events**: connected and disconnected events
+    - **Authentication**: Anonymous, Username/Password, and X.509 Certificate authentication
+    - **Connection lifecycle**: connected/disconnected events with auto-reconnect
     - **SSL/TLS**: keystore and truststore configuration for secure connections
+    - **Cooperative cancellation**: all blocking operations support thread/program cancellation
 
     @section opcuadataprovider_examples OPC UA Data Provider Examples
 
@@ -428,12 +432,32 @@ module OpcUaDataProvider {
     @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request read-value 'node_id=ns=2;s=Temperature'
     @endverbatim
 
+    @par API Example: Read Multiple Node Values
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request read-values 'node_ids=(ns=0;i=2258,ns=0;i=2259)'
+    @endverbatim
+
+    @par API Example: Read Node Attributes
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request read-attributes 'node_id=ns=0;i=2258'
+    @endverbatim
+
     @par API Example: Write a Node Value
-    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' send message 'node_id=ns=2;s=SetPoint,value=22.5'
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' send write-value 'node_id=ns=2;s=SetPoint,value=22.5'
     @endverbatim
 
     @par API Example: Browse the Address Space
-    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request browse 'node_id=ns=0;i=84'
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request browse-nodes 'node_id=ns=0;i=84'
+    @endverbatim
+
+    @par API Example: Read Historical Data
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request read-history 'node_id=ns=2;s=Temperature,start_time=2026-03-01,end_time=2026-03-15'
+    @endverbatim
+
+    @par API Example: Discover Server Endpoints
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request discover-endpoints
+    @endverbatim
+
+    @par API Example: Get Server Status
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request get-server-status
     @endverbatim
 
     @par API Example: Listen for Data Changes
@@ -445,12 +469,16 @@ module OpcUaDataProvider {
     @subsection OpcUaDataProvider_v1_0 OpcUaDataProvider v1.0
     - initial release of the module with support for:
       - data change subscriptions for monitored nodes
-      - reading and writing node values
-      - browsing the OPC UA address space
+      - single and batch reading/writing of node values
+      - reading node attributes (display name, data type, access level, etc.)
+      - browsing the OPC UA address space with server-side pagination
       - calling methods on OPC UA server objects
-      - connection lifecycle events (connected/disconnected)
-      - security policy and authentication configuration
+      - reading raw historical data with time range filtering
+      - server endpoint discovery and server status
+      - connection lifecycle events (connected/disconnected) with auto-reconnect
+      - security policy and authentication configuration (Anonymous, Username/Password, Certificate)
       - SSL/TLS keystore and truststore configuration
+      - cooperative cancellation support for all blocking operations
 */
 
 #! contains all public definitions in the OpcUaDataProvider module

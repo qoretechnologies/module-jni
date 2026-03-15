@@ -127,6 +127,7 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
                 cfg.setApplicationUri(copts.application_uri ?? "urn:qore:opcua:client");
                 cfg.setRequestTimeout(UInteger::valueOf(copts.request_timeout ?? 10000));
                 cfg.setSessionTimeout(UInteger::valueOf(copts.session_timeout ?? 120000));
+                cfg.setConnectTimeout(UInteger::valueOf(copts.connect_timeout ?? 10000));
 
                 # set identity provider based on auth_type
                 string auth_type = copts.auth_type ?? "Anonymous";

@@ -551,10 +551,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private stop() {
         if (client) {
             try {
-                awaitFuture(client.disconnect(), "disconnect");
+                client.disconnect().get();
                 debug("OPC UA: Disconnected from %y", url);
-            } catch (hash<ExceptionInfo> ex) {
-                # ignore disconnect errors during stop
+            } catch () {
+                # ignore all disconnect errors during stop/destructor
             }
         }
         delete subscription;
@@ -687,7 +687,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         return variant.getValue();
     }
 
-    #! Converts a Milo DateTime to a Qore date
+    #! Converts a Milo DateTime to a Qore date with millisecond precision
     private static *date convertDateTime(auto dt) {
         if (!dt) {
             return NOTHING;
@@ -697,7 +697,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         if (!java_date) {
             return NOTHING;
         }
-        return date(int(java_date.getTime() / 1000));
+        int epoch_ms = int(java_date.getTime());
+        return date(epoch_ms / 1000) + milliseconds(epoch_ms % 1000);
     }
 
     #! Awaits a CompletableFuture with cooperative cancellation support
@@ -864,47 +865,65 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         return AbstractDataProviderTypeMap."auto";
     }
 
-    #! Processes API requests
+    #! Processes API requests with auto-reconnect on connection failure
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        try {
-            ensureConnected();
-            string action = req.action;
-            switch (action) {
-                case REQUEST_READ_VALUE:
-                    return doReadValue(req);
-                case REQUEST_READ_VALUES:
-                    return doReadValues(req);
-                case REQUEST_READ_ATTRIBUTES:
-                    return doReadAttributes(req);
-                case REQUEST_BROWSE:
-                    return doBrowse(req);
-                case REQUEST_CALL_METHOD:
-                    return doCallMethod(req);
-                case REQUEST_READ_HISTORY:
-                    return doReadHistory(req);
-                case REQUEST_DISCOVER_ENDPOINTS:
-                    return doDiscoverEndpoints(req);
-                case REQUEST_GET_SERVER_STATUS:
-                    return doGetServerStatus(req);
-                default:
-                    throw "UNSUPPORTED-REQUEST", sprintf("action %y is unsupported; supported "
-                        "actions: %y", action, (REQUEST_READ_VALUE, REQUEST_READ_VALUES,
-                        REQUEST_READ_ATTRIBUTES, REQUEST_BROWSE, REQUEST_CALL_METHOD,
-                        REQUEST_READ_HISTORY, REQUEST_DISCOVER_ENDPOINTS,
-                        REQUEST_GET_SERVER_STATUS));
+        ensureConnected();
+        bool auto_reconnect = copts.auto_reconnect ?? True;
+        int attempts = auto_reconnect ? 2 : 1;
+        for (int attempt = 0; attempt < attempts; ++attempt) {
+            try {
+                return doRequestIntern(req);
+            } catch (hash<ExceptionInfo> ex) {
+                # retry on connection errors if auto_reconnect is enabled
+                if (attempt == 0 && auto_reconnect
+                        && (ex.desc =~ /UaException|Connection|Disconnect|closed|Session/i)) {
+                    reconnect();
+                    continue;
+                }
+                if (ex.arg instanceof object && ex.arg.hasCallableMethod("toString")) {
+                    LoggerWrapper::error("OPC UA: Error in request %y: %s", req.action,
+                        ex.arg.toString());
+                    rethrow ex.err, sprintf("%s: %s", ex.desc, ex.arg.toString()), ex.arg;
+                }
+                rethrow;
             }
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg instanceof object && ex.arg.hasCallableMethod("toString")) {
-                LoggerWrapper::error("OPC UA: Error in request %y: %s", req.action,
-                    ex.arg.toString());
-                rethrow ex.err, sprintf("%s: %s", ex.desc, ex.arg.toString()), ex.arg;
-            }
-            rethrow;
+        }
+    }
+
+    #! Internal request dispatcher
+    private auto doRequestIntern(auto req) {
+        string action = req.action;
+        switch (action) {
+            case REQUEST_READ_VALUE:
+                return doReadValue(req);
+            case REQUEST_READ_VALUES:
+                return doReadValues(req);
+            case REQUEST_READ_ATTRIBUTES:
+                return doReadAttributes(req);
+            case REQUEST_BROWSE:
+                return doBrowse(req);
+            case REQUEST_CALL_METHOD:
+                return doCallMethod(req);
+            case REQUEST_READ_HISTORY:
+                return doReadHistory(req);
+            case REQUEST_DISCOVER_ENDPOINTS:
+                return doDiscoverEndpoints(req);
+            case REQUEST_GET_SERVER_STATUS:
+                return doGetServerStatus(req);
+            default:
+                throw "UNSUPPORTED-REQUEST", sprintf("action %y is unsupported; supported "
+                    "actions: %y", action, (REQUEST_READ_VALUE, REQUEST_READ_VALUES,
+                    REQUEST_READ_ATTRIBUTES, REQUEST_BROWSE, REQUEST_CALL_METHOD,
+                    REQUEST_READ_HISTORY, REQUEST_DISCOVER_ENDPOINTS,
+                    REQUEST_GET_SERVER_STATUS));
         }
     }
 
     #! Reads a value from an OPC UA node
     private hash<auto> doReadValue(auto request) {
+        if (!request.node_id) {
+            throw "OPCUA-REQUEST-ERROR", "`node_id` is required for the `read-value` action";
+        }
         auto node_id = NodeId::parse(request.node_id);
         auto data_value = awaitFuture(
             client.readValue(0.0, TimestampsToReturn::Both, node_id), "read value");
@@ -985,6 +1004,12 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Calls a method on an OPC UA server
     private hash<auto> doCallMethod(auto request) {
+        if (!request.object_id) {
+            throw "OPCUA-REQUEST-ERROR", "`object_id` is required for the `call-method` action";
+        }
+        if (!request.method_id) {
+            throw "OPCUA-REQUEST-ERROR", "`method_id` is required for the `call-method` action";
+        }
         auto object_id = NodeId::parse(request.object_id);
         auto method_id = NodeId::parse(request.method_id);
 
@@ -1016,6 +1041,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Reads values from multiple OPC UA nodes in a single request
     private hash<auto> doReadValues(auto request) {
+        if (!request.node_ids || !request.node_ids.size()) {
+            throw "OPCUA-REQUEST-ERROR", "`node_ids` is required for the `read-values` action";
+        }
         ArrayList read_value_ids();
         foreach string node_id_str in (request.node_ids) {
             read_value_ids.add(new ReadValueId(
@@ -1047,6 +1075,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Reads node attributes from an OPC UA node
     private hash<auto> doReadAttributes(auto request) {
+        if (!request.node_id) {
+            throw "OPCUA-REQUEST-ERROR", "`node_id` is required for the `read-attributes` action";
+        }
         NodeId node_id = NodeId::parse(request.node_id);
 
         # read multiple attributes in one request
@@ -1147,6 +1178,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Reads historical data from an OPC UA node
     private hash<auto> doReadHistory(auto request) {
+        if (!request.node_id) {
+            throw "OPCUA-REQUEST-ERROR", "`node_id` is required for the `read-history` action";
+        }
         NodeId node_id = NodeId::parse(request.node_id);
 
         # build read details using Milo DateTime
@@ -1293,34 +1327,30 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         };
     }
 
-    #! Ensures the client is connected; reconnects if auto_reconnect is enabled
+    #! Ensures the client is connected; reconnects on failure if auto_reconnect is enabled
     private ensureConnected() {
         if (!client) {
             client = getClient(copts, logger);
             awaitFuture(client.connect(), "connect");
             debug("OPC UA: Connected to %y", url);
-            return;
         }
-        # check if session is still active; reconnect if needed
-        bool auto_reconnect = copts.auto_reconnect ?? True;
-        if (auto_reconnect) {
-            try {
-                # test the connection by reading the server state
-                awaitFuture(client.readValue(0.0, TimestampsToReturn::Neither,
-                    new NodeId(0, 2259)), "connection test");
-            } catch (hash<ExceptionInfo> ex) {
-                debug("OPC UA: Connection lost, reconnecting to %y", url);
-                try {
-                    awaitFuture(client.disconnect(), "disconnect");
-                } catch () {
-                    # ignore disconnect errors
-                }
-                delete client;
-                client = getClient(copts, logger);
-                awaitFuture(client.connect(), "connect");
-                debug("OPC UA: Reconnected to %y", url);
-            }
+    }
+
+    #! Reconnects the client after a failed operation
+    /** Only called when auto_reconnect is enabled and an operation has failed
+        with a connection-related error.
+    */
+    private reconnect() {
+        debug("OPC UA: Connection lost, reconnecting to %y", url);
+        try {
+            client.disconnect().get();
+        } catch () {
+            # ignore disconnect errors
         }
+        delete client;
+        client = getClient(copts, logger);
+        awaitFuture(client.connect(), "reconnect");
+        debug("OPC UA: Reconnected to %y", url);
     }
 }
 }
