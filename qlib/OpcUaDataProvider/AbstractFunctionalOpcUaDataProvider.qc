@@ -447,8 +447,13 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             "direction": {
                 "display_name": "Browse Direction",
                 "type": SoftStringOrNothingType,
-                "desc": "Browse direction: `Forward`, `Inverse`, or `Both`; defaults to `Forward`; "
-                    "only used by the `browse` action",
+                "desc": "Browse direction; defaults to `Forward`; only used by the "
+                    "`browse-nodes` action",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Forward", "display_name": "Forward"},
+                    <AllowedValueInfo>{"value": "Inverse", "display_name": "Inverse"},
+                    <AllowedValueInfo>{"value": "Both", "display_name": "Both"},
+                ),
             },
             "max_results": {
                 "display_name": "Max Results",
