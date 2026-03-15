@@ -6,6 +6,8 @@
 
 %requires Util
 %requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
 %requires ../qlib/MqttDataProvider
 
 %exec-class MqttDataProviderTest
@@ -23,7 +25,19 @@ public class MqttDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("MqttDataProviderTest Test", "1.0", \ARGV, MyOpts) {
-        addTestCase("MQTT test", \mqttTest());
+        addTestCase("event data type fields", \eventDataTypeFieldTest());
+        addTestCase("connected event data type fields", \connectedEventDataTypeFieldTest());
+        addTestCase("disconnected event data type fields", \disconnectedEventDataTypeFieldTest());
+        addTestCase("message data type fields", \messageDataTypeFieldTest());
+        addTestCase("constructor options", \constructorOptionsTest());
+        addTestCase("ssl options", \sslOptionsTest());
+        addTestCase("will options", \willOptionsTest());
+        addTestCase("connection options phase 3", \connectionOptionsPhase3Test());
+        addTestCase("factory info", \factoryInfoTest());
+        addTestCase("action registration", \actionRegistrationTest());
+        addTestCase("provider info", \providerInfoTest());
+        addTestCase("example event data", \exampleEventDataTest());
+        addTestCase("MQTT integration test", \mqttIntegrationTest());
 
         try {
             setupConnection();
@@ -39,12 +53,488 @@ public class MqttDataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    mqttTest() {
+    eventDataTypeFieldTest() {
+        # verify all expected fields exist in the event data type
+        hash<auto> fields = MqttEventDataType::Fields;
+
+        # original fields
+        assertTrue(fields.hasKey("topic"), "event type should have 'topic' field");
+        assertTrue(fields.hasKey("id"), "event type should have 'id' field");
+        assertTrue(fields.hasKey("qos"), "event type should have 'qos' field");
+        assertTrue(fields.hasKey("payload"), "event type should have 'payload' field");
+        assertTrue(fields.hasKey("duplicate"), "event type should have 'duplicate' field");
+        assertTrue(fields.hasKey("retained"), "event type should have 'retained' field");
+
+        # MQTT 5 fields
+        assertTrue(fields.hasKey("content_type"), "event type should have 'content_type' field");
+        assertTrue(fields.hasKey("response_topic"), "event type should have 'response_topic' field");
+        assertTrue(fields.hasKey("correlation_data"), "event type should have 'correlation_data' field");
+        assertTrue(fields.hasKey("message_expiry_interval"),
+            "event type should have 'message_expiry_interval' field");
+        assertTrue(fields.hasKey("payload_format"), "event type should have 'payload_format' field");
+        assertTrue(fields.hasKey("user_properties"), "event type should have 'user_properties' field");
+        assertTrue(fields.hasKey("subscription_identifiers"),
+            "event type should have 'subscription_identifiers' field");
+
+        # verify field descriptions
+        assertEq("Topic", fields.topic.display_name);
+        assertEq(StringType, fields.topic.type);
+        assertEq("Content Type", fields.content_type.display_name);
+        assertEq(SoftStringOrNothingType, fields.content_type.type);
+        assertEq("Response Topic", fields.response_topic.display_name);
+        assertEq(SoftStringOrNothingType, fields.response_topic.type);
+        assertEq("Correlation Data", fields.correlation_data.display_name);
+        assertEq(SoftBinaryOrNothingType, fields.correlation_data.type);
+        assertEq("Message Expiry Interval", fields.message_expiry_interval.display_name);
+        assertEq(SoftIntOrNothingType, fields.message_expiry_interval.type);
+        assertEq("Payload Format Indicator", fields.payload_format.display_name);
+        assertEq(SoftBoolOrNothingType, fields.payload_format.type);
+        assertEq("User Properties", fields.user_properties.display_name);
+        assertEq(AutoHashOrNothingType, fields.user_properties.type);
+        assertEq("Subscription Identifiers", fields.subscription_identifiers.display_name);
+        assertEq(SoftListOrNothingType, fields.subscription_identifiers.type);
+
+        # verify QoS allowed values
+        assertEq(3, fields.qos.allowed_values.size(), "qos should have 3 allowed values");
+        assertEq(0, fields.qos.allowed_values[0].value);
+        assertEq(1, fields.qos.allowed_values[1].value);
+        assertEq(2, fields.qos.allowed_values[2].value);
+        assertTrue(exists fields.qos.allowed_values[0].display_name,
+            "qos allowed values should have display_name");
+
+        # verify total field count (13 fields)
+        assertEq(13, fields.size(), "event type should have 13 fields");
+
+        # verify all fields have display_name and desc
+        foreach hash<auto> field in (fields.pairIterator()) {
+            assertTrue(exists field.value.display_name,
+                sprintf("event field '%s' should have display_name", field.key));
+            assertTrue(exists field.value.desc,
+                sprintf("event field '%s' should have desc", field.key));
+        }
+    }
+
+    connectedEventDataTypeFieldTest() {
+        hash<auto> fields = MqttConnectedEventDataType::Fields;
+
+        assertTrue(fields.hasKey("reconnect"), "connected event should have 'reconnect' field");
+        assertTrue(fields.hasKey("server_uri"), "connected event should have 'server_uri' field");
+        assertEq(2, fields.size(), "connected event should have 2 fields");
+
+        assertEq(BoolType, fields.reconnect.type);
+        assertEq(StringType, fields.server_uri.type);
+        assertEq("Reconnect", fields.reconnect.display_name);
+        assertEq("Server URI", fields.server_uri.display_name);
+
+        # verify all fields have display_name and desc
+        foreach hash<auto> field in (fields.pairIterator()) {
+            assertTrue(exists field.value.display_name,
+                sprintf("connected event field '%s' should have display_name", field.key));
+            assertTrue(exists field.value.desc,
+                sprintf("connected event field '%s' should have desc", field.key));
+        }
+    }
+
+    disconnectedEventDataTypeFieldTest() {
+        hash<auto> fields = MqttDisconnectedEventDataType::Fields;
+
+        assertTrue(fields.hasKey("reason_code"), "disconnected event should have 'reason_code' field");
+        assertTrue(fields.hasKey("reason"), "disconnected event should have 'reason' field");
+        assertTrue(fields.hasKey("server_reference"),
+            "disconnected event should have 'server_reference' field");
+        assertEq(3, fields.size(), "disconnected event should have 3 fields");
+
+        assertEq(IntType, fields.reason_code.type);
+        assertEq(SoftStringOrNothingType, fields.reason.type);
+        assertEq(SoftStringOrNothingType, fields.server_reference.type);
+        assertEq("Reason Code", fields.reason_code.display_name);
+        assertEq("Reason", fields.reason.display_name);
+        assertEq("Server Reference", fields.server_reference.display_name);
+
+        # verify all fields have display_name and desc
+        foreach hash<auto> field in (fields.pairIterator()) {
+            assertTrue(exists field.value.display_name,
+                sprintf("disconnected event field '%s' should have display_name", field.key));
+            assertTrue(exists field.value.desc,
+                sprintf("disconnected event field '%s' should have desc", field.key));
+        }
+    }
+
+    messageDataTypeFieldTest() {
+        # verify all expected fields exist in the message data type
+        hash<auto> fields = MqttMessageDataType::Fields;
+
+        # original fields
+        assertTrue(fields.hasKey("topic"), "message type should have 'topic' field");
+        assertTrue(fields.hasKey("qos"), "message type should have 'qos' field");
+        assertTrue(fields.hasKey("payload"), "message type should have 'payload' field");
+        assertTrue(fields.hasKey("retained"), "message type should have 'retained' field");
+
+        # MQTT 5 fields
+        assertTrue(fields.hasKey("content_type"), "message type should have 'content_type' field");
+        assertTrue(fields.hasKey("response_topic"), "message type should have 'response_topic' field");
+        assertTrue(fields.hasKey("correlation_data"), "message type should have 'correlation_data' field");
+        assertTrue(fields.hasKey("message_expiry_interval"),
+            "message type should have 'message_expiry_interval' field");
+        assertTrue(fields.hasKey("payload_format"), "message type should have 'payload_format' field");
+        assertTrue(fields.hasKey("user_properties"), "message type should have 'user_properties' field");
+
+        # verify no subscription_identifiers in outbound message type
+        assertFalse(fields.hasKey("subscription_identifiers"),
+            "message type should NOT have 'subscription_identifiers' field");
+
+        # verify field details
+        assertEq("Quality of Service", fields.qos.display_name);
+        assertEq(2, fields.qos.default_value);
+        assertEq(3, fields.qos.allowed_values.size(), "qos should have 3 allowed values");
+        assertEq(0, fields.qos.allowed_values[0].value);
+        assertEq(1, fields.qos.allowed_values[1].value);
+        assertEq(2, fields.qos.allowed_values[2].value);
+        assertEq(False, fields.retained.default_value);
+
+        # MQTT 5 field types
+        assertEq(SoftStringOrNothingType, fields.content_type.type);
+        assertEq(SoftStringOrNothingType, fields.response_topic.type);
+        assertEq(SoftBinaryOrNothingType, fields.correlation_data.type);
+        assertEq(SoftIntOrNothingType, fields.message_expiry_interval.type);
+        assertEq(SoftBoolOrNothingType, fields.payload_format.type);
+        assertEq(AutoHashOrNothingType, fields.user_properties.type);
+
+        # verify total field count (10 fields)
+        assertEq(10, fields.size(), "message type should have 10 fields");
+
+        # verify all fields have display_name and desc
+        foreach hash<auto> field in (fields.pairIterator()) {
+            assertTrue(exists field.value.display_name,
+                sprintf("message field '%s' should have display_name", field.key));
+            assertTrue(exists field.value.desc,
+                sprintf("message field '%s' should have desc", field.key));
+        }
+    }
+
+    constructorOptionsTest() {
+        hash<auto> opts = AbstractFunctionalMqttDataProvider::ConstructorOptions;
+
+        # verify original options exist
+        assertTrue(opts.hasKey("url"), "should have 'url' option");
+        assertTrue(opts.hasKey("client_id"), "should have 'client_id' option");
+        assertTrue(opts.hasKey("username"), "should have 'username' option");
+        assertTrue(opts.hasKey("password"), "should have 'password' option");
+        assertTrue(opts.hasKey("auto_reconnect"), "should have 'auto_reconnect' option");
+        assertTrue(opts.hasKey("connect_timeout"), "should have 'connect_timeout' option");
+        assertTrue(opts.hasKey("keep_alive_interval"), "should have 'keep_alive_interval' option");
+        assertTrue(opts.hasKey("message_format"), "should have 'message_format' option");
+        assertTrue(opts.hasKey("encoding"), "should have 'encoding' option");
+        assertTrue(opts.hasKey("subscription_topic"), "should have 'subscription_topic' option");
+        assertTrue(opts.hasKey("subscription_qos"), "should have 'subscription_qos' option");
+
+        # verify MQTT 5 options - replaced options
+        assertTrue(opts.hasKey("clean_start"), "should have 'clean_start' option");
+        assertFalse(opts.hasKey("clean_session"), "should NOT have old 'clean_session' option");
+        assertTrue(opts.hasKey("receive_maximum"), "should have 'receive_maximum' option");
+        assertFalse(opts.hasKey("max_in_flight"), "should NOT have old 'max_in_flight' option");
+
+        # verify new MQTT 5 connection options
+        assertTrue(opts.hasKey("session_expiry_interval"), "should have 'session_expiry_interval' option");
+        assertTrue(opts.hasKey("max_reconnect_delay"), "should have 'max_reconnect_delay' option");
+
+        # verify new MQTT 5 subscription options
+        assertTrue(opts.hasKey("no_local"), "should have 'no_local' option");
+        assertTrue(opts.hasKey("retain_as_published"), "should have 'retain_as_published' option");
+        assertTrue(opts.hasKey("retain_handling"), "should have 'retain_handling' option");
+
+        # verify option defaults
+        assertEq(True, opts.clean_start.default_value, "clean_start default should be True");
+        assertEq(65535, opts.receive_maximum.default_value, "receive_maximum default should be 65535");
+        assertEq(128000, opts.max_reconnect_delay.default_value, "max_reconnect_delay default should be 128000");
+        assertEq(False, opts.no_local.default_value, "no_local default should be False");
+        assertEq(False, opts.retain_as_published.default_value,
+            "retain_as_published default should be False");
+        assertEq(0, opts.retain_handling.default_value, "retain_handling default should be 0");
+
+        # verify retain_handling has allowed_values
+        assertTrue(exists opts.retain_handling.allowed_values, "retain_handling should have allowed_values");
+        assertEq(3, opts.retain_handling.allowed_values.size(),
+            "retain_handling should have 3 allowed values");
+
+        # verify all options have display_name, short_desc, and desc
+        foreach hash<auto> opt in (opts.pairIterator()) {
+            assertTrue(exists opt.value.display_name,
+                sprintf("option '%s' should have display_name", opt.key));
+            assertTrue(exists opt.value.short_desc,
+                sprintf("option '%s' should have short_desc", opt.key));
+            assertTrue(exists opt.value.desc,
+                sprintf("option '%s' should have desc", opt.key));
+        }
+
+        # verify sensitive options
+        assertTrue(opts.password.sensitive, "password should be marked sensitive");
+
+        # verify required options
+        assertTrue(opts.url.required, "url should be required");
+        assertTrue(opts.subscription_qos.required, "subscription_qos should be required");
+        assertTrue(opts.subscription_topic.required, "subscription_topic should be required");
+    }
+
+    sslOptionsTest() {
+        hash<auto> opts = AbstractFunctionalMqttDataProvider::ConstructorOptions;
+
+        # verify SSL/TLS options exist
+        assertTrue(opts.hasKey("ssl.keystore.location"), "should have 'ssl.keystore.location' option");
+        assertTrue(opts.hasKey("ssl.keystore.password"), "should have 'ssl.keystore.password' option");
+        assertTrue(opts.hasKey("ssl.keystore.type"), "should have 'ssl.keystore.type' option");
+        assertTrue(opts.hasKey("ssl.truststore.location"), "should have 'ssl.truststore.location' option");
+        assertTrue(opts.hasKey("ssl.truststore.password"), "should have 'ssl.truststore.password' option");
+        assertTrue(opts.hasKey("ssl.truststore.type"), "should have 'ssl.truststore.type' option");
+        assertTrue(opts.hasKey("ssl.protocol"), "should have 'ssl.protocol' option");
+        assertTrue(opts.hasKey("ssl.cipher.suites"), "should have 'ssl.cipher.suites' option");
+
+        # verify sensitive SSL options
+        assertTrue(opts."ssl.keystore.password".sensitive,
+            "ssl.keystore.password should be marked sensitive");
+        assertTrue(opts."ssl.truststore.password".sensitive,
+            "ssl.truststore.password should be marked sensitive");
+
+        # verify non-sensitive SSL options
+        assertFalse(opts."ssl.keystore.location".sensitive ?? False,
+            "ssl.keystore.location should not be sensitive");
+        assertFalse(opts."ssl.protocol".sensitive ?? False,
+            "ssl.protocol should not be sensitive");
+
+        # verify defaults
+        assertEq("PKCS12", opts."ssl.keystore.type".default_value,
+            "ssl.keystore.type default should be PKCS12");
+        assertEq("PKCS12", opts."ssl.truststore.type".default_value,
+            "ssl.truststore.type default should be PKCS12");
+        assertEq("TLSv1.3", opts."ssl.protocol".default_value,
+            "ssl.protocol default should be TLSv1.3");
+    }
+
+    willOptionsTest() {
+        hash<auto> opts = AbstractFunctionalMqttDataProvider::ConstructorOptions;
+
+        # verify will options exist
+        assertTrue(opts.hasKey("will_topic"), "should have 'will_topic' option");
+        assertTrue(opts.hasKey("will_payload"), "should have 'will_payload' option");
+        assertTrue(opts.hasKey("will_qos"), "should have 'will_qos' option");
+        assertTrue(opts.hasKey("will_retained"), "should have 'will_retained' option");
+        assertTrue(opts.hasKey("will_content_type"), "should have 'will_content_type' option");
+        assertTrue(opts.hasKey("will_message_expiry_interval"),
+            "should have 'will_message_expiry_interval' option");
+        assertTrue(opts.hasKey("will_delay_interval"), "should have 'will_delay_interval' option");
+        assertTrue(opts.hasKey("will_user_properties"), "should have 'will_user_properties' option");
+
+        # verify defaults
+        assertEq(0, opts.will_qos.default_value, "will_qos default should be 0");
+        assertEq(False, opts.will_retained.default_value, "will_retained default should be False");
+
+        # verify will_qos allowed values
+        assertTrue(exists opts.will_qos.allowed_values, "will_qos should have allowed_values");
+        assertEq(3, opts.will_qos.allowed_values.size(), "will_qos should have 3 allowed values");
+
+        # verify will options are excluded from ConnectionScheme
+        hash<auto> conn_opts = MqttConnection::ConnectionScheme.options;
+        assertFalse(conn_opts.hasKey("will_topic"),
+            "will_topic should be excluded from ConnectionScheme");
+        assertFalse(conn_opts.hasKey("will_payload"),
+            "will_payload should be excluded from ConnectionScheme");
+        assertFalse(conn_opts.hasKey("will_qos"),
+            "will_qos should be excluded from ConnectionScheme");
+    }
+
+    connectionOptionsPhase3Test() {
+        hash<auto> opts = AbstractFunctionalMqttDataProvider::ConstructorOptions;
+
+        # verify Phase 3 options exist
+        assertTrue(opts.hasKey("maximum_packet_size"), "should have 'maximum_packet_size' option");
+        assertTrue(opts.hasKey("topic_alias_maximum"), "should have 'topic_alias_maximum' option");
+        assertTrue(opts.hasKey("server_uris"), "should have 'server_uris' option");
+        assertTrue(opts.hasKey("request_response_info"), "should have 'request_response_info' option");
+        assertTrue(opts.hasKey("request_problem_info"), "should have 'request_problem_info' option");
+        assertTrue(opts.hasKey("connect_user_properties"),
+            "should have 'connect_user_properties' option");
+        assertTrue(opts.hasKey("auth_method"), "should have 'auth_method' option");
+        assertTrue(opts.hasKey("auth_data"), "should have 'auth_data' option");
+
+        # verify auth_data is sensitive
+        assertTrue(opts.auth_data.sensitive, "auth_data should be marked sensitive");
+
+        # verify auth_method is not sensitive
+        assertFalse(opts.auth_method.sensitive ?? False, "auth_method should not be sensitive");
+
+        # verify these are included in ConnectionScheme (not excluded)
+        hash<auto> conn_opts = MqttConnection::ConnectionScheme.options;
+        assertTrue(conn_opts.hasKey("maximum_packet_size"),
+            "maximum_packet_size should be in ConnectionScheme");
+        assertTrue(conn_opts.hasKey("server_uris"),
+            "server_uris should be in ConnectionScheme");
+        assertTrue(conn_opts.hasKey("auth_method"),
+            "auth_method should be in ConnectionScheme");
+    }
+
+    factoryInfoTest() {
+        MqttDataProviderFactory factory();
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("mqtt", info.name);
+        assertTrue(info.children_can_support_observers, "factory should support observers");
+        assertTrue(info.children_can_support_messages, "factory should support messages");
+
+        hash<DataProviderInfo> pinfo = factory.getProviderInfo();
+        assertTrue(pinfo.supports_observable, "provider should support observable");
+        assertEq(MSG_Async, pinfo.supports_messages);
+    }
+
+    actionRegistrationTest() {
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("MQTT");
+        assertTrue(exists actions, "should have actions registered for MQTT app");
+        assertEq(4, actions.size(), "should have 4 actions");
+
+        # create lookup hash
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # verify msg-received event action
+        assertTrue(action_map.hasKey("msg-received"), "should have 'msg-received' action");
+        assertEq("MQTT Message Received", action_map."msg-received".display_name);
+        assertEq(DPAT_EVENT, action_map."msg-received".action_code);
+        assertEq(MqttDataProvider::EVENT_MQTT_MESSAGE, action_map."msg-received".action_val);
+
+        # verify connected event action
+        assertTrue(action_map.hasKey("connected"), "should have 'connected' action");
+        assertEq("MQTT Connected", action_map."connected".display_name);
+        assertEq(DPAT_EVENT, action_map."connected".action_code);
+        assertEq(MqttDataProvider::EVENT_MQTT_CONNECTED, action_map."connected".action_val);
+
+        # verify disconnected event action
+        assertTrue(action_map.hasKey("disconnected"), "should have 'disconnected' action");
+        assertEq("MQTT Disconnected", action_map."disconnected".display_name);
+        assertEq(DPAT_EVENT, action_map."disconnected".action_code);
+        assertEq(MqttDataProvider::EVENT_MQTT_DISCONNECTED, action_map."disconnected".action_val);
+
+        # verify send-msg action
+        assertTrue(action_map.hasKey("send-msg"), "should have 'send-msg' action");
+        assertEq("Send MQTT Message", action_map."send-msg".display_name);
+        assertEq(DPAT_SEND_MESSAGE, action_map."send-msg".action_code);
+
+        # verify send-msg has all expected options including MQTT 5 fields
+        hash<auto> send_opts = action_map."send-msg".options;
+        assertTrue(send_opts.hasKey("topic"), "send-msg should have 'topic' option");
+        assertTrue(send_opts.hasKey("payload"), "send-msg should have 'payload' option");
+        assertTrue(send_opts.hasKey("qos"), "send-msg should have 'qos' option");
+        assertTrue(send_opts.hasKey("retained"), "send-msg should have 'retained' option");
+        assertTrue(send_opts.hasKey("content_type"), "send-msg should have 'content_type' option");
+        assertTrue(send_opts.hasKey("response_topic"), "send-msg should have 'response_topic' option");
+        assertTrue(send_opts.hasKey("correlation_data"),
+            "send-msg should have 'correlation_data' option");
+        assertTrue(send_opts.hasKey("message_expiry_interval"),
+            "send-msg should have 'message_expiry_interval' option");
+        assertTrue(send_opts.hasKey("payload_format"), "send-msg should have 'payload_format' option");
+        assertTrue(send_opts.hasKey("user_properties"), "send-msg should have 'user_properties' option");
+
+        # verify required options
+        assertTrue(send_opts.topic.required, "topic should be required");
+        assertTrue(send_opts.payload.required, "payload should be required");
+    }
+
+    providerInfoTest() {
+        # verify provider instance info
+        MqttDataProvider prov({"url": "tcp://localhost:1883"});
+        hash<DataProviderInfo> info = prov.getInfo();
+        assertTrue(info.supports_observable, "should support observable");
+        assertEq(MSG_Async, info.supports_messages);
+        assertEq("mqtt", info.name);
+
+        # verify child provider names from the instance
+        *list<string> children = prov.getChildProviderNames();
+        assertTrue(exists children, "should have child provider names");
+        assertTrue(inlist("devices", children), "should have 'devices' child");
+
+        # verify event and message constants
+        assertEq("mqtt-message-event", MqttDataProvider::EVENT_MQTT_MESSAGE);
+        assertEq("mqtt-connected-event", MqttDataProvider::EVENT_MQTT_CONNECTED);
+        assertEq("mqtt-disconnected-event", MqttDataProvider::EVENT_MQTT_DISCONNECTED);
+        assertEq("message", MqttDataProvider::MESSAGE_MQTT_MESSAGE);
+    }
+
+    exampleEventDataTest() {
+        MqttDataProvider prov({"url": "tcp://localhost:1883"});
+        hash<auto> event_types = prov.getEventTypes();
+
+        # verify all event types exist
+        assertTrue(event_types.hasKey(MqttDataProvider::EVENT_MQTT_MESSAGE),
+            "should have mqtt-message-event type");
+        assertTrue(event_types.hasKey(MqttDataProvider::EVENT_MQTT_CONNECTED),
+            "should have mqtt-connected-event type");
+        assertTrue(event_types.hasKey(MqttDataProvider::EVENT_MQTT_DISCONNECTED),
+            "should have mqtt-disconnected-event type");
+        assertEq(3, event_types.size(), "should have 3 event types");
+
+        # verify mqtt-message-event description
+        assertEq("This event is raised when an incoming MQTT message matching the subscription "
+            "topic arrives",
+            event_types{MqttDataProvider::EVENT_MQTT_MESSAGE}.desc);
+
+        # verify example event data for message event
+        auto example = prov.getExampleEventData(MqttDataProvider::EVENT_MQTT_MESSAGE);
+        assertTrue(exists example, "should return example event data");
+        assertEq("sensors/temperature", example.topic);
+        assertEq(1, example.id);
+        assertEq(1, example.qos);
+        assertEq(False, example.duplicate);
+        assertEq(False, example.retained);
+        assertEq("application/json", example.content_type);
+        assertEq("sensors/temperature/response", example.response_topic);
+        assertTrue(exists example.correlation_data, "should have correlation_data");
+        assertEq(3600, example.message_expiry_interval);
+        assertEq(True, example.payload_format);
+        assertEq("sensor-1", example.user_properties.source);
+        assertEq("us-east", example.user_properties.region);
+
+        # verify example event data for connected event
+        auto conn_example = prov.getExampleEventData(MqttDataProvider::EVENT_MQTT_CONNECTED);
+        assertTrue(exists conn_example, "should return connected example data");
+        assertEq(False, conn_example.reconnect);
+        assertEq("ssl://broker.example.com:8883", conn_example.server_uri);
+
+        # verify example event data for disconnected event
+        auto disc_example = prov.getExampleEventData(MqttDataProvider::EVENT_MQTT_DISCONNECTED);
+        assertTrue(exists disc_example, "should return disconnected example data");
+        assertEq(0, disc_example.reason_code);
+        assertEq("Normal disconnect", disc_example.reason);
+
+        # verify message types
+        hash<auto> msg_types = prov.getMessageTypes();
+        assertTrue(msg_types.hasKey(MqttDataProvider::MESSAGE_MQTT_MESSAGE),
+            "should have message type");
+    }
+
+    mqttIntegrationTest() {
         if (!mqtt) {
             testSkip("no connection");
         }
 
         assertEq("mqtt", mqtt.getName());
+
+        # verify child providers
+        *list<string> children = mqtt.getChildProviderNames();
+        assertTrue(exists children, "should have child providers");
+        assertTrue(children.size() >= 1, "should have at least one child provider");
+        assertTrue(inlist("devices", children), "should have 'devices' child provider");
+
+        # verify message types
+        hash<auto> msg_types = mqtt.getMessageTypes();
+        assertTrue(msg_types.hasKey("message"), "should have 'message' message type");
+
+        # verify event types
+        hash<auto> event_types = mqtt.getEventTypes();
+        assertTrue(event_types.hasKey("mqtt-message-event"), "should have 'mqtt-message-event' event type");
+        assertTrue(event_types.hasKey("mqtt-connected-event"),
+            "should have 'mqtt-connected-event' event type");
+        assertTrue(event_types.hasKey("mqtt-disconnected-event"),
+            "should have 'mqtt-disconnected-event' event type");
     }
 
     private usageIntern() {

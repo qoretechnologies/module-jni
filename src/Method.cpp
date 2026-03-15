@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -45,13 +45,6 @@ void BaseMethod::init(Env &env) {
     paramTypes.reserve(paramCount);
     for (jsize p = 0; p < paramCount; ++p) {
         LocalReference<jclass> paramType = env.getObjectArrayElement(paramTypesArray, p).as<jclass>();
-        if (!varargs && (p == (paramCount - 1)) && env.callBooleanMethod(paramType, Globals::methodClassIsArray, nullptr)) {
-            LocalReference<jclass> elementClass =
-                env.callObjectMethod(paramType, Globals::methodClassGetComponentType, nullptr).as<jclass>();
-            if (elementClass && (Globals::getType(elementClass) != Type::Byte)) {
-                varargs = true;
-            }
-        }
         paramTypes.emplace_back(Globals::getType(paramType), paramType.makeGlobal());
     }
 }

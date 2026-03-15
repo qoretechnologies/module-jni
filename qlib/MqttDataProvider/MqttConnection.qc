@@ -40,7 +40,9 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
                     $1.key: cast<hash<ConnectionOptionInfo>>($1.value - ("type", "required") + {
                         "type": MqttConnection::getType($1.value),
                     })
-                }, MqttDataProvider::ConstructorOptions.pairIterator(), $1.key !~ /^subscription_/ && $1.key != "url"
+                }, MqttDataProvider::ConstructorOptions.pairIterator(),
+                $1.key !~ /^subscription_/ && $1.key !~ /^will_/ && $1.key != "url"
+                && $1.key != "no_local" && $1.key != "retain_as_published" && $1.key != "retain_handling"
             ) + {
                 "disable_automatic_pings": <ConnectionOptionInfo>{
                     "display_name": "Disable Automatic Pings?",

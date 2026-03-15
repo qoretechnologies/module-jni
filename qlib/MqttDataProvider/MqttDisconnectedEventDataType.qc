@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** MqttConnectionWrapper.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
+/** MqttDisconnectedEventDataType.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,22 +24,36 @@
 
 #! contains all public definitions in the MqttDataProvider module
 public namespace MqttDataProvider {
-#! Class that encapsulates the client and connection options
-public class MqttConnectionWrapper {
+#! MQTT Disconnected event data type
+public class MqttDisconnectedEventDataType inherits HashDataType {
     public {
-        MqttClient client;
-        *MqttConnectionOptions opts;
+        #! Field descriptions
+        const Fields = {
+            "reason_code": {
+                "display_name": "Reason Code",
+                "type": IntType,
+                "desc": "The MQTT 5 disconnect reason code indicating why the connection was lost",
+            },
+            "reason": {
+                "display_name": "Reason",
+                "type": SoftStringOrNothingType,
+                "desc": "A human-readable description of the disconnect reason",
+            },
+            "server_reference": {
+                "display_name": "Server Reference",
+                "type": SoftStringOrNothingType,
+                "desc": "A server reference string indicating a server the client should redirect to, "
+                    "if provided by the broker",
+            },
+        };
     }
 
-    #! Creates the object from the arguments
-    constructor(MqttClient client, *MqttConnectionOptions opts) {
-        self.client = client;
-        self.opts = opts;
-    }
-
-    #! Redirects method calls to the client
-    auto methodGate(string method, ...) {
-        return call_object_method_args(client, method, argv);
+    #! Creates the object
+    constructor() {
+        addQoreFields(Fields);
     }
 }
+
+#! Constant giving the MQTT disconnected event data type
+public const MqttDisconnectedEventDataType = new MqttDisconnectedEventDataType();
 }

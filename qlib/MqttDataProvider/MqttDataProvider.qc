@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** MqttDataProvider.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** MqttDataProvider.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,11 +22,19 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) import org.eclipse.paho.client.mqttv3.MqttClient
-%module-cmd(jni) import org.eclipse.paho.client.mqttv3.MqttConnectOptions
-%module-cmd(jni) import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
-%module-cmd(jni) import org.eclipse.paho.client.mqttv3.IMqttMessageListener
-%module-cmd(jni) import org.eclipse.paho.client.mqttv3.MqttMessage
+%module-cmd(jni) import org.eclipse.paho.mqttv5.client.MqttClient
+%module-cmd(jni) import org.eclipse.paho.mqttv5.client.MqttConnectionOptions
+%module-cmd(jni) import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence
+%module-cmd(jni) import org.eclipse.paho.mqttv5.client.IMqttMessageListener
+%module-cmd(jni) import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse
+%module-cmd(jni) import org.eclipse.paho.mqttv5.common.MqttMessage
+%module-cmd(jni) import org.eclipse.paho.mqttv5.common.MqttException
+%module-cmd(jni) import org.eclipse.paho.mqttv5.common.packet.MqttProperties
+%module-cmd(jni) import org.eclipse.paho.mqttv5.common.packet.UserProperty
+%module-cmd(jni) import org.eclipse.paho.mqttv5.client.MqttCallback
+%module-cmd(jni) import org.eclipse.paho.mqttv5.client.IMqttToken
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import java.util.Properties
 
 %try-module json >= 1.5
 %define NoJson

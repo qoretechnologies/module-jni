@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/*  MqttDataProvider.qm Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/*  MqttDataProvider.qm Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@
 %modern
 
 # import MQTT Paho Java Client Library: JAR must be added to the global classloader
-%module-cmd(jni) global-add-relative-classpath ./jar/org.eclipse.paho.client.mqttv3-1.2.5.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/org.eclipse.paho.mqttv5.client-1.2.5.jar
 
 # implements a data provider for MQTT functionality
 %requires(reexport) DataProvider
@@ -35,7 +35,7 @@
 %requires(reexport) ConnectionProvider
 
 module MqttDataProvider {
-    version = "2.0";
+    version = "3.0";
     desc = "user module providing a data provider API for MQTT servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -52,8 +52,9 @@ module MqttDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MqttDataProvider::AppName,
             "display_name": "MQTT",
-            "short_desc": "MQTT server for fast and efficient messaging",
-            "desc": "MQTT server for fast and efficient messaging",
+            "short_desc": "MQTT 5.0 server for fast and efficient messaging",
+            "desc": "MQTT 5.0 server for fast and efficient messaging with support for request/response "
+                "patterns, message expiry, content type metadata, and user-defined properties",
             "groups": (DataProvider::AppGroup::Messaging, DataProvider::AppGroup::Iot,),
             "scheme": "mqttssl",
             "logo": MqttLogo,
@@ -67,8 +68,9 @@ module MqttDataProvider {
             "path": "/",
             "action": "msg-received",
             "display_name": "MQTT Message Received",
-            "short_desc": "An MQTT message is received",
-            "desc": "An MQTT message is received; react to an MQTT message",
+            "short_desc": "An MQTT message is received with MQTT 5 properties",
+            "desc": "An MQTT message is received; event includes MQTT 5.0 properties such as "
+                "content type, response topic, correlation data, and user properties",
             "action_code": DPAT_EVENT,
             "action_val": MqttDataProvider::EVENT_MQTT_MESSAGE,
             "output_type": MqttEventDataType,
@@ -77,10 +79,36 @@ module MqttDataProvider {
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": MqttDataProvider::AppName,
             "path": "/",
+            "action": "connected",
+            "display_name": "MQTT Connected",
+            "short_desc": "Client connected or reconnected to the MQTT broker",
+            "desc": "This event is raised when the client connects or reconnects to the MQTT broker",
+            "action_code": DPAT_EVENT,
+            "action_val": MqttDataProvider::EVENT_MQTT_CONNECTED,
+            "output_type": MqttConnectedEventDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MqttDataProvider::AppName,
+            "path": "/",
+            "action": "disconnected",
+            "display_name": "MQTT Disconnected",
+            "short_desc": "Client disconnected from the MQTT broker",
+            "desc": "This event is raised when the client is disconnected from the MQTT broker, "
+                "including the MQTT 5 disconnect reason code and description",
+            "action_code": DPAT_EVENT,
+            "action_val": MqttDataProvider::EVENT_MQTT_DISCONNECTED,
+            "output_type": MqttDisconnectedEventDataType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MqttDataProvider::AppName,
+            "path": "/",
             "action": "send-msg",
             "display_name": "Send MQTT Message",
-            "short_desc": "Send an MQTT message",
-            "desc": "Send an MQTT message",
+            "short_desc": "Send an MQTT message with optional MQTT 5 properties",
+            "desc": "Send an MQTT message to a topic with optional MQTT 5.0 properties including "
+                "content type, request/response correlation, message expiry, and user-defined metadata",
             "action_code": DPAT_SEND_MESSAGE,
             "action_val": MqttDataProvider::MESSAGE_MQTT_MESSAGE,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -89,7 +117,8 @@ module MqttDataProvider {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                MqttMessageDataType::Fields{"qos", "retained"}
+                MqttMessageDataType::Fields{"qos", "retained", "content_type", "response_topic",
+                    "correlation_data", "message_expiry_interval", "payload_format", "user_properties"}
             ),
         });
     };
@@ -99,14 +128,29 @@ module MqttDataProvider {
 
     @tableofcontents
 
-    @section MqttDataProviderintro Introduction to the MqttDataProvider Module
+    @section mqttdataproviderintro Introduction to the MqttDataProvider Module
 
-    The %MqttDataProvider module provides a data provider API for MQTT servers for sending and receiving MQTT
-    messages.
+    The %MqttDataProvider module provides a data provider API for MQTT 5.0 servers for sending and receiving
+    MQTT messages with full MQTT 5.0 protocol support.
 
     This data provider provides MQTT functionality with the \c mqtt factory and data provider with the same name,
     supporting asynchronous MQTT events and messaging (class
     @ref MqttDataProvider::MqttDataProvider "MqttDataProvider").
+
+    MQTT 5.0 features supported include:
+    - **User properties**: application-level key-value metadata on messages
+    - **Request/response pattern**: \c response_topic and \c correlation_data fields
+    - **Message expiry**: automatic message expiration with \c message_expiry_interval
+    - **Content type**: MIME content type metadata on messages
+    - **Payload format indicator**: distinguish UTF-8 text from binary payloads
+    - **Clean start / session expiry**: fine-grained session lifecycle control
+    - **Subscription options**: \c no_local, \c retain_as_published, \c retain_handling
+    - **Receive maximum**: flow control for concurrent unacknowledged messages
+    - **SSL/TLS**: keystore, truststore, protocol, and cipher suite configuration
+    - **Will messages**: Last Will and Testament with MQTT 5 properties
+    - **Enhanced authentication**: \c auth_method and \c auth_data for challenge-response flows
+    - **Connection lifecycle events**: \c connected and \c disconnected events
+    - **Failover**: multiple server URIs for automatic failover
 
     @section mqttdataprovider_examples MQTT Data Provider Examples
 
@@ -116,11 +160,49 @@ module MqttDataProvider {
     @verbatim qdp 'mqtt{url=ssl://eu1.cloud.thethings.network:8883,username=my-username,password=my-password}' send message 'topic=v3/username@ttn/devices/bl-001/down/push,payload={downlinks=({f_port=15,frm_payload="AP8ACgo=",priority=NORMAL},)}'
     @endverbatim
 
+    @par API Example: Send a Message with MQTT 5 Properties
+    @verbatim qdp 'mqtt{url=ssl://broker:8883,username=user,password=pass}' send message 'topic=sensors/temp,payload={"temp":22.5},content_type=application/json,user_properties={source=sensor-1,region=us-east}'
+    @endverbatim
+
+    @par API Example: Connect with SSL/TLS Client Certificates
+    @verbatim qdp 'mqtt{url=ssl://broker:8883,ssl.keystore.location=/path/to/client.p12,ssl.keystore.password=secret,ssl.truststore.location=/path/to/ca.p12,ssl.truststore.password=secret}' send message 'topic=test,payload=hello'
+    @endverbatim
+
+    @par API Example: Connect with Will Message
+    @verbatim qdp 'mqtt{url=ssl://broker:8883,username=user,password=pass,will_topic=devices/status,will_payload={"status":"offline"},will_qos=1,will_retained=True}' listen
+    @endverbatim
+
+    @par API Example: Connect with Failover Servers
+    @verbatim qdp 'mqtt{url=ssl://primary:8883,server_uris=(ssl://secondary:8883,ssl://tertiary:8883),username=user,password=pass}' listen
+    @endverbatim
+
     @par API Example: Listen for Messages
     @verbatim qdp 'mqtt{url=ssl://eu1.cloud.thethings.network:8883,topic=#,username=my-username,password=my-password}' listen
     @endverbatim
 
     @section MqttDataProvider_relnotes Release Notes
+
+    @subsection MqttDataProvider_v3_0 MqttDataProvider v3.0
+    - upgraded to MQTT 5.0 protocol using Eclipse Paho v5 client
+    - added MQTT 5.0 message properties: \c content_type, \c response_topic, \c correlation_data,
+      \c message_expiry_interval, \c payload_format, \c user_properties, \c subscription_identifiers
+    - added MQTT 5.0 connection options: \c clean_start, \c session_expiry_interval, \c receive_maximum,
+      \c max_reconnect_delay
+    - added MQTT 5.0 subscription options: \c no_local, \c retain_as_published, \c retain_handling
+    - added \c topic field to event data type
+    - replaced \c clean_session option with \c clean_start
+    - replaced \c max_in_flight option with \c receive_maximum
+    - added SSL/TLS configuration options: \c ssl.keystore.location, \c ssl.keystore.password,
+      \c ssl.keystore.type, \c ssl.truststore.location, \c ssl.truststore.password,
+      \c ssl.truststore.type, \c ssl.protocol, \c ssl.cipher.suites
+    - added will message (Last Will and Testament) options: \c will_topic, \c will_payload,
+      \c will_qos, \c will_retained, \c will_content_type, \c will_message_expiry_interval,
+      \c will_delay_interval, \c will_user_properties
+    - added additional connection options: \c maximum_packet_size, \c topic_alias_maximum,
+      \c server_uris, \c request_response_info, \c request_problem_info,
+      \c connect_user_properties, \c auth_method, \c auth_data
+    - added connection lifecycle events: \c mqtt-connected-event and \c mqtt-disconnected-event
+    - added \c connected and \c disconnected event actions to the data provider action catalog
 
     @subsection MqttDataProvider_v2_0 MqttDataProvider v2.0
     - added support for the data provider action catalog API
