@@ -35,6 +35,13 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("read response data type fields", \readResponseDataTypeFieldTest());
         addTestCase("browse response data type fields", \browseResponseDataTypeFieldTest());
         addTestCase("call method response data type fields", \callMethodResponseDataTypeFieldTest());
+        addTestCase("read values response data type fields", \readValuesResponseDataTypeFieldTest());
+        addTestCase("write values message data type fields", \writeValuesMessageDataTypeFieldTest());
+        addTestCase("read attributes response data type fields",
+            \readAttributesResponseDataTypeFieldTest());
+        addTestCase("history read response data type fields", \historyReadResponseDataTypeFieldTest());
+        addTestCase("endpoint description data type fields", \endpointDescriptionDataTypeFieldTest());
+        addTestCase("server status data type fields", \serverStatusDataTypeFieldTest());
         addTestCase("constructor options", \constructorOptionsTest());
         addTestCase("ssl options", \sslOptionsTest());
         addTestCase("security options", \securityOptionsTest());
@@ -197,6 +204,64 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq(3, fields.size(), "call method response should have 3 fields");
     }
 
+    readValuesResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaReadValuesResponseDataType::Fields;
+        assertTrue(fields.hasKey("results"), "should have 'results' field");
+        assertEq(1, fields.size(), "read values response should have 1 field");
+    }
+
+    writeValuesMessageDataTypeFieldTest() {
+        hash<auto> fields = OpcUaWriteValuesMessageDataType::Fields;
+        assertTrue(fields.hasKey("values"), "should have 'values' field");
+        assertEq(1, fields.size(), "write values message should have 1 field");
+    }
+
+    readAttributesResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaReadAttributesResponseDataType::Fields;
+        assertTrue(fields.hasKey("node_id"), "should have 'node_id' field");
+        assertTrue(fields.hasKey("display_name"), "should have 'display_name' field");
+        assertTrue(fields.hasKey("description"), "should have 'description' field");
+        assertTrue(fields.hasKey("node_class"), "should have 'node_class' field");
+        assertTrue(fields.hasKey("data_type"), "should have 'data_type' field");
+        assertTrue(fields.hasKey("value"), "should have 'value' field");
+        assertTrue(fields.hasKey("access_level"), "should have 'access_level' field");
+        assertTrue(fields.hasKey("writable"), "should have 'writable' field");
+        assertTrue(fields.hasKey("historizing"), "should have 'historizing' field");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertEq(11, fields.size(), "read attributes response should have 11 fields");
+    }
+
+    historyReadResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaHistoryReadResponseDataType::Fields;
+        assertTrue(fields.hasKey("node_id"), "should have 'node_id' field");
+        assertTrue(fields.hasKey("data_values"), "should have 'data_values' field");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertEq(4, fields.size(), "history read response should have 4 fields");
+    }
+
+    endpointDescriptionDataTypeFieldTest() {
+        hash<auto> fields = OpcUaEndpointDescriptionDataType::Fields;
+        assertTrue(fields.hasKey("endpoints"), "should have 'endpoints' field");
+        assertEq(1, fields.size(), "endpoint description should have 1 field");
+    }
+
+    serverStatusDataTypeFieldTest() {
+        hash<auto> fields = OpcUaServerStatusDataType::Fields;
+        assertTrue(fields.hasKey("state"), "should have 'state' field");
+        assertTrue(fields.hasKey("start_time"), "should have 'start_time' field");
+        assertTrue(fields.hasKey("current_time"), "should have 'current_time' field");
+        assertTrue(fields.hasKey("build_info_product_name"), "should have 'build_info_product_name'");
+        assertTrue(fields.hasKey("build_info_product_uri"), "should have 'build_info_product_uri'");
+        assertTrue(fields.hasKey("build_info_manufacturer"), "should have 'build_info_manufacturer'");
+        assertTrue(fields.hasKey("build_info_software_version"),
+            "should have 'build_info_software_version'");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertEq(9, fields.size(), "server status should have 9 fields");
+    }
+
     constructorOptionsTest() {
         hash<auto> opts = AbstractFunctionalOpcUaDataProvider::ConstructorOptions;
 
@@ -335,7 +400,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         *list<hash<DataProviderActionInfo>> actions =
             DataProviderActionCatalog::getActions("OpcUA");
         assertTrue(exists actions, "should have actions registered for OPC UA app");
-        assertEq(7, actions.size(), "should have 7 actions");
+        assertEq(13, actions.size(), "should have 13 actions");
 
         # create lookup hash
         hash<string, hash<DataProviderActionInfo>> action_map;
@@ -394,6 +459,36 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(call_opts.hasKey("method_id"), "call-method should have 'method_id' option");
         assertTrue(call_opts.object_id.required, "object_id should be required");
         assertTrue(call_opts.method_id.required, "method_id should be required");
+
+        # verify read-values API action
+        assertTrue(action_map.hasKey("read-values"), "should have 'read-values' action");
+        assertEq("Read Multiple OPC UA Node Values", action_map."read-values".display_name);
+        assertEq(DPAT_API, action_map."read-values".action_code);
+
+        # verify write-values message action
+        assertTrue(action_map.hasKey("write-values"), "should have 'write-values' action");
+        assertEq("Write Multiple OPC UA Node Values", action_map."write-values".display_name);
+        assertEq(DPAT_SEND_MESSAGE, action_map."write-values".action_code);
+
+        # verify read-attributes API action
+        assertTrue(action_map.hasKey("read-attributes"), "should have 'read-attributes' action");
+        assertEq("Read OPC UA Node Attributes", action_map."read-attributes".display_name);
+        assertEq(DPAT_API, action_map."read-attributes".action_code);
+
+        # verify read-history API action
+        assertTrue(action_map.hasKey("read-history"), "should have 'read-history' action");
+        assertEq("Read OPC UA Historical Data", action_map."read-history".display_name);
+        assertEq(DPAT_API, action_map."read-history".action_code);
+
+        # verify discover-endpoints API action
+        assertTrue(action_map.hasKey("discover-endpoints"), "should have 'discover-endpoints' action");
+        assertEq("Discover OPC UA Endpoints", action_map."discover-endpoints".display_name);
+        assertEq(DPAT_API, action_map."discover-endpoints".action_code);
+
+        # verify get-server-status API action
+        assertTrue(action_map.hasKey("get-server-status"), "should have 'get-server-status' action");
+        assertEq("Get OPC UA Server Status", action_map."get-server-status".display_name);
+        assertEq(DPAT_API, action_map."get-server-status".action_code);
     }
 
     providerInfoTest() {
@@ -514,6 +609,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         # verify message types
         hash<auto> msg_types = opcua.getMessageTypes();
         assertTrue(msg_types.hasKey("write-value"), "should have 'write-value' message type");
+        assertTrue(msg_types.hasKey("write-values"), "should have 'write-values' message type");
 
         # verify event types
         hash<auto> event_types = opcua.getEventTypes();
@@ -541,6 +637,42 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq(0, browse_result.status_code, "browse should succeed with status code 0");
         assertTrue(exists browse_result.references, "should have references");
         assertTrue(browse_result.references.size() > 0, "root should have children");
+
+        # read multiple values
+        hash<auto> read_values_result = opcua.doRequest({
+            "action": "read-values",
+            "node_ids": ("ns=0;i=2258", "ns=0;i=2259"),
+        });
+        assertTrue(exists read_values_result.results, "read-values should have results");
+        assertEq(2, read_values_result.results.size(), "should have 2 results");
+        assertEq("ns=0;i=2258", read_values_result.results[0].node_id);
+        assertEq(0, read_values_result.results[0].status_code);
+
+        # read node attributes
+        hash<auto> attr_result = opcua.doRequest({
+            "action": "read-attributes",
+            "node_id": "ns=0;i=2258",
+        });
+        assertEq("ns=0;i=2258", attr_result.node_id);
+        assertEq(0, attr_result.status_code, "read-attributes should succeed");
+        assertTrue(exists attr_result.value, "should have a value");
+
+        # discover endpoints
+        hash<auto> discover_result = opcua.doRequest({
+            "action": "discover-endpoints",
+        });
+        assertTrue(exists discover_result.endpoints, "should have endpoints");
+        assertTrue(discover_result.endpoints.size() > 0, "should have at least one endpoint");
+        assertTrue(exists discover_result.endpoints[0].endpoint_url,
+            "endpoint should have URL");
+
+        # get server status
+        hash<auto> status_result = opcua.doRequest({
+            "action": "get-server-status",
+        });
+        assertEq(0, status_result.status_code, "server status should succeed");
+        assertEq("Running", status_result.state, "server should be running");
+        assertTrue(exists status_result.current_time, "should have current time");
 
         # subscribe and observe data change
         Queue data_queue();

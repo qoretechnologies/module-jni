@@ -42,8 +42,12 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.BrowseDirection
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.MonitoringMode
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadValueId
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadRawModifiedDetails
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ViewDescription
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.AttributeId
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.Identifiers
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.List
 %module-cmd(jni) import java.lang.reflect.Method
@@ -343,8 +347,17 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         #! OPC UA write value message type
         const MESSAGE_WRITE_VALUE = "write-value";
 
+        #! OPC UA write multiple values message type
+        const MESSAGE_WRITE_VALUES = "write-values";
+
         #! Read value request type
         const REQUEST_READ_VALUE = "read-value";
+
+        #! Read multiple values request type
+        const REQUEST_READ_VALUES = "read-values";
+
+        #! Read node attributes request type
+        const REQUEST_READ_ATTRIBUTES = "read-attributes";
 
         #! Browse request type
         const REQUEST_BROWSE = "browse";
@@ -352,18 +365,39 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         #! Call method request type
         const REQUEST_CALL_METHOD = "call-method";
 
+        #! Read history request type
+        const REQUEST_READ_HISTORY = "read-history";
+
+        #! Discover endpoints request type
+        const REQUEST_DISCOVER_ENDPOINTS = "discover-endpoints";
+
+        #! Get server status request type
+        const REQUEST_GET_SERVER_STATUS = "get-server-status";
+
         #! Request type for the provider
         const RequestType = new HashDataType("OpcUaRequest", {
             "action": {
                 "display_name": "Action",
                 "type": StringType,
-                "desc": "The action to perform: `read-value`, `browse`, or `call-method`",
+                "desc": "The action to perform",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "display_name": "Read Value",
                         "short_desc": "Read a node value",
                         "desc": "Read a value from an OPC UA node",
                         "value": REQUEST_READ_VALUE,
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Read Values",
+                        "short_desc": "Read multiple node values",
+                        "desc": "Read values from multiple OPC UA nodes in a single request",
+                        "value": REQUEST_READ_VALUES,
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Read Attributes",
+                        "short_desc": "Read node attributes",
+                        "desc": "Read attributes (display name, data type, etc.) from an OPC UA node",
+                        "value": REQUEST_READ_ATTRIBUTES,
                     },
                     <AllowedValueInfo>{
                         "display_name": "Browse",
@@ -377,13 +411,36 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                         "desc": "Call a method on an OPC UA server object",
                         "value": REQUEST_CALL_METHOD,
                     },
+                    <AllowedValueInfo>{
+                        "display_name": "Read History",
+                        "short_desc": "Read historical data",
+                        "desc": "Read historical data from an OPC UA node",
+                        "value": REQUEST_READ_HISTORY,
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Discover Endpoints",
+                        "short_desc": "Discover server endpoints",
+                        "desc": "Discover available endpoints on the OPC UA server",
+                        "value": REQUEST_DISCOVER_ENDPOINTS,
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Get Server Status",
+                        "short_desc": "Get server status",
+                        "desc": "Get the current status of the OPC UA server",
+                        "value": REQUEST_GET_SERVER_STATUS,
+                    },
                 ),
             },
             "node_id": {
                 "display_name": "Node ID",
                 "type": SoftStringOrNothingType,
-                "desc": "The OPC UA node ID (e.g., `ns=2;s=Temperature`); used by `read-value` and "
-                    "`browse` actions",
+                "desc": "The OPC UA node ID (e.g., `ns=2;s=Temperature`); used by `read-value`, "
+                    "`read-attributes`, `read-history`, and `browse` actions",
+            },
+            "node_ids": {
+                "display_name": "Node IDs",
+                "type": SoftListOrNothingType,
+                "desc": "List of OPC UA node IDs; used by the `read-values` action",
             },
             "direction": {
                 "display_name": "Browse Direction",
@@ -394,8 +451,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             "max_results": {
                 "display_name": "Max Results",
                 "type": SoftIntOrNothingType,
-                "desc": "Maximum number of references to return; `0` or omitted means no limit; "
-                    "only used by the `browse` action",
+                "desc": "Maximum number of results to return; only used by the `browse` action",
             },
             "object_id": {
                 "display_name": "Object ID",
@@ -412,6 +468,22 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "display_name": "Arguments",
                 "type": SoftListOrNothingType,
                 "desc": "The input arguments for the method call; used by the `call-method` action",
+            },
+            "start_time": {
+                "display_name": "Start Time",
+                "type": SoftDateOrNothingType,
+                "desc": "The start time for historical data reads; used by the `read-history` action",
+            },
+            "end_time": {
+                "display_name": "End Time",
+                "type": SoftDateOrNothingType,
+                "desc": "The end time for historical data reads; used by the `read-history` action",
+            },
+            "max_values": {
+                "display_name": "Max Values",
+                "type": SoftIntOrNothingType,
+                "desc": "Maximum number of historical values to return per node; used by the "
+                    "`read-history` action; `0` or omitted means no limit",
             },
         });
     }
@@ -682,6 +754,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "desc": "Write a value to an OPC UA node",
                 "type": OpcUaWriteMessageDataType,
             },
+            MESSAGE_WRITE_VALUES: <DataProviderMessageInfo>{
+                "desc": "Write values to multiple OPC UA nodes in a single request",
+                "type": OpcUaWriteValuesMessageDataType,
+            },
         };
     }
 
@@ -703,6 +779,33 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                             "status code %d", msg.node_id, int(result.getValue()));
                     }
                     debug("OPC UA: Wrote value to node %y: %y", msg.node_id, msg.value);
+                    break;
+                }
+
+                case MESSAGE_WRITE_VALUES: {
+                    ensureConnected();
+                    ArrayList write_values();
+                    foreach hash<auto> item in (msg.values) {
+                        NodeId node_id = NodeId::parse(item.node_id);
+                        Variant variant(item.value);
+                        DataValue data_value(variant);
+                        write_values.add(new WriteValue(
+                            node_id,
+                            AttributeId::Value.uid(),
+                            NOTHING,
+                            data_value
+                        ));
+                    }
+                    auto response = client.write(write_values).get();
+                    auto results = response.getResults();
+                    for (int i = 0; i < results.size(); ++i) {
+                        if (results[i].isBad()) {
+                            throw "OPCUA-WRITE-ERROR", sprintf("failed to write value to node %y: "
+                                "status code %d", msg.values[i].node_id,
+                                int(results[i].getValue()));
+                        }
+                    }
+                    debug("OPC UA: Wrote %d values", msg.values.size());
                     break;
                 }
 
@@ -739,14 +842,26 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             switch (action) {
                 case REQUEST_READ_VALUE:
                     return doReadValue(req);
+                case REQUEST_READ_VALUES:
+                    return doReadValues(req);
+                case REQUEST_READ_ATTRIBUTES:
+                    return doReadAttributes(req);
                 case REQUEST_BROWSE:
                     return doBrowse(req);
                 case REQUEST_CALL_METHOD:
                     return doCallMethod(req);
+                case REQUEST_READ_HISTORY:
+                    return doReadHistory(req);
+                case REQUEST_DISCOVER_ENDPOINTS:
+                    return doDiscoverEndpoints(req);
+                case REQUEST_GET_SERVER_STATUS:
+                    return doGetServerStatus(req);
                 default:
                     throw "UNSUPPORTED-REQUEST", sprintf("action %y is unsupported; supported "
-                        "actions: %y", action, (REQUEST_READ_VALUE, REQUEST_BROWSE,
-                        REQUEST_CALL_METHOD));
+                        "actions: %y", action, (REQUEST_READ_VALUE, REQUEST_READ_VALUES,
+                        REQUEST_READ_ATTRIBUTES, REQUEST_BROWSE, REQUEST_CALL_METHOD,
+                        REQUEST_READ_HISTORY, REQUEST_DISCOVER_ENDPOINTS,
+                        REQUEST_GET_SERVER_STATUS));
             }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.arg instanceof object && ex.arg.hasCallableMethod("toString")) {
@@ -803,16 +918,22 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             UInteger::valueOf(63)  # result mask (all)
         );
 
-        auto result = client.browse(browse_desc).get();
+        # use server-side pagination via maxReferencesPerNode
+        ArrayList browse_descs();
+        browse_descs.add(browse_desc);
+        auto response = client.browse(
+            ViewDescription::builder().build(),
+            UInteger::valueOf(max_results),
+            browse_descs
+        ).get();
+        auto browse_results = response.getResults();
+        auto result = browse_results[0];
 
         auto status = result.getStatusCode();
         list<hash<auto>> refs = ();
         auto references = result.getReferences();
         if (references) {
             foreach auto ref in (references) {
-                if (max_results > 0 && refs.size() >= max_results) {
-                    break;
-                }
                 refs += {
                     "node_id": ref.getNodeId().toParseableString(),
                     "display_name": ref.getDisplayName().getText(),
@@ -862,12 +983,305 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         };
     }
 
-    #! Ensures the client is connected
+    #! Reads values from multiple OPC UA nodes in a single request
+    private hash<auto> doReadValues(auto request) {
+        ArrayList read_value_ids();
+        foreach string node_id_str in (request.node_ids) {
+            read_value_ids.add(new ReadValueId(
+                NodeId::parse(node_id_str),
+                AttributeId::Value.uid(),
+                NOTHING,
+                QualifiedName::NULL_VALUE
+            ));
+        }
+        auto response = client.read(0.0, TimestampsToReturn::Both, read_value_ids).get();
+        auto results_list = response.getResults();
+
+        list<hash<auto>> results = ();
+        for (int i = 0; i < results_list.size(); ++i) {
+            auto dv = results_list[i];
+            auto status = dv.getStatusCode();
+            results += {
+                "node_id": request.node_ids[i],
+                "value": convertValue(dv.getValue()),
+                "status_code": int(status.getValue()),
+                "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
+                "source_timestamp": convertDateTime(dv.getSourceTime()),
+                "server_timestamp": convertDateTime(dv.getServerTime()),
+            };
+        }
+        return {"results": results};
+    }
+
+    #! Reads node attributes from an OPC UA node
+    private hash<auto> doReadAttributes(auto request) {
+        NodeId node_id = NodeId::parse(request.node_id);
+
+        # read multiple attributes in one request
+        ArrayList read_value_ids();
+        read_value_ids.add(new ReadValueId(node_id, AttributeId::Value.uid(), NOTHING,
+            QualifiedName::NULL_VALUE));
+        read_value_ids.add(new ReadValueId(node_id, AttributeId::DisplayName.uid(), NOTHING,
+            QualifiedName::NULL_VALUE));
+        read_value_ids.add(new ReadValueId(node_id, AttributeId::Description.uid(), NOTHING,
+            QualifiedName::NULL_VALUE));
+        read_value_ids.add(new ReadValueId(node_id, AttributeId::NodeClass.uid(), NOTHING,
+            QualifiedName::NULL_VALUE));
+        read_value_ids.add(new ReadValueId(node_id, AttributeId::DataType.uid(), NOTHING,
+            QualifiedName::NULL_VALUE));
+        read_value_ids.add(new ReadValueId(node_id, AttributeId::AccessLevel.uid(), NOTHING,
+            QualifiedName::NULL_VALUE));
+        read_value_ids.add(new ReadValueId(node_id, AttributeId::Historizing.uid(), NOTHING,
+            QualifiedName::NULL_VALUE));
+
+        auto response = client.read(0.0, TimestampsToReturn::Both, read_value_ids).get();
+        auto results = response.getResults();
+
+        # the overall status is from the Value attribute read
+        auto status = results[0].getStatusCode();
+
+        # extract display name text
+        *string display_name;
+        if (results[1].getStatusCode().isGood()) {
+            auto dn_val = results[1].getValue();
+            if (dn_val) {
+                display_name = dn_val.getValue().getText();
+            }
+        }
+
+        # extract description text
+        *string desc_text;
+        if (results[2].getStatusCode().isGood()) {
+            auto desc_val = results[2].getValue();
+            if (desc_val) {
+                desc_text = desc_val.getValue().getText();
+            }
+        }
+
+        # extract node class
+        *string node_class;
+        if (results[3].getStatusCode().isGood()) {
+            auto nc_val = results[3].getValue();
+            if (nc_val) {
+                node_class = nc_val.getValue().toString();
+            }
+        }
+
+        # extract data type
+        *string data_type;
+        if (results[4].getStatusCode().isGood()) {
+            auto dt_val = results[4].getValue();
+            if (dt_val) {
+                data_type = dt_val.getValue().toParseableString();
+            }
+        }
+
+        # extract access level
+        *int access_level;
+        *bool writable;
+        if (results[5].getStatusCode().isGood()) {
+            auto al_val = results[5].getValue();
+            if (al_val) {
+                access_level = int(al_val.getValue().intValue());
+                # bit 1 = CurrentWrite
+                writable = boolean(access_level & 2);
+            }
+        }
+
+        # extract historizing flag
+        *bool historizing;
+        if (results[6].getStatusCode().isGood()) {
+            auto hist_val = results[6].getValue();
+            if (hist_val) {
+                historizing = boolean(hist_val.getValue());
+            }
+        }
+
+        return {
+            "node_id": request.node_id,
+            "display_name": display_name,
+            "description": desc_text,
+            "node_class": node_class,
+            "data_type": data_type,
+            "value": convertValue(results[0].getValue()),
+            "access_level": access_level,
+            "writable": writable,
+            "historizing": historizing,
+            "status_code": int(status.getValue()),
+            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
+        };
+    }
+
+    #! Reads historical data from an OPC UA node
+    private hash<auto> doReadHistory(auto request) {
+        NodeId node_id = NodeId::parse(request.node_id);
+
+        # build read details using Milo DateTime
+        DateTime start_date = request.start_time
+            ? new DateTime(int(get_epoch_seconds(request.start_time)) * 1000)
+            : new DateTime(0);
+        DateTime end_date = request.end_time
+            ? new DateTime(int(get_epoch_seconds(request.end_time)) * 1000)
+            : DateTime::now();
+        int max_values = int(request.max_values ?? 0);
+
+        auto details = ReadRawModifiedDetails::builder()
+            .setIsReadModified(False)
+            .setStartTime(start_date)
+            .setEndTime(end_date)
+            .setNumValuesPerNode(UInteger::valueOf(max_values))
+            .setReturnBounds(True)
+            .build();
+
+        ArrayList hrvids();
+        hrvids.add(new HistoryReadValueId(node_id, NOTHING, QualifiedName::NULL_VALUE, NOTHING));
+
+        auto response = client.historyRead(details, TimestampsToReturn::Both, False, hrvids).get();
+        auto results = response.getResults();
+        auto result = results[0];
+        auto status = result.getStatusCode();
+
+        list<hash<auto>> data_values = ();
+        auto history_data = result.getHistoryData().decode();
+        if (history_data) {
+            auto dv_list = history_data.getDataValues();
+            if (dv_list) {
+                foreach auto dv in (dv_list) {
+                    auto dv_status = dv.getStatusCode();
+                    data_values += {
+                        "value": convertValue(dv.getValue()),
+                        "status_code": int(dv_status.getValue()),
+                        "source_timestamp": convertDateTime(dv.getSourceTime()),
+                        "server_timestamp": convertDateTime(dv.getServerTime()),
+                    };
+                }
+            }
+        }
+
+        return {
+            "node_id": request.node_id,
+            "data_values": data_values,
+            "status_code": int(status.getValue()),
+            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
+        };
+    }
+
+    #! Discovers available endpoints on the OPC UA server
+    private hash<auto> doDiscoverEndpoints(auto request) {
+        string discover_url = request.node_id ?? url;
+        auto endpoints = DiscoveryClient::getEndpoints(discover_url).get();
+
+        list<hash<auto>> endpoint_list = ();
+        foreach auto ep in (endpoints) {
+            endpoint_list += {
+                "endpoint_url": ep.getEndpointUrl(),
+                "security_policy_uri": ep.getSecurityPolicyUri(),
+                "security_mode": ep.getSecurityMode().toString(),
+                "server_name": ep.getServer().getApplicationName().getText(),
+                "transport_profile_uri": ep.getTransportProfileUri(),
+            };
+        }
+        return {"endpoints": endpoint_list};
+    }
+
+    #! Gets the server status
+    private hash<auto> doGetServerStatus(auto request) {
+        # read server status nodes
+        ArrayList read_value_ids();
+        # ServerStatus_State (ns=0;i=2259)
+        read_value_ids.add(new ReadValueId(new NodeId(0, 2259),
+            AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
+        # ServerStatus_StartTime (ns=0;i=2257)
+        read_value_ids.add(new ReadValueId(new NodeId(0, 2257),
+            AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
+        # ServerStatus_CurrentTime (ns=0;i=2258)
+        read_value_ids.add(new ReadValueId(new NodeId(0, 2258),
+            AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
+        # ServerStatus_BuildInfo_ProductName (ns=0;i=2261)
+        read_value_ids.add(new ReadValueId(new NodeId(0, 2261),
+            AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
+        # ServerStatus_BuildInfo_ProductUri (ns=0;i=2262)
+        read_value_ids.add(new ReadValueId(new NodeId(0, 2262),
+            AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
+        # ServerStatus_BuildInfo_ManufacturerName (ns=0;i=2263)
+        read_value_ids.add(new ReadValueId(new NodeId(0, 2263),
+            AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
+        # ServerStatus_BuildInfo_SoftwareVersion (ns=0;i=2264)
+        read_value_ids.add(new ReadValueId(new NodeId(0, 2264),
+            AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
+
+        auto response = client.read(0.0, TimestampsToReturn::Both, read_value_ids).get();
+        auto results = response.getResults();
+
+        auto status = results[0].getStatusCode();
+
+        # ServerState enum: 0=Running, 1=Failed, 2=NoConfiguration, etc.
+        *string state;
+        if (results[0].getStatusCode().isGood()) {
+            auto sv = results[0].getValue();
+            if (sv) {
+                int state_val = int(sv.getValue());
+                switch (state_val) {
+                    case 0: state = "Running"; break;
+                    case 1: state = "Failed"; break;
+                    case 2: state = "NoConfiguration"; break;
+                    case 3: state = "Suspended"; break;
+                    case 4: state = "Shutdown"; break;
+                    case 5: state = "Test"; break;
+                    case 6: state = "CommunicationFault"; break;
+                    case 7: state = "Unknown"; break;
+                    default: state = sprintf("Unknown(%d)", state_val); break;
+                }
+            }
+        }
+
+        return {
+            "state": state ?? "Unknown",
+            "start_time": results[1].getStatusCode().isGood()
+                ? convertDateTime(results[1].getValue() ? results[1].getValue().getValue() : NOTHING)
+                : NOTHING,
+            "current_time": results[2].getStatusCode().isGood()
+                ? convertDateTime(results[2].getValue() ? results[2].getValue().getValue() : NOTHING)
+                : NOTHING,
+            "build_info_product_name": results[3].getStatusCode().isGood()
+                ? convertValue(results[3].getValue()) : NOTHING,
+            "build_info_product_uri": results[4].getStatusCode().isGood()
+                ? convertValue(results[4].getValue()) : NOTHING,
+            "build_info_manufacturer": results[5].getStatusCode().isGood()
+                ? convertValue(results[5].getValue()) : NOTHING,
+            "build_info_software_version": results[6].getStatusCode().isGood()
+                ? convertValue(results[6].getValue()) : NOTHING,
+            "status_code": int(status.getValue()),
+            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
+        };
+    }
+
+    #! Ensures the client is connected; reconnects if auto_reconnect is enabled
     private ensureConnected() {
         if (!client) {
             client = getClient(copts, logger);
             client.connect().get();
             debug("OPC UA: Connected to %y", url);
+            return;
+        }
+        # check if session is still active; reconnect if needed
+        bool auto_reconnect = copts.auto_reconnect ?? True;
+        if (auto_reconnect) {
+            try {
+                # test the connection by reading the server state
+                client.readValue(0.0, TimestampsToReturn::Neither, new NodeId(0, 2259)).get();
+            } catch (hash<ExceptionInfo> ex) {
+                debug("OPC UA: Connection lost, reconnecting to %y", url);
+                try {
+                    client.disconnect().get();
+                } catch () {
+                    # ignore disconnect errors
+                }
+                delete client;
+                client = getClient(copts, logger);
+                client.connect().get();
+                debug("OPC UA: Reconnected to %y", url);
+            }
         }
     }
 }

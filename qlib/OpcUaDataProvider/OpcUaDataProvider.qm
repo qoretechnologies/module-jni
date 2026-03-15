@@ -234,6 +234,135 @@ module OpcUaDataProvider {
             }),
             "output_type": OpcUaCallMethodResponseDataType,
         });
+
+        # API: read multiple values
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "read-values",
+            "display_name": "Read Multiple OPC UA Node Values",
+            "short_desc": "Read values from multiple OPC UA nodes in a single request",
+            "desc": "Read current values from multiple OPC UA nodes in a single batch request "
+                "for improved performance",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "node_ids": {
+                    "display_name": "Node IDs",
+                    "type": SoftAutoListType,
+                    "desc": "List of OPC UA node IDs to read (e.g., `ns=2;s=Temperature`)",
+                },
+            }, {
+                "required": True,
+                "preselected": True,
+            }),
+            "output_type": OpcUaReadValuesResponseDataType,
+        });
+
+        # message: write multiple values
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "write-values",
+            "display_name": "Write Multiple OPC UA Node Values",
+            "short_desc": "Write values to multiple OPC UA nodes",
+            "desc": "Write values to multiple OPC UA nodes in a single batch request",
+            "action_code": DPAT_SEND_MESSAGE,
+            "action_val": OpcUaDataProvider::MESSAGE_WRITE_VALUES,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpcUaWriteValuesMessageDataType::Fields{"values",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ),
+        });
+
+        # API: read node attributes
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "read-attributes",
+            "display_name": "Read OPC UA Node Attributes",
+            "short_desc": "Read attributes from an OPC UA node",
+            "desc": "Read node attributes including display name, description, data type, "
+                "access level, and current value",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "node_id": {
+                    "display_name": "Node ID",
+                    "type": StringType,
+                    "desc": "The OPC UA node ID to read attributes from",
+                },
+            }, {
+                "required": True,
+                "preselected": True,
+            }),
+            "output_type": OpcUaReadAttributesResponseDataType,
+        });
+
+        # API: read history
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "read-history",
+            "display_name": "Read OPC UA Historical Data",
+            "short_desc": "Read historical data from an OPC UA node",
+            "desc": "Read historical data values from an OPC UA node with configurable time range "
+                "and maximum values",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "node_id": {
+                    "display_name": "Node ID",
+                    "type": StringType,
+                    "desc": "The OPC UA node ID to read history from",
+                },
+            }, {
+                "required": True,
+                "preselected": True,
+            }) + DataProviderActionCatalog::getActionOptionFromFields({
+                "start_time": {
+                    "display_name": "Start Time",
+                    "type": SoftDateOrNothingType,
+                    "desc": "The start time for the historical data range",
+                },
+                "end_time": {
+                    "display_name": "End Time",
+                    "type": SoftDateOrNothingType,
+                    "desc": "The end time for the historical data range",
+                },
+                "max_values": {
+                    "display_name": "Max Values",
+                    "type": SoftIntOrNothingType,
+                    "desc": "Maximum number of values to return; 0 or omitted means no limit",
+                },
+            }),
+            "output_type": OpcUaHistoryReadResponseDataType,
+        });
+
+        # API: discover endpoints
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "discover-endpoints",
+            "display_name": "Discover OPC UA Endpoints",
+            "short_desc": "Discover available endpoints on an OPC UA server",
+            "desc": "Discover available endpoints on the OPC UA server including security "
+                "policies and transport profiles",
+            "action_code": DPAT_API,
+            "output_type": OpcUaEndpointDescriptionDataType,
+        });
+
+        # API: get server status
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "get-server-status",
+            "display_name": "Get OPC UA Server Status",
+            "short_desc": "Get the current status of the OPC UA server",
+            "desc": "Get the current server status including state, start time, build info, "
+                "and product information",
+            "action_code": DPAT_API,
+            "output_type": OpcUaServerStatusDataType,
+        });
     };
 }
 
