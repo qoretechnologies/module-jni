@@ -5,7 +5,7 @@ set(module_name "jni")
 project(qore-jni-module)
 
 set (VERSION_MAJOR 2)
-set (VERSION_MINOR 6)
+set (VERSION_MINOR 7)
 set (VERSION_PATCH 0)
 
 set (BYTE_BUDDY_JAR ${CMAKE_SOURCE_DIR}/byte-buddy/byte-buddy-1.14.19.jar)

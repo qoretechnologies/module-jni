@@ -920,6 +920,22 @@ set_save_object_callback(callback);
 
     @section jnireleasenotes jni Module Release Notes
 
+    @subsection jni_2_7_0 jni Module Version 2.7.0
+    - added the <a href="../../OpcUaDataProvider/html/index.html">OpcUaDataProvider</a> module for OPC UA
+      connectivity using the Eclipse Milo 0.6.13 SDK
+      - supports data change subscriptions via the observer pattern
+      - supports read/write node values, browse address space, and call methods via the request API
+      - supports connection provider with \c opcua, \c opcuatcp, and \c opcuahttps schemes
+      - supports SSL/TLS and OPC UA security policy configuration
+      - includes action catalog integration (7 actions)
+    - fixed a bug where Java callback threads using module method references would fail to resolve
+      classes because the callback's program context lacked JNI external data; the dispatcher now
+      falls back to the program captured at \c QoreInvocationHandler construction time
+    - fixed \c addParentClasspath() to fall back to adding JARs to the classloader directly when the
+      parent classloader is not a \c QoreURLClassLoader (bootstrap program case)
+    - fixed \c getQoreType() to gracefully handle class loading failures during type resolution by
+      falling back to \c auto type instead of aborting class population
+
     @subsection jni_2_6_0 jni Module Version 2.6.0
     - added Kotlin language integration support
       (<a href="https://github.com/qoretechnologies/qore/issues/5131">issue 5131</a>)
