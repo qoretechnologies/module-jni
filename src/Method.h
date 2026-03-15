@@ -154,6 +154,13 @@ public:
 
     void getName(QoreString& str) const;
 
+    //! Checks if any interface implemented by the declaring class has this method declared as varargs
+    /** Called when a method's isVarArgs() is false but its last parameter is a non-byte array.
+        This handles JVM lambda classes where LambdaMetafactory drops ACC_VARARGS from the
+        generated SAM method.
+    */
+    DLLLOCAL bool checkInterfaceVarArgs(Env& env, jobjectArray paramTypesArray, jsize paramCount);
+
     int isStatic() const {
         return mods & JVM_ACC_STATIC;
     }
