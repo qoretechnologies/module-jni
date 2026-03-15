@@ -115,8 +115,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "display_name": "Auto Reconnect",
                 "short_desc": "Automatically reconnect on connection loss",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If set to `True`, the client will automatically attempt to reconnect to the "
-                    "server if the connection is lost",
+                "desc": "If set to `True`, the client will automatically attempt to reconnect "
+                    "to the server if the connection is lost",
                 "default_value": True,
             },
             "connect_timeout": <DataProviderOptionInfo>{
@@ -130,8 +130,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "display_name": "Discard Oldest",
                 "short_desc": "Discard oldest values when the monitored item queue is full",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If set to `True`, the oldest notification in the monitored item queue is "
-                    "discarded when the queue is full. If `False`, the newest value is discarded",
+                "desc": "If set to `True`, the oldest notification in the monitored item "
+                    "queue is discarded when the queue is full. If `False`, the newest "
+                    "value is discarded",
                 "default_value": True,
             },
             "message_security_mode": <DataProviderOptionInfo>{
@@ -360,7 +361,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         const REQUEST_READ_ATTRIBUTES = "read-attributes";
 
         #! Browse request type
-        const REQUEST_BROWSE = "browse";
+        const REQUEST_BROWSE = "browse-nodes";
 
         #! Call method request type
         const REQUEST_CALL_METHOD = "call-method";

@@ -33,11 +33,13 @@ public class OpcUaWriteMessageDataType inherits HashDataType {
                 "display_name": "Node ID",
                 "type": StringType,
                 "desc": "The target OPC UA node ID (e.g., `ns=2;s=SetPoint`)",
+                "example_value": "ns=2;s=SetPoint",
             },
             "value": {
                 "display_name": "Value",
                 "type": AutoType,
                 "desc": "The value to write to the node",
+                "example_value": 22.5,
             },
             "data_type": {
                 "display_name": "Data Type",

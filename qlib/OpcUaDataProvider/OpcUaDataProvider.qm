@@ -165,6 +165,7 @@ module OpcUaDataProvider {
                     "display_name": "Node ID",
                     "type": StringType,
                     "desc": "The OPC UA node ID to read (e.g., `ns=2;s=Temperature`)",
+                    "example_value": "ns=2;s=Temperature",
                 },
             }, {
                 "required": True,
@@ -173,11 +174,11 @@ module OpcUaDataProvider {
             "output_type": OpcUaReadResponseDataType,
         });
 
-        # API: browse
+        # API: browse nodes
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OpcUaDataProvider::AppName,
             "path": "/",
-            "action": "browse",
+            "action": "browse-nodes",
             "display_name": "Browse OPC UA Address Space",
             "short_desc": "Browse the OPC UA server address space",
             "desc": "Browse the OPC UA server address space to discover available nodes",
@@ -187,16 +188,26 @@ module OpcUaDataProvider {
                     "display_name": "Node ID",
                     "type": SoftStringOrNothingType,
                     "desc": "The node ID to browse from; defaults to the Root node (`ns=0;i=84`)",
+                    "example_value": "ns=0;i=84",
                 },
+            }) + DataProviderActionCatalog::getActionOptionFromFields({
                 "direction": {
                     "display_name": "Direction",
                     "type": SoftStringOrNothingType,
-                    "desc": "Browse direction: `Forward`, `Inverse`, or `Both`; defaults to `Forward`",
+                    "desc": "Browse direction: `Forward`, `Inverse`, or `Both`; defaults to "
+                        "`Forward`",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "Forward", "display_name": "Forward"},
+                        <AllowedValueInfo>{"value": "Inverse", "display_name": "Inverse"},
+                        <AllowedValueInfo>{"value": "Both", "display_name": "Both"},
+                    ),
+                    "preselected": True,
                 },
                 "max_results": {
                     "display_name": "Max Results",
                     "type": SoftIntOrNothingType,
                     "desc": "Maximum number of references to return; `0` or omitted means no limit",
+                    "preselected": True,
                 },
             }),
             "output_type": OpcUaBrowseResponseDataType,
@@ -348,6 +359,15 @@ module OpcUaDataProvider {
             "desc": "Discover available endpoints on the OPC UA server including security "
                 "policies and transport profiles",
             "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "url": {
+                    "display_name": "Discovery URL",
+                    "type": SoftStringOrNothingType,
+                    "desc": "The OPC UA server URL to discover endpoints on; if omitted, the "
+                        "connection URL is used",
+                    "example_value": "opc.tcp://localhost:4840",
+                },
+            }),
             "output_type": OpcUaEndpointDescriptionDataType,
         });
 
@@ -358,9 +378,17 @@ module OpcUaDataProvider {
             "action": "get-server-status",
             "display_name": "Get OPC UA Server Status",
             "short_desc": "Get the current status of the OPC UA server",
-            "desc": "Get the current server status including state, start time, build info, "
-                "and product information",
+            "desc": "Get the current server status including state, start time, build "
+                "info, and product information",
             "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "node_id": {
+                    "display_name": "Server Node ID",
+                    "type": SoftStringOrNothingType,
+                    "desc": "The server object node ID; defaults to the standard "
+                        "ServerStatus node (`ns=0;i=2259`)",
+                },
+            }),
             "output_type": OpcUaServerStatusDataType,
         });
     };

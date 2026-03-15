@@ -446,9 +446,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(read_opts.node_id.required, "node_id should be required for read");
 
         # verify browse API action
-        assertTrue(action_map.hasKey("browse"), "should have 'browse' action");
-        assertEq("Browse OPC UA Address Space", action_map."browse".display_name);
-        assertEq(DPAT_API, action_map."browse".action_code);
+        assertTrue(action_map.hasKey("browse-nodes"), "should have 'browse-nodes' action");
+        assertEq("Browse OPC UA Address Space", action_map."browse-nodes".display_name);
+        assertEq(DPAT_API, action_map."browse-nodes".action_code);
 
         # verify call-method API action
         assertTrue(action_map.hasKey("call-method"), "should have 'call-method' action");
@@ -631,7 +631,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
 
         # browse from root node
         hash<auto> browse_result = opcua.doRequest({
-            "action": "browse",
+            "action": "browse-nodes",
             "node_id": "ns=0;i=84",
         });
         assertEq(0, browse_result.status_code, "browse should succeed with status code 0");

@@ -33,6 +33,7 @@ public class OpcUaReadResponseDataType inherits HashDataType {
                 "display_name": "Node ID",
                 "type": StringType,
                 "desc": "The OPC UA node ID that was read",
+                "example_value": "ns=0;i=2258",
             },
             "value": {
                 "display_name": "Value",
@@ -43,11 +44,13 @@ public class OpcUaReadResponseDataType inherits HashDataType {
                 "display_name": "Status Code",
                 "type": IntType,
                 "desc": "The OPC UA status code; `0` indicates good quality",
+                "example_value": 0,
             },
             "status_text": {
                 "display_name": "Status Text",
                 "type": StringType,
                 "desc": "A human-readable description of the status code",
+                "example_value": "Good",
             },
             "source_timestamp": {
                 "display_name": "Source Timestamp",

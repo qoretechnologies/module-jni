@@ -33,26 +33,32 @@ public class OpcUaDataChangeEventDataType inherits HashDataType {
                 "display_name": "Node ID",
                 "type": StringType,
                 "desc": "The OPC UA node ID string (e.g., `ns=2;s=Temperature`)",
+                "example_value": "ns=2;s=Temperature",
             },
             "display_name": {
                 "display_name": "Display Name",
                 "type": SoftStringOrNothingType,
                 "desc": "The display name of the node, if available",
+                "example_value": "Temperature",
             },
             "value": {
                 "display_name": "Value",
                 "type": AutoType,
-                "desc": "The new value of the node; the type depends on the OPC UA data type of the node",
+                "desc": "The new value of the node; the type depends on the OPC UA data type "
+                    "of the node",
+                "example_value": 22.5,
             },
             "status_code": {
                 "display_name": "Status Code",
                 "type": IntType,
                 "desc": "The OPC UA status code; `0` indicates good quality",
+                "example_value": 0,
             },
             "status_text": {
                 "display_name": "Status Text",
                 "type": StringType,
                 "desc": "A human-readable description of the status code",
+                "example_value": "Good",
             },
             "source_timestamp": {
                 "display_name": "Source Timestamp",
