@@ -50,6 +50,7 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.List
+%module-cmd(jni) import java.util.concurrent.TimeUnit
 %module-cmd(jni) import java.lang.reflect.Method
 
 #! contains all public definitions in the OpcUaDataProvider module
@@ -550,7 +551,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private stop() {
         if (client) {
             try {
-                client.disconnect().get();
+                awaitFuture(client.disconnect(), "disconnect");
                 debug("OPC UA: Disconnected from %y", url);
             } catch (hash<ExceptionInfo> ex) {
                 # ignore disconnect errors during stop
@@ -565,7 +566,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private start() {
         try {
             client = getClient(copts, logger);
-            client.connect().get();
+            awaitFuture(client.connect(), "connect");
             debug("OPC UA: Connected to %y", url);
 
             # notify connected event
@@ -593,8 +594,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     #! Creates a subscription and adds monitored items
     private createSubscription() {
         # create subscription
-        subscription = client.getSubscriptionManager()
-            .createSubscription(publishing_interval * 1.0).get();
+        subscription = awaitFuture(client.getSubscriptionManager()
+            .createSubscription(publishing_interval * 1.0), "create subscription");
 
         # create monitored item requests
         ArrayList requests();
@@ -629,10 +630,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         subscription.addNotificationListener(notification_listener);
 
         # create monitored items
-        auto monitored_items = subscription.createMonitoredItems(
+        auto monitored_items = awaitFuture(subscription.createMonitoredItems(
             TimestampsToReturn::Both,
             requests
-        ).get();
+        ), "create monitored items");
 
         debug("OPC UA: Created subscription with %d monitored items", monitored_items.size());
     }
@@ -697,6 +698,32 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             return NOTHING;
         }
         return date(int(java_date.getTime() / 1000));
+    }
+
+    #! Awaits a CompletableFuture with cooperative cancellation support
+    /** Polls with 500ms timeout intervals, checking for thread cancellation between polls.
+        This ensures that blocking operations can be interrupted by the Qore runtime.
+        @param future the CompletableFuture to await
+        @param operation a description of the operation for error messages
+        @return the result of the future
+        @throw PROGRAM-INTERRUPTED if the thread is cancelled during the wait
+    */
+    private static auto awaitFuture(auto future, string operation = "OPC UA operation") {
+        while (True) {
+            try {
+                return future.get(500, TimeUnit::MILLISECONDS);
+            } catch (hash<ExceptionInfo> ex) {
+                # TimeoutException means the future hasn't completed yet; loop and check cancel
+                if (ex.desc =~ /TimeoutException/) {
+                    # check for thread/program cancellation
+                    # this will throw PROGRAM-INTERRUPTED or THREAD-CANCELLED if active
+                    # NOTE: sleep(0) is a cancellation point in Qore
+                    sleep(0);
+                    continue;
+                }
+                rethrow;
+            }
+        }
     }
 
     #! Returns a hash of all supported event types
@@ -774,7 +801,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     Variant variant(msg.value);
                     DataValue data_value(variant);
 
-                    StatusCode result = client.writeValue(node_id, data_value).get();
+                    StatusCode result = awaitFuture(
+                        client.writeValue(node_id, data_value), "write value");
                     if (result.isBad()) {
                         throw "OPCUA-WRITE-ERROR", sprintf("failed to write value to node %y: "
                             "status code %d", msg.node_id, int(result.getValue()));
@@ -797,7 +825,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                             data_value
                         ));
                     }
-                    auto response = client.write(write_values).get();
+                    auto response = awaitFuture(
+                        client.write(write_values), "write values");
                     auto results = response.getResults();
                     for (int i = 0; i < results.size(); ++i) {
                         if (results[i].isBad()) {
@@ -877,7 +906,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     #! Reads a value from an OPC UA node
     private hash<auto> doReadValue(auto request) {
         auto node_id = NodeId::parse(request.node_id);
-        auto data_value = client.readValue(0.0, TimestampsToReturn::Both, node_id).get();
+        auto data_value = awaitFuture(
+            client.readValue(0.0, TimestampsToReturn::Both, node_id), "read value");
 
         auto status = data_value.getStatusCode();
         return {
@@ -922,11 +952,11 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # use server-side pagination via maxReferencesPerNode
         ArrayList browse_descs();
         browse_descs.add(browse_desc);
-        auto response = client.browse(
+        auto response = awaitFuture(client.browse(
             ViewDescription::builder().build(),
             UInteger::valueOf(max_results),
             browse_descs
-        ).get();
+        ), "browse nodes");
         auto browse_results = response.getResults();
         auto result = browse_results[0];
 
@@ -964,9 +994,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             input_args = map new Variant($1), request.arguments;
         }
 
-        auto result = client.call(
+        auto result = awaitFuture(client.call(
             new CallMethodRequest(object_id, method_id, input_args)
-        ).get();
+        ), "call method");
 
         auto status = result.getStatusCode();
         list<auto> output_args = ();
@@ -995,7 +1025,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 QualifiedName::NULL_VALUE
             ));
         }
-        auto response = client.read(0.0, TimestampsToReturn::Both, read_value_ids).get();
+        auto response = awaitFuture(
+            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results_list = response.getResults();
 
         list<hash<auto>> results = ();
@@ -1035,7 +1066,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         read_value_ids.add(new ReadValueId(node_id, AttributeId::Historizing.uid(), NOTHING,
             QualifiedName::NULL_VALUE));
 
-        auto response = client.read(0.0, TimestampsToReturn::Both, read_value_ids).get();
+        auto response = awaitFuture(
+            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results = response.getResults();
 
         # the overall status is from the Value attribute read
@@ -1137,7 +1169,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         ArrayList hrvids();
         hrvids.add(new HistoryReadValueId(node_id, NOTHING, QualifiedName::NULL_VALUE, NOTHING));
 
-        auto response = client.historyRead(details, TimestampsToReturn::Both, False, hrvids).get();
+        auto response = awaitFuture(
+            client.historyRead(details, TimestampsToReturn::Both, False, hrvids),
+            "read history");
         auto results = response.getResults();
         auto result = results[0];
         auto status = result.getStatusCode();
@@ -1170,7 +1204,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     #! Discovers available endpoints on the OPC UA server
     private hash<auto> doDiscoverEndpoints(auto request) {
         string discover_url = request.node_id ?? url;
-        auto endpoints = DiscoveryClient::getEndpoints(discover_url).get();
+        auto endpoints = awaitFuture(
+            DiscoveryClient::getEndpoints(discover_url), "discover endpoints");
 
         list<hash<auto>> endpoint_list = ();
         foreach auto ep in (endpoints) {
@@ -1211,7 +1246,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         read_value_ids.add(new ReadValueId(new NodeId(0, 2264),
             AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
 
-        auto response = client.read(0.0, TimestampsToReturn::Both, read_value_ids).get();
+        auto response = awaitFuture(
+            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results = response.getResults();
 
         auto status = results[0].getStatusCode();
@@ -1261,7 +1297,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private ensureConnected() {
         if (!client) {
             client = getClient(copts, logger);
-            client.connect().get();
+            awaitFuture(client.connect(), "connect");
             debug("OPC UA: Connected to %y", url);
             return;
         }
@@ -1270,17 +1306,18 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         if (auto_reconnect) {
             try {
                 # test the connection by reading the server state
-                client.readValue(0.0, TimestampsToReturn::Neither, new NodeId(0, 2259)).get();
+                awaitFuture(client.readValue(0.0, TimestampsToReturn::Neither,
+                    new NodeId(0, 2259)), "connection test");
             } catch (hash<ExceptionInfo> ex) {
                 debug("OPC UA: Connection lost, reconnecting to %y", url);
                 try {
-                    client.disconnect().get();
+                    awaitFuture(client.disconnect(), "disconnect");
                 } catch () {
                     # ignore disconnect errors
                 }
                 delete client;
                 client = getClient(copts, logger);
-                client.connect().get();
+                awaitFuture(client.connect(), "connect");
                 debug("OPC UA: Reconnected to %y", url);
             }
         }

@@ -28,6 +28,7 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.identity.UsernameProvider
 %module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.identity.X509IdentityProvider
 %module-cmd(jni) import java.security.KeyStore
+%module-cmd(jni) import java.io.ByteArrayInputStream
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.LocalizedText
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.EndpointDescription
@@ -138,20 +139,18 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
                         *string ks_location = copts."ssl.keystore.location";
                         if (!ks_location) {
                             throw "OPCUA-CONFIG-ERROR", "Certificate authentication requires "
-                                "'ssl.keystore.location' to be set";
+                                "`ssl.keystore.location` to be set";
                         }
                         string ks_password = copts."ssl.keystore.password" ?? "";
                         string ks_type = copts."ssl.keystore.type" ?? "PKCS12";
                         # convert password string to char array (list of ints)
                         softlist<int> pw_chars = map ord($1), ks_password;
+                        # read keystore file through Qore I/O (respects filesystem sandbox)
+                        binary ks_data = ReadOnlyFile::readBinaryFile(ks_location);
                         KeyStore ks = KeyStore::getInstance(ks_type);
                         {
-                            auto fis = cast<object>(
-                                load_class("java/io/FileInputStream")
-                                    .getDeclaredConstructor(load_class("java/lang/String"))
-                                    .newInstance(ks_location));
-                            ks.load(fis, pw_chars);
-                            fis.close();
+                            ByteArrayInputStream bais(ks_data);
+                            ks.load(bais, pw_chars);
                         }
                         # get the first alias
                         string alias = ks.aliases().nextElement();
