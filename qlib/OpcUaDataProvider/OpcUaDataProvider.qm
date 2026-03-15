@@ -1,0 +1,308 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore OpcUaDataProvider module definition
+
+/*  OpcUaDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+# import Eclipse Milo OPC UA SDK JARs: must be added to the global classloader
+%module-cmd(jni) global-add-relative-classpath ./jar/sdk-client-0.6.13.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/sdk-core-0.6.13.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/stack-client-0.6.13.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/stack-core-0.6.13.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-buffer-4.1.109.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-channel-fsm-0.9.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-codec-4.1.109.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-codec-http-4.1.109.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-common-4.1.109.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-handler-4.1.109.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-resolver-4.1.109.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-4.1.109.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-native-unix-common-4.1.109.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/guava-33.0.0-jre.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/failureaccess-1.0.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcprov-jdk18on-1.78.1.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcpkix-jdk18on-1.78.1.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcutil-jdk18on-1.78.1.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/strict-machine-0.7.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jaxb-runtime-2.3.6.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.xml.bind-api-2.3.3.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.activation-1.2.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/txw2-2.3.6.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/istack-commons-runtime-3.0.12.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-api-2.0.16.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-nop-2.0.16.jar
+
+# implements a data provider for OPC UA functionality
+%requires(reexport) DataProvider
+# implements support for OPC UA connections
+%requires(reexport) ConnectionProvider
+
+module OpcUaDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for OPC UA servers";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register connection schemes
+        ConnectionSchemeCache::registerScheme("opcua", OpcUaConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("opcuatcp", OpcUaConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("opcuahttps", OpcUaConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new OpcUaDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": OpcUaDataProvider::AppName,
+            "display_name": "OPC UA",
+            "short_desc": "OPC UA server for industrial communication and IoT",
+            "desc": "OPC UA (Open Platform Communications Unified Architecture) server for industrial "
+                "communication, supporting node value reading/writing, address space browsing, "
+                "data change subscriptions, and method calls",
+            "groups": (DataProvider::AppGroup::Iot,),
+            "scheme": "opcuatcp",
+            "logo": OpcUaLogo,
+            "logo_file_name": "opc-ua-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+
+        # event: data change
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "data-change",
+            "display_name": "OPC UA Data Change",
+            "short_desc": "A monitored OPC UA node value has changed",
+            "desc": "This event is raised when the value of a monitored OPC UA node changes, "
+                "including the new value, status code, and timestamps",
+            "action_code": DPAT_EVENT,
+            "action_val": OpcUaDataProvider::EVENT_OPCUA_DATA_CHANGE,
+            "output_type": OpcUaDataChangeEventDataType,
+        });
+
+        # event: connected
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "connected",
+            "display_name": "OPC UA Connected",
+            "short_desc": "Client connected or reconnected to the OPC UA server",
+            "desc": "This event is raised when the client connects or reconnects to the OPC UA server",
+            "action_code": DPAT_EVENT,
+            "action_val": OpcUaDataProvider::EVENT_OPCUA_CONNECTED,
+            "output_type": OpcUaConnectedEventDataType,
+        });
+
+        # event: disconnected
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "disconnected",
+            "display_name": "OPC UA Disconnected",
+            "short_desc": "Client disconnected from the OPC UA server",
+            "desc": "This event is raised when the client is disconnected from the OPC UA server",
+            "action_code": DPAT_EVENT,
+            "action_val": OpcUaDataProvider::EVENT_OPCUA_DISCONNECTED,
+            "output_type": OpcUaDisconnectedEventDataType,
+        });
+
+        # message: write value
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "write-value",
+            "display_name": "Write OPC UA Node Value",
+            "short_desc": "Write a value to an OPC UA node",
+            "desc": "Write a value to an OPC UA node on the server",
+            "action_code": DPAT_SEND_MESSAGE,
+            "action_val": OpcUaDataProvider::MESSAGE_WRITE_VALUE,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpcUaWriteMessageDataType::Fields{"node_id", "value"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpcUaWriteMessageDataType::Fields{"data_type",}
+            ),
+        });
+
+        # API: read value
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "read-value",
+            "display_name": "Read OPC UA Node Value",
+            "short_desc": "Read a value from an OPC UA node",
+            "desc": "Read the current value from an OPC UA node on the server",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "node_id": {
+                    "display_name": "Node ID",
+                    "type": StringType,
+                    "desc": "The OPC UA node ID to read (e.g., `ns=2;s=Temperature`)",
+                },
+            }, {
+                "required": True,
+                "preselected": True,
+            }),
+            "output_type": OpcUaReadResponseDataType,
+        });
+
+        # API: browse
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "browse",
+            "display_name": "Browse OPC UA Address Space",
+            "short_desc": "Browse the OPC UA server address space",
+            "desc": "Browse the OPC UA server address space to discover available nodes",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "node_id": {
+                    "display_name": "Node ID",
+                    "type": SoftStringOrNothingType,
+                    "desc": "The node ID to browse from; defaults to the Root node (`ns=0;i=84`)",
+                },
+                "direction": {
+                    "display_name": "Direction",
+                    "type": SoftStringOrNothingType,
+                    "desc": "Browse direction: `Forward`, `Inverse`, or `Both`; defaults to `Forward`",
+                },
+                "max_results": {
+                    "display_name": "Max Results",
+                    "type": SoftIntOrNothingType,
+                    "desc": "Maximum number of references to return; `0` or omitted means no limit",
+                },
+            }),
+            "output_type": OpcUaBrowseResponseDataType,
+        });
+
+        # API: call method
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpcUaDataProvider::AppName,
+            "path": "/",
+            "action": "call-method",
+            "display_name": "Call OPC UA Method",
+            "short_desc": "Call a method on an OPC UA server object",
+            "desc": "Call a method on an OPC UA server object node with optional input arguments",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields({
+                "object_id": {
+                    "display_name": "Object ID",
+                    "type": StringType,
+                    "desc": "The node ID of the object that owns the method",
+                },
+                "method_id": {
+                    "display_name": "Method ID",
+                    "type": StringType,
+                    "desc": "The node ID of the method to call",
+                },
+            }, {
+                "required": True,
+                "preselected": True,
+            }) + DataProviderActionCatalog::getActionOptionFromFields({
+                "arguments": {
+                    "display_name": "Arguments",
+                    "type": SoftListOrNothingType,
+                    "desc": "The input arguments for the method call",
+                },
+            }),
+            "output_type": OpcUaCallMethodResponseDataType,
+        });
+    };
+}
+
+/** @mainpage OpcUaDataProvider Module
+
+    @tableofcontents
+
+    @section opcuadataproviderintro Introduction to the OpcUaDataProvider Module
+
+    The %OpcUaDataProvider module provides a data provider API for OPC UA (Open Platform Communications
+    Unified Architecture) servers, supporting industrial communication and IoT use cases.
+
+    This data provider provides OPC UA functionality with the \c opcua factory and data provider with the
+    same name, supporting data change subscriptions, value reading/writing, address space browsing,
+    and method calls (class @ref OpcUaDataProvider::OpcUaDataProvider "OpcUaDataProvider").
+
+    Features supported include:
+    - **Data change subscriptions**: monitor node values for changes with configurable sampling and
+      publishing intervals
+    - **Read values**: read current values from OPC UA nodes
+    - **Write values**: write values to OPC UA nodes
+    - **Browse address space**: discover available nodes in the server's address space
+    - **Call methods**: invoke methods on OPC UA server objects
+    - **Security**: configurable security policies (None, Basic256Sha256, Aes128_Sha256_RsaOaep,
+      Aes256_Sha256_RsaPss) and message security modes (None, Sign, SignAndEncrypt)
+    - **Authentication**: Anonymous, Username/Password, and Certificate authentication
+    - **Connection lifecycle events**: connected and disconnected events
+    - **SSL/TLS**: keystore and truststore configuration for secure connections
+
+    @section opcuadataprovider_examples OPC UA Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par API Example: Read a Node Value
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request read-value 'node_id=ns=2;s=Temperature'
+    @endverbatim
+
+    @par API Example: Write a Node Value
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' send message 'node_id=ns=2;s=SetPoint,value=22.5'
+    @endverbatim
+
+    @par API Example: Browse the Address Space
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840}' request browse 'node_id=ns=0;i=84'
+    @endverbatim
+
+    @par API Example: Listen for Data Changes
+    @verbatim qdp 'opcua{url=opc.tcp://localhost:4840,monitored_nodes=(ns=2;s=Temperature)}' listen
+    @endverbatim
+
+    @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_0 OpcUaDataProvider v1.0
+    - initial release of the module with support for:
+      - data change subscriptions for monitored nodes
+      - reading and writing node values
+      - browsing the OPC UA address space
+      - calling methods on OPC UA server objects
+      - connection lifecycle events (connected/disconnected)
+      - security policy and authentication configuration
+      - SSL/TLS keystore and truststore configuration
+*/
+
+#! contains all public definitions in the OpcUaDataProvider module
+public namespace OpcUaDataProvider {
+#! OPC UA application name
+public const AppName = "OpcUA";
+}
+
+namespace Priv {
+#! OPC UA logo
+const OpcUaLogo = File::readTextFile(get_script_dir() + "/opc-ua-logo.svg");
+}
