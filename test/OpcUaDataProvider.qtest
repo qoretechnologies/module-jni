@@ -1,0 +1,762 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires ../qlib/OpcUaDataProvider
+
+%exec-class OpcUaDataProviderTest
+
+public class OpcUaDataProviderTest inherits QUnit::Test {
+    private {
+        OpcUaDataProvider opcua;
+
+        #! The OPC UA server URL for integration tests
+        string opcua_url;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("OpcUaDataProviderTest Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("data change event data type fields", \dataChangeEventDataTypeFieldTest());
+        addTestCase("connected event data type fields", \connectedEventDataTypeFieldTest());
+        addTestCase("disconnected event data type fields", \disconnectedEventDataTypeFieldTest());
+        addTestCase("write message data type fields", \writeMessageDataTypeFieldTest());
+        addTestCase("read response data type fields", \readResponseDataTypeFieldTest());
+        addTestCase("browse response data type fields", \browseResponseDataTypeFieldTest());
+        addTestCase("call method response data type fields", \callMethodResponseDataTypeFieldTest());
+        addTestCase("read values response data type fields", \readValuesResponseDataTypeFieldTest());
+        addTestCase("write values message data type fields", \writeValuesMessageDataTypeFieldTest());
+        addTestCase("read attributes response data type fields",
+            \readAttributesResponseDataTypeFieldTest());
+        addTestCase("history read response data type fields", \historyReadResponseDataTypeFieldTest());
+        addTestCase("endpoint description data type fields", \endpointDescriptionDataTypeFieldTest());
+        addTestCase("server status data type fields", \serverStatusDataTypeFieldTest());
+        addTestCase("constructor options", \constructorOptionsTest());
+        addTestCase("ssl options", \sslOptionsTest());
+        addTestCase("security options", \securityOptionsTest());
+        addTestCase("subscription options", \subscriptionOptionsTest());
+        addTestCase("factory info", \factoryInfoTest());
+        addTestCase("action registration", \actionRegistrationTest());
+        addTestCase("provider info", \providerInfoTest());
+        addTestCase("example event data", \exampleEventDataTest());
+        addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("OPC UA integration test", \opcuaIntegrationTest());
+
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 2) {
+                printf("%s\n", get_exception_string(ex));
+            } else if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    dataChangeEventDataTypeFieldTest() {
+        hash<auto> fields = OpcUaDataChangeEventDataType::Fields;
+
+        # verify all expected fields exist
+        assertTrue(fields.hasKey("node_id"), "should have 'node_id' field");
+        assertTrue(fields.hasKey("display_name"), "should have 'display_name' field");
+        assertTrue(fields.hasKey("value"), "should have 'value' field");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertTrue(fields.hasKey("source_timestamp"), "should have 'source_timestamp' field");
+        assertTrue(fields.hasKey("server_timestamp"), "should have 'server_timestamp' field");
+        assertTrue(fields.hasKey("namespace_index"), "should have 'namespace_index' field");
+
+        # verify field count
+        assertEq(8, fields.size(), "data change event should have 8 fields");
+
+        # verify field types
+        assertEq(StringType, fields.node_id.type);
+        assertEq(SoftStringOrNothingType, fields.display_name.type);
+        assertEq(AutoType, fields.value.type);
+        assertEq(IntType, fields.status_code.type);
+        assertEq(StringType, fields.status_text.type);
+        assertEq(SoftDateOrNothingType, fields.source_timestamp.type);
+        assertEq(SoftDateOrNothingType, fields.server_timestamp.type);
+        assertEq(IntType, fields.namespace_index.type);
+
+        # verify display names
+        assertEq("Node ID", fields.node_id.display_name);
+        assertEq("Value", fields.value.display_name);
+        assertEq("Status Code", fields.status_code.display_name);
+
+        # verify all fields have display_name and desc
+        foreach hash<auto> field in (fields.pairIterator()) {
+            assertTrue(exists field.value.display_name,
+                sprintf("data change field '%s' should have display_name", field.key));
+            assertTrue(exists field.value.desc,
+                sprintf("data change field '%s' should have desc", field.key));
+        }
+    }
+
+    connectedEventDataTypeFieldTest() {
+        hash<auto> fields = OpcUaConnectedEventDataType::Fields;
+
+        assertTrue(fields.hasKey("reconnect"), "should have 'reconnect' field");
+        assertTrue(fields.hasKey("endpoint_url"), "should have 'endpoint_url' field");
+        assertTrue(fields.hasKey("security_policy"), "should have 'security_policy' field");
+        assertTrue(fields.hasKey("security_mode"), "should have 'security_mode' field");
+        assertEq(4, fields.size(), "connected event should have 4 fields");
+
+        assertEq(BoolType, fields.reconnect.type);
+        assertEq(StringType, fields.endpoint_url.type);
+        assertEq(SoftStringOrNothingType, fields.security_policy.type);
+        assertEq(SoftStringOrNothingType, fields.security_mode.type);
+        assertEq("Reconnect", fields.reconnect.display_name);
+        assertEq("Endpoint URL", fields.endpoint_url.display_name);
+
+        # verify all fields have display_name and desc
+        foreach hash<auto> field in (fields.pairIterator()) {
+            assertTrue(exists field.value.display_name,
+                sprintf("connected event field '%s' should have display_name", field.key));
+            assertTrue(exists field.value.desc,
+                sprintf("connected event field '%s' should have desc", field.key));
+        }
+    }
+
+    disconnectedEventDataTypeFieldTest() {
+        hash<auto> fields = OpcUaDisconnectedEventDataType::Fields;
+
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("reason"), "should have 'reason' field");
+        assertEq(2, fields.size(), "disconnected event should have 2 fields");
+
+        assertEq(IntType, fields.status_code.type);
+        assertEq(SoftStringOrNothingType, fields.reason.type);
+        assertEq("Status Code", fields.status_code.display_name);
+        assertEq("Reason", fields.reason.display_name);
+
+        # verify all fields have display_name and desc
+        foreach hash<auto> field in (fields.pairIterator()) {
+            assertTrue(exists field.value.display_name,
+                sprintf("disconnected event field '%s' should have display_name", field.key));
+            assertTrue(exists field.value.desc,
+                sprintf("disconnected event field '%s' should have desc", field.key));
+        }
+    }
+
+    writeMessageDataTypeFieldTest() {
+        hash<auto> fields = OpcUaWriteMessageDataType::Fields;
+
+        assertTrue(fields.hasKey("node_id"), "should have 'node_id' field");
+        assertTrue(fields.hasKey("value"), "should have 'value' field");
+        assertTrue(fields.hasKey("data_type"), "should have 'data_type' field");
+        assertEq(3, fields.size(), "write message should have 3 fields");
+
+        assertEq(StringType, fields.node_id.type);
+        assertEq(AutoType, fields.value.type);
+        assertEq(SoftStringOrNothingType, fields.data_type.type);
+
+        # verify all fields have display_name and desc
+        foreach hash<auto> field in (fields.pairIterator()) {
+            assertTrue(exists field.value.display_name,
+                sprintf("write message field '%s' should have display_name", field.key));
+            assertTrue(exists field.value.desc,
+                sprintf("write message field '%s' should have desc", field.key));
+        }
+    }
+
+    readResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaReadResponseDataType::Fields;
+
+        assertTrue(fields.hasKey("node_id"), "should have 'node_id' field");
+        assertTrue(fields.hasKey("value"), "should have 'value' field");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertTrue(fields.hasKey("source_timestamp"), "should have 'source_timestamp' field");
+        assertTrue(fields.hasKey("server_timestamp"), "should have 'server_timestamp' field");
+        assertEq(6, fields.size(), "read response should have 6 fields");
+    }
+
+    browseResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaBrowseResponseDataType::Fields;
+
+        assertTrue(fields.hasKey("references"), "should have 'references' field");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertEq(3, fields.size(), "browse response should have 3 fields");
+    }
+
+    callMethodResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaCallMethodResponseDataType::Fields;
+
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertTrue(fields.hasKey("output_arguments"), "should have 'output_arguments' field");
+        assertEq(3, fields.size(), "call method response should have 3 fields");
+    }
+
+    readValuesResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaReadValuesResponseDataType::Fields;
+        assertTrue(fields.hasKey("results"), "should have 'results' field");
+        assertEq(1, fields.size(), "read values response should have 1 field");
+    }
+
+    writeValuesMessageDataTypeFieldTest() {
+        hash<auto> fields = OpcUaWriteValuesMessageDataType::Fields;
+        assertTrue(fields.hasKey("values"), "should have 'values' field");
+        assertEq(1, fields.size(), "write values message should have 1 field");
+    }
+
+    readAttributesResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaReadAttributesResponseDataType::Fields;
+        assertTrue(fields.hasKey("node_id"), "should have 'node_id' field");
+        assertTrue(fields.hasKey("display_name"), "should have 'display_name' field");
+        assertTrue(fields.hasKey("description"), "should have 'description' field");
+        assertTrue(fields.hasKey("node_class"), "should have 'node_class' field");
+        assertTrue(fields.hasKey("data_type"), "should have 'data_type' field");
+        assertTrue(fields.hasKey("value"), "should have 'value' field");
+        assertTrue(fields.hasKey("access_level"), "should have 'access_level' field");
+        assertTrue(fields.hasKey("writable"), "should have 'writable' field");
+        assertTrue(fields.hasKey("historizing"), "should have 'historizing' field");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertEq(11, fields.size(), "read attributes response should have 11 fields");
+    }
+
+    historyReadResponseDataTypeFieldTest() {
+        hash<auto> fields = OpcUaHistoryReadResponseDataType::Fields;
+        assertTrue(fields.hasKey("node_id"), "should have 'node_id' field");
+        assertTrue(fields.hasKey("data_values"), "should have 'data_values' field");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertEq(4, fields.size(), "history read response should have 4 fields");
+    }
+
+    endpointDescriptionDataTypeFieldTest() {
+        hash<auto> fields = OpcUaEndpointDescriptionDataType::Fields;
+        assertTrue(fields.hasKey("endpoints"), "should have 'endpoints' field");
+        assertEq(1, fields.size(), "endpoint description should have 1 field");
+    }
+
+    serverStatusDataTypeFieldTest() {
+        hash<auto> fields = OpcUaServerStatusDataType::Fields;
+        assertTrue(fields.hasKey("state"), "should have 'state' field");
+        assertTrue(fields.hasKey("start_time"), "should have 'start_time' field");
+        assertTrue(fields.hasKey("current_time"), "should have 'current_time' field");
+        assertTrue(fields.hasKey("build_info_product_name"), "should have 'build_info_product_name'");
+        assertTrue(fields.hasKey("build_info_product_uri"), "should have 'build_info_product_uri'");
+        assertTrue(fields.hasKey("build_info_manufacturer"), "should have 'build_info_manufacturer'");
+        assertTrue(fields.hasKey("build_info_software_version"),
+            "should have 'build_info_software_version'");
+        assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
+        assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
+        assertEq(9, fields.size(), "server status should have 9 fields");
+    }
+
+    constructorOptionsTest() {
+        hash<auto> opts = AbstractFunctionalOpcUaDataProvider::ConstructorOptions;
+
+        # verify required options exist
+        assertTrue(opts.hasKey("url"), "should have 'url' option");
+        assertTrue(opts.hasKey("monitored_nodes"), "should have 'monitored_nodes' option");
+        assertTrue(opts.hasKey("application_name"), "should have 'application_name' option");
+        assertTrue(opts.hasKey("application_uri"), "should have 'application_uri' option");
+        assertTrue(opts.hasKey("connect_timeout"), "should have 'connect_timeout' option");
+        assertTrue(opts.hasKey("request_timeout"), "should have 'request_timeout' option");
+        assertTrue(opts.hasKey("session_timeout"), "should have 'session_timeout' option");
+        assertTrue(opts.hasKey("auto_reconnect"), "should have 'auto_reconnect' option");
+        assertTrue(opts.hasKey("username"), "should have 'username' option");
+        assertTrue(opts.hasKey("password"), "should have 'password' option");
+
+        # verify required flags
+        assertTrue(opts.url.required, "url should be required");
+        assertTrue(opts.monitored_nodes.required, "monitored_nodes should be required");
+
+        # verify sensitive flags
+        assertTrue(opts.password.sensitive, "password should be marked sensitive");
+
+        # verify defaults
+        assertEq("QoreOpcUaClient", opts.application_name.default_value);
+        assertEq("urn:qore:opcua:client", opts.application_uri.default_value);
+        assertEq(10000, opts.connect_timeout.default_value);
+        assertEq(10000, opts.request_timeout.default_value);
+        assertEq(120000, opts.session_timeout.default_value);
+        assertEq(True, opts.auto_reconnect.default_value);
+
+        # verify all options have display_name, short_desc, and desc
+        foreach hash<auto> opt in (opts.pairIterator()) {
+            assertTrue(exists opt.value.display_name,
+                sprintf("option '%s' should have display_name", opt.key));
+            assertTrue(exists opt.value.short_desc,
+                sprintf("option '%s' should have short_desc", opt.key));
+            assertTrue(exists opt.value.desc,
+                sprintf("option '%s' should have desc", opt.key));
+        }
+    }
+
+    sslOptionsTest() {
+        hash<auto> opts = AbstractFunctionalOpcUaDataProvider::ConstructorOptions;
+
+        # verify SSL/TLS options exist
+        assertTrue(opts.hasKey("ssl.keystore.location"), "should have 'ssl.keystore.location' option");
+        assertTrue(opts.hasKey("ssl.keystore.password"), "should have 'ssl.keystore.password' option");
+        assertTrue(opts.hasKey("ssl.keystore.type"), "should have 'ssl.keystore.type' option");
+        assertTrue(opts.hasKey("ssl.truststore.location"),
+            "should have 'ssl.truststore.location' option");
+        assertTrue(opts.hasKey("ssl.truststore.password"),
+            "should have 'ssl.truststore.password' option");
+        assertTrue(opts.hasKey("ssl.truststore.type"), "should have 'ssl.truststore.type' option");
+
+        # verify sensitive flags
+        assertTrue(opts."ssl.keystore.password".sensitive,
+            "ssl.keystore.password should be marked sensitive");
+        assertTrue(opts."ssl.truststore.password".sensitive,
+            "ssl.truststore.password should be marked sensitive");
+
+        # verify defaults
+        assertEq("PKCS12", opts."ssl.keystore.type".default_value);
+        assertEq("PKCS12", opts."ssl.truststore.type".default_value);
+
+        # verify allowed values for keystore type
+        assertTrue(exists opts."ssl.keystore.type".allowed_values,
+            "ssl.keystore.type should have allowed_values");
+        assertEq(2, opts."ssl.keystore.type".allowed_values.size(),
+            "ssl.keystore.type should have 2 allowed values");
+    }
+
+    securityOptionsTest() {
+        hash<auto> opts = AbstractFunctionalOpcUaDataProvider::ConstructorOptions;
+
+        # verify security options exist
+        assertTrue(opts.hasKey("security_policy"), "should have 'security_policy' option");
+        assertTrue(opts.hasKey("message_security_mode"),
+            "should have 'message_security_mode' option");
+        assertTrue(opts.hasKey("auth_type"), "should have 'auth_type' option");
+
+        # verify defaults
+        assertEq("None", opts.security_policy.default_value);
+        assertEq("None", opts.message_security_mode.default_value);
+        assertEq("Anonymous", opts.auth_type.default_value);
+
+        # verify security_policy allowed values
+        assertTrue(exists opts.security_policy.allowed_values,
+            "security_policy should have allowed_values");
+        assertEq(4, opts.security_policy.allowed_values.size(),
+            "security_policy should have 4 allowed values");
+
+        # verify message_security_mode allowed values
+        assertTrue(exists opts.message_security_mode.allowed_values,
+            "message_security_mode should have allowed_values");
+        assertEq(3, opts.message_security_mode.allowed_values.size(),
+            "message_security_mode should have 3 allowed values");
+
+        # verify auth_type allowed values
+        assertTrue(exists opts.auth_type.allowed_values,
+            "auth_type should have allowed_values");
+        assertEq(3, opts.auth_type.allowed_values.size(),
+            "auth_type should have 3 allowed values");
+    }
+
+    subscriptionOptionsTest() {
+        hash<auto> opts = AbstractFunctionalOpcUaDataProvider::ConstructorOptions;
+
+        # verify subscription options exist
+        assertTrue(opts.hasKey("publishing_interval"), "should have 'publishing_interval' option");
+        assertTrue(opts.hasKey("sampling_interval"), "should have 'sampling_interval' option");
+        assertTrue(opts.hasKey("queue_size"), "should have 'queue_size' option");
+        assertTrue(opts.hasKey("discard_oldest"), "should have 'discard_oldest' option");
+
+        # verify defaults
+        assertEq(1000, opts.publishing_interval.default_value);
+        assertEq(500, opts.sampling_interval.default_value);
+        assertEq(10, opts.queue_size.default_value);
+        assertEq(True, opts.discard_oldest.default_value);
+    }
+
+    factoryInfoTest() {
+        OpcUaDataProviderFactory factory();
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("opcua", info.name);
+        assertTrue(info.children_can_support_observers, "factory should support observers");
+        assertTrue(info.children_can_support_messages, "factory should support messages");
+
+        hash<DataProviderInfo> pinfo = factory.getProviderInfo();
+        assertTrue(pinfo.supports_observable, "provider should support observable");
+        assertTrue(pinfo.supports_request, "provider should support request");
+        assertEq(MSG_Async, pinfo.supports_messages);
+    }
+
+    actionRegistrationTest() {
+        *list<hash<DataProviderActionInfo>> actions =
+            DataProviderActionCatalog::getActions("OpcUA");
+        assertTrue(exists actions, "should have actions registered for OPC UA app");
+        assertEq(13, actions.size(), "should have 13 actions");
+
+        # create lookup hash
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # verify data-change event action
+        assertTrue(action_map.hasKey("data-change"), "should have 'data-change' action");
+        assertEq("OPC UA Data Change", action_map."data-change".display_name);
+        assertEq(DPAT_EVENT, action_map."data-change".action_code);
+        assertEq(OpcUaDataProvider::EVENT_OPCUA_DATA_CHANGE, action_map."data-change".action_val);
+
+        # verify connected event action
+        assertTrue(action_map.hasKey("connected"), "should have 'connected' action");
+        assertEq("OPC UA Connected", action_map."connected".display_name);
+        assertEq(DPAT_EVENT, action_map."connected".action_code);
+        assertEq(OpcUaDataProvider::EVENT_OPCUA_CONNECTED, action_map."connected".action_val);
+
+        # verify disconnected event action
+        assertTrue(action_map.hasKey("disconnected"), "should have 'disconnected' action");
+        assertEq("OPC UA Disconnected", action_map."disconnected".display_name);
+        assertEq(DPAT_EVENT, action_map."disconnected".action_code);
+        assertEq(OpcUaDataProvider::EVENT_OPCUA_DISCONNECTED,
+            action_map."disconnected".action_val);
+
+        # verify write-value message action
+        assertTrue(action_map.hasKey("write-value"), "should have 'write-value' action");
+        assertEq("Write OPC UA Node Value", action_map."write-value".display_name);
+        assertEq(DPAT_SEND_MESSAGE, action_map."write-value".action_code);
+        hash<auto> write_opts = action_map."write-value".options;
+        assertTrue(write_opts.hasKey("node_id"), "write-value should have 'node_id' option");
+        assertTrue(write_opts.hasKey("value"), "write-value should have 'value' option");
+        assertTrue(write_opts.node_id.required, "node_id should be required");
+        assertTrue(write_opts.value.required, "value should be required");
+
+        # verify read-value API action
+        assertTrue(action_map.hasKey("read-value"), "should have 'read-value' action");
+        assertEq("Read OPC UA Node Value", action_map."read-value".display_name);
+        assertEq(DPAT_API, action_map."read-value".action_code);
+        hash<auto> read_opts = action_map."read-value".options;
+        assertTrue(read_opts.hasKey("node_id"), "read-value should have 'node_id' option");
+        assertTrue(read_opts.node_id.required, "node_id should be required for read");
+
+        # verify browse API action
+        assertTrue(action_map.hasKey("browse-nodes"), "should have 'browse-nodes' action");
+        assertEq("Browse OPC UA Address Space", action_map."browse-nodes".display_name);
+        assertEq(DPAT_API, action_map."browse-nodes".action_code);
+
+        # verify call-method API action
+        assertTrue(action_map.hasKey("call-method"), "should have 'call-method' action");
+        assertEq("Call OPC UA Method", action_map."call-method".display_name);
+        assertEq(DPAT_API, action_map."call-method".action_code);
+        hash<auto> call_opts = action_map."call-method".options;
+        assertTrue(call_opts.hasKey("object_id"), "call-method should have 'object_id' option");
+        assertTrue(call_opts.hasKey("method_id"), "call-method should have 'method_id' option");
+        assertTrue(call_opts.object_id.required, "object_id should be required");
+        assertTrue(call_opts.method_id.required, "method_id should be required");
+
+        # verify read-values API action
+        assertTrue(action_map.hasKey("read-values"), "should have 'read-values' action");
+        assertEq("Read Multiple OPC UA Node Values", action_map."read-values".display_name);
+        assertEq(DPAT_API, action_map."read-values".action_code);
+
+        # verify write-values message action
+        assertTrue(action_map.hasKey("write-values"), "should have 'write-values' action");
+        assertEq("Write Multiple OPC UA Node Values", action_map."write-values".display_name);
+        assertEq(DPAT_SEND_MESSAGE, action_map."write-values".action_code);
+
+        # verify read-attributes API action
+        assertTrue(action_map.hasKey("read-attributes"), "should have 'read-attributes' action");
+        assertEq("Read OPC UA Node Attributes", action_map."read-attributes".display_name);
+        assertEq(DPAT_API, action_map."read-attributes".action_code);
+
+        # verify read-history API action
+        assertTrue(action_map.hasKey("read-history"), "should have 'read-history' action");
+        assertEq("Read OPC UA Historical Data", action_map."read-history".display_name);
+        assertEq(DPAT_API, action_map."read-history".action_code);
+
+        # verify discover-endpoints API action
+        assertTrue(action_map.hasKey("discover-endpoints"), "should have 'discover-endpoints' action");
+        assertEq("Discover OPC UA Endpoints", action_map."discover-endpoints".display_name);
+        assertEq(DPAT_API, action_map."discover-endpoints".action_code);
+
+        # verify get-server-status API action
+        assertTrue(action_map.hasKey("get-server-status"), "should have 'get-server-status' action");
+        assertEq("Get OPC UA Server Status", action_map."get-server-status".display_name);
+        assertEq(DPAT_API, action_map."get-server-status".action_code);
+    }
+
+    providerInfoTest() {
+        # verify provider instance info
+        OpcUaDataProvider prov({"url": "opc.tcp://localhost:4840"});
+        hash<DataProviderInfo> info = prov.getInfo();
+        assertTrue(info.supports_observable, "should support observable");
+        assertTrue(info.supports_request, "should support request");
+        assertEq(MSG_Async, info.supports_messages);
+        assertEq("opcua", info.name);
+
+        # verify child provider names
+        *list<string> children = prov.getChildProviderNames();
+        assertTrue(exists children, "should have child provider names");
+        assertTrue(inlist("devices", children), "should have 'devices' child");
+
+        # verify event and message constants
+        assertEq("opcua-data-change-event", OpcUaDataProvider::EVENT_OPCUA_DATA_CHANGE);
+        assertEq("opcua-connected-event", OpcUaDataProvider::EVENT_OPCUA_CONNECTED);
+        assertEq("opcua-disconnected-event", OpcUaDataProvider::EVENT_OPCUA_DISCONNECTED);
+        assertEq("write-value", OpcUaDataProvider::MESSAGE_WRITE_VALUE);
+    }
+
+    exampleEventDataTest() {
+        OpcUaDataProvider prov({"url": "opc.tcp://localhost:4840"});
+        hash<auto> event_types = prov.getEventTypes();
+
+        # verify all event types exist
+        assertTrue(event_types.hasKey(OpcUaDataProvider::EVENT_OPCUA_DATA_CHANGE),
+            "should have opcua-data-change-event type");
+        assertTrue(event_types.hasKey(OpcUaDataProvider::EVENT_OPCUA_CONNECTED),
+            "should have opcua-connected-event type");
+        assertTrue(event_types.hasKey(OpcUaDataProvider::EVENT_OPCUA_DISCONNECTED),
+            "should have opcua-disconnected-event type");
+        assertEq(3, event_types.size(), "should have 3 event types");
+
+        # verify data change event description
+        assertEq("This event is raised when a monitored OPC UA node value changes",
+            event_types{OpcUaDataProvider::EVENT_OPCUA_DATA_CHANGE}.desc);
+
+        # verify example event data for data change event
+        auto example = prov.getExampleEventData(OpcUaDataProvider::EVENT_OPCUA_DATA_CHANGE);
+        assertTrue(exists example, "should return example event data");
+        assertEq("ns=2;s=Temperature", example.node_id);
+        assertEq("Temperature", example.display_name);
+        assertEq(22.5, example.value);
+        assertEq(0, example.status_code);
+        assertEq("Good", example.status_text);
+        assertTrue(exists example.source_timestamp, "should have source_timestamp");
+        assertTrue(exists example.server_timestamp, "should have server_timestamp");
+        assertEq(2, example.namespace_index);
+
+        # verify example event data for connected event
+        auto conn_example = prov.getExampleEventData(OpcUaDataProvider::EVENT_OPCUA_CONNECTED);
+        assertTrue(exists conn_example, "should return connected example data");
+        assertEq(False, conn_example.reconnect);
+        assertEq("opc.tcp://server.example.com:4840", conn_example.endpoint_url);
+
+        # verify example event data for disconnected event
+        auto disc_example = prov.getExampleEventData(OpcUaDataProvider::EVENT_OPCUA_DISCONNECTED);
+        assertTrue(exists disc_example, "should return disconnected example data");
+        assertEq(0, disc_example.status_code);
+        assertEq("Normal disconnect", disc_example.reason);
+
+        # verify message types
+        hash<auto> msg_types = prov.getMessageTypes();
+        assertTrue(msg_types.hasKey(OpcUaDataProvider::MESSAGE_WRITE_VALUE),
+            "should have write-value message type");
+    }
+
+    connectionSchemeTest() {
+        hash<auto> conn_opts = OpcUaConnection::ConnectionScheme.options;
+
+        # verify subscription options are excluded from connection scheme
+        assertFalse(conn_opts.hasKey("monitored_nodes"),
+            "monitored_nodes should be excluded from ConnectionScheme");
+        assertFalse(conn_opts.hasKey("publishing_interval"),
+            "publishing_interval should be excluded from ConnectionScheme");
+        assertFalse(conn_opts.hasKey("sampling_interval"),
+            "sampling_interval should be excluded from ConnectionScheme");
+        assertFalse(conn_opts.hasKey("queue_size"),
+            "queue_size should be excluded from ConnectionScheme");
+        assertFalse(conn_opts.hasKey("discard_oldest"),
+            "discard_oldest should be excluded from ConnectionScheme");
+        assertFalse(conn_opts.hasKey("url"),
+            "url should be excluded from ConnectionScheme (comes from connection URL)");
+
+        # verify connection options are included
+        assertTrue(conn_opts.hasKey("application_name"),
+            "application_name should be in ConnectionScheme");
+        assertTrue(conn_opts.hasKey("security_policy"),
+            "security_policy should be in ConnectionScheme");
+        assertTrue(conn_opts.hasKey("auth_type"),
+            "auth_type should be in ConnectionScheme");
+        assertTrue(conn_opts.hasKey("username"),
+            "username should be in ConnectionScheme");
+
+        # verify schemes
+        hash<auto> schemes = OpcUaConnection::ConnectionScheme.schemes;
+        assertTrue(schemes.hasKey("opcua"), "should have 'opcua' scheme");
+        assertTrue(schemes.hasKey("opcuatcp"), "should have 'opcuatcp' scheme");
+        assertTrue(schemes.hasKey("opcuahttps"), "should have 'opcuahttps' scheme");
+    }
+
+    opcuaIntegrationTest() {
+        if (!opcua) {
+            testSkip("no connection");
+        }
+
+        assertEq("opcua", opcua.getName());
+
+        # verify child providers
+        *list<string> children = opcua.getChildProviderNames();
+        assertTrue(exists children, "should have child providers");
+        assertTrue(children.size() >= 1, "should have at least one child provider");
+        assertTrue(inlist("devices", children), "should have 'devices' child provider");
+
+        # verify message types
+        hash<auto> msg_types = opcua.getMessageTypes();
+        assertTrue(msg_types.hasKey("write-value"), "should have 'write-value' message type");
+        assertTrue(msg_types.hasKey("write-values"), "should have 'write-values' message type");
+
+        # verify event types
+        hash<auto> event_types = opcua.getEventTypes();
+        assertTrue(event_types.hasKey("opcua-data-change-event"),
+            "should have 'opcua-data-change-event' event type");
+        assertTrue(event_types.hasKey("opcua-connected-event"),
+            "should have 'opcua-connected-event' event type");
+        assertTrue(event_types.hasKey("opcua-disconnected-event"),
+            "should have 'opcua-disconnected-event' event type");
+
+        # read a well-known node (ServerStatus/CurrentTime)
+        hash<auto> read_result = opcua.doRequest({
+            "action": "read-value",
+            "node_id": "ns=0;i=2258",
+        });
+        assertEq(0, read_result.status_code, "read should succeed with status code 0");
+        assertEq("Good", read_result.status_text);
+        assertTrue(exists read_result.value, "should have a value");
+
+        # browse from root node
+        hash<auto> browse_result = opcua.doRequest({
+            "action": "browse-nodes",
+            "node_id": "ns=0;i=84",
+        });
+        assertEq(0, browse_result.status_code, "browse should succeed with status code 0");
+        assertTrue(exists browse_result.references, "should have references");
+        assertTrue(browse_result.references.size() > 0, "root should have children");
+
+        # read multiple values
+        hash<auto> read_values_result = opcua.doRequest({
+            "action": "read-values",
+            "node_ids": ("ns=0;i=2258", "ns=0;i=2259"),
+        });
+        assertTrue(exists read_values_result.results, "read-values should have results");
+        assertEq(2, read_values_result.results.size(), "should have 2 results");
+        assertEq("ns=0;i=2258", read_values_result.results[0].node_id);
+        assertEq(0, read_values_result.results[0].status_code);
+
+        # read node attributes
+        hash<auto> attr_result = opcua.doRequest({
+            "action": "read-attributes",
+            "node_id": "ns=0;i=2258",
+        });
+        assertEq("ns=0;i=2258", attr_result.node_id);
+        assertEq(0, attr_result.status_code, "read-attributes should succeed");
+        assertTrue(exists attr_result.value, "should have a value");
+
+        # discover endpoints
+        hash<auto> discover_result = opcua.doRequest({
+            "action": "discover-endpoints",
+        });
+        assertTrue(exists discover_result.endpoints, "should have endpoints");
+        assertTrue(discover_result.endpoints.size() > 0, "should have at least one endpoint");
+        assertTrue(exists discover_result.endpoints[0].endpoint_url,
+            "endpoint should have URL");
+
+        # get server status
+        hash<auto> status_result = opcua.doRequest({
+            "action": "get-server-status",
+        });
+        assertEq(0, status_result.status_code, "server status should succeed");
+        assertEq("Running", status_result.state, "server should be running");
+        assertTrue(exists status_result.current_time, "should have current time");
+
+        # subscribe and observe data change
+        Queue data_queue();
+        OpcUaTestObserver obs(data_queue);
+
+        # create subscriber for a well-known node
+        # use ns=0;i=2258 (ServerStatus/CurrentTime) which changes continuously
+        OpcUaDataProvider subscriber({"url": opcua_url,
+            "monitored_nodes": ("ns=0;i=2258",),
+            "publishing_interval": 500,
+            "sampling_interval": 250,
+        });
+        subscriber.registerObserver(obs);
+        subscriber.observersReady();
+
+        # wait for a data change (server time updates continuously)
+        auto received = data_queue.get(30s);
+        assertTrue(exists received, "should receive data change notification");
+        assertEq("ns=0;i=2258", received.node_id);
+        assertTrue(exists received.value, "should have a value in notification");
+        assertEq(0, received.status_code);
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name", OptionColumn);
+    }
+
+    private error(string fmt) {
+        throw "OPTION-ERROR", sprintf("%s: ERROR: %s", get_script_name(), vsprintf(fmt, argv));
+    }
+
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.OPCUA_CONNECTION;
+        if (!conn_name.val()) {
+            error("missing -c,--connection option or OPCUA_CONNECTION environment variable");
+        }
+
+        # try get_connection() first (works in CI with connection providers)
+        try {
+            AbstractConnection conn = get_connection(conn_name);
+            if (!(conn instanceof OpcUaConnection)) {
+                error("connection %y is type %y; expecting \"OpcUaConnection\"",
+                    conn_name, conn.className());
+            }
+            opcua_url = conn.getUrl();
+            opcua = conn.getDataProvider();
+        } catch (hash<ExceptionInfo> ex) {
+            # fall back to direct URL if get_connection() fails (local testing)
+            if (conn_name =~ /^opc(ua)?[.:\/]/) {
+                opcua_url = conn_name;
+            } else {
+                rethrow;
+            }
+        }
+
+        # convert opcuatcp:// to opc.tcp:// etc.
+        if (opcua_url =~ /^opcuatcp:/) {
+            opcua_url =~ s/^opcuatcp:/opc.tcp:/;
+        } else if (opcua_url =~ /^opcuahttps:/) {
+            opcua_url =~ s/^opcuahttps:/opc.https:/;
+        } else if (opcua_url =~ /^opcua:/) {
+            opcua_url =~ s/^opcua:/opc.tcp:/;
+        }
+
+        if (!opcua) {
+            opcua = new OpcUaDataProvider({"url": opcua_url});
+        }
+    }
+}
+
+#! Observer class for capturing OPC UA events in integration tests
+class OpcUaTestObserver inherits Observer {
+    private {
+        Queue queue;
+    }
+
+    constructor(Queue queue) {
+        self.queue = queue;
+    }
+
+    update(string event_id, hash<auto> data) {
+        if (event_id == OpcUaDataProvider::EVENT_OPCUA_DATA_CHANGE) {
+            queue.push(data);
+        }
+    }
+}

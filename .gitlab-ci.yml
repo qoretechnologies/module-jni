@@ -14,6 +14,8 @@ default:
         - |
           printf 'listener 1883\nallow_anonymous true\n' > /tmp/mosquitto.conf &&
           /usr/sbin/mosquitto -c /tmp/mosquitto.conf
+    - name: open62541/open62541:latest
+      alias: opcua
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -26,6 +28,7 @@ variables:
   POSTGRES_PASSWORD: omq
   QORE_DB_CONNSTR: pgsql:postgres/omq@postgres%postgres
   MQTT_CONNECTION: "mqtttcp://mosquitto:1883"
+  OPCUA_CONNECTION: "opc.tcp://opcua:4840"
   TZ: Europe/Prague
   PGTZ: Europe/Prague
 
