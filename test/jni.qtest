@@ -24,6 +24,7 @@
 %module-cmd(jni) import java.lang.invoke.*
 %module-cmd(jni) import org.qore.jni.test.Fields
 %module-cmd(jni) import org.qore.jni.test.QoreJavaApiTest
+%module-cmd(jni) import org.qore.jni.test.OverloadedMethods
 
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompilerException
@@ -271,6 +272,7 @@ public class Main inherits QUnit::Test {
         addTestCase("cross-program inner class sharing test", \crossProgramInnerClassSharingTest());
         addTestCase("multi-program class sharing test", \multiProgramClassSharingTest());
         addTestCase("auto param overload test", \autoParamOverloadTest());
+        addTestCase("overloaded method dispatch test", \overloadedMethodDispatchTest());
 
         Qore::exit(main());
     }
@@ -2398,6 +2400,26 @@ auto sub test() {
             printf("%s\n", get_exception_string(ex));
             rethrow;
         }
+    }
+
+    overloadedMethodDispatchTest() {
+        # test that overloaded methods with array params dispatch correctly
+        # and don't cause infinite recursion due to fake varargs
+        assertEq("foo,bar", OverloadedMethods::testOverloadedDispatch());
+        assertEq("hello,world", OverloadedMethods::testDirectArrayCall());
+
+        # test instance method dispatch with explicit array arguments
+        OverloadedMethods obj();
+        list<string> names = ("a", "b", "c");
+        assertEq("a,b,c", obj.process(names));
+        assertEq(1, obj.getCallCount());
+
+        obj.resetCallCount();
+        list<int> values = (10, 20, 30);
+        assertEq("a,b,c", obj.process(names, values));
+        # process(String[], int[]) delegates to process(String[]) internally
+        # so callCount should be 1, not infinite
+        assertEq(1, obj.getCallCount());
     }
 }
 

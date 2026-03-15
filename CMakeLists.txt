@@ -576,6 +576,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/StaticMethods.java
     test/java/src/org/qore/jni/test/StringFactory.java
     test/java/src/org/qore/jni/test/QoreCallback.java
+    test/java/src/org/qore/jni/test/OverloadedMethods.java
     test/java/src/org/qore/lang/test/QoreJavaLangApiTest.java
 )
 

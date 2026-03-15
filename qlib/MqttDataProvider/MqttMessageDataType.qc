@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** MqttMessageDataType.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** MqttMessageDataType.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,11 +35,30 @@ public class MqttMessageDataType inherits HashDataType {
                 "desc": "The message topic",
             },
             "qos": {
-                "display_name": "Message Body",
+                "display_name": "Quality of Service",
                 "type": IntType,
                 "desc": "The quality of service value for this message",
                 "default_value": 2,
-                "allowed_values": (0, 1, 2),
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "At Most Once",
+                        "short_desc": "QoS 0: fire and forget",
+                        "desc": "QoS 0: message is delivered at most once with no acknowledgment",
+                        "value": 0,
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "At Least Once",
+                        "short_desc": "QoS 1: acknowledged delivery",
+                        "desc": "QoS 1: message is delivered at least once with acknowledgment",
+                        "value": 1,
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Exactly Once",
+                        "short_desc": "QoS 2: assured delivery",
+                        "desc": "QoS 2: message is delivered exactly once using a four-step handshake",
+                        "value": 2,
+                    },
+                ),
             },
             "payload": {
                 "display_name": "Message Body",
@@ -52,6 +71,43 @@ public class MqttMessageDataType inherits HashDataType {
                 "type": BoolType,
                 "desc": "If this message should be retained by the server",
                 "default_value": False,
+            },
+            "content_type": {
+                "display_name": "Content Type",
+                "type": SoftStringOrNothingType,
+                "desc": "The MIME content type of the message payload (e.g., `application/json`, `text/plain`)",
+            },
+            "response_topic": {
+                "display_name": "Response Topic",
+                "type": SoftStringOrNothingType,
+                "desc": "The topic to which the receiver should publish a response "
+                    "(MQTT 5 request/response pattern)",
+            },
+            "correlation_data": {
+                "display_name": "Correlation Data",
+                "type": SoftBinaryOrNothingType,
+                "desc": "Correlation data for matching responses to requests; echoed back by the responder "
+                    "(MQTT 5 request/response pattern)",
+            },
+            "message_expiry_interval": {
+                "display_name": "Message Expiry Interval",
+                "type": SoftIntOrNothingType,
+                "desc": "Message lifetime in seconds; the broker will discard the message after this interval "
+                    "if it has not been delivered",
+            },
+            "payload_format": {
+                "display_name": "Payload Format Indicator",
+                "type": SoftBoolOrNothingType,
+                "desc": "Payload format indicator: `True` = UTF-8 encoded text, `False` or omitted = "
+                    "unspecified binary data",
+            },
+            "user_properties": {
+                "display_name": "User Properties",
+                "type": AutoHashOrNothingType,
+                "short_desc": "Application-level key-value string metadata to attach to the message",
+                "desc": "Application-level key-value string metadata to attach to the message.\n\n"
+                    "Provide a hash of string key-value pairs (e.g., `{\"source\": \"sensor-1\", "
+                    "\"region\": \"us-east\"}`)",
             },
         };
     }

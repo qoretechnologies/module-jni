@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MqttDataProvider module definition
 
-/** MqttConnectionWrapper.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
+/** MqttConnectedEventDataType.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,22 +24,31 @@
 
 #! contains all public definitions in the MqttDataProvider module
 public namespace MqttDataProvider {
-#! Class that encapsulates the client and connection options
-public class MqttConnectionWrapper {
+#! MQTT Connected event data type
+public class MqttConnectedEventDataType inherits HashDataType {
     public {
-        MqttClient client;
-        *MqttConnectionOptions opts;
+        #! Field descriptions
+        const Fields = {
+            "reconnect": {
+                "display_name": "Reconnect",
+                "type": BoolType,
+                "desc": "Whether this connection event is a reconnection (`True`) or the initial connection "
+                    "(`False`)",
+            },
+            "server_uri": {
+                "display_name": "Server URI",
+                "type": StringType,
+                "desc": "The URI of the server to which the client connected",
+            },
+        };
     }
 
-    #! Creates the object from the arguments
-    constructor(MqttClient client, *MqttConnectionOptions opts) {
-        self.client = client;
-        self.opts = opts;
-    }
-
-    #! Redirects method calls to the client
-    auto methodGate(string method, ...) {
-        return call_object_method_args(client, method, argv);
+    #! Creates the object
+    constructor() {
+        addQoreFields(Fields);
     }
 }
+
+#! Constant giving the MQTT connected event data type
+public const MqttConnectedEventDataType = new MqttConnectedEventDataType();
 }
