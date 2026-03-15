@@ -163,7 +163,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                         "desc": "Convert messages to strings with no deserialization",
                         "value": "string",
                     },
-%ifndef NoJson
+%ifndef NoYaml
                     <AllowedValueInfo>{
                         "display_name": "YAML",
                         "short_desc": "Parse messages as YAML strings",

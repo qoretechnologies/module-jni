@@ -59,13 +59,13 @@ void BaseMethod::init(Env &env) {
             LocalReference<jclass> elementClass =
                 env.callObjectMethod(lastParam, Globals::methodClassGetComponentType, nullptr).as<jclass>();
             if (elementClass && (Globals::getType(elementClass) != Type::Byte)) {
-                varargs = checkInterfaceVarArgs(env, paramTypesArray, paramCount);
+                varargs = checkInterfaceVarArgs(env, paramTypesArray);
             }
         }
     }
 }
 
-bool BaseMethod::checkInterfaceVarArgs(Env& env, jobjectArray paramTypesArray, jsize paramCount) {
+bool BaseMethod::checkInterfaceVarArgs(Env& env, jobjectArray paramTypesArray) {
     // get the declaring class
     LocalReference<jclass> declaringClass =
         env.callObjectMethod(method, Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>();

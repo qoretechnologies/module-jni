@@ -7,6 +7,13 @@ default:
     - amd64
   services:
     - name: postgres:18
+    - name: eclipse-mosquitto:2
+      alias: mosquitto
+      entrypoint: ["sh", "-c"]
+      command:
+        - |
+          printf 'listener 1883\nallow_anonymous true\n' > /tmp/mosquitto.conf &&
+          /usr/sbin/mosquitto -c /tmp/mosquitto.conf
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -18,6 +25,7 @@ variables:
   REPO_NAME: module-jni
   POSTGRES_PASSWORD: omq
   QORE_DB_CONNSTR: pgsql:postgres/omq@postgres%postgres
+  MQTT_CONNECTION: "mqtttcp://mosquitto:1883"
   TZ: Europe/Prague
   PGTZ: Europe/Prague
 

@@ -16,6 +16,9 @@ public class MqttDataProviderTest inherits QUnit::Test {
     private {
         MqttDataProvider mqtt;
 
+        #! The MQTT broker URL for integration tests
+        string mqtt_url;
+
         # command-line options
         const MyOpts = Opts + {
             "conn": "c,connection=s",
@@ -535,6 +538,39 @@ public class MqttDataProviderTest inherits QUnit::Test {
             "should have 'mqtt-connected-event' event type");
         assertTrue(event_types.hasKey("mqtt-disconnected-event"),
             "should have 'mqtt-disconnected-event' event type");
+
+        # publish/subscribe round-trip test
+        string test_topic = "qore/test/" + get_random_string(8);
+        hash<auto> test_payload = {"key": "value", "number": 42};
+
+        # create a subscriber provider on the test topic
+        MqttDataProvider subscriber({"url": mqtt_url, "subscription_topic": test_topic,
+            "client_id": "QoreTestSubscriber-" + get_random_string(4)});
+
+        # set up observer to capture received messages
+        Queue msg_queue();
+        MqttTestObserver obs(msg_queue);
+        subscriber.registerObserver(obs);
+        subscriber.observersReady();
+
+        # create a publisher and send a message
+        MqttDataProvider publisher({"url": mqtt_url, "subscription_topic": "unused",
+            "client_id": "QoreTestPublisher-" + get_random_string(4)});
+        publisher.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
+            "topic": test_topic,
+            "payload": test_payload,
+            "qos": 1,
+            "content_type": "application/json",
+        });
+
+        # wait for the message to arrive
+        auto received = msg_queue.get(10s);
+        assertTrue(exists received, "should receive published message");
+        assertEq(test_topic, received.topic, "received topic should match");
+        assertEq("value", received.payload.key, "received payload key should match");
+        assertEq(42, received.payload.number, "received payload number should match");
+        assertEq(1, received.qos, "received qos should match");
+        assertEq("application/json", received.content_type, "received content_type should match");
     }
 
     private usageIntern() {
@@ -556,6 +592,28 @@ public class MqttDataProviderTest inherits QUnit::Test {
         if (!(conn instanceof MqttConnection)) {
             error("connection %y is type %y; expecting \"MqttConnection\"", conn_name, conn.className());
         }
+        # store the real URL for creating additional providers in integration tests
+        mqtt_url = conn.getUrl();
+        # convert mqtttcp:// to tcp:// and mqttssl:// to ssl://
+        mqtt_url =~ s/^mqtt:/tcp:/;
+        mqtt_url =~ s/^mqtt//;
         mqtt = conn.getDataProvider();
+    }
+}
+
+#! Observer class for capturing MQTT events in integration tests
+class MqttTestObserver inherits Observer {
+    private {
+        Queue queue;
+    }
+
+    constructor(Queue queue) {
+        self.queue = queue;
+    }
+
+    update(string event_id, hash<auto> data) {
+        if (event_id == MqttDataProvider::EVENT_MQTT_MESSAGE) {
+            queue.push(data);
+        }
     }
 }

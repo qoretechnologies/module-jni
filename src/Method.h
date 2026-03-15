@@ -159,7 +159,7 @@ public:
         This handles JVM lambda classes where LambdaMetafactory drops ACC_VARARGS from the
         generated SAM method.
     */
-    DLLLOCAL bool checkInterfaceVarArgs(Env& env, jobjectArray paramTypesArray, jsize paramCount);
+    DLLLOCAL bool checkInterfaceVarArgs(Env& env, jobjectArray paramTypesArray);
 
     int isStatic() const {
         return mods & JVM_ACC_STATIC;
