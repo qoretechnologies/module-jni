@@ -507,10 +507,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         bool discard_oldest;
 
         #! OPC UA subscription (prevent GC)
-        auto subscription;
+        *UaSubscription subscription;
 
         #! Notification listener callback (prevent GC)
-        auto notification_listener;
+        *object notification_listener;
     }
 
     #! Creates the object from another object of the same class
