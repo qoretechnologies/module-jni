@@ -533,8 +533,6 @@ Class* QoreJniClassMap::loadProgramClass(Env& env, const char* name, JniExternal
     jvalue jarg;
     jarg.l = jname;
 
-    //printd(5, "QoreJniClassMap::loadProgramClass() '%s' jpc: %p\n", name, jpc);
-
     LocalReference<jclass> c = env.callObjectMethod(jpc->getClassLoader(),
         Globals::methodQoreURLClassLoaderLoadClass, &jarg).as<jclass>();
 
@@ -1151,10 +1149,21 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
         if (!qc) {
             printd(LogLevel, "QoreJniClassMap::getQoreType() creating cname: '%s' jname: '%s'\n", cname.c_str(),
                 jname.c_str());
-            bool base;
-            SimpleRefHolder<Class> cls(loadClass(env, jname.c_str(), base, jpc));
-            qc = findCreateQoreClass(env, cname, jname.c_str(), cls.release(), base, pgm);
-            assert(qc);
+            try {
+                bool base;
+                SimpleRefHolder<Class> cls(loadClass(env, jname.c_str(), base, jpc));
+                qc = findCreateQoreClass(env, cname, jname.c_str(), cls.release(), base, pgm);
+                assert(qc);
+            } catch (jni::Exception& e) {
+                // if the class cannot be loaded (e.g., in a callback thread where the
+                // classloader doesn't have access to all JARs), fall back to auto type
+                printd(5, "QoreJniClassMap::getQoreType() failed to load '%s'; using auto type\n",
+                    jname.c_str());
+                ExceptionSink xsink;
+                e.convert(&xsink);
+                xsink.clear();
+                return autoTypeInfo;
+            }
         }
     }
 
@@ -2953,9 +2962,17 @@ void JniExternalProgramData::addParentClasspath(const char* path) {
     try {
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddParentPath, &jarg);
     } catch (jni::Exception& e) {
-        // display exception info on the console as an unhandled exception
-        ExceptionSink xsink;
-        e.convert(&xsink);
+        // fallback: if the parent classloader is not a QoreURLClassLoader
+        // (e.g., PlatformClassLoader for the bootstrap program), add to this
+        // classloader directly
+        e.ignore();
+        try {
+            env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddPath, &jarg);
+        } catch (jni::Exception& e2) {
+            // display exception info on the console as an unhandled exception
+            ExceptionSink xsink;
+            e2.convert(&xsink);
+        }
     }
 }
 

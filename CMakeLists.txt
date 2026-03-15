@@ -625,6 +625,7 @@ set(CPP_SRC
 set(QMOD
     qlib/BusyLightDataProvider
     qlib/MqttDataProvider
+    qlib/OpcUaDataProvider
     qlib/ExcelDataProvider
     qlib/KafkaDataProvider
     qlib/WordDataProvider
@@ -671,6 +672,7 @@ qore_external_binary_module(${module_name} ${PROJECT_VERSION})
 qore_user_modules("${QMOD}")
 
 qore_external_user_module("qlib/MqttDataProvider" "")
+qore_external_user_module("qlib/OpcUaDataProvider" "")
 qore_external_user_module("qlib/BusyLightDataProvider" "MqttDataProvider")
 qore_external_user_module("qlib/ExcelDataProvider" "")
 qore_external_user_module("qlib/KafkaDataProvider" "")

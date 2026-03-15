@@ -82,7 +82,14 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
 
     ExceptionSink xsink;
     try {
+        // use the callback's program if it has JNI data; otherwise fall back to the
+        // program captured at construction time (when the QoreInvocationHandler was
+        // created) - this handles the case where the callback is a method reference
+        // to a method in a module that doesn't have JNI external data
         QoreProgram* pgm = callback->getProgram();
+        if (!pgm->getExternalData("jni")) {
+            pgm = this->pgm;
+        }
         JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 
         // Set up full program context including tlpd for thread pool threads
