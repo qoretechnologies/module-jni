@@ -219,6 +219,7 @@ public:
     DLLLOCAL static jmethodID methodJavaClassBuilderGetTypeDescriptionCls;        // static TypeDescription getTypeDescription(Class<?>)
     DLLLOCAL static jmethodID methodJavaClassBuilderGetTypeDescriptionStr;        // static TypeDescription getTypeDescription(String)
     DLLLOCAL static jmethodID methodJavaClassBuilderFindBaseClassMethodConflict;  // static boolean findBaseClassMethodConflict(Class<?>, String, List<TypeDescription>, boolean)
+    DLLLOCAL static jmethodID methodJavaClassBuilderIsFinalBaseClassMethod;       // static boolean isFinalBaseClassMethod(Class<?>, String, List<TypeDescription>)
 
     // Kotlin metadata helper class
     DLLLOCAL static GlobalReference<jclass> classKotlinMetadataHelper;           // org.qore.jni.KotlinMetadataHelper

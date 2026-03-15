@@ -1563,6 +1563,24 @@ int QoreJavaParamHelper::checkVariant(LocalReference<jobject>& params, qore_meth
     return 0;
 }
 
+bool QoreJavaParamHelper::isFinalMethod(const char* name, LocalReference<jobject>& params) {
+    if (!parent_class) {
+        return false;
+    }
+    try {
+        jvalue jargs[3];
+        jargs[0].l = parent_class;
+        LocalReference<jstring> jname = env.newString(name);
+        jargs[1].l = jname;
+        jargs[2].l = params;
+        return env.callStaticBooleanMethod(Globals::classJavaClassBuilder,
+            Globals::methodJavaClassBuilderIsFinalBaseClassMethod, &jargs[0]);
+    } catch (JavaException& e) {
+        e.ignore();
+    }
+    return false;
+}
+
 int JniExternalProgramData::addConstructorVariant(Env& env, jobject class_loader, const QoreClass& qcls,
         LocalReference<jobject>& bb, const QoreMethod& m, const QoreExternalMethodVariant& v, jclass parent_class,
         QoreJavaParamHelper& jph) {
@@ -1630,6 +1648,15 @@ int JniExternalProgramData::addNormalMethodVariant(Env& env, jobject class_loade
     QoreString jname;
     if (!strcmp(m.getName(), "getClass")) {
         jname = "getQoreClass";
+    }
+
+    // skip methods that would override final methods in parent classes (e.g., wait(), notify(),
+    // notifyAll() from java.lang.Object)
+    if (jname.empty() && jph.isFinalMethod(m.getName(), params)) {
+        printd(5, "JniExternalProgramData::addNormalMethodVariant() %s %s::%s(%s): skipping final parent " \
+            "method\n", qore_type_get_name(v.getReturnTypeInfo()), qcls.getName(), m.getName(),
+            v.getSignatureText());
+        return 0;
     }
 
     while (true) {

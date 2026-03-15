@@ -271,6 +271,9 @@ public:
     // returns 0 if the types are not equal, -1 (skip) if they are equal
     DLLLOCAL int checkVariant(LocalReference<jobject>& params, qore_method_type_t method_type);
 
+    // returns true if the parent class has a final method with matching name and params
+    DLLLOCAL bool isFinalMethod(const char* name, LocalReference<jobject>& params);
+
 private:
     Env& env;
     const char* mname;

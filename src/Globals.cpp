@@ -210,6 +210,7 @@ jmethodID Globals::methodJavaClassBuilderGetByteCodeFromBuilder;
 jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionCls;
 jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionStr;
 jmethodID Globals::methodJavaClassBuilderFindBaseClassMethodConflict;
+jmethodID Globals::methodJavaClassBuilderIsFinalBaseClassMethod;
 
 GlobalReference<jclass> Globals::classKotlinMetadataHelper;
 jmethodID Globals::methodKotlinMetadataHelperIsKotlinClass;
@@ -3071,6 +3072,9 @@ bool Globals::init() {
         "(Ljava/lang/String;)Lnet/bytebuddy/description/type/TypeDescription;");
     methodJavaClassBuilderFindBaseClassMethodConflict = env.getStaticMethod(classJavaClassBuilder,
         "findBaseClassMethodConflict", "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/List;Z)Z");
+    methodJavaClassBuilderIsFinalBaseClassMethod = env.getStaticMethod(classJavaClassBuilder,
+        "isFinalBaseClassMethod", "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/List;)Z");
+
 
     // Note: KotlinMetadataHelper is lazily initialized by initKotlinMetadataHelper() when first needed
     // This is because we can't load it until the classloader has access to qore-jni.jar
