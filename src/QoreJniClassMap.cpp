@@ -743,11 +743,22 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
     // find/create parent namespace in default / master Jni namespace first
     const char* sn;
     QoreNamespace* ns = jni_find_create_namespace(*default_jns, name.c_str(), sn);
+
+    // check if the class already exists in the namespace (e.g., same Java class loaded from
+    // multiple JARs on the classpath)
+    if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(sn))) {
+        if (existing->getJavaName() == name.c_str()) {
+            // same Java class already registered; add to calling Program and return existing
+            addClassToProgram(existing, jpath, pgm);
+            return existing;
+        }
+    }
+
     if (ic_idx != -1) {
         // get last '.'
         int dot = name.rfind('.');
 
-        // check for name conflict
+        // check for name conflict with a different Java class
         while (ns->findLocalClass(sn)) {
             // add an underscore
             name.insertch('_', ic_idx + 2, 1);
@@ -895,15 +906,8 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
     // that normally happens at parse time doesn't get called
     qc->runtimeResolveAbstractMethods();
 
-    // save class in namespace; check for duplicate to avoid assertion failure when the same
-    // Java class is loaded from multiple JARs (e.g., jakarta.jms API classes bundled in both
-    // the API JAR and a provider's "all-in-one" JAR)
-    if (ns->findLocalClass(qc->getName())) {
-        printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace '%s'; "
-            "skipping duplicate\n", jpath, ns->getName());
-    } else {
-        ns->addSystemClass(qc);
-    }
+    // save class in namespace
+    ns->addSystemClass(qc);
 
     jpc->saveClass(*qc, jc->getJavaObjectRef());
 
