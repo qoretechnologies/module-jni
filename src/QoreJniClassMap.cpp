@@ -820,13 +820,33 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
     const char* sn;
     QoreNamespace* ns = jni_find_create_namespace(*jpc->getJniNamespace(), qc->getJavaName().c_str(), sn);
 
-    // check if the class is already in the namespace (may have been added by another mechanism)
-    if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(sn))) {
-        // class already in namespace - just add the jpc mapping and return
-        jpc->add(jpath, existing);
-        printd(LogLevel, "QoreJniClassMap::addClassToProgram() '%s' already in namespace '%s', added jpc mapping\n",
-            jpath, ns->getName());
+    // check if the class is already in the namespace — must check both the local namespace
+    // and the root namespace path, because the class may have been inherited from a loaded
+    // module's namespace (e.g., JakartaJmsDataProvider imports jakarta.jms.* classes, and
+    // when the test program loads that module, the classes are merged into the program's
+    // namespace tree but not directly into the program-local Jni:: namespace)
+    if (QoreClass* existing = ns->findLocalClass(sn)) {
+        // class already in this namespace - just add the jpc mapping and return
+        jpc->add(jpath, static_cast<JniQoreClass*>(existing));
+        printd(LogLevel, "QoreJniClassMap::addClassToProgram() '%s' already in namespace '%s', "
+            "added jpc mapping\n", jpath, ns->getName());
         return;
+    }
+    // also check via the program's root namespace path, which catches classes inherited
+    // from loaded modules
+    {
+        QoreString full_path("Jni::");
+        full_path.concat(qc->getJavaName().c_str());
+        full_path.replaceAll(".", "::");
+        ExceptionSink xsink;
+        if (const QoreClass* existing = pgm->findClass(full_path.c_str(), &xsink)) {
+            jpc->add(jpath, const_cast<JniQoreClass*>(static_cast<const JniQoreClass*>(existing)));
+            printd(LogLevel, "QoreJniClassMap::addClassToProgram() '%s' found via path '%s', "
+                "added jpc mapping\n", jpath, full_path.c_str());
+            return;
+        }
+        // clear any exception from class lookup failure
+        xsink.clear();
     }
 
     // copy class for assignment
@@ -841,7 +861,6 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
     // create entry for class in map
     jpc->add(jpath, new_qc.get());
 
-    // save class in namespace
     JniQoreClass* saved_qc = new_qc.release();
     // issue #5056: resolve abstract methods for copied class
     saved_qc->runtimeResolveAbstractMethods();
@@ -919,7 +938,13 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
     // that normally happens at parse time doesn't get called
     qc->runtimeResolveAbstractMethods();
 
-    // save class in namespace
+    // save class in namespace; check for duplicate to handle the case where the same Java
+    // class is loaded from multiple JARs or inherited from a loaded module's namespace
+    if (ns->findLocalClass(qc->getName())) {
+        printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace '%s'; "
+            "skipping duplicate addSystemClass\n", jpath, ns->getName());
+        return qc;
+    }
     ns->addSystemClass(qc);
 
     jpc->saveClass(*qc, jc->getJavaObjectRef());
