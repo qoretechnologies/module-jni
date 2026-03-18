@@ -1,0 +1,144 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore ArtemisTestHelper module for JMS integration tests
+
+/* ArtemisTestHelper.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires jni
+
+module ArtemisTestHelper {
+    version = "1.0";
+    desc = "Helper module for starting/stopping an embedded ActiveMQ Artemis broker for JMS integration tests";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage ArtemisTestHelper Module
+
+    Provides a helper class for starting/stopping an embedded Apache ActiveMQ Artemis broker
+    for JMS integration testing. The broker runs in-process via JNI.
+
+    Requires Artemis JARs to be on the classpath. Set the \c ARTEMIS_CLASSPATH environment
+    variable to specify the location of the Artemis JARs, or use
+    \c %%module-cmd(jni) add-classpath directives.
+*/
+
+#! contains all public definitions in the ArtemisTestHelper module
+public namespace ArtemisTestHelper {
+#! Helper class for managing an embedded Artemis broker
+/** Starts an in-process embedded ActiveMQ Artemis broker using the EmbeddedActiveMQ API.
+    No external service needed for testing.
+*/
+public class ArtemisEmbeddedBroker {
+    private {
+        #! The embedded broker instance
+        auto embedded;
+
+        #! Whether the broker is running
+        bool running = False;
+
+        #! The broker URL
+        string broker_url;
+
+        #! The Artemis ConnectionFactory class name
+        string factory_class = "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory";
+    }
+
+    #! Creates the embedded broker helper
+    /** @param artemis_classpath optional classpath for Artemis JARs
+    */
+    constructor(*string artemis_classpath) {
+        if (!artemis_classpath.val()) {
+            artemis_classpath = ENV.ARTEMIS_CLASSPATH;
+        }
+        if (!artemis_classpath.val()) {
+            throw "ARTEMIS-CLASSPATH-ERROR", "ARTEMIS_CLASSPATH environment variable not set and "
+                "no classpath provided; set ARTEMIS_CLASSPATH to the path containing Artemis JARs "
+                "(e.g. /path/to/artemis/lib/*)";
+        }
+        # add Artemis JARs to classpath
+        list<string> paths = artemis_classpath.split(",");
+        foreach string path in (paths) {
+            path = trim(path);
+            if (path.val()) {
+                Program::issueModuleCmd("jni", "add-classpath " + path);
+            }
+        }
+    }
+
+    #! Starts the embedded Artemis broker
+    /** @return the broker URL for connecting clients (e.g. "vm://0")
+    */
+    string start() {
+        if (running) {
+            return broker_url;
+        }
+
+        # use the EmbeddedActiveMQ API
+        lang::Class embedded_cls = load_class("org/apache/activemq/artemis/core/server/embedded/EmbeddedActiveMQ");
+        embedded = embedded_cls.getConstructor().newInstance();
+
+        # start the broker
+        lang::Class start_cls = embedded.getClass();
+        start_cls.getMethod("start").invoke(embedded);
+
+        running = True;
+        broker_url = "vm://0";
+        return broker_url;
+    }
+
+    #! Stops the embedded Artemis broker
+    stop() {
+        if (!running) {
+            return;
+        }
+        running = False;
+        if (embedded) {
+            try {
+                lang::Class stop_cls = embedded.getClass();
+                stop_cls.getMethod("stop").invoke(embedded);
+            } catch () {
+                # ignore
+            }
+            delete embedded;
+        }
+    }
+
+    #! Returns the broker URL
+    string getBrokerUrl() {
+        return broker_url;
+    }
+
+    #! Returns the Artemis ConnectionFactory class name
+    string getFactoryClass() {
+        return factory_class;
+    }
+
+    #! Returns True if the broker is running
+    bool isRunning() {
+        return running;
+    }
+}
+}

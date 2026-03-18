@@ -23,6 +23,8 @@
       BusyLight devices using MQTT messaging
     - <a href="../../ExcelDataProvider/html/index.html">ExcelDataProvider</a> a data provider API to allow reading
       record-based data from Excel spreadsheets
+    - <a href="../../JakartaJmsDataProvider/html/index.html">JakartaJmsDataProvider</a> a data provider API for
+      Jakarta JMS 3.x messaging brokers (ActiveMQ Artemis, TIBCO EMS, IBM MQ, etc.)
     - <a href="../../KafkaDataProvider/html/index.html">KafkaDataProvider</a> a data provider API for Kafka messaging
     - <a href="../../MqttDataProvider/html/index.html">MqttDataProvider</a> a data provider API for MQTT messaging
     - <a href="../../OpcUaDataProvider/html/index.html">OpcUaDataProvider</a> a data provider API for OPC UA
@@ -921,6 +923,19 @@ set_save_object_callback(callback);
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - added the <a href="../../JakartaJmsDataProvider/html/index.html">JakartaJmsDataProvider</a>
+      module for Jakarta JMS 3.x messaging brokers
+      - supports ActiveMQ Artemis, TIBCO EMS, IBM MQ, Oracle AQ, and any Jakarta Messaging 3.x
+        compliant provider
+      - automatic Qore-to-JMS type mapping (\c string \u2194 \c TextMessage, \c hash \u2194
+        \c MapMessage, \c binary \u2194 \c BytesMessage)
+      - send (fire-and-forget), request-reply, queue browsing, and event-driven consumption
+      - JMS SQL-92 message selector support
+      - durable topic subscriptions with \c client_id
+      - thread-safe JMS session pool
+      - connection provider with \c jms scheme
+      - 4 app actions: \c send-jms-message, \c jms-request-reply, \c browse-jms-queue,
+        \c jms-message-received
     - added the <a href="../../OpcUaDataProvider/html/index.html">OpcUaDataProvider</a> module for OPC UA
       connectivity using the Eclipse Milo 0.6.13 SDK
       - supports data change subscriptions via the observer pattern
@@ -928,6 +943,10 @@ set_save_object_callback(callback);
       - supports connection provider with \c opcua, \c opcuatcp, and \c opcuahttps schemes
       - supports SSL/TLS and OPC UA security policy configuration
       - includes action catalog integration (7 actions)
+    - fixed a bug in \c QoreCodeDispatcher::dispatch() where \c callback->getProgram() could return
+      a null pointer, causing a SIGSEGV when Java callback threads invoked Qore code via
+      \c implement_interface(); the dispatcher now checks for null before accessing the program's
+      external data
     - fixed a bug where Java callback threads using module method references would fail to resolve
       classes because the callback's program context lacked JNI external data; the dispatcher now
       falls back to the program captured at \c QoreInvocationHandler construction time

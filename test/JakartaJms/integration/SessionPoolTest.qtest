@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* SessionPoolTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%module-cmd(jni) import jakarta.jms.*
+
+%exec-class SessionPoolTest
+
+public class SessionPoolTest inherits QUnit::Test {
+    public {
+        const FactoryClass = "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory";
+    }
+
+    private {
+        *string jms_url;
+        *string artemis_cp;
+        *JmsDataProvider provider;
+    }
+
+    constructor() : Test("SessionPoolTest", "1.0", \ARGV) {
+        jms_url = ENV.JMS_CONNECTION;
+        artemis_cp = ENV.ARTEMIS_CLASSPATH;
+        if (!jms_url || !artemis_cp) {
+            addTestCase("skip", sub () { testSkip("set JMS_CONNECTION and ARTEMIS_CLASSPATH to run"); });
+            set_return_value(main());
+            return;
+        }
+
+        addTestCase("acquire and release", \acquireReleaseTest());
+        addTestCase("pool max sessions", \poolMaxSessionsTest());
+        addTestCase("pool close", \poolCloseTest());
+        addTestCase("negative: acquire after close", \negativeAcquireAfterCloseTest());
+
+        try {
+            provider = new JmsDataProvider({
+                "url": jms_url,
+                "connection_factory_class": FactoryClass,
+                "provider_classpath": artemis_cp,
+                "session_mode": "AUTO_ACKNOWLEDGE",
+                "max_sessions": 2,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            printf("SKIPPING: Cannot connect to broker: %s: %s\n", ex.err, ex.desc);
+        }
+        set_return_value(main());
+    }
+
+    destructor() {
+        delete provider;
+    }
+
+    acquireReleaseTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        assertEq(True, exists session, "session acquired");
+        assertEq(1, pool.getCreatedCount(), "one session created");
+
+        pool.release(session);
+        assertEq(1, pool.getAvailableCount(), "one session available after release");
+    }
+
+    poolMaxSessionsTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        JmsSessionPool pool = provider.getSessionPool();
+        # acquire all sessions up to max
+        Session s1 = pool.acquire();
+        Session s2 = pool.acquire();
+
+        assertEq(2, pool.getCreatedCount(), "max sessions created");
+        assertEq(0, pool.getAvailableCount(), "no sessions available");
+
+        # release one
+        pool.release(s1);
+        assertEq(1, pool.getAvailableCount(), "one session available after release");
+
+        # acquire again - should reuse
+        Session s3 = pool.acquire();
+        assertEq(True, exists s3, "reused session acquired");
+
+        pool.release(s2);
+        pool.release(s3);
+    }
+
+    poolCloseTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        # create a separate data provider with its own pool for this test
+        JmsDataProvider temp_provider({
+            "url": jms_url,
+            "connection_factory_class": FactoryClass,
+            "provider_classpath": artemis_cp,
+            "session_mode": "AUTO_ACKNOWLEDGE",
+            "max_sessions": 2,
+        });
+
+        JmsSessionPool pool = temp_provider.getSessionPool();
+        Session session = pool.acquire();
+        pool.release(session);
+
+        pool.close();
+        assertEq(True, pool.isClosed(), "pool is closed");
+        assertEq(0, pool.getAvailableCount(), "no sessions after close");
+    }
+
+    negativeAcquireAfterCloseTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        JmsDataProvider temp_provider({
+            "url": jms_url,
+            "connection_factory_class": FactoryClass,
+            "provider_classpath": artemis_cp,
+            "session_mode": "AUTO_ACKNOWLEDGE",
+            "max_sessions": 1,
+        });
+
+        JmsSessionPool pool = temp_provider.getSessionPool();
+        pool.close();
+
+        code acquire_closed = sub () { pool.acquire(); };
+        assertThrows("JMS-SESSION-POOL-ERROR", acquire_closed,
+            NOTHING, "acquire after close throws");
+    }
+}

@@ -1,0 +1,57 @@
+#!/usr/bin/env qore
+
+# Quick start: send and receive a message with Apache ActiveMQ Artemis.
+#
+# Prerequisites:
+#   - ActiveMQ Artemis running on tcp://localhost:61616
+#   - Artemis client JARs on classpath (e.g. ARTEMIS_CLASSPATH=/path/to/artemis/lib/*)
+#
+# Expected output:
+#   Sent: Hello from Qore!
+#   Received: Hello from Qore!
+#   Round-trip test successful!
+
+%requires jni
+%requires JakartaJmsDataProvider
+
+# add Artemis client JARs if ARTEMIS_CLASSPATH is set
+%module-cmd(jni) add-classpath $ARTEMIS_CLASSPATH
+
+hash<auto> opts = {
+    "url": "tcp://localhost:61616",
+    "connection_factory_class": "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory",
+    "session_mode": "AUTO_ACKNOWLEDGE",
+};
+
+JmsDataProvider provider(opts);
+
+# send a message
+AbstractDataProvider producer = provider.getChildProviderEx("producer");
+string test_body = "Hello from Qore!";
+producer.sendMessage("message", {
+    "destination": "queue://quickstart",
+    "body": test_body,
+});
+printf("Sent: %s\n", test_body);
+
+# receive the message (synchronous)
+JmsSessionPool pool = provider.getSessionPool();
+Session session = pool.acquire();
+on_exit pool.release(session);
+
+Destination dest = JmsDataProviderBase::parseDestination(session, "queue://quickstart");
+MessageConsumer cons = session.createConsumer(dest);
+on_exit cons.close();
+
+Message recv = cons.receive(5000);
+if (recv) {
+    hash<auto> result = JmsTypeMapper::fromJmsMessage(recv);
+    printf("Received: %s\n", result.body);
+    if (result.body == test_body) {
+        printf("Round-trip test successful!\n");
+    } else {
+        printf("ERROR: message body mismatch!\n");
+    }
+} else {
+    printf("ERROR: no message received within 5 seconds\n");
+}

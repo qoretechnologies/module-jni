@@ -73,11 +73,19 @@ mkdir -p ${MODULE_SRC_DIR}/qlib/PowerPointDataProvider/jar
 cp ${MODULE_SRC_DIR}/build/qore-dataprovider-powerpoint.jar ${MODULE_SRC_DIR}/qlib/PowerPointDataProvider/jar/
 cp ${MODULE_SRC_DIR}/build/qore-dataprovider-kafka.jar ${MODULE_SRC_DIR}/qlib/KafkaDataProvider/jar/
 
+# download Artemis Jakarta JMS client JAR for JMS data provider tests
+ARTEMIS_JAR_DIR=${MODULE_SRC_DIR}/test/JakartaJms/lib
+mkdir -p ${ARTEMIS_JAR_DIR}
+if [ -n "${ARTEMIS_JAKARTA_JAR_URL}" ]; then
+    echo && echo "-- downloading Artemis Jakarta JMS client JAR --"
+    curl -sL -o ${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar "${ARTEMIS_JAKARTA_JAR_URL}"
+fi
+
 # run the tests
-export QORE_MODULE_DIR=${MODULE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
+export QORE_MODULE_DIR=${MODULE_SRC_DIR}/qlib:${MODULE_SRC_DIR}/test/JakartaJms/lib:${QORE_MODULE_DIR}
 cd ${MODULE_SRC_DIR}
 for test in test/*.qtest; do
-    # skip jms test
+    # skip legacy jms test
     if [[ -z "$do_jms_test" && "$test" == test/jms.qtest ]]; then
         continue
     fi
@@ -86,6 +94,27 @@ for test in test/*.qtest; do
     RESULTS="$RESULTS $?"
     date
 done
+
+# run Jakarta JMS unit tests (no broker needed)
+echo && echo "-- running Jakarta JMS unit tests --"
+for test in test/JakartaJms/unit/*.qtest; do
+    date
+    gosu qore:qore qore --enable-debug $test -vv
+    RESULTS="$RESULTS $?"
+    date
+done
+
+# run Jakarta JMS integration tests (requires Artemis service)
+if [ -n "${JMS_CONNECTION}" ] && [ -f "${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar" ]; then
+    echo && echo "-- running Jakarta JMS integration tests against ${JMS_CONNECTION} --"
+    export ARTEMIS_CLASSPATH=${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar
+    for test in test/JakartaJms/integration/*.qtest; do
+        date
+        gosu qore:qore qore --enable-debug $test -vv
+        RESULTS="$RESULTS $?"
+        date
+    done
+fi
 
 # check the results
 for R in $RESULTS; do

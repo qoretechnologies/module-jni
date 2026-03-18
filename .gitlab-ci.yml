@@ -16,6 +16,12 @@ default:
           /usr/sbin/mosquitto -c /tmp/mosquitto.conf
     - name: open62541/open62541:latest
       alias: opcua
+    - name: quay.io/artemiscloud/activemq-artemis-broker:latest
+      alias: artemis
+      variables:
+        AMQ_USER: admin
+        AMQ_PASSWORD: admin
+        AMQ_EXTRA_ARGS: "--no-fsync"
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -29,6 +35,8 @@ variables:
   QORE_DB_CONNSTR: pgsql:postgres/omq@postgres%postgres
   MQTT_CONNECTION: "mqtttcp://mosquitto:1883"
   OPCUA_CONNECTION: "opc.tcp://opcua:4840"
+  JMS_CONNECTION: "tcp://artemis:61616"
+  ARTEMIS_JAKARTA_JAR_URL: "https://repo1.maven.org/maven2/org/apache/activemq/artemis-jakarta-client-all/2.40.0/artemis-jakarta-client-all-2.40.0.jar"
   TZ: Europe/Prague
   PGTZ: Europe/Prague
 

@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* MessageSelectorTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%module-cmd(jni) import jakarta.jms.*
+
+%exec-class MessageSelectorTest
+
+public class MessageSelectorTest inherits QUnit::Test {
+    public {
+        const FactoryClass = "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory";
+    }
+
+    private {
+        *JmsDataProvider provider;
+    }
+
+    constructor() : Test("MessageSelectorTest", "1.0", \ARGV) {
+        *string jms_url = ENV.JMS_CONNECTION;
+        *string artemis_cp = ENV.ARTEMIS_CLASSPATH;
+        if (!jms_url || !artemis_cp) {
+            addTestCase("skip", sub () { testSkip("set JMS_CONNECTION and ARTEMIS_CLASSPATH to run"); });
+            set_return_value(main());
+            return;
+        }
+
+        addTestCase("consumer with selector", \consumerSelectorTest());
+        addTestCase("selector matching nothing", \selectorMatchingNothingTest());
+
+        try {
+            provider = new JmsDataProvider({
+                "url": jms_url,
+                "connection_factory_class": FactoryClass,
+                "provider_classpath": artemis_cp,
+                "session_mode": "AUTO_ACKNOWLEDGE",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            printf("SKIPPING: Cannot connect to broker: %s: %s\n", ex.err, ex.desc);
+        }
+        set_return_value(main());
+    }
+
+    destructor() {
+        delete provider;
+    }
+
+    consumerSelectorTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        string queue_name = "queue://test-selector";
+        string selector = "color = 'red'";
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, queue_name);
+
+        # send messages with different properties
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+
+        Message msg1 = JmsTypeMapper::toJmsMessage(session, "red item", {"color": "red"});
+        prod.send(msg1);
+        Message msg2 = JmsTypeMapper::toJmsMessage(session, "blue item", {"color": "blue"});
+        prod.send(msg2);
+
+        # consume with selector - should only get red
+        MessageConsumer cons = session.createConsumer(dest, selector);
+        on_exit cons.close();
+
+        Message recv = cons.receive(5000);
+        assertEq(True, exists recv, "message matching selector received");
+        hash<auto> result = JmsTypeMapper::fromJmsMessage(recv);
+        assertEq("red item", result.body, "correct message received based on selector");
+
+        # try again - should not get blue
+        *Message recv2 = cons.receiveNoWait();
+        assertEq(False, exists recv2, "blue message not received with red selector");
+    }
+
+    selectorMatchingNothingTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        string queue_name = "queue://test-selector-nothing";
+        string selector = "nonexistent_prop = 'value'";
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, queue_name);
+
+        # send a message without the property
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+        Message msg = JmsTypeMapper::toJmsMessage(session, "test");
+        prod.send(msg);
+
+        # consume with selector that won't match
+        MessageConsumer cons = session.createConsumer(dest, selector);
+        on_exit cons.close();
+
+        *Message recv = cons.receiveNoWait();
+        assertEq(False, exists recv, "no message matches non-existent property selector");
+    }
+}

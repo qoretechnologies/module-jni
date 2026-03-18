@@ -1,0 +1,402 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore JakartaJmsDataProvider module definition
+
+/*  JakartaJmsDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+# import Jakarta JMS API: JAR must be added to the global classloader
+%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.jms-api-3.1.0.jar
+
+# implements a data provider for JMS functionality
+%requires(reexport) DataProvider
+# implements support for JMS connections
+%requires(reexport) ConnectionProvider
+
+module JakartaJmsDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Jakarta JMS messaging brokers";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register connection scheme
+        ConnectionSchemeCache::registerScheme("jms", JmsConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new JmsDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": JakartaJmsDataProvider::AppName,
+            "display_name": "Jakarta JMS",
+            "short_desc": "Jakarta Messaging (JMS) 3.x compliant broker",
+            "desc": "Jakarta Messaging (JMS) 3.x compliant broker for enterprise messaging with support for "
+                "queues, topics, durable subscriptions, message selectors, and request-reply patterns",
+            "groups": (DataProvider::AppGroup::Messaging,),
+            "scheme": "jms",
+            "logo": JmsLogo,
+            "logo_file_name": "jms-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+
+        # event: message received
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JakartaJmsDataProvider::AppName,
+            "path": "/polling",
+            "action": "jms-message-received",
+            "display_name": "JMS Message Received",
+            "short_desc": "A JMS message is received from a queue or topic",
+            "desc": "A JMS message is received from a queue or topic; event includes JMS headers "
+                "and user-defined string properties.\n\n"
+                "Configure the destination to listen on (`queue://name` or `topic://name`), "
+                "an optional message selector for filtering, and a client ID for durable "
+                "topic subscriptions",
+            "action_code": DPAT_EVENT,
+            "action_val": JmsPollingDataProvider::EVENT_JMS_MESSAGE,
+            "output_type": JmsEventDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JmsDataProvider::ConstructorOptions{"destination",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JmsDataProvider::ConstructorOptions{"message_selector",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JmsDataProvider::ConstructorOptions{"client_id",}
+            ),
+        });
+
+        # send message (fire-and-forget)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JakartaJmsDataProvider::AppName,
+            "path": "/producer",
+            "action": "send-jms-message",
+            "display_name": "Send JMS Message",
+            "short_desc": "Send a JMS message to a queue or topic",
+            "desc": "Send a JMS message to a queue or topic with optional JMS headers "
+                "and user-defined string properties",
+            "action_code": DPAT_SEND_MESSAGE,
+            "action_val": JmsProducerDataProvider::MESSAGE_JMS_SEND,
+            "output_type": JmsMessageDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JmsMessageDataType::Fields{"destination", "body"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JmsMessageDataType::Fields{"delivery_mode", "priority", "time_to_live",
+                    "correlation_id", "type", "headers"}
+            ),
+        });
+
+        # request-reply
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JakartaJmsDataProvider::AppName,
+            "path": "/producer",
+            "action": "jms-request-reply",
+            "display_name": "JMS Request-Reply",
+            "short_desc": "Send a JMS request and wait for a reply",
+            "desc": "Send a JMS message to a destination and wait for a synchronous reply "
+                "using a temporary queue.\n\n"
+                "The request message's `JMSReplyTo` header is automatically set to a "
+                "temporary queue. The responder should send the reply to that destination "
+                "and copy the `JMSMessageID` to the reply's `JMSCorrelationID`",
+            "action_code": DPAT_API,
+            "output_type": JmsMessageResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JmsMessageDataType::Fields{"destination", "body"}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JmsMessageDataType::Fields{"delivery_mode", "priority", "time_to_live",
+                    "correlation_id", "type", "headers"}
+            ),
+        });
+
+        # browse queue
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JakartaJmsDataProvider::AppName,
+            "path": "/browser",
+            "action": "browse-jms-queue",
+            "display_name": "Browse JMS Queue",
+            "short_desc": "Non-destructively browse messages in a JMS queue",
+            "desc": "Non-destructively inspect messages currently in a JMS queue without "
+                "consuming them.\n\n"
+                "Messages remain in the queue after browsing. An optional selector can "
+                "be used to filter the browsed messages by their properties",
+            "action_code": DPAT_API,
+            "output_type": JmsEventDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JmsBrowseRequestDataType::Fields{"destination",}, {
+                    "required": True,
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JmsBrowseRequestDataType::Fields{"selector",}
+            ),
+        });
+    };
+}
+
+/** @mainpage JakartaJmsDataProvider Module
+
+    @tableofcontents
+
+    @section jakartajmsdataproviderintro Introduction to the JakartaJmsDataProvider Module
+
+    The %JakartaJmsDataProvider module provides a data provider API for Jakarta Messaging (JMS) 3.x
+    compliant brokers such as Apache ActiveMQ Artemis, TIBCO EMS, IBM MQ, and Oracle AQ.
+
+    This data provider provides JMS functionality with the \c jms factory and data provider with the
+    same name (class @ref JakartaJmsDataProvider::JmsDataProvider "JmsDataProvider").
+
+    @subsection jakartajmsdataprovider_usecases Business Use Cases
+
+    JMS is the standard Java messaging API used across enterprise systems. Common use cases include:
+
+    - **Order processing**: send orders to a \c queue://orders queue for reliable, exactly-once
+      processing by backend fulfillment systems
+    - **Event-driven microservices**: subscribe to \c topic://events for real-time notifications
+      (e.g., inventory changes, price updates, shipment status)
+    - **Request-reply workflows**: send a pricing request to \c queue://pricing-engine and wait
+      for a synchronous reply with the calculated quote
+    - **Audit and compliance**: browse a \c queue://audit-log queue without consuming messages to
+      inspect pending audit records
+    - **Message filtering**: use JMS message selectors (e.g., \c "region = 'us-east' AND
+      priority > 5") to receive only relevant messages from a shared topic
+    - **Durable subscriptions**: persist topic subscriptions across client restarts so no messages
+      are lost during maintenance windows
+
+    @subsection jakartajmsdataprovider_features Features
+
+    - **Queue and topic messaging**: point-to-point and publish-subscribe patterns
+    - **Message types**: \c TextMessage, \c MapMessage, \c BytesMessage with automatic type mapping
+    - **Message selectors**: SQL-92 based filtering on message properties
+    - **Request-reply**: synchronous request-reply using temporary queues
+    - **Queue browsing**: non-destructive inspection of queue contents
+    - **Durable subscriptions**: persistent topic subscriptions across reconnects
+    - **Event-driven consumption**: asynchronous message reception via \c MessageListener
+    - **Session pooling**: thread-safe pool of JMS sessions for concurrent access
+    - **Provider-agnostic**: works with any Jakarta Messaging 3.x compliant provider
+
+    @subsection jakartajmsdataprovider_providers Provider Hierarchy
+
+    The root \c jms data provider has three child providers:
+
+    |Provider|Path|Purpose|
+    |---|---|---|
+    |@ref JakartaJmsDataProvider::JmsProducerDataProvider "producer"|<tt>/producer</tt>|Send messages (fire-and-forget) and request-reply|
+    |@ref JakartaJmsDataProvider::JmsBrowserDataProvider "browser"|<tt>/browser</tt>|Non-destructive queue browsing|
+    |@ref JakartaJmsDataProvider::JmsPollingDataProvider "polling"|<tt>/polling</tt>|Event-driven message consumption|
+
+    @subsection jakartajmsdataprovider_messagetypes Message Type Mapping
+
+    Qore values are automatically mapped to JMS message types when sending:
+
+    |Qore Type|JMS Message Type|Notes|
+    |---|---|---|
+    |\c string|\c TextMessage|UTF-8 text|
+    |\c hash|\c MapMessage|Keys mapped to JMS map entries; nested hashes serialized as JSON strings|
+    |\c binary|\c BytesMessage|Raw bytes|
+    |other|\c BytesMessage|Serialized as JSON with \c content_type property set to \c application/json|
+
+    When receiving, the reverse mapping is applied automatically.
+
+    @subsection jakartajmsdataprovider_setup Connection Setup
+
+    The JMS provider requires two mandatory options:
+    - \c url: the broker URL (e.g., \c tcp://localhost:61616)
+    - \c connection_factory_class: the fully-qualified Java class name of the JMS
+      \c ConnectionFactory (e.g.,
+      \c org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory)
+
+    The provider's client JARs must be on the classpath. Use the \c provider_classpath option
+    to add JARs at runtime, or set the \c QORE_JNI_CLASSPATH environment variable, or use
+    \c %%module-cmd(jni) directives.
+
+    Destinations are specified in URI format:
+    - \c queue://order-queue — point-to-point queue
+    - \c topic://price-updates — publish-subscribe topic
+
+    @section jakartajmsdataprovider_examples JMS Data Provider Examples
+
+    @subsection jakartajmsdataprovider_qdp_examples Command-Line Examples (qdp)
+
+    @par Send a text message to a queue
+    @verbatim qdp 'jms{url=tcp://localhost:61616,connection_factory_class=org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory}/producer' send message 'destination=queue://orders,body={"order_id": 123}'
+    @endverbatim
+
+    @par Send with custom headers and priority
+    @verbatim qdp 'jms{url=tcp://localhost:61616,connection_factory_class=org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory}/producer' send message 'destination=queue://orders,body=urgent order,priority=9,headers={region=us-east}'
+    @endverbatim
+
+    @par Listen for messages on a queue
+    @verbatim qdp 'jms{url=tcp://localhost:61616,connection_factory_class=org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory,destination=queue://orders}/polling' listen
+    @endverbatim
+
+    @par Listen with a message selector
+    @verbatim qdp 'jms{url=tcp://localhost:61616,connection_factory_class=org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory,destination=queue://orders,message_selector=region = '"'"'us-east'"'"'}/polling' listen
+    @endverbatim
+
+    @par Browse a queue without consuming
+    @verbatim qdp 'jms{url=tcp://localhost:61616,connection_factory_class=org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory}/browser' request 'destination=queue://orders'
+    @endverbatim
+
+    @par Request-reply
+    @verbatim qdp 'jms{url=tcp://localhost:61616,connection_factory_class=org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory}/producer' request 'destination=queue://pricing-engine,body={"sku": "ABC-123", "qty": 10}'
+    @endverbatim
+
+    @subsection jakartajmsdataprovider_qore_examples Qore Code Examples
+
+    @par Send a message
+    @code{.py}
+    %requires JakartaJmsDataProvider
+
+    JmsDataProvider provider({
+        "url": "tcp://localhost:61616",
+        "connection_factory_class": "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory",
+        "provider_classpath": "/opt/artemis/lib/artemis-jakarta-client-all.jar",
+    });
+
+    AbstractDataProvider producer = provider.getChildProviderEx("producer");
+    producer.sendMessage("message", {
+        "destination": "queue://orders",
+        "body": {"order_id": 123, "customer": "Acme Corp"},
+        "headers": {"region": "us-east", "source": "web-api"},
+        "priority": 7,
+    });
+    @endcode
+
+    @par Listen for messages with a selector
+    @code{.py}
+    class OrderHandler inherits DataProvider::Observer {
+        update(string event_id, hash<auto> data_) {
+            printf("Order received: %y\n", data_.body);
+        }
+    }
+
+    JmsDataProvider provider({
+        "url": "tcp://localhost:61616",
+        "connection_factory_class": "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory",
+        "provider_classpath": "/opt/artemis/lib/artemis-jakarta-client-all.jar",
+        "destination": "queue://orders",
+        "message_selector": "region = 'us-east'",
+    });
+
+    AbstractDataProvider polling = provider.getChildProviderEx("polling");
+    polling.registerObserver(new OrderHandler());
+    polling.observersReady();
+    # messages matching the selector are delivered to OrderHandler::update()
+    @endcode
+
+    @par Request-reply (synchronous)
+    @code{.py}
+    AbstractDataProvider producer = provider.getChildProviderEx("producer");
+    hash<auto> response = producer.doRequest({
+        "destination": "queue://pricing-engine",
+        "body": {"sku": "ABC-123", "qty": 10},
+        "correlation_id": "quote-001",
+    });
+    printf("Price quote: %y\n", response.body);
+    @endcode
+
+    @par Browse a queue
+    @code{.py}
+    AbstractDataProvider browser = provider.getChildProviderEx("browser");
+    list<auto> messages = browser.doRequest({"destination": "queue://audit-log"});
+    printf("Queue contains %d messages\n", messages.size());
+    foreach hash<auto> msg in (messages) {
+        printf("  [%s] %y\n", msg.message_id, msg.body);
+    }
+    @endcode
+
+    @par Durable topic subscription
+    @code{.py}
+    JmsDataProvider provider({
+        "url": "tcp://localhost:61616",
+        "connection_factory_class": "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory",
+        "provider_classpath": "/opt/artemis/lib/artemis-jakarta-client-all.jar",
+        "destination": "topic://price-updates",
+        "client_id": "pricing-service-1",
+    });
+
+    # creates a durable subscription — messages are retained across reconnects
+    AbstractDataProvider polling = provider.getChildProviderEx("polling");
+    polling.registerObserver(new PriceUpdateHandler());
+    polling.observersReady();
+    @endcode
+
+    @section jakartajmsdataprovider_actions App Action Reference
+
+    |Action|Type|Description|
+    |---|---|---|
+    |\c send-jms-message|DPAT_SEND_MESSAGE|Fire-and-forget message send to a queue or topic|
+    |\c jms-request-reply|DPAT_API|Synchronous request-reply using a temporary queue|
+    |\c browse-jms-queue|DPAT_API|Non-destructive queue inspection with optional selector|
+    |\c jms-message-received|DPAT_EVENT|Event-driven message consumption with optional selector and durable subscriptions|
+
+    @section jakartajmsdataprovider_troubleshooting Troubleshooting
+
+    - **ClassNotFoundException**: the JMS provider JARs are not on the classpath; set the
+      \c provider_classpath option, the \c QORE_JNI_CLASSPATH environment variable, or use
+      \c %%module-cmd(jni) \c add-classpath directives
+    - **Connection refused**: verify the broker URL and that the broker is running
+    - **Security exception**: check \c username and \c password options
+    - **Durable subscription requires client ID**: set the \c client_id option when subscribing
+      to topics with durable subscriptions
+    - **Message selector syntax error**: selectors use JMS SQL-92 syntax
+      (e.g., \c "color = 'red' AND priority > 5"); property names must be valid Java identifiers
+      (no hyphens — use underscores)
+
+    @section JakartaJmsDataProvider_relnotes Release Notes
+
+    @subsection JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider v1.0
+    - initial release of the module
+    - support for sending, receiving, request-reply, and queue browsing
+    - automatic Qore-to-JMS type mapping (\c string \u2194 \c TextMessage, \c hash \u2194
+      \c MapMessage, \c binary \u2194 \c BytesMessage)
+    - event-driven message consumption via \c MessageListener with queue-based handoff
+    - thread-safe JMS session pool
+    - JMS SQL-92 message selector support
+    - durable topic subscriptions
+    - 4 app actions: \c send-jms-message, \c jms-request-reply, \c browse-jms-queue,
+      \c jms-message-received
+*/
+
+#! contains all public definitions in the JakartaJmsDataProvider module
+public namespace JakartaJmsDataProvider {
+#! JMS application name
+public const AppName = "JakartaJMS";
+}
+
+namespace Priv {
+#! JMS logo
+const JmsLogo = File::readTextFile(get_script_dir() + "/jms-logo.svg");
+}

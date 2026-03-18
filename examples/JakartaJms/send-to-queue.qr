@@ -1,0 +1,31 @@
+#!/usr/bin/env qore
+
+# Send a text message to a JMS queue using the JakartaJmsDataProvider module.
+#
+# Prerequisites:
+#   - ActiveMQ Artemis running on tcp://localhost:61616
+#   - Artemis client JARs on classpath (set ARTEMIS_CLASSPATH or use %module-cmd)
+#
+# Expected output:
+#   JMS: Sent message to queue://test
+#   Message sent successfully
+
+%requires jni
+%requires JakartaJmsDataProvider
+
+# add Artemis client JARs if ARTEMIS_CLASSPATH is set
+%module-cmd(jni) add-classpath $ARTEMIS_CLASSPATH
+
+JmsDataProvider provider({
+    "url": "tcp://localhost:61616",
+    "connection_factory_class": "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory",
+});
+
+AbstractDataProvider producer = provider.getChildProviderEx("producer");
+producer.sendMessage("message", {
+    "destination": "queue://test",
+    "body": "Hello, JMS World!",
+    "headers": {"source": "qore-example"},
+});
+
+printf("Message sent successfully\n");
