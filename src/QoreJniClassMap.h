@@ -96,6 +96,13 @@ public:
         jcmap[name] = qc;
     }
 
+    //! Replaces an existing mapping (used when a duplicate class is detected after the initial add)
+    DLLLOCAL void replace(const char* name, JniQoreClass* qc) {
+        printd(LogLevel, "QoreJniClassMapBase::replace() this: %p name: %s qc: %p (%s)\n", this, name, qc,
+            qc->getName());
+        jcmap[name] = qc;
+    }
+
     // accepts either a dotted name (ex: "java.lang.Object)") or an internal name ("java/lang/Object") as argument
     DLLLOCAL JniQoreClass* find(const char* jpath) const {
         if (strchr(jpath, '.')) {

@@ -940,10 +940,16 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
 
     // save class in namespace; check for duplicate to handle the case where the same Java
     // class is loaded from multiple JARs or inherited from a loaded module's namespace
-    if (ns->findLocalClass(qc->getName())) {
+    // (the early check at the top may miss this if addSuperClasses() triggered recursive
+    // loading that added the class first)
+    if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(qc->getName()))) {
         printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace '%s'; "
-            "skipping duplicate addSystemClass\n", jpath, ns->getName());
-        return qc;
+            "using existing class %p instead of %p\n", jpath, ns->getName(), existing, qc);
+        // jpath was already added to map (line above) pointing to qc; update it to point
+        // to the existing class instead, and save the Java reference on the existing class
+        map.replace(jpath, existing);
+        jpc->saveClass(*existing, jc->getJavaObjectRef());
+        return existing;
     }
     ns->addSystemClass(qc);
 
