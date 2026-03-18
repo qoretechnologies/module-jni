@@ -628,6 +628,7 @@ set(QMOD
     qlib/OpcUaDataProvider
     qlib/ExcelDataProvider
     qlib/KafkaDataProvider
+    qlib/JakartaJmsDataProvider
     qlib/WordDataProvider
     qlib/PowerPointDataProvider
 )
@@ -676,6 +677,7 @@ qore_external_user_module("qlib/OpcUaDataProvider" "")
 qore_external_user_module("qlib/BusyLightDataProvider" "MqttDataProvider")
 qore_external_user_module("qlib/ExcelDataProvider" "")
 qore_external_user_module("qlib/KafkaDataProvider" "")
+qore_external_user_module("qlib/JakartaJmsDataProvider" "")
 qore_external_user_module("qlib/WordDataProvider" "")
 qore_external_user_module("qlib/PowerPointDataProvider" "")
 

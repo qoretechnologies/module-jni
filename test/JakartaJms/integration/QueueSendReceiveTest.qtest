@@ -1,0 +1,252 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* QueueSendReceiveTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%module-cmd(jni) import jakarta.jms.*
+
+%exec-class QueueSendReceiveTest
+
+public class QueueSendReceiveTest inherits QUnit::Test {
+    public {
+        const FactoryClass = "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory";
+    }
+
+    private {
+        *JmsDataProvider provider;
+    }
+
+    constructor() : Test("QueueSendReceiveTest", "1.0", \ARGV) {
+        *string jms_url = ENV.JMS_CONNECTION;
+        *string artemis_cp = ENV.ARTEMIS_CLASSPATH;
+        if (!jms_url || !artemis_cp) {
+            addTestCase("skip", sub () { testSkip("set JMS_CONNECTION and ARTEMIS_CLASSPATH to run"); });
+            set_return_value(main());
+            return;
+        }
+
+        addTestCase("send and receive text message", \textMessageTest());
+        addTestCase("send and receive hash message (MapMessage)", \mapMessageTest());
+        addTestCase("send and receive binary message", \binaryMessageTest());
+        addTestCase("send with headers", \headersTest());
+        addTestCase("empty body", \emptyBodyTest());
+        addTestCase("large message", \largeMessageTest());
+        addTestCase("negative: non-existent destination timeout", \negativeTimeoutTest());
+
+        try {
+            provider = new JmsDataProvider({
+                "url": jms_url,
+                "connection_factory_class": FactoryClass,
+                "provider_classpath": artemis_cp,
+                "session_mode": "AUTO_ACKNOWLEDGE",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            printf("SKIPPING: Cannot connect to broker: %s: %s\n", ex.err, ex.desc);
+        }
+        set_return_value(main());
+    }
+
+    destructor() {
+        delete provider;
+    }
+
+    textMessageTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        # send
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, "queue://test-text");
+        Message msg = JmsTypeMapper::toJmsMessage(session, "Hello, JMS World!");
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+        prod.send(msg);
+
+        # receive
+        MessageConsumer cons = session.createConsumer(dest);
+        on_exit cons.close();
+        Message recv = cons.receive(5000);
+        assertEq(True, exists recv, "message was received");
+
+        hash<auto> result = JmsTypeMapper::fromJmsMessage(recv);
+        assertEq("Hello, JMS World!", result.body, "text message body matches");
+        assertEq("PERSISTENT", result.delivery_mode, "default delivery mode is PERSISTENT");
+    }
+
+    mapMessageTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        hash<auto> data = {"name": "test", "count": 42, "active": True};
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, "queue://test-map");
+        Message msg = JmsTypeMapper::toJmsMessage(session, data);
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+        prod.send(msg);
+
+        MessageConsumer cons = session.createConsumer(dest);
+        on_exit cons.close();
+        Message recv = cons.receive(5000);
+        assertEq(True, exists recv, "map message received");
+
+        hash<auto> result = JmsTypeMapper::fromJmsMessage(recv);
+        assertEq("test", result.body.name, "map message name field");
+    }
+
+    binaryMessageTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        binary data = <deadbeef>;
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, "queue://test-binary");
+        Message msg = JmsTypeMapper::toJmsMessage(session, data);
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+        prod.send(msg);
+
+        MessageConsumer cons = session.createConsumer(dest);
+        on_exit cons.close();
+        Message recv = cons.receive(5000);
+        assertEq(True, exists recv, "binary message received");
+
+        hash<auto> result = JmsTypeMapper::fromJmsMessage(recv);
+        assertEq(data, result.body, "binary message body matches");
+    }
+
+    headersTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        hash<string, string> headers = {"source": "test-suite", "region": "local"};
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, "queue://test-headers");
+        Message msg = JmsTypeMapper::toJmsMessage(session, "test body", headers);
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+        prod.send(msg);
+
+        MessageConsumer cons = session.createConsumer(dest);
+        on_exit cons.close();
+        Message recv = cons.receive(5000);
+        assertEq(True, exists recv, "message with headers received");
+
+        hash<auto> result = JmsTypeMapper::fromJmsMessage(recv);
+        assertEq("test-suite", result.headers.source, "source header preserved");
+        assertEq("local", result.headers.region, "region header preserved");
+    }
+
+    emptyBodyTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, "queue://test-empty");
+        Message msg = JmsTypeMapper::toJmsMessage(session, "");
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+        prod.send(msg);
+
+        MessageConsumer cons = session.createConsumer(dest);
+        on_exit cons.close();
+        Message recv = cons.receive(5000);
+        assertEq(True, exists recv, "empty body message received");
+
+        hash<auto> result = JmsTypeMapper::fromJmsMessage(recv);
+        assertEq("", result.body, "empty text message body");
+    }
+
+    largeMessageTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        # 1MB+ text message
+        string large_body = strmul("x", 1024 * 1024 + 1);
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, "queue://test-large");
+        Message msg = JmsTypeMapper::toJmsMessage(session, large_body);
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+        prod.send(msg);
+
+        MessageConsumer cons = session.createConsumer(dest);
+        on_exit cons.close();
+        Message recv = cons.receive(10000);
+        assertEq(True, exists recv, "large message received");
+
+        hash<auto> result = JmsTypeMapper::fromJmsMessage(recv);
+        assertEq(large_body.size(), result.body.size(), "large message body size matches");
+    }
+
+    negativeTimeoutTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, "queue://test-nonexistent-msgs");
+        MessageConsumer cons = session.createConsumer(dest);
+        on_exit cons.close();
+
+        # zero-timeout receive should return nothing immediately
+        *Message recv = cons.receiveNoWait();
+        assertEq(False, exists recv, "receiveNoWait on empty queue returns nothing");
+    }
+}

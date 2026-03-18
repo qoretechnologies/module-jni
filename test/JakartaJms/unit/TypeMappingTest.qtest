@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* TypeMappingTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%exec-class TypeMappingTest
+
+public class TypeMappingTest inherits QUnit::Test {
+    constructor() : Test("TypeMappingTest", "1.0", \ARGV) {
+        addTestCase("event data type fields", \eventDataTypeFieldsTest());
+        addTestCase("message data type fields", \messageDataTypeFieldsTest());
+        addTestCase("response data type fields", \responseDataTypeFieldsTest());
+        addTestCase("event data type completeness", \eventDataTypeCompletenessTest());
+        addTestCase("message data type delivery mode", \messageDeliveryModeTest());
+        addTestCase("negative: null required param to selector", \negativeNullSelectorTest());
+
+        set_return_value(main());
+    }
+
+    eventDataTypeFieldsTest() {
+        hash<auto> fields = JmsEventDataType::Fields;
+        assertEq(True, fields.hasKey("message_id"), "event has message_id field");
+        assertEq(True, fields.hasKey("correlation_id"), "event has correlation_id field");
+        assertEq(True, fields.hasKey("destination"), "event has destination field");
+        assertEq(True, fields.hasKey("delivery_mode"), "event has delivery_mode field");
+        assertEq(True, fields.hasKey("priority"), "event has priority field");
+        assertEq(True, fields.hasKey("timestamp"), "event has timestamp field");
+        assertEq(True, fields.hasKey("expiration"), "event has expiration field");
+        assertEq(True, fields.hasKey("type"), "event has type field");
+        assertEq(True, fields.hasKey("redelivered"), "event has redelivered field");
+        assertEq(True, fields.hasKey("headers"), "event has headers field");
+        assertEq(True, fields.hasKey("body"), "event has body field");
+    }
+
+    messageDataTypeFieldsTest() {
+        hash<auto> fields = JmsMessageDataType::Fields;
+        assertEq(True, fields.hasKey("destination"), "message has destination field");
+        assertEq(True, fields.hasKey("body"), "message has body field");
+        assertEq(True, fields.hasKey("delivery_mode"), "message has delivery_mode field");
+        assertEq(True, fields.hasKey("priority"), "message has priority field");
+        assertEq(True, fields.hasKey("time_to_live"), "message has time_to_live field");
+        assertEq(True, fields.hasKey("correlation_id"), "message has correlation_id field");
+        assertEq(True, fields.hasKey("type"), "message has type field");
+        assertEq(True, fields.hasKey("headers"), "message has headers field");
+    }
+
+    responseDataTypeFieldsTest() {
+        hash<auto> fields = JmsMessageResponseType::Fields;
+        assertEq(True, fields.hasKey("message_id"), "response has message_id field");
+        assertEq(True, fields.hasKey("correlation_id"), "response has correlation_id field");
+        assertEq(True, fields.hasKey("destination"), "response has destination field");
+        assertEq(True, fields.hasKey("body"), "response has body field");
+        assertEq(True, fields.hasKey("headers"), "response has headers field");
+    }
+
+    eventDataTypeCompletenessTest() {
+        # verify delivery_mode allowed values
+        auto allowed = JmsEventDataType::Fields.delivery_mode.allowed_values;
+        assertEq(2, allowed.size(), "delivery_mode has 2 allowed values");
+        list<string> vals = map $1.value, allowed;
+        assertEq(True, inlist("PERSISTENT", vals), "PERSISTENT is allowed");
+        assertEq(True, inlist("NON_PERSISTENT", vals), "NON_PERSISTENT is allowed");
+
+        # verify display names exist for all fields
+        foreach hash<auto> entry in (JmsEventDataType::Fields.pairIterator()) {
+            assertEq(True, entry.value.display_name.val(),
+                sprintf("field %y has display_name", entry.key));
+            assertEq(True, entry.value.desc.val(),
+                sprintf("field %y has desc", entry.key));
+        }
+    }
+
+    messageDeliveryModeTest() {
+        auto allowed = JmsMessageDataType::Fields.delivery_mode.allowed_values;
+        assertEq(2, allowed.size(), "delivery_mode has 2 allowed values");
+        assertEq("PERSISTENT", JmsMessageDataType::Fields.delivery_mode.default_value,
+            "default delivery mode is PERSISTENT");
+
+        # verify priority default
+        assertEq(4, JmsMessageDataType::Fields.priority.default_value,
+            "default priority is 4");
+
+        # verify ttl default
+        assertEq(0, JmsMessageDataType::Fields.time_to_live.default_value,
+            "default time_to_live is 0");
+    }
+
+    negativeNullSelectorTest() {
+        # passing NOTHING should return NOTHING - valid
+        assertEq(NOTHING, JmsSelectorBuilder::build(NOTHING),
+            "null where returns NOTHING");
+        assertEq(NOTHING, JmsSelectorBuilder::build({}),
+            "empty where returns NOTHING");
+    }
+}

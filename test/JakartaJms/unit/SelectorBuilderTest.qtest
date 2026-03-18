@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* SelectorBuilderTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%exec-class SelectorBuilderTest
+
+public class SelectorBuilderTest inherits QUnit::Test {
+    constructor() : Test("SelectorBuilderTest", "1.0", \ARGV) {
+        addTestCase("simple equality", \simpleEqualityTest());
+        addTestCase("multiple keys AND", \multipleKeysAndTest());
+        addTestCase("string quoting", \stringQuotingTest());
+        addTestCase("numeric values", \numericValuesTest());
+        addTestCase("boolean values", \booleanValuesTest());
+        addTestCase("comparison operators", \comparisonOperatorsTest());
+        addTestCase("LIKE operator", \likeOperatorTest());
+        addTestCase("IN operator", \inOperatorTest());
+        addTestCase("BETWEEN operator", \betweenOperatorTest());
+        addTestCase("IS NULL operators", \isNullOperatorsTest());
+        addTestCase("empty and null where", \emptyWhereTest());
+        addTestCase("quotes in string values", \quotesInStringTest());
+        addTestCase("negative: unsupported operator", \negativeUnsupportedOperatorTest());
+
+        set_return_value(main());
+    }
+
+    simpleEqualityTest() {
+        assertEq("color = 'red'", JmsSelectorBuilder::build({"color": "red"}),
+            "simple string equality");
+        assertEq("count = 42", JmsSelectorBuilder::build({"count": 42}),
+            "simple integer equality");
+        assertEq("active = TRUE", JmsSelectorBuilder::build({"active": True}),
+            "simple boolean equality");
+    }
+
+    multipleKeysAndTest() {
+        string result = JmsSelectorBuilder::build({"color": "red", "size": 42});
+        assertEq(True, result.find("color = 'red'") >= 0, "first clause present");
+        assertEq(True, result.find("size = 42") >= 0, "second clause present");
+        assertEq(True, result.find(" AND ") >= 0, "AND joins clauses");
+    }
+
+    stringQuotingTest() {
+        assertEq("name = 'hello world'", JmsSelectorBuilder::build({"name": "hello world"}),
+            "string with space is quoted");
+        assertEq("type = ''", JmsSelectorBuilder::build({"type": ""}),
+            "empty string is quoted");
+    }
+
+    numericValuesTest() {
+        assertEq("price = 99.99", JmsSelectorBuilder::build({"price": 99.99}),
+            "float value");
+        assertEq("count = 0", JmsSelectorBuilder::build({"count": 0}),
+            "zero value");
+        assertEq("qty = -5", JmsSelectorBuilder::build({"qty": -5}),
+            "negative value");
+    }
+
+    booleanValuesTest() {
+        assertEq("active = TRUE", JmsSelectorBuilder::build({"active": True}),
+            "True boolean");
+        assertEq("active = FALSE", JmsSelectorBuilder::build({"active": False}),
+            "False boolean");
+    }
+
+    comparisonOperatorsTest() {
+        assertEq("price > 100", JmsSelectorBuilder::build({"price": {"op": ">", "value": 100}}),
+            "greater than");
+        assertEq("price < 50", JmsSelectorBuilder::build({"price": {"op": "<", "value": 50}}),
+            "less than");
+        assertEq("price >= 100", JmsSelectorBuilder::build({"price": {"op": ">=", "value": 100}}),
+            "greater than or equal");
+        assertEq("price <= 50", JmsSelectorBuilder::build({"price": {"op": "<=", "value": 50}}),
+            "less than or equal");
+        assertEq("color <> 'blue'", JmsSelectorBuilder::build({"color": {"op": "<>", "value": "blue"}}),
+            "not equal");
+        assertEq("priority = 5", JmsSelectorBuilder::build({"priority": {"op": "=", "value": 5}}),
+            "explicit equality operator");
+    }
+
+    likeOperatorTest() {
+        assertEq("name LIKE 'test%'",
+            JmsSelectorBuilder::build({"name": {"op": "LIKE", "value": "test%"}}),
+            "LIKE operator");
+        assertEq("name LIKE '%test%'",
+            JmsSelectorBuilder::build({"name": {"op": "like", "value": "%test%"}}),
+            "LIKE operator case insensitive");
+    }
+
+    inOperatorTest() {
+        assertEq("color IN ('red', 'blue', 'green')",
+            JmsSelectorBuilder::build({"color": {"op": "IN", "value": ("red", "blue", "green")}}),
+            "IN operator with strings");
+        assertEq("id IN (1, 2, 3)",
+            JmsSelectorBuilder::build({"id": {"op": "IN", "value": (1, 2, 3)}}),
+            "IN operator with integers");
+    }
+
+    betweenOperatorTest() {
+        assertEq("price BETWEEN 10 AND 100",
+            JmsSelectorBuilder::build({"price": {"op": "BETWEEN", "value": (10, 100)}}),
+            "BETWEEN operator");
+        assertEq("name BETWEEN 'a' AND 'z'",
+            JmsSelectorBuilder::build({"name": {"op": "BETWEEN", "value": ("a", "z")}}),
+            "BETWEEN operator with strings");
+    }
+
+    isNullOperatorsTest() {
+        assertEq("color IS NULL",
+            JmsSelectorBuilder::build({"color": {"op": "IS NULL"}}),
+            "IS NULL operator");
+        assertEq("color IS NOT NULL",
+            JmsSelectorBuilder::build({"color": {"op": "IS NOT NULL"}}),
+            "IS NOT NULL operator");
+    }
+
+    emptyWhereTest() {
+        assertEq(NOTHING, JmsSelectorBuilder::build(NOTHING), "null where");
+        assertEq(NOTHING, JmsSelectorBuilder::build({}), "empty hash where");
+    }
+
+    quotesInStringTest() {
+        string result = JmsSelectorBuilder::build({"name": "O'Brien"});
+        assertEq("name = 'O''Brien'", result, "single quote in value is escaped by doubling");
+    }
+
+    negativeUnsupportedOperatorTest() {
+        assertThrows("JMS-SELECTOR-ERROR", \JmsSelectorBuilder::build(),
+            ({"name": {"op": "REGEX", "value": ".*"}},),
+            "unsupported operator REGEX throws");
+
+        assertThrows("JMS-SELECTOR-ERROR", \JmsSelectorBuilder::build(),
+            ({"name": {"op": "CONTAINS", "value": "test"}},),
+            "unsupported operator CONTAINS throws");
+    }
+}

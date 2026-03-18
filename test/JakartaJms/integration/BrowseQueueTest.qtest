@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* BrowseQueueTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%module-cmd(jni) import jakarta.jms.*
+
+%exec-class BrowseQueueTest
+
+public class BrowseQueueTest inherits QUnit::Test {
+    public {
+        const FactoryClass = "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory";
+    }
+
+    private {
+        *JmsDataProvider provider;
+    }
+
+    constructor() : Test("BrowseQueueTest", "1.0", \ARGV) {
+        *string jms_url = ENV.JMS_CONNECTION;
+        *string artemis_cp = ENV.ARTEMIS_CLASSPATH;
+        if (!jms_url || !artemis_cp) {
+            addTestCase("skip", sub () { testSkip("set JMS_CONNECTION and ARTEMIS_CLASSPATH to run"); });
+            set_return_value(main());
+            return;
+        }
+
+        addTestCase("browse queue messages", \browseQueueTest());
+        addTestCase("browse empty queue", \browseEmptyQueueTest());
+        addTestCase("browse with selector", \browseWithSelectorTest());
+
+        try {
+            provider = new JmsDataProvider({
+                "url": jms_url,
+                "connection_factory_class": FactoryClass,
+                "provider_classpath": artemis_cp,
+                "session_mode": "AUTO_ACKNOWLEDGE",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            printf("SKIPPING: Cannot connect to broker: %s: %s\n", ex.err, ex.desc);
+        }
+        set_return_value(main());
+    }
+
+    destructor() {
+        delete provider;
+    }
+
+    browseQueueTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        # use unique queue name to avoid stale messages from previous runs
+        string queue_name = "queue://test-browse-" + get_random_string(8);
+
+        # send a few messages
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, queue_name);
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+
+        for (int i = 0; i < 3; ++i) {
+            Message msg = JmsTypeMapper::toJmsMessage(session, sprintf("browse-msg-%d", i));
+            prod.send(msg);
+        }
+
+        # browse
+        *AbstractDataProvider browser_dp = provider.getChildProviderEx("browser");
+        auto result = browser_dp.doRequest({"destination": queue_name});
+
+        assertEq(True, result instanceof list, "browse returns a list");
+        assertEq(3, result.size(), "browse returns all 3 messages");
+
+        # messages should still be in the queue (non-destructive)
+        auto result2 = browser_dp.doRequest({"destination": queue_name});
+        assertEq(3, result2.size(), "messages still present after browse");
+    }
+
+    browseEmptyQueueTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        # use unique queue name
+        string queue_name = "queue://test-browse-empty-" + get_random_string(8);
+        *AbstractDataProvider browser_dp = provider.getChildProviderEx("browser");
+        auto result = browser_dp.doRequest({"destination": queue_name});
+        assertEq(True, result instanceof list, "browse returns a list");
+        assertEq(0, result.size(), "empty queue returns 0 messages");
+    }
+
+    browseWithSelectorTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        # use unique queue name
+        string queue_name = "queue://test-browse-sel-" + get_random_string(8);
+
+        # send messages with different properties
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, queue_name);
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+
+        Message msg1 = JmsTypeMapper::toJmsMessage(session, "red item", {"color": "red"});
+        prod.send(msg1);
+        Message msg2 = JmsTypeMapper::toJmsMessage(session, "blue item", {"color": "blue"});
+        prod.send(msg2);
+        Message msg3 = JmsTypeMapper::toJmsMessage(session, "red item 2", {"color": "red"});
+        prod.send(msg3);
+
+        # browse with selector
+        *AbstractDataProvider browser_dp = provider.getChildProviderEx("browser");
+        auto result = browser_dp.doRequest({
+            "destination": queue_name,
+            "selector": {"color": "red"},
+        });
+        assertEq(True, result instanceof list, "filtered browse returns a list");
+        assertEq(2, result.size(), "selector filters to 2 red messages");
+    }
+}

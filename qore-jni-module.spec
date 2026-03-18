@@ -98,6 +98,12 @@ This RPM provides API documentation, test and example programs
 %doc docs/jni test/*.qtest test/*.jar test/*.java
 
 %changelog
+* Tue Mar 18 2026 David Nichols <david@qore.org>
+- updated to version 2.7.0
+- added JakartaJmsDataProvider module for Jakarta JMS 3.x messaging brokers
+- added OpcUaDataProvider module for OPC UA connectivity
+- fixed null pointer dereference in QoreCodeDispatcher::dispatch() for foreign thread callbacks
+
 * Sat Jan 4 2026 David Nichols <david@qore.org>
 - updated to version 2.6.0
 - added full Kotlin language integration support

@@ -1,0 +1,38 @@
+#!/usr/bin/env qore
+
+# Receive only messages matching a SQL-92 selector from a JMS queue.
+#
+# Prerequisites:
+#   - ActiveMQ Artemis running on tcp://localhost:61616
+#   - Messages with "priority_class" property in queue://orders
+#
+# Expected output:
+#   Listening for high-priority orders...
+#   Received: <high priority message body>
+
+%requires jni
+%requires JakartaJmsDataProvider
+
+# add Artemis client JARs if ARTEMIS_CLASSPATH is set
+%module-cmd(jni) add-classpath $ARTEMIS_CLASSPATH
+
+public class SelectorObserver inherits DataProvider::Observer {
+    update(string event_id, hash<auto> data_) {
+        printf("Received high-priority order: %y\n", data_.body);
+    }
+}
+
+JmsDataProvider provider({
+    "url": "tcp://localhost:61616",
+    "connection_factory_class": "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory",
+    "destination": "queue://orders",
+    "message_selector": "priority_class = 'high'",
+});
+
+AbstractDataProvider polling = provider.getChildProviderEx("polling");
+polling.registerObserver(new SelectorObserver());
+
+printf("Listening for high-priority orders...\nPress Ctrl+C to stop\n");
+
+Counter c(1);
+c.waitForZero();

@@ -1,0 +1,33 @@
+#!/usr/bin/env qore
+
+# Non-destructively browse messages in a JMS queue.
+#
+# Prerequisites:
+#   - ActiveMQ Artemis running on tcp://localhost:61616
+#   - Some messages already in queue://test
+#
+# Expected output:
+#   Queue contains <N> messages:
+#   1. <message body>
+#   2. <message body>
+#   ...
+
+%requires jni
+%requires JakartaJmsDataProvider
+
+# add Artemis client JARs if ARTEMIS_CLASSPATH is set
+%module-cmd(jni) add-classpath $ARTEMIS_CLASSPATH
+
+JmsDataProvider provider({
+    "url": "tcp://localhost:61616",
+    "connection_factory_class": "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory",
+});
+
+AbstractDataProvider browser = provider.getChildProviderEx("browser");
+list<auto> messages = browser.doRequest({"destination": "queue://test"});
+
+printf("Queue contains %d messages:\n", messages.size());
+int i = 1;
+foreach hash<auto> msg in (messages) {
+    printf("%d. %y (id: %s)\n", i++, msg.body, msg.message_id ?? "N/A");
+}

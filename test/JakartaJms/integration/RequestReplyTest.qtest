@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* RequestReplyTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%module-cmd(jni) import jakarta.jms.*
+
+%exec-class RequestReplyTest
+
+public class RequestReplyTest inherits QUnit::Test {
+    public {
+        const FactoryClass = "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory";
+    }
+
+    private {
+        *JmsDataProvider provider;
+    }
+
+    constructor() : Test("RequestReplyTest", "1.0", \ARGV) {
+        *string jms_url = ENV.JMS_CONNECTION;
+        *string artemis_cp = ENV.ARTEMIS_CLASSPATH;
+        if (!jms_url || !artemis_cp) {
+            addTestCase("skip", sub () { testSkip("set JMS_CONNECTION and ARTEMIS_CLASSPATH to run"); });
+            set_return_value(main());
+            return;
+        }
+
+        addTestCase("request-reply with producer data provider", \requestReplyTest());
+        addTestCase("request-reply timeout", \requestReplyTimeoutTest());
+
+        try {
+            provider = new JmsDataProvider({
+                "url": jms_url,
+                "connection_factory_class": FactoryClass,
+                "provider_classpath": artemis_cp,
+                "session_mode": "AUTO_ACKNOWLEDGE",
+                "connection_timeout_ms": 3000,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            printf("SKIPPING: Cannot connect to broker: %s: %s\n", ex.err, ex.desc);
+        }
+        set_return_value(main());
+    }
+
+    destructor() {
+        delete provider;
+    }
+
+    requestReplyTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        string request_dest = "queue://test-request-reply";
+
+        # start a background responder thread
+        Counter ready(1);
+        Counter done(1);
+        background respondToRequests(request_dest, ready, done);
+        ready.waitForZero();
+
+        # send request via producer data provider
+        *AbstractDataProvider prod = provider.getChildProviderEx("producer");
+        hash<auto> response = prod.doRequest({
+            "destination": request_dest,
+            "body": "ping",
+        });
+        assertEq(True, response.body.val(), "response body received");
+
+        done.waitForZero();
+    }
+
+    private respondToRequests(string dest_str, Counter ready, Counter done) {
+        on_exit done.dec();
+
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, dest_str);
+        MessageConsumer cons = session.createConsumer(dest);
+        on_exit cons.close();
+
+        ready.dec();
+
+        Message request = cons.receive(5000);
+        if (request) {
+            # send reply
+            Destination reply_to = request.getJMSReplyTo();
+            if (reply_to) {
+                MessageProducer reply_prod = session.createProducer(reply_to);
+                on_exit reply_prod.close();
+                Message reply = JmsTypeMapper::toJmsMessage(session, "pong");
+                reply.setJMSCorrelationID(request.getJMSMessageID());
+                reply_prod.send(reply);
+            }
+        }
+    }
+
+    requestReplyTimeoutTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        *AbstractDataProvider prod = provider.getChildProviderEx("producer");
+        # send request to a queue with no responder - should timeout
+        code do_request = sub () {
+            prod.doRequest({
+                "destination": "queue://test-no-responder",
+                "body": "ping",
+            });
+        };
+        assertThrows("JMS-TIMEOUT-ERROR", do_request,
+            NOTHING, "request-reply timeout when no responder");
+    }
+}

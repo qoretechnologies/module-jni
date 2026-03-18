@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* ConnectionOptionsTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%exec-class ConnectionOptionsTest
+
+public class ConnectionOptionsTest inherits QUnit::Test {
+    constructor() : Test("ConnectionOptionsTest", "1.0", \ARGV) {
+        addTestCase("constructor options validation", \constructorOptionsTest());
+        addTestCase("connection scheme validation", \connectionSchemeTest());
+        addTestCase("session mode parsing", \sessionModeTest());
+        addTestCase("destination parsing format", \destinationFormatTest());
+        addTestCase("factory info", \factoryInfoTest());
+        addTestCase("app registration", \appRegistrationTest());
+        addTestCase("provider info", \providerInfoTest());
+        addTestCase("negative: missing required options", \negativeMissingRequiredTest());
+        addTestCase("negative: invalid session mode", \negativeInvalidSessionModeTest());
+
+        set_return_value(main());
+    }
+
+    constructorOptionsTest() {
+        # verify ConstructorOptions has all expected keys
+        hash<auto> opts = JmsDataProvider::ConstructorOptions;
+        assertEq(True, opts.hasKey("url"), "url option exists");
+        assertEq(True, opts.hasKey("connection_factory_class"), "connection_factory_class option exists");
+        assertEq(True, opts.hasKey("provider_classpath"), "provider_classpath option exists");
+        assertEq(True, opts.hasKey("username"), "username option exists");
+        assertEq(True, opts.hasKey("password"), "password option exists");
+        assertEq(True, opts.hasKey("client_id"), "client_id option exists");
+        assertEq(True, opts.hasKey("session_mode"), "session_mode option exists");
+        assertEq(True, opts.hasKey("destination"), "destination option exists");
+        assertEq(True, opts.hasKey("message_selector"), "message_selector option exists");
+        assertEq(True, opts.hasKey("max_sessions"), "max_sessions option exists");
+        assertEq(True, opts.hasKey("connection_timeout_ms"), "connection_timeout_ms option exists");
+
+        # verify required flags
+        assertEq(True, opts.url.required, "url is required");
+        assertEq(True, opts.connection_factory_class.required, "connection_factory_class is required");
+
+        # verify sensitive flags
+        assertEq(True, opts.password.sensitive, "password is sensitive");
+
+        # verify defaults
+        assertEq("AUTO_ACKNOWLEDGE", opts.session_mode.default_value, "session_mode default");
+        assertEq(4, opts.max_sessions.default_value, "max_sessions default");
+        assertEq(5000, opts.connection_timeout_ms.default_value, "connection_timeout_ms default");
+    }
+
+    connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> scheme = JmsConnection::ConnectionScheme;
+        assertEq("JMS Connection", scheme.display_name, "scheme display name");
+        assertEq(True, scheme.schemes.hasKey("jms"), "jms scheme registered");
+        assertEq(True, scheme.options.hasKey("connection_factory_class"), "connection_factory_class option exists");
+        assertEq(True, scheme.options.hasKey("username"), "username option exists");
+        assertEq(True, scheme.options.hasKey("password"), "password option exists");
+        assertEq(True, scheme.options.hasKey("session_mode"), "session_mode option exists");
+        assertEq(True, scheme.options.hasKey("max_sessions"), "max_sessions option exists");
+        assertEq(True, scheme.options.connection_factory_class.required, "connection_factory_class is required");
+    }
+
+    sessionModeTest() {
+        # valid modes
+        assertEq(1, JmsDataProviderBase::getSessionMode("AUTO_ACKNOWLEDGE"),
+            "AUTO_ACKNOWLEDGE maps correctly");
+        assertEq(2, JmsDataProviderBase::getSessionMode("CLIENT_ACKNOWLEDGE"),
+            "CLIENT_ACKNOWLEDGE maps correctly");
+        assertEq(3, JmsDataProviderBase::getSessionMode("DUPS_OK_ACKNOWLEDGE"),
+            "DUPS_OK_ACKNOWLEDGE maps correctly");
+        assertEq(0, JmsDataProviderBase::getSessionMode("SESSION_TRANSACTED"),
+            "SESSION_TRANSACTED maps correctly");
+
+        # verify allowed_values in constructor options
+        auto allowed = JmsDataProvider::ConstructorOptions.session_mode.allowed_values;
+        assertEq(4, allowed.size(), "session_mode has 4 allowed values");
+        list<string> vals = map $1.value, allowed;
+        assertEq(True, inlist("AUTO_ACKNOWLEDGE", vals), "AUTO_ACKNOWLEDGE in allowed_values");
+        assertEq(True, inlist("CLIENT_ACKNOWLEDGE", vals), "CLIENT_ACKNOWLEDGE in allowed_values");
+        assertEq(True, inlist("DUPS_OK_ACKNOWLEDGE", vals), "DUPS_OK_ACKNOWLEDGE in allowed_values");
+        assertEq(True, inlist("SESSION_TRANSACTED", vals), "SESSION_TRANSACTED in allowed_values");
+    }
+
+    destinationFormatTest() {
+        # destination parsing is tested via format validation (not actual JMS Session parsing)
+        # verify that the destination option accepts queue:// and topic:// formats
+        hash<auto> opts = JmsDataProvider::ConstructorOptions;
+        assertEq(True, opts.hasKey("destination"), "destination option present");
+        assertEq(True, opts.destination.desc.find("queue://") >= 0,
+            "destination desc mentions queue:// format");
+        assertEq(True, opts.destination.desc.find("topic://") >= 0,
+            "destination desc mentions topic:// format");
+    }
+
+    factoryInfoTest() {
+        JmsDataProviderFactory factory();
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("jms", info.name, "factory name");
+        assertEq(True, info.children_can_support_observers, "factory supports observers");
+        assertEq(True, info.children_can_support_messages, "factory supports messages");
+    }
+
+    appRegistrationTest() {
+        assertEq("JakartaJMS", JakartaJmsDataProvider::AppName, "app name constant");
+    }
+
+    providerInfoTest() {
+        hash<DataProviderInfo> info = JmsDataProvider::ProviderInfo;
+        assertEq("jms", info.name, "provider name");
+        assertEq(True, info.supports_children, "provider supports children");
+        assertEq(True, info.children_can_support_observers, "children can support observers");
+        assertEq(True, info.children_can_support_messages, "children can support messages");
+
+        # check producer provider info
+        hash<DataProviderInfo> prod_info = JmsProducerDataProvider::ProviderInfo;
+        assertEq("producer", prod_info.name, "producer name");
+        assertEq(True, prod_info.supports_request, "producer supports request");
+
+        # check browser provider info
+        hash<DataProviderInfo> browser_info = JmsBrowserDataProvider::ProviderInfo;
+        assertEq("browser", browser_info.name, "browser name");
+        assertEq(True, browser_info.supports_read, "browser supports read");
+        assertEq(True, browser_info.supports_request, "browser supports request");
+
+        # check polling provider info
+        hash<DataProviderInfo> polling_info = JmsPollingDataProvider::ProviderInfo;
+        assertEq("polling", polling_info.name, "polling name");
+        assertEq(True, polling_info.supports_observable, "polling supports observable");
+    }
+
+    negativeMissingRequiredTest() {
+        # missing both required options
+        code missing_all = sub () { new JmsDataProvider({}); };
+        assertThrows("CONSTRUCTOR-ERROR", missing_all,
+            NOTHING, "missing all required options throws");
+
+        # missing connection_factory_class
+        code missing_factory = sub () { new JmsDataProvider({"url": "tcp://localhost:61616"}); };
+        assertThrows("CONSTRUCTOR-ERROR", missing_factory,
+            NOTHING, "missing connection_factory_class throws");
+
+        # missing url
+        code missing_url = sub () { new JmsDataProvider({"connection_factory_class": "com.example.Factory"}); };
+        assertThrows("CONSTRUCTOR-ERROR", missing_url,
+            NOTHING, "missing url throws");
+    }
+
+    negativeInvalidSessionModeTest() {
+        assertThrows("JMS-SESSION-ERROR", \JmsDataProviderBase::getSessionMode(),
+            ("INVALID_MODE",), "invalid session mode throws");
+
+        assertThrows("JMS-SESSION-ERROR", \JmsDataProviderBase::getSessionMode(),
+            ("",), "empty session mode throws");
+    }
+}

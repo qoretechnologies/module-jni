@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* PollingProviderTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%module-cmd(jni) import jakarta.jms.*
+
+%exec-class PollingProviderTest
+
+public class PollingObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> received_events = ();
+        Mutex event_mutex();
+        Counter event_counter();
+    }
+
+    #! Observer update callback
+    update(string event_id, hash<auto> data_) {
+        AutoLock al(event_mutex);
+        push received_events, data_;
+        if (event_counter.getCount() > 0) {
+            event_counter.dec();
+        }
+    }
+}
+
+public class PollingProviderTest inherits QUnit::Test {
+    public {
+        const FactoryClass = "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory";
+    }
+
+    private {
+        *string jms_url;
+        *string artemis_cp;
+        *JmsDataProvider provider;
+        PollingObserver obs();
+    }
+
+    constructor() : Test("PollingProviderTest", "1.0", \ARGV) {
+        jms_url = ENV.JMS_CONNECTION;
+        artemis_cp = ENV.ARTEMIS_CLASSPATH;
+        if (!jms_url || !artemis_cp) {
+            addTestCase("skip", sub () { testSkip("set JMS_CONNECTION and ARTEMIS_CLASSPATH to run"); });
+            set_return_value(main());
+            return;
+        }
+
+        addTestCase("polling provider receives events", \pollingEventTest());
+        addTestCase("polling provider event types", \pollingEventTypesTest());
+        addTestCase("polling provider example data", \pollingExampleDataTest());
+        addTestCase("negative: polling without destination", \negativeNoDestinationTest());
+
+        try {
+            provider = new JmsDataProvider({
+                "url": jms_url,
+                "connection_factory_class": FactoryClass,
+                "provider_classpath": artemis_cp,
+                "session_mode": "AUTO_ACKNOWLEDGE",
+                "destination": "queue://test-polling",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            printf("SKIPPING: Cannot connect to broker: %s: %s\n", ex.err, ex.desc);
+        }
+        set_return_value(main());
+    }
+
+    destructor() {
+        delete provider;
+    }
+
+    pollingEventTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        *AbstractDataProvider polling = provider.getChildProviderEx("polling");
+
+        # set up observer
+        obs.event_counter = new Counter(1);
+        obs.received_events = ();
+        polling.registerObserver(obs);
+        polling.observersReady();
+
+        # send a message
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+
+        Destination dest = JmsDataProviderBase::parseDestination(session, "queue://test-polling");
+        Message msg = JmsTypeMapper::toJmsMessage(session, "polling test message");
+        MessageProducer prod = session.createProducer(dest);
+        on_exit prod.close();
+        prod.send(msg);
+
+        # wait for the event
+        obs.event_counter.waitForZero(5000);
+
+        polling.stopEvents();
+        polling.deregisterObserver(obs);
+
+        {
+            AutoLock al(obs.event_mutex);
+            assertEq(True, obs.received_events.size() >= 1, "at least one event received");
+            if (obs.received_events.size() > 0) {
+                assertEq("polling test message", obs.received_events[0].body,
+                    "event body matches sent message");
+            }
+        }
+    }
+
+    pollingEventTypesTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        *AbstractDataProvider polling = provider.getChildProviderEx("polling");
+        hash<string, hash<DataProviderMessageInfo>> events = polling.getEventTypes();
+        assertEq(True, events.hasKey(JmsPollingDataProvider::EVENT_JMS_MESSAGE),
+            "jms-message-event event type registered");
+    }
+
+    pollingExampleDataTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        *AbstractDataProvider polling = provider.getChildProviderEx("polling");
+        auto example = polling.getExampleEventData(JmsPollingDataProvider::EVENT_JMS_MESSAGE);
+        assertEq(True, exists example.message_id, "example has message_id");
+        assertEq(True, exists example.destination, "example has destination");
+        assertEq(True, exists example.body, "example has body");
+    }
+
+    negativeNoDestinationTest() {
+        if (!provider) {
+            testSkip("broker not available");
+        }
+
+        # create provider without destination
+        JmsDataProvider no_dest_provider({
+            "url": jms_url,
+            "connection_factory_class": FactoryClass,
+            "provider_classpath": artemis_cp,
+            "session_mode": "AUTO_ACKNOWLEDGE",
+        });
+
+        *AbstractDataProvider polling = no_dest_provider.getChildProviderEx("polling");
+        PollingObserver neg_obs();
+        code start_polling = sub () {
+            polling.registerObserver(neg_obs);
+            polling.observersReady();
+        };
+        assertThrows("JMS-POLLING-ERROR", start_polling,
+            NOTHING, "polling without destination throws");
+    }
+}
