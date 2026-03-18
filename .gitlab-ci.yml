@@ -16,7 +16,7 @@ default:
           /usr/sbin/mosquitto -c /tmp/mosquitto.conf
     - name: open62541/open62541:latest
       alias: opcua
-    - name: quay.io/artemiscloud/activemq-artemis-broker:artemis.2.40.0
+    - name: quay.io/artemiscloud/activemq-artemis-broker:artemis.2.38.0
       alias: artemis
       variables:
         AMQ_USER: admin
