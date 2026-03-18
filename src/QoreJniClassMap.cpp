@@ -878,6 +878,19 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
         : jni_get_context(pgm);
     assert(jpc);
 
+    // check for duplicate before proceeding — handles the case where the same Java class is
+    // loaded from multiple JARs (e.g., jakarta.jms API classes bundled in both the API JAR
+    // and a provider's all-in-one JAR)
+    if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(qc->getName()))) {
+        printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace '%s'; "
+            "returning existing class %p\n", jpath, ns->getName(), existing);
+        // add mapping for the jpath to the existing class and return it
+        map.add(jpath, existing);
+        jpc->saveClass(*existing, jc->getJavaObjectRef());
+        // qc_holder will delete the unused new class
+        return existing;
+    }
+
     // save pointer to java class info in JniQoreClass
     qc->setManagedUserData(jc);
 

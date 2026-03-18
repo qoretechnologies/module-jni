@@ -71,11 +71,19 @@ public class JmsSelectorBuilder {
                     case ">=":
                     case "<=":
                     case "<>":
+                        if (!val.hasKey("value")) {
+                            throw "JMS-SELECTOR-ERROR",
+                                sprintf("%s operator for field %y requires a 'value' key", op, name);
+                        }
                         push clauses, sprintf("%s %s %s", name, op,
                             JmsSelectorBuilder::quoteValue(val.value));
                         break;
 
                     case "LIKE":
+                        if (!val.hasKey("value")) {
+                            throw "JMS-SELECTOR-ERROR",
+                                sprintf("LIKE operator for field %y requires a 'value' key", name);
+                        }
                         push clauses, sprintf("%s LIKE %s", name,
                             JmsSelectorBuilder::quoteValue(val.value));
                         break;

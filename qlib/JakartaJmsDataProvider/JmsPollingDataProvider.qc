@@ -175,8 +175,11 @@ public class JmsPollingDataProvider inherits JmsDataProviderBase, DataProvider::
     }
 
     #! Stops the message listener and cleans up resources
+    /** Idempotent — safe to call even if start() failed partway through, cleaning up
+        any partially-initialized resources.
+    */
     private stop() {
-        if (!running) {
+        if (!running && !consumer && !listener_session && !listener_conn) {
             return;
         }
         running = False;
