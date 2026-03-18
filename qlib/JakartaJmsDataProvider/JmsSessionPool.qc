@@ -100,18 +100,20 @@ public class JmsSessionPool {
 
         # wait for a session to become available; poll with 500ms intervals
         # for cooperative cancellation support
-        date deadline = now_us() + milliseconds(timeout_ms);
+        *date deadline = timeout_ms >= 0 ? now_us() + milliseconds(timeout_ms) : NOTHING;
         while (!available.size()) {
             if (closed) {
                 throw "JMS-SESSION-POOL-ERROR", "session pool is closed";
             }
-            int remaining_ms = (deadline - now_us()).durationMilliseconds();
-            if (remaining_ms <= 0) {
-                throw "JMS-SESSION-POOL-ERROR", sprintf("timeout waiting for a session after %d ms", timeout_ms);
+            if (deadline) {
+                int remaining_ms = (deadline - now_us()).durationMilliseconds();
+                if (remaining_ms <= 0) {
+                    throw "JMS-SESSION-POOL-ERROR",
+                        sprintf("timeout waiting for a session after %d ms", timeout_ms);
+                }
             }
             # use bounded wait for cancellation responsiveness
-            int wait_ms = remaining_ms > 500 ? 500 : remaining_ms;
-            cond.wait(m, wait_ms);
+            cond.wait(m, 500);
             # cancellation point — allows program interrupt / thread cancel to take effect
             al.unlock();
             sleep(0);

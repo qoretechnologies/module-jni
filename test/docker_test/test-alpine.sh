@@ -78,7 +78,12 @@ ARTEMIS_JAR_DIR=${MODULE_SRC_DIR}/test/JakartaJms/lib
 mkdir -p ${ARTEMIS_JAR_DIR}
 if [ -n "${ARTEMIS_JAKARTA_JAR_URL}" ]; then
     echo && echo "-- downloading Artemis Jakarta JMS client JAR --"
-    curl -sL -o ${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar "${ARTEMIS_JAKARTA_JAR_URL}"
+    curl -fSL --retry 3 -o ${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar "${ARTEMIS_JAKARTA_JAR_URL}"
+    # verify the download is a valid JAR (ZIP archive)
+    if ! file ${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar | grep -q "archive data"; then
+        echo "ERROR: downloaded file is not a valid JAR archive"
+        rm -f ${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar
+    fi
 fi
 
 # run the tests

@@ -59,6 +59,10 @@ public class JmsSelectorBuilder {
 
             if (val instanceof hash) {
                 # operator form: {"op": ">", "value": 100}
+                if (!val.hasKey("op") || val.op.typeCode() != NT_STRING) {
+                    throw "JMS-SELECTOR-ERROR",
+                        sprintf("operator hash for field %y must have a string 'op' key", name);
+                }
                 string op = val.op.upr();
                 switch (op) {
                     case "=":
@@ -67,24 +71,36 @@ public class JmsSelectorBuilder {
                     case ">=":
                     case "<=":
                     case "<>":
-                        push clauses, sprintf("%s %s %s", name, op, JmsSelectorBuilder::quoteValue(val.value));
+                        push clauses, sprintf("%s %s %s", name, op,
+                            JmsSelectorBuilder::quoteValue(val.value));
                         break;
 
                     case "LIKE":
-                        push clauses, sprintf("%s LIKE %s", name, JmsSelectorBuilder::quoteValue(val.value));
+                        push clauses, sprintf("%s LIKE %s", name,
+                            JmsSelectorBuilder::quoteValue(val.value));
                         break;
 
                     case "IN": {
+                        if (!(val.value instanceof list)) {
+                            throw "JMS-SELECTOR-ERROR",
+                                sprintf("IN operator for field %y requires a list value", name);
+                        }
                         list<string> vals = map JmsSelectorBuilder::quoteValue($1), val.value;
                         push clauses, sprintf("%s IN (%s)", name, vals.join(", "));
                         break;
                     }
 
-                    case "BETWEEN":
+                    case "BETWEEN": {
+                        if (!(val.value instanceof list) || val.value.size() < 2) {
+                            throw "JMS-SELECTOR-ERROR",
+                                sprintf("BETWEEN operator for field %y requires a list of 2 values",
+                                    name);
+                        }
                         push clauses, sprintf("%s BETWEEN %s AND %s", name,
                             JmsSelectorBuilder::quoteValue(val.value[0]),
                             JmsSelectorBuilder::quoteValue(val.value[1]));
                         break;
+                    }
 
                     case "IS NULL":
                         push clauses, sprintf("%s IS NULL", name);
@@ -97,6 +113,9 @@ public class JmsSelectorBuilder {
                     default:
                         throw "JMS-SELECTOR-ERROR", sprintf("unsupported operator %y", val.op);
                 }
+            } else if (!exists val || val === NULL) {
+                # NULL/NOTHING equality maps to IS NULL in SQL-92
+                push clauses, sprintf("%s IS NULL", name);
             } else {
                 # simple equality
                 push clauses, sprintf("%s = %s", name, JmsSelectorBuilder::quoteValue(val));
