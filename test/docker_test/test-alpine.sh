@@ -83,6 +83,7 @@ if [ -n "${ARTEMIS_JAKARTA_JAR_URL}" ]; then
     if ! file ${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar | grep -q "archive data"; then
         echo "ERROR: downloaded file is not a valid JAR archive"
         rm -f ${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar
+        exit 1
     fi
 fi
 
