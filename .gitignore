@@ -12,3 +12,11 @@ test/qore-jni-test.jar
 qlib/*/jar/*.jar
 src/java/org/qore/dataprovider/excel/*.class
 src/java/org/qore/dataprovider/kafka/*.class
+
+# Generated test data files - recreated by test setup on each run
+test/excel-test-data/
+test/word-test-data/
+test/powerpoint-test-data/
+
+# JVM crash logs
+hs_err_pid*.log
