@@ -895,8 +895,15 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
     // that normally happens at parse time doesn't get called
     qc->runtimeResolveAbstractMethods();
 
-    // save class in namespace
-    ns->addSystemClass(qc);
+    // save class in namespace; check for duplicate to avoid assertion failure when the same
+    // Java class is loaded from multiple JARs (e.g., jakarta.jms API classes bundled in both
+    // the API JAR and a provider's "all-in-one" JAR)
+    if (ns->findLocalClass(qc->getName())) {
+        printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace '%s'; "
+            "skipping duplicate\n", jpath, ns->getName());
+    } else {
+        ns->addSystemClass(qc);
+    }
 
     jpc->saveClass(*qc, jc->getJavaObjectRef());
 
