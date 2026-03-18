@@ -603,6 +603,7 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         });
 
         dp.createRecord({"Test": "factory"});
+        dp.commit();
 
         # Verify can read back
         ExcelReadDataProvider rdp(output_path, {
