@@ -1,0 +1,393 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore OdtDataProvider module definition
+
+/*  OdtDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-odt.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/odfdom-java-0.13.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/xercesImpl-2.12.2.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/serializer-2.7.3.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-lang3-3.20.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-logging-1.3.5.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-collections-3.2.2.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-collections4-4.4.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-csv-1.10.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-validator-1.10.1.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-beanutils-1.11.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-digester-2.1.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-cli-1.5.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/slf4j-api-1.7.30.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/json-20251224.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/bcprov-jdk18on-1.83.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/caffeine-3.1.8.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/checker-qual-3.37.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/error_prone_annotations-2.21.1.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/collection-0.7.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/java-rdfa-1.0.0-BETA1.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/jena-core-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/jena-base-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/jena-iri-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/RoaringBitmap-1.0.0.jar
+
+%module-cmd(jni) import org.qore.dataprovider.odt.OdtIterator
+%module-cmd(jni) import org.qore.dataprovider.odt.OdtWriter
+
+module OdtDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for reading and writing ODT documents";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factories
+        DataProvider::registerFactory(new OdtReadDataProviderFactory());
+        DataProvider::registerFactory(new OdtWriteDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": OdtDataProvider::AppName,
+            "display_name": "ODT Documents",
+            "short_desc": "Read and write ODT documents",
+            "desc": "Provides data provider operations for **ODT** (OpenDocument Text) files, the "
+                "native document format for LibreOffice Writer and part of the "
+                "[OpenDocument](https://en.wikipedia.org/wiki/OpenDocument) standard.\n\n"
+                "**Supported Operations**:\n"
+                "- **Read paragraphs** — extract text with heading hierarchy and style information\n"
+                "- **Read tables** — extract table data with automatic or explicit header detection\n"
+                "- **Write paragraphs** — create documents with styled text and headings\n"
+                "- **Write tables** — create documents with structured tabular data\n\n"
+                "**Key Features**:\n"
+                "- Heading style detection (`Heading1`, `Heading2`, `Heading3`)\n"
+                "- Table extraction with `header_row` auto-detection or explicit `headers`\n"
+                "- `paragraphs` and `table` content modes for both reading and writing\n"
+                "- File path, stream, and in-memory binary data support\n\n"
+                "**Business Use Cases**:\n"
+                "- Processing LibreOffice Writer documents in automated workflows\n"
+                "- Extracting structured text and tables from `.odt` files\n"
+                "- Generating ODT reports and documents programmatically",
+            "groups": (DataProvider::AppGroup::Documents,),
+            "logo": OdtLogo,
+            "logo_file_name": "odt-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdtDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "display_name": "Read ODT Document File",
+            "short_desc": "Read ODT document from a specific file location",
+            "desc": "Reads and parses an ODT document from a file location specified by the `path` "
+                "option.\n\n"
+                "Use this action to extract structured content from `.odt` files stored on disk or "
+                "accessible via a URL.\n\n"
+                "**Key Options**:\n"
+                "- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to "
+                "extract tabular data\n"
+                "- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n"
+                "- `header_row` — set to `True` if the first table row contains column headers",
+            "action_code": DPAT_FIND,
+            "cls": "OdtDataProvider::OdtReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdtReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdtReadDataProvider::ConstructorOptions{"content_type", "table_index", "header_row"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdtReadDataProvider::ConstructorOptions - ("path", "content_type", "table_index", "header_row",
+                    "stream", "data"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdtDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "display_name": "Read ODT Document Inline Data",
+            "short_desc": "Read ODT document inline data",
+            "desc": "Reads and parses an ODT document from inline binary data provided via the `data` "
+                "option.\n\n"
+                "Use this action when the ODT document content is already available in memory as "
+                "binary data rather than stored in a file.\n\n"
+                "**Key Options**:\n"
+                "- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to "
+                "extract tabular data\n"
+                "- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n"
+                "- `header_row` — set to `True` if the first table row contains column headers",
+            "action_code": DPAT_FIND,
+            "cls": "OdtDataProvider::OdtReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdtReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdtReadDataProvider::ConstructorOptions{"content_type", "table_index", "header_row"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdtReadDataProvider::ConstructorOptions - ("path", "content_type", "table_index", "header_row",
+                    "stream", "data"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdtDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "display_name": "Write ODT Document File",
+            "short_desc": "Write data to an ODT document file",
+            "desc": "Creates an ODT document and writes it to the file location specified by the "
+                "`path` option.\n\n"
+                "Use this action to generate `.odt` files with paragraphs or tabular data for "
+                "reports, documents, or data exports.\n\n"
+                "**Key Options**:\n"
+                "- `content_type` — set to `\"paragraphs\"` to write styled text, or `\"table\"` to "
+                "write structured tabular data\n"
+                "- `headers` — provide column headers for `\"table\"` mode\n"
+                "- `title` — optional document title added as a `Heading1` at the top",
+            "action_code": DPAT_CREATE,
+            "cls": "OdtDataProvider::OdtWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdtWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdtWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdtDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "display_name": "Create ODT Document Data",
+            "short_desc": "Create ODT document data and return as binary",
+            "desc": "Creates an ODT document in memory and returns it as binary data, without writing "
+                "to disk.\n\n"
+                "Use this action when you need to generate an ODT document for further processing, "
+                "email attachment, or API response without creating a file on the filesystem.\n\n"
+                "**Key Options**:\n"
+                "- `content_type` — set to `\"paragraphs\"` to write styled text, or `\"table\"` to "
+                "write structured tabular data\n"
+                "- `headers` — provide column headers for `\"table\"` mode\n"
+                "- `title` — optional document title added as a `Heading1` at the top",
+            "action_code": DPAT_CREATE,
+            "cls": "OdtDataProvider::OdtWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdtWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage OdtDataProvider Module
+
+    @tableofcontents
+
+    @section OdtDataProviderintro Introduction to the OdtDataProvider Module
+
+    The %OdtDataProvider module provides a data provider API for reading and writing ODT
+    (OpenDocument Text) documents through the @ref dataproviderintro "DataProvider" API.
+    ODT is the native document format for LibreOffice Writer and other OpenDocument-compatible
+    applications.
+
+    The following classes are provided by this module:
+    - @ref OdtDataProvider::OdtReadDataProvider "OdtReadDataProvider" - for reading ODT documents
+    - @ref OdtDataProvider::OdtReadDataProviderFactory "OdtReadDataProviderFactory" - factory for read providers
+    - @ref OdtDataProvider::OdtWriteDataProvider "OdtWriteDataProvider" - for writing ODT documents
+    - @ref OdtDataProvider::OdtWriteDataProviderFactory "OdtWriteDataProviderFactory" - factory for write providers
+
+    @section OdtDataProvider_reading Reading ODT Documents
+
+    @subsection OdtDataProvider_reading_paragraphs Reading Paragraphs
+
+    @code{.py}
+    %requires OdtDataProvider
+
+    # Read paragraphs from a file path
+    OdtReadDataProvider dp("document.odt", {"content_type": "paragraphs"});
+    list<hash<auto>> paragraphs = map $1, dp.searchRecords();
+
+    # Each record has:
+    # - "text": The paragraph text content
+    # - "style": The paragraph style name
+    @endcode
+
+    @subsection OdtDataProvider_reading_tables Reading Tables
+
+    @code{.py}
+    %requires OdtDataProvider
+
+    # Read table data from a document
+    OdtReadDataProvider dp("document.odt", {
+        "content_type": "table",
+        "table_index": 0,       # First table (0-based index)
+        "header_row": True,     # First row contains headers
+    });
+    list<hash<auto>> rows = map $1, dp.searchRecords();
+
+    # Read with explicit headers
+    OdtReadDataProvider dp2("document.odt", {
+        "content_type": "table",
+        "headers": ("Name", "Department", "Salary"),
+    });
+    @endcode
+
+    @subsection OdtDataProvider_reading_options Read Options
+
+    - \c path: Path to the ODT document
+    - \c stream: Input stream for ODT data
+    - \c data: Binary ODT document data
+    - \c content_type: "paragraphs" (default) or "table"
+    - \c table_index: Index of table to read (0-based, for table mode)
+    - \c header_row: If \c True, first row of table contains headers
+    - \c headers: List of header names to use
+
+    @section OdtDataProvider_writing Writing ODT Documents
+
+    @subsection OdtDataProvider_writing_paragraphs Writing Paragraphs
+
+    @code{.py}
+    %requires OdtDataProvider
+
+    # Write paragraphs to a file
+    OdtWriteDataProvider dp("output.odt", {
+        "content_type": "paragraphs",
+        "title": "My Document",
+    });
+
+    dp.createRecord({"text": "First paragraph content", "style": "Normal"});
+    dp.createRecord({"text": "Section Heading", "style": "Heading1"});
+    dp.createRecord({"text": "More content here.", "style": "Normal"});
+
+    dp.commit();  # Write the file
+    @endcode
+
+    @subsection OdtDataProvider_writing_tables Writing Tables
+
+    @code{.py}
+    %requires OdtDataProvider
+
+    # Write table data to a file
+    OdtWriteDataProvider dp("output.odt", {
+        "content_type": "table",
+        "headers": ("Name", "Department", "Salary"),
+        "title": "Employee Directory",
+    });
+
+    dp.createRecord({"Name": "Alice Smith", "Department": "Engineering", "Salary": "75000"});
+    dp.createRecord({"Name": "Bob Johnson", "Department": "Marketing", "Salary": "65000"});
+
+    dp.commit();  # Write the file
+    @endcode
+
+    @subsection OdtDataProvider_writing_binary Writing to Binary
+
+    @code{.py}
+    %requires OdtDataProvider
+
+    # Create document in memory
+    OdtWriteDataProvider dp({
+        "content_type": "paragraphs",
+        "title": "In-Memory Document",
+    });
+
+    dp.createRecord({"text": "Some content"});
+
+    # Get binary data instead of writing to file
+    binary data = dp.getData();
+    @endcode
+
+    @subsection OdtDataProvider_writing_options Write Options
+
+    - \c path: Output file path
+    - \c stream: Output stream
+    - \c content_type: "paragraphs" (default) or "table"
+    - \c headers: List of column headers (for table mode)
+    - \c title: Optional document title (added as Heading1)
+
+    @section OdtDataProvider_styles Paragraph Styles
+
+    When writing paragraphs, the following style names are supported:
+    - \c "Normal": Regular paragraph text
+    - \c "Heading1": Main heading (bold, 16pt)
+    - \c "Heading2": Secondary heading (bold, 14pt)
+    - \c "Heading3": Tertiary heading (bold, 12pt)
+
+    @section OdtDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c ODT-READ-OPTION-ERROR: Invalid read options or option conflicts
+    - \c ODT-WRITE-OPTION-ERROR: Invalid write options or option conflicts
+
+    @section OdtDataProvider_relnotes Release Notes
+
+    @subsection OdtDataProvider_v1_0 OdtDataProvider v1.0
+    - initial release of the module
+    - support for reading ODT documents (.odt format)
+    - support for writing ODT documents (.odt format)
+    - paragraph and table read/write modes
+    - header row detection for tables
+    - binary data input/output support
+*/
+
+#! contains all public definitions in the OdtDataProvider module
+public namespace OdtDataProvider {
+#! Application name
+public const AppName = "ODT";
+}
+
+namespace Priv {
+#! ODT logo
+const OdtLogo = File::readTextFile(get_script_dir() + "/odt-logo.svg");
+}

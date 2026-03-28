@@ -1,0 +1,666 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  OdtDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/OdtDataProvider
+
+# Add classpaths for the test helper - uses OdsDataProvider jars for shared ODF dependencies
+%module-cmd(jni) add-relative-classpath ../qlib/OdtDataProvider/jar/qore-dataprovider-odt.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/odfdom-java-0.13.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/xercesImpl-2.12.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/serializer-2.7.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-lang3-3.20.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-logging-1.3.5.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-collections-3.2.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-collections4-4.4.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-csv-1.10.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-validator-1.10.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-beanutils-1.11.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-digester-2.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-cli-1.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/slf4j-api-1.7.30.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/json-20251224.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/bcprov-jdk18on-1.83.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/caffeine-3.1.8.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/checker-qual-3.37.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/error_prone_annotations-2.21.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/collection-0.7.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/java-rdfa-1.0.0-BETA1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/jena-core-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/jena-base-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/jena-iri-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/RoaringBitmap-1.0.0.jar
+%module-cmd(jni) import org.qore.dataprovider.odt.OdtTestHelper
+%module-cmd(jni) import org.qore.dataprovider.odt.OdtIterator
+
+%exec-class OdtDataProviderTest
+
+public class OdtDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("OdtDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/odt-test-data";
+
+        addTestCase("test setup", \testSetup());
+        addTestCase("basic read paragraphs from path", \testBasicReadParagraphsPath());
+        addTestCase("read paragraphs from stream", \testReadParagraphsStream());
+        addTestCase("read paragraphs from binary data", \testReadParagraphsBinaryData());
+        addTestCase("read table with header_row", \testReadTableWithHeaderRow());
+        addTestCase("read table with explicit headers", \testReadTableWithExplicitHeaders());
+        addTestCase("get table count", \testGetTableCount());
+        addTestCase("get full text", \testGetFullText());
+        addTestCase("factory tests", \testFactory());
+        addTestCase("negative: invalid path", \testNegativeInvalidPath());
+        addTestCase("negative: invalid table index", \testNegativeInvalidTableIndex());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("edge case: empty document", \testEdgeCaseEmptyDocument());
+        addTestCase("edge case: no tables", \testEdgeCaseNoTables());
+        addTestCase("edge case: special characters", \testEdgeCaseSpecialChars());
+        addTestCase("write: basic paragraphs", \testWriteBasicParagraphs());
+        addTestCase("write: paragraphs with styles", \testWriteParagraphsWithStyles());
+        addTestCase("write: table to file", \testWriteTable());
+        addTestCase("write: with title", \testWriteWithTitle());
+        addTestCase("write: to binary data", \testWriteToBinary());
+        addTestCase("write: factory", \testWriteFactory());
+        addTestCase("write: data only (no path/stream)", \testWriteDataOnly());
+        addTestCase("write: negative - path+stream conflict", \testWriteNegativePathStreamConflict());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("roundtrip: write and read paragraphs", \testRoundtripParagraphs());
+        addTestCase("roundtrip: write and read table", \testRoundtripTable());
+
+        set_return_value(main());
+    }
+
+    testSetup() {
+        # Create test data directory and files
+        if (!is_dir(test_data_dir)) {
+            mkdir(test_data_dir);
+        }
+
+        # Create all test ODT files
+        OdtTestHelper::createSimpleOdt(test_data_dir + "/simple.odt");
+        OdtTestHelper::createTableOdt(test_data_dir + "/with-table.odt");
+        OdtTestHelper::createEmptyOdt(test_data_dir + "/empty.odt");
+        OdtTestHelper::createSpecialCharsOdt(test_data_dir + "/special-chars.odt");
+
+        assertTrue(is_file(test_data_dir + "/simple.odt"), "simple.odt created");
+    }
+
+    testBasicReadParagraphsPath() {
+        OdtReadDataProvider dp(test_data_dir + "/simple.odt", {
+            "content_type": "paragraphs",
+        });
+
+        assertEq("OdtReadDataProvider", dp.getInfo().type);
+        assertTrue(dp.getInfo().supports_read);
+        assertTrue(dp.getInfo().has_record);
+
+        # Read all records
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertTrue(records.size() >= 3, "should have at least 3 paragraphs");
+
+        # Check record structure
+        assertTrue(records[0].hasKey("text"), "should have text field");
+        assertTrue(records[0].hasKey("style"), "should have style field");
+
+        # Check content
+        assertEq("Sample Document", records[0].text);
+    }
+
+    testReadParagraphsStream() {
+        FileInputStream fis(test_data_dir + "/simple.odt");
+        OdtReadDataProvider dp(fis, {
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertTrue(records.size() >= 3);
+        assertEq("Sample Document", records[0].text);
+    }
+
+    testReadParagraphsBinaryData() {
+        binary data = OdtTestHelper::createSimpleOdtBytes();
+
+        OdtReadDataProvider dp({
+            "data": data,
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertTrue(records.size() >= 2, "should have at least 2 paragraphs");
+        assertEq("Sample Document", records[0].text);
+    }
+
+    testReadTableWithHeaderRow() {
+        OdtReadDataProvider dp(test_data_dir + "/with-table.odt", {
+            "content_type": "table",
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 data rows (excluding header)");
+
+        # Check that headers are used as keys
+        assertTrue(records[0].hasKey("Name"), "should have Name column");
+        assertTrue(records[0].hasKey("Department"), "should have Department column");
+        assertTrue(records[0].hasKey("Salary"), "should have Salary column");
+
+        assertEq("Alice Smith", records[0].Name);
+        assertEq("Engineering", records[0].Department);
+        assertEq("75000", records[0].Salary);
+    }
+
+    testReadTableWithExplicitHeaders() {
+        OdtReadDataProvider dp(test_data_dir + "/with-table.odt", {
+            "content_type": "table",
+            "table_index": 0,
+            "headers": ("Col1", "Col2", "Col3"),
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertTrue(records.size() >= 1);
+        assertTrue(records[0].hasKey("Col1"), "should have Col1 header");
+    }
+
+    testGetTableCount() {
+        int count = OdtIterator::getTableCount(test_data_dir + "/with-table.odt");
+        assertTrue(count >= 1, "should have at least 1 table");
+
+        # Test with stream
+        FileInputStream fis(test_data_dir + "/with-table.odt");
+        count = OdtIterator::getTableCount(fis);
+        assertTrue(count >= 1, "should have at least 1 table via stream");
+
+        # Test document with no tables
+        count = OdtIterator::getTableCount(test_data_dir + "/simple.odt");
+        assertEq(0, count, "simple document should have 0 tables");
+    }
+
+    testGetFullText() {
+        string text = OdtIterator::getFullText(test_data_dir + "/simple.odt");
+
+        assertTrue(text.contains("Sample Document"), "should contain title");
+        assertTrue(text.contains("first paragraph"), "should contain paragraph text");
+
+        # Test with stream
+        FileInputStream fis(test_data_dir + "/simple.odt");
+        text = OdtIterator::getFullText(fis);
+        assertTrue(text.contains("Sample Document"), "should contain title via stream");
+    }
+
+    testFactory() {
+        OdtReadDataProviderFactory factory();
+
+        assertEq("odtread", factory.getInfo().name);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": test_data_dir + "/simple.odt",
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertTrue(records.size() >= 3);
+    }
+
+    testNegativeInvalidPath() {
+        # Invalid path should throw an exception
+        bool threw = False;
+        try {
+            OdtReadDataProvider dp("/nonexistent/path/to/file.odt");
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.desc.contains("No such file") || ex.desc.contains("FileNotFoundException"),
+                "should mention file not found");
+        }
+        assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    testNegativeInvalidTableIndex() {
+        # Invalid table index should return empty results
+        OdtReadDataProvider dp(test_data_dir + "/with-table.odt", {
+            "content_type": "table",
+            "table_index": 99,  # Document only has 1 table
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "should return empty for invalid table index");
+    }
+
+    testNegativeOptionConflicts() {
+        # Test headers and header_row conflict
+        assertThrows("ODT-READ-OPTION-ERROR", sub () {
+            OdtReadDataProvider dp({
+                "path": test_data_dir + "/with-table.odt",
+                "content_type": "table",
+                "headers": ("A", "B", "C"),
+                "header_row": True,
+            });
+        });
+
+        # Test path and stream conflict
+        assertThrows("ODT-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.odt");
+            OdtReadDataProvider dp({
+                "path": test_data_dir + "/simple.odt",
+                "stream": fis,
+            });
+        });
+
+        # Test path and data conflict
+        assertThrows("ODT-READ-OPTION-ERROR", sub () {
+            OdtReadDataProvider dp({
+                "path": test_data_dir + "/simple.odt",
+                "data": <abcd>,
+            });
+        });
+    }
+
+    testEdgeCaseEmptyDocument() {
+        OdtReadDataProvider dp(test_data_dir + "/empty.odt", {
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "empty document should return no records");
+    }
+
+    testEdgeCaseNoTables() {
+        # Try to read table from document without tables
+        OdtReadDataProvider dp(test_data_dir + "/simple.odt", {
+            "content_type": "table",
+            "table_index": 0,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "document without tables should return no records in table mode");
+    }
+
+    testEdgeCaseSpecialChars() {
+        OdtReadDataProvider dp(test_data_dir + "/special-chars.odt", {
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertTrue(records.size() >= 5, "should have multiple paragraphs");
+
+        # Find paragraph with special characters - look for text that indicates the content was read
+        bool found_cafe = False;
+        bool found_currency = False;
+        foreach hash<auto> rec in (records) {
+            if (rec.text.contains("Caf") || rec.text.contains("cafe")) {
+                found_cafe = True;
+            }
+            if (rec.text.contains("Currency") || rec.text.contains("$")) {
+                found_currency = True;
+            }
+        }
+        assertTrue(found_cafe, "should contain cafe-related text");
+        assertTrue(found_currency, "should contain currency-related text");
+    }
+
+    testWriteBasicParagraphs() {
+        string output_path = test_data_dir + "/write-paragraphs.odt";
+        on_exit unlink(output_path);
+
+        OdtWriteDataProvider dp(output_path, {
+            "content_type": "paragraphs",
+        });
+
+        # Write some paragraphs
+        dp.createRecord({"text": "First paragraph", "style": "Normal"});
+        dp.createRecord({"text": "Second paragraph", "style": "Normal"});
+        dp.createRecord({"text": "Third paragraph", "style": "Normal"});
+
+        # Commit to write the file
+        dp.commit();
+
+        # Read back and verify
+        OdtReadDataProvider rdp(output_path, {
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("First paragraph", records[0].text);
+        assertEq("Second paragraph", records[1].text);
+        assertEq("Third paragraph", records[2].text);
+    }
+
+    testWriteParagraphsWithStyles() {
+        string output_path = test_data_dir + "/write-styled.odt";
+        on_exit unlink(output_path);
+
+        OdtWriteDataProvider dp(output_path, {
+            "content_type": "paragraphs",
+        });
+
+        dp.createRecord({"text": "Main Heading", "style": "Heading1"});
+        dp.createRecord({"text": "Some content here.", "style": "Normal"});
+        dp.createRecord({"text": "Sub Heading", "style": "Heading2"});
+        dp.createRecord({"text": "More content.", "style": "Normal"});
+
+        dp.commit();
+
+        # Verify file was created
+        assertTrue(is_file(output_path), "styled document should be created");
+
+        # Read back
+        OdtReadDataProvider rdp(output_path, {
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(4, records.size());
+        assertEq("Main Heading", records[0].text);
+        assertEq("Sub Heading", records[2].text);
+    }
+
+    testWriteTable() {
+        string output_path = test_data_dir + "/write-table.odt";
+        on_exit unlink(output_path);
+
+        OdtWriteDataProvider dp(output_path, {
+            "content_type": "table",
+            "headers": ("Name", "Age", "City"),
+        });
+
+        dp.createRecord({"Name": "Alice", "Age": "30", "City": "New York"});
+        dp.createRecord({"Name": "Bob", "Age": "25", "City": "Los Angeles"});
+        dp.createRecord({"Name": "Charlie", "Age": "35", "City": "Chicago"});
+
+        dp.commit();
+
+        # Read back and verify
+        OdtReadDataProvider rdp(output_path, {
+            "content_type": "table",
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Alice", records[0].Name);
+        assertEq("30", records[0].Age);
+        assertEq("New York", records[0].City);
+    }
+
+    testWriteWithTitle() {
+        string output_path = test_data_dir + "/write-with-title.odt";
+        on_exit unlink(output_path);
+
+        OdtWriteDataProvider dp(output_path, {
+            "content_type": "paragraphs",
+            "title": "My Document Title",
+        });
+
+        dp.createRecord({"text": "Some content."});
+
+        dp.commit();
+
+        # Read back
+        OdtReadDataProvider rdp(output_path, {
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertTrue(records.size() >= 2, "should have title and content");
+        assertEq("My Document Title", records[0].text);
+    }
+
+    testWriteToBinary() {
+        OdtWriteDataProvider dp({
+            "content_type": "paragraphs",
+        });
+
+        dp.createRecord({"text": "Binary test paragraph"});
+
+        # Get data as binary before commit
+        binary data = dp.getData();
+
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Read back from binary
+        OdtReadDataProvider rdp({
+            "data": data,
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Binary test paragraph", records[0].text);
+    }
+
+    testWriteFactory() {
+        string output_path = test_data_dir + "/write-factory.odt";
+        on_exit unlink(output_path);
+
+        OdtWriteDataProviderFactory factory();
+
+        assertEq("odtwrite", factory.getInfo().name);
+
+        # Create provider via factory
+        OdtWriteDataProvider dp = factory.create({
+            "path": output_path,
+            "content_type": "paragraphs",
+        });
+
+        dp.createRecord({"text": "Factory test"});
+        dp.commit();
+
+        # Read back
+        OdtReadDataProvider rdp(output_path, {
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Factory test", records[0].text);
+    }
+
+    testWriteDataOnly() {
+        # Test creating a provider without path or stream (for write-data action use case)
+        OdtWriteDataProvider dp({
+            "content_type": "table",
+            "headers": ("Name", "Value"),
+        });
+
+        assertEq("odt-data", dp.getName());
+
+        # Write records
+        dp.createRecord({"Name": "item1", "Value": "100"});
+        dp.createRecord({"Name": "item2", "Value": "200"});
+
+        # Get binary data
+        binary data = dp.getData();
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Verify by reading back
+        OdtReadDataProvider rdp({
+            "data": data,
+            "content_type": "table",
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("item1", records[0].Name);
+        assertEq("100", records[0].Value);
+    }
+
+    testWriteNegativePathStreamConflict() {
+        # Test path constructor with stream option
+        assertThrows("ODT-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            OdtWriteDataProvider dp(test_data_dir + "/test.odt", {
+                "stream": sos,
+            });
+        });
+
+        # Test path constructor with path option
+        assertThrows("ODT-WRITE-OPTION-ERROR", sub () {
+            OdtWriteDataProvider dp(test_data_dir + "/test.odt", {
+                "path": test_data_dir + "/other.odt",
+            });
+        });
+
+        # Test options constructor with both path and stream
+        assertThrows("ODT-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            OdtWriteDataProvider dp({
+                "path": test_data_dir + "/test.odt",
+                "stream": sos,
+            });
+        });
+    }
+
+    testActionRegistration() {
+        # Verify that actions are properly registered with correct properties
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("ODT");
+        assertTrue(exists actions, "should have actions registered for ODT app");
+        assertTrue(actions.size() >= 4, "should have at least 4 actions (read, read-data, write, write-data)");
+
+        # Create a lookup hash for easier testing
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # Verify read action
+        assertTrue(action_map.hasKey("read"), "should have 'read' action");
+        assertEq("Read ODT Document File", action_map."read".display_name);
+        assertTrue(action_map."read".options.hasKey("path"), "read action should have 'path' option");
+        assertTrue(action_map."read".options.hasKey("content_type"), "read action should have 'content_type' option");
+
+        # Verify read-data action
+        assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
+        assertEq("Read ODT Document Inline Data", action_map."read-data".display_name);
+        assertTrue(action_map."read-data".options.hasKey("data"), "read-data action should have 'data' option");
+
+        # Verify write action
+        assertTrue(action_map.hasKey("write"), "should have 'write' action");
+        assertEq("Write ODT Document File", action_map."write".display_name);
+        assertTrue(action_map."write".options.hasKey("path"), "write action should have 'path' option");
+        assertTrue(action_map."write".options.hasKey("headers"), "write action should have 'headers' option");
+        assertTrue(action_map."write".options.hasKey("title"), "write action should have 'title' option");
+
+        # Verify write-data action
+        assertTrue(action_map.hasKey("write-data"), "should have 'write-data' action");
+        assertEq("Create ODT Document Data", action_map."write-data".display_name);
+        assertFalse(action_map."write-data".options.hasKey("path"), "write-data action should NOT have 'path' option");
+        assertTrue(action_map."write-data".options.hasKey("headers"), "write-data action should have 'headers' option");
+    }
+
+    testRoundtripParagraphs() {
+        string output_path = test_data_dir + "/roundtrip-paragraphs.odt";
+        on_exit unlink(output_path);
+
+        # Write paragraphs
+        OdtWriteDataProvider wdp(output_path, {
+            "content_type": "paragraphs",
+            "title": "Roundtrip Test",
+        });
+
+        wdp.createRecord({"text": "First paragraph content", "style": "Normal"});
+        wdp.createRecord({"text": "Second paragraph content", "style": "Normal"});
+        wdp.createRecord({"text": "Third paragraph content", "style": "Normal"});
+
+        wdp.commit();
+
+        # Read back
+        OdtReadDataProvider rdp(output_path, {
+            "content_type": "paragraphs",
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertTrue(records.size() >= 4, "should have title + 3 paragraphs");
+        assertEq("Roundtrip Test", records[0].text);
+        assertEq("First paragraph content", records[1].text);
+        assertEq("Second paragraph content", records[2].text);
+        assertEq("Third paragraph content", records[3].text);
+    }
+
+    testRoundtripTable() {
+        string output_path = test_data_dir + "/roundtrip-table.odt";
+        on_exit unlink(output_path);
+
+        # Write table
+        OdtWriteDataProvider wdp(output_path, {
+            "content_type": "table",
+            "headers": ("Product", "Price", "Quantity"),
+            "title": "Inventory",
+        });
+
+        wdp.createRecord({"Product": "Widget", "Price": "9.99", "Quantity": "100"});
+        wdp.createRecord({"Product": "Gadget", "Price": "19.99", "Quantity": "50"});
+        wdp.createRecord({"Product": "Gizmo", "Price": "29.99", "Quantity": "25"});
+
+        wdp.commit();
+
+        # Read back
+        OdtReadDataProvider rdp(output_path, {
+            "content_type": "table",
+            "table_index": 0,
+            "header_row": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Widget", records[0].Product);
+        assertEq("9.99", records[0].Price);
+        assertEq("100", records[0].Quantity);
+        assertEq("Gadget", records[1].Product);
+        assertEq("Gizmo", records[2].Product);
+    }
+}

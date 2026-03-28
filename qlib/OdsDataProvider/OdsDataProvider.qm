@@ -1,0 +1,272 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore OdsDataProvider module definition
+
+/*  OdsDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-ods.jar
+%module-cmd(jni) add-relative-classpath ./jar/odfdom-java-0.13.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/xercesImpl-2.12.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/serializer-2.7.3.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-lang3-3.20.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-logging-1.3.5.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-collections-3.2.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-collections4-4.4.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-csv-1.10.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-validator-1.10.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-beanutils-1.11.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-digester-2.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-cli-1.5.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/slf4j-api-1.7.30.jar
+%module-cmd(jni) add-relative-classpath ./jar/json-20251224.jar
+%module-cmd(jni) add-relative-classpath ./jar/bcprov-jdk18on-1.83.jar
+%module-cmd(jni) add-relative-classpath ./jar/caffeine-3.1.8.jar
+%module-cmd(jni) add-relative-classpath ./jar/checker-qual-3.37.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/error_prone_annotations-2.21.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/collection-0.7.jar
+%module-cmd(jni) add-relative-classpath ./jar/java-rdfa-1.0.0-BETA1.jar
+%module-cmd(jni) add-relative-classpath ./jar/jena-core-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/jena-base-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/jena-iri-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/RoaringBitmap-1.0.0.jar
+
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsIterator
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsWriter
+
+module OdsDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for reading and writing ODS spreadsheets";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factories
+        DataProvider::registerFactory(new OdsReadDataProviderFactory());
+        DataProvider::registerFactory(new OdsWriteDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": OdsDataProvider::AppName,
+            "display_name": "ODS Spreadsheets",
+            "short_desc": "Read and write ODS spreadsheets",
+            "desc": "Read and write OpenDocument Spreadsheet (ODS) files, the native spreadsheet "
+                "format for LibreOffice Calc and other OpenDocument-compatible applications.\n\n"
+                "**Supported Operations**:\n"
+                "- **Read**: Parse ODS spreadsheets into structured records with automatic header "
+                "detection, cell range selection, and multi-sheet access\n"
+                "- **Write**: Create ODS spreadsheet files from structured data with configurable "
+                "worksheets and column headers\n\n"
+                "**Key Features**:\n"
+                "- Multi-sheet support: browse and read individual worksheets\n"
+                "- Flexible header handling: auto-detect from first row, specify cell ranges, or provide "
+                "explicit header names\n"
+                "- Cell range selection: read specific regions of a spreadsheet\n"
+                "- Data type preservation: handles strings, numbers, booleans, and dates with timezone "
+                "support\n"
+                "- In-memory operation: read from or write to binary data without file I/O\n\n"
+                "**Business Use Cases**:\n"
+                "- Importing LibreOffice Calc spreadsheets into data pipelines\n"
+                "- Converting ODS data to other formats in ETL workflows\n"
+                "- Generating ODS reports from application data\n"
+                "- Processing spreadsheet uploads in web applications",
+            "groups": (DataProvider::AppGroup::Spreadsheets,),
+            "logo": OdsWhiteLogo,
+            "logo_file_name": "ods-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdsDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "display_name": "Read ODS Spreadsheet File",
+            "short_desc": "Read ODS spreadsheet from a specific file location",
+            "desc": "Read an ODS spreadsheet from a file location and return the data as records.\n\n"
+                "Use this action to import data from ODS files stored on disk or accessible via a URL. "
+                "The file location is resolved using the `FileLocationHandler` module, supporting local "
+                "file paths and remote URLs.\n\n"
+                "**Key Options**:\n"
+                "- `path` (required) — the file location to read from\n"
+                "- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n"
+                "- `header_names` — set to `True` to use the first row as column headers\n"
+                "- `header_cells` / `data_cells` — specify cell ranges for headers and data\n"
+                "- `headers` — provide explicit column header names",
+            "action_code": DPAT_FIND,
+            "cls": "OdsDataProvider::OdsReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdsReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsReadDataProvider::ConstructorOptions{"worksheet", "data_cells", "header_cells",
+                    "header_names"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsReadDataProvider::ConstructorOptions - ("path", "worksheet", "data_cells", "header_cells",
+                    "header_names", "stream", "data"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdsDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "display_name": "Read ODS Spreadsheet Inline Data",
+            "short_desc": "Read ODS spreadsheet inline data",
+            "desc": "Read an ODS spreadsheet from inline binary data and return the data as records.\n\n"
+                "Use this action when the ODS data is already available in memory (e.g., received from "
+                "an API response, uploaded by a user, or read from a database BLOB column) rather than "
+                "stored as a file.\n\n"
+                "**Key Options**:\n"
+                "- `data` (required) — the ODS binary data to parse\n"
+                "- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n"
+                "- `header_names` — set to `True` to use the first row as column headers\n"
+                "- `header_cells` / `data_cells` — specify cell ranges for headers and data\n"
+                "- `headers` — provide explicit column header names",
+            "action_code": DPAT_FIND,
+            "cls": "OdsDataProvider::OdsReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdsReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsReadDataProvider::ConstructorOptions{"worksheet", "data_cells", "header_cells",
+                    "header_names"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsReadDataProvider::ConstructorOptions - ("path", "worksheet", "data_cells", "header_cells",
+                    "header_names", "stream", "data"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdsDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "display_name": "Write ODS Spreadsheet File",
+            "short_desc": "Write data to an ODS spreadsheet file",
+            "desc": "Write data to an ODS spreadsheet file at a specified path.\n\n"
+                "Use this action to generate ODS files from structured data for reporting, data export, "
+                "or integration with LibreOffice Calc and other OpenDocument-compatible applications.\n\n"
+                "**Key Options**:\n"
+                "- `path` (required) — the output file location\n"
+                "- `worksheet` — the worksheet name (defaults to `Sheet1`)\n"
+                "- `headers` — explicit column header names; if not provided, headers are auto-detected "
+                "from the first record",
+            "action_code": DPAT_CREATE,
+            "cls": "OdsDataProvider::OdsWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdsWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsWriteDataProvider::ConstructorOptions{"worksheet", "headers"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdsDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "display_name": "Create ODS Spreadsheet Data",
+            "short_desc": "Create ODS spreadsheet data and return as binary",
+            "desc": "Create ODS spreadsheet data in memory and return it as binary data.\n\n"
+                "Use this action when you need to generate an ODS file without writing to disk — for "
+                "example, to return the spreadsheet as an API response, store it in a database, or pass "
+                "it to another processing step. Retrieve the result by calling `getData()` on the "
+                "provider after creating all records.\n\n"
+                "**Key Options**:\n"
+                "- `worksheet` — the worksheet name (defaults to `Sheet1`)\n"
+                "- `headers` — explicit column header names; if not provided, headers are auto-detected "
+                "from the first record",
+            "action_code": DPAT_CREATE,
+            "cls": "OdsDataProvider::OdsWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdsWriteDataProvider::ConstructorOptions{"worksheet", "headers"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage OdsDataProvider Module
+
+    @tableofcontents
+
+    @section OdsDataProviderintro Introduction to the OdsDataProvider Module
+
+    The %OdsDataProvider module provides a data provider API for reading and writing ODS
+    (OpenDocument Spreadsheet) files through the @ref dataproviderintro "DataProvider" API.
+    ODS is the native spreadsheet format for LibreOffice Calc and other OpenDocument-compatible
+    applications.
+
+    The following classes are provided by this module:
+    - @ref OdsDataProvider::OdsReadDataProvider "OdsReadDataProvider" - for reading ODS files
+    - @ref OdsDataProvider::OdsReadDataProviderFactory "OdsReadDataProviderFactory" - factory for read providers
+    - @ref OdsDataProvider::OdsWriteDataProvider "OdsWriteDataProvider" - for writing ODS files
+    - @ref OdsDataProvider::OdsWriteDataProviderFactory "OdsWriteDataProviderFactory" - factory for write providers
+    - @ref OdsDataProvider::OdsWorksheetReadDataProvider "OdsWorksheetReadDataProvider" - for reading specific worksheets
+
+    @section OdsDataProvider_relnotes Release Notes
+
+    @subsection OdsDataProvider_v1_0 OdsDataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the OdsDataProvider module
+public namespace OdsDataProvider {
+#! Application name
+public const AppName = "ODS";
+}
+
+namespace Priv {
+#! ODS logo
+const OdsWhiteLogo = File::readTextFile(get_script_dir() + "/ods-logo.svg");
+}

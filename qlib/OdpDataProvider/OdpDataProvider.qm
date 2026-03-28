@@ -1,0 +1,411 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore OdpDataProvider module definition
+
+/*  OdpDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-odp.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/odfdom-java-0.13.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/xercesImpl-2.12.2.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/serializer-2.7.3.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-lang3-3.20.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-logging-1.3.5.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-collections-3.2.2.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-collections4-4.4.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-csv-1.10.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-validator-1.10.1.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-beanutils-1.11.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-digester-2.1.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/commons-cli-1.5.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/slf4j-api-1.7.30.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/json-20251224.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/bcprov-jdk18on-1.83.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/caffeine-3.1.8.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/checker-qual-3.37.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/error_prone_annotations-2.21.1.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/collection-0.7.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/java-rdfa-1.0.0-BETA1.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/jena-core-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/jena-base-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/jena-iri-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../OdsDataProvider/jar/RoaringBitmap-1.0.0.jar
+
+%module-cmd(jni) import org.qore.dataprovider.odp.OdpIterator
+%module-cmd(jni) import org.qore.dataprovider.odp.OdpWriter
+
+module OdpDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for reading and writing ODP presentations";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factories
+        DataProvider::registerFactory(new OdpReadDataProviderFactory());
+        DataProvider::registerFactory(new OdpWriteDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": OdpDataProvider::AppName,
+            "display_name": "ODP Presentations",
+            "short_desc": "Read and write ODP presentations",
+            "desc": "Provides data provider actions for reading and writing **ODP** (OpenDocument "
+                "Presentation) files, the native presentation format for LibreOffice Impress and part of "
+                "the OASIS OpenDocument standard.\n\n"
+                "## Supported Operations\n\n"
+                "- **Read slides**: iterate over slides extracting title, body text, speaker notes, and "
+                "layout information\n"
+                "- **Read tables**: extract tabular data from tables embedded in slides with automatic or "
+                "explicit header detection\n"
+                "- **Write slides**: generate presentations with title, body, and speaker notes per slide\n"
+                "- **Write tables**: create presentations containing tabular data with column headers\n\n"
+                "## Key Features\n\n"
+                "- Slide-by-slide iteration with structured field extraction\n"
+                "- Title, body text, and speaker notes parsing\n"
+                "- Table support for reading and writing structured data on slides\n"
+                "- Binary data input/output for in-memory processing\n"
+                "- File path and stream-based I/O\n\n"
+                "## Business Use Cases\n\n"
+                "- Extracting presentation content for indexing or analysis\n"
+                "- Processing slide decks in automated workflows\n"
+                "- Generating ODP presentations from structured data\n"
+                "- Converting presentation content to other formats",
+            "groups": (DataProvider::AppGroup::Documents,),
+            "logo": OdpLogo,
+            "logo_file_name": "odp-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdpDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "display_name": "Read ODP Presentation File",
+            "short_desc": "Read ODP presentation from a specific file location",
+            "desc": "Reads an ODP presentation from a file at the given `path` and returns structured "
+                "data for each slide or table row.\n\n"
+                "## Key Options\n\n"
+                "- `path`: the file location of the ODP presentation to read (required)\n"
+                "- `content_type`: set to `slides` (default) to iterate slides, or `table` to read "
+                "tabular data from a slide\n"
+                "- `slide_index`: 0-based slide index when reading a table\n"
+                "- `table_index`: 0-based table index on the target slide\n"
+                "- `header_row`: if `true`, the first table row is treated as column headers\n\n"
+                "Each slide record includes `title`, `body`, `notes`, `layout`, and `slide_number` "
+                "fields.",
+            "action_code": DPAT_FIND,
+            "cls": "OdpDataProvider::OdpReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdpReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdpReadDataProvider::ConstructorOptions{"content_type", "slide_index", "table_index",
+                    "header_row"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdpReadDataProvider::ConstructorOptions - ("path", "content_type", "slide_index", "table_index",
+                    "header_row", "stream", "data"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdpDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "display_name": "Read ODP Presentation Inline Data",
+            "short_desc": "Read ODP presentation inline data",
+            "desc": "Reads an ODP presentation from inline binary `data` and returns structured "
+                "data for each slide or table row.\n\n"
+                "## Key Options\n\n"
+                "- `data`: the ODP presentation binary data to process (required)\n"
+                "- `content_type`: set to `slides` (default) to iterate slides, or `table` to read "
+                "tabular data from a slide\n"
+                "- `slide_index`: 0-based slide index when reading a table\n"
+                "- `table_index`: 0-based table index on the target slide\n"
+                "- `header_row`: if `true`, the first table row is treated as column headers\n\n"
+                "Useful for processing ODP presentations already loaded in memory without writing to "
+                "disk first.",
+            "action_code": DPAT_FIND,
+            "cls": "OdpDataProvider::OdpReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdpReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdpReadDataProvider::ConstructorOptions{"content_type", "slide_index", "table_index",
+                    "header_row"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdpReadDataProvider::ConstructorOptions - ("path", "content_type", "slide_index", "table_index",
+                    "header_row", "stream", "data"), {
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdpDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "display_name": "Write ODP Presentation File",
+            "short_desc": "Write data to an ODP presentation file",
+            "desc": "Creates an ODP presentation file at the given `path` from records written via "
+                "the data provider API.\n\n"
+                "## Key Options\n\n"
+                "- `path`: the output file location for the ODP presentation (required)\n"
+                "- `content_type`: set to `slides` (default) to write slide records, or `table` to "
+                "write tabular data\n"
+                "- `headers`: explicit list of column headers for table mode\n"
+                "- `title`: optional presentation title; adds a title-only first slide in `slides` "
+                "mode or sets the table slide title in `table` mode\n\n"
+                "For slides, each record should contain `title`, `body`, and optionally `notes` and "
+                "`layout` fields.",
+            "action_code": DPAT_CREATE,
+            "cls": "OdpDataProvider::OdpWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdpWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdpWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdpDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "display_name": "Create ODP Presentation Data",
+            "short_desc": "Create ODP presentation data and return as binary",
+            "desc": "Creates an ODP presentation in memory and returns it as binary data, without "
+                "writing to disk.\n\n"
+                "## Key Options\n\n"
+                "- `content_type`: set to `slides` (default) to write slide records, or `table` to "
+                "write tabular data\n"
+                "- `headers`: explicit list of column headers for table mode\n"
+                "- `title`: optional presentation title\n\n"
+                "Useful for generating ODP presentations dynamically in workflows where the output is "
+                "sent to a downstream system or returned as a response rather than saved to a file.",
+            "action_code": DPAT_CREATE,
+            "cls": "OdpDataProvider::OdpWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OdpWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage OdpDataProvider Module
+
+    @tableofcontents
+
+    @section OdpDataProviderintro Introduction to the OdpDataProvider Module
+
+    The %OdpDataProvider module provides a data provider API for reading and writing ODP
+    (OpenDocument Presentation) files through the @ref dataproviderintro "DataProvider" API.
+    ODP is the native presentation format for LibreOffice Impress and other OpenDocument-compatible
+    applications.
+
+    The following classes are provided by this module:
+    - @ref OdpDataProvider::OdpReadDataProvider "OdpReadDataProvider" - for reading ODP presentations
+    - @ref OdpDataProvider::OdpReadDataProviderFactory "OdpReadDataProviderFactory" - factory for read providers
+    - @ref OdpDataProvider::OdpWriteDataProvider "OdpWriteDataProvider" - for writing ODP presentations
+    - @ref OdpDataProvider::OdpWriteDataProviderFactory "OdpWriteDataProviderFactory" - factory for write providers
+
+    @section OdpDataProvider_reading Reading ODP Presentations
+
+    @subsection OdpDataProvider_reading_slides Reading Slides
+
+    @code{.py}
+    %requires OdpDataProvider
+
+    # Read slides from a file path
+    OdpReadDataProvider dp("presentation.odp", {"content_type": "slides"});
+    list<hash<auto>> slides = map $1, dp.searchRecords();
+
+    # Each record has:
+    # - "slide_number": The 1-based slide number
+    # - "title": The slide title text
+    # - "body": The slide body text (non-title text shapes)
+    # - "notes": Speaker notes text
+    # - "layout": The slide layout name
+    @endcode
+
+    @subsection OdpDataProvider_reading_tables Reading Tables
+
+    @code{.py}
+    %requires OdpDataProvider
+
+    # Read table data from a slide
+    OdpReadDataProvider dp("presentation.odp", {
+        "content_type": "table",
+        "slide_index": 0,       # First slide (0-based)
+        "table_index": 0,       # First table on the slide (0-based)
+        "header_row": True,     # First row contains headers
+    });
+    list<hash<auto>> rows = map $1, dp.searchRecords();
+
+    # Read with explicit headers
+    OdpReadDataProvider dp2("presentation.odp", {
+        "content_type": "table",
+        "headers": ("Name", "Department", "Salary"),
+    });
+    @endcode
+
+    @subsection OdpDataProvider_reading_options Read Options
+
+    - \c path: Path to the ODP file
+    - \c stream: Input stream for ODP data
+    - \c data: Binary ODP data
+    - \c content_type: "slides" (default) or "table"
+    - \c slide_index: Index of slide for table mode (0-based)
+    - \c table_index: Index of table on the slide (0-based, for table mode)
+    - \c header_row: If \c True, first row of table contains headers
+    - \c headers: List of header names to use
+
+    @section OdpDataProvider_writing Writing ODP Presentations
+
+    @subsection OdpDataProvider_writing_slides Writing Slides
+
+    @code{.py}
+    %requires OdpDataProvider
+
+    # Write slides to a file
+    OdpWriteDataProvider dp("output.odp", {
+        "content_type": "slides",
+        "title": "My Presentation",
+    });
+
+    dp.createRecord({"title": "Introduction", "body": "Welcome to the presentation"});
+    dp.createRecord({"title": "Main Content", "body": "Here is the main content"});
+    dp.createRecord({"title": "Conclusion", "body": "Thank you!", "notes": "Remember to summarize"});
+
+    dp.commit();  # Write the file
+    @endcode
+
+    @subsection OdpDataProvider_writing_tables Writing Tables
+
+    @code{.py}
+    %requires OdpDataProvider
+
+    # Write table data to a presentation
+    OdpWriteDataProvider dp("output.odp", {
+        "content_type": "table",
+        "headers": ("Name", "Department", "Salary"),
+        "title": "Employee Directory",
+    });
+
+    dp.createRecord({"Name": "Alice Smith", "Department": "Engineering", "Salary": "75000"});
+    dp.createRecord({"Name": "Bob Johnson", "Department": "Marketing", "Salary": "65000"});
+
+    dp.commit();  # Write the file
+    @endcode
+
+    @subsection OdpDataProvider_writing_binary Writing to Binary
+
+    @code{.py}
+    %requires OdpDataProvider
+
+    # Create presentation in memory
+    OdpWriteDataProvider dp({
+        "content_type": "slides",
+    });
+
+    dp.createRecord({"title": "Slide 1", "body": "Content"});
+
+    # Get binary data instead of writing to file
+    binary data = dp.getData();
+    @endcode
+
+    @subsection OdpDataProvider_writing_options Write Options
+
+    - \c path: Output file path
+    - \c stream: Output stream
+    - \c content_type: "slides" (default) or "table"
+    - \c headers: List of column headers (for table mode)
+    - \c title: Optional presentation title
+
+    @section OdpDataProvider_layouts Slide Layouts
+
+    When writing slides, the following layout names are supported:
+    - \c "TITLE_AND_CONTENT": Standard slide with title and content area (default)
+    - \c "TITLE_ONLY": Slide with title only
+    - \c "BLANK": Empty slide
+    - \c "SECTION_HEADER": Section divider slide
+
+    @section OdpDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c ODP-READ-OPTION-ERROR: Invalid read options or option conflicts
+    - \c ODP-WRITE-OPTION-ERROR: Invalid write options or option conflicts
+
+    @section OdpDataProvider_relnotes Release Notes
+
+    @subsection OdpDataProvider_v1_0 OdpDataProvider v1.0
+    - initial release of the module
+    - support for reading ODP presentations (.odp format)
+    - support for writing ODP presentations (.odp format)
+    - slides and table read/write modes
+    - speaker notes support
+    - slide layout support
+    - header row detection for tables
+    - binary data input/output support
+*/
+
+#! contains all public definitions in the OdpDataProvider module
+public namespace OdpDataProvider {
+#! Application name
+public const AppName = "ODP";
+}
+
+namespace Priv {
+#! ODP logo
+const OdpLogo = File::readTextFile(get_script_dir() + "/odp-logo.svg");
+}

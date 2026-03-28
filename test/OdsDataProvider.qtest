@@ -1,0 +1,735 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  OdsDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+
+# Add classpaths for ODFDOM and the test helper BEFORE loading OdsDataProvider
+# so they share the same classloader context
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/qore-dataprovider-ods.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/odfdom-java-0.13.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/xercesImpl-2.12.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/serializer-2.7.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-lang3-3.20.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-logging-1.3.5.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-collections-3.2.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-collections4-4.4.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-csv-1.10.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-validator-1.10.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-beanutils-1.11.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-digester-2.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/commons-cli-1.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/slf4j-api-1.7.30.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/json-20251224.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/bcprov-jdk18on-1.83.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/caffeine-3.1.8.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/checker-qual-3.37.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/error_prone_annotations-2.21.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/collection-0.7.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/java-rdfa-1.0.0-BETA1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/jena-core-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/jena-base-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/jena-iri-4.10.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/RoaringBitmap-1.0.0.jar
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsTestHelper
+
+%requires ../qlib/OdsDataProvider
+
+%exec-class OdsDataProviderTest
+
+public class OdsDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("OdsDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/ods-test-data";
+
+        addTestCase("test setup", \testSetup());
+        addTestCase("basic read from path", \testBasicReadPath());
+        addTestCase("read from stream", \testReadStream());
+        addTestCase("read from binary data", \testReadBinaryData());
+        addTestCase("header_cells option", \testHeaderCells());
+        addTestCase("data_cells option", \testDataCells());
+        addTestCase("headers option", \testHeaders());
+        addTestCase("header_names option", \testHeaderNames());
+        addTestCase("tolwr option", \testTolwr());
+        addTestCase("timezone option", \testTimezone());
+        addTestCase("worksheet option", \testWorksheet());
+        addTestCase("cell range parsing", \testCellRangeParsing());
+        addTestCase("data types", \testDataTypes());
+        addTestCase("multi-sheet navigation", \testMultiSheet());
+        addTestCase("factory tests", \testFactory());
+        addTestCase("negative: invalid path", \testNegativeInvalidPath());
+        addTestCase("negative: invalid worksheet", \testNegativeInvalidWorksheet());
+        addTestCase("negative: invalid cell range", \testNegativeInvalidCellRange());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("edge case: empty worksheet", \testEdgeCaseEmptyWorksheet());
+        addTestCase("edge case: no headers", \testEdgeCaseNoHeaders());
+        addTestCase("edge case: special characters", \testEdgeCaseSpecialChars());
+        addTestCase("write: basic file write", \testWriteBasic());
+        addTestCase("write: with headers", \testWriteWithHeaders());
+        addTestCase("write: to binary data", \testWriteToBinary());
+        addTestCase("write: factory", \testWriteFactory());
+        addTestCase("write: data only (no path/stream)", \testWriteDataOnly());
+        addTestCase("write: negative - path+stream conflict", \testWriteNegativePathStreamConflict());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("roundtrip: write and read", \testRoundtrip());
+
+        set_return_value(main());
+    }
+
+    testSetup() {
+        # Create test data directory and files
+        if (!is_dir(test_data_dir)) {
+            mkdir(test_data_dir);
+        }
+
+        # Create all test ODS files
+        OdsTestHelper::createSimpleOds(test_data_dir + "/simple.ods");
+        OdsTestHelper::createMultiSheetOds(test_data_dir + "/multi-sheet.ods");
+        OdsTestHelper::createDatesOds(test_data_dir + "/dates.ods");
+        OdsTestHelper::createEmptyOds(test_data_dir + "/empty.ods");
+        OdsTestHelper::createNoHeadersOds(test_data_dir + "/no-headers.ods");
+        OdsTestHelper::createSpecialCharsOds(test_data_dir + "/special-chars.ods");
+        OdsTestHelper::createMixedCaseHeadersOds(test_data_dir + "/mixed-case-headers.ods");
+        OdsTestHelper::createOffsetDataOds(test_data_dir + "/offset-data.ods");
+        OdsTestHelper::createDataTypesOds(test_data_dir + "/data-types.ods");
+
+        assertTrue(is_file(test_data_dir + "/simple.ods"), "simple.ods created");
+    }
+
+    testBasicReadPath() {
+        OdsReadDataProvider dp(test_data_dir + "/simple.ods", {
+            "header_names": True,
+        });
+
+        assertEq("OdsReadDataProvider", dp.getInfo().type);
+        assertTrue(dp.getInfo().supports_read);
+        assertTrue(dp.getInfo().has_record);
+
+        # Read all records
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 data rows");
+        assertEq("Alice", records[0].Name);
+        assertEq(30.0, records[0].Age);
+        assertEq("New York", records[0].City);
+
+        assertEq("Bob", records[1].Name);
+        assertEq(25.0, records[1].Age);
+
+        assertEq("Charlie", records[2].Name);
+        assertEq(35.0, records[2].Age);
+    }
+
+    testReadStream() {
+        FileInputStream fis(test_data_dir + "/simple.ods");
+        OdsReadDataProvider dp(fis, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Alice", records[0].Name);
+    }
+
+    testReadBinaryData() {
+        binary data = OdsTestHelper::createSimpleOdsBytes();
+
+        OdsReadDataProvider dp({
+            "data": data,
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 data rows");
+        assertEq("Alice", records[0].Name);
+        assertEq(30.0, records[0].Age);
+    }
+
+    testHeaderCells() {
+        # Test with explicit header cells range
+        OdsReadDataProvider dp(test_data_dir + "/offset-data.ods", {
+            "header_cells": "b3",
+            "data_cells": "b4:d5",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("A", records[0].Col1);
+        assertEq("B", records[0].Col2);
+        assertEq("C", records[0].Col3);
+        assertEq("D", records[1].Col1);
+    }
+
+    testDataCells() {
+        OdsReadDataProvider dp(test_data_dir + "/simple.ods", {
+            "header_cells": "a1:c1",
+            "data_cells": "a2:c3",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        # Should only get 2 rows due to data_cells limit
+        assertEq(2, records.size());
+        assertEq("Alice", records[0].Name);
+        assertEq("Bob", records[1].Name);
+    }
+
+    testHeaders() {
+        OdsReadDataProvider dp(test_data_dir + "/no-headers.ods", {
+            "headers": ("Field1", "Field2", "Field3"),
+            "data_cells": "a1",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("value1", records[0].Field1);
+        assertEq(100.0, records[0].Field2);
+        assertTrue(records[0].Field3);
+    }
+
+    testHeaderNames() {
+        # When header_names is true without header_cells, should default to row 1
+        OdsReadDataProvider dp(test_data_dir + "/simple.ods", {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertTrue(records[0].hasKey("Name"), "should have Name header");
+        assertEq("Alice", records[0].Name);
+    }
+
+    testTolwr() {
+        OdsReadDataProvider dp(test_data_dir + "/mixed-case-headers.ods", {
+            "header_names": True,
+            "tolwr": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size());
+        # Headers should be converted to lowercase
+        assertTrue(records[0].hasKey("firstname"), "should have lowercase header 'firstname'");
+        assertTrue(records[0].hasKey("last_name"), "should have lowercase header 'last_name'");
+        assertTrue(records[0].hasKey("email_address"), "should have lowercase header 'email_address'");
+        assertEq("John", records[0].firstname);
+    }
+
+    testTimezone() {
+        OdsReadDataProvider dp(test_data_dir + "/dates.ods", {
+            "header_names": True,
+            "timezone": "America/New_York",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertTrue(records[0].Date instanceof date, "Date should be a date type");
+    }
+
+    testWorksheet() {
+        OdsReadDataProvider dp(test_data_dir + "/multi-sheet.ods", {
+            "worksheet": "Products",
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size());
+        assertEq("A001", records[0].SKU);
+        assertEq("Widget", records[0].Product);
+    }
+
+    testCellRangeParsing() {
+        # Test parseRange
+        hash<OdsCellRangeInfo> range = OdsReadDataProvider::parseRange("a1:e10");
+        assertEq("a", range.start.column);
+        assertEq(1, range.start.row);
+        assertEq("e", range.end.column);
+        assertEq(10, range.end.row);
+
+        # Test single cell (becomes a range with special end marker)
+        range = OdsReadDataProvider::parseRange("b5");
+        assertEq("b", range.start.column);
+        assertEq(5, range.start.row);
+        assertEq("-", range.end.column);
+        assertEq(-1, range.end.row);
+
+        # Test row-only range
+        range = OdsReadDataProvider::parseRange("1:5");
+        assertEq("-", range.start.column);
+        assertEq(1, range.start.row);
+        assertEq("-", range.end.column);
+        assertEq(5, range.end.row);
+
+        # Test parseCellLocation
+        hash<OdsCellLocationInfo> loc = OdsReadDataProvider::parseCellLocation("c3");
+        assertEq("c", loc.column);
+        assertEq(3, loc.row);
+    }
+
+    testDataTypes() {
+        OdsReadDataProvider dp(test_data_dir + "/data-types.ods", {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+
+        # Check first row data types
+        assertEq("text", records[0].String);
+        assertEq(42.0, records[0].Integer);
+        assertEq(Type::Float, records[0].Float.type());
+        assertTrue(abs(records[0].Float - 3.14159) < 0.0001, "Float value should be approximately 3.14159");
+        assertTrue(records[0].Boolean);
+        assertTrue(records[0].Date instanceof date, "Date should be a date type");
+
+        # Check second row
+        assertEq("another", records[1].String);
+        assertFalse(records[1].Boolean);
+    }
+
+    testMultiSheet() {
+        OdsReadDataProvider dp(test_data_dir + "/multi-sheet.ods", {
+            "header_names": True,
+        });
+
+        # Get child provider names (worksheets)
+        *list<string> sheets = dp.getChildProviderNames();
+
+        assertEq(3, sheets.size(), "should have 3 worksheets");
+        assertTrue(sheets.contains("Users"), "should contain 'Users' sheet");
+        assertTrue(sheets.contains("Products"), "should contain 'Products' sheet");
+        assertTrue(sheets.contains("Orders"), "should contain 'Orders' sheet");
+
+        # Get specific child provider - note: child providers need header_names option too
+        *AbstractDataProvider child = dp.getChildProvider("Products");
+        assertTrue(exists child, "should get Products child provider");
+
+        # The child provider already has the options from the parent
+        list<hash<auto>> records = map $1, child.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Widget", records[0].Product);
+    }
+
+    testFactory() {
+        OdsReadDataProviderFactory factory();
+
+        assertEq("odsread", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": test_data_dir + "/simple.ods",
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(3, records.size());
+    }
+
+    testNegativeInvalidPath() {
+        # Invalid path should throw an exception
+        bool threw = False;
+        try {
+            OdsReadDataProvider dp("/nonexistent/path/to/file.ods");
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.desc.contains("No such file") || ex.desc.contains("FileNotFoundException"),
+                "should mention file not found");
+        }
+        assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    testNegativeInvalidWorksheet() {
+        # Invalid worksheet should throw an exception
+        bool threw = False;
+        try {
+            OdsReadDataProvider dp(test_data_dir + "/simple.ods", {
+                "worksheet": "NonexistentSheet",
+            });
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.desc.contains("unknown"), "should mention unknown sheet");
+        }
+        assertTrue(threw, "should throw exception for invalid worksheet");
+    }
+
+    testNegativeInvalidCellRange() {
+        # Invalid range format
+        assertThrows("ODS-INVALID-LOCATION", sub () {
+            OdsReadDataProvider::parseRange("invalid");
+        });
+
+        # Start after end
+        assertThrows("ODS-INVALID-LOCATION", sub () {
+            OdsReadDataProvider::parseRange("e1:a1");
+        });
+
+        # Invalid row number
+        assertThrows("ODS-INVALID-LOCATION", sub () {
+            OdsReadDataProvider::parseCellLocation("a0");
+        });
+    }
+
+    testNegativeOptionConflicts() {
+        # Test headers and header_names conflict
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsReadDataProvider dp({
+                "path": test_data_dir + "/simple.ods",
+                "headers": ("A", "B", "C"),
+                "header_names": True,
+            });
+        });
+
+        # Test path and stream conflict
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.ods");
+            OdsReadDataProvider dp({
+                "path": test_data_dir + "/simple.ods",
+                "stream": fis,
+            });
+        });
+
+        # Test path and data conflict
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsReadDataProvider dp({
+                "path": test_data_dir + "/simple.ods",
+                "data": <abcd>,
+            });
+        });
+    }
+
+    testEdgeCaseEmptyWorksheet() {
+        OdsReadDataProvider dp(test_data_dir + "/empty.ods");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "empty worksheet should return no records");
+    }
+
+    testEdgeCaseNoHeaders() {
+        # Without headers option, we need to specify data_cells to tell where data starts
+        # Since no-headers.ods has raw data starting from row 1
+        OdsReadDataProvider dp(test_data_dir + "/no-headers.ods", {
+            "data_cells": "a1",
+            "headers": ("Col1", "Col2", "Col3"),
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("value1", records[0].Col1);
+        assertEq(100.0, records[0].Col2);
+    }
+
+    testEdgeCaseSpecialChars() {
+        OdsReadDataProvider dp(test_data_dir + "/special-chars.ods", {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Cafe", records[0].Name);
+        assertEq("Tokyo", records[1].Name);
+        assertEq("He said \"hello\"", records[2].Description);
+    }
+
+    testWriteBasic() {
+        string output_path = test_data_dir + "/write-test.ods";
+        on_exit unlink(output_path);
+
+        OdsWriteDataProvider dp(output_path, {
+            "worksheet": "TestSheet",
+        });
+
+        # Write some records
+        dp.createRecord({"Name": "Alice", "Age": 30, "Active": True});
+        dp.createRecord({"Name": "Bob", "Age": 25, "Active": False});
+
+        # Commit to write the file
+        dp.commit();
+
+        # Read back and verify
+        OdsReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("Alice", records[0].Name);
+        assertEq(30.0, records[0].Age);
+        assertTrue(records[0].Active);
+        assertEq("Bob", records[1].Name);
+        assertFalse(records[1].Active);
+    }
+
+    testWriteWithHeaders() {
+        string output_path = test_data_dir + "/write-headers-test.ods";
+        on_exit unlink(output_path);
+
+        OdsWriteDataProvider dp(output_path, {
+            "headers": ("FirstName", "LastName", "Score"),
+        });
+
+        dp.createRecord({"FirstName": "John", "LastName": "Doe", "Score": 95.5});
+        dp.createRecord({"FirstName": "Jane", "LastName": "Smith", "Score": 87.3});
+
+        dp.commit();
+
+        # Verify with read
+        OdsReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+        assertTrue(records[0].hasKey("FirstName"), "should have predefined header");
+        assertEq("John", records[0].FirstName);
+        assertEq(95.5, records[0].Score);
+    }
+
+    testWriteToBinary() {
+        OdsWriteDataProvider dp({
+            "path": test_data_dir + "/write-binary-test.ods",
+        });
+
+        dp.createRecord({"Key": "value1", "Number": 100});
+        dp.createRecord({"Key": "value2", "Number": 200});
+
+        # Get data as binary before commit
+        binary data = dp.getData();
+
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Read back from binary
+        OdsReadDataProvider rdp({
+            "data": data,
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("value1", records[0].Key);
+    }
+
+    testWriteFactory() {
+        string output_path = test_data_dir + "/write-factory-test.ods";
+        on_exit unlink(output_path);
+
+        OdsWriteDataProviderFactory factory();
+
+        assertEq("odswrite", factory.getInfo().name);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": output_path,
+            "worksheet": "FactorySheet",
+        });
+
+        dp.createRecord({"Test": "factory"});
+        dp.commit();
+
+        # Verify can read back
+        OdsReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("factory", records[0].Test);
+    }
+
+    testWriteDataOnly() {
+        # Test creating a provider without path or stream (for write-data action use case)
+        OdsWriteDataProvider dp({
+            "worksheet": "DataSheet",
+            "headers": ("Name", "Value"),
+        });
+
+        assertEq("ods-data", dp.getName());
+
+        # Write records
+        dp.createRecord({"Name": "item1", "Value": 100});
+        dp.createRecord({"Name": "item2", "Value": 200});
+
+        # Get binary data
+        binary data = dp.getData();
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Verify by reading back
+        OdsReadDataProvider rdp({
+            "data": data,
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("item1", records[0].Name);
+        assertEq(100.0, records[0].Value);
+        assertEq("item2", records[1].Name);
+        assertEq(200.0, records[1].Value);
+    }
+
+    testWriteNegativePathStreamConflict() {
+        # Test path constructor with stream option
+        assertThrows("ODS-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            OdsWriteDataProvider dp(test_data_dir + "/test.ods", {
+                "stream": sos,
+            });
+        });
+
+        # Test path constructor with path option
+        assertThrows("ODS-WRITE-OPTION-ERROR", sub () {
+            OdsWriteDataProvider dp(test_data_dir + "/test.ods", {
+                "path": test_data_dir + "/other.ods",
+            });
+        });
+
+        # Test stream constructor with path option
+        assertThrows("ODS-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            OdsWriteDataProvider dp(sos, {
+                "path": test_data_dir + "/test.ods",
+            });
+        });
+
+        # Test stream constructor with stream option
+        assertThrows("ODS-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            StringOutputStream sos2();
+            OdsWriteDataProvider dp(sos, {
+                "stream": sos2,
+            });
+        });
+
+        # Test options constructor with both path and stream
+        assertThrows("ODS-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            OdsWriteDataProvider dp({
+                "path": test_data_dir + "/test.ods",
+                "stream": sos,
+            });
+        });
+
+        # Note: options constructor with neither path nor stream is now valid
+        # for the write-data use case (user calls getData() to get binary)
+    }
+
+    testActionRegistration() {
+        # Verify that actions are properly registered with correct properties
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("ODS");
+        assertTrue(exists actions, "should have actions registered for ODS app");
+        assertTrue(actions.size() >= 4, "should have at least 4 actions (read, read-data, write, write-data)");
+
+        # Create a lookup hash for easier testing
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # Verify read action
+        assertTrue(action_map.hasKey("read"), "should have 'read' action");
+        assertEq("Read ODS Spreadsheet File", action_map."read".display_name);
+        assertTrue(action_map."read".options.hasKey("path"), "read action should have 'path' option");
+        assertTrue(action_map."read".options.hasKey("header_names"), "read action should have 'header_names' option");
+
+        # Verify read-data action
+        assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
+        assertEq("Read ODS Spreadsheet Inline Data", action_map."read-data".display_name);
+        assertTrue(action_map."read-data".options.hasKey("data"), "read-data action should have 'data' option");
+
+        # Verify write action
+        assertTrue(action_map.hasKey("write"), "should have 'write' action");
+        assertEq("Write ODS Spreadsheet File", action_map."write".display_name);
+        assertTrue(action_map."write".options.hasKey("path"), "write action should have 'path' option");
+        assertTrue(action_map."write".options.hasKey("headers"), "write action should have 'headers' option");
+
+        # Verify write-data action
+        assertTrue(action_map.hasKey("write-data"), "should have 'write-data' action");
+        assertEq("Create ODS Spreadsheet Data", action_map."write-data".display_name);
+        assertFalse(action_map."write-data".options.hasKey("path"), "write-data action should NOT have 'path' option");
+        assertTrue(action_map."write-data".options.hasKey("headers"), "write-data action should have 'headers' option");
+    }
+
+    testRoundtrip() {
+        string output_path = test_data_dir + "/roundtrip-test.ods";
+        on_exit unlink(output_path);
+
+        # Write complex data
+        OdsWriteDataProvider wdp(output_path, {
+            "headers": ("Name", "Amount", "Date", "Active"),
+        });
+
+        date d = 2025-06-15T10:30:00Z;
+
+        wdp.createRecord({"Name": "Item1", "Amount": 99.99, "Date": d, "Active": True});
+        wdp.createRecord({"Name": "Item2", "Amount": 50.00, "Date": d, "Active": False});
+        wdp.createRecord({"Name": "Item3", "Amount": 0.01, "Date": d, "Active": True});
+
+        wdp.commit();
+
+        # Read back all data
+        OdsReadDataProvider rdp(output_path, {
+            "header_names": True,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Item1", records[0].Name);
+        assertEq(99.99, records[0].Amount);
+        assertTrue(records[0].Active);
+        assertEq("Item2", records[1].Name);
+        assertFalse(records[1].Active);
+        assertEq("Item3", records[2].Name);
+        assertEq(0.01, records[2].Amount);
+    }
+}

@@ -257,6 +257,95 @@ add_custom_target(qore-powerpoint-jar
 # install the PowerPoint jar file manually
 install(FILES ${POWERPOINT_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/PowerPointDataProvider/jar)
 
+# ODS data provider jar
+set(ODS_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-ods.jar)
+set(ODS_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/odfdom-java-0.13.0.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/xercesImpl-2.12.2.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/serializer-2.7.3.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/commons-lang3-3.20.0.jar)
+set(ODS_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(ODS_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/)
+set(ODS_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${ODS_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${ODS_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-ods ${ODS_JAR} ${ODS_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${ODS_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${ODS_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/
+    DEPENDS ${module_name} ${ODS_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-ods-jar
+    DEPENDS ${ODS_JAR}
+)
+
+# install the ODS jar file manually
+install(FILES ${ODS_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/OdsDataProvider/jar)
+
+# ODT data provider jar
+set(ODT_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-odt.jar)
+set(ODT_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/odfdom-java-0.13.0.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/xercesImpl-2.12.2.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/serializer-2.7.3.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/commons-lang3-3.20.0.jar)
+set(ODT_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(ODT_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/odt/)
+set(ODT_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/odt/OdtIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/odt/OdtWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/odt/OdtTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${ODT_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${ODT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-odt ${ODT_JAR} ${ODT_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${ODT_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/OdtDataProvider/jar
+    COMMAND ${CMAKE_COMMAND} -E copy ${ODT_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdtDataProvider/jar/
+    DEPENDS ${module_name} ${ODT_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-odt-jar
+    DEPENDS ${ODT_JAR}
+)
+
+# install the ODT jar file manually
+install(FILES ${ODT_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/OdtDataProvider/jar)
+
+# ODP data provider jar
+set(ODP_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-odp.jar)
+set(ODP_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/odfdom-java-0.13.0.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/xercesImpl-2.12.2.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/serializer-2.7.3.jar:${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/commons-lang3-3.20.0.jar)
+set(ODP_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(ODP_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/odp/)
+set(ODP_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/odp/OdpIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/odp/OdpWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/odp/OdpTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${ODP_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${ODP_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-odp ${ODP_JAR} ${ODP_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${ODP_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/OdpDataProvider/jar
+    COMMAND ${CMAKE_COMMAND} -E copy ${ODP_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdpDataProvider/jar/
+    DEPENDS ${module_name} ${ODP_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-odp-jar
+    DEPENDS ${ODP_JAR}
+)
+
+# install the ODP jar file manually
+install(FILES ${ODP_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/OdpDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -631,6 +720,9 @@ set(QMOD
     qlib/JakartaJmsDataProvider
     qlib/WordDataProvider
     qlib/PowerPointDataProvider
+    qlib/OdsDataProvider
+    qlib/OdtDataProvider
+    qlib/OdpDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -680,6 +772,9 @@ qore_external_user_module("qlib/KafkaDataProvider" "")
 qore_external_user_module("qlib/JakartaJmsDataProvider" "")
 qore_external_user_module("qlib/WordDataProvider" "")
 qore_external_user_module("qlib/PowerPointDataProvider" "")
+qore_external_user_module("qlib/OdsDataProvider" "")
+qore_external_user_module("qlib/OdtDataProvider" "")
+qore_external_user_module("qlib/OdpDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 
