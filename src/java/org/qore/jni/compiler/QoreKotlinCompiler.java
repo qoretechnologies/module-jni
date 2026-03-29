@@ -163,10 +163,16 @@ public class QoreKotlinCompiler implements AutoCloseable {
                     classpath.append(File.pathSeparator).append(qoreJniJar);
                 }
             }
-            // Also check standard install location
-            String stdJniJar = "/usr/share/qore/java/qore-jni.jar";
-            if (new File(stdJniJar).exists()) {
-                classpath.append(File.pathSeparator).append(stdJniJar);
+            // Also check standard install locations
+            for (String stdPath : new String[]{
+                "/usr/share/qore/java/qore-jni.jar",
+                "/usr/local/share/qore/java/qore-jni.jar",
+                "/opt/share/qore/java/qore-jni.jar",
+            }) {
+                if (new File(stdPath).exists()) {
+                    classpath.append(File.pathSeparator).append(stdPath);
+                    break;
+                }
             }
 
             // Add kotlin-stdlib to classpath
