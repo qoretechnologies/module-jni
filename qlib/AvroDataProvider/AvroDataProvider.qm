@@ -170,7 +170,7 @@ module AvroDataProvider {
 
     @tableofcontents
 
-    @section AvroDataProviderintro Introduction to the AvroDataProvider Module
+    @section avrodataproviderintro Introduction to the AvroDataProvider Module
 
     The %AvroDataProvider module provides a data provider API for reading and writing Apache Avro data files
     through the @ref dataproviderintro "DataProvider" API. It supports the Avro 1.12.0 format using the

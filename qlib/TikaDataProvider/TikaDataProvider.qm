@@ -161,7 +161,7 @@ module TikaDataProvider {
 
     @tableofcontents
 
-    @section TikaDataProviderintro Introduction to the TikaDataProvider Module
+    @section tikadataproviderintro Introduction to the TikaDataProvider Module
 
     The %TikaDataProvider module provides a data provider API for universal content detection and text
     extraction through the @ref dataproviderintro "DataProvider" API using

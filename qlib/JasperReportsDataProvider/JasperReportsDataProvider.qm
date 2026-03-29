@@ -132,7 +132,7 @@ module JasperReportsDataProvider {
 
     @tableofcontents
 
-    @section JasperReportsDataProviderintro Introduction to the JasperReportsDataProvider Module
+    @section jasperreportsdataproviderintro Introduction to the JasperReportsDataProvider Module
 
     The %JasperReportsDataProvider module provides a data provider API for generating reports from
     JasperReports templates through the @ref dataproviderintro "DataProvider" API. It supports
