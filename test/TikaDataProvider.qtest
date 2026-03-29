@@ -1,0 +1,191 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  TikaDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+# Add classpaths BEFORE module requires
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/qore-dataprovider-tika.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/commons-codec-1.17.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/commons-csv-1.12.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/commons-io-2.17.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/jsoup-1.18.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/juniversalchardet-2.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/slf4j-api-2.0.16.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/tika-core-3.0.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/tika-parser-html-module-3.0.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/tika-parser-text-module-3.0.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/tika-parser-xml-module-3.0.0.jar
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/TikaDataProvider
+
+%module-cmd(jni) import org.qore.dataprovider.tika.TikaTestHelper
+
+%exec-class TikaDataProviderTest
+
+public class TikaDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("TikaDataProviderTest", "1.0", \ARGV) {
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/tika-test-data";
+
+        addTestCase("extract HTML", \testExtractHtml());
+        addTestCase("extract XML", \testExtractXml());
+        addTestCase("extract plain text", \testExtractPlainText());
+        addTestCase("extract from binary data", \testExtractFromBinary());
+        addTestCase("extract from file path", \testExtractFromFilePath());
+        addTestCase("content type detection", \testContentTypeDetection());
+        addTestCase("metadata extraction", \testMetadataExtraction());
+        addTestCase("factory test", \testFactory());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("empty provider", \testEmptyProvider());
+        addTestCase("test helper", \testHelper());
+
+        set_return_value(main());
+    }
+
+    private testExtractHtml() {
+        binary htmlData = TikaTestHelper::createTestHtml();
+        TikaReadDataProvider dp({"data": htmlData});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+        assertTrue(records[0].content.find("Hello World") >= 0);
+        assertTrue(records[0].content_type.find("html") >= 0 || records[0].content_type.find("text") >= 0);
+        assertGt(0, records[0].content_length);
+    }
+
+    private testExtractXml() {
+        binary xmlData = TikaTestHelper::createTestXml();
+        TikaReadDataProvider dp({"data": xmlData});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+        assertTrue(records[0].content.find("Test Data") >= 0);
+        assertTrue(records[0].content_type.find("xml") >= 0);
+    }
+
+    private testExtractPlainText() {
+        binary textData = TikaTestHelper::createTestPlainText();
+        TikaReadDataProvider dp({"data": textData});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+        assertTrue(records[0].content.find("plain text test") >= 0);
+        assertTrue(records[0].content_type.find("text/plain") >= 0);
+    }
+
+    private testExtractFromBinary() {
+        binary data = binary("<html><body><p>Binary test</p></body></html>");
+        TikaReadDataProvider dp({"data": data});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+        assertTrue(records[0].content.find("Binary test") >= 0);
+    }
+
+    private testExtractFromFilePath() {
+        # Write a test file
+        string path = test_data_dir + "/test.html";
+        File f();
+        f.open(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("<html><body><h1>File Test</h1></body></html>");
+        f.close();
+        on_exit unlink(path);
+
+        TikaReadDataProvider dp(path);
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+        assertTrue(records[0].content.find("File Test") >= 0);
+    }
+
+    private testContentTypeDetection() {
+        # HTML detection
+        binary htmlData = TikaTestHelper::createTestHtml();
+        TikaReadDataProvider dp({"data": htmlData});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertTrue(records[0].content_type.val());
+
+        # XML detection
+        binary xmlData = TikaTestHelper::createTestXml();
+        TikaReadDataProvider dp2({"data": xmlData});
+        list<hash<auto>> records2 = map $1, dp2.searchRecords();
+        assertTrue(records2[0].content_type.val());
+    }
+
+    private testMetadataExtraction() {
+        binary htmlData = binary("<html><head><title>Meta Test</title></head><body>content</body></html>");
+        TikaReadDataProvider dp({"data": htmlData});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+        # metadata should be a hash
+        assertTrue(records[0].metadata instanceof hash);
+    }
+
+    private testFactory() {
+        TikaReadDataProviderFactory factory();
+        assertEq("tikaread", factory.getInfo().name);
+
+        binary data = TikaTestHelper::createTestPlainText();
+        AbstractDataProvider dp = factory.create({"data": data});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+    }
+
+    private testNegativeOptionConflicts() {
+        assertThrows("TIKA-READ-OPTION-ERROR", sub () {
+            binary data = TikaTestHelper::createTestHtml();
+            new TikaReadDataProvider({
+                "data": data,
+                "path": "/tmp/test.html",
+            });
+        });
+    }
+
+    private testActionRegistration() {
+        assertEq(True, DataProviderActionCatalog::getApp("Tika").val());
+    }
+
+    private testEmptyProvider() {
+        TikaReadDataProvider dp();
+        assertEq("tika", dp.getName());
+    }
+
+    private testHelper() {
+        binary html = TikaTestHelper::createTestHtml();
+        assertGt(0, html.size());
+
+        binary xml = TikaTestHelper::createTestXml();
+        assertGt(0, xml.size());
+
+        binary text = TikaTestHelper::createTestPlainText();
+        assertGt(0, text.size());
+    }
+}

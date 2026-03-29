@@ -1,0 +1,250 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore TikaDataProvider module definition
+
+/*  TikaDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-tika.jar
+%module-cmd(jni) add-relative-classpath ./jar/tika-core-3.0.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/tika-parser-html-module-3.0.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/tika-parser-text-module-3.0.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/tika-parser-xml-module-3.0.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-codec-1.17.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-csv-1.12.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-io-2.17.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/jsoup-1.18.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/juniversalchardet-2.5.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/slf4j-api-2.0.16.jar
+
+%module-cmd(jni) import org.qore.dataprovider.tika.TikaExtractor
+
+module TikaDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for universal content detection and extraction "
+        "using Apache Tika";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new TikaReadDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": TikaDataProvider::AppName,
+            "display_name": "Apache Tika",
+            "short_desc": "Universal content detection and extraction",
+            "desc": "Provides data provider operations for content detection and text extraction using "
+                "[Apache Tika](https://tika.apache.org/).\n\n"
+                "**Supported Operations**:\n"
+                "- **Extract** — extract text content, metadata, and MIME type from a file\n"
+                "- **Extract data** — extract from inline binary data\n"
+                "- **Detect** — detect the MIME type of a file without full extraction\n\n"
+                "**Key Features**:\n"
+                "- Automatic MIME type detection for hundreds of file formats\n"
+                "- Text extraction from HTML, XML, plain text, and more\n"
+                "- Rich metadata extraction (author, title, dates, etc.)\n"
+                "- File path, stream, and in-memory binary data support\n\n"
+                "**Business Use Cases**:\n"
+                "- Extracting searchable text from document files in automated workflows\n"
+                "- Detecting file types for content routing and validation\n"
+                "- Building document indexing and search pipelines",
+            "groups": (DataProvider::AppGroup::Documents,),
+            "logo": TikaLogo,
+            "logo_file_name": "tika-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TikaDataProvider::AppName,
+            "path": "/",
+            "action": "extract",
+            "display_name": "Extract Content from File",
+            "short_desc": "Extract text content and metadata from a file",
+            "desc": "Extracts text content, metadata, and MIME type from a file at a specific file "
+                "location using Apache Tika.\n\n"
+                "Returns a single record containing:\n"
+                "- `content` — the extracted text content\n"
+                "- `content_type` — the detected MIME type\n"
+                "- `metadata` — a hash of extracted metadata (author, title, dates, etc.)\n"
+                "- `content_length` — the length of the extracted text content\n\n"
+                "Tika automatically detects the file format and applies the appropriate parser.",
+            "action_code": DPAT_FIND,
+            "cls": "TikaDataProvider::TikaReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TikaReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TikaDataProvider::AppName,
+            "path": "/",
+            "action": "extract-data",
+            "display_name": "Extract Content from Inline Data",
+            "short_desc": "Extract text content and metadata from inline binary data",
+            "desc": "Extracts text content, metadata, and MIME type from inline binary data using "
+                "Apache Tika.\n\n"
+                "Returns a single record containing:\n"
+                "- `content` — the extracted text content\n"
+                "- `content_type` — the detected MIME type\n"
+                "- `metadata` — a hash of extracted metadata (author, title, dates, etc.)\n"
+                "- `content_length` — the length of the extracted text content\n\n"
+                "Use this action when the file content is already available in memory as binary data.",
+            "action_code": DPAT_FIND,
+            "cls": "TikaDataProvider::TikaReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TikaReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TikaDataProvider::AppName,
+            "path": "/",
+            "action": "detect",
+            "display_name": "Detect MIME Type from File",
+            "short_desc": "Detect the MIME type of a file without full content extraction",
+            "desc": "Detects the MIME type of a file at a specific file location using Apache Tika "
+                "without performing full content extraction.\n\n"
+                "Returns a single record containing:\n"
+                "- `content_type` — the detected MIME type\n"
+                "- `metadata` — a hash of extracted metadata\n\n"
+                "This is faster than full extraction when only the MIME type is needed.",
+            "action_code": DPAT_FIND,
+            "cls": "TikaDataProvider::TikaReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TikaReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TikaReadDataProvider::ConstructorOptions{"metadata_only",}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage TikaDataProvider Module
+
+    @tableofcontents
+
+    @section TikaDataProviderintro Introduction to the TikaDataProvider Module
+
+    The %TikaDataProvider module provides a data provider API for universal content detection and text
+    extraction through the @ref dataproviderintro "DataProvider" API using
+    <a href="https://tika.apache.org/">Apache Tika</a> 3.0.
+
+    Apache Tika detects and extracts metadata and text from hundreds of different file types (such as
+    HTML, XML, plain text, and more). This module wraps Tika's extraction capabilities in a read-only
+    data provider that returns a single record per file containing the extracted content, detected MIME
+    type, and metadata.
+
+    The following classes are provided by this module:
+    - @ref TikaDataProvider::TikaReadDataProvider "TikaReadDataProvider" - for extracting content from files
+    - @ref TikaDataProvider::TikaReadDataProviderFactory "TikaReadDataProviderFactory" - factory for read providers
+
+    @section TikaDataProvider_extracting Extracting Content
+
+    @subsection TikaDataProvider_extracting_basic Basic Extraction
+
+    @code{.py}
+    %requires TikaDataProvider
+
+    # Extract content from a file path
+    TikaReadDataProvider dp("document.html");
+    list<hash<auto>> records = map $1, dp.searchRecords();
+    hash<auto> result = records[0];
+    printf("MIME type: %s\n", result.content_type);
+    printf("Content: %s\n", result.content);
+    printf("Metadata: %N\n", result.metadata);
+
+    # Extract from a stream
+    FileInputStream fis("document.xml");
+    TikaReadDataProvider dp2(fis);
+
+    # Extract from binary data
+    binary data = File::readBinaryFile("document.html");
+    TikaReadDataProvider dp3({"data": data});
+    @endcode
+
+    @subsection TikaDataProvider_detecting Detecting MIME Type
+
+    @code{.py}
+    %requires TikaDataProvider
+
+    # Detect MIME type only (faster, no content extraction)
+    TikaReadDataProvider dp({"path": "unknown-file.bin", "metadata_only": True});
+    list<hash<auto>> records = map $1, dp.searchRecords();
+    printf("Detected type: %s\n", records[0].content_type);
+    @endcode
+
+    @subsection TikaDataProvider_fields Record Fields
+
+    Each extraction returns a single record with the following fields:
+    - \c content: The extracted text content (empty string when \c metadata_only is \c True)
+    - \c content_type: The detected MIME type (e.g., \c "text/html", \c "application/xml")
+    - \c metadata: A hash of extracted metadata keys and values
+    - \c content_length: The length of the extracted text content
+
+    @section TikaDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c TIKA-READ-OPTION-ERROR: Invalid read options or option conflicts
+
+    @section TikaDataProvider_relnotes Release Notes
+
+    @subsection TikaDataProvider_v1_0 TikaDataProvider v1.0
+    - initial release of the module
+    - support for text extraction from files using Apache Tika 3.0
+    - support for MIME type detection
+    - metadata extraction support
+    - file path, stream, and binary data input support
+*/
+
+#! contains all public definitions in the TikaDataProvider module
+public namespace TikaDataProvider {
+#! Application name
+public const AppName = "Tika";
+}
+
+namespace Priv {
+#! Tika logo
+const TikaLogo = File::readTextFile(get_script_dir() + "/tika-logo.svg");
+}

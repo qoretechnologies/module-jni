@@ -574,6 +574,34 @@ add_custom_target(qore-flyway-jar
 # install the Flyway jar file manually
 install(FILES ${FLYWAY_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/FlywayDataProvider/jar)
 
+# Apache Tika data provider jar
+set(TIKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-tika.jar)
+set(TIKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/commons-codec-1.17.1.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/commons-csv-1.12.0.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/commons-io-2.17.0.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/jsoup-1.18.1.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/juniversalchardet-2.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/tika-core-3.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/tika-parser-html-module-3.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/tika-parser-text-module-3.0.0.jar:${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/tika-parser-xml-module-3.0.0.jar)
+set(TIKA_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(TIKA_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/tika/)
+set(TIKA_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/tika/TikaExtractor.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/tika/TikaTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${TIKA_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${TIKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-tika ${TIKA_JAR} ${TIKA_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${TIKA_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${TIKA_JAR} ${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/
+    DEPENDS ${module_name} ${TIKA_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-tika-jar
+    DEPENDS ${TIKA_JAR}
+)
+
+# install the Tika jar file manually
+install(FILES ${TIKA_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/TikaDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -854,7 +882,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar qore-tika-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -959,6 +987,7 @@ set(QMOD
     qlib/AvroDataProvider
     qlib/JasperReportsDataProvider
     qlib/FlywayDataProvider
+    qlib/TikaDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -1019,6 +1048,7 @@ qore_external_user_module("qlib/IcsDataProvider" "")
 qore_external_user_module("qlib/AvroDataProvider" "")
 qore_external_user_module("qlib/JasperReportsDataProvider" "")
 qore_external_user_module("qlib/FlywayDataProvider" "")
+qore_external_user_module("qlib/TikaDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 
