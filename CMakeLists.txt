@@ -227,6 +227,64 @@ add_custom_target(qore-word-jar
 # install the Word jar file manually
 install(FILES ${WORD_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/WordDataProvider/jar)
 
+# Visio data provider jar
+set(VISIO_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-visio.jar)
+set(VISIO_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar)
+set(VISIO_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(VISIO_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/visio/)
+set(VISIO_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/visio/VisioIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/visio/VisioTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${VISIO_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${VISIO_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-visio ${VISIO_JAR} ${VISIO_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${VISIO_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/VisioDataProvider/jar
+    COMMAND ${CMAKE_COMMAND} -E copy ${VISIO_JAR} ${CMAKE_SOURCE_DIR}/qlib/VisioDataProvider/jar/
+    DEPENDS ${module_name} ${VISIO_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-visio-jar
+    DEPENDS ${VISIO_JAR}
+)
+
+# install the Visio jar file manually
+install(FILES ${VISIO_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/VisioDataProvider/jar)
+
+# Access data provider jar
+set(ACCESS_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-access.jar)
+set(ACCESS_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/jar/jackcess-4.0.7.jar:${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/jar/commons-lang3-3.10.jar:${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/jar/commons-logging-1.2.jar)
+set(ACCESS_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(ACCESS_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/access/)
+set(ACCESS_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/access/AccessIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/access/AccessTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${ACCESS_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${ACCESS_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-access ${ACCESS_JAR} ${ACCESS_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${ACCESS_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/jar
+    COMMAND ${CMAKE_COMMAND} -E copy ${ACCESS_JAR} ${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/jar/
+    DEPENDS ${module_name} ${ACCESS_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-access-jar
+    DEPENDS ${ACCESS_JAR}
+)
+
+# install the Access jar file manually
+install(FILES ${ACCESS_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/AccessDataProvider/jar)
+
 # Email data provider jar
 set(EMAIL_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-email.jar)
 set(EMAIL_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/jakarta.mail-api-2.1.3.jar:${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/angus-mail-2.0.3.jar:${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/jakarta.activation-api-2.1.3.jar:${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/angus-activation-2.0.2.jar:${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/poi-scratchpad-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar)
@@ -715,7 +773,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-email-jar qore-powerpoint-jar qore-vcf-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-visio-jar qore-access-jar qore-email-jar qore-powerpoint-jar qore-vcf-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -808,6 +866,8 @@ set(QMOD
     qlib/KafkaDataProvider
     qlib/JakartaJmsDataProvider
     qlib/WordDataProvider
+    qlib/VisioDataProvider
+    qlib/AccessDataProvider
     qlib/EmailDataProvider
     qlib/PowerPointDataProvider
     qlib/OdsDataProvider
@@ -863,6 +923,8 @@ qore_external_user_module("qlib/ExcelDataProvider" "")
 qore_external_user_module("qlib/KafkaDataProvider" "")
 qore_external_user_module("qlib/JakartaJmsDataProvider" "")
 qore_external_user_module("qlib/WordDataProvider" "")
+qore_external_user_module("qlib/VisioDataProvider" "")
+qore_external_user_module("qlib/AccessDataProvider" "")
 qore_external_user_module("qlib/EmailDataProvider" "")
 qore_external_user_module("qlib/PowerPointDataProvider" "")
 qore_external_user_module("qlib/OdsDataProvider" "")

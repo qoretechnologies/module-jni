@@ -1,0 +1,196 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore AccessDataProvider module definition
+
+/*  AccessDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-access.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackcess-4.0.7.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-lang3-3.10.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-logging-1.2.jar
+
+%module-cmd(jni) import org.qore.dataprovider.access.AccessIterator
+
+module AccessDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for reading Access databases";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new AccessReadDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AccessDataProvider::AppName,
+            "display_name": "Access Databases",
+            "short_desc": "Read Microsoft Access databases",
+            "desc": "Read Microsoft Access databases (.mdb/.accdb format) using the Jackcess library",
+            "groups": (DataProvider::AppGroup::Databases,),
+            "logo": AccessLogo,
+            "logo_file_name": "access-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AccessDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "display_name": "Read Access Database File",
+            "short_desc": "Read Access database from a specific file location",
+            "desc": "Read Access database from a specific file location and iterate table rows",
+            "action_code": DPAT_FIND,
+            "cls": "AccessDataProvider::AccessReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AccessReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AccessReadDataProvider::ConstructorOptions{"table_name",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AccessDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "display_name": "Read Access Database Inline Data",
+            "short_desc": "Read Access database inline data",
+            "desc": "Read Access database inline data and iterate table rows",
+            "action_code": DPAT_FIND,
+            "cls": "AccessDataProvider::AccessReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AccessReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AccessReadDataProvider::ConstructorOptions{"table_name",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage AccessDataProvider Module
+
+    @tableofcontents
+
+    @section AccessDataProviderintro Introduction to the AccessDataProvider Module
+
+    The %AccessDataProvider module provides a data provider API for reading Microsoft Access databases
+    through the @ref dataproviderintro "DataProvider" API. It supports both .mdb (Access 2003 and earlier)
+    and .accdb (Access 2007+) formats using the Jackcess library.
+
+    The following classes are provided by this module:
+    - @ref AccessDataProvider::AccessReadDataProvider "AccessReadDataProvider" - for reading Access databases
+    - @ref AccessDataProvider::AccessReadDataProviderFactory "AccessReadDataProviderFactory" - factory for read
+      providers
+    - @ref AccessDataProvider::AccessTableReadDataProvider "AccessTableReadDataProvider" - for reading specific tables
+
+    @section AccessDataProvider_reading Reading Access Databases
+
+    @subsection AccessDataProvider_reading_basic Basic Reading
+
+    @code{.py}
+    %requires AccessDataProvider
+
+    # Read from a file path with a specific table
+    AccessReadDataProvider dp("database.accdb", {"table_name": "Users"});
+    list<hash<auto>> records = map $1, dp.searchRecords();
+
+    # Each record is a hash of column name -> value mappings
+    @endcode
+
+    @subsection AccessDataProvider_reading_multiTable Multi-Table Access
+
+    @code{.py}
+    AccessReadDataProvider dp("database.accdb");
+
+    # List all tables
+    list<string> tables = dp.getChildProviderNames();
+
+    # Access specific table
+    AbstractDataProvider table = dp.getChildProvider("Users");
+    list<hash<auto>> records = map $1, table.searchRecords();
+    @endcode
+
+    @subsection AccessDataProvider_reading_options Read Options
+
+    Key Options:
+    - \c path: Path to the Access database file
+    - \c data: Binary Access database data
+    - \c table_name: The name of the table to read (required for direct iteration)
+
+    @section AccessDataProvider_datatypes Supported Data Types
+
+    The module automatically handles the following Access data types:
+    - Text (SHORT_TEXT, LONG_TEXT) -> string
+    - Numbers (LONG, DOUBLE, etc.) -> int/float
+    - Boolean -> bool
+    - Date/Time -> date
+    - Binary (OLE) -> binary
+
+    @section AccessDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c ACCESS-READ-OPTION-ERROR: Invalid read options or option conflicts
+
+    @section AccessDataProvider_relnotes Release Notes
+
+    @subsection AccessDataProvider_v1_0 AccessDataProvider v1.0
+    - initial release of the module
+    - support for reading Access databases (.mdb/.accdb format)
+    - multi-table access via child providers
+    - dynamic record schema based on table columns
+    - binary data input support via temp file
+*/
+
+#! contains all public definitions in the AccessDataProvider module
+public namespace AccessDataProvider {
+#! Application name
+public const AppName = "Access";
+}
+
+namespace Priv {
+#! Access logo
+const AccessLogo = File::readTextFile(get_script_dir() + "/access-logo.svg");
+}

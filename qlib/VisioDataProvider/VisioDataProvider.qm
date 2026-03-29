@@ -1,0 +1,172 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore VisioDataProvider module definition
+
+/*  VisioDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-visio.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/poi-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/poi-ooxml-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/commons-lang3-3.18.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/commons-math3-3.6.1.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/curvesapi-1.08.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/xmlbeans-5.3.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/commons-collections4-4.5.0.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/log4j-api-2.24.3.jar
+%module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/SparseBitSet-1.3.jar
+
+%module-cmd(jni) import org.qore.dataprovider.visio.VisioIterator
+
+module VisioDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for reading Visio documents";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new VisioReadDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": VisioDataProvider::AppName,
+            "display_name": "Visio Documents",
+            "short_desc": "Read Microsoft Visio documents",
+            "desc": "Read Microsoft Visio documents (.vsdx format) and extract page text and shape data",
+            "groups": (DataProvider::AppGroup::Documents,),
+            "logo": VisioLogo,
+            "logo_file_name": "visio-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VisioDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "display_name": "Read Visio Document File",
+            "short_desc": "Read Visio document from a specific file location",
+            "desc": "Read Visio document from a specific file location and extract text from each page",
+            "action_code": DPAT_FIND,
+            "cls": "VisioDataProvider::VisioReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VisioReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VisioDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "display_name": "Read Visio Document Inline Data",
+            "short_desc": "Read Visio document inline data",
+            "desc": "Read Visio document inline data and extract text from each page",
+            "action_code": DPAT_FIND,
+            "cls": "VisioDataProvider::VisioReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VisioReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage VisioDataProvider Module
+
+    @tableofcontents
+
+    @section VisioDataProviderintro Introduction to the VisioDataProvider Module
+
+    The %VisioDataProvider module provides a data provider API for reading Microsoft Visio documents
+    through the @ref dataproviderintro "DataProvider" API. It supports the modern .vsdx format (Visio 2013+)
+    using Apache POI's XDGF library.
+
+    The following classes are provided by this module:
+    - @ref VisioDataProvider::VisioReadDataProvider "VisioReadDataProvider" - for reading Visio documents
+    - @ref VisioDataProvider::VisioReadDataProviderFactory "VisioReadDataProviderFactory" - factory for read providers
+
+    @section VisioDataProvider_reading Reading Visio Documents
+
+    @subsection VisioDataProvider_reading_basic Basic Reading
+
+    @code{.py}
+    %requires VisioDataProvider
+
+    # Read from a file path
+    VisioReadDataProvider dp("diagram.vsdx");
+    list<hash<auto>> pages = map $1, dp.searchRecords();
+
+    # Each record has:
+    # - "page_number": The 1-based page number (int)
+    # - "page_name": The page name (string or NOTHING)
+    # - "text": All text from shapes on the page (string)
+    @endcode
+
+    @subsection VisioDataProvider_reading_options Read Options
+
+    Key Options:
+    - \c path: Path to the Visio document
+    - \c stream: Input stream for Visio data
+    - \c data: Binary Visio document data
+
+    @section VisioDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c VISIO-READ-OPTION-ERROR: Invalid read options or option conflicts
+
+    @section VisioDataProvider_relnotes Release Notes
+
+    @subsection VisioDataProvider_v1_0 VisioDataProvider v1.0
+    - initial release of the module
+    - support for reading Visio documents (.vsdx format)
+    - page-level text extraction from shapes
+    - binary data input support
+*/
+
+#! contains all public definitions in the VisioDataProvider module
+public namespace VisioDataProvider {
+#! Application name
+public const AppName = "Visio";
+}
+
+namespace Priv {
+#! Visio logo
+const VisioLogo = File::readTextFile(get_script_dir() + "/visio-logo.svg");
+}

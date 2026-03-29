@@ -1,0 +1,320 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  VisioDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+# Add classpaths for the Visio module and POI dependencies
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-io-2.20.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-compress-1.28.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/xmlbeans-5.3.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-collections4-4.5.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-codec-1.19.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-lang3-3.18.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/commons-math3-3.6.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/SparseBitSet-1.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/log4j-api-2.24.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/curvesapi-1.08.jar
+%module-cmd(jni) add-relative-classpath ../qlib/VisioDataProvider/jar/qore-dataprovider-visio.jar
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/VisioDataProvider
+
+%module-cmd(jni) import org.qore.dataprovider.visio.VisioTestHelper
+%module-cmd(jni) import org.qore.dataprovider.visio.VisioIterator
+
+%exec-class VisioDataProviderTest
+
+public class VisioDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("VisioDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/visio-test-data";
+
+        addTestCase("test setup", \testSetup());
+        addTestCase("basic read from path", \testBasicReadPath());
+        addTestCase("read from stream", \testReadStream());
+        addTestCase("read from binary data", \testReadBinaryData());
+        addTestCase("read multi-page document", \testReadMultiPage());
+        addTestCase("get page count", \testGetPageCount());
+        addTestCase("get full text", \testGetFullText());
+        addTestCase("get page names", \testGetPageNames());
+        addTestCase("factory tests", \testFactory());
+        addTestCase("negative: invalid path", \testNegativeInvalidPath());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("edge case: empty document", \testEdgeCaseEmptyDocument());
+        addTestCase("edge case: special characters", \testEdgeCaseSpecialChars());
+        addTestCase("record schema", \testRecordSchema());
+        addTestCase("action registration", \testActionRegistration());
+
+        set_return_value(main());
+    }
+
+    testSetup() {
+        # Create test data directory and files
+        if (!is_dir(test_data_dir)) {
+            mkdir(test_data_dir);
+        }
+
+        # Create all test Visio files
+        VisioTestHelper::createSimpleVisio(test_data_dir + "/simple.vsdx");
+        VisioTestHelper::createMultiPageVisio(test_data_dir + "/multi-page.vsdx");
+        VisioTestHelper::createEmptyVisio(test_data_dir + "/empty.vsdx");
+        VisioTestHelper::createSpecialCharsVisio(test_data_dir + "/special-chars.vsdx");
+
+        assertTrue(is_file(test_data_dir + "/simple.vsdx"), "simple.vsdx created");
+    }
+
+    testBasicReadPath() {
+        VisioReadDataProvider dp(test_data_dir + "/simple.vsdx");
+
+        assertEq("VisioReadDataProvider", dp.getInfo().type);
+        assertTrue(dp.getInfo().supports_read);
+        assertTrue(dp.getInfo().has_record);
+
+        # Read all records
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size(), "should have 1 page");
+
+        # Check record structure
+        assertTrue(records[0].hasKey("page_number"), "should have page_number field");
+        assertTrue(records[0].hasKey("page_name"), "should have page_name field");
+        assertTrue(records[0].hasKey("text"), "should have text field");
+
+        # Check content
+        assertEq(1, records[0].page_number);
+        assertEq("Page-1", records[0].page_name);
+        assertTrue(records[0].text.contains("Hello World"), "should contain Hello World");
+        assertTrue(records[0].text.contains("Sample Shape"), "should contain Sample Shape");
+    }
+
+    testReadStream() {
+        FileInputStream fis(test_data_dir + "/simple.vsdx");
+        VisioReadDataProvider dp(fis);
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size());
+        assertTrue(records[0].text.contains("Hello World"));
+    }
+
+    testReadBinaryData() {
+        binary data = VisioTestHelper::createSimpleVisioBytes();
+
+        VisioReadDataProvider dp({
+            "data": data,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size());
+        assertTrue(records[0].text.contains("Hello World"));
+    }
+
+    testReadMultiPage() {
+        VisioReadDataProvider dp(test_data_dir + "/multi-page.vsdx");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 pages");
+
+        # Check page numbering
+        assertEq(1, records[0].page_number);
+        assertEq(2, records[1].page_number);
+        assertEq(3, records[2].page_number);
+
+        # Check page names
+        assertEq("Overview", records[0].page_name);
+        assertEq("Details", records[1].page_name);
+        assertEq("Summary", records[2].page_name);
+
+        # Check content from each page
+        assertTrue(records[0].text.contains("Network Diagram"), "page 1 should have Network Diagram text");
+        assertTrue(records[1].text.contains("Connection Details"), "page 2 should have Connection Details text");
+        assertTrue(records[2].text.contains("Summary"), "page 3 should have Summary text");
+    }
+
+    testGetPageCount() {
+        int count = VisioIterator::getPageCount(test_data_dir + "/multi-page.vsdx");
+        assertEq(3, count, "should have 3 pages");
+
+        # Test with stream
+        FileInputStream fis(test_data_dir + "/multi-page.vsdx");
+        count = VisioIterator::getPageCount(fis);
+        assertEq(3, count, "should have 3 pages via stream");
+
+        # Test single page
+        count = VisioIterator::getPageCount(test_data_dir + "/simple.vsdx");
+        assertEq(1, count, "simple document should have 1 page");
+    }
+
+    testGetFullText() {
+        string text = VisioIterator::getFullText(test_data_dir + "/simple.vsdx");
+
+        assertTrue(text.contains("Hello World"), "should contain Hello World");
+        assertTrue(text.contains("Sample Shape"), "should contain Sample Shape");
+
+        # Test with stream
+        FileInputStream fis(test_data_dir + "/simple.vsdx");
+        text = VisioIterator::getFullText(fis);
+        assertTrue(text.contains("Hello World"), "should contain Hello World via stream");
+    }
+
+    testGetPageNames() {
+        auto names = VisioIterator::getPageNames(test_data_dir + "/multi-page.vsdx");
+
+        assertEq(3, names.size(), "should have 3 page names");
+        assertEq("Overview", names[0]);
+        assertEq("Details", names[1]);
+        assertEq("Summary", names[2]);
+
+        # Test with stream
+        FileInputStream fis(test_data_dir + "/multi-page.vsdx");
+        auto names2 = VisioIterator::getPageNames(fis);
+        assertEq(3, names2.size());
+    }
+
+    testFactory() {
+        VisioReadDataProviderFactory factory();
+
+        assertEq("visioread", factory.getInfo().name);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": test_data_dir + "/simple.vsdx",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+        assertTrue(records[0].text.contains("Hello World"));
+    }
+
+    testNegativeInvalidPath() {
+        # Invalid path should throw an exception
+        bool threw = False;
+        try {
+            VisioReadDataProvider dp("/nonexistent/path/to/file.vsdx");
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+        }
+        assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    testNegativeOptionConflicts() {
+        # Test path and data conflict
+        assertThrows("VISIO-READ-OPTION-ERROR", sub () {
+            VisioReadDataProvider dp({
+                "path": test_data_dir + "/simple.vsdx",
+                "data": <abcd>,
+            });
+        });
+
+        # Test path and stream conflict
+        assertThrows("VISIO-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.vsdx");
+            VisioReadDataProvider dp({
+                "path": test_data_dir + "/simple.vsdx",
+                "stream": fis,
+            });
+        });
+
+        # Test data and stream conflict
+        assertThrows("VISIO-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.vsdx");
+            VisioReadDataProvider dp({
+                "data": <abcd>,
+                "stream": fis,
+            });
+        });
+    }
+
+    testEdgeCaseEmptyDocument() {
+        VisioReadDataProvider dp(test_data_dir + "/empty.vsdx");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        # Empty document should still have 1 page, but with empty text
+        assertEq(1, records.size(), "empty document should still have 1 page");
+        assertEq("", records[0].text, "empty document should have empty text");
+    }
+
+    testEdgeCaseSpecialChars() {
+        VisioReadDataProvider dp(test_data_dir + "/special-chars.vsdx");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(1, records.size());
+
+        # Check that special characters were preserved
+        string text = records[0].text;
+        assertTrue(text.contains("Caf"), "should contain cafe text");
+        assertTrue(text.contains("Price"), "should contain Price text");
+        assertTrue(text.contains("Tokyo"), "should contain Tokyo text");
+    }
+
+    testRecordSchema() {
+        VisioReadDataProvider dp(test_data_dir + "/simple.vsdx");
+
+        *hash<string, AbstractDataField> fields = dp.getRecordType();
+        assertTrue(exists fields, "should have a record type");
+        assertTrue(fields.hasKey("page_number"), "should have page_number field");
+        assertTrue(fields.hasKey("page_name"), "should have page_name field");
+        assertTrue(fields.hasKey("text"), "should have text field");
+    }
+
+    testActionRegistration() {
+        # Verify that actions are properly registered with correct properties
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Visio");
+        assertTrue(exists actions, "should have actions registered for Visio app");
+        assertTrue(actions.size() >= 2, "should have at least 2 actions (read, read-data)");
+
+        # Create a lookup hash for easier testing
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # Verify read action
+        assertTrue(action_map.hasKey("read"), "should have 'read' action");
+        assertEq("Read Visio Document File", action_map."read".display_name);
+        assertTrue(action_map."read".options.hasKey("path"), "read action should have 'path' option");
+
+        # Verify read-data action
+        assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
+        assertEq("Read Visio Document Inline Data", action_map."read-data".display_name);
+        assertTrue(action_map."read-data".options.hasKey("data"), "read-data action should have 'data' option");
+    }
+}

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <linearGradient id="accessGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A4373A;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#C94B4B;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect x="4" y="4" width="88" height="88" rx="8" ry="8" fill="url(#accessGradient)"/>
+  <!-- Database cylinder -->
+  <ellipse cx="48" cy="28" rx="22" ry="8" fill="white" opacity="0.9"/>
+  <rect x="26" y="28" width="44" height="32" fill="white" opacity="0.9"/>
+  <ellipse cx="48" cy="60" rx="22" ry="8" fill="white" opacity="0.85"/>
+  <ellipse cx="48" cy="44" rx="22" ry="8" fill="none" stroke="white" stroke-width="1" opacity="0.5"/>
+  <!-- Table lines -->
+  <line x1="32" y1="34" x2="64" y2="34" stroke="#A4373A" stroke-width="1.5" opacity="0.5"/>
+  <line x1="48" y1="28" x2="48" y2="60" stroke="#A4373A" stroke-width="1" opacity="0.3"/>
+  <!-- A letter -->
+  <text x="48" y="82" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">A</text>
+</svg>

@@ -1,0 +1,367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AccessDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+# Add classpaths for the Access module and Jackcess dependencies
+%module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/jackcess-4.0.7.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/commons-lang3-3.10.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/commons-logging-1.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/qore-dataprovider-access.jar
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/AccessDataProvider
+
+%module-cmd(jni) import org.qore.dataprovider.access.AccessTestHelper
+%module-cmd(jni) import org.qore.dataprovider.access.AccessIterator
+
+%exec-class AccessDataProviderTest
+
+public class AccessDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("AccessDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/access-test-data";
+
+        addTestCase("test setup", \testSetup());
+        addTestCase("basic read from path", \testBasicReadPath());
+        addTestCase("read from binary data", \testReadBinaryData());
+        addTestCase("read products table", \testReadProductsTable());
+        addTestCase("get table names", \testGetTableNames());
+        addTestCase("get row count", \testGetRowCount());
+        addTestCase("child providers (multi-table)", \testChildProviders());
+        addTestCase("data types", \testDataTypes());
+        addTestCase("factory tests", \testFactory());
+        addTestCase("negative: invalid path", \testNegativeInvalidPath());
+        addTestCase("negative: invalid table name", \testNegativeInvalidTableName());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("negative: missing table name for direct read", \testNegativeMissingTableName());
+        addTestCase("edge case: empty table", \testEdgeCaseEmptyTable());
+        addTestCase("edge case: special characters", \testEdgeCaseSpecialChars());
+        addTestCase("edge case: null values", \testEdgeCaseNullValues());
+        addTestCase("action registration", \testActionRegistration());
+
+        set_return_value(main());
+    }
+
+    testSetup() {
+        # Create test data directory and files
+        if (!is_dir(test_data_dir)) {
+            mkdir(test_data_dir);
+        }
+
+        # Create all test Access files
+        AccessTestHelper::createSimpleAccdb(test_data_dir + "/simple.accdb");
+        AccessTestHelper::createEmptyTableAccdb(test_data_dir + "/empty-table.accdb");
+        AccessTestHelper::createDataTypesAccdb(test_data_dir + "/data-types.accdb");
+        AccessTestHelper::createSpecialCharsAccdb(test_data_dir + "/special-chars.accdb");
+        AccessTestHelper::createMultiTableAccdb(test_data_dir + "/multi-table.accdb");
+
+        assertTrue(is_file(test_data_dir + "/simple.accdb"), "simple.accdb created");
+    }
+
+    testBasicReadPath() {
+        AccessReadDataProvider dp(test_data_dir + "/simple.accdb", {
+            "table_name": "Users",
+        });
+
+        assertEq("AccessReadDataProvider", dp.getInfo().type);
+        assertTrue(dp.getInfo().supports_read);
+        assertTrue(dp.getInfo().has_record);
+        assertTrue(dp.getInfo().supports_children);
+
+        # Read all records
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 rows");
+
+        # Check record structure
+        assertTrue(records[0].hasKey("id"), "should have id field");
+        assertTrue(records[0].hasKey("name"), "should have name field");
+        assertTrue(records[0].hasKey("email"), "should have email field");
+
+        # Check content
+        assertEq("Alice Smith", records[0].name);
+        assertEq("alice@example.com", records[0].email);
+        assertEq("Bob Johnson", records[1].name);
+        assertEq("Carol Williams", records[2].name);
+    }
+
+    testReadBinaryData() {
+        binary data = AccessTestHelper::createSimpleAccdbBytes();
+
+        AccessReadDataProvider dp({
+            "data": data,
+            "table_name": "Users",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Alice Smith", records[0].name);
+    }
+
+    testReadProductsTable() {
+        AccessReadDataProvider dp(test_data_dir + "/simple.accdb", {
+            "table_name": "Products",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+
+        assertTrue(records[0].hasKey("id"), "should have id field");
+        assertTrue(records[0].hasKey("name"), "should have name field");
+        assertTrue(records[0].hasKey("price"), "should have price field");
+
+        assertEq("Widget", records[0].name);
+        assertEq(9.99, records[0].price);
+        assertEq("Gadget", records[1].name);
+        assertEq(19.99, records[1].price);
+    }
+
+    testGetTableNames() {
+        auto names = AccessIterator::getTableNames(test_data_dir + "/simple.accdb");
+
+        assertTrue(names.size() >= 2, "should have at least 2 tables");
+
+        # Convert to hash for easier lookup
+        hash<string, bool> name_map = map {$1: True}, names;
+        assertTrue(name_map.hasKey("Users"), "should contain Users table");
+        assertTrue(name_map.hasKey("Products"), "should contain Products table");
+    }
+
+    testGetRowCount() {
+        int count = AccessIterator::getRowCount(test_data_dir + "/simple.accdb", "Users");
+        assertEq(3, count, "Users table should have 3 rows");
+
+        count = AccessIterator::getRowCount(test_data_dir + "/simple.accdb", "Products");
+        assertEq(3, count, "Products table should have 3 rows");
+    }
+
+    testChildProviders() {
+        AccessReadDataProvider dp(test_data_dir + "/multi-table.accdb");
+
+        # Get child provider names (table names)
+        *list<string> tables = dp.getChildProviderNames();
+
+        assertTrue(exists tables, "should have child providers");
+        assertTrue(tables.size() >= 3, "should have at least 3 tables");
+
+        # Convert to hash for easier lookup
+        hash<string, bool> table_map = map {$1: True}, tables;
+        assertTrue(table_map.hasKey("Employees"), "should contain Employees table");
+        assertTrue(table_map.hasKey("Departments"), "should contain Departments table");
+        assertTrue(table_map.hasKey("Projects"), "should contain Projects table");
+
+        # Get specific child provider
+        *AbstractDataProvider child = dp.getChildProvider("Employees");
+        assertTrue(exists child, "should get Employees child provider");
+
+        list<hash<auto>> records = map $1, child.searchRecords();
+        assertEq(3, records.size());
+        assertEq("Alice Smith", records[0].name);
+
+        # Test another table via child provider
+        *AbstractDataProvider dept_child = dp.getChildProvider("Departments");
+        assertTrue(exists dept_child, "should get Departments child provider");
+
+        list<hash<auto>> dept_records = map $1, dept_child.searchRecords();
+        assertEq(3, dept_records.size());
+        assertEq("Engineering", dept_records[0].name);
+        assertEq(500000.0, dept_records[0].budget);
+
+        # Test non-existent child
+        *AbstractDataProvider missing = dp.getChildProvider("NonExistentTable");
+        assertNothing(missing, "should return NOTHING for non-existent table");
+    }
+
+    testDataTypes() {
+        AccessReadDataProvider dp(test_data_dir + "/data-types.accdb", {
+            "table_name": "DataTypes",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+
+        # Check first row data types
+        assertEq(Type::Int, records[0].int_col.type());
+        assertEq(1, records[0].int_col);
+        assertEq("hello", records[0].text_col);
+        assertTrue(records[0].bool_col);
+        assertEq(Type::Float, records[0].double_col.type());
+        assertTrue(abs(records[0].double_col - 3.14) < 0.01, "should be approximately 3.14");
+        assertTrue(records[0].datetime_col instanceof date, "should be a date type");
+
+        # Check second row
+        assertEq(2, records[1].int_col);
+        assertEq("world", records[1].text_col);
+        assertFalse(records[1].bool_col);
+
+        # Check third row with nulls
+        assertEq(3, records[2].int_col);
+        assertNothing(records[2].text_col, "null text should be NOTHING");
+        assertTrue(records[2].bool_col);
+    }
+
+    testFactory() {
+        AccessReadDataProviderFactory factory();
+
+        assertEq("accessread", factory.getInfo().name);
+        assertTrue(factory.getInfo().children_can_support_records);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": test_data_dir + "/simple.accdb",
+            "table_name": "Users",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(3, records.size());
+    }
+
+    testNegativeInvalidPath() {
+        # Invalid path should throw an exception
+        bool threw = False;
+        try {
+            AccessReadDataProvider dp("/nonexistent/path/to/file.accdb", {
+                "table_name": "Users",
+            });
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+        }
+        assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    testNegativeInvalidTableName() {
+        # Invalid table name should throw an exception
+        bool threw = False;
+        try {
+            AccessReadDataProvider dp(test_data_dir + "/simple.accdb", {
+                "table_name": "NonExistentTable",
+            });
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(ex.desc.contains("not found") || ex.desc.contains("NonExistentTable"),
+                "should mention table not found");
+        }
+        assertTrue(threw, "should throw exception for invalid table name");
+    }
+
+    testNegativeOptionConflicts() {
+        # Test path and data conflict
+        assertThrows("ACCESS-READ-OPTION-ERROR", sub () {
+            AccessReadDataProvider dp({
+                "path": test_data_dir + "/simple.accdb",
+                "data": <abcd>,
+                "table_name": "Users",
+            });
+        });
+    }
+
+    testNegativeMissingTableName() {
+        # Should throw when trying to iterate without table_name
+        bool threw = False;
+        try {
+            AccessReadDataProvider dp(test_data_dir + "/simple.accdb");
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertEq("ACCESS-READ-OPTION-ERROR", ex.err);
+        }
+        assertTrue(threw, "should throw exception when table_name is missing for direct read");
+    }
+
+    testEdgeCaseEmptyTable() {
+        AccessReadDataProvider dp(test_data_dir + "/empty-table.accdb", {
+            "table_name": "EmptyTable",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "empty table should return no records");
+    }
+
+    testEdgeCaseSpecialChars() {
+        AccessReadDataProvider dp(test_data_dir + "/special-chars.accdb", {
+            "table_name": "SpecialChars",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(4, records.size());
+        assertTrue(records[0].text_col.contains("Caf"), "should contain cafe text");
+    }
+
+    testEdgeCaseNullValues() {
+        AccessReadDataProvider dp(test_data_dir + "/data-types.accdb", {
+            "table_name": "DataTypes",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        # Third row has null values
+        assertEq(3, records[2].int_col);
+        assertNothing(records[2].text_col, "null text_col should be NOTHING");
+        assertNothing(records[2].datetime_col, "null datetime_col should be NOTHING");
+    }
+
+    testActionRegistration() {
+        # Verify that actions are properly registered with correct properties
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Access");
+        assertTrue(exists actions, "should have actions registered for Access app");
+        assertTrue(actions.size() >= 2, "should have at least 2 actions (read, read-data)");
+
+        # Create a lookup hash for easier testing
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # Verify read action
+        assertTrue(action_map.hasKey("read"), "should have 'read' action");
+        assertEq("Read Access Database File", action_map."read".display_name);
+        assertTrue(action_map."read".options.hasKey("path"), "read action should have 'path' option");
+        assertTrue(action_map."read".options.hasKey("table_name"), "read action should have 'table_name' option");
+
+        # Verify read-data action
+        assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
+        assertEq("Read Access Database Inline Data", action_map."read-data".display_name);
+        assertTrue(action_map."read-data".options.hasKey("data"), "read-data action should have 'data' option");
+        assertTrue(action_map."read-data".options.hasKey("table_name"),
+            "read-data action should have 'table_name' option");
+    }
+}
