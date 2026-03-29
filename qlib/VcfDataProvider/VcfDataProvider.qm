@@ -158,6 +158,7 @@ module VcfDataProvider {
                 "After writing all contacts, use `getData()` to retrieve the binary VCF data.",
             "action_code": DPAT_CREATE,
             "cls": "VcfDataProvider::VcfWriteDataProvider",
+            "options": {},
         });
     };
 }
