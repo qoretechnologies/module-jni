@@ -1,0 +1,141 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore JdbcDataProvider module definition
+
+/*  JdbcDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# import custom JDBC helper JAR: must be added to the global classloader
+# because JDBC connections persist through thread pools
+%module-cmd(jni) global-add-relative-classpath ./jar/qore-dataprovider-jdbc.jar
+
+%module-cmd(jni) import org.qore.dataprovider.jdbc.JdbcSchemaIntrospector
+%module-cmd(jni) import org.qore.dataprovider.jdbc.JdbcQueryExecutor
+%module-cmd(jni) import org.qore.dataprovider.jdbc.JdbcTypeMapper
+
+# import JDK built-in JDBC classes
+%module-cmd(jni) import java.sql.DriverManager
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+# implements support for JDBC connections
+%requires(reexport) ConnectionProvider
+%requires Util
+
+module JdbcDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for JDBC database access";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register connection schemes
+        ConnectionSchemeCache::registerScheme("jdbc-dp", JdbcConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new JdbcDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": JdbcDataProvider::AppName,
+            "display_name": "JDBC Database",
+            "short_desc": "JDBC database access",
+            "desc": "JDBC database access via the DataProvider API",
+            "groups": (DataProvider::AppGroup::Databases,),
+            "scheme": "jdbc-dp",
+            "logo": JdbcLogo,
+            "logo_file_name": "jdbc-dp-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JdbcDataProvider::AppName,
+            "path": "/query",
+            "action": "query",
+            "display_name": "Execute SQL Query",
+            "short_desc": "Execute a SQL query and return results",
+            "desc": "Execute a SQL SELECT query against the database and return the result set",
+            "action_code": DPAT_FIND,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JdbcDataProvider::AppName,
+            "path": "/exec",
+            "action": "exec",
+            "display_name": "Execute SQL Statement",
+            "short_desc": "Execute a SQL statement",
+            "desc": "Execute a SQL statement (INSERT, UPDATE, DELETE, DDL) against the database",
+            "action_code": DPAT_API,
+        });
+    };
+}
+
+/** @mainpage JdbcDataProvider Module
+
+    @tableofcontents
+
+    @section jdbcdataproviderintro Introduction to the JdbcDataProvider Module
+
+    The %JdbcDataProvider module provides a data provider API for JDBC database access.
+
+    This data provider provides JDBC functionality with the \c jdbc-dp factory and data provider with
+    the same name, supporting database table browsing, SQL query execution, and SQL statement execution
+    (class @ref JdbcDataProvider::JdbcDataProvider "JdbcDataProvider").
+
+    Database-specific JDBC drivers must be available on the Java classpath before loading this module.
+    Add them via the \c QORE_CLASSPATH environment variable or JNI classpath configuration.
+
+    @section jdbcdataprovider_examples JDBC Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par API Example: List Tables
+    @verbatim qdp 'jdbc-dp{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret}/tables' children
+    @endverbatim
+
+    @par API Example: Execute Query
+    @verbatim qdp 'jdbc-dp{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret}/query' request sql="SELECT * FROM users"
+    @endverbatim
+
+    @par API Example: Execute Statement
+    @verbatim qdp 'jdbc-dp{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret}/exec' request sql="INSERT INTO users (name) VALUES ('test')"
+    @endverbatim
+
+    @section jdbcdataprovider_relnotes Release Notes
+
+    @subsection jdbcdataprovider_v1_0 JdbcDataProvider v1.0
+    - initial release of the module
+*/
+
+#! Contains all public definitions in the JdbcDataProvider module
+public namespace JdbcDataProvider {
+#! JDBC data provider application name
+public const AppName = "JdbcDP";
+}
+
+namespace Priv {
+#! JDBC logo
+const JdbcLogo = File::readTextFile(get_script_dir() + "/jdbc-dp-logo.svg");
+}

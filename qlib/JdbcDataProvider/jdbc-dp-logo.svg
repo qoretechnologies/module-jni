@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="535"
+   height="535"
+   viewBox="0 0 535 535"
+   version="1.1"
+   xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>.db-fill{fill:#2962FF;}.db-stroke{fill:none;stroke:#2962FF;stroke-width:8;}</style>
+  </defs>
+  <title>JDBC Database</title>
+  <!-- Database cylinder -->
+  <ellipse class="db-fill" cx="267.5" cy="140" rx="160" ry="50"/>
+  <rect class="db-fill" x="107.5" y="140" width="320" height="255"/>
+  <ellipse class="db-fill" cx="267.5" cy="395" rx="160" ry="50"/>
+  <!-- Cylinder highlight lines -->
+  <ellipse class="db-stroke" cx="267.5" cy="210" rx="160" ry="50"/>
+  <ellipse class="db-stroke" cx="267.5" cy="300" rx="160" ry="50"/>
+  <!-- Top ellipse outline -->
+  <ellipse style="fill:none;stroke:#1A47B8;stroke-width:8;" cx="267.5" cy="140" rx="160" ry="50"/>
+  <!-- Bottom ellipse outline -->
+  <ellipse style="fill:none;stroke:#1A47B8;stroke-width:8;" cx="267.5" cy="395" rx="160" ry="50"/>
+  <!-- Side lines -->
+  <line style="stroke:#1A47B8;stroke-width:8;" x1="107.5" y1="140" x2="107.5" y2="395"/>
+  <line style="stroke:#1A47B8;stroke-width:8;" x1="427.5" y1="140" x2="427.5" y2="395"/>
+</svg>

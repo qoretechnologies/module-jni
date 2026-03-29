@@ -602,6 +602,28 @@ add_custom_target(qore-tika-jar
 # install the Tika jar file manually
 install(FILES ${TIKA_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/TikaDataProvider/jar)
 
+# JDBC generic data provider jar (no external deps — JDBC is JDK built-in)
+set(JDBC_DP_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-jdbc.jar)
+set(JDBC_DP_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(JDBC_DP_SOURCES ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/jdbc/)
+
+add_custom_command(
+    OUTPUT ${JDBC_DP_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${JDBC_DP_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-jdbc-dp ${JDBC_DP_JAR} ${JDBC_DP_SOURCES}
+    COMMAND ${CMAKE_COMMAND} -E copy ${JDBC_DP_JAR} ${CMAKE_SOURCE_DIR}/qlib/JdbcDataProvider/jar/
+    DEPENDS ${module_name} ${JDBC_DP_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-jdbc-dp-jar
+    DEPENDS ${JDBC_DP_JAR}
+)
+
+# install the JDBC data provider jar file manually
+install(FILES ${JDBC_DP_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/JdbcDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -882,7 +904,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar qore-tika-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar qore-tika-jar qore-jdbc-dp-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -988,6 +1010,7 @@ set(QMOD
     qlib/JasperReportsDataProvider
     qlib/FlywayDataProvider
     qlib/TikaDataProvider
+    qlib/JdbcDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -1049,6 +1072,7 @@ qore_external_user_module("qlib/AvroDataProvider" "")
 qore_external_user_module("qlib/JasperReportsDataProvider" "")
 qore_external_user_module("qlib/FlywayDataProvider" "")
 qore_external_user_module("qlib/TikaDataProvider" "")
+qore_external_user_module("qlib/JdbcDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 
