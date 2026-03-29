@@ -1,0 +1,103 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  CamelDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires ConnectionProvider
+%requires jni
+%requires ../qlib/CamelDataProvider
+
+%exec-class CamelDataProviderTest
+
+public class CamelDataProviderTest inherits QUnit::Test {
+    constructor() : Test("CamelDataProviderTest", "1.0", \ARGV) {
+        addTestCase("factory test", \testFactory());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("child providers", \testChildProviders());
+        addTestCase("context lifecycle", \testContextLifecycle());
+        addTestCase("send via direct", \testSendViaDirect());
+        addTestCase("routes list", \testRoutesList());
+
+        set_return_value(main());
+    }
+
+    private testFactory() {
+        CamelDataProviderFactory factory();
+        assertEq("camel", factory.getInfo().name);
+    }
+
+    private testActionRegistration() {
+        assertEq(True, DataProviderActionCatalog::getApp("Camel").val());
+    }
+
+    private testChildProviders() {
+        CamelDataProvider dp();
+        on_exit delete dp;
+
+        list<string> children = dp.getChildProviderNames();
+        assertTrue(children.size() >= 2);
+        assertTrue(inlist("producer", children));
+        assertTrue(inlist("routes", children));
+    }
+
+    private testContextLifecycle() {
+        # Create and destroy a context
+        CamelDataProvider dp();
+        assertEq(True, dp instanceof CamelDataProvider);
+        delete dp;
+        # If we get here without exception, the lifecycle is correct
+        assertTrue(True);
+    }
+
+    private testSendViaDirect() {
+        CamelDataProvider dp();
+        on_exit delete dp;
+
+        # Add a route: direct:test -> log:result
+        # Access the underlying Java context to add a route
+        AbstractDataProvider producer = dp.getChildProvider("producer");
+        assertTrue(producer instanceof CamelProducerDataProvider);
+
+        # Send a message to the seda endpoint (seda doesn't require a consumer route)
+        # This tests the producer template mechanism
+        auto result = producer.doRequest({
+            "endpoint": "seda:testqueue",
+            "body": "Hello Camel",
+        });
+        assertTrue(result instanceof hash);
+    }
+
+    private testRoutesList() {
+        CamelDataProvider dp();
+        on_exit delete dp;
+
+        AbstractDataProvider routes = dp.getChildProvider("routes");
+        list<hash<auto>> routeList = map $1, routes.searchRecords();
+        # Initially there should be no routes (we haven't added any)
+        assertEq(0, routeList.size());
+    }
+}

@@ -1,0 +1,189 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore CamelDataProvider module definition
+
+/*  CamelDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# import Camel and dependency JARs: must be added to the global classloader
+# because Camel maintains long-lived routes and thread pools
+%module-cmd(jni) global-add-relative-classpath ./jar/qore-dataprovider-camel.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/angus-activation-2.0.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-api-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-base-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-base-engine-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-bean-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-browse-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-cluster-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-controlbus-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-core-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-core-catalog-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-core-engine-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-core-languages-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-core-model-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-core-processor-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-core-reifier-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-dataformat-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-dataset-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-direct-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-file-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-health-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-language-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-log-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-main-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-management-api-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-mock-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-ref-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-rest-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-saga-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-scheduler-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-seda-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-stub-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-support-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-timer-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-tooling-model-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-util-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-util-json-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-validator-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-xml-io-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-xml-io-util-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-xml-jaxb-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-xml-jaxp-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-xml-jaxp-util-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-xpath-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-xslt-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/camel-yaml-io-4.8.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/commons-codec-1.17.1.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/istack-commons-runtime-4.1.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-annotations-2.17.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-core-2.17.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-databind-2.17.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-dataformat-yaml-2.17.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.activation-api-2.1.3.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.xml.bind-api-4.0.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jaxb-core-4.0.5.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jaxb-runtime-4.0.5.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-api-2.0.16.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/snakeyaml-2.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/txw2-4.0.5.jar
+
+%module-cmd(jni) import org.qore.dataprovider.camel.QoreCamelContext
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+# implements support for Camel connections
+%requires(reexport) ConnectionProvider
+%requires Util
+
+module CamelDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for enterprise integration patterns "
+        "via Apache Camel";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register connection schemes
+        ConnectionSchemeCache::registerScheme("camel", CamelConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new CamelDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": CamelDataProvider::AppName,
+            "display_name": "Apache Camel",
+            "short_desc": "Apache Camel enterprise integration patterns",
+            "desc": "Apache Camel enterprise integration patterns",
+            "groups": (DataProvider::AppGroup::Messaging,),
+            "scheme": "camel",
+            "logo": CamelLogo,
+            "logo_file_name": "camel-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CamelDataProvider::AppName,
+            "path": "/producer",
+            "action": "send",
+            "display_name": "Send Camel Message",
+            "short_desc": "Send a message to a Camel endpoint",
+            "desc": "Send a message to any Apache Camel endpoint URI",
+            "action_code": DPAT_API,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CamelDataProvider::AppName,
+            "path": "/routes",
+            "action": "routes",
+            "display_name": "List Camel Routes",
+            "short_desc": "List active Camel routes",
+            "desc": "List all active routes in the Camel context",
+            "action_code": DPAT_FIND,
+        });
+    };
+}
+
+/** @mainpage CamelDataProvider Module
+
+    @tableofcontents
+
+    @section cameldataproviderintro Introduction to the CamelDataProvider Module
+
+    The %CamelDataProvider module provides a data provider API for enterprise integration
+    patterns via Apache Camel.
+
+    This data provider provides Apache Camel functionality with the \c camel factory and data
+    provider with the same name, supporting message routing and endpoint integration
+    (class @ref CamelDataProvider::CamelDataProvider "CamelDataProvider").
+
+    @section cameldataprovider_examples Camel Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par API Example: Send a Message
+    @verbatim qdp 'camel/producer' request endpoint=direct:test body='hello world'
+    @endverbatim
+
+    @par API Example: List Routes
+    @verbatim qdp 'camel/routes' search
+    @endverbatim
+
+    @section cameldataprovider_relnotes Release Notes
+
+    @subsection cameldataprovider_v1_0 CamelDataProvider v1.0
+    - initial release of the module
+*/
+
+#! Contains all public definitions in the CamelDataProvider module
+public namespace CamelDataProvider {
+#! Camel application name
+public const AppName = "Camel";
+}
+
+namespace Priv {
+#! Camel logo
+const CamelLogo = File::readTextFile(get_script_dir() + "/camel-logo.svg");
+}

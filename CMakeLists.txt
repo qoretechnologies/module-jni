@@ -624,6 +624,29 @@ add_custom_target(qore-jdbc-dp-jar
 # install the JDBC data provider jar file manually
 install(FILES ${JDBC_DP_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/JdbcDataProvider/jar)
 
+# Apache Camel data provider jar
+set(CAMEL_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-camel.jar)
+set(CAMEL_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/angus-activation-2.0.2.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-api-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-base-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-base-engine-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-bean-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-browse-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-cluster-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-controlbus-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-core-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-core-catalog-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-core-engine-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-core-languages-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-core-model-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-core-processor-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-core-reifier-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-dataformat-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-dataset-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-direct-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-file-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-health-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-language-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-log-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-main-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-management-api-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-mock-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-ref-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-rest-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-saga-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-scheduler-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-seda-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-stub-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-support-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-timer-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-tooling-model-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-util-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-util-json-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-validator-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-xml-io-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-xml-io-util-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-xml-jaxb-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-xml-jaxp-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-xml-jaxp-util-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-xpath-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-xslt-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/camel-yaml-io-4.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/commons-codec-1.17.1.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/istack-commons-runtime-4.1.2.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/jackson-annotations-2.17.2.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/jackson-core-2.17.2.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/jackson-databind-2.17.2.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/jackson-dataformat-yaml-2.17.2.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/jakarta.activation-api-2.1.3.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/jakarta.xml.bind-api-4.0.2.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/jaxb-core-4.0.5.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/jaxb-runtime-4.0.5.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/snakeyaml-2.2.jar:${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/txw2-4.0.5.jar)
+set(CAMEL_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(CAMEL_SOURCES ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/camel/)
+
+add_custom_command(
+    OUTPUT ${CAMEL_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${CAMEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-camel ${CAMEL_JAR} ${CAMEL_SOURCES} -cp ${CAMEL_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${CAMEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/
+    DEPENDS ${module_name} ${CAMEL_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-camel-jar
+    DEPENDS ${CAMEL_JAR}
+)
+
+# install the Camel jar file manually
+install(FILES ${CAMEL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/CamelDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -904,7 +927,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar qore-tika-jar qore-jdbc-dp-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar qore-tika-jar qore-jdbc-dp-jar qore-camel-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -1011,6 +1034,7 @@ set(QMOD
     qlib/FlywayDataProvider
     qlib/TikaDataProvider
     qlib/JdbcDataProvider
+    qlib/CamelDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -1073,6 +1097,7 @@ qore_external_user_module("qlib/JasperReportsDataProvider" "")
 qore_external_user_module("qlib/FlywayDataProvider" "")
 qore_external_user_module("qlib/TikaDataProvider" "")
 qore_external_user_module("qlib/JdbcDataProvider" "")
+qore_external_user_module("qlib/CamelDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 
