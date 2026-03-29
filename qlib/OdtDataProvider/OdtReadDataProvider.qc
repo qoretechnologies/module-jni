@@ -84,9 +84,12 @@ public class OdtReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "example_value": "paragraphs",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "paragraphs", "display_name": "Paragraphs",
-                        "desc": "Read document paragraphs with text and style information"},
+                        "short_desc": "Read document paragraphs with text and style information",
+                        "desc": "Read document paragraphs with text content and style information "
+                            "(headings, normal text)"},
                     <AllowedValueInfo>{"value": "table", "display_name": "Table",
-                        "desc": "Read a table as row data"},
+                        "short_desc": "Read a table as row data",
+                        "desc": "Read a table as structured row data with column headers"},
                 ),
             },
             "table_index": <DataProviderOptionInfo>{

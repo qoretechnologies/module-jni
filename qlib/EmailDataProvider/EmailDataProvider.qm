@@ -55,18 +55,20 @@
 %module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/SparseBitSet-1.3.jar
 
 %module-cmd(jni) import org.qore.dataprovider.email.EmlIterator
+%module-cmd(jni) import org.qore.dataprovider.email.EmlWriter
 %module-cmd(jni) import org.qore.dataprovider.email.MsgIterator
 %module-cmd(jni) import org.qore.dataprovider.email.MboxIterator
 
 module EmailDataProvider {
     version = "1.0";
-    desc = "user module providing a data provider API for reading email messages in EML, MSG, and MBOX formats";
+    desc = "user module providing a data provider API for reading and writing email messages in EML, MSG, and MBOX formats";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
         # register the data provider factories
         DataProvider::registerFactory(new EmlReadDataProviderFactory());
+        DataProvider::registerFactory(new EmlWriteDataProviderFactory());
         DataProvider::registerFactory(new MsgReadDataProviderFactory());
         DataProvider::registerFactory(new MboxReadDataProviderFactory());
 
@@ -74,17 +76,18 @@ module EmailDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": EmailDataProvider::AppName,
             "display_name": "Email Messages",
-            "short_desc": "Read email messages in EML, MSG, and MBOX formats",
-            "desc": "Provides data provider support for reading email messages in multiple formats:\n\n"
+            "short_desc": "Read and write email messages in EML, MSG, and MBOX formats",
+            "desc": "Provides data provider support for reading and writing email messages in multiple "
+                "formats:\n\n"
                 "- **EML** (RFC 822 / MIME): Standard email format used by many email clients including "
                 "Thunderbird, Apple Mail, and others. Each `.eml` file contains a single email message with "
-                "headers, body text, HTML content, and attachments.\n\n"
+                "headers, body text, HTML content, and attachments. Supports both reading and writing.\n\n"
                 "- **MSG** (Microsoft Outlook): Proprietary binary format used by Microsoft Outlook. Each "
                 "`.msg` file contains a single email message stored as an OLE2 Compound Document with MAPI "
-                "properties.\n\n"
+                "properties. Read-only support.\n\n"
                 "- **MBOX** (Unix Mailbox): Standard mailbox format where multiple email messages are "
                 "concatenated in a single file, each delimited by a `From ` separator line. Used by "
-                "Thunderbird, Evolution, and many Unix mail systems.\n\n"
+                "Thunderbird, Evolution, and many Unix mail systems. Read-only support.\n\n"
                 "All formats produce records with a unified schema including sender, recipients (To, CC, BCC), "
                 "subject, date, plain text body, HTML body, attachments metadata, Message-ID, and In-Reply-To "
                 "headers.",
@@ -238,6 +241,58 @@ module EmailDataProvider {
                 }
             ),
         });
+
+        # register EML write action (to file)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EmailDataProvider::AppName,
+            "path": "/",
+            "action": "eml-write",
+            "display_name": "Write EML Email File",
+            "short_desc": "Write an EML email message to a file location",
+            "desc": "Writes an EML (RFC 822 / MIME) email message to a file path.\n\n"
+                "Each record written represents a single email message with the following fields:\n"
+                "- `from`: the sender's email address\n"
+                "- `to`: list of To recipients\n"
+                "- `cc`: list of CC recipients (optional)\n"
+                "- `bcc`: list of BCC recipients (optional)\n"
+                "- `subject`: the email subject line\n"
+                "- `date`: the sent date (optional, defaults to current time)\n"
+                "- `body_text`: plain text body content (optional)\n"
+                "- `body_html`: HTML body content (optional)\n"
+                "- `attachments`: list of attachment hashes with `name`, `content_type`, and `data` "
+                "(optional)\n"
+                "- `message_id`: the Message-ID header (optional)\n"
+                "- `in_reply_to`: the In-Reply-To header (optional)\n"
+                "- `reply_to`: the Reply-To header (optional)\n"
+                "- `references`: the References header (optional)",
+            "action_code": DPAT_CREATE,
+            "cls": "EmailDataProvider::EmlWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                EmlWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register EML write-data action (to binary data)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EmailDataProvider::AppName,
+            "path": "/",
+            "action": "eml-write-data",
+            "display_name": "Create EML Email Data",
+            "short_desc": "Create EML email data and return as binary",
+            "desc": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful "
+                "for generating EML files without writing to disk.\n\n"
+                "Each record written represents a single email message with the standard email fields "
+                "including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, "
+                "`attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\n"
+                "After writing all messages, use `getData()` to retrieve the binary EML data.",
+            "action_code": DPAT_CREATE,
+            "cls": "EmailDataProvider::EmlWriteDataProvider",
+            "options": {},
+        });
     };
 }
 
@@ -247,13 +302,15 @@ module EmailDataProvider {
 
     @section EmailDataProviderintro Introduction to the EmailDataProvider Module
 
-    The %EmailDataProvider module provides a data provider API for reading email messages in multiple formats
-    through the @ref dataproviderintro "DataProvider" API. It supports EML (RFC 822), MSG (Microsoft Outlook),
-    and MBOX (Unix Mailbox) formats using Jakarta Mail and Apache POI HSMF libraries.
+    The %EmailDataProvider module provides a data provider API for reading and writing email messages in
+    multiple formats through the @ref dataproviderintro "DataProvider" API. It supports EML (RFC 822),
+    MSG (Microsoft Outlook), and MBOX (Unix Mailbox) formats using Jakarta Mail and Apache POI HSMF libraries.
 
     The following classes are provided by this module:
     - @ref EmailDataProvider::EmlReadDataProvider "EmlReadDataProvider" - for reading EML files
     - @ref EmailDataProvider::EmlReadDataProviderFactory "EmlReadDataProviderFactory" - factory for EML read providers
+    - @ref EmailDataProvider::EmlWriteDataProvider "EmlWriteDataProvider" - for writing EML files
+    - @ref EmailDataProvider::EmlWriteDataProviderFactory "EmlWriteDataProviderFactory" - factory for EML write providers
     - @ref EmailDataProvider::MsgReadDataProvider "MsgReadDataProvider" - for reading MSG files
     - @ref EmailDataProvider::MsgReadDataProviderFactory "MsgReadDataProviderFactory" - factory for MSG read providers
     - @ref EmailDataProvider::MboxReadDataProvider "MboxReadDataProvider" - for reading MBOX files
@@ -308,14 +365,54 @@ module EmailDataProvider {
     - \c date: The sent date (optional date)
     - \c body_text: Plain text body content (optional string)
     - \c body_html: HTML body content (optional string)
-    - \c attachments: List of attachment metadata hashes (optional), each with \c name, \c content_type, and \c size
+    - \c attachments: List of attachment metadata hashes (optional), each with \c name, \c content_type, \c size, and \c data (binary content)
     - \c message_id: The Message-ID header value (optional string)
     - \c in_reply_to: The In-Reply-To header value (optional string)
+    - \c reply_to: The Reply-To header value (optional string)
+    - \c references: The References header value for threading (optional string)
+
+    @section EmailDataProvider_writing Writing Email Messages
+
+    @subsection EmailDataProvider_writing_eml Writing EML Files
+
+    @code{.py}
+    %requires EmailDataProvider
+
+    # Write an EML file to a path
+    EmlWriteDataProvider dp({"path": "message.eml"});
+
+    dp.createRecord({
+        "from": "sender@example.com",
+        "to": ("recipient@example.com",),
+        "subject": "Test Email",
+        "body_text": "Hello, World!",
+        "body_html": "<h1>Hello, World!</h1>",
+    });
+
+    dp.commit();
+    @endcode
+
+    @subsection EmailDataProvider_writing_binary Writing to Binary
+
+    @code{.py}
+    EmlWriteDataProvider dp();
+
+    dp.createRecord({
+        "from": "sender@example.com",
+        "to": ("recipient@example.com",),
+        "subject": "Test Email",
+        "body_text": "Hello!",
+    });
+
+    # Get binary data instead of writing to file
+    binary data = dp.getData();
+    @endcode
 
     @section EmailDataProvider_errors Error Handling
 
     Common exceptions:
     - \c EML-READ-OPTION-ERROR: Invalid read options or option conflicts for EML provider
+    - \c EML-WRITE-OPTION-ERROR: Invalid write options or option conflicts for EML provider
     - \c MSG-READ-OPTION-ERROR: Invalid read options or option conflicts for MSG provider
     - \c MBOX-READ-OPTION-ERROR: Invalid read options or option conflicts for MBOX provider
 
@@ -324,10 +421,11 @@ module EmailDataProvider {
     @subsection EmailDataProvider_v1_0 EmailDataProvider v1.0
     - initial release of the module
     - support for reading EML (RFC 822 / MIME) email files
+    - support for writing EML (RFC 822 / MIME) email files with text, HTML, and attachments
     - support for reading MSG (Microsoft Outlook) email files
     - support for reading MBOX (Unix Mailbox) files with multiple messages
     - unified record schema across all email formats
-    - binary data and stream input support
+    - binary data and stream input/output support
 */
 
 #! contains all public definitions in the EmailDataProvider module
@@ -356,11 +454,16 @@ public hash<string, AbstractDataField> sub getEmailRecordType() {
         "body_html": new QoreDataField("body_html", "HTML body content (optional)",
             AbstractDataProviderType::get(SoftStringOrNothingType)),
         "attachments": new QoreDataField("attachments",
-            "List of attachment metadata hashes with 'name', 'content_type', and 'size' keys (optional)",
+            "List of attachment metadata hashes with 'name', 'content_type', 'size', and 'data' (binary content) "
+            "keys (optional)",
             AbstractDataProviderType::get(new Type("*list<hash<auto>>"))),
         "message_id": new QoreDataField("message_id", "The Message-ID header value (optional)",
             AbstractDataProviderType::get(SoftStringOrNothingType)),
         "in_reply_to": new QoreDataField("in_reply_to", "The In-Reply-To header value (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "reply_to": new QoreDataField("reply_to", "The Reply-To header value (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "references": new QoreDataField("references", "The References header value for threading (optional)",
             AbstractDataProviderType::get(SoftStringOrNothingType)),
     };
 }

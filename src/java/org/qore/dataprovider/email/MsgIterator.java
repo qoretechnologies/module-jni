@@ -241,11 +241,14 @@ public class MsgIterator extends qore.Qore.AbstractIterator implements java.io.C
                 }
                 attachment.put("content_type", contentType != null ? contentType : "application/octet-stream");
 
+                byte[] attachData = null;
                 int size = 0;
                 if (att.getAttachData() != null) {
-                    size = att.getAttachData().getValue().length;
+                    attachData = att.getAttachData().getValue();
+                    size = attachData.length;
                 }
                 attachment.put("size", size);
+                attachment.put("data", attachData);
 
                 attachments.add(attachment);
             }
@@ -254,20 +257,26 @@ public class MsgIterator extends qore.Qore.AbstractIterator implements java.io.C
         }
         record.put("attachments", attachments.isEmpty() ? null : attachments);
 
-        // Message-ID and In-Reply-To (not directly available in HSMF; try headers)
+        // Message-ID, In-Reply-To, Reply-To, References (not directly available in HSMF; try headers)
         String messageId = null;
         String inReplyTo = null;
+        String replyTo = null;
+        String references = null;
         try {
             String[] headers = message.getHeaders();
             if (headers != null) {
                 messageId = extractHeader(headers, "Message-ID");
                 inReplyTo = extractHeader(headers, "In-Reply-To");
+                replyTo = extractHeader(headers, "Reply-To");
+                references = extractHeader(headers, "References");
             }
         } catch (ChunkNotFoundException e) {
             // ignore
         }
         record.put("message_id", messageId);
         record.put("in_reply_to", inReplyTo);
+        record.put("reply_to", replyTo);
+        record.put("references", references);
 
         return record;
     }

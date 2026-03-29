@@ -177,34 +177,51 @@ public class VcfReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (dummy) {
             return {};
         }
-        return {
-            "formatted_name": new QoreDataField("formatted_name", "The display name of the contact",
-                AbstractDataProviderType::get(StringType)),
-            "given_name": new QoreDataField("given_name", "The first/given name of the contact",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "family_name": new QoreDataField("family_name", "The last/family name of the contact",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "emails": new QoreDataField("emails", "List of email addresses with type and value",
-                AbstractDataProviderType::get(AutoListOrNothingType)),
-            "phones": new QoreDataField("phones", "List of phone numbers with type and value",
-                AbstractDataProviderType::get(AutoListOrNothingType)),
-            "addresses": new QoreDataField("addresses",
-                "List of postal addresses with type and address components",
-                AbstractDataProviderType::get(AutoListOrNothingType)),
-            "organization": new QoreDataField("organization", "The company or organization name",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "title": new QoreDataField("title", "The job title",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "note": new QoreDataField("note", "Free-text notes about the contact",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "uid": new QoreDataField("uid", "The unique identifier of the contact",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-        };
+        return VcfDataProvider::getVcfRecordType();
     }
 
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
     }
+}
+
+#! Returns the shared VCF contact record type
+/** @return a hash of field name to AbstractDataField entries describing the VCF contact record schema
+*/
+public hash<string, AbstractDataField> sub getVcfRecordType() {
+    return {
+        "formatted_name": new QoreDataField("formatted_name", "The display name of the contact",
+            AbstractDataProviderType::get(StringType)),
+        "given_name": new QoreDataField("given_name", "The first/given name of the contact",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "family_name": new QoreDataField("family_name", "The last/family name of the contact",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "emails": new QoreDataField("emails", "List of email addresses with type and value",
+            AbstractDataProviderType::get(AutoListOrNothingType)),
+        "phones": new QoreDataField("phones", "List of phone numbers with type and value",
+            AbstractDataProviderType::get(AutoListOrNothingType)),
+        "addresses": new QoreDataField("addresses",
+            "List of postal addresses with type and address components",
+            AbstractDataProviderType::get(AutoListOrNothingType)),
+        "organization": new QoreDataField("organization", "The company or organization name",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "title": new QoreDataField("title", "The job title",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "note": new QoreDataField("note", "Free-text notes about the contact",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "uid": new QoreDataField("uid", "The unique identifier of the contact",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "birthday": new QoreDataField("birthday", "The contact's birthday (optional)",
+            AbstractDataProviderType::get(new Type("*date"))),
+        "url": new QoreDataField("url", "The contact's URL (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "nickname": new QoreDataField("nickname", "The contact's nickname (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "categories": new QoreDataField("categories", "Categories/tags for the contact (optional)",
+            AbstractDataProviderType::get(new Type("*list<string>"))),
+        "role": new QoreDataField("role", "The contact's role within their organization (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+    };
 }
 } # VcfDataProvider namespace

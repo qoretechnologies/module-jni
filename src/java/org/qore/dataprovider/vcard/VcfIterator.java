@@ -24,10 +24,15 @@ package org.qore.dataprovider.vcard;
 import ezvcard.Ezvcard;
 import ezvcard.VCard;
 import ezvcard.property.Address;
+import ezvcard.property.Birthday;
+import ezvcard.property.Categories;
 import ezvcard.property.Email;
+import ezvcard.property.Nickname;
 import ezvcard.property.Organization;
+import ezvcard.property.Role;
 import ezvcard.property.StructuredName;
 import ezvcard.property.Telephone;
+import ezvcard.property.Url;
 import ezvcard.parameter.AddressType;
 import ezvcard.parameter.EmailType;
 import ezvcard.parameter.TelephoneType;
@@ -267,6 +272,61 @@ public class VcfIterator extends qore.Qore.AbstractIterator implements java.io.C
             h.put("uid", vcard.getUid().getValue());
         } else {
             h.put("uid", null);
+        }
+
+        // birthday
+        Birthday bday = vcard.getBirthday();
+        if (bday != null && bday.getDate() != null) {
+            java.time.temporal.Temporal temporal = bday.getDate();
+            java.time.ZonedDateTime zdt;
+            if (temporal instanceof java.time.ZonedDateTime) {
+                zdt = (java.time.ZonedDateTime) temporal;
+            } else if (temporal instanceof java.time.OffsetDateTime) {
+                zdt = ((java.time.OffsetDateTime) temporal).toZonedDateTime();
+            } else if (temporal instanceof java.time.LocalDateTime) {
+                zdt = ((java.time.LocalDateTime) temporal).atZone(java.time.ZoneId.systemDefault());
+            } else if (temporal instanceof java.time.LocalDate) {
+                zdt = ((java.time.LocalDate) temporal).atStartOfDay(java.time.ZoneId.systemDefault());
+            } else if (temporal instanceof java.time.Instant) {
+                zdt = ((java.time.Instant) temporal).atZone(java.time.ZoneId.systemDefault());
+            } else {
+                zdt = null;
+            }
+            h.put("birthday", zdt);
+        } else {
+            h.put("birthday", null);
+        }
+
+        // url
+        List<Url> urls = vcard.getUrls();
+        if (urls != null && !urls.isEmpty()) {
+            h.put("url", urls.get(0).getValue());
+        } else {
+            h.put("url", null);
+        }
+
+        // nickname
+        Nickname nick = vcard.getNickname();
+        if (nick != null && nick.getValues() != null && !nick.getValues().isEmpty()) {
+            h.put("nickname", nick.getValues().get(0));
+        } else {
+            h.put("nickname", null);
+        }
+
+        // categories
+        Categories cats = vcard.getCategories();
+        if (cats != null && cats.getValues() != null && !cats.getValues().isEmpty()) {
+            h.put("categories", new ArrayList<>(cats.getValues()));
+        } else {
+            h.put("categories", null);
+        }
+
+        // role
+        List<Role> roles = vcard.getRoles();
+        if (roles != null && !roles.isEmpty()) {
+            h.put("role", roles.get(0).getValue());
+        } else {
+            h.put("role", null);
         }
 
         return h;

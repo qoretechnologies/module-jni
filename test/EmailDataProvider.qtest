@@ -86,6 +86,13 @@ public class EmailDataProviderTest inherits QUnit::Test {
         addTestCase("MBOX: max_messages limit", \testMboxMaxMessages());
         addTestCase("MBOX: empty file", \testMboxEmpty());
         addTestCase("MBOX: factory tests", \testMboxFactory());
+        addTestCase("EML write: basic text email", \testEmlWriteBasic());
+        addTestCase("EML write: with HTML body", \testEmlWriteWithHtml());
+        addTestCase("EML write: with attachments", \testEmlWriteWithAttachments());
+        addTestCase("EML write: to binary data", \testEmlWriteToBinary());
+        addTestCase("EML write: full roundtrip", \testEmlWriteRoundtrip());
+        addTestCase("EML write: factory", \testEmlWriteFactory());
+        addTestCase("EML write: negative path+stream conflict", \testEmlWriteNegativePathStreamConflict());
         addTestCase("factory: all factories registered", \testAllFactories());
         addTestCase("action registration", \testActionRegistration());
         addTestCase("negative: invalid EML path", \testNegativeInvalidEmlPath());
@@ -142,6 +149,8 @@ public class EmailDataProviderTest inherits QUnit::Test {
         assertTrue(rec.hasKey("attachments"), "should have 'attachments' field");
         assertTrue(rec.hasKey("message_id"), "should have 'message_id' field");
         assertTrue(rec.hasKey("in_reply_to"), "should have 'in_reply_to' field");
+        assertTrue(rec.hasKey("reply_to"), "should have 'reply_to' field");
+        assertTrue(rec.hasKey("references"), "should have 'references' field");
         assertTrue(rec.hasKey("date"), "should have 'date' field");
 
         # Check content
@@ -150,6 +159,9 @@ public class EmailDataProviderTest inherits QUnit::Test {
         assertTrue(rec.body_text.contains("plain text test email"), "body should contain test text");
         # Message-ID is set by Jakarta Mail during saveChanges()
         assertTrue(exists rec.message_id, "should have a message_id");
+
+        # Check Reply-To header
+        assertEq("replyto-simple@example.com", rec.reply_to);
     }
 
     testEmlReadHtml() {
@@ -190,8 +202,22 @@ public class EmailDataProviderTest inherits QUnit::Test {
         assertTrue(rec.attachments.size() >= 1, "should have at least 1 attachment");
         assertEq("test-attachment.txt", rec.attachments[0].name);
 
+        # Check attachment binary data
+        assertTrue(exists rec.attachments[0].data, "attachment should have 'data' field");
+        assertEq(Type::Binary, rec.attachments[0].data.type(), "attachment data should be binary");
+        assertTrue(rec.attachments[0].data.size() > 0, "attachment data should not be empty");
+        # Verify size matches data length
+        assertEq(rec.attachments[0].data.size(), rec.attachments[0].size,
+            "attachment size should match data length");
+
         # Check In-Reply-To header
         assertEq("<original-001@example.com>", rec.in_reply_to);
+
+        # Check Reply-To header
+        assertEq("replyto@example.com", rec.reply_to);
+
+        # Check References header
+        assertEq("<ref1@example.com> <ref2@example.com>", rec.references);
     }
 
     testEmlReadStream() {
@@ -234,6 +260,8 @@ public class EmailDataProviderTest inherits QUnit::Test {
         assertTrue(rt.hasKey("attachments"), "should have 'attachments' field");
         assertTrue(rt.hasKey("message_id"), "should have 'message_id' field");
         assertTrue(rt.hasKey("in_reply_to"), "should have 'in_reply_to' field");
+        assertTrue(rt.hasKey("reply_to"), "should have 'reply_to' field");
+        assertTrue(rt.hasKey("references"), "should have 'references' field");
     }
 
     testEmlFactory() {
@@ -267,6 +295,8 @@ public class EmailDataProviderTest inherits QUnit::Test {
         assertTrue(rec.hasKey("from"), "should have 'from' field");
         assertTrue(rec.hasKey("to"), "should have 'to' field");
         assertTrue(rec.hasKey("subject"), "should have 'subject' field");
+        assertTrue(rec.hasKey("reply_to"), "should have 'reply_to' field");
+        assertTrue(rec.hasKey("references"), "should have 'references' field");
 
         # Check content from our test MSG file
         assertEq("Test MSG Subject", rec.subject);
@@ -359,10 +389,277 @@ public class EmailDataProviderTest inherits QUnit::Test {
         assertEq(3, records.size());
     }
 
+    testEmlWriteBasic() {
+        string output_path = test_data_dir + "/write-basic.eml";
+        on_exit unlink(output_path);
+
+        EmlWriteDataProvider dp(output_path);
+
+        dp.createRecord({
+            "from": "writer@example.com",
+            "to": ("reader@example.com",),
+            "subject": "Write Basic Test",
+            "body_text": "This is a basic test email body.",
+        });
+
+        dp.commit();
+
+        assertTrue(is_file(output_path), "EML file should be created");
+
+        # Read back and verify
+        EmlReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        assertTrue(records[0].from.contains("writer@example.com"), "from should contain sender");
+        assertTrue(records[0].to[0].contains("reader@example.com"), "to should contain recipient");
+        assertEq("Write Basic Test", records[0].subject);
+        assertTrue(records[0].body_text.contains("basic test email body"), "body should contain text");
+    }
+
+    testEmlWriteWithHtml() {
+        string output_path = test_data_dir + "/write-html.eml";
+        on_exit unlink(output_path);
+
+        EmlWriteDataProvider dp(output_path);
+
+        dp.createRecord({
+            "from": "html-writer@example.com",
+            "to": ("html-reader@example.com",),
+            "subject": "Write HTML Test",
+            "body_text": "Plain text version of the email.",
+            "body_html": "<html><body><h1>Hello HTML</h1><p>This is HTML content.</p></body></html>",
+        });
+
+        dp.commit();
+
+        assertTrue(is_file(output_path), "EML file should be created");
+
+        # Read back and verify
+        EmlReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        assertEq("Write HTML Test", records[0].subject);
+        assertTrue(exists records[0].body_text, "should have plain text body");
+        assertTrue(records[0].body_text.contains("Plain text version"), "body_text should contain text");
+        assertTrue(exists records[0].body_html, "should have HTML body");
+        assertTrue(records[0].body_html.contains("<h1>Hello HTML</h1>"), "body_html should contain heading");
+    }
+
+    testEmlWriteWithAttachments() {
+        string output_path = test_data_dir + "/write-attach.eml";
+        on_exit unlink(output_path);
+
+        # Create binary attachment data
+        binary att_data = binary("Test attachment content for EML write");
+
+        EmlWriteDataProvider dp(output_path);
+
+        dp.createRecord({
+            "from": "attach-writer@example.com",
+            "to": ("attach-reader@example.com",),
+            "subject": "Write Attachment Test",
+            "body_text": "Email with attachment.",
+            "attachments": ({
+                "name": "test-file.txt",
+                "content_type": "text/plain",
+                "data": att_data,
+            },),
+        });
+
+        dp.commit();
+
+        assertTrue(is_file(output_path), "EML file should be created");
+
+        # Read back and verify
+        EmlReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        assertEq("Write Attachment Test", records[0].subject);
+        assertTrue(records[0].body_text.contains("Email with attachment"), "body should contain text");
+
+        # Check attachments
+        assertTrue(exists records[0].attachments, "should have attachments");
+        assertTrue(records[0].attachments.size() >= 1, "should have at least 1 attachment");
+        assertEq("test-file.txt", records[0].attachments[0].name);
+        assertEq("text/plain", records[0].attachments[0].content_type);
+        assertTrue(exists records[0].attachments[0].data, "attachment should have data");
+        assertEq(Type::Binary, records[0].attachments[0].data.type(), "attachment data should be binary");
+        assertTrue(records[0].attachments[0].data.size() > 0, "attachment data should not be empty");
+        # Verify content matches
+        assertEq(att_data, records[0].attachments[0].data, "attachment data should match original");
+    }
+
+    testEmlWriteToBinary() {
+        EmlWriteDataProvider dp();
+
+        dp.createRecord({
+            "from": "binary-writer@example.com",
+            "to": ("binary-reader@example.com",),
+            "subject": "Binary Data Test",
+            "body_text": "Email written to binary.",
+        });
+
+        # Get data as binary before commit
+        binary data = dp.getData();
+
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Read back from binary
+        EmlReadDataProvider rdp({
+            "data": data,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Binary Data Test", records[0].subject);
+        assertTrue(records[0].body_text.contains("Email written to binary"), "body should contain text");
+    }
+
+    testEmlWriteRoundtrip() {
+        string output_path = test_data_dir + "/write-roundtrip.eml";
+        on_exit unlink(output_path);
+
+        binary att_data = binary("Roundtrip attachment data");
+
+        hash<auto> original = {
+            "from": "roundtrip-sender@example.com",
+            "to": ("roundtrip-to@example.com",),
+            "cc": ("roundtrip-cc@example.com",),
+            "subject": "Roundtrip Test Email",
+            "body_text": "Plain text for roundtrip.",
+            "body_html": "<html><body><p>HTML for roundtrip.</p></body></html>",
+            "in_reply_to": "<original-msg-001@example.com>",
+            "reply_to": "roundtrip-reply@example.com",
+            "references": "<ref-001@example.com> <ref-002@example.com>",
+            "attachments": ({
+                "name": "roundtrip.bin",
+                "content_type": "application/octet-stream",
+                "data": att_data,
+            },),
+        };
+
+        EmlWriteDataProvider dp(output_path);
+        dp.createRecord(original);
+        dp.commit();
+
+        assertTrue(is_file(output_path), "EML file should be created");
+
+        # Read back and verify all fields
+        EmlReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        hash<auto> rec = records[0];
+
+        # Verify sender
+        assertTrue(rec.from.contains("roundtrip-sender@example.com"), "from should match");
+
+        # Verify recipients
+        assertTrue(rec.to[0].contains("roundtrip-to@example.com"), "to should match");
+        assertTrue(exists rec.cc, "should have CC");
+        assertTrue(rec.cc[0].contains("roundtrip-cc@example.com"), "cc should match");
+
+        # Verify subject
+        assertEq("Roundtrip Test Email", rec.subject);
+
+        # Verify body parts
+        assertTrue(rec.body_text.contains("Plain text for roundtrip"), "body_text should match");
+        assertTrue(rec.body_html.contains("HTML for roundtrip"), "body_html should match");
+
+        # Verify headers
+        assertEq("<original-msg-001@example.com>", rec.in_reply_to);
+        assertEq("roundtrip-reply@example.com", rec.reply_to);
+        assertEq("<ref-001@example.com> <ref-002@example.com>", rec.references);
+
+        # Verify attachments
+        assertTrue(exists rec.attachments, "should have attachments");
+        assertEq(1, rec.attachments.size());
+        assertEq("roundtrip.bin", rec.attachments[0].name);
+        assertEq("application/octet-stream", rec.attachments[0].content_type);
+        assertEq(att_data, rec.attachments[0].data, "attachment data should match original");
+    }
+
+    testEmlWriteFactory() {
+        string output_path = test_data_dir + "/write-factory.eml";
+        on_exit unlink(output_path);
+
+        EmlWriteDataProviderFactory factory();
+
+        assertEq("emlwrite", factory.getInfo().name);
+
+        # Create provider via factory
+        EmlWriteDataProvider dp = factory.create({
+            "path": output_path,
+        });
+
+        dp.createRecord({
+            "from": "factory-writer@example.com",
+            "to": ("factory-reader@example.com",),
+            "subject": "Factory Test Email",
+            "body_text": "Written via factory.",
+        });
+        dp.commit();
+
+        # Read back
+        EmlReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Factory Test Email", records[0].subject);
+    }
+
+    testEmlWriteNegativePathStreamConflict() {
+        # Test path constructor with stream option
+        assertThrows("EML-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            EmlWriteDataProvider dp(test_data_dir + "/test.eml", {
+                "stream": sos,
+            });
+        });
+
+        # Test path constructor with path option
+        assertThrows("EML-WRITE-OPTION-ERROR", sub () {
+            EmlWriteDataProvider dp(test_data_dir + "/test.eml", {
+                "path": test_data_dir + "/other.eml",
+            });
+        });
+
+        # Test options constructor with both path and stream
+        assertThrows("EML-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            EmlWriteDataProvider dp({
+                "path": test_data_dir + "/test.eml",
+                "stream": sos,
+            });
+        });
+
+        # Test stream constructor with path option
+        assertThrows("EML-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            EmlWriteDataProvider dp(sos, {
+                "path": test_data_dir + "/test.eml",
+            });
+        });
+
+        # Test stream constructor with stream option
+        assertThrows("EML-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            StringOutputStream sos2();
+            EmlWriteDataProvider dp(sos, {
+                "stream": sos2,
+            });
+        });
+    }
+
     testAllFactories() {
-        # Verify all 3 factories are registered
-        EmlReadDataProviderFactory eml_factory();
-        assertEq("emlread", eml_factory.getInfo().name);
+        # Verify all 4 factories are registered
+        EmlReadDataProviderFactory eml_read_factory();
+        assertEq("emlread", eml_read_factory.getInfo().name);
+
+        EmlWriteDataProviderFactory eml_write_factory();
+        assertEq("emlwrite", eml_write_factory.getInfo().name);
 
         MsgReadDataProviderFactory msg_factory();
         assertEq("msgread", msg_factory.getInfo().name);
@@ -375,7 +672,7 @@ public class EmailDataProviderTest inherits QUnit::Test {
         # Verify that actions are properly registered
         *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("Email");
         assertTrue(exists actions, "should have actions registered for Email app");
-        assertTrue(actions.size() >= 6, "should have at least 6 actions");
+        assertTrue(actions.size() >= 8, "should have at least 8 actions");
 
         # Create a lookup hash for easier testing
         hash<string, hash<DataProviderActionInfo>> action_map;
@@ -383,7 +680,7 @@ public class EmailDataProviderTest inherits QUnit::Test {
             action_map{action.action} = action;
         }
 
-        # Verify EML actions
+        # Verify EML read actions
         assertTrue(action_map.hasKey("eml-read"), "should have 'eml-read' action");
         assertEq("Read EML Email File", action_map."eml-read".display_name);
         assertTrue(action_map."eml-read".options.hasKey("path"), "eml-read should have 'path' option");
@@ -391,6 +688,16 @@ public class EmailDataProviderTest inherits QUnit::Test {
         assertTrue(action_map.hasKey("eml-read-data"), "should have 'eml-read-data' action");
         assertEq("Read EML Email Inline Data", action_map."eml-read-data".display_name);
         assertTrue(action_map."eml-read-data".options.hasKey("data"), "eml-read-data should have 'data' option");
+
+        # Verify EML write actions
+        assertTrue(action_map.hasKey("eml-write"), "should have 'eml-write' action");
+        assertEq("Write EML Email File", action_map."eml-write".display_name);
+        assertTrue(action_map."eml-write".options.hasKey("path"), "eml-write should have 'path' option");
+        assertEq(DPAT_CREATE, action_map."eml-write".action_code);
+
+        assertTrue(action_map.hasKey("eml-write-data"), "should have 'eml-write-data' action");
+        assertEq("Create EML Email Data", action_map."eml-write-data".display_name);
+        assertEq(DPAT_CREATE, action_map."eml-write-data".action_code);
 
         # Verify MSG actions
         assertTrue(action_map.hasKey("msg-read"), "should have 'msg-read' action");

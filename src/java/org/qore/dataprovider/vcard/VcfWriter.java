@@ -25,14 +25,19 @@ import ezvcard.Ezvcard;
 import ezvcard.VCard;
 import ezvcard.VCardVersion;
 import ezvcard.property.Address;
+import ezvcard.property.Birthday;
+import ezvcard.property.Categories;
 import ezvcard.property.Email;
 import ezvcard.property.FormattedName;
+import ezvcard.property.Nickname;
 import ezvcard.property.Note;
 import ezvcard.property.Organization;
+import ezvcard.property.Role;
 import ezvcard.property.StructuredName;
 import ezvcard.property.Telephone;
 import ezvcard.property.Title;
 import ezvcard.property.Uid;
+import ezvcard.property.Url;
 import ezvcard.parameter.AddressType;
 import ezvcard.parameter.EmailType;
 import ezvcard.parameter.TelephoneType;
@@ -187,6 +192,52 @@ public class VcfWriter implements Closeable {
         Object uidObj = data.get("uid");
         if (uidObj != null) {
             vcard.setUid(new Uid(uidObj.toString()));
+        }
+
+        // birthday
+        Object bdayObj = data.get("birthday");
+        if (bdayObj != null) {
+            if (bdayObj instanceof java.time.ZonedDateTime) {
+                vcard.setBirthday(new Birthday(((java.time.ZonedDateTime) bdayObj).toLocalDate()));
+            } else if (bdayObj instanceof java.time.LocalDate) {
+                vcard.setBirthday(new Birthday((java.time.LocalDate) bdayObj));
+            } else if (bdayObj instanceof java.time.LocalDateTime) {
+                vcard.setBirthday(new Birthday(((java.time.LocalDateTime) bdayObj).toLocalDate()));
+            }
+        }
+
+        // url
+        Object urlObj = data.get("url");
+        if (urlObj != null) {
+            vcard.addUrl(urlObj.toString());
+        }
+
+        // nickname
+        Object nickObj = data.get("nickname");
+        if (nickObj != null) {
+            Nickname nick = new Nickname();
+            nick.getValues().add(nickObj.toString());
+            vcard.setNickname(nick);
+        }
+
+        // categories
+        Object catsObj = data.get("categories");
+        if (catsObj != null) {
+            Categories cats = new Categories();
+            for (Object item : toIterable(catsObj)) {
+                if (item != null) {
+                    cats.getValues().add(item.toString());
+                }
+            }
+            if (!cats.getValues().isEmpty()) {
+                vcard.setCategories(cats);
+            }
+        }
+
+        // role
+        Object roleObj = data.get("role");
+        if (roleObj != null) {
+            vcard.addRole(roleObj.toString());
         }
 
         vcards.add(vcard);

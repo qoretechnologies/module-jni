@@ -78,8 +78,13 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "desc": "Type of content to read: `paragraphs` (default) or `table`",
                 "default_value": "paragraphs",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "paragraphs", "desc": "Read document paragraphs"},
-                    <AllowedValueInfo>{"value": "table", "desc": "Read a table as row data"},
+                    <AllowedValueInfo>{"value": "paragraphs", "display_name": "Paragraphs",
+                        "short_desc": "Read document paragraphs",
+                        "desc": "Read document paragraphs with text content and style information "
+                            "(headings, normal text)"},
+                    <AllowedValueInfo>{"value": "table", "display_name": "Table",
+                        "short_desc": "Read a table as row data",
+                        "desc": "Read a table as structured row data with column headers"},
                 ),
             },
             "table_index": <DataProviderOptionInfo>{

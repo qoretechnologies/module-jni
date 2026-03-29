@@ -213,29 +213,7 @@ public class VcfWriteDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Returns the description of the record type, if any
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-        return {
-            "formatted_name": new QoreDataField("formatted_name", "The display name of the contact",
-                AbstractDataProviderType::get(StringType)),
-            "given_name": new QoreDataField("given_name", "The first/given name of the contact",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "family_name": new QoreDataField("family_name", "The last/family name of the contact",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "emails": new QoreDataField("emails", "List of email addresses with type and value",
-                AbstractDataProviderType::get(AutoListOrNothingType)),
-            "phones": new QoreDataField("phones", "List of phone numbers with type and value",
-                AbstractDataProviderType::get(AutoListOrNothingType)),
-            "addresses": new QoreDataField("addresses",
-                "List of postal addresses with type and address components",
-                AbstractDataProviderType::get(AutoListOrNothingType)),
-            "organization": new QoreDataField("organization", "The company or organization name",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "title": new QoreDataField("title", "The job title",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "note": new QoreDataField("note", "Free-text notes about the contact",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-            "uid": new QoreDataField("uid", "The unique identifier of the contact",
-                AbstractDataProviderType::get(SoftStringOrNothingType)),
-        };
+        return VcfDataProvider::getVcfRecordType();
     }
 
     #! Returns data provider static info

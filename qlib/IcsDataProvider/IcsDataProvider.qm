@@ -91,20 +91,26 @@ module IcsDataProvider {
             "path": "/",
             "action": "read",
             "display_name": "Read ICS Calendar File",
-            "short_desc": "Read iCalendar events from a specific file location",
-            "desc": "Read an ICS file from a file location and return the calendar events as "
-                "records.\n\n"
-                "Use this action to import calendar events from ICS files stored on disk or "
-                "accessible via a URL. The file location is resolved using the "
+            "short_desc": "Read iCalendar events or to-dos from a specific file location",
+            "desc": "Read an ICS file from a file location and return the calendar events or "
+                "to-dos as records.\n\n"
+                "Use this action to import calendar events or VTODO tasks from ICS files stored "
+                "on disk or accessible via a URL. The file location is resolved using the "
                 "`FileLocationHandler` module, supporting local file paths and remote URLs.\n\n"
                 "**Key Options**:\n"
-                "- `path` (required) -- the file location to read from",
+                "- `path` (required) -- the file location to read from\n"
+                "- `content_type` (optional) -- \"events\" (default) or \"todos\"",
             "action_code": DPAT_FIND,
             "cls": "IcsDataProvider::IcsReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 IcsReadDataProvider::ConstructorOptions{"path",}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                IcsReadDataProvider::ConstructorOptions{"content_type",}, {
+                    "preselected": True,
                     "loc": "constructor",
                 }
             ),
@@ -116,19 +122,26 @@ module IcsDataProvider {
             "path": "/",
             "action": "read-data",
             "display_name": "Read ICS Calendar Inline Data",
-            "short_desc": "Read iCalendar events from inline binary data",
-            "desc": "Read iCalendar events from inline binary data and return them as records.\n\n"
+            "short_desc": "Read iCalendar events or to-dos from inline binary data",
+            "desc": "Read iCalendar events or to-dos from inline binary data and return them as "
+                "records.\n\n"
                 "Use this action when the ICS data is already available in memory (e.g., received "
                 "from an API response, uploaded by a user, or read from a database BLOB column) "
                 "rather than stored as a file.\n\n"
                 "**Key Options**:\n"
-                "- `data` (required) -- the ICS binary data to parse",
+                "- `data` (required) -- the ICS binary data to parse\n"
+                "- `content_type` (optional) -- \"events\" (default) or \"todos\"",
             "action_code": DPAT_FIND,
             "cls": "IcsDataProvider::IcsReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 IcsReadDataProvider::ConstructorOptions{"data",}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                IcsReadDataProvider::ConstructorOptions{"content_type",}, {
+                    "preselected": True,
                     "loc": "constructor",
                 }
             ),
@@ -140,18 +153,24 @@ module IcsDataProvider {
             "path": "/",
             "action": "write",
             "display_name": "Write ICS Calendar File",
-            "short_desc": "Write calendar events to an ICS file",
-            "desc": "Write calendar events to an ICS file at a specified path.\n\n"
-                "Use this action to generate ICS files from structured event data for calendar "
-                "sharing, meeting invitations, or integration with calendar applications.\n\n"
+            "short_desc": "Write calendar events or to-dos to an ICS file",
+            "desc": "Write calendar events or to-dos to an ICS file at a specified path.\n\n"
+                "Use this action to generate ICS files from structured event or to-do data for "
+                "calendar sharing, task management, or integration with calendar applications.\n\n"
                 "**Key Options**:\n"
-                "- `path` (required) -- the output file location",
+                "- `path` (required) -- the output file location\n"
+                "- `content_type` (optional) -- \"events\" (default) or \"todos\"",
             "action_code": DPAT_CREATE,
             "cls": "IcsDataProvider::IcsWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 IcsWriteDataProvider::ConstructorOptions{"path",}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                IcsWriteDataProvider::ConstructorOptions{"content_type",}, {
+                    "preselected": True,
                     "loc": "constructor",
                 }
             ),
@@ -163,18 +182,25 @@ module IcsDataProvider {
             "path": "/",
             "action": "write-data",
             "display_name": "Create ICS Calendar Data",
-            "short_desc": "Create iCalendar data and return as binary",
-            "desc": "Create iCalendar data in memory and return it as binary data.\n\n"
+            "short_desc": "Create iCalendar event or to-do data and return as binary",
+            "desc": "Create iCalendar event or to-do data in memory and return it as binary "
+                "data.\n\n"
                 "Use this action when you need to generate an ICS file without writing to disk -- "
                 "for example, to return the calendar as an API response, attach it to an email, "
                 "or pass it to another processing step. Retrieve the result by calling "
                 "`getData()` on the provider after creating all records.\n\n"
                 "**Key Options**:\n"
-                "- No required options -- events are added via `createRecord()` and binary data "
-                "is retrieved via `getData()`",
+                "- `content_type` (optional) -- \"events\" (default) or \"todos\"\n"
+                "- No other required options -- records are added via `createRecord()` and binary "
+                "data is retrieved via `getData()`",
             "action_code": DPAT_CREATE,
             "cls": "IcsDataProvider::IcsWriteDataProvider",
-            "options": {},
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                IcsWriteDataProvider::ConstructorOptions{"content_type",}, {
+                    "preselected": True,
+                    "loc": "constructor",
+                }
+            ),
         });
     };
 }

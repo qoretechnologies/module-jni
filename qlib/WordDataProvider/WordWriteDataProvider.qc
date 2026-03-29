@@ -61,8 +61,12 @@ public class WordWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 "desc": "Type of content to write: `paragraphs` (default) or `table`",
                 "default_value": "paragraphs",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "paragraphs", "desc": "Write paragraphs"},
-                    <AllowedValueInfo>{"value": "table", "desc": "Write a table"},
+                    <AllowedValueInfo>{"value": "paragraphs", "display_name": "Paragraphs",
+                        "short_desc": "Write paragraphs",
+                        "desc": "Write styled paragraphs with text and heading styles"},
+                    <AllowedValueInfo>{"value": "table", "display_name": "Table",
+                        "short_desc": "Write a table",
+                        "desc": "Write structured tabular data with column headers"},
                 ),
             },
             "headers": <DataProviderOptionInfo>{

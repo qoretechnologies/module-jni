@@ -292,6 +292,7 @@ set(EMAIL_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(EMAIL_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/)
 set(EMAIL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/EmlIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/EmlWriter.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/MsgIterator.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/MboxIterator.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/EmailTestHelper.java

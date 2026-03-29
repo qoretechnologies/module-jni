@@ -25,14 +25,19 @@ import ezvcard.Ezvcard;
 import ezvcard.VCard;
 import ezvcard.VCardVersion;
 import ezvcard.property.Address;
+import ezvcard.property.Birthday;
+import ezvcard.property.Categories;
 import ezvcard.property.Email;
 import ezvcard.property.FormattedName;
+import ezvcard.property.Nickname;
 import ezvcard.property.Note;
 import ezvcard.property.Organization;
+import ezvcard.property.Role;
 import ezvcard.property.StructuredName;
 import ezvcard.property.Telephone;
 import ezvcard.property.Title;
 import ezvcard.property.Uid;
+import ezvcard.property.Url;
 import ezvcard.parameter.AddressType;
 import ezvcard.parameter.EmailType;
 import ezvcard.parameter.TelephoneType;
@@ -42,6 +47,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -218,5 +224,111 @@ public class VcfTestHelper {
         try (FileOutputStream out = new FileOutputStream(new File(path))) {
             Ezvcard.write(vcards).version(VCardVersion.V3_0).go(out);
         }
+    }
+
+    /**
+     * Creates a VCF file with all fields populated including birthday, url, nickname,
+     * categories, and role.
+     *
+     * @param path The path to create the file at
+     * @throws IOException if an I/O error occurs
+     */
+    public static void createFullFieldsVcf(String path) throws IOException {
+        List<VCard> vcards = new ArrayList<>();
+        vcards.add(createFullFieldsVcard());
+
+        try (FileOutputStream out = new FileOutputStream(new File(path))) {
+            Ezvcard.write(vcards).version(VCardVersion.V3_0).go(out);
+        }
+    }
+
+    /**
+     * Creates a VCF with all fields populated and returns the bytes.
+     *
+     * @return The VCF file as bytes
+     * @throws IOException if an I/O error occurs
+     */
+    public static byte[] createFullFieldsVcfBytes() throws IOException {
+        List<VCard> vcards = new ArrayList<>();
+        vcards.add(createFullFieldsVcard());
+
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Ezvcard.write(vcards).version(VCardVersion.V3_0).go(out);
+            return out.toByteArray();
+        }
+    }
+
+    /**
+     * Creates a VCard with all fields populated including the new fields:
+     * birthday, url, nickname, categories, and role.
+     */
+    private static VCard createFullFieldsVcard() {
+        VCard card = new VCard();
+
+        // Formatted name
+        card.setFormattedName("Charlie Full Fields");
+
+        // Structured name
+        StructuredName sn = new StructuredName();
+        sn.setGiven("Charlie");
+        sn.setFamily("Full Fields");
+        card.setStructuredName(sn);
+
+        // Email
+        Email email = new Email("charlie@example.com");
+        email.getTypes().add(EmailType.WORK);
+        card.addEmail(email);
+
+        // Phone
+        Telephone phone = new Telephone("+1-555-0300");
+        phone.getTypes().add(TelephoneType.CELL);
+        card.addTelephoneNumber(phone);
+
+        // Address
+        Address addr = new Address();
+        addr.getTypes().add(AddressType.HOME);
+        addr.setStreetAddress("789 Test Lane");
+        addr.setLocality("Portland");
+        addr.setRegion("OR");
+        addr.setPostalCode("97201");
+        addr.setCountry("USA");
+        card.addAddress(addr);
+
+        // Organization
+        Organization org = new Organization();
+        org.getValues().add("Full Fields Corp");
+        card.setOrganization(org);
+
+        // Title
+        card.addTitle("Chief Testing Officer");
+
+        // Note
+        card.addNote("Contact with all fields populated for testing");
+
+        // UID
+        card.setUid(new Uid("urn:uuid:full-fields-test-1234"));
+
+        // Birthday - 1990-06-15
+        card.setBirthday(new Birthday(LocalDate.of(1990, 6, 15)));
+
+        // URL
+        card.addUrl("https://charlie.example.com");
+
+        // Nickname
+        Nickname nick = new Nickname();
+        nick.getValues().add("Chuck");
+        card.setNickname(nick);
+
+        // Categories
+        Categories cats = new Categories();
+        cats.getValues().add("friend");
+        cats.getValues().add("colleague");
+        cats.getValues().add("vip");
+        card.setCategories(cats);
+
+        // Role
+        card.addRole("Quality Assurance Lead");
+
+        return card;
     }
 }

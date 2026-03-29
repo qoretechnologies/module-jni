@@ -74,6 +74,7 @@ public class EmailTestHelper {
         msg.setSentDate(new Date(1735689600000L)); // 2025-01-01T00:00:00 UTC
         msg.setText("This is a plain text test email body.", "utf-8");
         msg.setHeader("Message-ID", "<test-001@example.com>");
+        msg.setHeader("Reply-To", "replyto-simple@example.com");
         msg.saveChanges();
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
@@ -131,6 +132,8 @@ public class EmailTestHelper {
         msg.setSentDate(new Date(1735689600000L));
         msg.setHeader("Message-ID", "<test-003@example.com>");
         msg.setHeader("In-Reply-To", "<original-001@example.com>");
+        msg.setHeader("Reply-To", "replyto@example.com");
+        msg.setHeader("References", "<ref1@example.com> <ref2@example.com>");
 
         // Outer multipart/mixed
         MimeMultipart mixed = new MimeMultipart("mixed");

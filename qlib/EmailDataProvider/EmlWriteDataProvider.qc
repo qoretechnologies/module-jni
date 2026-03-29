@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-# Qore IcsWriteDataProvider class definition
+# Qore EmlWriteDataProvider class definition
 
-/*  IcsWriteDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  EmlWriteDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -22,14 +22,14 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-#! the IcsDataProvider namespace
-public namespace IcsDataProvider {
-#! Provides a data provider for writing ICS (iCalendar) files
-public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
+#! the EmailDataProvider namespace. All classes used in the EmailDataProvider module should be inside this namespace
+public namespace EmailDataProvider {
+#! Provides a data provider for writing EML (RFC 822 / MIME) email files
+public class EmlWriteDataProvider inherits DataProvider::AbstractDataProvider {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "type": "IcsWriteDataProvider",
+            "type": "EmlWriteDataProvider",
             "supports_create": True,
             "has_record": True,
             "constructor_options": ConstructorOptions,
@@ -38,45 +38,21 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
         #! Constructor options
         const ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
-                "display_name": "ICS Output Path",
-                "short_desc": "The location to write the ICS file",
+                "display_name": "EML Output Path",
+                "short_desc": "The location to write the EML file",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The location for the output ICS data file; mutually exclusive with `stream`.\n\n"
-                    "The output location is handled by a call to "
+                "desc": "The location for the output EML data file; mutually exclusive with `stream`; "
+                    "the output location is handled by a call to "
                     "[FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/"
                     "manual/qorus/current/qore/modules/FileLocationHandler/html/"
                     "class_file_location_handler_1_1_file_location_handler.html"
                     "#a46f7e9cc0e76e0d7e30cae79513cd35)",
-                "example_value": "file:///path/to/output.ics",
             },
             "stream": <DataProviderOptionInfo>{
-                "display_name": "ICS Output Stream",
-                "short_desc": "An output stream for ICS data",
+                "display_name": "EML Output Stream",
+                "short_desc": "An output stream for EML data",
                 "type": AbstractDataProviderType::get(new Type("OutputStream")),
-                "desc": "An output stream for ICS data; mutually exclusive with `path`",
-            },
-            "content_type": <DataProviderOptionInfo>{
-                "display_name": "Content Type",
-                "short_desc": "Type of calendar component to write",
-                "type": AbstractDataProviderType::get(StringType),
-                "desc": "The type of iCalendar component to write: \"events\" (default) or \"todos\"",
-                "default_value": "events",
-                "allowed_values": (
-                    <AllowedValueInfo>{
-                        "value": "events",
-                        "display_name": "Events",
-                        "short_desc": "Write VEVENT components",
-                        "desc": "Write VEVENT (calendar event) components with fields for dates, "
-                            "location, attendees, recurrence, categories, and alarms",
-                    },
-                    <AllowedValueInfo>{
-                        "value": "todos",
-                        "display_name": "To-dos",
-                        "short_desc": "Write VTODO components",
-                        "desc": "Write VTODO (task/to-do) components with fields for due date, "
-                            "completion status, priority, percent complete, and categories",
-                    },
-                ),
+                "desc": "An output stream for EML data; mutually exclusive with `path`",
             },
         };
     }
@@ -91,68 +67,83 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
         #! The name of the object
         string name;
 
-        #! The ICS writer object
-        IcsWriter writer;
+        #! The EML writer object
+        EmlWriter writer;
 
         #! Records created count
         int created = 0;
-
-        #! The content type to write: "events" or "todos"
-        string content_type = "events";
     }
 
-    #! Creates the IcsWriteDataProvider with the output path and optionally an option hash
+    #! Creates the EmlWriteDataProvider with the output path and optionally an option hash
+    /** @param path the output file path
+        @param opts a hash of optional options
+
+        @throw EML-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
+    */
     constructor(string path, *hash<auto> opts) {
-        *hash<auto> copts = checkOptions("ICS-WRITE-OPTION-ERROR", ConstructorOptions, opts);
+        *hash<auto> copts = checkOptions("EML-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.stream) {
-            error("ICS-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when path is given as first "
+            error("EML-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when path is given as first "
                 "argument; use either one or the other");
         }
         if (copts.path) {
-            error("ICS-WRITE-OPTION-ERROR", "cannot provide \"path\" option when path is given as first "
+            error("EML-WRITE-OPTION-ERROR", "cannot provide \"path\" option when path is given as first "
                 "argument");
         }
         self.path = path;
         name = path;
-        content_type = copts.content_type ?? "events";
-        writer = new IcsWriter(content_type);
+        setupWriter();
     }
 
-    #! Creates the IcsWriteDataProvider with an output stream and optionally an option hash
+    #! Creates the EmlWriteDataProvider with an output stream and optionally an option hash
+    /** @param stream the output stream to write to
+        @param opts a hash of optional options
+
+        @throw EML-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
+    */
     constructor(OutputStream stream, *hash<auto> opts) {
-        *hash<auto> copts = checkOptions("ICS-WRITE-OPTION-ERROR", ConstructorOptions, opts);
+        *hash<auto> copts = checkOptions("EML-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.path) {
-            error("ICS-WRITE-OPTION-ERROR", "cannot provide \"path\" option when stream is given as first "
+            error("EML-WRITE-OPTION-ERROR", "cannot provide \"path\" option when stream is given as first "
                 "argument; use either one or the other");
         }
         if (copts.stream) {
-            error("ICS-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when stream is given as first "
+            error("EML-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when stream is given as first "
                 "argument");
         }
         self.stream = stream;
-        name = sprintf("ics-stream=%s", stream.uniqueHash());
-        content_type = copts.content_type ?? "events";
-        writer = new IcsWriter(content_type);
+        name = sprintf("eml-stream=%s", stream.uniqueHash());
+        setupWriter();
     }
 
     #! Creates the object from constructor options
+    /**
+        @throw EML-WRITE-OPTION-ERROR invalid or unknown option
+
+        @note If neither \c path nor \c stream is provided, use getData() to retrieve the EML data as binary
+    */
     constructor(*hash<auto> options) {
-        *hash<auto> copts = checkOptions("ICS-WRITE-OPTION-ERROR", ConstructorOptions, options);
-        content_type = copts.content_type ?? "events";
+        *hash<auto> copts = checkOptions("EML-WRITE-OPTION-ERROR", ConstructorOptions, options);
         if (copts.path) {
             if (copts.stream) {
-                error("ICS-WRITE-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
+                error("EML-WRITE-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
                     "one or the other");
             }
             path = copts.path;
             name = path;
         } else if (copts.stream) {
             stream = copts.stream;
-            name = sprintf("ics-stream=%s", stream.uniqueHash());
+            name = sprintf("eml-stream=%s", stream.uniqueHash());
         } else {
-            name = "ics-data";
+            # No path or stream - user will use getData() to retrieve binary data
+            name = "eml-data";
         }
-        writer = new IcsWriter(content_type);
+        setupWriter();
+    }
+
+    #! Sets up the writer
+    private setupWriter() {
+        writer = new EmlWriter();
     }
 
     #! Returns the object name
@@ -160,19 +151,29 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
         return name;
     }
 
-    #! Destructor - ensures data is written
+    #! Destructor - ensures file is written
     destructor() {
         commit();
     }
 
-    #! Creates a single record (event or todo) in the data provider
+    #! Creates a single record in the data provider
+    /** @param rec the record to create; should contain email fields such as \c from, \c to,
+        \c cc, \c bcc, \c subject, \c date, \c body_text, \c body_html, \c attachments,
+        \c message_id, \c in_reply_to, \c reply_to, \c references
+        @param create_options no options are currently supported
+
+        @return the record created (echoes back the input)
+    */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
-        writer.writeRecord(rec);
+        writer.writeMessage(rec);
         ++created;
         return rec;
     }
 
-    #! Commits (writes) the ICS file
+    #! Commits (writes) the EML file
+    /** Call this method when you are done writing records to ensure the file is written.
+        This is also called automatically in the destructor.
+    */
     commit() {
         if (!writer) {
             return;
@@ -194,9 +195,13 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns the data as binary
+    /** @return the EML file contents as binary data
+
+        @note This is an alternative to using path or stream - get the data directly
+    */
     binary getData() {
         if (!writer) {
-            throw "ICS-WRITE-ERROR", "writer has already been committed";
+            throw "EML-WRITE-ERROR", "writer has already been committed";
         }
         return writer.getBytes();
     }
@@ -208,10 +213,7 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Returns the description of the record type, if any
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-        if (content_type == "todos") {
-            return IcsDataProvider::getIcsTodoRecordType();
-        }
-        return IcsDataProvider::getIcsRecordType();
+        return EmailDataProvider::getEmailRecordType();
     }
 
     #! Returns data provider static info
@@ -219,4 +221,4 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
         return ProviderInfo;
     }
 }
-} # IcsDataProvider namespace
+} # EmailDataProvider namespace

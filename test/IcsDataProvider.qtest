@@ -78,6 +78,18 @@ public class IcsDataProviderTest inherits QUnit::Test {
         addTestCase("negative: write path+stream conflict", \testWriteNegativePathStreamConflict());
         addTestCase("negative: invalid ICS data", \testNegativeInvalidData());
         addTestCase("negative: getData after commit", \testNegativeGetDataAfterCommit());
+        addTestCase("read: extended fields from file", \testReadExtendedFields());
+        addTestCase("read: extended fields record type", \testExtendedRecordType());
+        addTestCase("roundtrip: extended fields", \testRoundtripExtendedFields());
+        addTestCase("roundtrip: alarms", \testRoundtripAlarms());
+        addTestCase("roundtrip: categories", \testRoundtripCategories());
+        addTestCase("roundtrip: all new fields combined", \testRoundtripAllNewFields());
+        addTestCase("todo: read from path", \testTodoReadPath());
+        addTestCase("todo: read from binary data", \testTodoReadBinaryData());
+        addTestCase("todo: record type", \testTodoRecordType());
+        addTestCase("todo: write basic", \testTodoWriteBasic());
+        addTestCase("todo: roundtrip all fields", \testTodoRoundtrip());
+        addTestCase("todo: content type default", \testContentTypeDefault());
 
         set_return_value(main());
     }
@@ -92,10 +104,14 @@ public class IcsDataProviderTest inherits QUnit::Test {
         IcsTestHelper::createSimpleIcs(test_data_dir + "/simple.ics");
         IcsTestHelper::createRecurringIcs(test_data_dir + "/recurring.ics");
         IcsTestHelper::createEmptyIcs(test_data_dir + "/empty.ics");
+        IcsTestHelper::createFullFieldsIcs(test_data_dir + "/full-fields.ics");
+        IcsTestHelper::createTodoIcs(test_data_dir + "/todos.ics");
 
         assertTrue(is_file(test_data_dir + "/simple.ics"), "simple.ics created");
         assertTrue(is_file(test_data_dir + "/recurring.ics"), "recurring.ics created");
         assertTrue(is_file(test_data_dir + "/empty.ics"), "empty.ics created");
+        assertTrue(is_file(test_data_dir + "/full-fields.ics"), "full-fields.ics created");
+        assertTrue(is_file(test_data_dir + "/todos.ics"), "todos.ics created");
     }
 
     testBasicReadPath() {
@@ -509,20 +525,29 @@ public class IcsDataProviderTest inherits QUnit::Test {
         assertTrue(action_map.hasKey("read"), "should have 'read' action");
         assertEq("Read ICS Calendar File", action_map."read".display_name);
         assertTrue(action_map."read".options.hasKey("path"), "read action should have 'path' option");
+        assertTrue(action_map."read".options.hasKey("content_type"),
+            "read action should have 'content_type' option");
 
         # Verify read-data action
         assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
         assertEq("Read ICS Calendar Inline Data", action_map."read-data".display_name);
-        assertTrue(action_map."read-data".options.hasKey("data"), "read-data action should have 'data' option");
+        assertTrue(action_map."read-data".options.hasKey("data"),
+            "read-data action should have 'data' option");
+        assertTrue(action_map."read-data".options.hasKey("content_type"),
+            "read-data action should have 'content_type' option");
 
         # Verify write action
         assertTrue(action_map.hasKey("write"), "should have 'write' action");
         assertEq("Write ICS Calendar File", action_map."write".display_name);
         assertTrue(action_map."write".options.hasKey("path"), "write action should have 'path' option");
+        assertTrue(action_map."write".options.hasKey("content_type"),
+            "write action should have 'content_type' option");
 
         # Verify write-data action
         assertTrue(action_map.hasKey("write-data"), "should have 'write-data' action");
         assertEq("Create ICS Calendar Data", action_map."write-data".display_name);
+        assertTrue(action_map."write-data".options.hasKey("content_type"),
+            "write-data action should have 'content_type' option");
     }
 
     testNegativeInvalidPath() {
@@ -642,5 +667,543 @@ public class IcsDataProviderTest inherits QUnit::Test {
         assertThrows("ICS-WRITE-ERROR", sub () {
             dp.getData();
         });
+    }
+
+    testReadExtendedFields() {
+        IcsReadDataProvider dp(test_data_dir + "/full-fields.ics");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 events from full-fields.ics");
+
+        # Event 1: Conference with all extended fields
+        hash<auto> ev1 = records[0];
+        assertEq("full-001@test.example.com", ev1.uid);
+        assertEq("Annual Conference", ev1.summary);
+        assertEq("Convention Center", ev1.location);
+        assertEq("Annual company conference", ev1.description);
+        assertEq("events@example.com", ev1.organizer);
+        assertEq("CONFIRMED", ev1.status);
+
+        # Categories
+        assertTrue(ev1.categories instanceof list, "categories should be a list");
+        assertEq(3, ev1.categories.size(), "should have 3 categories");
+        assertTrue(inlist("CONFERENCE", ev1.categories), "should have CONFERENCE category");
+        assertTrue(inlist("BUSINESS", ev1.categories), "should have BUSINESS category");
+        assertTrue(inlist("ANNUAL", ev1.categories), "should have ANNUAL category");
+
+        # Classification
+        assertEq("PUBLIC", ev1.classification);
+
+        # URL
+        assertEq("https://example.com/conference", ev1.url);
+
+        # Created
+        assertTrue(ev1.created instanceof date, "created should be a date");
+
+        # Last-Modified
+        assertTrue(ev1.last_modified instanceof date, "last_modified should be a date");
+
+        # Transp
+        assertEq("OPAQUE", ev1.transp);
+
+        # Sequence
+        assertEq(2, ev1.sequence);
+
+        # Alarms
+        assertTrue(ev1.alarms instanceof list, "alarms should be a list");
+        assertEq(2, ev1.alarms.size(), "should have 2 alarms");
+
+        # First alarm - display
+        hash<auto> a1 = ev1.alarms[0];
+        assertEq("DISPLAY", a1.action);
+        assertEq("-PT15M", a1.trigger);
+        assertEq("Conference starts in 15 minutes", a1.description);
+
+        # Second alarm - email with repeat
+        hash<auto> a2 = ev1.alarms[1];
+        assertEq("EMAIL", a2.action);
+        assertEq("-P1D", a2.trigger);
+        assertEq("Conference tomorrow", a2.description);
+        assertEq(2, a2.repeat);
+
+        # Event 2: Private meeting with minimal extended fields
+        hash<auto> ev2 = records[1];
+        assertEq("full-002@test.example.com", ev2.uid);
+        assertEq("Private Meeting", ev2.summary);
+        assertEq("PRIVATE", ev2.classification);
+        assertEq("TRANSPARENT", ev2.transp);
+        assertEq(0, ev2.sequence);
+        assertTrue(ev2.created instanceof date, "created should be a date for event 2");
+        assertNothing(ev2.categories, "no categories for event 2");
+        assertNothing(ev2.url, "no url for event 2");
+        assertNothing(ev2.alarms, "no alarms for event 2");
+    }
+
+    testExtendedRecordType() {
+        IcsReadDataProvider dp(test_data_dir + "/full-fields.ics");
+
+        *hash<string, AbstractDataField> fields = dp.getRecordType();
+        assertTrue(exists fields, "should have record type");
+
+        # Verify all new fields are present
+        assertTrue(fields.hasKey("categories"), "should have 'categories' field");
+        assertTrue(fields.hasKey("classification"), "should have 'classification' field");
+        assertTrue(fields.hasKey("url"), "should have 'url' field");
+        assertTrue(fields.hasKey("created"), "should have 'created' field");
+        assertTrue(fields.hasKey("last_modified"), "should have 'last_modified' field");
+        assertTrue(fields.hasKey("transp"), "should have 'transp' field");
+        assertTrue(fields.hasKey("sequence"), "should have 'sequence' field");
+        assertTrue(fields.hasKey("alarms"), "should have 'alarms' field");
+
+        # Verify the total number of fields (11 original + 8 new = 19)
+        assertEq(19, fields.size(), "should have 19 total fields");
+    }
+
+    testRoundtripExtendedFields() {
+        IcsWriteDataProvider wdp();
+
+        wdp.createRecord({
+            "uid": "ext-001@test.com",
+            "summary": "Extended Fields Event",
+            "dtstart": 2026-07-15T10:00:00Z,
+            "dtend": 2026-07-15T12:00:00Z,
+            "classification": "CONFIDENTIAL",
+            "url": "https://example.com/event/ext-001",
+            "created": 2026-01-15T08:00:00Z,
+            "last_modified": 2026-06-01T12:00:00Z,
+            "transp": "OPAQUE",
+            "sequence": 3,
+        });
+
+        binary data = wdp.getData();
+
+        IcsReadDataProvider rdp({"data": data});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        hash<auto> ev = records[0];
+        assertEq("ext-001@test.com", ev.uid);
+        assertEq("Extended Fields Event", ev.summary);
+        assertEq("CONFIDENTIAL", ev.classification);
+        assertEq("https://example.com/event/ext-001", ev.url);
+        assertTrue(ev.created instanceof date, "created should be a date");
+        assertTrue(ev.last_modified instanceof date, "last_modified should be a date");
+        assertEq("OPAQUE", ev.transp);
+        assertEq(3, ev.sequence);
+    }
+
+    testRoundtripAlarms() {
+        IcsWriteDataProvider wdp();
+
+        wdp.createRecord({
+            "uid": "alarm-001@test.com",
+            "summary": "Event with Alarms",
+            "dtstart": 2026-08-15T14:00:00Z,
+            "dtend": 2026-08-15T15:00:00Z,
+            "alarms": (
+                {
+                    "action": "DISPLAY",
+                    "trigger": "-PT30M",
+                    "description": "Meeting in 30 minutes",
+                },
+                {
+                    "action": "EMAIL",
+                    "trigger": "-PT1H",
+                    "description": "Meeting in 1 hour",
+                    "duration": "PT15M",
+                    "repeat": 3,
+                },
+            ),
+        });
+
+        binary data = wdp.getData();
+
+        IcsReadDataProvider rdp({"data": data});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        hash<auto> ev = records[0];
+        assertEq("alarm-001@test.com", ev.uid);
+
+        assertTrue(ev.alarms instanceof list, "alarms should be a list");
+        assertEq(2, ev.alarms.size(), "should have 2 alarms");
+
+        # First alarm
+        assertEq("DISPLAY", ev.alarms[0].action);
+        assertEq("-PT30M", ev.alarms[0].trigger);
+        assertEq("Meeting in 30 minutes", ev.alarms[0].description);
+
+        # Second alarm with repeat
+        assertEq("EMAIL", ev.alarms[1].action);
+        assertEq("-PT1H", ev.alarms[1].trigger);
+        assertEq("Meeting in 1 hour", ev.alarms[1].description);
+        assertEq(3, ev.alarms[1].repeat);
+    }
+
+    testRoundtripCategories() {
+        IcsWriteDataProvider wdp();
+
+        wdp.createRecord({
+            "uid": "cat-001@test.com",
+            "summary": "Categorized Event",
+            "dtstart": 2026-09-15T10:00:00Z,
+            "dtend": 2026-09-15T11:00:00Z,
+            "categories": ("MEETING", "IMPORTANT", "TEAM"),
+        });
+
+        binary data = wdp.getData();
+
+        IcsReadDataProvider rdp({"data": data});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        hash<auto> ev = records[0];
+        assertEq("cat-001@test.com", ev.uid);
+
+        assertTrue(ev.categories instanceof list, "categories should be a list");
+        assertEq(3, ev.categories.size(), "should have 3 categories");
+        assertTrue(inlist("MEETING", ev.categories), "should have MEETING category");
+        assertTrue(inlist("IMPORTANT", ev.categories), "should have IMPORTANT category");
+        assertTrue(inlist("TEAM", ev.categories), "should have TEAM category");
+    }
+
+    testRoundtripAllNewFields() {
+        IcsWriteDataProvider wdp();
+
+        wdp.createRecord({
+            "uid": "all-001@test.com",
+            "summary": "All New Fields Event",
+            "dtstart": 2026-10-01T09:00:00Z,
+            "dtend": 2026-10-01T10:30:00Z,
+            "location": "Main Hall",
+            "description": "Event with every new field populated",
+            "organizer": "admin@example.com",
+            "attendees": ("user1@example.com", "user2@example.com"),
+            "status": "CONFIRMED",
+            "categories": ("WORK", "PROJECT"),
+            "classification": "PUBLIC",
+            "url": "https://example.com/all-fields",
+            "created": 2026-09-01T12:00:00Z,
+            "last_modified": 2026-09-20T18:00:00Z,
+            "transp": "OPAQUE",
+            "sequence": 5,
+            "alarms": (
+                {
+                    "action": "DISPLAY",
+                    "trigger": "-PT10M",
+                    "description": "Starting soon",
+                },
+            ),
+        });
+
+        binary data = wdp.getData();
+
+        IcsReadDataProvider rdp({"data": data});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        hash<auto> ev = records[0];
+
+        # Verify original fields
+        assertEq("all-001@test.com", ev.uid);
+        assertEq("All New Fields Event", ev.summary);
+        assertEq("Main Hall", ev.location);
+        assertEq("Event with every new field populated", ev.description);
+        assertEq("admin@example.com", ev.organizer);
+        assertTrue(ev.attendees instanceof list, "attendees should be a list");
+        assertEq(2, ev.attendees.size(), "should have 2 attendees");
+        assertEq("CONFIRMED", ev.status);
+
+        # Verify all new fields
+        assertTrue(ev.categories instanceof list, "categories should be a list");
+        assertEq(2, ev.categories.size(), "should have 2 categories");
+        assertTrue(inlist("WORK", ev.categories), "should have WORK category");
+        assertTrue(inlist("PROJECT", ev.categories), "should have PROJECT category");
+        assertEq("PUBLIC", ev.classification);
+        assertEq("https://example.com/all-fields", ev.url);
+        assertTrue(ev.created instanceof date, "created should be a date");
+        assertTrue(ev.last_modified instanceof date, "last_modified should be a date");
+        assertEq("OPAQUE", ev.transp);
+        assertEq(5, ev.sequence);
+        assertTrue(ev.alarms instanceof list, "alarms should be a list");
+        assertEq(1, ev.alarms.size(), "should have 1 alarm");
+        assertEq("DISPLAY", ev.alarms[0].action);
+        assertEq("-PT10M", ev.alarms[0].trigger);
+        assertEq("Starting soon", ev.alarms[0].description);
+
+        # Verify that events without new fields have NOTHING for those fields
+        wdp = new IcsWriteDataProvider();
+        wdp.createRecord({
+            "uid": "minimal-001@test.com",
+            "summary": "Minimal Event",
+            "dtstart": 2026-10-02T08:00:00Z,
+        });
+        data = wdp.getData();
+        rdp = new IcsReadDataProvider({"data": data});
+        records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        hash<auto> minimal = records[0];
+        assertNothing(minimal.categories, "minimal event should have no categories");
+        assertNothing(minimal.classification, "minimal event should have no classification");
+        assertNothing(minimal.url, "minimal event should have no url");
+        assertNothing(minimal.created, "minimal event should have no created");
+        assertNothing(minimal.last_modified, "minimal event should have no last_modified");
+        assertNothing(minimal.transp, "minimal event should have no transp");
+        assertNothing(minimal.sequence, "minimal event should have no sequence");
+        assertNothing(minimal.alarms, "minimal event should have no alarms");
+    }
+
+    testTodoReadPath() {
+        IcsReadDataProvider dp(test_data_dir + "/todos.ics", {
+            "content_type": "todos",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 todos");
+
+        # Todo 1: Complete project proposal
+        hash<auto> t1 = records[0];
+        assertEq("todo-001@test.example.com", t1.uid);
+        assertEq("Complete project proposal", t1.summary);
+        assertTrue(t1.due instanceof date, "due should be a date");
+        assertEq(1, t1.priority);
+        assertEq(75, t1.percent_complete);
+        assertEq("IN-PROCESS", t1.status);
+        assertEq("Write and submit the Q2 project proposal", t1.description);
+        assertEq("manager@example.com", t1.organizer);
+        assertTrue(t1.categories instanceof list, "categories should be a list");
+        assertEq(2, t1.categories.size(), "should have 2 categories");
+        assertTrue(inlist("WORK", t1.categories), "should have WORK category");
+        assertTrue(inlist("URGENT", t1.categories), "should have URGENT category");
+        assertEq("PRIVATE", t1.classification);
+        assertEq("https://example.com/projects/proposal", t1.url);
+        assertTrue(t1.created instanceof date, "created should be a date");
+        assertTrue(t1.last_modified instanceof date, "last_modified should be a date");
+        assertEq(2, t1.sequence);
+        assertTrue(t1.alarms instanceof list, "alarms should be a list");
+        assertEq(1, t1.alarms.size(), "should have 1 alarm");
+        assertEq("DISPLAY", t1.alarms[0].action);
+        assertEq("-P1D", t1.alarms[0].trigger);
+        assertEq("Proposal due tomorrow", t1.alarms[0].description);
+
+        # Todo 2: Buy groceries
+        hash<auto> t2 = records[1];
+        assertEq("todo-002@test.example.com", t2.uid);
+        assertEq("Buy groceries", t2.summary);
+        assertTrue(t2.due instanceof date, "due should be a date for todo 2");
+        assertEq(5, t2.priority);
+        assertEq("NEEDS-ACTION", t2.status);
+
+        # Todo 3: Review code - completed
+        hash<auto> t3 = records[2];
+        assertEq("todo-003@test.example.com", t3.uid);
+        assertEq("Review code", t3.summary);
+        assertTrue(t3.completed instanceof date, "completed should be a date");
+        assertEq(100, t3.percent_complete);
+        assertEq("COMPLETED", t3.status);
+        assertEq("Review pull request #42", t3.description);
+    }
+
+    testTodoReadBinaryData() {
+        binary data = IcsTestHelper::createTodoIcsBytes();
+
+        IcsReadDataProvider dp({
+            "data": data,
+            "content_type": "todos",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 todos from byte data");
+        assertEq("Complete project proposal", records[0].summary);
+        assertEq("todo-001@test.example.com", records[0].uid);
+        assertEq("Buy groceries", records[1].summary);
+        assertEq("Review code", records[2].summary);
+    }
+
+    testTodoRecordType() {
+        IcsReadDataProvider dp(test_data_dir + "/todos.ics", {
+            "content_type": "todos",
+        });
+
+        *hash<string, AbstractDataField> fields = dp.getRecordType();
+        assertTrue(exists fields, "should have record type for todos");
+
+        # Verify todo-specific fields are present
+        assertTrue(fields.hasKey("due"), "should have 'due' field");
+        assertTrue(fields.hasKey("completed"), "should have 'completed' field");
+        assertTrue(fields.hasKey("percent_complete"), "should have 'percent_complete' field");
+        assertTrue(fields.hasKey("priority"), "should have 'priority' field");
+
+        # Verify shared fields are present
+        assertTrue(fields.hasKey("uid"), "should have 'uid' field");
+        assertTrue(fields.hasKey("summary"), "should have 'summary' field");
+        assertTrue(fields.hasKey("dtstart"), "should have 'dtstart' field");
+        assertTrue(fields.hasKey("status"), "should have 'status' field");
+        assertTrue(fields.hasKey("description"), "should have 'description' field");
+        assertTrue(fields.hasKey("organizer"), "should have 'organizer' field");
+        assertTrue(fields.hasKey("attendees"), "should have 'attendees' field");
+        assertTrue(fields.hasKey("rrule"), "should have 'rrule' field");
+        assertTrue(fields.hasKey("categories"), "should have 'categories' field");
+        assertTrue(fields.hasKey("classification"), "should have 'classification' field");
+        assertTrue(fields.hasKey("url"), "should have 'url' field");
+        assertTrue(fields.hasKey("created"), "should have 'created' field");
+        assertTrue(fields.hasKey("last_modified"), "should have 'last_modified' field");
+        assertTrue(fields.hasKey("sequence"), "should have 'sequence' field");
+        assertTrue(fields.hasKey("alarms"), "should have 'alarms' field");
+
+        # Verify event-specific fields are NOT present
+        assertFalse(fields.hasKey("dtend"), "should NOT have 'dtend' field for todos");
+        assertFalse(fields.hasKey("duration"), "should NOT have 'duration' field for todos");
+        assertFalse(fields.hasKey("location"), "should NOT have 'location' field for todos");
+        assertFalse(fields.hasKey("transp"), "should NOT have 'transp' field for todos");
+
+        # Total fields: uid, summary, dtstart, due, completed, percent_complete, priority,
+        # status, description, organizer, attendees, rrule, categories, classification,
+        # url, created, last_modified, sequence, alarms = 19
+        assertEq(19, fields.size(), "should have 19 total todo fields");
+    }
+
+    testTodoWriteBasic() {
+        string output_path = test_data_dir + "/write-todo-test.ics";
+        on_exit {
+            if (is_file(output_path)) {
+                unlink(output_path);
+            }
+        }
+
+        {
+            IcsWriteDataProvider dp(output_path, {
+                "content_type": "todos",
+            });
+
+            dp.createRecord({
+                "uid": "write-todo-001@test.com",
+                "summary": "Written Todo 1",
+                "due": 2026-04-15T17:00:00Z,
+                "priority": 2,
+                "percent_complete": 50,
+                "status": "IN-PROCESS",
+            });
+            dp.createRecord({
+                "uid": "write-todo-002@test.com",
+                "summary": "Written Todo 2",
+                "due": 2026-04-20T12:00:00Z,
+                "status": "NEEDS-ACTION",
+            });
+
+            dp.commit();
+        }
+
+        assertTrue(is_file(output_path), "todo output file should exist");
+
+        # Read back and verify
+        IcsReadDataProvider rdp(output_path, {
+            "content_type": "todos",
+        });
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 written todos");
+        assertEq("write-todo-001@test.com", records[0].uid);
+        assertEq("Written Todo 1", records[0].summary);
+        assertEq(2, records[0].priority);
+        assertEq(50, records[0].percent_complete);
+        assertEq("IN-PROCESS", records[0].status);
+        assertEq("write-todo-002@test.com", records[1].uid);
+        assertEq("Written Todo 2", records[1].summary);
+        assertEq("NEEDS-ACTION", records[1].status);
+    }
+
+    testTodoRoundtrip() {
+        IcsWriteDataProvider wdp({
+            "content_type": "todos",
+        });
+
+        wdp.createRecord({
+            "uid": "rt-todo-001@test.com",
+            "summary": "Roundtrip Todo",
+            "dtstart": 2026-05-01T09:00:00Z,
+            "due": 2026-05-15T17:00:00Z,
+            "completed": 2026-05-10T14:00:00Z,
+            "percent_complete": 100,
+            "priority": 3,
+            "status": "COMPLETED",
+            "description": "Full roundtrip todo with all fields",
+            "organizer": "boss@example.com",
+            "attendees": ("dev1@example.com", "dev2@example.com"),
+            "categories": ("WORK", "PROJECT"),
+            "classification": "CONFIDENTIAL",
+            "url": "https://example.com/todos/rt-001",
+            "created": 2026-04-01T12:00:00Z,
+            "last_modified": 2026-05-10T14:00:00Z,
+            "sequence": 4,
+            "alarms": (
+                {
+                    "action": "DISPLAY",
+                    "trigger": "-PT30M",
+                    "description": "Todo due soon",
+                },
+            ),
+        });
+
+        binary data = wdp.getData();
+
+        IcsReadDataProvider rdp({
+            "data": data,
+            "content_type": "todos",
+        });
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size(), "should have 1 roundtrip todo");
+        hash<auto> t = records[0];
+
+        assertEq("rt-todo-001@test.com", t.uid);
+        assertEq("Roundtrip Todo", t.summary);
+        assertTrue(t.dtstart instanceof date, "dtstart should be a date");
+        assertTrue(t.due instanceof date, "due should be a date");
+        assertTrue(t.completed instanceof date, "completed should be a date");
+        assertEq(100, t.percent_complete);
+        assertEq(3, t.priority);
+        assertEq("COMPLETED", t.status);
+        assertEq("Full roundtrip todo with all fields", t.description);
+        assertEq("boss@example.com", t.organizer);
+        assertTrue(t.attendees instanceof list, "attendees should be a list");
+        assertEq(2, t.attendees.size(), "should have 2 attendees");
+        assertTrue(t.categories instanceof list, "categories should be a list");
+        assertEq(2, t.categories.size(), "should have 2 categories");
+        assertTrue(inlist("WORK", t.categories), "should have WORK category");
+        assertTrue(inlist("PROJECT", t.categories), "should have PROJECT category");
+        assertEq("CONFIDENTIAL", t.classification);
+        assertEq("https://example.com/todos/rt-001", t.url);
+        assertTrue(t.created instanceof date, "created should be a date");
+        assertTrue(t.last_modified instanceof date, "last_modified should be a date");
+        assertEq(4, t.sequence);
+        assertTrue(t.alarms instanceof list, "alarms should be a list");
+        assertEq(1, t.alarms.size(), "should have 1 alarm");
+        assertEq("DISPLAY", t.alarms[0].action);
+        assertEq("-PT30M", t.alarms[0].trigger);
+        assertEq("Todo due soon", t.alarms[0].description);
+    }
+
+    testContentTypeDefault() {
+        # Verify default content_type is "events" - reading the todo ICS file without
+        # specifying content_type should return no records (events mode skips VTODOs)
+        IcsReadDataProvider dp_events(test_data_dir + "/todos.ics");
+        list<hash<auto>> event_records = map $1, dp_events.searchRecords();
+        assertEq(0, event_records.size(), "default content_type should be events, no events in todos file");
+
+        # Verify reading events file with todos content_type returns no records
+        IcsReadDataProvider dp_todos(test_data_dir + "/simple.ics", {
+            "content_type": "todos",
+        });
+        list<hash<auto>> todo_records = map $1, dp_todos.searchRecords();
+        assertEq(0, todo_records.size(), "todos content_type on events file should return no records");
+
+        # Verify events file without specifying content_type returns events
+        IcsReadDataProvider dp_default(test_data_dir + "/simple.ics");
+        list<hash<auto>> default_records = map $1, dp_default.searchRecords();
+        assertEq(3, default_records.size(), "default content_type should read events");
     }
 }

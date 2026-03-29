@@ -67,8 +67,10 @@ public class OdtWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 "example_value": "paragraphs",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "paragraphs", "display_name": "Paragraphs",
+                        "short_desc": "Write styled paragraphs with text and heading styles",
                         "desc": "Write styled paragraphs with text and heading styles"},
                     <AllowedValueInfo>{"value": "table", "display_name": "Table",
+                        "short_desc": "Write structured tabular data",
                         "desc": "Write structured tabular data"},
                 ),
             },

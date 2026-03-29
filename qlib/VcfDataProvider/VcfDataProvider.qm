@@ -83,7 +83,12 @@ module VcfDataProvider {
                 "- `organization`: the company or organization name\n"
                 "- `title`: the job title\n"
                 "- `note`: free-text notes about the contact\n"
-                "- `uid`: the unique identifier of the contact\n\n"
+                "- `uid`: the unique identifier of the contact\n"
+                "- `birthday`: the contact's birthday\n"
+                "- `url`: the contact's URL\n"
+                "- `nickname`: the contact's nickname\n"
+                "- `categories`: categories/tags for the contact\n"
+                "- `role`: the contact's role within their organization\n\n"
                 "Multi-contact VCF files are fully supported; each contact is returned as a separate record.",
             "action_code": DPAT_FIND,
             "cls": "VcfDataProvider::VcfReadDataProvider",
@@ -104,7 +109,7 @@ module VcfDataProvider {
             "desc": "Read contacts from inline vCard (.vcf) binary data.\n\n"
                 "Each record returned represents a single contact with the standard vCard fields "
                 "including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, "
-                "`title`, `note`, and `uid`.\n\n"
+                "`title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\n"
                 "Multi-contact VCF data is fully supported.",
             "action_code": DPAT_FIND,
             "cls": "VcfDataProvider::VcfReadDataProvider",
@@ -134,7 +139,12 @@ module VcfDataProvider {
                 "- `organization`: the company or organization name\n"
                 "- `title`: the job title\n"
                 "- `note`: free-text notes\n"
-                "- `uid`: the unique identifier\n\n"
+                "- `uid`: the unique identifier\n"
+                "- `birthday`: the contact's birthday (date)\n"
+                "- `url`: the contact's URL\n"
+                "- `nickname`: the contact's nickname\n"
+                "- `categories`: categories/tags for the contact (list of strings)\n"
+                "- `role`: the contact's role within their organization\n\n"
                 "Multiple contacts can be written to a single VCF file.",
             "action_code": DPAT_CREATE,
             "cls": "VcfDataProvider::VcfWriteDataProvider",
@@ -154,7 +164,9 @@ module VcfDataProvider {
             "short_desc": "Create vCard contact data and return as binary",
             "desc": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for "
                 "generating VCF files without writing to disk.\n\n"
-                "Each record written represents a single contact with the standard vCard fields.\n\n"
+                "Each record written represents a single contact with the standard vCard fields "
+                "including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, "
+                "`title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\n"
                 "After writing all contacts, use `getData()` to retrieve the binary VCF data.",
             "action_code": DPAT_CREATE,
             "cls": "VcfDataProvider::VcfWriteDataProvider",

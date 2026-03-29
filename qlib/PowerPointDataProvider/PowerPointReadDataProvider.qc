@@ -78,8 +78,12 @@ public class PowerPointReadDataProvider inherits DataProvider::AbstractDataProvi
                 "desc": "Type of content to read: `slides` (default) or `table`",
                 "default_value": "slides",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "slides", "desc": "Read presentation slides"},
-                    <AllowedValueInfo>{"value": "table", "desc": "Read a table as row data"},
+                    <AllowedValueInfo>{"value": "slides", "display_name": "Slides",
+                        "short_desc": "Read presentation slides",
+                        "desc": "Read presentation slides with title, body, notes, and layout information"},
+                    <AllowedValueInfo>{"value": "table", "display_name": "Table",
+                        "short_desc": "Read a table as row data",
+                        "desc": "Read a table embedded in a slide as structured row data"},
                 ),
             },
             "slide_index": <DataProviderOptionInfo>{

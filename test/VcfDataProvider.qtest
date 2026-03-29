@@ -77,6 +77,11 @@ public class VcfDataProviderTest inherits QUnit::Test {
         addTestCase("action registration", \testActionRegistration());
         addTestCase("roundtrip: write and read simple", \testRoundtripSimple());
         addTestCase("roundtrip: write and read detailed", \testRoundtripDetailed());
+        addTestCase("read full fields contact", \testReadFullFields());
+        addTestCase("roundtrip: new fields", \testRoundtripNewFields());
+        addTestCase("record type includes new fields", \testRecordTypeNewFields());
+        addTestCase("new fields: null when absent", \testNewFieldsNullWhenAbsent());
+        addTestCase("new fields: categories as list", \testCategoriesAsList());
 
         set_return_value(main());
     }
@@ -91,10 +96,12 @@ public class VcfDataProviderTest inherits QUnit::Test {
         VcfTestHelper::createSimpleVcf(test_data_dir + "/simple.vcf");
         VcfTestHelper::createDetailedVcf(test_data_dir + "/detailed.vcf");
         VcfTestHelper::createEmptyVcf(test_data_dir + "/empty.vcf");
+        VcfTestHelper::createFullFieldsVcf(test_data_dir + "/full-fields.vcf");
 
         assertTrue(is_file(test_data_dir + "/simple.vcf"), "simple.vcf created");
         assertTrue(is_file(test_data_dir + "/detailed.vcf"), "detailed.vcf created");
         assertTrue(is_file(test_data_dir + "/empty.vcf"), "empty.vcf created");
+        assertTrue(is_file(test_data_dir + "/full-fields.vcf"), "full-fields.vcf created");
     }
 
     testBasicReadPath() {
@@ -644,5 +651,193 @@ public class VcfDataProviderTest inherits QUnit::Test {
         assertEq("Senior Engineer", contact.title);
         assertEq("Important test contact", contact.note);
         assertEq("test-uid-12345", contact.uid);
+    }
+
+    testReadFullFields() {
+        VcfReadDataProvider dp(test_data_dir + "/full-fields.vcf");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size(), "should have 1 full-fields contact");
+
+        hash<auto> contact = records[0];
+
+        # Verify standard fields
+        assertEq("Charlie Full Fields", contact.formatted_name);
+        assertEq("Charlie", contact.given_name);
+        assertEq("Full Fields", contact.family_name);
+        assertEq("charlie@example.com", contact.emails[0].value);
+        assertEq("Full Fields Corp", contact.organization);
+        assertEq("Chief Testing Officer", contact.title);
+        assertEq("urn:uuid:full-fields-test-1234", contact.uid);
+
+        # Verify new fields
+        assertTrue(contact.birthday instanceof date, "birthday should be a date");
+        # Birthday was set to 1990-06-15; verify year/month/day
+        assertEq(1990, get_years(contact.birthday), "birthday year");
+        assertEq(6, get_months(contact.birthday), "birthday month");
+        assertEq(15, get_days(contact.birthday), "birthday day");
+
+        assertEq("https://charlie.example.com", contact.url);
+        assertEq("Chuck", contact.nickname);
+
+        assertTrue(contact.categories instanceof list, "categories should be a list");
+        assertEq(3, contact.categories.size(), "should have 3 categories");
+        assertTrue(inlist("friend", contact.categories), "should have 'friend' category");
+        assertTrue(inlist("colleague", contact.categories), "should have 'colleague' category");
+        assertTrue(inlist("vip", contact.categories), "should have 'vip' category");
+
+        assertEq("Quality Assurance Lead", contact.role);
+    }
+
+    testRoundtripNewFields() {
+        string output_path = test_data_dir + "/roundtrip-new-fields.vcf";
+        on_exit unlink(output_path);
+
+        # Write a contact with all new fields
+        date bday = 1985-03-20;
+        VcfWriteDataProvider wdp(output_path);
+
+        wdp.createRecord({
+            "formatted_name": "Roundtrip New Fields",
+            "given_name": "Roundtrip",
+            "family_name": "New Fields",
+            "emails": ({"type": "work", "value": "roundtrip@example.com"},),
+            "organization": "Roundtrip Corp",
+            "title": "Test Manager",
+            "uid": "roundtrip-new-fields-001",
+            "birthday": bday,
+            "url": "https://roundtrip.example.com",
+            "nickname": "RT",
+            "categories": ("testing", "automation"),
+            "role": "Test Automation Lead",
+        });
+
+        wdp.commit();
+
+        # Read back
+        VcfReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+
+        hash<auto> contact = records[0];
+
+        # Verify standard fields round-tripped
+        assertEq("Roundtrip New Fields", contact.formatted_name);
+        assertEq("Roundtrip", contact.given_name);
+        assertEq("New Fields", contact.family_name);
+        assertEq("roundtrip@example.com", contact.emails[0].value);
+        assertEq("Roundtrip Corp", contact.organization);
+        assertEq("Test Manager", contact.title);
+        assertEq("roundtrip-new-fields-001", contact.uid);
+
+        # Verify new fields round-tripped
+        assertTrue(contact.birthday instanceof date, "birthday should be a date");
+        assertEq(1985, get_years(contact.birthday), "birthday year");
+        assertEq(3, get_months(contact.birthday), "birthday month");
+        assertEq(20, get_days(contact.birthday), "birthday day");
+
+        assertEq("https://roundtrip.example.com", contact.url);
+        assertEq("RT", contact.nickname);
+
+        assertTrue(contact.categories instanceof list, "categories should be a list");
+        assertEq(2, contact.categories.size(), "should have 2 categories");
+        assertTrue(inlist("testing", contact.categories), "should have 'testing' category");
+        assertTrue(inlist("automation", contact.categories), "should have 'automation' category");
+
+        assertEq("Test Automation Lead", contact.role);
+    }
+
+    testRecordTypeNewFields() {
+        VcfReadDataProvider dp(test_data_dir + "/simple.vcf");
+
+        *hash<string, AbstractDataField> record_type = dp.getRecordType();
+
+        # Verify the new fields are present in the record type
+        assertTrue(record_type.hasKey("birthday"), "should have birthday field");
+        assertTrue(record_type.hasKey("url"), "should have url field");
+        assertTrue(record_type.hasKey("nickname"), "should have nickname field");
+        assertTrue(record_type.hasKey("categories"), "should have categories field");
+        assertTrue(record_type.hasKey("role"), "should have role field");
+
+        # Also verify existing fields are still present
+        assertTrue(record_type.hasKey("formatted_name"), "should still have formatted_name field");
+        assertTrue(record_type.hasKey("given_name"), "should still have given_name field");
+        assertTrue(record_type.hasKey("family_name"), "should still have family_name field");
+        assertTrue(record_type.hasKey("emails"), "should still have emails field");
+        assertTrue(record_type.hasKey("phones"), "should still have phones field");
+        assertTrue(record_type.hasKey("addresses"), "should still have addresses field");
+        assertTrue(record_type.hasKey("organization"), "should still have organization field");
+        assertTrue(record_type.hasKey("title"), "should still have title field");
+        assertTrue(record_type.hasKey("note"), "should still have note field");
+        assertTrue(record_type.hasKey("uid"), "should still have uid field");
+
+        # Verify write provider record type also has new fields
+        VcfWriteDataProvider wdp();
+        *hash<string, AbstractDataField> write_record_type = wdp.getRecordType();
+        assertTrue(write_record_type.hasKey("birthday"), "write provider should have birthday field");
+        assertTrue(write_record_type.hasKey("url"), "write provider should have url field");
+        assertTrue(write_record_type.hasKey("nickname"), "write provider should have nickname field");
+        assertTrue(write_record_type.hasKey("categories"), "write provider should have categories field");
+        assertTrue(write_record_type.hasKey("role"), "write provider should have role field");
+    }
+
+    testNewFieldsNullWhenAbsent() {
+        # Read the simple.vcf which has no new fields - they should all be null
+        VcfReadDataProvider dp(test_data_dir + "/simple.vcf");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+
+        foreach hash<auto> contact in (records) {
+            assertNothing(contact.birthday, "birthday should be null when absent");
+            assertNothing(contact.url, "url should be null when absent");
+            assertNothing(contact.nickname, "nickname should be null when absent");
+            assertNothing(contact.categories, "categories should be null when absent");
+            assertNothing(contact.role, "role should be null when absent");
+        }
+    }
+
+    testCategoriesAsList() {
+        # Test writing and reading categories with various sizes
+        string output_path = test_data_dir + "/categories-test.vcf";
+        on_exit unlink(output_path);
+
+        VcfWriteDataProvider wdp(output_path);
+
+        # Single category
+        wdp.createRecord({
+            "formatted_name": "Single Category",
+            "categories": ("solo",),
+        });
+
+        # Multiple categories
+        wdp.createRecord({
+            "formatted_name": "Multi Category",
+            "categories": ("alpha", "beta", "gamma", "delta"),
+        });
+
+        wdp.commit();
+
+        # Read back
+        VcfReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+
+        # Single category contact
+        assertTrue(records[0].categories instanceof list, "single category should be a list");
+        assertEq(1, records[0].categories.size(), "should have 1 category");
+        assertEq("solo", records[0].categories[0]);
+
+        # Multiple categories contact
+        assertTrue(records[1].categories instanceof list, "multi categories should be a list");
+        assertEq(4, records[1].categories.size(), "should have 4 categories");
+        assertTrue(inlist("alpha", records[1].categories), "should have 'alpha'");
+        assertTrue(inlist("beta", records[1].categories), "should have 'beta'");
+        assertTrue(inlist("gamma", records[1].categories), "should have 'gamma'");
+        assertTrue(inlist("delta", records[1].categories), "should have 'delta'");
     }
 }

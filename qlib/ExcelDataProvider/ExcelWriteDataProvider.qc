@@ -74,8 +74,13 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
                 "desc": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
                 "default_value": "xlsx",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "xlsx", "desc": "Excel 2007+ format (.xlsx)"},
-                    <AllowedValueInfo>{"value": "xls", "desc": "Excel 97-2003 format (.xls)"},
+                    <AllowedValueInfo>{"value": "xlsx", "display_name": "XLSX",
+                        "short_desc": "Excel 2007+ format (.xlsx)",
+                        "desc": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files"},
+                    <AllowedValueInfo>{"value": "xls", "display_name": "XLS",
+                        "short_desc": "Excel 97-2003 format (.xls)",
+                        "desc": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows "
+                            "and 256 columns per sheet"},
                 ),
             },
             "streaming": <DataProviderOptionInfo>{

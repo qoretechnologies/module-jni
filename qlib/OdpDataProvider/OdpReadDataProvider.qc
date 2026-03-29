@@ -84,9 +84,11 @@ public class OdpReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "example_value": "slides",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "slides", "display_name": "Slides",
-                        "desc": "Read presentation slides"},
+                        "short_desc": "Read presentation slides",
+                        "desc": "Read presentation slides with title, body, notes, and layout information"},
                     <AllowedValueInfo>{"value": "table", "display_name": "Table",
-                        "desc": "Read a table as row data"},
+                        "short_desc": "Read a table as row data",
+                        "desc": "Read a table embedded in a slide as structured row data"},
                 ),
             },
             "slide_index": <DataProviderOptionInfo>{

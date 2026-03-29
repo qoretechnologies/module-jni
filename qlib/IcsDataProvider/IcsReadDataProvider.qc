@@ -61,6 +61,29 @@ public class IcsReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderType::get(new Type("InputStream")),
                 "desc": "An input stream for ICS data; mutually exclusive with `data` and `path`",
             },
+            "content_type": <DataProviderOptionInfo>{
+                "display_name": "Content Type",
+                "short_desc": "Type of calendar component to read",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "The type of iCalendar component to extract: \"events\" (default) or \"todos\"",
+                "default_value": "events",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "events",
+                        "display_name": "Events",
+                        "short_desc": "Read VEVENT components",
+                        "desc": "Read VEVENT (calendar event) components with fields for dates, "
+                            "location, attendees, recurrence, categories, and alarms",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "todos",
+                        "display_name": "To-dos",
+                        "short_desc": "Read VTODO components",
+                        "desc": "Read VTODO (task/to-do) components with fields for due date, "
+                            "completion status, priority, percent complete, and categories",
+                    },
+                ),
+            },
         };
     }
 
@@ -76,25 +99,31 @@ public class IcsReadDataProvider inherits DataProvider::AbstractDataProvider {
 
         #! Dummy iterator flag
         bool dummy;
+
+        #! The content type to extract: "events" or "todos"
+        string content_type = "events";
     }
 
     #! Creates the IcsReadDataProvider with the input data path and optionally an option hash
     constructor(string path, *hash<auto> opts) {
+        *hash<auto> copts = checkOptions("ICS-READ-OPTION-ERROR", ConstructorOptions, opts);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
-        checkOptions("ICS-READ-OPTION-ERROR", ConstructorOptions, opts);
+        content_type = copts.content_type ?? "events";
     }
 
     #! Creates the IcsReadDataProvider with the input data stream
     constructor(InputStream stream, *hash<auto> opts) {
+        *hash<auto> copts = checkOptions("ICS-READ-OPTION-ERROR", ConstructorOptions, opts);
         i = stream;
-        checkOptions("ICS-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("ics-stream=%s", stream.uniqueHash());
+        content_type = copts.content_type ?? "events";
     }
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
         *hash<auto> copts = checkOptions("ICS-READ-OPTION-ERROR", ConstructorOptions, options);
+        content_type = copts.content_type ?? "events";
         if (copts.path) {
             if (copts.stream) {
                 error("ICS-READ-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
@@ -135,7 +164,7 @@ public class IcsReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (it) {
             return;
         }
-        it = new IcsIterator(i);
+        it = new IcsIterator(i, content_type);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -149,6 +178,9 @@ public class IcsReadDataProvider inherits DataProvider::AbstractDataProvider {
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         if (dummy) {
             return {};
+        }
+        if (content_type == "todos") {
+            return IcsDataProvider::getIcsTodoRecordType();
         }
         return IcsDataProvider::getIcsRecordType();
     }
@@ -187,6 +219,80 @@ public hash<string, AbstractDataField> sub getIcsRecordType() {
             AbstractDataProviderType::get(SoftStringOrNothingType)),
         "rrule": new QoreDataField("rrule", "The recurrence rule in RFC 5545 RRULE format (optional)",
             AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "categories": new QoreDataField("categories", "List of event categories (optional)",
+            AbstractDataProviderType::get(new Type("*list<string>"))),
+        "classification": new QoreDataField("classification",
+            "Event classification: PUBLIC, PRIVATE, or CONFIDENTIAL (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "url": new QoreDataField("url", "A URL associated with the event (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "created": new QoreDataField("created", "The date/time the event was created (optional)",
+            AbstractDataProviderType::get(new Type("*date"))),
+        "last_modified": new QoreDataField("last_modified",
+            "The date/time the event was last modified (optional)",
+            AbstractDataProviderType::get(new Type("*date"))),
+        "transp": new QoreDataField("transp",
+            "Time transparency: OPAQUE or TRANSPARENT (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "sequence": new QoreDataField("sequence", "The revision sequence number (optional)",
+            AbstractDataProviderType::get(SoftIntOrNothingType)),
+        "alarms": new QoreDataField("alarms",
+            "List of alarm hashes with 'action', 'trigger', 'description', 'duration', 'repeat' keys (optional)",
+            AbstractDataProviderType::get(new Type("*list<hash<auto>>"))),
+    };
+}
+#! Returns the shared ICS todo record type
+/** @return a hash of field name to AbstractDataField entries describing the ICS todo record schema
+*/
+public hash<string, AbstractDataField> sub getIcsTodoRecordType() {
+    return {
+        "uid": new QoreDataField("uid", "The unique identifier of the to-do",
+            AbstractDataProviderType::get(StringType)),
+        "summary": new QoreDataField("summary", "The to-do summary / title",
+            AbstractDataProviderType::get(StringType)),
+        "dtstart": new QoreDataField("dtstart", "The start date/time of the to-do (optional)",
+            AbstractDataProviderType::get(new Type("*date"))),
+        "due": new QoreDataField("due", "The due date/time of the to-do (optional)",
+            AbstractDataProviderType::get(new Type("*date"))),
+        "completed": new QoreDataField("completed", "The completion date/time (optional)",
+            AbstractDataProviderType::get(new Type("*date"))),
+        "percent_complete": new QoreDataField("percent_complete",
+            "Completion percentage 0-100 (optional)",
+            AbstractDataProviderType::get(SoftIntOrNothingType)),
+        "priority": new QoreDataField("priority",
+            "Priority 0-9 where 1 is highest (optional)",
+            AbstractDataProviderType::get(SoftIntOrNothingType)),
+        "status": new QoreDataField("status",
+            "The to-do status: NEEDS-ACTION, IN-PROCESS, COMPLETED, or CANCELLED (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "description": new QoreDataField("description",
+            "A detailed description of the to-do (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "organizer": new QoreDataField("organizer", "The organizer's email address (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "attendees": new QoreDataField("attendees", "List of attendee email addresses (optional)",
+            AbstractDataProviderType::get(new Type("*list<string>"))),
+        "rrule": new QoreDataField("rrule",
+            "The recurrence rule in RFC 5545 RRULE format (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "categories": new QoreDataField("categories", "List of to-do categories (optional)",
+            AbstractDataProviderType::get(new Type("*list<string>"))),
+        "classification": new QoreDataField("classification",
+            "To-do classification: PUBLIC, PRIVATE, or CONFIDENTIAL (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "url": new QoreDataField("url", "A URL associated with the to-do (optional)",
+            AbstractDataProviderType::get(SoftStringOrNothingType)),
+        "created": new QoreDataField("created", "The date/time the to-do was created (optional)",
+            AbstractDataProviderType::get(new Type("*date"))),
+        "last_modified": new QoreDataField("last_modified",
+            "The date/time the to-do was last modified (optional)",
+            AbstractDataProviderType::get(new Type("*date"))),
+        "sequence": new QoreDataField("sequence", "The revision sequence number (optional)",
+            AbstractDataProviderType::get(SoftIntOrNothingType)),
+        "alarms": new QoreDataField("alarms",
+            "List of alarm hashes with 'action', 'trigger', 'description', 'duration', 'repeat' "
+            "keys (optional)",
+            AbstractDataProviderType::get(new Type("*list<hash<auto>>"))),
     };
 }
 } # IcsDataProvider namespace

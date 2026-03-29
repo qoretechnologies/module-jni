@@ -207,6 +207,16 @@ public class EmlIterator extends qore.Qore.AbstractIterator implements java.io.C
         record.put("in_reply_to", (inReplyToHeader != null && inReplyToHeader.length > 0)
             ? inReplyToHeader[0] : null);
 
+        // Reply-To
+        String[] replyToHeaders = msg.getHeader("Reply-To");
+        record.put("reply_to", (replyToHeaders != null && replyToHeaders.length > 0)
+            ? replyToHeaders[0] : null);
+
+        // References
+        String[] referencesHeaders = msg.getHeader("References");
+        record.put("references", (referencesHeaders != null && referencesHeaders.length > 0)
+            ? referencesHeaders[0] : null);
+
         return record;
     }
 
@@ -263,6 +273,23 @@ public class EmlIterator extends qore.Qore.AbstractIterator implements java.io.C
                     attachment.put("name", fileName != null ? fileName : "unnamed");
                     attachment.put("content_type", part.getContentType().split(";")[0].trim());
                     attachment.put("size", part.getSize());
+
+                    // Read attachment binary data
+                    try (java.io.InputStream attStream = part.getInputStream()) {
+                        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                        byte[] buf = new byte[8192];
+                        int n;
+                        while ((n = attStream.read(buf)) != -1) {
+                            baos.write(buf, 0, n);
+                        }
+                        byte[] attachContent = baos.toByteArray();
+                        attachment.put("data", attachContent);
+                        // Fix size if getSize() returned -1
+                        if (part.getSize() < 0) {
+                            attachment.put("size", attachContent.length);
+                        }
+                    }
+
                     result.attachments.add(attachment);
                 }
             } else if (contentType.startsWith("text/plain") && result.text == null) {

@@ -117,7 +117,8 @@ module OdtDataProvider {
                 "- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to "
                 "extract tabular data\n"
                 "- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n"
-                "- `header_row` — set to `True` if the first table row contains column headers",
+                "- `header_row` — set to `True` if the first table row contains column headers\n"
+                "- `headers` — provide explicit column header names for table mode",
             "action_code": DPAT_FIND,
             "cls": "OdtDataProvider::OdtReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -127,13 +128,8 @@ module OdtDataProvider {
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                OdtReadDataProvider::ConstructorOptions{"content_type", "table_index", "header_row"}, {
+                OdtReadDataProvider::ConstructorOptions{"content_type", "table_index", "header_row", "headers"}, {
                     "preselected": True,
-                    "loc": "constructor",
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                OdtReadDataProvider::ConstructorOptions - ("path", "content_type", "table_index", "header_row",
-                    "stream", "data"), {
                     "loc": "constructor",
                 }
             ),
@@ -152,7 +148,8 @@ module OdtDataProvider {
                 "- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to "
                 "extract tabular data\n"
                 "- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n"
-                "- `header_row` — set to `True` if the first table row contains column headers",
+                "- `header_row` — set to `True` if the first table row contains column headers\n"
+                "- `headers` — provide explicit column header names for table mode",
             "action_code": DPAT_FIND,
             "cls": "OdtDataProvider::OdtReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -162,13 +159,8 @@ module OdtDataProvider {
                     "loc": "constructor",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                OdtReadDataProvider::ConstructorOptions{"content_type", "table_index", "header_row"}, {
+                OdtReadDataProvider::ConstructorOptions{"content_type", "table_index", "header_row", "headers"}, {
                     "preselected": True,
-                    "loc": "constructor",
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                OdtReadDataProvider::ConstructorOptions - ("path", "content_type", "table_index", "header_row",
-                    "stream", "data"), {
                     "loc": "constructor",
                 }
             ),

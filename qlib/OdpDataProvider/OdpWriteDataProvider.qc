@@ -65,8 +65,10 @@ public class OdpWriteDataProvider inherits DataProvider::AbstractDataProvider {
                 "example_value": "slides",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "slides", "display_name": "Slides",
+                        "short_desc": "Write slides",
                         "desc": "Write slides"},
                     <AllowedValueInfo>{"value": "table", "display_name": "Table",
+                        "short_desc": "Write a table",
                         "desc": "Write a table"},
                 ),
             },

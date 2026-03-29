@@ -61,8 +61,12 @@ public class PowerPointWriteDataProvider inherits DataProvider::AbstractDataProv
                 "desc": "Type of content to write: `slides` (default) or `table`",
                 "default_value": "slides",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "slides", "desc": "Write slides"},
-                    <AllowedValueInfo>{"value": "table", "desc": "Write a table"},
+                    <AllowedValueInfo>{"value": "slides", "display_name": "Slides",
+                        "short_desc": "Write slides",
+                        "desc": "Write presentation slides with title, body, and optional notes"},
+                    <AllowedValueInfo>{"value": "table", "display_name": "Table",
+                        "short_desc": "Write a table",
+                        "desc": "Write structured tabular data on a slide"},
                 ),
             },
             "headers": <DataProviderOptionInfo>{
