@@ -207,6 +207,12 @@ JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm) {
     JniExternalProgramData* jpc = jni_get_context(pgm);
     if (!jpc) {
         pgm = Globals::getJavaContextProgram();
+        if (!pgm) {
+            // Can happen when a Java callback fires during or after JNI
+            // module shutdown (e.g. ActiveMQ/JMS listener thread); the
+            // global context program has been cleared by clearGlobalContext()
+            return nullptr;
+        }
         jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
         assert(jpc);
     }

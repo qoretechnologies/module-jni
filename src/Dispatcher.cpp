@@ -62,9 +62,9 @@ QoreCodeDispatcher::~QoreCodeDispatcher() {
 }
 
 jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jobjectArray jargs) {
-    if (q_libqore_shutdown()) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "could not execute Qore callback; the Qore library "
-            "has already been shut down");
+    if (q_libqore_shutdown() || Globals::isShuttingDown()) {
+        env.throwNew(env.findClass("java/lang/RuntimeException"), "could not execute Qore callback; the "
+            "Qore library or JNI module has been shut down");
         return nullptr;
     }
 
@@ -82,15 +82,11 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
 
     ExceptionSink xsink;
     try {
-        // use the callback's program if it has JNI data; otherwise fall back to the
-        // program captured at construction time (when the QoreInvocationHandler was
-        // created) - this handles the case where the callback is a method reference
-        // to a method in a module that doesn't have JNI external data, or where the
-        // callback's program has already been destroyed
-        QoreProgram* pgm = callback->getProgram();
-        if (!pgm || !pgm->getExternalData("jni")) {
-            pgm = this->pgm;
-        }
+        // Use our ref'd program (this->pgm) — guaranteed alive because we
+        // hold a strong reference from the constructor.
+        // callback->getProgram() is unsafe: it can return a dangling pointer
+        // when the callback's owning program has been destroyed.
+        QoreProgram* pgm = this->pgm;
         JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 
         // Set up full program context including tlpd for thread pool threads

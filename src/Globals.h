@@ -34,6 +34,8 @@
 #include "GlobalReference.h"
 #include "Env.h"
 
+#include <atomic>
+
 DLLLOCAL QoreStringNode* jni_module_init_intern();
 
 #define QORE_JNI_MODULE_NAME "jni"
@@ -452,9 +454,19 @@ public:
     DLLLOCAL static QoreProgram* getJavaContextProgram();
 
     DLLLOCAL static void clearGlobalContext() {
+        jni_shutting_down.store(true, std::memory_order_release);
         if (qph) {
             qph.reset();
         }
+    }
+
+    //! Returns true if the JNI module is shutting down
+    /** Java background threads (e.g. ActiveMQ/JMS listeners) must check
+        this before calling back into Qore — after shutdown starts, the
+        global context program and JNI external data are no longer valid.
+    */
+    DLLLOCAL static bool isShuttingDown() {
+        return jni_shutting_down.load(std::memory_order_acquire);
     }
 
     DLLLOCAL static void setAlreadyInitialized() {
@@ -476,6 +488,7 @@ private:
     DLLLOCAL static std::unique_ptr<QoreProgramHelper> qph;
 
     DLLLOCAL static bool already_initialized;
+    DLLLOCAL static std::atomic<bool> jni_shutting_down;
 
     DLLLOCAL static void defineQoreURLClassLoader(Env& env);
 };
