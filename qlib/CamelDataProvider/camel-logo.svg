@@ -1,1 +1,127 @@
-<svg viewBox="0 0 130.21 130.01" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="a" x1="333.48" x2="477" y1="702.6" y2="563.73" gradientTransform="translate(94.038 276.06) scale(.99206)" gradientUnits="userSpaceOnUse"><stop stop-color="#F69923" offset="0"/><stop stop-color="#F79A23" offset=".11"/><stop stop-color="#E97826" offset=".945"/></linearGradient><linearGradient id="b" x1="333.48" x2="477" y1="702.6" y2="563.73" gradientTransform="translate(94.038 276.06) scale(.99206)" gradientUnits="userSpaceOnUse"><stop stop-color="#F69923" offset="0"/><stop stop-color="#F79A23" offset=".08"/><stop stop-color="#E97826" offset=".419"/></linearGradient><linearGradient id="c" x1="633.55" x2="566.47" y1="814.6" y2="909.12" gradientTransform="translate(-85.421 56.236)" gradientUnits="userSpaceOnUse"><stop stop-color="#f6e423" offset="0"/><stop stop-color="#F79A23" offset=".412"/><stop stop-color="#E97826" offset=".733"/></linearGradient></defs><g transform="translate(-437.89 -835.29)"><circle cx="503.1" cy="900.29" r="62.52" fill="url(#a)" stroke="url(#b)" stroke-linejoin="round" stroke-width="4.96"/><path d="M487.89 873.64a89.53 89.53 0 0 0-2.688.031c-1.043.031-2.445.362-4.062.906 27.309 20.737 37.127 58.146 20.25 90.656.573.015 1.142.063 1.719.063 30.844 0 56.62-21.493 63.28-50.312-19.572-22.943-46.117-41.294-78.5-41.344z" fill="url(#c)" opacity=".75"/><path d="M481.14 874.58c-9.068 3.052-26.368 13.802-43 28.156 1.263 34.195 28.961 61.607 63.25 62.5 16.877-32.51 7.06-69.919-20.25-90.656z" fill="#28170b" opacity=".75"/><path d="M504.889 862.546c-.472-.032-.932.028-1.375.25-5.6 2.801 0 14 0 14-16.807 14.009-13.236 37.938-32.844 37.938-10.689 0-21.322-12.293-32.531-19.812-.144 1.773-.25 3.564-.25 5.375 0 24.515 13.51 45.863 33.469 57.063 5.583-.703 11.158-2.114 15.344-4.906 21.992-14.662 27.452-42.557 36.438-56.031 5.596-8.407 31.824-7.677 33.594-11.22 2.804-5.601-5.602-14-8.406-14h-22.406c-1.566 0-4.025-2.78-5.594-2.78h-8.406s-3.725-5.65-7.031-5.875z" fill="#fff"/></g></svg>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 130.21 130.21001"
+   version="1.1"
+   id="svg11"
+   sodipodi:docname="camel-logo.svg"
+   width="130.21001"
+   height="130.21001"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview11"
+     pagecolor="#ffffff"
+     bordercolor="#999999"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="13.914315"
+     inkscape:cx="65.076866"
+     inkscape:cy="65.004997"
+     inkscape:window-width="3736"
+     inkscape:window-height="2074"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg11" />
+  <defs
+     id="defs9">
+    <linearGradient
+       id="a"
+       x1="333.48001"
+       x2="477"
+       y1="702.59998"
+       y2="563.72998"
+       gradientTransform="matrix(0.99206,0,0,0.99206,94.038,276.06)"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         stop-color="#F69923"
+         offset="0"
+         id="stop1" />
+      <stop
+         stop-color="#F79A23"
+         offset=".11"
+         id="stop2" />
+      <stop
+         stop-color="#E97826"
+         offset=".945"
+         id="stop3" />
+    </linearGradient>
+    <linearGradient
+       id="b"
+       x1="333.48001"
+       x2="477"
+       y1="702.59998"
+       y2="563.72998"
+       gradientTransform="matrix(0.99206,0,0,0.99206,94.038,276.06)"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         stop-color="#F69923"
+         offset="0"
+         id="stop4" />
+      <stop
+         stop-color="#F79A23"
+         offset=".08"
+         id="stop5" />
+      <stop
+         stop-color="#E97826"
+         offset=".419"
+         id="stop6" />
+    </linearGradient>
+    <linearGradient
+       id="c"
+       x1="633.54999"
+       x2="566.46997"
+       y1="814.59998"
+       y2="909.12"
+       gradientTransform="translate(-85.421,56.236)"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         stop-color="#f6e423"
+         offset="0"
+         id="stop7" />
+      <stop
+         stop-color="#F79A23"
+         offset=".412"
+         id="stop8" />
+      <stop
+         stop-color="#E97826"
+         offset=".733"
+         id="stop9" />
+    </linearGradient>
+  </defs>
+  <g
+     transform="translate(-437.89,-835.29)"
+     id="g11">
+    <circle
+       cx="503.10001"
+       cy="900.28998"
+       r="62.52"
+       fill="url(#a)"
+       stroke="url(#b)"
+       stroke-linejoin="round"
+       stroke-width="4.96"
+       id="circle9"
+       style="fill:url(#a);stroke:url(#b)" />
+    <path
+       d="m 487.89,873.64 a 89.53,89.53 0 0 0 -2.688,0.031 c -1.043,0.031 -2.445,0.362 -4.062,0.906 27.309,20.737 37.127,58.146 20.25,90.656 0.573,0.015 1.142,0.063 1.719,0.063 30.844,0 56.62,-21.493 63.28,-50.312 -19.572,-22.943 -46.117,-41.294 -78.5,-41.344 z"
+       fill="url(#c)"
+       opacity="0.75"
+       id="path9"
+       style="fill:url(#c)" />
+    <path
+       d="m 481.14,874.58 c -9.068,3.052 -26.368,13.802 -43,28.156 1.263,34.195 28.961,61.607 63.25,62.5 16.877,-32.51 7.06,-69.919 -20.25,-90.656 z"
+       fill="#28170b"
+       opacity="0.75"
+       id="path10" />
+    <path
+       d="m 504.889,862.546 c -0.472,-0.032 -0.932,0.028 -1.375,0.25 -5.6,2.801 0,14 0,14 -16.807,14.009 -13.236,37.938 -32.844,37.938 -10.689,0 -21.322,-12.293 -32.531,-19.812 -0.144,1.773 -0.25,3.564 -0.25,5.375 0,24.515 13.51,45.863 33.469,57.063 5.583,-0.703 11.158,-2.114 15.344,-4.906 21.992,-14.662 27.452,-42.557 36.438,-56.031 5.596,-8.407 31.824,-7.677 33.594,-11.22 2.804,-5.601 -5.602,-14 -8.406,-14 h -22.406 c -1.566,0 -4.025,-2.78 -5.594,-2.78 h -8.406 c 0,0 -3.725,-5.65 -7.031,-5.875 z"
+       fill="#ffffff"
+       id="path11" />
+  </g>
+</svg>
