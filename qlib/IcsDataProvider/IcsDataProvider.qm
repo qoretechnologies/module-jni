@@ -1,0 +1,214 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore IcsDataProvider module definition
+
+/*  IcsDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+# iCal4j JARs
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-ics.jar
+%module-cmd(jni) add-relative-classpath ./jar/ical4j-4.0.8.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-codec-1.17.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-lang3-3.14.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/slf4j-api-2.0.12.jar
+%module-cmd(jni) add-relative-classpath ./jar/threeten-extra-1.8.0.jar
+
+%module-cmd(jni) import org.qore.dataprovider.ical.IcsIterator
+%module-cmd(jni) import org.qore.dataprovider.ical.IcsWriter
+
+module IcsDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for reading and writing iCalendar (ICS) files";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factories
+        DataProvider::registerFactory(new IcsReadDataProviderFactory());
+        DataProvider::registerFactory(new IcsWriteDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": IcsDataProvider::AppName,
+            "display_name": "ICS Calendars",
+            "short_desc": "Read and write iCalendar (ICS) files",
+            "desc": "Read and write iCalendar (ICS) files, the standard format for calendar data "
+                "exchange defined by RFC 5545.\n\n"
+                "**Supported Operations**:\n"
+                "- **Read**: Parse ICS files and extract calendar events (VEVENT components) as "
+                "structured records with fields for summary, dates, location, attendees, and "
+                "recurrence rules\n"
+                "- **Write**: Create ICS files from structured event data with full VCALENDAR "
+                "wrapper and VEVENT components\n\n"
+                "**Key Features**:\n"
+                "- Supports all standard VEVENT properties: UID, summary, start/end dates, "
+                "duration, location, description, organizer, attendees, status, and recurrence "
+                "rules (RRULE)\n"
+                "- Automatic UID generation when writing events without explicit UIDs\n"
+                "- In-memory operation: read from or write to binary data without file I/O\n"
+                "- Compatible with all major calendar applications (Google Calendar, Outlook, "
+                "Apple Calendar, etc.)\n\n"
+                "**Business Use Cases**:\n"
+                "- Importing calendar events from ICS files into data pipelines\n"
+                "- Exporting scheduled events as ICS for email or download\n"
+                "- Migrating calendar data between systems\n"
+                "- Processing meeting invitations and RSVPs programmatically",
+            "groups": (DataProvider::AppGroup::Documents,),
+            "logo": IcsWhiteLogo,
+            "logo_file_name": "ics-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register read action (from file)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": IcsDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "display_name": "Read ICS Calendar File",
+            "short_desc": "Read iCalendar events from a specific file location",
+            "desc": "Read an ICS file from a file location and return the calendar events as "
+                "records.\n\n"
+                "Use this action to import calendar events from ICS files stored on disk or "
+                "accessible via a URL. The file location is resolved using the "
+                "`FileLocationHandler` module, supporting local file paths and remote URLs.\n\n"
+                "**Key Options**:\n"
+                "- `path` (required) -- the file location to read from",
+            "action_code": DPAT_FIND,
+            "cls": "IcsDataProvider::IcsReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                IcsReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register read-data action (from inline data)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": IcsDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "display_name": "Read ICS Calendar Inline Data",
+            "short_desc": "Read iCalendar events from inline binary data",
+            "desc": "Read iCalendar events from inline binary data and return them as records.\n\n"
+                "Use this action when the ICS data is already available in memory (e.g., received "
+                "from an API response, uploaded by a user, or read from a database BLOB column) "
+                "rather than stored as a file.\n\n"
+                "**Key Options**:\n"
+                "- `data` (required) -- the ICS binary data to parse",
+            "action_code": DPAT_FIND,
+            "cls": "IcsDataProvider::IcsReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                IcsReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register write action (to file)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": IcsDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "display_name": "Write ICS Calendar File",
+            "short_desc": "Write calendar events to an ICS file",
+            "desc": "Write calendar events to an ICS file at a specified path.\n\n"
+                "Use this action to generate ICS files from structured event data for calendar "
+                "sharing, meeting invitations, or integration with calendar applications.\n\n"
+                "**Key Options**:\n"
+                "- `path` (required) -- the output file location",
+            "action_code": DPAT_CREATE,
+            "cls": "IcsDataProvider::IcsWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                IcsWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register write-data action (in-memory)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": IcsDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "display_name": "Create ICS Calendar Data",
+            "short_desc": "Create iCalendar data and return as binary",
+            "desc": "Create iCalendar data in memory and return it as binary data.\n\n"
+                "Use this action when you need to generate an ICS file without writing to disk -- "
+                "for example, to return the calendar as an API response, attach it to an email, "
+                "or pass it to another processing step. Retrieve the result by calling "
+                "`getData()` on the provider after creating all records.\n\n"
+                "**Key Options**:\n"
+                "- No required options -- events are added via `createRecord()` and binary data "
+                "is retrieved via `getData()`",
+            "action_code": DPAT_CREATE,
+            "cls": "IcsDataProvider::IcsWriteDataProvider",
+            "options": {},
+        });
+    };
+}
+
+/** @mainpage IcsDataProvider Module
+
+    @tableofcontents
+
+    @section IcsDataProviderintro Introduction to the IcsDataProvider Module
+
+    The %IcsDataProvider module provides a data provider API for reading and writing ICS
+    (iCalendar) files through the @ref dataproviderintro "DataProvider" API.
+    ICS is the standard format for calendar data exchange defined by RFC 5545, supported by
+    all major calendar applications including Google Calendar, Microsoft Outlook, and Apple Calendar.
+
+    The following classes are provided by this module:
+    - @ref IcsDataProvider::IcsReadDataProvider "IcsReadDataProvider" - for reading ICS files
+    - @ref IcsDataProvider::IcsReadDataProviderFactory "IcsReadDataProviderFactory" - factory for read providers
+    - @ref IcsDataProvider::IcsWriteDataProvider "IcsWriteDataProvider" - for writing ICS files
+    - @ref IcsDataProvider::IcsWriteDataProviderFactory "IcsWriteDataProviderFactory" - factory for write providers
+
+    @section IcsDataProvider_relnotes Release Notes
+
+    @subsection IcsDataProvider_v1_0 IcsDataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the IcsDataProvider module
+public namespace IcsDataProvider {
+#! Application name
+public const AppName = "ICS";
+}
+
+namespace Priv {
+#! ICS logo
+const IcsWhiteLogo = File::readTextFile(get_script_dir() + "/ics-logo.svg");
+}

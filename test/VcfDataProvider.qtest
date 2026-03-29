@@ -1,0 +1,648 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  VcfDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+# Add classpaths BEFORE module requires to ensure the JNI classpath is available
+%module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/qore-dataprovider-vcf.jar
+%module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/ez-vcard-0.12.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/vinnie-2.0.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/jsoup-1.16.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/freemarker-2.3.32.jar
+%module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/jackson-core-2.15.2.jar
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/VcfDataProvider
+
+%module-cmd(jni) import org.qore.dataprovider.vcard.VcfTestHelper
+
+%exec-class VcfDataProviderTest
+
+public class VcfDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("VcfDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/vcf-test-data";
+
+        addTestCase("test setup", \testSetup());
+        addTestCase("basic read from path", \testBasicReadPath());
+        addTestCase("read from stream", \testReadStream());
+        addTestCase("read from binary data", \testReadBinaryData());
+        addTestCase("read detailed contact", \testReadDetailedContact());
+        addTestCase("read multi-contact vcf", \testReadMultiContact());
+        addTestCase("read record type", \testReadRecordType());
+        addTestCase("read factory tests", \testReadFactory());
+        addTestCase("negative: invalid path", \testNegativeInvalidPath());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("edge case: empty vcf", \testEdgeCaseEmptyVcf());
+        addTestCase("edge case: minimal contact", \testEdgeCaseMinimalContact());
+        addTestCase("write: basic file write", \testWriteBasic());
+        addTestCase("write: multiple contacts", \testWriteMultipleContacts());
+        addTestCase("write: to binary data", \testWriteToBinary());
+        addTestCase("write: factory", \testWriteFactory());
+        addTestCase("write: data only (no path/stream)", \testWriteDataOnly());
+        addTestCase("write: negative - path+stream conflict", \testWriteNegativePathStreamConflict());
+        addTestCase("write: negative - double commit", \testWriteNegativeDoubleCommit());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("roundtrip: write and read simple", \testRoundtripSimple());
+        addTestCase("roundtrip: write and read detailed", \testRoundtripDetailed());
+
+        set_return_value(main());
+    }
+
+    testSetup() {
+        # Create test data directory
+        if (!is_dir(test_data_dir)) {
+            mkdir(test_data_dir);
+        }
+
+        # Create all test VCF files using Java helper
+        VcfTestHelper::createSimpleVcf(test_data_dir + "/simple.vcf");
+        VcfTestHelper::createDetailedVcf(test_data_dir + "/detailed.vcf");
+        VcfTestHelper::createEmptyVcf(test_data_dir + "/empty.vcf");
+
+        assertTrue(is_file(test_data_dir + "/simple.vcf"), "simple.vcf created");
+        assertTrue(is_file(test_data_dir + "/detailed.vcf"), "detailed.vcf created");
+        assertTrue(is_file(test_data_dir + "/empty.vcf"), "empty.vcf created");
+    }
+
+    testBasicReadPath() {
+        VcfReadDataProvider dp(test_data_dir + "/simple.vcf");
+
+        assertEq("VcfReadDataProvider", dp.getInfo().type);
+        assertTrue(dp.getInfo().supports_read);
+        assertTrue(dp.getInfo().has_record);
+
+        # Read all records
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 contacts");
+
+        # Check first contact
+        assertEq("Alice Smith", records[0].formatted_name);
+        assertEq("Alice", records[0].given_name);
+        assertEq("Smith", records[0].family_name);
+        assertTrue(records[0].emails instanceof list, "emails should be a list");
+        assertEq(1, records[0].emails.size(), "should have 1 email");
+        assertEq("alice@example.com", records[0].emails[0].value);
+        assertTrue(records[0].phones instanceof list, "phones should be a list");
+        assertEq(1, records[0].phones.size(), "should have 1 phone");
+
+        # Check second contact
+        assertEq("Bob Johnson", records[1].formatted_name);
+        assertEq("Bob", records[1].given_name);
+        assertEq("Johnson", records[1].family_name);
+        assertEq("bob@example.com", records[1].emails[0].value);
+    }
+
+    testReadStream() {
+        FileInputStream fis(test_data_dir + "/simple.vcf");
+        VcfReadDataProvider dp(fis);
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("Alice Smith", records[0].formatted_name);
+        assertEq("Bob Johnson", records[1].formatted_name);
+    }
+
+    testReadBinaryData() {
+        binary data = VcfTestHelper::createSimpleVcfBytes();
+
+        VcfReadDataProvider dp({
+            "data": data,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 contacts from binary data");
+        assertEq("Alice Smith", records[0].formatted_name);
+        assertEq("Bob Johnson", records[1].formatted_name);
+    }
+
+    testReadDetailedContact() {
+        VcfReadDataProvider dp(test_data_dir + "/detailed.vcf");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size(), "should have 1 detailed contact");
+
+        hash<auto> contact = records[0];
+
+        # Check name fields
+        assertEq("Dr. Jane Marie Wilson", contact.formatted_name);
+        assertEq("Jane", contact.given_name);
+        assertEq("Wilson", contact.family_name);
+
+        # Check emails
+        assertTrue(contact.emails instanceof list, "emails should be a list");
+        assertEq(2, contact.emails.size(), "should have 2 emails");
+        # Find work email
+        bool found_work_email = False;
+        bool found_home_email = False;
+        foreach hash<auto> email in (contact.emails) {
+            if (email.value == "jane.wilson@corp.example.com") {
+                found_work_email = True;
+            }
+            if (email.value == "jane@personal.example.com") {
+                found_home_email = True;
+            }
+        }
+        assertTrue(found_work_email, "should have work email");
+        assertTrue(found_home_email, "should have home email");
+
+        # Check phones
+        assertTrue(contact.phones instanceof list, "phones should be a list");
+        assertEq(3, contact.phones.size(), "should have 3 phones");
+
+        # Check addresses
+        assertTrue(contact.addresses instanceof list, "addresses should be a list");
+        assertEq(2, contact.addresses.size(), "should have 2 addresses");
+        # Find work address
+        bool found_work_addr = False;
+        foreach hash<auto> addr in (contact.addresses) {
+            if (addr.city == "San Francisco") {
+                found_work_addr = True;
+                assertEq("100 Corporate Blvd", addr.street);
+                assertEq("CA", addr.state);
+                assertEq("94105", addr.postal_code);
+                assertEq("USA", addr.country);
+            }
+        }
+        assertTrue(found_work_addr, "should have work address");
+
+        # Check organization, title, note, uid
+        assertEq("Acme Corporation", contact.organization);
+        assertEq("Vice President of Engineering", contact.title);
+        assertTrue(contact.note.val(), "note should not be empty");
+        assertEq("urn:uuid:12345678-1234-1234-1234-123456789abc", contact.uid);
+    }
+
+    testReadMultiContact() {
+        # Simple.vcf already has 2 contacts
+        VcfReadDataProvider dp(test_data_dir + "/simple.vcf");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size());
+
+        # Verify both contacts are distinct
+        assertTrue(records[0].formatted_name != records[1].formatted_name,
+            "contacts should have different formatted names");
+    }
+
+    testReadRecordType() {
+        VcfReadDataProvider dp(test_data_dir + "/simple.vcf");
+
+        *hash<string, AbstractDataField> record_type = dp.getRecordType();
+
+        assertTrue(record_type.hasKey("formatted_name"), "should have formatted_name field");
+        assertTrue(record_type.hasKey("given_name"), "should have given_name field");
+        assertTrue(record_type.hasKey("family_name"), "should have family_name field");
+        assertTrue(record_type.hasKey("emails"), "should have emails field");
+        assertTrue(record_type.hasKey("phones"), "should have phones field");
+        assertTrue(record_type.hasKey("addresses"), "should have addresses field");
+        assertTrue(record_type.hasKey("organization"), "should have organization field");
+        assertTrue(record_type.hasKey("title"), "should have title field");
+        assertTrue(record_type.hasKey("note"), "should have note field");
+        assertTrue(record_type.hasKey("uid"), "should have uid field");
+    }
+
+    testReadFactory() {
+        VcfReadDataProviderFactory factory();
+
+        assertEq("vcfread", factory.getInfo().name);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": test_data_dir + "/simple.vcf",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+    }
+
+    testNegativeInvalidPath() {
+        # Invalid path should throw an exception
+        bool threw = False;
+        try {
+            VcfReadDataProvider dp("/nonexistent/path/to/file.vcf");
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+        }
+        assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    testNegativeOptionConflicts() {
+        # Test path and stream conflict
+        assertThrows("VCF-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.vcf");
+            VcfReadDataProvider dp({
+                "path": test_data_dir + "/simple.vcf",
+                "stream": fis,
+            });
+        });
+
+        # Test path and data conflict
+        assertThrows("VCF-READ-OPTION-ERROR", sub () {
+            VcfReadDataProvider dp({
+                "path": test_data_dir + "/simple.vcf",
+                "data": <abcd>,
+            });
+        });
+
+        # Test stream and data conflict
+        assertThrows("VCF-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.vcf");
+            VcfReadDataProvider dp({
+                "stream": fis,
+                "data": <abcd>,
+            });
+        });
+    }
+
+    testEdgeCaseEmptyVcf() {
+        VcfReadDataProvider dp(test_data_dir + "/empty.vcf");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "empty VCF should return no records");
+    }
+
+    testEdgeCaseMinimalContact() {
+        # Write a minimal contact (just formatted_name) and read it back
+        string output_path = test_data_dir + "/minimal.vcf";
+        on_exit unlink(output_path);
+
+        VcfWriteDataProvider wdp(output_path);
+        wdp.createRecord({"formatted_name": "Minimal Contact"});
+        wdp.commit();
+
+        VcfReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        assertEq("Minimal Contact", records[0].formatted_name);
+    }
+
+    testWriteBasic() {
+        string output_path = test_data_dir + "/write-basic.vcf";
+        on_exit unlink(output_path);
+
+        VcfWriteDataProvider dp(output_path);
+
+        dp.createRecord({
+            "formatted_name": "Test User",
+            "given_name": "Test",
+            "family_name": "User",
+            "emails": ({"type": "work", "value": "test@example.com"},),
+            "phones": ({"type": "cell", "value": "+1-555-9999"},),
+        });
+
+        dp.commit();
+
+        assertTrue(is_file(output_path), "VCF file should be created");
+
+        # Read back and verify
+        VcfReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        assertEq("Test User", records[0].formatted_name);
+        assertEq("Test", records[0].given_name);
+        assertEq("User", records[0].family_name);
+        assertEq("test@example.com", records[0].emails[0].value);
+    }
+
+    testWriteMultipleContacts() {
+        string output_path = test_data_dir + "/write-multi.vcf";
+        on_exit unlink(output_path);
+
+        VcfWriteDataProvider dp(output_path);
+
+        dp.createRecord({
+            "formatted_name": "Contact One",
+            "given_name": "One",
+            "family_name": "Contact",
+        });
+        dp.createRecord({
+            "formatted_name": "Contact Two",
+            "given_name": "Two",
+            "family_name": "Contact",
+        });
+        dp.createRecord({
+            "formatted_name": "Contact Three",
+            "given_name": "Three",
+            "family_name": "Contact",
+        });
+
+        dp.commit();
+
+        # Read back
+        VcfReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Contact One", records[0].formatted_name);
+        assertEq("Contact Two", records[1].formatted_name);
+        assertEq("Contact Three", records[2].formatted_name);
+    }
+
+    testWriteToBinary() {
+        VcfWriteDataProvider dp();
+
+        dp.createRecord({
+            "formatted_name": "Binary Test",
+            "given_name": "Binary",
+            "family_name": "Test",
+        });
+
+        # Get data as binary before commit
+        binary data = dp.getData();
+
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Read back from binary
+        VcfReadDataProvider rdp({
+            "data": data,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Binary Test", records[0].formatted_name);
+    }
+
+    testWriteFactory() {
+        string output_path = test_data_dir + "/write-factory.vcf";
+        on_exit unlink(output_path);
+
+        VcfWriteDataProviderFactory factory();
+
+        assertEq("vcfwrite", factory.getInfo().name);
+
+        # Create provider via factory
+        VcfWriteDataProvider dp = factory.create({
+            "path": output_path,
+        });
+
+        dp.createRecord({"formatted_name": "Factory Test"});
+        dp.commit();
+
+        # Read back
+        VcfReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Factory Test", records[0].formatted_name);
+    }
+
+    testWriteDataOnly() {
+        # Test creating a provider without path or stream (for write-data action use case)
+        VcfWriteDataProvider dp();
+
+        assertEq("vcf-data", dp.getName());
+
+        # Write records
+        dp.createRecord({"formatted_name": "Data Only Contact", "given_name": "Data", "family_name": "Only"});
+
+        # Get binary data
+        binary data = dp.getData();
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Verify by reading back
+        VcfReadDataProvider rdp({
+            "data": data,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Data Only Contact", records[0].formatted_name);
+    }
+
+    testWriteNegativePathStreamConflict() {
+        # Test path constructor with stream option
+        assertThrows("VCF-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            VcfWriteDataProvider dp(test_data_dir + "/test.vcf", {
+                "stream": sos,
+            });
+        });
+
+        # Test path constructor with path option
+        assertThrows("VCF-WRITE-OPTION-ERROR", sub () {
+            VcfWriteDataProvider dp(test_data_dir + "/test.vcf", {
+                "path": test_data_dir + "/other.vcf",
+            });
+        });
+
+        # Test options constructor with both path and stream
+        assertThrows("VCF-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            VcfWriteDataProvider dp({
+                "path": test_data_dir + "/test.vcf",
+                "stream": sos,
+            });
+        });
+    }
+
+    testWriteNegativeDoubleCommit() {
+        VcfWriteDataProvider dp();
+        dp.createRecord({"formatted_name": "Test"});
+
+        # First getData should work
+        binary data = dp.getData();
+        assertTrue(data.size() > 0);
+
+        # Commit explicitly
+        dp.commit();
+
+        # After commit, getData should throw
+        assertThrows("VCF-WRITE-ERROR", sub () {
+            dp.getData();
+        });
+    }
+
+    testActionRegistration() {
+        # Verify that actions are properly registered with correct properties
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("VCF");
+        assertTrue(exists actions, "should have actions registered for VCF app");
+        assertTrue(actions.size() >= 4, "should have at least 4 actions (read, read-data, write, write-data)");
+
+        # Create a lookup hash for easier testing
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # Verify read action
+        assertTrue(action_map.hasKey("read"), "should have 'read' action");
+        assertEq("Read VCF Contact File", action_map."read".display_name);
+        assertTrue(action_map."read".options.hasKey("path"), "read action should have 'path' option");
+
+        # Verify read-data action
+        assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
+        assertEq("Read VCF Contact Inline Data", action_map."read-data".display_name);
+        assertTrue(action_map."read-data".options.hasKey("data"), "read-data action should have 'data' option");
+
+        # Verify write action
+        assertTrue(action_map.hasKey("write"), "should have 'write' action");
+        assertEq("Write VCF Contact File", action_map."write".display_name);
+        assertTrue(action_map."write".options.hasKey("path"), "write action should have 'path' option");
+
+        # Verify write-data action
+        assertTrue(action_map.hasKey("write-data"), "should have 'write-data' action");
+        assertEq("Create VCF Contact Data", action_map."write-data".display_name);
+    }
+
+    testRoundtripSimple() {
+        string output_path = test_data_dir + "/roundtrip-simple.vcf";
+        on_exit unlink(output_path);
+
+        # Write contacts
+        VcfWriteDataProvider wdp(output_path);
+
+        wdp.createRecord({
+            "formatted_name": "Alice Roundtrip",
+            "given_name": "Alice",
+            "family_name": "Roundtrip",
+            "emails": ({"type": "work", "value": "alice@roundtrip.example.com"},),
+            "phones": ({"type": "cell", "value": "+1-555-1111"},),
+        });
+        wdp.createRecord({
+            "formatted_name": "Bob Roundtrip",
+            "given_name": "Bob",
+            "family_name": "Roundtrip",
+            "emails": ({"type": "home", "value": "bob@roundtrip.example.com"},),
+            "phones": ({"type": "work", "value": "+1-555-2222"},),
+        });
+
+        wdp.commit();
+
+        # Read back
+        VcfReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("Alice Roundtrip", records[0].formatted_name);
+        assertEq("Alice", records[0].given_name);
+        assertEq("Roundtrip", records[0].family_name);
+        assertEq("alice@roundtrip.example.com", records[0].emails[0].value);
+
+        assertEq("Bob Roundtrip", records[1].formatted_name);
+        assertEq("Bob", records[1].given_name);
+        assertEq("Roundtrip", records[1].family_name);
+        assertEq("bob@roundtrip.example.com", records[1].emails[0].value);
+    }
+
+    testRoundtripDetailed() {
+        string output_path = test_data_dir + "/roundtrip-detailed.vcf";
+        on_exit unlink(output_path);
+
+        # Write a contact with all fields
+        VcfWriteDataProvider wdp(output_path);
+
+        wdp.createRecord({
+            "formatted_name": "Jane Detailed",
+            "given_name": "Jane",
+            "family_name": "Detailed",
+            "emails": (
+                {"type": "work", "value": "jane@work.example.com"},
+                {"type": "home", "value": "jane@home.example.com"},
+            ),
+            "phones": (
+                {"type": "work", "value": "+1-555-3001"},
+                {"type": "cell", "value": "+1-555-3002"},
+            ),
+            "addresses": (
+                {
+                    "type": "work",
+                    "street": "123 Business Ave",
+                    "city": "San Francisco",
+                    "state": "CA",
+                    "postal_code": "94105",
+                    "country": "USA",
+                },
+            ),
+            "organization": "Test Corp",
+            "title": "Senior Engineer",
+            "note": "Important test contact",
+            "uid": "test-uid-12345",
+        });
+
+        wdp.commit();
+
+        # Read back
+        VcfReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+
+        hash<auto> contact = records[0];
+
+        assertEq("Jane Detailed", contact.formatted_name);
+        assertEq("Jane", contact.given_name);
+        assertEq("Detailed", contact.family_name);
+
+        # Check emails
+        assertEq(2, contact.emails.size(), "should have 2 emails");
+        bool found_work_email = False;
+        bool found_home_email = False;
+        foreach hash<auto> email in (contact.emails) {
+            if (email.value == "jane@work.example.com") {
+                found_work_email = True;
+            }
+            if (email.value == "jane@home.example.com") {
+                found_home_email = True;
+            }
+        }
+        assertTrue(found_work_email, "should have work email");
+        assertTrue(found_home_email, "should have home email");
+
+        # Check phones
+        assertEq(2, contact.phones.size(), "should have 2 phones");
+
+        # Check addresses
+        assertEq(1, contact.addresses.size(), "should have 1 address");
+        assertEq("123 Business Ave", contact.addresses[0].street);
+        assertEq("San Francisco", contact.addresses[0].city);
+        assertEq("CA", contact.addresses[0].state);
+        assertEq("94105", contact.addresses[0].postal_code);
+        assertEq("USA", contact.addresses[0].country);
+
+        # Check other fields
+        assertEq("Test Corp", contact.organization);
+        assertEq("Senior Engineer", contact.title);
+        assertEq("Important test contact", contact.note);
+        assertEq("test-uid-12345", contact.uid);
+    }
+}

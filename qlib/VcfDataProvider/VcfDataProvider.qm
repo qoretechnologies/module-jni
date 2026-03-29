@@ -1,0 +1,273 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore VcfDataProvider module definition
+
+/*  VcfDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-vcf.jar
+%module-cmd(jni) add-relative-classpath ./jar/ez-vcard-0.12.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/vinnie-2.0.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/jsoup-1.16.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/freemarker-2.3.32.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackson-core-2.15.2.jar
+
+%module-cmd(jni) import org.qore.dataprovider.vcard.VcfIterator
+%module-cmd(jni) import org.qore.dataprovider.vcard.VcfWriter
+
+module VcfDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for reading and writing vCard (.vcf) contact files";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factories
+        DataProvider::registerFactory(new VcfReadDataProviderFactory());
+        DataProvider::registerFactory(new VcfWriteDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": VcfDataProvider::AppName,
+            "display_name": "VCF Contacts",
+            "short_desc": "Read and write vCard (.vcf) contact files",
+            "desc": "Read and write vCard (.vcf) contact files containing names, emails, phones, "
+                "addresses, and other contact information",
+            "groups": (DataProvider::AppGroup::Documents,),
+            "logo": VcfLogo,
+            "logo_file_name": "vcf-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VcfDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "display_name": "Read VCF Contact File",
+            "short_desc": "Read contacts from a vCard file at a specific file location",
+            "desc": "Read contacts from a vCard (.vcf) file at a specific file location.\n\n"
+                "Each record returned represents a single contact with the following fields:\n"
+                "- `formatted_name`: the display name of the contact\n"
+                "- `given_name`: the first/given name\n"
+                "- `family_name`: the last/family name\n"
+                "- `emails`: a list of email addresses with type and value\n"
+                "- `phones`: a list of phone numbers with type and value\n"
+                "- `addresses`: a list of postal addresses with type and address components\n"
+                "- `organization`: the company or organization name\n"
+                "- `title`: the job title\n"
+                "- `note`: free-text notes about the contact\n"
+                "- `uid`: the unique identifier of the contact\n\n"
+                "Multi-contact VCF files are fully supported; each contact is returned as a separate record.",
+            "action_code": DPAT_FIND,
+            "cls": "VcfDataProvider::VcfReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VcfReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VcfDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "display_name": "Read VCF Contact Inline Data",
+            "short_desc": "Read contacts from inline vCard data",
+            "desc": "Read contacts from inline vCard (.vcf) binary data.\n\n"
+                "Each record returned represents a single contact with the standard vCard fields "
+                "including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, "
+                "`title`, `note`, and `uid`.\n\n"
+                "Multi-contact VCF data is fully supported.",
+            "action_code": DPAT_FIND,
+            "cls": "VcfDataProvider::VcfReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VcfReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VcfDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "display_name": "Write VCF Contact File",
+            "short_desc": "Write contacts to a vCard file at a specified path",
+            "desc": "Write contacts to a vCard (.vcf) file at a specified path.\n\n"
+                "Each record written represents a single contact. The following fields are supported:\n"
+                "- `formatted_name` (required): the display name of the contact\n"
+                "- `given_name`: the first/given name\n"
+                "- `family_name`: the last/family name\n"
+                "- `emails`: a list of `{\"type\": \"work\", \"value\": \"user@example.com\"}` hashes\n"
+                "- `phones`: a list of `{\"type\": \"cell\", \"value\": \"+1-555-0100\"}` hashes\n"
+                "- `addresses`: a list of address hashes with `type`, `street`, `city`, `state`, "
+                "`postal_code`, `country`\n"
+                "- `organization`: the company or organization name\n"
+                "- `title`: the job title\n"
+                "- `note`: free-text notes\n"
+                "- `uid`: the unique identifier\n\n"
+                "Multiple contacts can be written to a single VCF file.",
+            "action_code": DPAT_CREATE,
+            "cls": "VcfDataProvider::VcfWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VcfWriteDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VcfDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "display_name": "Create VCF Contact Data",
+            "short_desc": "Create vCard contact data and return as binary",
+            "desc": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for "
+                "generating VCF files without writing to disk.\n\n"
+                "Each record written represents a single contact with the standard vCard fields.\n\n"
+                "After writing all contacts, use `getData()` to retrieve the binary VCF data.",
+            "action_code": DPAT_CREATE,
+            "cls": "VcfDataProvider::VcfWriteDataProvider",
+        });
+    };
+}
+
+/** @mainpage VcfDataProvider Module
+
+    @tableofcontents
+
+    @section VcfDataProviderintro Introduction to the VcfDataProvider Module
+
+    The %VcfDataProvider module provides a data provider API for reading and writing vCard (.vcf) contact files
+    through the @ref dataproviderintro "DataProvider" API. It supports the vCard 3.0 format using the
+    <a href="https://github.com/mangstadt/ez-vcard">ez-vcard</a> Java library.
+
+    The following classes are provided by this module:
+    - @ref VcfDataProvider::VcfReadDataProvider "VcfReadDataProvider" - for reading VCF files
+    - @ref VcfDataProvider::VcfReadDataProviderFactory "VcfReadDataProviderFactory" - factory for read providers
+    - @ref VcfDataProvider::VcfWriteDataProvider "VcfWriteDataProvider" - for writing VCF files
+    - @ref VcfDataProvider::VcfWriteDataProviderFactory "VcfWriteDataProviderFactory" - factory for write providers
+
+    @section VcfDataProvider_reading Reading vCard Files
+
+    @subsection VcfDataProvider_reading_basic Basic Reading
+
+    @code{.py}
+    %requires VcfDataProvider
+
+    # Read from a file path
+    VcfReadDataProvider dp("contacts.vcf");
+    list<hash<auto>> contacts = map $1, dp.searchRecords();
+
+    # Read from a stream
+    FileInputStream fis("contacts.vcf");
+    VcfReadDataProvider dp2(fis);
+
+    # Read from binary data
+    binary data = File::readBinaryFile("contacts.vcf");
+    VcfReadDataProvider dp3({"data": data});
+    @endcode
+
+    @subsection VcfDataProvider_reading_fields Record Fields
+
+    Each contact record contains the following fields:
+    - \c formatted_name: The display name of the contact (string)
+    - \c given_name: The first/given name (*string)
+    - \c family_name: The last/family name (*string)
+    - \c emails: List of email addresses, each with \c type and \c value (*list)
+    - \c phones: List of phone numbers, each with \c type and \c value (*list)
+    - \c addresses: List of postal addresses with components (*list)
+    - \c organization: The company or organization name (*string)
+    - \c title: The job title (*string)
+    - \c note: Free-text notes (*string)
+    - \c uid: The unique identifier (*string)
+
+    @section VcfDataProvider_writing Writing vCard Files
+
+    @subsection VcfDataProvider_writing_basic Basic Writing
+
+    @code{.py}
+    %requires VcfDataProvider
+
+    # Write to a file
+    VcfWriteDataProvider dp("output.vcf");
+
+    dp.createRecord({
+        "formatted_name": "Alice Smith",
+        "given_name": "Alice",
+        "family_name": "Smith",
+        "emails": ({"type": "work", "value": "alice@example.com"},),
+        "phones": ({"type": "cell", "value": "+1-555-0101"},),
+    });
+
+    dp.commit();
+    @endcode
+
+    @subsection VcfDataProvider_writing_binary Writing to Binary
+
+    @code{.py}
+    VcfWriteDataProvider dp();
+
+    dp.createRecord({"formatted_name": "Bob Johnson"});
+
+    # Get binary data instead of writing to file
+    binary data = dp.getData();
+    @endcode
+
+    @section VcfDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c VCF-READ-OPTION-ERROR: Invalid read options or option conflicts
+    - \c VCF-WRITE-OPTION-ERROR: Invalid write options or option conflicts
+
+    @section VcfDataProvider_relnotes Release Notes
+
+    @subsection VcfDataProvider_v1_0 VcfDataProvider v1.0
+    - initial release of the module
+    - support for reading vCard (.vcf) files with single and multiple contacts
+    - support for writing vCard (.vcf) files in vCard 3.0 format
+    - full support for contact fields: name, email, phone, address, organization, title, note, uid
+    - binary data input/output support
+    - stream-based input/output support
+*/
+
+#! contains all public definitions in the VcfDataProvider module
+public namespace VcfDataProvider {
+#! Application name
+public const AppName = "VCF";
+}
+
+namespace Priv {
+#! VCF logo
+const VcfLogo = File::readTextFile(get_script_dir() + "/vcf-logo.svg");
+}

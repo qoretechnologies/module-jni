@@ -377,6 +377,64 @@ add_custom_target(qore-odp-jar
 # install the ODP jar file manually
 install(FILES ${ODP_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/OdpDataProvider/jar)
 
+# ICS (iCalendar) data provider jar
+set(ICS_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-ics.jar)
+set(ICS_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/jar/ical4j-4.0.8.jar:${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/jar/commons-codec-1.17.0.jar:${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/jar/commons-lang3-3.14.0.jar:${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/jar/slf4j-api-2.0.12.jar:${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/jar/threeten-extra-1.8.0.jar)
+set(ICS_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(ICS_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ical/)
+set(ICS_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ical/IcsIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ical/IcsWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ical/IcsTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${ICS_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${ICS_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-ics ${ICS_JAR} ${ICS_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${ICS_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${ICS_JAR} ${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/jar/
+    DEPENDS ${module_name} ${ICS_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-ics-jar
+    DEPENDS ${ICS_JAR}
+)
+
+# install the ICS jar file manually
+install(FILES ${ICS_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/IcsDataProvider/jar)
+
+# VCF (vCard) data provider jar
+set(VCF_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-vcf.jar)
+set(VCF_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/jar/ez-vcard-0.12.1.jar:${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/jar/vinnie-2.0.2.jar:${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/jar/jsoup-1.16.1.jar:${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/jar/freemarker-2.3.32.jar:${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/jar/jackson-core-2.15.2.jar)
+set(VCF_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(VCF_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/vcard/)
+set(VCF_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/vcard/VcfIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/vcard/VcfWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/vcard/VcfTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${VCF_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${VCF_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-vcf ${VCF_JAR} ${VCF_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${VCF_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${VCF_JAR} ${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/jar/
+    DEPENDS ${module_name} ${VCF_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-vcf-jar
+    DEPENDS ${VCF_JAR}
+)
+
+# install the VCF jar file manually
+install(FILES ${VCF_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/VcfDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -657,7 +715,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-email-jar qore-powerpoint-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-email-jar qore-powerpoint-jar qore-vcf-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -755,6 +813,8 @@ set(QMOD
     qlib/OdsDataProvider
     qlib/OdtDataProvider
     qlib/OdpDataProvider
+    qlib/VcfDataProvider
+    qlib/IcsDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -808,6 +868,8 @@ qore_external_user_module("qlib/PowerPointDataProvider" "")
 qore_external_user_module("qlib/OdsDataProvider" "")
 qore_external_user_module("qlib/OdtDataProvider" "")
 qore_external_user_module("qlib/OdpDataProvider" "")
+qore_external_user_module("qlib/VcfDataProvider" "")
+qore_external_user_module("qlib/IcsDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 

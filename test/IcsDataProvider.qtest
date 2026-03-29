@@ -1,0 +1,646 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  IcsDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+
+# Add classpaths for iCal4j and the test helper BEFORE loading IcsDataProvider
+# so they share the same classloader context
+%module-cmd(jni) add-relative-classpath ../qlib/IcsDataProvider/jar/qore-dataprovider-ics.jar
+%module-cmd(jni) add-relative-classpath ../qlib/IcsDataProvider/jar/ical4j-4.0.8.jar
+%module-cmd(jni) add-relative-classpath ../qlib/IcsDataProvider/jar/commons-codec-1.17.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/IcsDataProvider/jar/commons-lang3-3.14.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/IcsDataProvider/jar/slf4j-api-2.0.12.jar
+%module-cmd(jni) add-relative-classpath ../qlib/IcsDataProvider/jar/threeten-extra-1.8.0.jar
+%module-cmd(jni) import org.qore.dataprovider.ical.IcsTestHelper
+
+%requires ../qlib/IcsDataProvider
+
+%exec-class IcsDataProviderTest
+
+public class IcsDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("IcsDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/ics-test-data";
+
+        addTestCase("test setup", \testSetup());
+        addTestCase("basic read from path", \testBasicReadPath());
+        addTestCase("read from stream", \testReadStream());
+        addTestCase("read from binary data", \testReadBinaryData());
+        addTestCase("read recurring event", \testReadRecurring());
+        addTestCase("read empty calendar", \testReadEmpty());
+        addTestCase("read record type", \testRecordType());
+        addTestCase("factory tests", \testFactory());
+        addTestCase("write: basic file write", \testWriteBasic());
+        addTestCase("write: to binary data", \testWriteToBinary());
+        addTestCase("write: data only (no path/stream)", \testWriteDataOnly());
+        addTestCase("write: factory", \testWriteFactory());
+        addTestCase("write: with attendees and organizer", \testWriteWithAttendees());
+        addTestCase("write: with status", \testWriteWithStatus());
+        addTestCase("roundtrip: write and read", \testRoundtrip());
+        addTestCase("roundtrip: recurring event", \testRoundtripRecurring());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("negative: invalid path", \testNegativeInvalidPath());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("negative: write path+stream conflict", \testWriteNegativePathStreamConflict());
+        addTestCase("negative: invalid ICS data", \testNegativeInvalidData());
+        addTestCase("negative: getData after commit", \testNegativeGetDataAfterCommit());
+
+        set_return_value(main());
+    }
+
+    testSetup() {
+        # Create test data directory and files
+        if (!is_dir(test_data_dir)) {
+            mkdir(test_data_dir);
+        }
+
+        # Create all test ICS files
+        IcsTestHelper::createSimpleIcs(test_data_dir + "/simple.ics");
+        IcsTestHelper::createRecurringIcs(test_data_dir + "/recurring.ics");
+        IcsTestHelper::createEmptyIcs(test_data_dir + "/empty.ics");
+
+        assertTrue(is_file(test_data_dir + "/simple.ics"), "simple.ics created");
+        assertTrue(is_file(test_data_dir + "/recurring.ics"), "recurring.ics created");
+        assertTrue(is_file(test_data_dir + "/empty.ics"), "empty.ics created");
+    }
+
+    testBasicReadPath() {
+        IcsReadDataProvider dp(test_data_dir + "/simple.ics");
+
+        assertEq("IcsReadDataProvider", dp.getInfo().type);
+        assertTrue(dp.getInfo().supports_read);
+        assertTrue(dp.getInfo().has_record);
+
+        # Read all records
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size(), "should have 3 events");
+
+        # Event 1: Team Meeting
+        assertEq("event-001@test.example.com", records[0].uid);
+        assertEq("Team Meeting", records[0].summary);
+        assertTrue(records[0].dtstart instanceof date, "dtstart should be a date");
+        assertTrue(records[0].dtend instanceof date, "dtend should be a date");
+        assertEq("Conference Room A", records[0].location);
+        assertEq("Weekly team sync meeting", records[0].description);
+        assertEq("boss@example.com", records[0].organizer);
+        assertEq("CONFIRMED", records[0].status);
+
+        # Event 2: Lunch
+        assertEq("event-002@test.example.com", records[1].uid);
+        assertEq("Lunch with Client", records[1].summary);
+        assertEq("Downtown Restaurant", records[1].location);
+        assertEq("TENTATIVE", records[1].status);
+
+        # Event 3: Workshop with attendees
+        assertEq("event-003@test.example.com", records[2].uid);
+        assertEq("Workshop", records[2].summary);
+        assertEq("Training Center", records[2].location);
+        assertTrue(records[2].attendees instanceof list, "attendees should be a list");
+        assertEq(2, records[2].attendees.size(), "should have 2 attendees");
+        assertEq("alice@example.com", string(records[2].attendees[0]),
+            "first attendee should be alice");
+        assertEq("bob@example.com", string(records[2].attendees[1]),
+            "second attendee should be bob");
+    }
+
+    testReadStream() {
+        FileInputStream fis(test_data_dir + "/simple.ics");
+        IcsReadDataProvider dp(fis);
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("Team Meeting", records[0].summary);
+    }
+
+    testReadBinaryData() {
+        binary data = IcsTestHelper::createSimpleIcsBytes();
+
+        IcsReadDataProvider dp({
+            "data": data,
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(2, records.size(), "should have 2 events from byte data");
+        assertEq("Byte Event 1", records[0].summary);
+        assertEq("bytes-001@test.example.com", records[0].uid);
+        assertEq("Room 101", records[0].location);
+        assertEq("Byte Event 2", records[1].summary);
+    }
+
+    testReadRecurring() {
+        IcsReadDataProvider dp(test_data_dir + "/recurring.ics");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+
+        assertEq(1, records.size(), "should have 1 recurring event");
+        assertEq("recurring-001@test.example.com", records[0].uid);
+        assertEq("Weekly Standup", records[0].summary);
+        assertEq("Standup Area", records[0].location);
+        assertEq("Daily standup meeting", records[0].description);
+        assertEq("scrum-master@example.com", records[0].organizer);
+        assertTrue(string(records[0].rrule) =~ /FREQ=WEEKLY/, "should have RRULE with FREQ=WEEKLY");
+        assertTrue(string(records[0].rrule) =~ /BYDAY=MO/, "should have BYDAY=MO in RRULE");
+        assertEq("CONFIRMED", records[0].status);
+    }
+
+    testReadEmpty() {
+        IcsReadDataProvider dp(test_data_dir + "/empty.ics");
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(0, records.size(), "empty calendar should return no records");
+    }
+
+    testRecordType() {
+        IcsReadDataProvider dp(test_data_dir + "/simple.ics");
+
+        *hash<string, AbstractDataField> fields = dp.getRecordType();
+        assertTrue(exists fields, "should have record type");
+        assertTrue(fields.hasKey("uid"), "should have 'uid' field");
+        assertTrue(fields.hasKey("summary"), "should have 'summary' field");
+        assertTrue(fields.hasKey("dtstart"), "should have 'dtstart' field");
+        assertTrue(fields.hasKey("dtend"), "should have 'dtend' field");
+        assertTrue(fields.hasKey("duration"), "should have 'duration' field");
+        assertTrue(fields.hasKey("location"), "should have 'location' field");
+        assertTrue(fields.hasKey("description"), "should have 'description' field");
+        assertTrue(fields.hasKey("organizer"), "should have 'organizer' field");
+        assertTrue(fields.hasKey("attendees"), "should have 'attendees' field");
+        assertTrue(fields.hasKey("status"), "should have 'status' field");
+        assertTrue(fields.hasKey("rrule"), "should have 'rrule' field");
+
+        # Verify dummy provider returns empty record type
+        IcsReadDataProvider dummy_dp();
+        *hash<string, AbstractDataField> dummy_fields = dummy_dp.getRecordType();
+        assertEq(0, dummy_fields.size(), "dummy provider should return empty record type");
+    }
+
+    testFactory() {
+        IcsReadDataProviderFactory factory();
+
+        assertEq("icsread", factory.getInfo().name);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": test_data_dir + "/simple.ics",
+        });
+
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(3, records.size());
+    }
+
+    testWriteBasic() {
+        string output_path = test_data_dir + "/write-test.ics";
+        on_exit {
+            if (is_file(output_path)) {
+                unlink(output_path);
+            }
+        }
+
+        {
+            IcsWriteDataProvider dp(output_path);
+
+            # Write some events
+            dp.createRecord({
+                "uid": "write-001@test.com",
+                "summary": "Written Event 1",
+                "dtstart": 2026-03-15T10:00:00Z,
+                "dtend": 2026-03-15T11:00:00Z,
+                "location": "Office",
+            });
+            dp.createRecord({
+                "uid": "write-002@test.com",
+                "summary": "Written Event 2",
+                "dtstart": 2026-03-16T14:00:00Z,
+                "dtend": 2026-03-16T15:30:00Z,
+            });
+
+            # Commit to write the file
+            dp.commit();
+        }
+
+        assertTrue(is_file(output_path), "output file should exist");
+
+        # Read back and verify
+        IcsReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("write-001@test.com", records[0].uid);
+        assertEq("Written Event 1", records[0].summary);
+        assertEq("Office", records[0].location);
+        assertEq("write-002@test.com", records[1].uid);
+        assertEq("Written Event 2", records[1].summary);
+    }
+
+    testWriteToBinary() {
+        IcsWriteDataProvider dp();
+
+        dp.createRecord({
+            "uid": "binary-001@test.com",
+            "summary": "Binary Event",
+            "dtstart": 2026-04-01T09:00:00Z,
+            "dtend": 2026-04-01T10:00:00Z,
+        });
+
+        binary data = dp.getData();
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Read back from binary
+        IcsReadDataProvider rdp({
+            "data": data,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("binary-001@test.com", records[0].uid);
+        assertEq("Binary Event", records[0].summary);
+    }
+
+    testWriteDataOnly() {
+        # Test creating a provider without path or stream (for write-data action use case)
+        IcsWriteDataProvider dp();
+
+        assertEq("ics-data", dp.getName());
+
+        dp.createRecord({
+            "uid": "data-001@test.com",
+            "summary": "Data Event 1",
+            "dtstart": 2026-05-01T08:00:00Z,
+        });
+        dp.createRecord({
+            "uid": "data-002@test.com",
+            "summary": "Data Event 2",
+            "dtstart": 2026-05-02T09:00:00Z,
+        });
+
+        binary data = dp.getData();
+        assertTrue(data.size() > 0, "should have binary data");
+
+        # Verify by reading back
+        IcsReadDataProvider rdp({
+            "data": data,
+        });
+
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("data-001@test.com", records[0].uid);
+        assertEq("Data Event 1", records[0].summary);
+        assertEq("data-002@test.com", records[1].uid);
+        assertEq("Data Event 2", records[1].summary);
+    }
+
+    testWriteFactory() {
+        string output_path = test_data_dir + "/write-factory-test.ics";
+        on_exit {
+            if (is_file(output_path)) {
+                unlink(output_path);
+            }
+        }
+
+        IcsWriteDataProviderFactory factory();
+        assertEq("icswrite", factory.getInfo().name);
+
+        # Create provider via factory
+        AbstractDataProvider dp = factory.create({
+            "path": output_path,
+        });
+
+        dp.createRecord({
+            "uid": "factory-001@test.com",
+            "summary": "Factory Event",
+            "dtstart": 2026-06-01T10:00:00Z,
+        });
+        dp.commit();
+
+        # Verify can read back
+        IcsReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Factory Event", records[0].summary);
+    }
+
+    testWriteWithAttendees() {
+        IcsWriteDataProvider dp();
+
+        dp.createRecord({
+            "uid": "attendee-001@test.com",
+            "summary": "Meeting with Attendees",
+            "dtstart": 2026-07-01T14:00:00Z,
+            "dtend": 2026-07-01T15:00:00Z,
+            "organizer": "organizer@example.com",
+            "attendees": ("alice@example.com", "bob@example.com", "charlie@example.com"),
+            "location": "Board Room",
+        });
+
+        binary data = dp.getData();
+
+        IcsReadDataProvider rdp({"data": data});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        assertEq("Meeting with Attendees", records[0].summary);
+        assertEq("organizer@example.com", records[0].organizer);
+        assertTrue(records[0].attendees instanceof list, "attendees should be a list");
+        assertEq(3, records[0].attendees.size(), "should have 3 attendees");
+        assertEq("Board Room", records[0].location);
+    }
+
+    testWriteWithStatus() {
+        IcsWriteDataProvider dp();
+
+        dp.createRecord({
+            "uid": "status-001@test.com",
+            "summary": "Confirmed Event",
+            "dtstart": 2026-08-01T10:00:00Z,
+            "status": "CONFIRMED",
+        });
+        dp.createRecord({
+            "uid": "status-002@test.com",
+            "summary": "Tentative Event",
+            "dtstart": 2026-08-02T10:00:00Z,
+            "status": "TENTATIVE",
+        });
+        dp.createRecord({
+            "uid": "status-003@test.com",
+            "summary": "Cancelled Event",
+            "dtstart": 2026-08-03T10:00:00Z,
+            "status": "CANCELLED",
+        });
+
+        binary data = dp.getData();
+
+        IcsReadDataProvider rdp({"data": data});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(3, records.size());
+        assertEq("CONFIRMED", records[0].status);
+        assertEq("TENTATIVE", records[1].status);
+        assertEq("CANCELLED", records[2].status);
+    }
+
+    testRoundtrip() {
+        string output_path = test_data_dir + "/roundtrip-test.ics";
+        on_exit {
+            if (is_file(output_path)) {
+                unlink(output_path);
+            }
+        }
+
+        # Write complex data
+        {
+            IcsWriteDataProvider wdp(output_path);
+
+            wdp.createRecord({
+                "uid": "rt-001@test.com",
+                "summary": "Roundtrip Event 1",
+                "dtstart": 2026-06-15T10:30:00Z,
+                "dtend": 2026-06-15T12:00:00Z,
+                "location": "Room A",
+                "description": "First roundtrip event",
+                "organizer": "boss@example.com",
+                "attendees": ("dev1@example.com", "dev2@example.com"),
+                "status": "CONFIRMED",
+            });
+            wdp.createRecord({
+                "uid": "rt-002@test.com",
+                "summary": "Roundtrip Event 2",
+                "dtstart": 2026-06-16T14:00:00Z,
+                "dtend": 2026-06-16T15:30:00Z,
+                "location": "Room B",
+                "status": "TENTATIVE",
+            });
+
+            wdp.commit();
+        }
+
+        # Read back all data
+        IcsReadDataProvider rdp(output_path);
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(2, records.size());
+        assertEq("rt-001@test.com", records[0].uid);
+        assertEq("Roundtrip Event 1", records[0].summary);
+        assertEq("Room A", records[0].location);
+        assertEq("First roundtrip event", records[0].description);
+        assertEq("boss@example.com", records[0].organizer);
+        assertTrue(records[0].attendees instanceof list, "should have attendees list");
+        assertEq(2, records[0].attendees.size());
+        assertEq("CONFIRMED", records[0].status);
+
+        assertEq("rt-002@test.com", records[1].uid);
+        assertEq("Roundtrip Event 2", records[1].summary);
+        assertEq("Room B", records[1].location);
+        assertEq("TENTATIVE", records[1].status);
+    }
+
+    testRoundtripRecurring() {
+        IcsWriteDataProvider wdp();
+
+        wdp.createRecord({
+            "uid": "rrule-001@test.com",
+            "summary": "Weekly Team Sync",
+            "dtstart": 2026-01-05T09:00:00Z,
+            "dtend": 2026-01-05T09:30:00Z,
+            "rrule": "FREQ=WEEKLY;BYDAY=MO;COUNT=10",
+            "status": "CONFIRMED",
+        });
+
+        binary data = wdp.getData();
+
+        IcsReadDataProvider rdp({"data": data});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+
+        assertEq(1, records.size());
+        assertEq("rrule-001@test.com", records[0].uid);
+        assertEq("Weekly Team Sync", records[0].summary);
+        assertTrue(string(records[0].rrule) =~ /FREQ=WEEKLY/, "should have FREQ=WEEKLY");
+        assertTrue(string(records[0].rrule) =~ /COUNT=10/, "should have COUNT=10");
+    }
+
+    testActionRegistration() {
+        # Verify that actions are properly registered with correct properties
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("ICS");
+        assertTrue(exists actions, "should have actions registered for ICS app");
+        assertTrue(actions.size() >= 4, "should have at least 4 actions (read, read-data, write, write-data)");
+
+        # Create a lookup hash for easier testing
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        # Verify read action
+        assertTrue(action_map.hasKey("read"), "should have 'read' action");
+        assertEq("Read ICS Calendar File", action_map."read".display_name);
+        assertTrue(action_map."read".options.hasKey("path"), "read action should have 'path' option");
+
+        # Verify read-data action
+        assertTrue(action_map.hasKey("read-data"), "should have 'read-data' action");
+        assertEq("Read ICS Calendar Inline Data", action_map."read-data".display_name);
+        assertTrue(action_map."read-data".options.hasKey("data"), "read-data action should have 'data' option");
+
+        # Verify write action
+        assertTrue(action_map.hasKey("write"), "should have 'write' action");
+        assertEq("Write ICS Calendar File", action_map."write".display_name);
+        assertTrue(action_map."write".options.hasKey("path"), "write action should have 'path' option");
+
+        # Verify write-data action
+        assertTrue(action_map.hasKey("write-data"), "should have 'write-data' action");
+        assertEq("Create ICS Calendar Data", action_map."write-data".display_name);
+    }
+
+    testNegativeInvalidPath() {
+        # Invalid path should throw an exception
+        bool threw = False;
+        try {
+            IcsReadDataProvider dp("/nonexistent/path/to/file.ics");
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+        }
+        assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    testNegativeOptionConflicts() {
+        # Test path and stream conflict
+        assertThrows("ICS-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.ics");
+            IcsReadDataProvider dp({
+                "path": test_data_dir + "/simple.ics",
+                "stream": fis,
+            });
+        });
+
+        # Test path and data conflict
+        assertThrows("ICS-READ-OPTION-ERROR", sub () {
+            IcsReadDataProvider dp({
+                "path": test_data_dir + "/simple.ics",
+                "data": <abcd>,
+            });
+        });
+
+        # Test stream and data conflict
+        assertThrows("ICS-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.ics");
+            IcsReadDataProvider dp({
+                "stream": fis,
+                "data": <abcd>,
+            });
+        });
+    }
+
+    testWriteNegativePathStreamConflict() {
+        # Test path constructor with stream option
+        assertThrows("ICS-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            IcsWriteDataProvider dp(test_data_dir + "/test.ics", {
+                "stream": sos,
+            });
+        });
+
+        # Test path constructor with path option
+        assertThrows("ICS-WRITE-OPTION-ERROR", sub () {
+            IcsWriteDataProvider dp(test_data_dir + "/test.ics", {
+                "path": test_data_dir + "/other.ics",
+            });
+        });
+
+        # Test stream constructor with path option
+        assertThrows("ICS-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            IcsWriteDataProvider dp(sos, {
+                "path": test_data_dir + "/test.ics",
+            });
+        });
+
+        # Test stream constructor with stream option
+        assertThrows("ICS-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            StringOutputStream sos2();
+            IcsWriteDataProvider dp(sos, {
+                "stream": sos2,
+            });
+        });
+
+        # Test options constructor with both path and stream
+        assertThrows("ICS-WRITE-OPTION-ERROR", sub () {
+            StringOutputStream sos();
+            IcsWriteDataProvider dp({
+                "path": test_data_dir + "/test.ics",
+                "stream": sos,
+            });
+        });
+    }
+
+    testNegativeInvalidData() {
+        # Invalid ICS data should throw an exception
+        bool threw = False;
+        try {
+            IcsReadDataProvider dp({
+                "data": binary("not valid ics data at all"),
+            });
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+        }
+        assertTrue(threw, "should throw exception for invalid ICS data");
+    }
+
+    testNegativeGetDataAfterCommit() {
+        string output_path = test_data_dir + "/commit-test.ics";
+        on_exit {
+            if (is_file(output_path)) {
+                unlink(output_path);
+            }
+        }
+
+        IcsWriteDataProvider dp(output_path);
+        dp.createRecord({
+            "uid": "commit-001@test.com",
+            "summary": "Commit Test",
+            "dtstart": 2026-09-01T10:00:00Z,
+        });
+        dp.commit();
+
+        # getData after commit should throw
+        assertThrows("ICS-WRITE-ERROR", sub () {
+            dp.getData();
+        });
+    }
+}
