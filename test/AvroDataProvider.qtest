@@ -90,6 +90,8 @@ public class AvroDataProviderTest inherits QUnit::Test {
             script_dir = getcwd();
         }
         test_data_dir = script_dir + "/avro-test-data";
+        # ensure test data directory exists
+        mkdir_ex(test_data_dir, 0755, True);
 
         addTestCase("write and read simple roundtrip", \testSimpleRoundtrip());
         addTestCase("write and read nested roundtrip", \testNestedRoundtrip());

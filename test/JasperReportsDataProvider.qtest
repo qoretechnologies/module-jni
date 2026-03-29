@@ -65,6 +65,7 @@ public class JasperReportsDataProviderTest inherits QUnit::Test {
             script_dir = getcwd();
         }
         test_data_dir = script_dir + "/jasperreports-test-data";
+        mkdir_ex(test_data_dir, 0755, True);
 
         addTestCase("generate PDF from template data", \testGeneratePdf());
         addTestCase("generate XLSX from template data", \testGenerateXlsx());

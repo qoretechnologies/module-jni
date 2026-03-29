@@ -58,6 +58,7 @@ public class TikaDataProviderTest inherits QUnit::Test {
             script_dir = getcwd();
         }
         test_data_dir = script_dir + "/tika-test-data";
+        mkdir_ex(test_data_dir, 0755, True);
 
         addTestCase("extract HTML", \testExtractHtml());
         addTestCase("extract XML", \testExtractXml());
