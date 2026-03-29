@@ -1,0 +1,212 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore FlywayDataProvider module definition
+
+/*  FlywayDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# import Flyway and dependency JARs: must be added to the global classloader
+# because Flyway uses JDBC connections that persist through thread pools
+%module-cmd(jni) global-add-relative-classpath ./jar/flyway-core-10.20.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/flyway-database-postgresql-10.20.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-annotations-2.15.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-core-2.15.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-databind-2.15.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-dataformat-toml-2.15.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jackson-datatype-jsr310-2.15.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/qore-dataprovider-flyway.jar
+
+%module-cmd(jni) import org.qore.dataprovider.flyway.QoreFlywayRunner
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+# implements support for Flyway connections
+%requires(reexport) ConnectionProvider
+%requires Util
+
+module FlywayDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Flyway database schema migration";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register connection schemes
+        ConnectionSchemeCache::registerScheme("flyway", FlywayConnection::ConnectionScheme);
+
+        # register the data provider factory
+        DataProvider::registerFactory(new FlywayDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": FlywayDataProvider::AppName,
+            "display_name": "Flyway",
+            "short_desc": "Flyway database schema migration",
+            "desc": "Flyway database schema migration",
+            "groups": (DataProvider::AppGroup::Databases,),
+            "scheme": "flyway",
+            "logo": FlywayLogo,
+            "logo_file_name": "flyway-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FlywayDataProvider::AppName,
+            "path": "/migrate",
+            "action": "migrate",
+            "display_name": "Run Flyway Migrations",
+            "short_desc": "Run pending database migrations",
+            "desc": "Run all pending Flyway database migrations",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions - ("url", "user", "password")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FlywayDataProvider::AppName,
+            "path": "/info",
+            "action": "info",
+            "display_name": "Get Flyway Migration Info",
+            "short_desc": "Get information about all migrations",
+            "desc": "Get information about all applied and pending Flyway migrations",
+            "action_code": DPAT_FIND,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions - ("url", "user", "password")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FlywayDataProvider::AppName,
+            "path": "/validate",
+            "action": "validate",
+            "display_name": "Validate Flyway Migrations",
+            "short_desc": "Validate applied migrations against available ones",
+            "desc": "Validate applied Flyway migrations against available migration scripts",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions - ("url", "user", "password")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FlywayDataProvider::AppName,
+            "path": "/clean",
+            "action": "clean",
+            "display_name": "Clean Flyway Schema",
+            "short_desc": "Drop all objects in the configured schemas",
+            "desc": "Drop all objects in the configured schemas; this is a destructive operation",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions - ("url", "user", "password")
+            ),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FlywayDataProvider::AppName,
+            "path": "/repair",
+            "action": "repair",
+            "display_name": "Repair Flyway Schema History",
+            "short_desc": "Repair the Flyway schema history table",
+            "desc": "Repair the Flyway schema history table by removing failed migration entries "
+                "and aligning checksums",
+            "action_code": DPAT_API,
+
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                FlywayDataProvider::ConstructorOptions - ("url", "user", "password")
+            ),
+        });
+    };
+}
+
+/** @mainpage FlywayDataProvider Module
+
+    @tableofcontents
+
+    @section flywaydataproviderintro Introduction to the FlywayDataProvider Module
+
+    The %FlywayDataProvider module provides a data provider API for Flyway database schema migration.
+
+    This data provider provides Flyway functionality with the \c flyway factory and data provider with the
+    same name, supporting database migration, validation, info, clean, and repair operations
+    (class @ref FlywayDataProvider::FlywayDataProvider "FlywayDataProvider").
+
+    @section flywaydataprovider_examples Flyway Data Provider Examples
+
+    These examples are with \c qdp, the command-line interface to the Data Provider API.
+
+    @par API Example: Run Migrations
+    @verbatim qdp 'flyway{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret,locations=filesystem:/path/to/sql}/migrate' request
+    @endverbatim
+
+    @par API Example: Get Migration Info
+    @verbatim qdp 'flyway{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret,locations=filesystem:/path/to/sql}/info' search
+    @endverbatim
+
+    @section flywaydataprovider_relnotes Release Notes
+
+    @subsection flywaydataprovider_v1_0 FlywayDataProvider v1.0
+    - initial release of the module
+*/
+
+#! Contains all public definitions in the FlywayDataProvider module
+public namespace FlywayDataProvider {
+#! Flyway application name
+public const AppName = "Flyway";
+}
+
+namespace Priv {
+#! Flyway logo
+const FlywayLogo = File::readTextFile(get_script_dir() + "/flyway-logo.svg");
+}

@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  FlywayDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires ConnectionProvider
+%requires jni
+%requires ../qlib/FlywayDataProvider
+
+%exec-class FlywayDataProviderTest
+
+public class FlywayDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+        *string jdbc_url;
+        *string jdbc_user;
+        *string jdbc_password;
+    }
+
+    constructor() : Test("FlywayDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/flyway-test-data/sql";
+
+        # Get JDBC connection from environment
+        jdbc_url = ENV.QORE_DB_CONNSTR_JDBC_PGSQL;
+        jdbc_user = ENV.FLYWAY_DB_USER ?? "postgres";
+        jdbc_password = ENV.FLYWAY_DB_PASSWORD ?? "omq";
+
+        addTestCase("factory test", \testFactory());
+        addTestCase("child providers", \testChildProviders());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("negative: missing url", \testNegativeMissingUrl());
+        addTestCase("negative: missing user", \testNegativeMissingUser());
+        addTestCase("migrate and info", \testMigrateAndInfo());
+        addTestCase("validate", \testValidate());
+        addTestCase("clean and repair", \testCleanAndRepair());
+
+        # execute tests and set program return value
+        set_return_value(main());
+    }
+
+    private testFactory() {
+        FlywayDataProviderFactory factory();
+        assertEq("flyway", factory.getInfo().name);
+    }
+
+    private testChildProviders() {
+        if (!jdbc_url) {
+            testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
+        }
+        FlywayDataProvider dp({
+            "url": jdbc_url,
+            "user": jdbc_user,
+            "password": jdbc_password,
+            "locations": ("filesystem:" + test_data_dir,),
+        });
+        # Verify child provider names
+        list<string> children = dp.getChildProviderNames();
+        assertTrue(children.size() >= 5);
+        assertTrue(inlist("migrate", children));
+        assertTrue(inlist("info", children));
+        assertTrue(inlist("validate", children));
+        assertTrue(inlist("clean", children));
+        assertTrue(inlist("repair", children));
+    }
+
+    private testActionRegistration() {
+        assertEq(True, DataProviderActionCatalog::getApp("Flyway").val());
+    }
+
+    private testNegativeMissingUrl() {
+        assertThrows("FLYWAY-CONSTRUCTOR-ERROR", sub () {
+            new FlywayDataProvider({
+                "user": "test",
+                "password": "test",
+            });
+        });
+    }
+
+    private testNegativeMissingUser() {
+        assertThrows("FLYWAY-CONSTRUCTOR-ERROR", sub () {
+            new FlywayDataProvider({
+                "url": "jdbc:postgresql://localhost/test",
+            });
+        });
+    }
+
+    private testMigrateAndInfo() {
+        if (!jdbc_url) {
+            testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
+        }
+        FlywayDataProvider dp({
+            "url": jdbc_url,
+            "user": jdbc_user,
+            "password": jdbc_password,
+            "locations": ("filesystem:" + test_data_dir,),
+        });
+
+        # Clean first to ensure a fresh state
+        AbstractDataProvider cleanDp = dp.getChildProvider("clean");
+        cleanDp.doRequest({});
+
+        # Run migrate
+        AbstractDataProvider migrateDp = dp.getChildProvider("migrate");
+        auto result = migrateDp.doRequest({});
+        assertTrue(result instanceof hash);
+
+        # Check info
+        AbstractDataProvider infoDp = dp.getChildProvider("info");
+        list<hash<auto>> records = map $1, infoDp.searchRecords();
+        assertGt(0, records.size());
+        # Should have at least 2 migrations (V1 and V2)
+        assertGt(1, records.size());
+        assertEq("1", records[0].version);
+        assertEq("2", records[1].version);
+    }
+
+    private testValidate() {
+        if (!jdbc_url) {
+            testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
+        }
+        FlywayDataProvider dp({
+            "url": jdbc_url,
+            "user": jdbc_user,
+            "password": jdbc_password,
+            "locations": ("filesystem:" + test_data_dir,),
+        });
+
+        AbstractDataProvider validateDp = dp.getChildProvider("validate");
+        auto result = validateDp.doRequest({});
+        assertTrue(result instanceof hash);
+    }
+
+    private testCleanAndRepair() {
+        if (!jdbc_url) {
+            testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
+        }
+        FlywayDataProvider dp({
+            "url": jdbc_url,
+            "user": jdbc_user,
+            "password": jdbc_password,
+            "locations": ("filesystem:" + test_data_dir,),
+        });
+
+        # Clean
+        AbstractDataProvider cleanDp = dp.getChildProvider("clean");
+        auto result = cleanDp.doRequest({});
+        assertTrue(result instanceof hash);
+
+        # Repair
+        AbstractDataProvider repairDp = dp.getChildProvider("repair");
+        result = repairDp.doRequest({});
+        assertTrue(result instanceof hash);
+
+        # Final clean to leave the database in a clean state
+        cleanDp = dp.getChildProvider("clean");
+        cleanDp.doRequest({});
+    }
+}

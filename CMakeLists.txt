@@ -551,6 +551,29 @@ add_custom_target(qore-jasper-jar
 # install the JasperReports jar file manually
 install(FILES ${JASPER_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/JasperReportsDataProvider/jar)
 
+# Flyway data provider jar
+set(FLYWAY_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-flyway.jar)
+set(FLYWAY_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/flyway-core-10.20.0.jar:${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/flyway-database-postgresql-10.20.0.jar:${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/jackson-annotations-2.15.2.jar:${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/jackson-core-2.15.2.jar:${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/jackson-databind-2.15.2.jar:${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/jackson-dataformat-toml-2.15.2.jar:${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/jackson-datatype-jsr310-2.15.2.jar)
+set(FLYWAY_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(FLYWAY_SOURCES ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/flyway/)
+
+add_custom_command(
+    OUTPUT ${FLYWAY_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${FLYWAY_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-flyway ${FLYWAY_JAR} ${FLYWAY_SOURCES} -cp ${FLYWAY_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${FLYWAY_JAR} ${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/
+    DEPENDS ${module_name} ${FLYWAY_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-flyway-jar
+    DEPENDS ${FLYWAY_JAR}
+)
+
+# install the Flyway jar file manually
+install(FILES ${FLYWAY_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/FlywayDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -831,7 +854,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -935,6 +958,7 @@ set(QMOD
     qlib/IcsDataProvider
     qlib/AvroDataProvider
     qlib/JasperReportsDataProvider
+    qlib/FlywayDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -994,6 +1018,7 @@ qore_external_user_module("qlib/VcfDataProvider" "")
 qore_external_user_module("qlib/IcsDataProvider" "")
 qore_external_user_module("qlib/AvroDataProvider" "")
 qore_external_user_module("qlib/JasperReportsDataProvider" "")
+qore_external_user_module("qlib/FlywayDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 
