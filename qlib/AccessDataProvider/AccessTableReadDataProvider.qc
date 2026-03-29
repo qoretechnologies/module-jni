@@ -46,6 +46,9 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
 
         #! the name of the table
         string table_name;
+
+        #! Temp file path for binary data cleanup
+        *string temp_path;
     }
 
     #! Creates the AccessTableReadDataProvider with the database path, name, and table name
@@ -57,6 +60,11 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
         self.i = new AccessIterator(db_path, table_name);
         self.name = name;
         self.table_name = table_name;
+    }
+
+    #! Destructor - clean up temp file if created
+    destructor() {
+        cleanupTempFile();
     }
 
     #! Creates the object from constructor options
@@ -71,15 +79,28 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
             i = new AccessIterator(copts.path, table_name);
             name = copts.path;
         } else if (copts.data) {
-            # Write data to temp file
-            string temp_path = tmp_location() + "/qore-access-" + get_random_string(16) + ".accdb";
+            # Write data to temp file (Jackcess requires a File)
+            temp_path = tmp_location() + "/qore-access-" + get_random_string(16) + ".accdb";
             File f();
             f.open(temp_path, O_CREAT | O_WRONLY | O_TRUNC);
             f.write(copts.data);
-            i = new AccessIterator(temp_path, table_name);
+            try {
+                i = new AccessIterator(temp_path, table_name);
+            } catch (hash<ExceptionInfo> ex) {
+                cleanupTempFile();
+                rethrow;
+            }
             name = "access-data";
         } else {
             throw "ACCESS-READ-OPTION-ERROR", "either \"path\" or \"data\" option is required";
+        }
+    }
+
+    #! Cleans up the temp file if one was created
+    private cleanupTempFile() {
+        if (temp_path && is_file(temp_path)) {
+            unlink(temp_path);
+            temp_path = NOTHING;
         }
     }
 
