@@ -717,6 +717,7 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
     // the DataTransferer for the headless awt toolkit is null, and this will cause an initializer exception
     // in this class when initializing the static member "ToolkitThreadBlockedHandler handler"
     if (name == "sun.awt.dnd.SunDropTargetEvent") {
+        Globals::ensureGraphicsEnvironment();
         Env env;
         if (env.callBooleanMethod(Globals::classGraphicsEnvironment, Globals::methodGraphicsEnvironmentIsHeadless,
             nullptr)) {

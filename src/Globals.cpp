@@ -3079,10 +3079,21 @@ bool Globals::init() {
     // Note: KotlinMetadataHelper is lazily initialized by initKotlinMetadataHelper() when first needed
     // This is because we can't load it until the classloader has access to qore-jni.jar
 
-    classGraphicsEnvironment = env.findClass("java/awt/GraphicsEnvironment").makeGlobal();;
-    methodGraphicsEnvironmentIsHeadless = env.getStaticMethod(classGraphicsEnvironment, "isHeadless", "()Z");
+    // NOTE: GraphicsEnvironment is loaded lazily (in ensureGraphicsEnvironment()) to avoid
+    // spawning a subprocess during init, which triggers a StackOverflowError on the JVM's
+    // "process reaper" thread (hardcoded 32KB stack in JDK 25)
 
     return bootstrap;
+}
+
+static std::once_flag graphicsEnvironmentInitFlag;
+
+void Globals::ensureGraphicsEnvironment() {
+    std::call_once(graphicsEnvironmentInitFlag, []() {
+        Env env;
+        classGraphicsEnvironment = env.findClass("java/awt/GraphicsEnvironment").makeGlobal();
+        methodGraphicsEnvironmentIsHeadless = env.getStaticMethod(classGraphicsEnvironment, "isHeadless", "()Z");
+    });
 }
 
 static std::once_flag kotlinMetadataHelperInitFlag;

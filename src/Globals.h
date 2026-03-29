@@ -242,8 +242,10 @@ public:
     DLLLOCAL static void initKotlinScriptEngine();
 
     // to check for headless AWT to avoid importing classes that cannot be initialized when headless
+    // NOTE: loaded lazily via ensureGraphicsEnvironment() to avoid spawning subprocesses during init
     DLLLOCAL static GlobalReference<jclass> classGraphicsEnvironment;             // java.awt.GraphicsEnvironment
     DLLLOCAL static jmethodID methodGraphicsEnvironmentIsHeadless;                // boolean GraphicsEnvironment.isHeadless()
+    DLLLOCAL static void ensureGraphicsEnvironment();
 
     DLLLOCAL static GlobalReference<jclass> classThread;                          // java.lang.Thread
     DLLLOCAL static jmethodID methodThreadCurrentThread;                          // Thread Thread.currentThread()

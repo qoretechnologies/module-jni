@@ -45,7 +45,19 @@ QoreStringNode* Jvm::createVM() {
     vm_args.ignoreUnrecognized = false;
     vm_args.nOptions = 0;
 
-    size_t num_options = 2;
+    // check if java.awt.headless should be set to avoid spawning subprocesses during
+    // GraphicsEnvironment initialization (which causes StackOverflowError on the JVM's
+    // "process reaper" thread with its hardcoded 32KB stack in JDK 25)
+    bool set_headless = false;
+    {
+        QoreString val;
+        if (SystemEnvironment::get("JAVA_AWT_HEADLESS", val)) {
+            // not explicitly set; default to headless=true to avoid the process reaper issue
+            set_headless = true;
+        }
+    }
+
+    size_t num_options = 2 + (set_headless ? 1 : 0);
     bool disable_jit = false;
     bool enable_native_access = true;
     bool native_access_explicit = false;
@@ -157,6 +169,9 @@ QoreStringNode* Jvm::createVM() {
     }
     QoreStringMaker thread_stack_size("-Xss%ldk", stack_size_kb);
     options[vm_args.nOptions++].optionString = (char*)thread_stack_size.c_str();
+    if (set_headless) {
+        options[vm_args.nOptions++].optionString = (char*)"-Djava.awt.headless=true";
+    }
     if (disable_jit) {
         // disable JIT
         options[vm_args.nOptions++].optionString = (char*)"-Xint";
