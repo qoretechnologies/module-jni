@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <rect width="100" height="100" rx="10" fill="#003B6F"/>
+  <text x="50" y="32" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="white" text-anchor="middle">JASPER</text>
+  <text x="50" y="54" font-family="Arial,sans-serif" font-size="11" font-weight="bold" fill="white" text-anchor="middle">REPORTS</text>
+  <!-- Document icon -->
+  <rect x="34" y="62" width="20" height="26" rx="2" fill="#ffffff" opacity="0.9"/>
+  <rect x="38" y="68" width="12" height="2" rx="1" fill="#003B6F" opacity="0.6"/>
+  <rect x="38" y="73" width="10" height="2" rx="1" fill="#003B6F" opacity="0.6"/>
+  <rect x="38" y="78" width="12" height="2" rx="1" fill="#003B6F" opacity="0.6"/>
+  <rect x="38" y="83" width="8" height="2" rx="1" fill="#003B6F" opacity="0.6"/>
+  <!-- Chart bars -->
+  <rect x="58" y="78" width="4" height="10" rx="1" fill="#4FC3F7"/>
+  <rect x="64" y="72" width="4" height="16" rx="1" fill="#29B6F6"/>
+  <rect x="70" y="66" width="4" height="22" rx="1" fill="#03A9F4"/>
+</svg>

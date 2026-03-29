@@ -523,6 +523,34 @@ add_custom_target(qore-avro-jar
 # install the Avro jar file manually
 install(FILES ${AVRO_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/AvroDataProvider/jar)
 
+# JasperReports data provider jar
+set(JASPER_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-jasperreports.jar)
+set(JASPER_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/commons-beanutils-1.9.4.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/commons-collections-3.2.2.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/commons-collections4-4.2.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/commons-digester-2.1.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/commons-logging-1.1.1.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/ecj-3.21.0.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/jackson-annotations-2.15.3.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/jackson-core-2.15.3.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/jackson-databind-2.15.3.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/jackson-dataformat-xml-2.15.3.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/jasperreports-6.21.3.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/jcommon-1.0.23.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/jfreechart-1.0.19.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/openpdf-1.3.32.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/stax2-api-4.2.1.jar:${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/woodstox-core-6.5.1.jar)
+set(JASPER_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(JASPER_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/jasperreports/)
+set(JASPER_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/jasperreports/JasperReportGenerator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/jasperreports/JasperReportTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${JASPER_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${JASPER_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-jasper ${JASPER_JAR} ${JASPER_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${JASPER_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${JASPER_JAR} ${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/
+    DEPENDS ${module_name} ${JASPER_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-jasper-jar
+    DEPENDS ${JASPER_JAR}
+)
+
+# install the JasperReports jar file manually
+install(FILES ${JASPER_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/JasperReportsDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -803,7 +831,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -906,6 +934,7 @@ set(QMOD
     qlib/VcfDataProvider
     qlib/IcsDataProvider
     qlib/AvroDataProvider
+    qlib/JasperReportsDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -964,6 +993,7 @@ qore_external_user_module("qlib/OdpDataProvider" "")
 qore_external_user_module("qlib/VcfDataProvider" "")
 qore_external_user_module("qlib/IcsDataProvider" "")
 qore_external_user_module("qlib/AvroDataProvider" "")
+qore_external_user_module("qlib/JasperReportsDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 

@@ -1,0 +1,245 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore JasperReportsDataProvider module definition
+
+/*  JasperReportsDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-jasperreports.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-beanutils-1.9.4.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-collections-3.2.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-collections4-4.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-digester-2.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-logging-1.1.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/ecj-3.21.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackson-annotations-2.15.3.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackson-core-2.15.3.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackson-databind-2.15.3.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackson-dataformat-xml-2.15.3.jar
+%module-cmd(jni) add-relative-classpath ./jar/jasperreports-6.21.3.jar
+%module-cmd(jni) add-relative-classpath ./jar/jcommon-1.0.23.jar
+%module-cmd(jni) add-relative-classpath ./jar/jfreechart-1.0.19.jar
+%module-cmd(jni) add-relative-classpath ./jar/openpdf-1.3.32.jar
+%module-cmd(jni) add-relative-classpath ./jar/stax2-api-4.2.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/woodstox-core-6.5.1.jar
+
+%module-cmd(jni) import org.qore.dataprovider.jasperreports.JasperReportGenerator
+
+module JasperReportsDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for generating reports from JasperReports templates";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new JasperReportsDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": JasperReportsDataProvider::AppName,
+            "display_name": "JasperReports",
+            "short_desc": "Generate reports from JasperReports templates",
+            "desc": "Generate reports in PDF, Excel, HTML, and CSV formats from JasperReports "
+                "(.jrxml / .jasper) templates with data-driven record input",
+            "groups": (DataProvider::AppGroup::Documents,),
+            "logo": JasperReportsLogo,
+            "logo_file_name": "jasperreports-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JasperReportsDataProvider::AppName,
+            "path": "/",
+            "action": "generate-report",
+            "display_name": "Generate Report from Template File",
+            "short_desc": "Generate a report from a JasperReports template at a file location",
+            "desc": "Generate a report from a JasperReports template (.jrxml or .jasper) at a "
+                "specific file location.\n\n"
+                "Each record created represents a single data row to be included in the report. "
+                "The report is generated when the provider is committed or destroyed.\n\n"
+                "Supported output formats: PDF, XLSX, HTML, CSV.",
+            "action_code": DPAT_CREATE,
+            "cls": "JasperReportsDataProvider::JasperReportsDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JasperReportsDataProvider::ConstructorOptions{"template", "output_format",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": JasperReportsDataProvider::AppName,
+            "path": "/",
+            "action": "generate-report-data",
+            "display_name": "Generate Report from Inline Template",
+            "short_desc": "Generate a report from inline JasperReports template data",
+            "desc": "Generate a report from inline JasperReports template binary data.\n\n"
+                "Each record created represents a single data row to be included in the report. "
+                "The report is generated when the provider is committed or destroyed.\n\n"
+                "After writing all records, use `getData()` to retrieve the binary report output.\n\n"
+                "Supported output formats: PDF, XLSX, HTML, CSV.",
+            "action_code": DPAT_CREATE,
+            "cls": "JasperReportsDataProvider::JasperReportsDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JasperReportsDataProvider::ConstructorOptions{"template_data", "output_format",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage JasperReportsDataProvider Module
+
+    @tableofcontents
+
+    @section JasperReportsDataProviderintro Introduction to the JasperReportsDataProvider Module
+
+    The %JasperReportsDataProvider module provides a data provider API for generating reports from
+    JasperReports templates through the @ref dataproviderintro "DataProvider" API. It supports
+    JasperReports 6.21 using the
+    <a href="https://community.jaspersoft.com/downloads/community-edition/">JasperReports</a> Java
+    library.
+
+    The following classes are provided by this module:
+    - @ref JasperReportsDataProvider::JasperReportsDataProvider "JasperReportsDataProvider" - for
+      generating reports
+    - @ref JasperReportsDataProvider::JasperReportsDataProviderFactory
+      "JasperReportsDataProviderFactory" - factory for report generation providers
+
+    @section JasperReportsDataProvider_generating Generating Reports
+
+    @subsection JasperReportsDataProvider_generating_basic Basic Report Generation
+
+    @code{.py}
+    %requires JasperReportsDataProvider
+
+    # Generate a PDF report from a template file
+    JasperReportsDataProvider dp("report.jrxml", "pdf");
+
+    dp.createRecord({
+        "name": "Alice Smith",
+        "amount": 1500.00,
+        "date": now(),
+    });
+
+    dp.createRecord({
+        "name": "Bob Johnson",
+        "amount": 2300.50,
+        "date": now(),
+    });
+
+    # Commit to generate the report (also called automatically in the destructor)
+    dp.commit();
+    @endcode
+
+    @subsection JasperReportsDataProvider_generating_options Using Options
+
+    @code{.py}
+    # Generate an Excel report with output path
+    JasperReportsDataProvider dp({
+        "template": "report.jrxml",
+        "output_format": "xlsx",
+        "output_path": "output/report.xlsx",
+    });
+
+    dp.createRecord({"col1": "value1", "col2": 42});
+    dp.commit();
+    @endcode
+
+    @subsection JasperReportsDataProvider_generating_binary Getting Binary Data
+
+    @code{.py}
+    # Generate a PDF report and get binary data
+    JasperReportsDataProvider dp({
+        "template": "report.jrxml",
+        "output_format": "pdf",
+    });
+
+    dp.createRecord({"field1": "data1"});
+
+    # Get binary report data instead of writing to file
+    binary data = dp.getData();
+    @endcode
+
+    @subsection JasperReportsDataProvider_generating_inline From Inline Template Data
+
+    @code{.py}
+    # Load template data from a binary source
+    binary templateData = File::readBinaryFile("report.jrxml");
+
+    JasperReportsDataProvider dp({
+        "template_data": templateData,
+        "output_format": "html",
+    });
+
+    dp.createRecord({"title": "Report Title", "content": "Report content"});
+    binary htmlData = dp.getData();
+    @endcode
+
+    @section JasperReportsDataProvider_formats Supported Output Formats
+
+    The following output formats are supported:
+    - \c pdf: PDF format using OpenPDF
+    - \c xlsx: Excel 2007+ format using Apache POI
+    - \c html: HTML format
+    - \c csv: CSV (comma-separated values) format
+
+    @section JasperReportsDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c JASPERREPORTS-OPTION-ERROR: Invalid or missing options
+    - \c JASPERREPORTS-GENERATE-ERROR: Error during report generation
+
+    @section JasperReportsDataProvider_relnotes Release Notes
+
+    @subsection JasperReportsDataProvider_v1_0 JasperReportsDataProvider v1.0
+    - initial release of the module
+    - support for generating reports from JasperReports (.jrxml / .jasper) templates
+    - support for PDF, XLSX, HTML, and CSV output formats
+    - data-driven report generation via the DataProvider create record API
+    - binary data output support
+    - file location handler support for template input and report output
+*/
+
+#! contains all public definitions in the JasperReportsDataProvider module
+public namespace JasperReportsDataProvider {
+#! Application name
+public const AppName = "JasperReports";
+}
+
+namespace Priv {
+#! JasperReports logo
+const JasperReportsLogo = File::readTextFile(get_script_dir() + "/jasperreports-logo.svg");
+}

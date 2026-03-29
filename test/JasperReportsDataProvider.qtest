@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  JasperReportsDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+# Add classpaths BEFORE module requires to ensure the JNI classpath is available
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/qore-dataprovider-jasperreports.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/commons-beanutils-1.9.4.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/commons-collections-3.2.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/commons-collections4-4.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/commons-digester-2.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/commons-logging-1.1.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/ecj-3.21.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/jackson-annotations-2.15.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/jackson-core-2.15.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/jackson-databind-2.15.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/jackson-dataformat-xml-2.15.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/jasperreports-6.21.3.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/jcommon-1.0.23.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/jfreechart-1.0.19.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/openpdf-1.3.32.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/stax2-api-4.2.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/woodstox-core-6.5.1.jar
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/JasperReportsDataProvider
+
+%module-cmd(jni) import org.qore.dataprovider.jasperreports.JasperReportTestHelper
+
+%exec-class JasperReportsDataProviderTest
+
+public class JasperReportsDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+    }
+
+    constructor() : Test("JasperReportsDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/jasperreports-test-data";
+
+        addTestCase("generate PDF from template data", \testGeneratePdf());
+        addTestCase("generate XLSX from template data", \testGenerateXlsx());
+        addTestCase("generate HTML from template data", \testGenerateHtml());
+        addTestCase("generate CSV from template data", \testGenerateCsv());
+        addTestCase("generate PDF to file", \testGeneratePdfToFile());
+        addTestCase("multiple records", \testMultipleRecords());
+        addTestCase("factory test", \testFactory());
+        addTestCase("negative: missing template", \testNegativeMissingTemplate());
+        addTestCase("negative: missing output format", \testNegativeMissingFormat());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("negative: invalid format", \testNegativeInvalidFormat());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("test helper", \testHelper());
+
+        # execute tests and set program return value
+        set_return_value(main());
+    }
+
+    private testGeneratePdf() {
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        JasperReportsDataProvider dp({"template_data": templateData, "output_format": "pdf"});
+        dp.createRecord({"name": "Alice", "age": 30, "email": "alice@example.com"});
+        binary pdfData = dp.getData();
+        assertGt(0, pdfData.size());
+        # PDF files start with %PDF
+        assertEq(ord("%"), pdfData[0]);
+    }
+
+    private testGenerateXlsx() {
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        JasperReportsDataProvider dp({"template_data": templateData, "output_format": "xlsx"});
+        dp.createRecord({"name": "Bob", "age": 25, "email": "bob@example.com"});
+        binary xlsxData = dp.getData();
+        assertGt(0, xlsxData.size());
+        # XLSX files start with PK (zip archive)
+        assertEq(ord("P"), xlsxData[0]);
+        assertEq(ord("K"), xlsxData[1]);
+    }
+
+    private testGenerateHtml() {
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        JasperReportsDataProvider dp({"template_data": templateData, "output_format": "html"});
+        dp.createRecord({"name": "Charlie", "age": 35, "email": "charlie@example.com"});
+        binary htmlData = dp.getData();
+        assertGt(0, htmlData.size());
+        # Check it contains HTML content
+        string htmlStr = htmlData.toString("UTF-8");
+        assertTrue(htmlStr.find("html") >= 0 || htmlStr.find("HTML") >= 0 || htmlStr.find("<") >= 0);
+    }
+
+    private testGenerateCsv() {
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        JasperReportsDataProvider dp({"template_data": templateData, "output_format": "csv"});
+        dp.createRecord({"name": "Dave", "age": 40, "email": "dave@example.com"});
+        binary csvData = dp.getData();
+        assertGt(0, csvData.size());
+    }
+
+    private testGeneratePdfToFile() {
+        string path = test_data_dir + "/test-output.pdf";
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        {
+            JasperReportsDataProvider dp({
+                "template_data": templateData,
+                "output_format": "pdf",
+                "output_path": path,
+            });
+            dp.createRecord({"name": "Eve", "age": 28, "email": "eve@example.com"});
+            dp.commit();
+        }
+
+        assertTrue(is_file(path));
+        on_exit unlink(path);
+
+        binary pdfData = File::readBinaryFile(path);
+        assertGt(0, pdfData.size());
+        assertEq(ord("%"), pdfData[0]);
+    }
+
+    private testMultipleRecords() {
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        JasperReportsDataProvider dp({"template_data": templateData, "output_format": "pdf"});
+        for (int i = 0; i < 10; i++) {
+            dp.createRecord({
+                "name": sprintf("Person_%d", i),
+                "age": 20 + i,
+                "email": sprintf("person%d@example.com", i),
+            });
+        }
+        binary pdfData = dp.getData();
+        assertGt(0, pdfData.size());
+        # Multi-record PDF should be larger than single-record
+        assertGt(500, pdfData.size());
+    }
+
+    private testFactory() {
+        JasperReportsDataProviderFactory factory();
+        assertEq("jasperreports", factory.getInfo().name);
+
+        # Create a provider from the factory
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        AbstractDataProvider dp = factory.create({
+            "template_data": templateData,
+            "output_format": "pdf",
+        });
+        dp.createRecord({"name": "FactoryTest", "age": 42, "email": "factory@test.com"});
+        assertEq(True, dp instanceof JasperReportsDataProvider);
+    }
+
+    private testNegativeMissingTemplate() {
+        assertThrows("JASPERREPORTS-OPTION-ERROR", sub () {
+            new JasperReportsDataProvider({"output_format": "pdf"});
+        });
+    }
+
+    private testNegativeMissingFormat() {
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        assertThrows("JASPERREPORTS-OPTION-ERROR", sub () {
+            new JasperReportsDataProvider({"template_data": templateData});
+        });
+    }
+
+    private testNegativeOptionConflicts() {
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        assertThrows("JASPERREPORTS-OPTION-ERROR", sub () {
+            new JasperReportsDataProvider({
+                "template": "/tmp/test.jrxml",
+                "template_data": templateData,
+                "output_format": "pdf",
+            });
+        });
+    }
+
+    private testNegativeInvalidFormat() {
+        binary templateData = JasperReportTestHelper::getSimpleJrxmlBytes();
+        assertThrows("OPTION-VALUE-ERROR", sub () {
+            JasperReportsDataProvider dp({
+                "template_data": templateData,
+                "output_format": "invalid",
+            });
+            dp.createRecord({"name": "Test", "age": 1, "email": "test@test.com"});
+            dp.getData();
+        });
+    }
+
+    private testActionRegistration() {
+        assertEq(True, DataProviderActionCatalog::getApp("JasperReports").val());
+    }
+
+    private testHelper() {
+        string jrxml = JasperReportTestHelper::getSimpleJrxml();
+        assertTrue(jrxml.size() > 0);
+        assertTrue(jrxml.find("jasperReport") >= 0);
+        assertTrue(jrxml.find("name") >= 0);
+
+        binary jrxmlBytes = JasperReportTestHelper::getSimpleJrxmlBytes();
+        assertEq(jrxml.size(), jrxmlBytes.size());
+    }
+}
