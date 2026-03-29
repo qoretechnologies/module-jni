@@ -51,6 +51,7 @@ ExceptionSink Globals::global_xsink;
 std::unique_ptr<QoreProgramHelper> Globals::qph;
 
 bool Globals::already_initialized = false;
+std::atomic<bool> Globals::jni_shutting_down{false};
 
 GlobalReference<jobject> Globals::syscl;
 bool Globals::bootstrap = false;
