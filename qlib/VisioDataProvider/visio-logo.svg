@@ -1,20 +1,118 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
-  <defs>
-    <linearGradient id="visioGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#3955A3;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#2A7DE1;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  <!-- Background -->
-  <rect x="4" y="4" width="88" height="88" rx="8" ry="8" fill="url(#visioGradient)"/>
-  <!-- Diagram shapes -->
-  <rect x="20" y="20" width="24" height="16" rx="3" ry="3" fill="white" opacity="0.9"/>
-  <rect x="52" y="20" width="24" height="16" rx="3" ry="3" fill="white" opacity="0.9"/>
-  <rect x="36" y="50" width="24" height="16" rx="3" ry="3" fill="white" opacity="0.9"/>
-  <!-- Connection lines -->
-  <line x1="32" y1="36" x2="48" y2="50" stroke="white" stroke-width="2" opacity="0.7"/>
-  <line x1="64" y1="36" x2="48" y2="50" stroke="white" stroke-width="2" opacity="0.7"/>
-  <!-- V letter -->
-  <text x="48" y="82" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="white" text-anchor="middle">V</text>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Generator: Adobe Illustrator 23.0.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+
+<svg
+   version="1.1"
+   id="Livello_1"
+   x="0px"
+   y="0px"
+   viewBox="0 0 2112.25 2112.25"
+   enable-background="new 0 0 2112.25 2011.641"
+   xml:space="preserve"
+   sodipodi:docname="visio-logo.svg"
+   width="2112.25"
+   height="2112.25"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:ns="&amp;ns_sfw;"><defs
+   id="defs11" /><sodipodi:namedview
+   id="namedview11"
+   pagecolor="#ffffff"
+   bordercolor="#999999"
+   borderopacity="1"
+   inkscape:showpageshadow="0"
+   inkscape:pageopacity="0"
+   inkscape:pagecheckerboard="0"
+   inkscape:deskcolor="#d1d1d1"
+   inkscape:zoom="0.44963291"
+   inkscape:cx="1189.8595"
+   inkscape:cy="1005.2645"
+   inkscape:window-width="2215"
+   inkscape:window-height="1483"
+   inkscape:window-x="26"
+   inkscape:window-y="23"
+   inkscape:window-maximized="0"
+   inkscape:current-layer="Livello_1" />
+<metadata
+   id="metadata1">
+	<ns:sfw>
+		<ns:slices />
+		<ns:sliceSourceBounds
+   bottomLeftOrigin="true"
+   height="2011.641"
+   width="2112.25"
+   x="-1082.417"
+   y="-931.52" />
+	</ns:sfw>
+</metadata>
+<path
+   fill="#2b7cd3"
+   d="m 1148.159,552.913 h 872.057 c 50.829,0 92.034,41.205 92.034,92.034 v 821.766 c 0,50.829 -41.205,92.034 -92.034,92.034 h -872.057 c -50.829,0 -92.034,-41.205 -92.034,-92.034 V 644.947 c 0,-50.829 41.205,-92.034 92.034,-92.034 z"
+   id="path1" />
+<path
+   fill="#41a5ee"
+   d="m 1609.333,552.913 c 0.102,24.41 -9.697,47.818 -27.158,64.876 L 1207,992.965 l -35.707,35.707 c -4.626,4.456 -9.495,8.654 -14.585,12.573 -15.053,9.507 -32.488,14.563 -50.292,14.585 -24.41,0.102 -47.818,-9.697 -64.876,-27.158 L 630.657,617.789 c -31.013,-30.579 -36.069,-78.823 -12.07,-115.168 3.594,-5.202 7.632,-10.082 12.07,-14.585 L 1041.54,77.154 c 35.304,-35.83 92.97,-36.256 128.801,-0.952 0.32,0.315 0.637,0.632 0.952,0.952 l 410.883,410.883 c 17.46,17.058 27.259,40.466 27.157,64.876 z"
+   id="path2" />
+<path
+   fill="#103f91"
+   d="m 1609.333,1558.746 c -0.012,277.753 -225.186,502.907 -502.939,502.895 -179.658,-0.01 -345.667,-95.853 -435.504,-251.436 -9.677,-16.085 -18.084,-32.9 -25.146,-50.292 -7.41,-16.35 -13.793,-33.147 -19.111,-50.292 -83.326,-264.96 63.917,-547.301 328.877,-630.627 48.83,-15.356 99.718,-23.168 150.906,-23.165 17.099,0 33.695,1.006 50.292,2.515 16.906,1.454 33.703,3.974 50.292,7.544 234.009,48.105 402.051,253.956 402.333,492.858 z"
+   id="path3" />
+<path
+   opacity="0.1"
+   enable-background="new    "
+   d="m 1207,594.655 v 1073.224 c -0.25,37.292 -22.849,70.794 -57.333,84.993 -10.98,4.645 -22.78,7.039 -34.701,7.041 H 645.745 c -7.41,-16.35 -13.793,-33.147 -19.111,-50.292 -83.326,-264.96 63.917,-547.301 328.877,-630.627 48.83,-15.356 99.718,-23.168 150.905,-23.165 -24.41,0.102 -47.818,-9.697 -64.876,-27.158 L 630.657,617.789 C 599.644,587.21 594.588,538.966 618.587,502.621 h 496.379 c 34.426,0.206 65.859,19.609 81.473,50.292 7.068,12.768 10.707,27.149 10.561,41.742 z"
+   id="path4" />
+<path
+   opacity="0.2"
+   enable-background="new    "
+   d="m 1156.708,644.947 v 1073.224 c 0,11.922 -2.396,23.722 -7.041,34.701 -14.199,34.484 -47.701,57.083 -84.993,57.333 H 670.891 c -9.677,-16.085 -18.084,-32.9 -25.146,-50.292 -7.41,-16.35 -13.793,-33.147 -19.111,-50.292 -83.326,-264.96 63.917,-547.301 328.877,-630.627 48.83,-15.356 99.718,-23.168 150.906,-23.165 -24.41,0.102 -47.818,-9.697 -64.876,-27.158 L 630.657,617.789 C 613.197,600.731 603.398,577.323 603.5,552.913 h 461.175 c 25.505,-0.089 49.837,10.704 66.888,29.672 16.077,16.788 25.081,39.117 25.145,62.362 z"
+   id="path5" />
+<path
+   opacity="0.2"
+   enable-background="new    "
+   d="m 1156.708,644.947 v 972.641 c -0.383,50.669 -41.365,91.651 -92.034,92.034 h -438.04 c -83.326,-264.96 63.917,-547.301 328.877,-630.627 48.83,-15.356 99.718,-23.168 150.906,-23.165 -24.41,0.102 -47.818,-9.697 -64.876,-27.158 L 630.657,617.789 C 613.197,600.731 603.398,577.323 603.5,552.913 h 461.175 c 25.505,-0.089 49.837,10.704 66.888,29.672 16.077,16.788 25.081,39.117 25.145,62.362 z"
+   id="path6" />
+<path
+   opacity="0.2"
+   enable-background="new    "
+   d="m 1106.417,644.947 v 410.883 c -24.41,0.102 -47.818,-9.697 -64.876,-27.158 L 630.657,617.789 C 613.197,600.731 603.398,577.323 603.5,552.913 h 410.883 c 50.749,0.193 91.841,41.285 92.034,92.034 z"
+   id="path7" />
+<path
+   opacity="0.2"
+   enable-background="new    "
+   d="m 1106.417,1055.83 v 561.758 c -0.383,50.669 -41.364,91.651 -92.034,92.034 H 626.634 c -83.326,-264.96 63.917,-547.301 328.877,-630.627 48.83,-15.357 99.718,-23.168 150.906,-23.165 z"
+   id="path8" />
+<linearGradient
+   id="SVGID_1_"
+   gradientUnits="userSpaceOnUse"
+   x1="192.20689"
+   y1="1683.361"
+   x2="914.20972"
+   y2="432.88199"
+   gradientTransform="matrix(1,0,0,-1,0,2164.2429)">
+	<stop
+   offset="0"
+   style="stop-color:#2368C4"
+   id="stop8" />
+	<stop
+   offset="0.5"
+   style="stop-color:#1A5DBE"
+   id="stop9" />
+	<stop
+   offset="1"
+   style="stop-color:#1146AC"
+   id="stop10" />
+</linearGradient>
+<path
+   fill="url(#SVGID_1_)"
+   d="m 92.185,552.913 h 922.047 c 50.912,0 92.185,41.272 92.185,92.185 v 922.047 c 0,50.912 -41.272,92.185 -92.185,92.185 H 92.185 C 41.272,1659.33 0,1618.057 0,1567.145 V 645.098 c 0,-50.912 41.272,-92.185 92.185,-92.185 z"
+   id="path10"
+   style="fill:url(#SVGID_1_)" />
+<path
+   fill="#ffffff"
+   d="m 523.033,1203.084 c 16.932,49.889 26.99,81.372 30.175,94.448 h 2.062 c 3.051,-13.076 13.931,-46.788 32.639,-101.136 L 722.037,806.434 H 845.352 L 617.782,1405.76 H 485.717 l -224.2,-599.326 h 126.836 z"
+   id="path11" />
 </svg>
