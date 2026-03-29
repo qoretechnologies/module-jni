@@ -72,6 +72,17 @@ cp ${MODULE_SRC_DIR}/build/qore-dataprovider-word.jar ${MODULE_SRC_DIR}/qlib/Wor
 mkdir -p ${MODULE_SRC_DIR}/qlib/PowerPointDataProvider/jar
 cp ${MODULE_SRC_DIR}/build/qore-dataprovider-powerpoint.jar ${MODULE_SRC_DIR}/qlib/PowerPointDataProvider/jar/
 cp ${MODULE_SRC_DIR}/build/qore-dataprovider-kafka.jar ${MODULE_SRC_DIR}/qlib/KafkaDataProvider/jar/
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-ods.jar ${MODULE_SRC_DIR}/qlib/OdsDataProvider/jar/
+mkdir -p ${MODULE_SRC_DIR}/qlib/OdtDataProvider/jar
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-odt.jar ${MODULE_SRC_DIR}/qlib/OdtDataProvider/jar/
+mkdir -p ${MODULE_SRC_DIR}/qlib/OdpDataProvider/jar
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-odp.jar ${MODULE_SRC_DIR}/qlib/OdpDataProvider/jar/
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-email.jar ${MODULE_SRC_DIR}/qlib/EmailDataProvider/jar/
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-ics.jar ${MODULE_SRC_DIR}/qlib/IcsDataProvider/jar/
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-vcf.jar ${MODULE_SRC_DIR}/qlib/VcfDataProvider/jar/
+mkdir -p ${MODULE_SRC_DIR}/qlib/VisioDataProvider/jar
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-visio.jar ${MODULE_SRC_DIR}/qlib/VisioDataProvider/jar/
+cp ${MODULE_SRC_DIR}/build/qore-dataprovider-access.jar ${MODULE_SRC_DIR}/qlib/AccessDataProvider/jar/
 
 # download Artemis Jakarta JMS client JAR for JMS data provider tests
 ARTEMIS_JAR_DIR=${MODULE_SRC_DIR}/test/JakartaJms/lib
