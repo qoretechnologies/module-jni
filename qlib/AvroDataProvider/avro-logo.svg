@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <rect width="100" height="100" rx="10" fill="#1a73e8"/>
+  <text x="50" y="38" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">APACHE</text>
+  <text x="50" y="68" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">AVRO</text>
+</svg>

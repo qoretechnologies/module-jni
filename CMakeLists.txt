@@ -494,6 +494,35 @@ add_custom_target(qore-vcf-jar
 # install the VCF jar file manually
 install(FILES ${VCF_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/VcfDataProvider/jar)
 
+# Apache Avro data provider jar
+set(AVRO_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-avro.jar)
+set(AVRO_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/avro-1.12.0.jar:${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/jackson-core-2.17.2.jar:${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/jackson-databind-2.17.2.jar:${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/jackson-annotations-2.17.2.jar:${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/commons-compress-1.26.2.jar:${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/commons-codec-1.17.0.jar:${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/commons-io-2.16.1.jar:${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/commons-lang3-3.14.0.jar:${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/slf4j-api-2.0.13.jar)
+set(AVRO_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(AVRO_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/avro/)
+set(AVRO_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/avro/AvroIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/avro/AvroWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/avro/AvroTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${AVRO_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${AVRO_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-avro ${AVRO_JAR} ${AVRO_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${AVRO_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${AVRO_JAR} ${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/
+    DEPENDS ${module_name} ${AVRO_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-avro-jar
+    DEPENDS ${AVRO_JAR}
+)
+
+# install the Avro jar file manually
+install(FILES ${AVRO_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/AvroDataProvider/jar)
+
 # ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/qore-dataprovider-kafka.jar
 set(KAFKA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-kafka.jar)
 set(KAFKA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/zstd-jni-1.5.6-9.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/lz4-java-1.8.0.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/slf4j-api-2.0.16.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/snappy-java-1.1.10.7.jar:${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/kafka-clients-3.9.0.jar)
@@ -774,7 +803,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -876,6 +905,7 @@ set(QMOD
     qlib/OdpDataProvider
     qlib/VcfDataProvider
     qlib/IcsDataProvider
+    qlib/AvroDataProvider
 )
 
 qore_wrap_qpp_value(QPP_SOURCES METALIST QPP_META_SRC ${QPP_SRC})
@@ -933,6 +963,7 @@ qore_external_user_module("qlib/OdtDataProvider" "")
 qore_external_user_module("qlib/OdpDataProvider" "")
 qore_external_user_module("qlib/VcfDataProvider" "")
 qore_external_user_module("qlib/IcsDataProvider" "")
+qore_external_user_module("qlib/AvroDataProvider" "")
 
 qore_dist(${PROJECT_VERSION})
 

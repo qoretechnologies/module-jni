@@ -1,0 +1,283 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore AvroDataProvider module definition
+
+/*  AvroDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+%modern
+
+# supports using the DataProvider module
+%requires(reexport) DataProvider
+%requires FileLocationHandler
+%requires Util
+
+%module-cmd(jni) add-relative-classpath ./jar/qore-dataprovider-avro.jar
+%module-cmd(jni) add-relative-classpath ./jar/avro-1.12.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackson-core-2.17.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackson-databind-2.17.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/jackson-annotations-2.17.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-compress-1.26.2.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-codec-1.17.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-io-2.16.1.jar
+%module-cmd(jni) add-relative-classpath ./jar/commons-lang3-3.14.0.jar
+%module-cmd(jni) add-relative-classpath ./jar/slf4j-api-2.0.13.jar
+
+%module-cmd(jni) import org.qore.dataprovider.avro.AvroIterator
+%module-cmd(jni) import org.qore.dataprovider.avro.AvroWriter
+
+module AvroDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for reading and writing Apache Avro data files";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factories
+        DataProvider::registerFactory(new AvroReadDataProviderFactory());
+        DataProvider::registerFactory(new AvroWriteDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AvroDataProvider::AppName,
+            "display_name": "Apache Avro",
+            "short_desc": "Read and write Apache Avro data files",
+            "desc": "Read and write Apache Avro data files containing structured records with "
+                "schema-based serialization",
+            "groups": (DataProvider::AppGroup::Messaging,),
+            "logo": AvroLogo,
+            "logo_file_name": "avro-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AvroDataProvider::AppName,
+            "path": "/",
+            "action": "read",
+            "display_name": "Read Avro File",
+            "short_desc": "Read records from an Avro file at a specific file location",
+            "desc": "Read records from an Apache Avro (.avro) file at a specific file location.\n\n"
+                "Each record returned represents a single Avro record as a hash. The record structure "
+                "is determined by the Avro schema embedded in the file.\n\n"
+                "Avro files are self-describing; the schema is stored in the file header and is used "
+                "to deserialize the records automatically.",
+            "action_code": DPAT_FIND,
+            "cls": "AvroDataProvider::AvroReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AvroReadDataProvider::ConstructorOptions{"path",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AvroDataProvider::AppName,
+            "path": "/",
+            "action": "read-data",
+            "display_name": "Read Avro Inline Data",
+            "short_desc": "Read records from inline Avro data",
+            "desc": "Read records from inline Apache Avro binary data.\n\n"
+                "Each record returned represents a single Avro record as a hash. The record structure "
+                "is determined by the Avro schema embedded in the data.\n\n"
+                "Avro data is self-describing; the schema is stored in the header and is used "
+                "to deserialize the records automatically.",
+            "action_code": DPAT_FIND,
+            "cls": "AvroDataProvider::AvroReadDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AvroReadDataProvider::ConstructorOptions{"data",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AvroDataProvider::AppName,
+            "path": "/",
+            "action": "write",
+            "display_name": "Write Avro File",
+            "short_desc": "Write records to an Avro file at a specified path",
+            "desc": "Write records to an Apache Avro (.avro) file at a specified path.\n\n"
+                "Each record written represents a single Avro record. The record structure must "
+                "conform to the Avro schema provided in the `schema` option.\n\n"
+                "The `schema` option is required and must be a valid Avro JSON schema string that "
+                "defines the record structure.",
+            "action_code": DPAT_CREATE,
+            "cls": "AvroDataProvider::AvroWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AvroWriteDataProvider::ConstructorOptions{"path", "schema",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AvroDataProvider::AppName,
+            "path": "/",
+            "action": "write-data",
+            "display_name": "Create Avro Data",
+            "short_desc": "Create Avro data and return as binary",
+            "desc": "Create Apache Avro data in memory and return it as binary data; useful for "
+                "generating Avro files without writing to disk.\n\n"
+                "The `schema` option is required and must be a valid Avro JSON schema string that "
+                "defines the record structure.\n\n"
+                "After writing all records, use `getData()` to retrieve the binary Avro data.",
+            "action_code": DPAT_CREATE,
+            "cls": "AvroDataProvider::AvroWriteDataProvider",
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AvroWriteDataProvider::ConstructorOptions{"schema",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+    };
+}
+
+/** @mainpage AvroDataProvider Module
+
+    @tableofcontents
+
+    @section AvroDataProviderintro Introduction to the AvroDataProvider Module
+
+    The %AvroDataProvider module provides a data provider API for reading and writing Apache Avro data files
+    through the @ref dataproviderintro "DataProvider" API. It supports the Avro 1.12.0 format using the
+    <a href="https://avro.apache.org/">Apache Avro</a> Java library.
+
+    The following classes are provided by this module:
+    - @ref AvroDataProvider::AvroReadDataProvider "AvroReadDataProvider" - for reading Avro files
+    - @ref AvroDataProvider::AvroReadDataProviderFactory "AvroReadDataProviderFactory" - factory for read providers
+    - @ref AvroDataProvider::AvroWriteDataProvider "AvroWriteDataProvider" - for writing Avro files
+    - @ref AvroDataProvider::AvroWriteDataProviderFactory "AvroWriteDataProviderFactory" - factory for write providers
+
+    @section AvroDataProvider_reading Reading Avro Files
+
+    @subsection AvroDataProvider_reading_basic Basic Reading
+
+    @code{.py}
+    %requires AvroDataProvider
+
+    # Read from a file path
+    AvroReadDataProvider dp("data.avro");
+    list<hash<auto>> records = map $1, dp.searchRecords();
+
+    # Read from a stream
+    FileInputStream fis("data.avro");
+    AvroReadDataProvider dp2(fis);
+
+    # Read from binary data
+    binary data = File::readBinaryFile("data.avro");
+    AvroReadDataProvider dp3({"data": data});
+    @endcode
+
+    @subsection AvroDataProvider_reading_fields Record Fields
+
+    Each record contains fields defined by the Avro schema embedded in the file. Avro files are
+    self-describing; the schema is stored in the file header and is used to deserialize the records
+    automatically.
+
+    Common Avro types mapped to Qore types:
+    - \c null: NOTHING
+    - \c boolean: bool
+    - \c int: int
+    - \c long: int
+    - \c float: float
+    - \c double: float
+    - \c bytes: binary
+    - \c string: string
+    - \c record: hash
+    - \c array: list
+    - \c map: hash
+
+    @section AvroDataProvider_writing Writing Avro Files
+
+    @subsection AvroDataProvider_writing_basic Basic Writing
+
+    @code{.py}
+    %requires AvroDataProvider
+
+    # Define an Avro schema
+    string schema = '{
+        "type": "record",
+        "name": "User",
+        "fields": [
+            {"name": "name", "type": "string"},
+            {"name": "age", "type": "int"},
+            {"name": "email", "type": ["null", "string"]}
+        ]
+    }';
+
+    # Write to a file
+    AvroWriteDataProvider dp({"path": "users.avro", "schema": schema});
+
+    dp.createRecord({
+        "name": "Alice Smith",
+        "age": 30,
+        "email": "alice@example.com",
+    });
+
+    dp.commit();
+    @endcode
+
+    @subsection AvroDataProvider_writing_binary Writing to Binary
+
+    @code{.py}
+    string schema = '{"type": "record", "name": "Test", "fields": [{"name": "value", "type": "string"}]}';
+    AvroWriteDataProvider dp({"schema": schema});
+
+    dp.createRecord({"value": "hello"});
+
+    # Get binary data instead of writing to file
+    binary data = dp.getData();
+    @endcode
+
+    @section AvroDataProvider_errors Error Handling
+
+    Common exceptions:
+    - \c AVRO-READ-OPTION-ERROR: Invalid read options or option conflicts
+    - \c AVRO-WRITE-OPTION-ERROR: Invalid write options or option conflicts
+
+    @section AvroDataProvider_relnotes Release Notes
+
+    @subsection AvroDataProvider_v1_0 AvroDataProvider v1.0
+    - initial release of the module
+    - support for reading Apache Avro (.avro) files with schema-based deserialization
+    - support for writing Apache Avro (.avro) files with schema-based serialization
+    - full support for all Avro primitive and complex types
+    - binary data input/output support
+    - stream-based input/output support
+*/
+
+#! contains all public definitions in the AvroDataProvider module
+public namespace AvroDataProvider {
+#! Application name
+public const AppName = "Avro";
+}
+
+namespace Priv {
+#! Avro logo
+const AvroLogo = File::readTextFile(get_script_dir() + "/avro-logo.svg");
+}

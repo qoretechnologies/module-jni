@@ -1,0 +1,332 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  AvroDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+# Add classpaths BEFORE module requires to ensure the JNI classpath is available
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/qore-dataprovider-avro.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/avro-1.12.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/jackson-core-2.17.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/jackson-databind-2.17.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/jackson-annotations-2.17.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/commons-compress-1.26.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/commons-codec-1.17.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/commons-io-2.16.1.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/commons-lang3-3.14.0.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/slf4j-api-2.0.13.jar
+
+%requires QUnit
+%requires Util
+%requires DataProvider
+%requires jni
+%requires ../qlib/AvroDataProvider
+
+%module-cmd(jni) import org.qore.dataprovider.avro.AvroTestHelper
+
+%exec-class AvroDataProviderTest
+
+public class AvroDataProviderTest inherits QUnit::Test {
+    private {
+        string test_data_dir;
+
+        #! Simple schema for testing
+        const SimpleSchema = '{
+            "type": "record",
+            "name": "Person",
+            "fields": [
+                {"name": "name", "type": "string"},
+                {"name": "age", "type": "int"},
+                {"name": "email", "type": ["null", "string"], "default": null}
+            ]
+        }';
+
+        #! Nested schema for testing
+        const NestedSchema = '{
+            "type": "record",
+            "name": "Employee",
+            "fields": [
+                {"name": "name", "type": "string"},
+                {"name": "department", "type": "string"},
+                {"name": "address", "type": {
+                    "type": "record",
+                    "name": "Address",
+                    "fields": [
+                        {"name": "street", "type": "string"},
+                        {"name": "city", "type": "string"},
+                        {"name": "zip", "type": "string"}
+                    ]
+                }},
+                {"name": "tags", "type": {"type": "array", "items": "string"}},
+                {"name": "notes", "type": ["null", "string"], "default": null}
+            ]
+        }';
+    }
+
+    constructor() : Test("AvroDataProviderTest", "1.0", \ARGV) {
+        # Get absolute path for test data directory
+        string script_dir = get_script_dir();
+        if (script_dir == ".") {
+            script_dir = getcwd();
+        }
+        test_data_dir = script_dir + "/avro-test-data";
+
+        addTestCase("write and read simple roundtrip", \testSimpleRoundtrip());
+        addTestCase("write and read nested roundtrip", \testNestedRoundtrip());
+        addTestCase("write to binary data", \testWriteToBinary());
+        addTestCase("read from binary data", \testReadFromBinary());
+        addTestCase("write multiple records", \testWriteMultipleRecords());
+        addTestCase("nullable fields", \testNullableFields());
+        addTestCase("read factory", \testReadFactory());
+        addTestCase("write factory", \testWriteFactory());
+        addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
+        addTestCase("negative: missing schema for write", \testNegativeMissingSchema());
+        addTestCase("negative: invalid schema", \testNegativeInvalidSchema());
+        addTestCase("write to file path", \testWriteToFilePath());
+        addTestCase("read from file path", \testReadFromFilePath());
+        addTestCase("test helper data", \testHelperData());
+        addTestCase("action registration", \testActionRegistration());
+        addTestCase("empty data provider", \testEmptyDataProvider());
+
+        # execute tests and set program return value
+        set_return_value(main());
+    }
+
+    private testSimpleRoundtrip() {
+        # Write records
+        AvroWriteDataProvider writer({"schema": SimpleSchema});
+        writer.createRecord({"name": "Alice", "age": 30, "email": "alice@example.com"});
+        writer.createRecord({"name": "Bob", "age": 25, "email": NOTHING});
+        writer.createRecord({"name": "Charlie", "age": 35, "email": "charlie@example.com"});
+        binary data = writer.getData();
+        assertGt(0, data.size());
+
+        # Read records back
+        AvroReadDataProvider reader({"data": data});
+        list<hash<auto>> records = map $1, reader.searchRecords();
+        assertEq(3, records.size());
+        assertEq("Alice", records[0].name);
+        assertEq(30, records[0].age);
+        assertEq("alice@example.com", records[0].email);
+        assertEq("Bob", records[1].name);
+        assertEq(25, records[1].age);
+        # null field
+        assertNothing(records[1].email);
+        assertEq("Charlie", records[2].name);
+        assertEq(35, records[2].age);
+    }
+
+    private testNestedRoundtrip() {
+        # Write nested records
+        AvroWriteDataProvider writer({"schema": NestedSchema});
+        writer.createRecord({
+            "name": "Jane",
+            "department": "Engineering",
+            "address": {
+                "street": "123 Main St",
+                "city": "Springfield",
+                "zip": "12345",
+            },
+            "tags": ("developer", "team-lead"),
+            "notes": "Senior engineer",
+        });
+        binary data = writer.getData();
+        assertGt(0, data.size());
+
+        # Read back
+        AvroReadDataProvider reader({"data": data});
+        list<hash<auto>> records = map $1, reader.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Jane", records[0].name);
+        assertEq("Engineering", records[0].department);
+        assertEq("123 Main St", records[0].address.street);
+        assertEq("Springfield", records[0].address.city);
+        assertEq("12345", records[0].address.zip);
+        assertEq(2, records[0].tags.size());
+        assertEq("developer", records[0].tags[0]);
+        assertEq("team-lead", records[0].tags[1]);
+        assertEq("Senior engineer", records[0].notes);
+    }
+
+    private testWriteToBinary() {
+        AvroWriteDataProvider writer({"schema": SimpleSchema});
+        writer.createRecord({"name": "Test", "age": 1, "email": "test@test.com"});
+        binary data = writer.getData();
+        assertGt(0, data.size());
+        # Avro container files start with "Obj" magic bytes
+        assertEq(ord("O"), data[0]);
+    }
+
+    private testReadFromBinary() {
+        # Use test helper to create data
+        binary data = AvroTestHelper::createTestAvroData();
+        assertGt(0, data.size());
+
+        AvroReadDataProvider reader({"data": data});
+        list<hash<auto>> records = map $1, reader.searchRecords();
+        assertEq(3, records.size());
+        assertEq("Alice Smith", records[0].name);
+    }
+
+    private testWriteMultipleRecords() {
+        AvroWriteDataProvider writer({"schema": SimpleSchema});
+        for (int i = 0; i < 100; i++) {
+            writer.createRecord({"name": sprintf("Person_%d", i), "age": 20 + i, "email": NOTHING});
+        }
+        binary data = writer.getData();
+        assertGt(0, data.size());
+
+        AvroReadDataProvider reader({"data": data});
+        list<hash<auto>> records = map $1, reader.searchRecords();
+        assertEq(100, records.size());
+        assertEq("Person_0", records[0].name);
+        assertEq(20, records[0].age);
+        assertEq("Person_99", records[99].name);
+        assertEq(119, records[99].age);
+    }
+
+    private testNullableFields() {
+        AvroWriteDataProvider writer({"schema": SimpleSchema});
+        # Write with null email
+        writer.createRecord({"name": "NullTest", "age": 1, "email": NOTHING});
+        # Write with non-null email
+        writer.createRecord({"name": "NonNull", "age": 2, "email": "hello@world.com"});
+        binary data = writer.getData();
+
+        AvroReadDataProvider reader({"data": data});
+        list<hash<auto>> records = map $1, reader.searchRecords();
+        assertEq(2, records.size());
+        assertNothing(records[0].email);
+        assertEq("hello@world.com", records[1].email);
+    }
+
+    private testReadFactory() {
+        AvroReadDataProviderFactory factory();
+        assertEq("avroread", factory.getInfo().name);
+
+        # Create a provider from the factory
+        binary data = AvroTestHelper::createTestAvroData();
+        AbstractDataProvider dp = factory.create({"data": data});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(3, records.size());
+    }
+
+    private testWriteFactory() {
+        AvroWriteDataProviderFactory factory();
+        assertEq("avrowrite", factory.getInfo().name);
+
+        # Create a provider from the factory
+        AbstractDataProvider dp = factory.create({"schema": SimpleSchema});
+        dp.createRecord({"name": "FactoryTest", "age": 42, "email": NOTHING});
+        assertEq(True, dp instanceof AvroWriteDataProvider);
+    }
+
+    private testNegativeOptionConflicts() {
+        # path and stream cannot both be provided for read
+        assertThrows("AVRO-READ-OPTION-ERROR", sub () {
+            binary data = AvroTestHelper::createTestAvroData();
+            new AvroReadDataProvider({
+                "data": data,
+                "path": "/tmp/test.avro",
+            });
+        });
+    }
+
+    private testNegativeMissingSchema() {
+        # write requires schema
+        assertThrows("AVRO-WRITE-OPTION-ERROR", sub () {
+            new AvroWriteDataProvider({});
+        });
+    }
+
+    private testNegativeInvalidSchema() {
+        # invalid schema JSON
+        assertThrows("JNI-ERROR", sub () {
+            new AvroWriteDataProvider({"schema": "not a valid schema"});
+        });
+    }
+
+    private testWriteToFilePath() {
+        string path = test_data_dir + "/test-write.avro";
+        {
+            AvroWriteDataProvider writer({"schema": SimpleSchema, "path": path});
+            writer.createRecord({"name": "FileTest", "age": 50, "email": "file@test.com"});
+            writer.commit();
+        }
+
+        # Verify file exists and can be read
+        assertTrue(is_file(path));
+        on_exit unlink(path);
+
+        AvroReadDataProvider reader(path);
+        list<hash<auto>> records = map $1, reader.searchRecords();
+        assertEq(1, records.size());
+        assertEq("FileTest", records[0].name);
+        assertEq(50, records[0].age);
+        assertEq("file@test.com", records[0].email);
+    }
+
+    private testReadFromFilePath() {
+        # Write a test file first
+        string path = test_data_dir + "/test-read.avro";
+        {
+            AvroWriteDataProvider writer({"schema": SimpleSchema, "path": path});
+            writer.createRecord({"name": "PathTest", "age": 33, "email": NOTHING});
+            writer.commit();
+        }
+        on_exit unlink(path);
+
+        # Read from path
+        AvroReadDataProvider reader(path);
+        list<hash<auto>> records = map $1, reader.searchRecords();
+        assertEq(1, records.size());
+        assertEq("PathTest", records[0].name);
+        assertEq(33, records[0].age);
+    }
+
+    private testHelperData() {
+        # Verify the test helper creates valid data
+        string schema = AvroTestHelper::getSimpleSchema();
+        assertTrue(schema.size() > 0);
+        assertTrue(schema.find("Person") >= 0);
+
+        string nested = AvroTestHelper::getNestedSchema();
+        assertTrue(nested.size() > 0);
+        assertTrue(nested.find("Employee") >= 0);
+        assertTrue(nested.find("Address") >= 0);
+
+        binary data = AvroTestHelper::createTestAvroData();
+        assertGt(0, data.size());
+    }
+
+    private testActionRegistration() {
+        # Verify actions are registered
+        assertEq(True, DataProviderActionCatalog::getApp("Avro").val());
+    }
+
+    private testEmptyDataProvider() {
+        # Create a read data provider with no options (dummy mode)
+        AvroReadDataProvider dp();
+        assertEq("avro", dp.getName());
+    }
+}
