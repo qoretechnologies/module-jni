@@ -227,6 +227,37 @@ add_custom_target(qore-word-jar
 # install the Word jar file manually
 install(FILES ${WORD_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/WordDataProvider/jar)
 
+# Email data provider jar
+set(EMAIL_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-email.jar)
+set(EMAIL_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/jakarta.mail-api-2.1.3.jar:${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/angus-mail-2.0.3.jar:${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/jakarta.activation-api-2.1.3.jar:${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/angus-activation-2.0.2.jar:${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/poi-scratchpad-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar)
+set(EMAIL_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(EMAIL_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/)
+set(EMAIL_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/EmlIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/MsgIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/MboxIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/email/EmailTestHelper.java
+)
+
+add_custom_command(
+    OUTPUT ${EMAIL_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${EMAIL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-email ${EMAIL_JAR} ${EMAIL_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${EMAIL_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar
+    COMMAND ${CMAKE_COMMAND} -E copy ${EMAIL_JAR} ${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/
+    DEPENDS ${module_name} ${EMAIL_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-email-jar
+    DEPENDS ${EMAIL_JAR}
+)
+
+# install the Email jar file manually
+install(FILES ${EMAIL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/EmailDataProvider/jar)
+
 # PowerPoint data provider jar
 set(POWERPOINT_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-powerpoint.jar)
 set(POWERPOINT_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar)
@@ -626,7 +657,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-email-jar qore-powerpoint-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -719,6 +750,7 @@ set(QMOD
     qlib/KafkaDataProvider
     qlib/JakartaJmsDataProvider
     qlib/WordDataProvider
+    qlib/EmailDataProvider
     qlib/PowerPointDataProvider
     qlib/OdsDataProvider
     qlib/OdtDataProvider
@@ -771,6 +803,7 @@ qore_external_user_module("qlib/ExcelDataProvider" "")
 qore_external_user_module("qlib/KafkaDataProvider" "")
 qore_external_user_module("qlib/JakartaJmsDataProvider" "")
 qore_external_user_module("qlib/WordDataProvider" "")
+qore_external_user_module("qlib/EmailDataProvider" "")
 qore_external_user_module("qlib/PowerPointDataProvider" "")
 qore_external_user_module("qlib/OdsDataProvider" "")
 qore_external_user_module("qlib/OdtDataProvider" "")

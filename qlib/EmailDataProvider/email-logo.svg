@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <linearGradient id="emailGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2B579A;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E3F7A;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect x="4" y="4" width="88" height="88" rx="8" ry="8" fill="url(#emailGradient)"/>
+  <!-- Envelope body -->
+  <rect x="16" y="28" width="64" height="44" rx="3" ry="3" fill="white"/>
+  <!-- Envelope flap (triangle) -->
+  <polygon points="16,28 48,54 80,28" fill="white" stroke="#2B579A" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Envelope flap highlight -->
+  <polygon points="16,28 48,54 80,28" fill="none" stroke="white" stroke-width="0.5" opacity="0.5"/>
+  <!-- Bottom fold lines -->
+  <line x1="16" y1="72" x2="38" y2="52" stroke="#2B579A" stroke-width="1" opacity="0.3"/>
+  <line x1="80" y1="72" x2="58" y2="52" stroke="#2B579A" stroke-width="1" opacity="0.3"/>
+</svg>
