@@ -61,7 +61,16 @@ module JdbcDataProvider {
             "name": JdbcDataProvider::AppName,
             "display_name": "JDBC Database",
             "short_desc": "JDBC database access",
-            "desc": "JDBC database access via the DataProvider API",
+            "desc": "Access any JDBC-compatible database with schema introspection and SQL "
+                "execution.\n\n"
+                "**Capabilities**:\n"
+                "- Execute SQL queries with parameterized arguments\n"
+                "- Execute DDL and DML statements (CREATE, INSERT, UPDATE, DELETE)\n"
+                "- Browse database tables and introspect column metadata\n"
+                "- Dynamic column type mapping from SQL types to Qore types\n\n"
+                "Database-specific JDBC drivers must be on the Java classpath.\n\n"
+                "**Supported databases**: PostgreSQL, Oracle, MySQL, SQL Server, and any "
+                "database with a JDBC driver.",
             "groups": (DataProvider::AppGroup::Databases,),
             "scheme": "jdbc-dp",
             "logo": JdbcLogo,
@@ -76,8 +85,22 @@ module JdbcDataProvider {
             "action": "query",
             "display_name": "Execute SQL Query",
             "short_desc": "Execute a SQL query and return results",
-            "desc": "Execute a SQL SELECT query against the database and return the result set",
+            "desc": "Execute a SQL query and return the result rows.\n\nUse `?` placeholders in "
+                "the SQL string and provide arguments in the `args` list for parameterized "
+                "queries.\n\n**Example**: `SELECT * FROM orders WHERE status = ? AND total > ?` "
+                "with `args` = `(\"shipped\", 100.0)`",
             "action_code": DPAT_FIND,
+            "output_type": JdbcQueryResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JdbcQueryRequestDataType::Fields{"sql",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JdbcQueryRequestDataType::Fields{"args",}, {
+                    "preselected": True,
+                }
+            ),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -86,8 +109,22 @@ module JdbcDataProvider {
             "action": "exec",
             "display_name": "Execute SQL Statement",
             "short_desc": "Execute a SQL statement",
-            "desc": "Execute a SQL statement (INSERT, UPDATE, DELETE, DDL) against the database",
+            "desc": "Execute a SQL statement (DDL or DML) and return the number of affected "
+                "rows.\n\nUse for `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, and other "
+                "non-query statements.\n\n**Example**: `INSERT INTO users (name, email) VALUES "
+                "(?, ?)` with `args` = `(\"Alice\", \"alice@example.com\")`",
             "action_code": DPAT_API,
+            "output_type": JdbcQueryResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                JdbcQueryRequestDataType::Fields{"sql",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                JdbcQueryRequestDataType::Fields{"args",}, {
+                    "preselected": True,
+                }
+            ),
         });
     };
 }

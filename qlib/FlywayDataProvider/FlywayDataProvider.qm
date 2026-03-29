@@ -63,7 +63,14 @@ module FlywayDataProvider {
             "name": FlywayDataProvider::AppName,
             "display_name": "Flyway",
             "short_desc": "Flyway database schema migration",
-            "desc": "Flyway database schema migration",
+            "desc": "Manage database schema migrations using [Flyway](https://flywaydb.org/).\n\n"
+                "**Capabilities**:\n"
+                "- Run pending SQL migrations against a database\n"
+                "- View migration history and status\n"
+                "- Validate applied migrations against available scripts\n"
+                "- Clean and repair the schema history table\n\n"
+                "Supports PostgreSQL and other JDBC-accessible databases for DevOps and CI/CD "
+                "pipelines.",
             "groups": (DataProvider::AppGroup::Databases,),
             "scheme": "flyway",
             "logo": FlywayLogo,
@@ -78,8 +85,12 @@ module FlywayDataProvider {
             "action": "migrate",
             "display_name": "Run Flyway Migrations",
             "short_desc": "Run pending database migrations",
-            "desc": "Run all pending Flyway database migrations",
+            "desc": "Run all pending database schema migrations.\n\nExecutes migration scripts "
+                "in version order. Each migration is applied within a transaction and recorded "
+                "in the Flyway schema history table.\n\n**Note**: migrations are one-way — once "
+                "applied, they cannot be undone without using `clean`.",
             "action_code": DPAT_API,
+            "output_type": FlywayMigrateOutputDataType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
@@ -97,8 +108,12 @@ module FlywayDataProvider {
             "action": "info",
             "display_name": "Get Flyway Migration Info",
             "short_desc": "Get information about all migrations",
-            "desc": "Get information about all applied and pending Flyway migrations",
+            "desc": "Get information about all applied and pending database migrations.\n\n"
+                "Returns a list of migration records showing version, description, type, state, "
+                "and execution details. Useful for monitoring migration status in CI/CD "
+                "pipelines.",
             "action_code": DPAT_FIND,
+            "output_type": FlywayInfoRecordDataType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
@@ -118,6 +133,7 @@ module FlywayDataProvider {
             "short_desc": "Validate applied migrations against available ones",
             "desc": "Validate applied Flyway migrations against available migration scripts",
             "action_code": DPAT_API,
+            "output_type": FlywayMigrateOutputDataType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
@@ -137,6 +153,7 @@ module FlywayDataProvider {
             "short_desc": "Drop all objects in the configured schemas",
             "desc": "Drop all objects in the configured schemas; this is a destructive operation",
             "action_code": DPAT_API,
+            "output_type": FlywayMigrateOutputDataType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
@@ -157,6 +174,7 @@ module FlywayDataProvider {
             "desc": "Repair the Flyway schema history table by removing failed migration entries "
                 "and aligning checksums",
             "action_code": DPAT_API,
+            "output_type": FlywayMigrateOutputDataType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {

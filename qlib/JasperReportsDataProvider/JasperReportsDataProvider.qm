@@ -66,8 +66,14 @@ module JasperReportsDataProvider {
             "name": JasperReportsDataProvider::AppName,
             "display_name": "JasperReports",
             "short_desc": "Generate reports from JasperReports templates",
-            "desc": "Generate reports in PDF, Excel, HTML, and CSV formats from JasperReports "
-                "(.jrxml / .jasper) templates with data-driven record input",
+            "desc": "Generate enterprise reports from [JasperReports](https://jasperreports.sourceforge.net/) "
+                "templates in multiple output formats.\n\n"
+                "**Capabilities**:\n"
+                "- Compile and fill `.jrxml` templates with data records\n"
+                "- Export to `pdf`, `xlsx`, `html`, or `csv` format\n"
+                "- Automatic type coercion for Integer, Long, Float, Double fields\n\n"
+                "Ideal for generating invoices, financial statements, compliance reports, "
+                "and any template-driven business documents.",
             "groups": (DataProvider::AppGroup::Documents,),
             "logo": JasperReportsLogo,
             "logo_file_name": "jasperreports-logo.svg",
@@ -81,12 +87,13 @@ module JasperReportsDataProvider {
             "action": "generate-report",
             "display_name": "Generate Report from Template File",
             "short_desc": "Generate a report from a JasperReports template at a file location",
-            "desc": "Generate a report from a JasperReports template (.jrxml or .jasper) at a "
+            "desc": "Generate a report from a JasperReports template (`.jrxml` or `.jasper`) at a "
                 "specific file location.\n\n"
                 "Each record created represents a single data row to be included in the report. "
                 "The report is generated when the provider is committed or destroyed.\n\n"
-                "Supported output formats: PDF, XLSX, HTML, CSV.",
+                "Supported output formats: `pdf`, `xlsx`, `html`, `csv`.",
             "action_code": DPAT_CREATE,
+            "output_type": JasperReportsOutputDataType,
             "cls": "JasperReportsDataProvider::JasperReportsDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 JasperReportsDataProvider::ConstructorOptions{"template", "output_format",}, {
@@ -106,8 +113,9 @@ module JasperReportsDataProvider {
                 "Each record created represents a single data row to be included in the report. "
                 "The report is generated when the provider is committed or destroyed.\n\n"
                 "After writing all records, use `getData()` to retrieve the binary report output.\n\n"
-                "Supported output formats: PDF, XLSX, HTML, CSV.",
+                "Supported output formats: `pdf`, `xlsx`, `html`, `csv`.",
             "action_code": DPAT_CREATE,
+            "output_type": JasperReportsOutputDataType,
             "cls": "JasperReportsDataProvider::JasperReportsDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 JasperReportsDataProvider::ConstructorOptions{"template_data", "output_format",}, {

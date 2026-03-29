@@ -115,7 +115,16 @@ module CamelDataProvider {
             "name": CamelDataProvider::AppName,
             "display_name": "Apache Camel",
             "short_desc": "Apache Camel enterprise integration patterns",
-            "desc": "Apache Camel enterprise integration patterns",
+            "desc": "Enterprise integration using [Apache Camel](https://camel.apache.org/) with "
+                "support for 300+ connectors.\n\n"
+                "**Built-in components**:\n"
+                "- `direct` — synchronous in-memory messaging\n"
+                "- `seda` — asynchronous in-memory queues\n"
+                "- `file` — file system integration\n"
+                "- `timer` — periodic timer events\n"
+                "- `log` — message logging\n\n"
+                "Additional components (HTTP, JMS, Kafka, AWS, etc.) can be loaded by adding "
+                "their JARs to the Java classpath.",
             "groups": (DataProvider::AppGroup::Messaging,),
             "scheme": "camel",
             "logo": CamelLogo,
@@ -130,8 +139,22 @@ module CamelDataProvider {
             "action": "send",
             "display_name": "Send Camel Message",
             "short_desc": "Send a message to a Camel endpoint",
-            "desc": "Send a message to any Apache Camel endpoint URI",
+            "desc": "Send a message to a Camel endpoint.\n\nSpecify the endpoint URI (e.g., "
+                "`seda:orders`, `file:output`, `direct:process`) and provide the message body "
+                "and optional headers.\n\n**Note**: the endpoint must have an active consumer "
+                "route or be a built-in component that accepts messages directly.",
             "action_code": DPAT_API,
+            "output_type": CamelMessageResponseDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                CamelMessageDataType::Fields{"endpoint", "body",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                CamelMessageDataType::Fields{"headers",}, {
+                    "preselected": True,
+                }
+            ),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{

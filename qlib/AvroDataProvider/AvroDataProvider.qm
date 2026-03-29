@@ -61,8 +61,14 @@ module AvroDataProvider {
             "name": AvroDataProvider::AppName,
             "display_name": "Apache Avro",
             "short_desc": "Read and write Apache Avro data files",
-            "desc": "Read and write Apache Avro data files containing structured records with "
-                "schema-based serialization",
+            "desc": "Read and write [Apache Avro](https://avro.apache.org/) data files with schema-based "
+                "serialization.\n\n"
+                "**Capabilities**:\n"
+                "- Read Avro container files with automatic schema detection\n"
+                "- Write records using a JSON schema definition\n"
+                "- Support for all Avro types: primitives, records, arrays, maps, unions, enums\n"
+                "- Binary and stream-based I/O for integration pipelines\n\n"
+                "Commonly used with Apache Kafka for enterprise event streaming.",
             "groups": (DataProvider::AppGroup::Messaging,),
             "logo": AvroLogo,
             "logo_file_name": "avro-logo.svg",
@@ -76,12 +82,13 @@ module AvroDataProvider {
             "action": "read",
             "display_name": "Read Avro File",
             "short_desc": "Read records from an Avro file at a specific file location",
-            "desc": "Read records from an Apache Avro (.avro) file at a specific file location.\n\n"
-                "Each record returned represents a single Avro record as a hash. The record structure "
-                "is determined by the Avro schema embedded in the file.\n\n"
-                "Avro files are self-describing; the schema is stored in the file header and is used "
-                "to deserialize the records automatically.",
+            "desc": "Read records from an Apache Avro (`.avro`) container file at a specific file location.\n\n"
+                "Avro files are self-describing — the schema is stored in the file header and used "
+                "to deserialize records automatically.\n\n"
+                "Each record is returned as a hash with field names and types determined by the "
+                "embedded schema.",
             "action_code": DPAT_FIND,
+            "output_type": AvroRecordDataType,
             "cls": "AvroDataProvider::AvroReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AvroReadDataProvider::ConstructorOptions{"path",}, {
@@ -98,11 +105,12 @@ module AvroDataProvider {
             "display_name": "Read Avro Inline Data",
             "short_desc": "Read records from inline Avro data",
             "desc": "Read records from inline Apache Avro binary data.\n\n"
-                "Each record returned represents a single Avro record as a hash. The record structure "
-                "is determined by the Avro schema embedded in the data.\n\n"
-                "Avro data is self-describing; the schema is stored in the header and is used "
-                "to deserialize the records automatically.",
+                "Avro data is self-describing — the schema is stored in the header and used "
+                "to deserialize records automatically.\n\n"
+                "Each record is returned as a hash with field names and types determined by the "
+                "embedded schema.",
             "action_code": DPAT_FIND,
+            "output_type": AvroRecordDataType,
             "cls": "AvroDataProvider::AvroReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AvroReadDataProvider::ConstructorOptions{"data",}, {
@@ -118,12 +126,12 @@ module AvroDataProvider {
             "action": "write",
             "display_name": "Write Avro File",
             "short_desc": "Write records to an Avro file at a specified path",
-            "desc": "Write records to an Apache Avro (.avro) file at a specified path.\n\n"
-                "Each record written represents a single Avro record. The record structure must "
-                "conform to the Avro schema provided in the `schema` option.\n\n"
-                "The `schema` option is required and must be a valid Avro JSON schema string that "
-                "defines the record structure.",
+            "desc": "Write records to an Apache Avro (`.avro`) container file at a specified path.\n\n"
+                "The `schema` option is **required** and must be a valid Avro JSON schema string "
+                "that defines the record structure.\n\n"
+                "**Tip**: use `write-data` to generate Avro data in memory without writing to disk.",
             "action_code": DPAT_CREATE,
+            "output_type": AvroWriteOutputDataType,
             "cls": "AvroDataProvider::AvroWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AvroWriteDataProvider::ConstructorOptions{"path", "schema",}, {
@@ -140,11 +148,12 @@ module AvroDataProvider {
             "display_name": "Create Avro Data",
             "short_desc": "Create Avro data and return as binary",
             "desc": "Create Apache Avro data in memory and return it as binary data; useful for "
-                "generating Avro files without writing to disk.\n\n"
-                "The `schema` option is required and must be a valid Avro JSON schema string that "
-                "defines the record structure.\n\n"
+                "generating Avro data without writing to disk.\n\n"
+                "The `schema` option is **required** and must be a valid Avro JSON schema string "
+                "that defines the record structure.\n\n"
                 "After writing all records, use `getData()` to retrieve the binary Avro data.",
             "action_code": DPAT_CREATE,
+            "output_type": AvroWriteOutputDataType,
             "cls": "AvroDataProvider::AvroWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AvroWriteDataProvider::ConstructorOptions{"schema",}, {

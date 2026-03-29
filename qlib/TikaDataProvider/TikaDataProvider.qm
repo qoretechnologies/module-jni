@@ -61,21 +61,14 @@ module TikaDataProvider {
             "name": TikaDataProvider::AppName,
             "display_name": "Apache Tika",
             "short_desc": "Universal content detection and extraction",
-            "desc": "Provides data provider operations for content detection and text extraction using "
+            "desc": "Detect content types and extract text from documents using "
                 "[Apache Tika](https://tika.apache.org/).\n\n"
-                "**Supported Operations**:\n"
-                "- **Extract** — extract text content, metadata, and MIME type from a file\n"
-                "- **Extract data** — extract from inline binary data\n"
-                "- **Detect** — detect the MIME type of a file without full extraction\n\n"
-                "**Key Features**:\n"
-                "- Automatic MIME type detection for hundreds of file formats\n"
-                "- Text extraction from HTML, XML, plain text, and more\n"
-                "- Rich metadata extraction (author, title, dates, etc.)\n"
-                "- File path, stream, and in-memory binary data support\n\n"
-                "**Business Use Cases**:\n"
-                "- Extracting searchable text from document files in automated workflows\n"
-                "- Detecting file types for content routing and validation\n"
-                "- Building document indexing and search pipelines",
+                "**Capabilities**:\n"
+                "- Extract text content from HTML, XML, plain text, and other formats\n"
+                "- Detect MIME content types automatically\n"
+                "- Extract document metadata (author, title, creation date, etc.)\n\n"
+                "Additional format support (PDF, Office, images) can be enabled by adding "
+                "Tika parser module JARs to the Java classpath.",
             "groups": (DataProvider::AppGroup::Documents,),
             "logo": TikaLogo,
             "logo_file_name": "tika-logo.svg",
@@ -98,6 +91,7 @@ module TikaDataProvider {
                 "- `content_length` — the length of the extracted text content\n\n"
                 "Tika automatically detects the file format and applies the appropriate parser.",
             "action_code": DPAT_FIND,
+            "output_type": TikaExtractionDataType,
             "cls": "TikaDataProvider::TikaReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TikaReadDataProvider::ConstructorOptions{"path",}, {
@@ -122,6 +116,7 @@ module TikaDataProvider {
                 "- `content_length` — the length of the extracted text content\n\n"
                 "Use this action when the file content is already available in memory as binary data.",
             "action_code": DPAT_FIND,
+            "output_type": TikaExtractionDataType,
             "cls": "TikaDataProvider::TikaReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TikaReadDataProvider::ConstructorOptions{"data",}, {
@@ -144,6 +139,7 @@ module TikaDataProvider {
                 "- `metadata` — a hash of extracted metadata\n\n"
                 "This is faster than full extraction when only the MIME type is needed.",
             "action_code": DPAT_FIND,
+            "output_type": TikaExtractionDataType,
             "cls": "TikaDataProvider::TikaReadDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TikaReadDataProvider::ConstructorOptions{"path",}, {
