@@ -1,5 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-  <rect width="100" height="100" rx="10" fill="#1a73e8"/>
-  <text x="50" y="38" font-family="Arial,sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">APACHE</text>
-  <text x="50" y="68" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">AVRO</text>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+Original art by Emma Kellam https://www.github.com/emmak3l/
+
+Also see https://issues.apache.org/jira/browse/AVRO-3554
+-->
+
+<svg
+   version="1.1"
+   width="390"
+   height="390"
+   viewBox="0 0 39 39"
+   id="svg4"
+   sodipodi:docname="avro-logo.svg"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs4" />
+  <sodipodi:namedview
+     id="namedview4"
+     pagecolor="#ffffff"
+     bordercolor="#999999"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="2.6602941"
+     inkscape:cx="195.09121"
+     inkscape:cy="170.09397"
+     inkscape:window-width="3736"
+     inkscape:window-height="2074"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg4" />
+  <path
+     fill="#0068e0"
+     d="m 11.323019,22.812282 1.54227,4.70955 24.13142,6.882311 z"
+     id="path1" />
+  <path
+     fill="#000094"
+     d="m 19.74759,15.013623 c 0.296701,1.17482 -0.0154,1.921136 -1.916568,1.736268 l 19.06983,17.672511 c 0.216248,0.08673 0.253906,-0.0582 0.104415,-0.279013 z"
+     id="path2" />
+  <path
+     fill="#1cccfc"
+     d="m 19.141638,6.4863352 c 0,0 -0.680128,0.6419002 0.03537,1.4732323 0.530637,0.6173653 1.32431,0.2385015 1.32431,0.2385015 0,0 0.730909,-0.4102455 0.175738,-1.2752416 C 19.955281,5.7976477 19.141638,6.4863352 19.141638,6.4863352 Z M 37.043496,34.5 9.9901505,22.448824 c 0,0 -8.8393814,-5.467278 -7.923605,-7.626915 0.8918121,-2.090598 8.7703415,2.121979 9.6039545,2.315975 0.833613,0.195709 1.297493,-0.332076 1.312898,-0.700099 0.02454,-0.530637 -1.170253,-2.048375 -0.550607,-2.696551 0.617365,-0.646465 2.636637,0.612801 2.636637,0.612801 l 1.638127,1.134309 z"
+     id="path3" />
+  <path
+     fill="#1cccfc"
+     d="M 37.150194,34.386455 19.297405,14.610224 c 0,0 -3.215773,-3.651128 -3.082258,-4.6964271 0.133515,-1.0452988 4.404285,2.2914411 4.404285,2.2914411 0,0 0.474721,0.457033 0.924906,0.378864 0.450185,-0.07589 -0.03138,-0.824485 -0.03138,-0.824485 0,0 -0.737756,-1.714017 -0.245348,-2.0215581 0.495261,-0.3052592 1.745396,0.9848171 1.745396,0.9848171 0,0 0.312105,0.323518 0.639617,0.23622 0.327511,-0.08901 0.151773,-0.808509 0.151773,-0.808509 0,0 -2.257774,-5.2065239 -1.272958,-5.5945169 1.50233,-0.5951128 3.641994,3.7133212 4.359781,5.0547499 0.180302,0.3703051 10.258977,24.775635 10.258977,24.775635 z M 9.2900523,9.9160792 c 0,0 -0.9157763,0.6065248 0.1027039,1.7722148 0.9363168,1.074399 1.7699308,0.516944 1.7699308,0.516944 0,0 0.864424,-0.528355 0.03538,-1.524584 C 10.101413,9.3637597 9.2900523,9.9160792 9.2900523,9.9160792 Z"
+     id="path4" />
 </svg>
