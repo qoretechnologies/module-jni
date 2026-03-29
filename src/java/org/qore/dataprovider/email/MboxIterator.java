@@ -36,8 +36,6 @@ import java.nio.charset.StandardCharsets;
 
 import java.util.ArrayList;
 import java.util.Properties;
-import java.util.regex.Pattern;
-
 import org.qore.jni.Hash;
 import org.qore.jni.QoreException;
 
@@ -47,8 +45,6 @@ import org.qore.jni.QoreException;
  * Implements Closeable to ensure proper resource cleanup.
  */
 public class MboxIterator extends qore.Qore.AbstractIterator implements java.io.Closeable {
-    private static final Pattern FROM_LINE_PATTERN = Pattern.compile("^From \\S+.*\\d{4}$|^From \\S+.*");
-
     private BufferedReader reader;
     private Session session;
     private int maxMessages;
