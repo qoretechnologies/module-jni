@@ -773,7 +773,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-visio-jar qore-access-jar qore-email-jar qore-powerpoint-jar qore-vcf-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
