@@ -42,6 +42,17 @@ InvocationHandler::InvocationHandler(const ResolvedCallReferenceNode *callback)
       : InvocationHandler(std::unique_ptr<Dispatcher>(new QoreCodeDispatcher(callback))) {
 }
 
+InvocationHandler::~InvocationHandler() {
+   // zero the Java-side native pointer before the base class destructor releases
+   // the GlobalReference; this prevents the Java Cleaner from calling release0()
+   // on an already-freed Dispatcher pointer (use-after-free / double-free)
+   try {
+      destroy();
+   } catch (...) {
+      // ignore errors during destruction
+   }
+}
+
 void InvocationHandler::destroy() {
    Env env;
    env.callVoidMethod(jobj, Globals::methodQoreInvocationHandlerDestroy, nullptr);

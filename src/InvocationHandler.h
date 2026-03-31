@@ -46,6 +46,10 @@ class InvocationHandler : public QoreJniPrivateData {
 public:
    InvocationHandler(std::unique_ptr<Dispatcher> dispatcher);
    InvocationHandler(const ResolvedCallReferenceNode* callback);
+   //! Must call destroy() to zero the Java-side native pointer before the
+   //! GlobalReference is released; otherwise the Java Cleaner will try to
+   //! delete an already-freed Dispatcher when the GC collects the Java object
+   ~InvocationHandler();
 
    void destroy();
 };
