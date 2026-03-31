@@ -28,8 +28,6 @@
 #include <memory>
 #include <set>
 #include <atomic>
-#include <thread>
-#include <chrono>
 
 #include "defs.h"
 #include "Jvm.h"
@@ -3191,24 +3189,18 @@ void JniExternalProgramData::doDeref() {
     }
     // hint the JVM to collect orphaned classloaders periodically; the destructor above
     // released GlobalReferences, making Java objects eligible for GC.  Without this,
-    // the JVM never runs GC because only native memory is under pressure.
+    // the JVM never runs GC because only native memory is under pressure, causing
+    // classloaders and their associated native memory to accumulate indefinitely.
     //
-    // We batch the hint (every 20 destructions) to avoid overhead, and use a
-    // background thread to ensure all native destruction is fully complete before
-    // finalizers run — calling System.gc() synchronously here or in the destructor
-    // causes SIGSEGV in invocation_handler_finalize() because finalizers access
-    // native data that was just freed.
+    // Batched (every 20 destructions) to avoid overhead.
     if (++jni_pgm_deref_count % 20 == 0) {
-        std::thread([]() {
-            // small delay to let any in-progress destructions complete
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            try {
-                Env env;
-                env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
-            } catch (...) {
-                // ignore errors — GC hint is best-effort
-            }
-        }).detach();
+        try {
+            Env env;
+            env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
+        } catch (UnableToAttachException&) {
+        } catch (jni::Exception& e) {
+            e.convert(&xsink);
+        }
     }
     if (xsink) {
         throw new QoreXSinkException(xsink);

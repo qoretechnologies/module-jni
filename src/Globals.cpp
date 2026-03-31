@@ -430,7 +430,9 @@ typedef std::map<QoreProgram*, qmnc_t> qmnpc_t;
 qmnpc_t qmnc;
 
 static void JNICALL invocation_handler_finalize(JNIEnv *, jclass, jlong ptr) {
-    delete reinterpret_cast<Dispatcher*>(ptr);
+    if (ptr) {
+        delete reinterpret_cast<Dispatcher*>(ptr);
+    }
 }
 
 static jobject JNICALL invocation_handler_invoke(JNIEnv* jenv, jobject, jlong ptr, jobject proxy, jobject method, jobjectArray args) {
