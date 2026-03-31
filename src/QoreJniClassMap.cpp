@@ -27,7 +27,6 @@
 
 #include <memory>
 #include <set>
-#include <atomic>
 
 #include "defs.h"
 #include "Jvm.h"
@@ -2961,7 +2960,6 @@ JniExternalProgramData::~JniExternalProgramData() {
     for (auto& i : fake_cls_map) {
         delete i.second;
     }
-
     classLoader = nullptr;
 }
 
@@ -3174,9 +3172,6 @@ bool JniExternalProgramData::isInjectedModule(const char* mod) const {
     return rv;
 }
 
-// count of JniExternalProgramData destructions since last GC hint
-static std::atomic<int> jni_pgm_deref_count{0};
-
 void JniExternalProgramData::doDeref() {
     ExceptionSink xsink;
     if (save_object_callback) {
@@ -3186,21 +3181,6 @@ void JniExternalProgramData::doDeref() {
         delete this;
     } catch (jni::Exception& e) {
         e.convert(&xsink);
-    }
-    // hint the JVM to collect orphaned classloaders periodically; the destructor above
-    // released GlobalReferences, making Java objects eligible for GC.  Without this,
-    // the JVM never runs GC because only native memory is under pressure, causing
-    // classloaders and their associated native memory to accumulate indefinitely.
-    //
-    // Batched (every 20 destructions) to avoid overhead.
-    if (++jni_pgm_deref_count % 20 == 0) {
-        try {
-            Env env;
-            env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
-        } catch (UnableToAttachException&) {
-        } catch (jni::Exception& e) {
-            e.convert(&xsink);
-        }
     }
     if (xsink) {
         throw new QoreXSinkException(xsink);

@@ -81,7 +81,6 @@ public:
     DLLLOCAL static GlobalReference<jclass> classSystem;                          // java.lang.System
     DLLLOCAL static jmethodID methodSystemSetProperty;                            // String System.setProperty()
     DLLLOCAL static jmethodID methodSystemGetProperty;                            // String System.getProperty()
-    DLLLOCAL static jmethodID methodSystemGC;                                     // void System.gc()
 
     DLLLOCAL static GlobalReference<jclass> classObject;                          // java.lang.Object
     DLLLOCAL static jmethodID methodObjectClone;                                  // Object Object.clone()

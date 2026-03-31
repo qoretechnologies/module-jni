@@ -71,7 +71,6 @@ GlobalReference<jclass> Globals::arrayClassObject;
 GlobalReference<jclass> Globals::classSystem;
 jmethodID Globals::methodSystemSetProperty;
 jmethodID Globals::methodSystemGetProperty;
-jmethodID Globals::methodSystemGC;
 
 GlobalReference<jclass> Globals::classObject;
 jmethodID Globals::methodObjectClone;
@@ -430,9 +429,7 @@ typedef std::map<QoreProgram*, qmnc_t> qmnpc_t;
 qmnpc_t qmnc;
 
 static void JNICALL invocation_handler_finalize(JNIEnv *, jclass, jlong ptr) {
-    if (ptr) {
-        delete reinterpret_cast<Dispatcher*>(ptr);
-    }
+    delete reinterpret_cast<Dispatcher*>(ptr);
 }
 
 static jobject JNICALL invocation_handler_invoke(JNIEnv* jenv, jobject, jlong ptr, jobject proxy, jobject method, jobjectArray args) {
@@ -2537,7 +2534,6 @@ bool Globals::init() {
         "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
     methodSystemGetProperty = env.getStaticMethod(classSystem, "getProperty",
         "(Ljava/lang/String;)Ljava/lang/String;");
-    methodSystemGC = env.getStaticMethod(classSystem, "gc", "()V");
     check_java_version();
 
     // check for bootstrap initialization
