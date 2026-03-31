@@ -27,6 +27,9 @@
 
 #include <memory>
 #include <set>
+#include <atomic>
+#include <thread>
+#include <chrono>
 
 #include "defs.h"
 #include "Jvm.h"
@@ -3173,6 +3176,9 @@ bool JniExternalProgramData::isInjectedModule(const char* mod) const {
     return rv;
 }
 
+// count of JniExternalProgramData destructions since last GC hint
+static std::atomic<int> jni_pgm_deref_count{0};
+
 void JniExternalProgramData::doDeref() {
     ExceptionSink xsink;
     if (save_object_callback) {
@@ -3183,20 +3189,26 @@ void JniExternalProgramData::doDeref() {
     } catch (jni::Exception& e) {
         e.convert(&xsink);
     }
-    // hint the JVM to collect orphaned classloaders; the destructor above released
-    // GlobalReferences to the classloader and cached jclass objects, making them
-    // eligible for JVM GC.  Without this hint, the JVM never runs GC because only
-    // native memory is under pressure (not the Java heap), causing classloaders and
-    // their associated native memory to accumulate indefinitely.
-    // NOTE: this must run AFTER delete (not inside the destructor) to avoid triggering
-    // Java finalizers that access native data being destroyed (causes SIGSEGV in
-    // invocation_handler_finalize)
-    try {
-        Env env;
-        env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
-    } catch (UnableToAttachException&) {
-    } catch (jni::Exception& e) {
-        e.convert(&xsink);
+    // hint the JVM to collect orphaned classloaders periodically; the destructor above
+    // released GlobalReferences, making Java objects eligible for GC.  Without this,
+    // the JVM never runs GC because only native memory is under pressure.
+    //
+    // We batch the hint (every 20 destructions) to avoid overhead, and use a
+    // background thread to ensure all native destruction is fully complete before
+    // finalizers run — calling System.gc() synchronously here or in the destructor
+    // causes SIGSEGV in invocation_handler_finalize() because finalizers access
+    // native data that was just freed.
+    if (++jni_pgm_deref_count % 20 == 0) {
+        std::thread([]() {
+            // small delay to let any in-progress destructions complete
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            try {
+                Env env;
+                env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
+            } catch (...) {
+                // ignore errors — GC hint is best-effort
+            }
+        }).detach();
     }
     if (xsink) {
         throw new QoreXSinkException(xsink);
