@@ -9,7 +9,8 @@ build/
 test/qore-jni-test.jar
 
 # Build artifacts - compiled Java classes and generated JARs in dataprovider directories
-qlib/*/jar/*.jar
+# Only ignore built qore-dataprovider-*.jar files; dependency JARs are tracked and needed for the build
+qlib/*/jar/qore-dataprovider-*.jar
 src/java/org/qore/dataprovider/excel/*.class
 src/java/org/qore/dataprovider/kafka/*.class
 
