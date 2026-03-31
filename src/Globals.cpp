@@ -71,6 +71,7 @@ GlobalReference<jclass> Globals::arrayClassObject;
 GlobalReference<jclass> Globals::classSystem;
 jmethodID Globals::methodSystemSetProperty;
 jmethodID Globals::methodSystemGetProperty;
+jmethodID Globals::methodSystemGC;
 
 GlobalReference<jclass> Globals::classObject;
 jmethodID Globals::methodObjectClone;
@@ -2534,6 +2535,7 @@ bool Globals::init() {
         "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
     methodSystemGetProperty = env.getStaticMethod(classSystem, "getProperty",
         "(Ljava/lang/String;)Ljava/lang/String;");
+    methodSystemGC = env.getStaticMethod(classSystem, "gc", "()V");
     check_java_version();
 
     // check for bootstrap initialization

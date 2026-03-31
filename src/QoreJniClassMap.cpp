@@ -2960,7 +2960,22 @@ JniExternalProgramData::~JniExternalProgramData() {
     for (auto& i : fake_cls_map) {
         delete i.second;
     }
+
+    // release the GlobalReference to the classloader and all cached jclass objects
+    // (q2jmap is a member that's destroyed here, releasing its GlobalReferences)
     classLoader = nullptr;
+
+    // hint the JVM to collect orphaned classloaders; the GlobalReferences above have
+    // been released, making the Java objects eligible for GC.  Without this, the JVM
+    // never runs GC because only native memory is under pressure (not the Java heap),
+    // causing classloaders and their associated native memory to accumulate indefinitely.
+    try {
+        Env env;
+        env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
+    } catch (UnableToAttachException&) {
+    } catch (jni::Exception& e) {
+        e.convert(&xsink);
+    }
 }
 
 void JniExternalProgramData::initDynamicApi(Env& env) {
