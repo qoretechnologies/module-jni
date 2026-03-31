@@ -611,6 +611,7 @@ add_custom_command(
     OUTPUT ${JDBC_DP_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${JDBC_DP_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-jdbc-dp ${JDBC_DP_JAR} ${JDBC_DP_SOURCES}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/JdbcDataProvider/jar
     COMMAND ${CMAKE_COMMAND} -E copy ${JDBC_DP_JAR} ${CMAKE_SOURCE_DIR}/qlib/JdbcDataProvider/jar/
     DEPENDS ${module_name} ${JDBC_DP_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
