@@ -2961,21 +2961,7 @@ JniExternalProgramData::~JniExternalProgramData() {
         delete i.second;
     }
 
-    // release the GlobalReference to the classloader and all cached jclass objects
-    // (q2jmap is a member that's destroyed here, releasing its GlobalReferences)
     classLoader = nullptr;
-
-    // hint the JVM to collect orphaned classloaders; the GlobalReferences above have
-    // been released, making the Java objects eligible for GC.  Without this, the JVM
-    // never runs GC because only native memory is under pressure (not the Java heap),
-    // causing classloaders and their associated native memory to accumulate indefinitely.
-    try {
-        Env env;
-        env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
-    } catch (UnableToAttachException&) {
-    } catch (jni::Exception& e) {
-        e.convert(&xsink);
-    }
 }
 
 void JniExternalProgramData::initDynamicApi(Env& env) {
@@ -3194,6 +3180,21 @@ void JniExternalProgramData::doDeref() {
     }
     try {
         delete this;
+    } catch (jni::Exception& e) {
+        e.convert(&xsink);
+    }
+    // hint the JVM to collect orphaned classloaders; the destructor above released
+    // GlobalReferences to the classloader and cached jclass objects, making them
+    // eligible for JVM GC.  Without this hint, the JVM never runs GC because only
+    // native memory is under pressure (not the Java heap), causing classloaders and
+    // their associated native memory to accumulate indefinitely.
+    // NOTE: this must run AFTER delete (not inside the destructor) to avoid triggering
+    // Java finalizers that access native data being destroyed (causes SIGSEGV in
+    // invocation_handler_finalize)
+    try {
+        Env env;
+        env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
+    } catch (UnableToAttachException&) {
     } catch (jni::Exception& e) {
         e.convert(&xsink);
     }
