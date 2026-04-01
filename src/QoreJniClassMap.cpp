@@ -4,7 +4,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -659,21 +659,24 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClass(Env& env, const char* name, Q
     jpath.replaceAll(".", "/");
     jpath.replaceAll("__", "$");
 
-    // first try to find class in the global cache
-    JniQoreClass* rv = findInternal(jpath.c_str());
-    if (rv) {
-        // check if the class is also in the calling Program's namespace
-        if (pgm) {
-            if (!jpc) {
-                jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+    // first try to find class in the global cache; must hold lock to avoid
+    // data race with concurrent inserts into jcmap (std::map read+write is UB)
+    {
+        AutoLocker al(m);
+        JniQoreClass* rv = findInternal(jpath.c_str());
+        if (rv) {
+            // check if the class is also in the calling Program's namespace
+            if (pgm) {
+                if (!jpc) {
+                    jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+                }
+                if (jpc && !jpc->find(jpath.c_str())) {
+                    // class is in global cache but NOT in our Program - add it directly
+                    addClassToProgram(rv, jpath.c_str(), pgm);
+                }
             }
-            if (jpc && !jpc->find(jpath.c_str())) {
-                // class is in global cache but NOT in our Program - add it directly
-                AutoLocker al(m);
-                addClassToProgram(rv, jpath.c_str(), pgm);
-            }
+            return rv;
         }
-        return rv;
     }
     //printd(LogLevel, "QoreJniClassMap::findCreateQoreClass() '%s' not cached\n", name);
 
@@ -935,6 +938,12 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
     map.add(jpath, static_cast<JniQoreClass*>(qc_holder.release()));
 
     addSuperClasses(qc, jc, jpath, pgm, jpc);
+
+    // initialize now that all parents are set up; this must happen before
+    // populateQoreClass() which can trigger recursive class loading via type
+    // resolution — without this, a recursively-loaded class that has this class
+    // as an ancestor would prematurely initialize it with an incomplete parent list
+    qc->initializeBuiltin();
 
     // add methods after parents
     if (init_done) {
