@@ -27,9 +27,24 @@
 
 #include <qore/Qore.h>
 
+#include <dlfcn.h>
+
 #include "defs.h"
 #include "Globals.h"
 #include "QoreJniClassMap.h"
+
+//! Returns true if libjsig is linked into the process
+/** libjsig provides signal chaining so the JVM, V8, and Python can coexist.
+    When libjsig is active, -Xrs must NOT be used because it prevents the JVM from
+    installing the signal handlers that libjsig chains with other runtimes.
+    Without libjsig, -Xrs is needed to prevent the JVM from clobbering signal handlers
+    installed by V8 or Python.
+*/
+static bool hasLibjsig() {
+    // libjsig interposes on sigaction(); if linked, its JVM_begin_signal_setting symbol is present
+    void* sym = dlsym(RTLD_DEFAULT, "JVM_begin_signal_setting");
+    return sym != nullptr;
+}
 
 namespace jni {
 
@@ -57,7 +72,13 @@ QoreStringNode* Jvm::createVM() {
         }
     }
 
-    size_t num_options = 2 + (set_headless ? 1 : 0);
+    // When libjsig is linked into the process (qore links it by default), it chains signal
+    // handlers between the JVM, V8, and Python so they can coexist. In that case, -Xrs must
+    // NOT be used — it prevents the JVM from installing the handlers that libjsig chains.
+    // Without libjsig, -Xrs is the only way to prevent the JVM from clobbering other runtimes'
+    // signal handlers.
+    bool use_reduced_signals = !hasLibjsig();
+    size_t num_options = 1 + (use_reduced_signals ? 1 : 0) + (set_headless ? 1 : 0);
     bool disable_jit = false;
     bool enable_native_access = true;
     bool native_access_explicit = false;
@@ -159,8 +180,13 @@ QoreStringNode* Jvm::createVM() {
     }
 #endif
     JavaVMOption options[num_options];
-    // "reduced signals"
-    options[vm_args.nOptions++].optionString = (char*)"-Xrs";
+    if (use_reduced_signals) {
+        // "reduced signals" — only when libjsig is not available for signal chaining
+        options[vm_args.nOptions++].optionString = (char*)"-Xrs";
+        printd(LogLevel, "jni module: using -Xrs (libjsig not detected)\n");
+    } else {
+        printd(LogLevel, "jni module: libjsig detected, signal chaining active\n");
+    }
     // thread stack size; use a minimum of 1MB if stack size is unknown/0
     // (can happen when module links against a different libqore than the running executable)
     size_t stack_size_kb = q_thread_get_stack_size() / 1024;
