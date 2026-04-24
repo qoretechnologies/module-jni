@@ -43,6 +43,15 @@
 namespace jni {
 static std::string JNI_CK_JAVA_BIN_NAME = "jni_bin_name";
 
+static bool is_dynamic_qore_bin_name(const char* name) {
+    return !strncmp(name, "qore.", 5)
+        || !strncmp(name, "qoremod.", 8)
+        || !strncmp(name, "python.", 7)
+        || !strncmp(name, "pythonmod.", 10)
+        || !strncmp(name, "kotlin.", 7)
+        || !strncmp(name, "kotlinmod.", 10);
+}
+
 // the QoreClass for java::lang::Object
 JniQoreClass* QC_OBJECT;
 // the Qore class ID for java::lang::Object
@@ -2113,13 +2122,16 @@ LocalReference<jobject> JniExternalProgramData::loadServiceLoader(Env& env, jcla
 }
 
 LocalReference<jstring> JniExternalProgramData::getJavaNameForClass(Env& env, const QoreClass& qc) {
+    const char* mod = qc.getModuleName();
     ValueHolder v(qc.getReferencedKeyValue(JNI_CK_JAVA_BIN_NAME), nullptr);
     if (v) {
         assert(v->getType() == NT_STRING);
         const char* jname = v->get<const QoreStringNode>()->c_str();
-        printd(5, "JniExternalProgramData::getJavaNameForClass() cls '%s' -> embedded java '%s'\n", qc.getName(),
-            jname);
-        return env.newString(jname);
+        if (!mod || !is_dynamic_qore_bin_name(jname)) {
+            printd(5, "JniExternalProgramData::getJavaNameForClass() cls '%s' -> embedded java '%s'\n",
+                qc.getName(), jname);
+            return env.newString(jname);
+        }
     }
 
     std::string pname = qc.getNamespacePath(true);
@@ -2128,8 +2140,6 @@ LocalReference<jstring> JniExternalProgramData::getJavaNameForClass(Env& env, co
         pname.erase(0, 7);
         convert_qore_ns_to_java_pkg(pname);
     } else {
-        const char* mod = qc.getModuleName();
-
         if (mod) {
             bool done = false;
 #if QORE_VERSION_CODE >= 10013
@@ -2630,9 +2640,11 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
     if (has_jname) {
         // NOTE this must come last as using Env::GetStringUtfChars on a java string destroys the string
         Env::GetStringUtfChars jname_str(env, jname);
-        printd(5, "JniExternalProgramData::generateByteCodeIntern() saving class name %p %s: %s\n", qcls,
-            qcls->getName(), jname_str.c_str());
-        const_cast<QoreClass*>(qcls)->setKeyValueIfNotSet(JNI_CK_JAVA_BIN_NAME, jname_str.c_str());
+        if (!qcls->getModuleName() || !is_dynamic_qore_bin_name(jname_str.c_str())) {
+            printd(5, "JniExternalProgramData::generateByteCodeIntern() saving class name %p %s: %s\n", qcls,
+                qcls->getName(), jname_str.c_str());
+            const_cast<QoreClass*>(qcls)->setKeyValueIfNotSet(JNI_CK_JAVA_BIN_NAME, jname_str.c_str());
+        }
     }
 
     printd(5, "JniExternalProgramData::generateByteCodeIntern() %s rv: %p cl: %x (this->cl: %x) pgm: %p\n",
