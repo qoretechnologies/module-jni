@@ -33,7 +33,7 @@ import java.util.Map;
  * - kotlin-script-runtime.jar
  */
 public class KotlinScriptEngine {
-    private static volatile ScriptEngine engine = null;
+    private static volatile boolean available = false;
     private static volatile boolean initAttempted = false;
     private static volatile String initError = null;
     private static final Object lock = new Object();
@@ -45,7 +45,7 @@ public class KotlinScriptEngine {
      */
     public static boolean isAvailable() {
         ensureInitialized();
-        return engine != null;
+        return available;
     }
 
     /**
@@ -67,11 +67,12 @@ public class KotlinScriptEngine {
      */
     public static Object eval(String script) throws Exception {
         ensureInitialized();
-        if (engine == null) {
+        if (!available) {
             throw new RuntimeException("Kotlin scripting not available: " +
                 (initError != null ? initError : "unknown error"));
         }
         try {
+            ScriptEngine engine = createEngine();
             return engine.eval(script);
         } catch (ScriptException e) {
             throw new RuntimeException("Kotlin script error: " + e.getMessage(), e);
@@ -88,11 +89,12 @@ public class KotlinScriptEngine {
      */
     public static Object evalWithBindings(String script, HashMap<String, Object> bindings) throws Exception {
         ensureInitialized();
-        if (engine == null) {
+        if (!available) {
             throw new RuntimeException("Kotlin scripting not available: " +
                 (initError != null ? initError : "unknown error"));
         }
         try {
+            ScriptEngine engine = createEngine();
             Bindings b = new SimpleBindings();
             if (bindings != null) {
                 b.putAll(bindings);
@@ -104,7 +106,32 @@ public class KotlinScriptEngine {
     }
 
     /**
-     * Initialize the Kotlin script engine if not already done.
+     * Creates a Kotlin script engine using the current Qore URL classloader.
+     *
+     * Kotlin's JSR-223 engine has mutable compiler state and is not safe to
+     * share across independent Qorus service worker threads.
+     */
+    private static ScriptEngine createEngine() {
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        ScriptEngineManager manager = loader == null
+            ? new ScriptEngineManager()
+            : new ScriptEngineManager(loader);
+        ScriptEngine engine = manager.getEngineByExtension("kts");
+        if (engine == null) {
+            // Try by name as fallback
+            engine = manager.getEngineByName("kotlin");
+        }
+        if (engine == null) {
+            throw new RuntimeException("Kotlin script engine not found. " +
+                "Ensure kotlin-scripting-jsr223.jar and related JARs are in the classpath. " +
+                "Required: kotlin-scripting-jsr223, kotlin-scripting-compiler-embeddable, " +
+                "kotlin-compiler-embeddable, kotlin-script-runtime");
+        }
+        return engine;
+    }
+
+    /**
+     * Check that Kotlin script engines can be created.
      * Thread-safe lazy initialization.
      */
     private static void ensureInitialized() {
@@ -112,21 +139,11 @@ public class KotlinScriptEngine {
             synchronized (lock) {
                 if (!initAttempted) {
                     try {
-                        ScriptEngineManager manager = new ScriptEngineManager();
-                        engine = manager.getEngineByExtension("kts");
-                        if (engine == null) {
-                            // Try by name as fallback
-                            engine = manager.getEngineByName("kotlin");
-                        }
-                        if (engine == null) {
-                            initError = "Kotlin script engine not found. " +
-                                "Ensure kotlin-scripting-jsr223.jar and related JARs are in the classpath. " +
-                                "Required: kotlin-scripting-jsr223, kotlin-scripting-compiler-embeddable, " +
-                                "kotlin-compiler-embeddable, kotlin-script-runtime";
-                        }
+                        createEngine();
+                        available = true;
                     } catch (Exception e) {
                         initError = "Failed to initialize Kotlin script engine: " + e.getMessage();
-                        engine = null;
+                        available = false;
                     } finally {
                         initAttempted = true;
                     }
@@ -141,7 +158,7 @@ public class KotlinScriptEngine {
      */
     public static void reset() {
         synchronized (lock) {
-            engine = null;
+            available = false;
             initAttempted = false;
             initError = null;
         }
@@ -155,13 +172,12 @@ public class KotlinScriptEngine {
      */
     public static boolean retryInit() {
         synchronized (lock) {
-            if (engine == null) {
+            if (!available) {
                 initAttempted = false;
                 initError = null;
                 ensureInitialized();
             }
-            return engine != null;
+            return available;
         }
     }
 }
-

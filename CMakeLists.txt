@@ -918,7 +918,7 @@ add_custom_command(
     OUTPUT qore-jni.jar
     COMMAND ${CMAKE_SOURCE_DIR}/make-jar -o qore-jni.jar ${BYTE_BUDDY_JAR}
         ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-qore.jar
-    DEPENDS ${BYTE_BUDDY_JAR} qore-jni-qore-jar
+    DEPENDS ${BYTE_BUDDY_JAR} ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-qore.jar qore-jni-qore-jar
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
