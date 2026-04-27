@@ -1545,9 +1545,6 @@ void QoreJavaParamHelper::add(LocalReference<jobject>& params) {
 
 int QoreJavaParamHelper::checkVariant(LocalReference<jobject>& params, qore_method_type_t method_type) {
     int list_size = env.callIntMethod(plist, Globals::methodArrayListSize, nullptr);
-    if (!list_size) {
-        return 0;
-    }
 
     // get size of param list
     int plen = params ? env.callIntMethod(params, Globals::methodArrayListSize, nullptr) : 0;
@@ -1604,11 +1601,11 @@ int QoreJavaParamHelper::checkVariant(LocalReference<jobject>& params, qore_meth
         }
     }
 
-    if (qore_parent) {
-        return 0;
-    }
-
-    // if there are no matches in the list, then check base class methods of the opposite type
+    // if there are no matches in the list, then check base class methods of the opposite type.
+    // we cannot skip this check when qore_parent is non-null: even when we inherit from another
+    // Qore class, the parent's bytecode is loaded into the JVM, and the JVM rejects same-name +
+    // same-descriptor pairs across the static / non-static boundary in the same class file
+    // (e.g. child declaring a static method that collides with an inherited instance method).
     if (mname) {
         try {
             // check for a conflict in a base class with a method of the opposite type
@@ -2011,7 +2008,9 @@ int JniExternalProgramData::addMethods(Env& env, jobject class_loader, const Qor
             continue;
         }
 
-        QoreJavaParamHelper jph(env, nullptr, parent_class, qore_parent);
+        // pass mname so checkVariant() can detect a conflict with an inherited instance method
+        // of the same name+params (Java rejects same name+descriptor regardless of static/non-static)
+        QoreJavaParamHelper jph(env, m->getName(), parent_class, qore_parent);
         if (addStaticMethods(env, class_loader, source_class, *m, jph, bb)) {
             return -1;
         }
