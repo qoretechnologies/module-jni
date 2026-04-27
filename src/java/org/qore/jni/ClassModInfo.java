@@ -51,15 +51,26 @@ class ClassModInfo {
         } else if (bin_name.startsWith("qoremod.")) {
             int end = bin_name.indexOf(".", 9);
             if (end >= 9 && end < (bin_name.length() - 1)) {
+                // Standard form: qoremod.<mod>.<class-path>
                 mod = bin_name.substring(8, end);
                 cls = bin_name.substring(end + 1);
+                if (mod.equals("python")) {
+                    python = true;
+                    cls = "Python::" + cls;
+                    mod = null;
+                }
             } else {
-                mod = bin_name.substring(8);
-                cls = null;
-            }
-            if (mod.equals("python")) {
-                python = true;
-                cls = "Python::" + cls;
+                // Legacy flat form: qoremod.<class-name> (no module qualifier).
+                // Older module-jni versions generated this shape for classes from
+                // modules; pre-compiled bytecode and previously-saved jni_bin_name
+                // values still reference it.  Treat the segment after `qoremod.`
+                // as a Qore class path; the native side's QoreProgram::findClass
+                // tree-walks the loaded namespace tree by simple name and finds
+                // it without needing the module qualifier.  The trade-off vs the
+                // standard form: we cannot lazy-load the owning module here
+                // (because we don't know which module owns the class), so the
+                // module must already be loaded for the lookup to succeed.
+                cls = bin_name.substring(8);
                 mod = null;
             }
         } else if (bin_name.startsWith("python.")) {
