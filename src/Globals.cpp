@@ -1831,6 +1831,18 @@ static jobject JNICALL qore_url_classloader_dummy(JNIEnv* jenv, jclass jcls) {
     return nullptr;
 }
 
+// Returns the canonical "system" QoreURLClassLoader.
+//
+// Used by QoreURLClassLoader.loadClass / loadClassWithPtr to route qoremod.<mod>.*
+// lookups to the loader that owns the canonical Class for module-owned types so all
+// loaders sharing the same module see the same Class object.  Without this, every loader
+// outside syscl's parent chain that needs e.g. qoremod.SqlUtil.AbstractForeignConstraint
+// independently generates its own copy and the JVM rejects subsequent define-class for
+// overriding subclasses with "loader constraint violation".
+static jobject JNICALL qore_url_classloader_get_syscl(JNIEnv* jenv, jclass jcls) {
+    return Globals::syscl ? (jobject)Globals::syscl : nullptr;
+}
+
 static jobject JNICALL qore_url_classloader_debug(JNIEnv* jenv, jclass jcls, jlong ptr) {
     return nullptr;
 }
@@ -2371,6 +2383,11 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
         const_cast<char*>("debug0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_url_classloader_debug),
+    },
+    {
+        const_cast<char*>("getSyscl0"),
+        const_cast<char*>("()Lorg/qore/jni/QoreURLClassLoader;"),
+        reinterpret_cast<void*>(qore_url_classloader_get_syscl),
     },
 };
 

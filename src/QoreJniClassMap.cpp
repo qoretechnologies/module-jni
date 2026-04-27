@@ -2096,6 +2096,43 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
         }
     }
 
+    // Hard-fail legacy qore.<X>.<Y> imports of a module-owned class.
+    //
+    // Qore module classes are emitted under one canonical Java binary name:
+    // qoremod.<mod>.<rest> (see getJavaNameForClass()).  Older module-jni also exposed them
+    // via qore.<class-path> — that form is still parsed by ClassModInfo for backward
+    // compatibility with truly non-module Qore.* classes (e.g. qore.Qore.File,
+    // qore.OMQ.$Constants), but accepting it for module-owned classes produces two distinct
+    // Java Class objects for the same QoreClass.  At runtime the JVM then fails legitimate
+    // casts with ClassCastException or rejects subclass / parent override resolution with
+    // "loader constraint violation" once the class is needed across loaders.
+    //
+    // Refuse the legacy form for module classes so callers re-emit / re-import using the
+    // canonical qoremod.<mod>.<rest> name.  NOTE: we use the raw JNI APIs here rather than
+    // Env::GetStringUtfChars: the latter implicitly wraps a raw jstring in a
+    // LocalReference<jstring> whose destructor calls DeleteLocalRef on the jstring,
+    // invalidating the caller's `jname` for the rest of generateByteCode().
+    if (qcls->getModuleName() && jname) {
+        const char* jn = (*env)->GetStringUTFChars(jname, nullptr);
+        bool is_legacy_module = jn
+            && jn[0] == 'q' && jn[1] == 'o' && jn[2] == 'r' && jn[3] == 'e' && jn[4] == '.'
+            && strchr(jn + 5, '.');
+        if (is_legacy_module) {
+            const char* rest = strchr(jn + 5, '.') + 1;
+            QoreStringMaker desc("Java class '%s' refers to module-owned class '%s' (module '%s') " \
+                "via the legacy qore.<X>.<Y> binary name; module classes are exposed only under " \
+                "the canonical qoremod.<mod>.<rest> form.  Re-emit / re-import as " \
+                "'qoremod.%s.%s'.",
+                jn, qpath.c_str(), qcls->getModuleName(), qcls->getModuleName(), rest);
+            (*env)->ReleaseStringUTFChars(jname, jn);
+            env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc.c_str());
+            return nullptr;
+        }
+        if (jn) {
+            (*env)->ReleaseStringUTFChars(jname, jn);
+        }
+    }
+
     // ensure exclusive access while creating java classes
     AutoLocker al(codeGenLock);
 
@@ -2158,34 +2195,37 @@ LocalReference<jstring> JniExternalProgramData::getJavaNameForClass(Env& env, co
             }
 #endif
             if (!done) {
-                if (isInjectedModule(mod)) {
-                    convert_qore_ns_to_java_pkg(pname);
-                    pname.insert(0, "qore");
-                } else {
-                    QoreProgram* pgm = qc.getProgram();
-                    if (!pgm) {
-                        pgm = getProgram();
-                        assert(pgm);
+                // Module classes always use the qoremod.<mod>.<rest> shape — there is one
+                // canonical Java binary name per QoreClass.  We used to fall back to
+                // qore.<class-path> for injected modules and for cases where the module's
+                // root namespace couldn't be located, but that produced two distinct Java
+                // names referring to the same QoreClass: at runtime each name resolves to a
+                // different Java Class object (different defining loaders), so casts
+                // between the canonical and legacy forms fail with ClassCastException and
+                // override resolution between subclass / parent fails with
+                // LinkageError("loader constraint violation").  Emit qoremod.<mod>.<rest>
+                // unconditionally; the legacy qore.<X>.<Y> form is hard-rejected for
+                // module classes at resolution time (see generateByteCode()).
+                QoreProgram* pgm = qc.getProgram();
+                if (!pgm) {
+                    pgm = getProgram();
+                    assert(pgm);
+                }
+                const QoreNamespace* ns = isInjectedModule(mod) ? nullptr : get_module_root_ns(mod, pgm);
+                if (ns) {
+                    std::string nspath = ns->getPath(true);
+                    if (pname.rfind(nspath, 0) == 0) {
+                        printd(5, "pname before '%s' (nspath: '%s')\n", pname.c_str(), nspath.c_str());
+                        // create namespace path from the module's main namespace
+                        pname.erase(0, nspath.size());
+                        printd(5, "pname after '%s' (pgm: %p jpc: %p mod: %s)\n", pname.c_str(), pgm, this, mod);
                     }
-                    const QoreNamespace* ns = get_module_root_ns(mod, pgm);
-                    if (!ns) {
-                        convert_qore_ns_to_java_pkg(pname);
-                        pname.insert(0, "qore");
-                    } else {
-                        std::string nspath = ns->getPath(true);
-                        if (pname.rfind(nspath, 0) == 0) {
-                            printd(5, "pname before '%s' (nspath: '%s')\n", pname.c_str(), nspath.c_str());
-                            // create namespace path from the module's main namespace
-                            pname.erase(0, nspath.size());
-                            printd(5, "pname after '%s' (pgm: %p jpc: %p mod: %s)\n", pname.c_str(), pgm, this, mod);
-                        }
-                        convert_qore_ns_to_java_pkg(pname);
+                }
+                convert_qore_ns_to_java_pkg(pname);
 
-                        pname.insert(0, mod);
-                        if (strcmp(mod, "python")) {
-                            pname.insert(0, "qoremod.");
-                        }
-                    }
+                pname.insert(0, mod);
+                if (strcmp(mod, "python")) {
+                    pname.insert(0, "qoremod.");
                 }
             }
 

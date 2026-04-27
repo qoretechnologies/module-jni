@@ -479,6 +479,34 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
 
         if (isDynamic(bin_name)) {
+            // For qoremod.<mod>.* classes, prefer the canonical syscl-defined Class so all
+            // loaders that need the same module-owned type resolve to the same Class object.
+            // Without this, qjar / docs builds and Qorus workflow programs (which create
+            // per-task Programs whose loaders end up in chains disjoint from syscl)
+            // generate per-loader copies of shared types like
+            // qoremod.SqlUtil.AbstractForeignConstraint, and the JVM then rejects subsequent
+            // define-class for overriding subclasses with "loader constraint violation".
+            //
+            // Only qoremod.<mod>.<rest> needs this: qore.<X>.<Y> for module classes is
+            // hard-rejected at the C++ layer (see JniExternalProgramData::generateByteCode)
+            // and qore.* otherwise resolves to per-Program built-in / runtime-namespace
+            // classes that legitimately stay per-loader.
+            if (bin_name.startsWith("qoremod.") && bin_name.length() > 8) {
+                QoreURLClassLoader sys = getSyscl0();
+                if (sys != null && sys != this) {
+                    Class<?> shared = sys.checkLoadedClass(bin_name);
+                    if (shared != null) {
+                        return shared;
+                    }
+                    try {
+                        return sys.loadClass(bin_name);
+                    } catch (ClassNotFoundException e) {
+                        // syscl can't resolve it (e.g. owning module not loaded in syscl's
+                        // program); fall through to local generation
+                    }
+                }
+            }
+
             // only remove from set if successful
             try {
                 byte[] bytes = generateByteCode(bin_name);
@@ -566,6 +594,26 @@ public class QoreURLClassLoader extends URLClassLoader {
                 //    hashCode(), bin_name);
 
                 return defineClass(bin_name, bytes, 0, bytes.length);
+            }
+
+            // For qoremod.<mod>.* classes, prefer the canonical syscl-defined Class.  C++
+            // paths in JniExternalProgramData (parent-class lookup at line ~2515, forward
+            // references, etc.) call loadClassWithPtr directly — without this delegation
+            // each top-level loader independently generates its own copy.  See loadClass()
+            // for the qoremod.*-only restriction.
+            if (bin_name.startsWith("qoremod.") && bin_name.length() > 8) {
+                QoreURLClassLoader sys = getSyscl0();
+                if (sys != null && sys != this) {
+                    Class<?> shared = sys.checkLoadedClass(bin_name);
+                    if (shared != null) {
+                        return shared;
+                    }
+                    try {
+                        return sys.loadClassWithPtr(bin_name, class_ptr);
+                    } catch (ClassNotFoundException e) {
+                        // syscl can't resolve it; fall through to local generation
+                    }
+                }
             }
 
             // only remove from set if successful
@@ -1064,4 +1112,16 @@ public class QoreURLClassLoader extends URLClassLoader {
     static private native void clearCompilationCache0(long ptr);
     static private native void dummy0();
     static private native void debug0(long ptr);
+
+    //! Returns the canonical "system" {@code QoreURLClassLoader} (Globals::syscl in C++).
+    /** Used by loadClass / loadClassWithPtr to route qoremod.<mod>.* lookups to the loader
+        that holds the canonical Class for module-owned types — without this, qjar / docs
+        builds and Qorus workflow programs (whose loaders end up in chains disjoint from
+        syscl) generate per-loader copies of the same module class and the JVM rejects
+        subsequent define-class for an overriding subclass with "loader constraint
+        violation".
+
+        Returns {@code null} during very early init before syscl exists.
+    */
+    static private native QoreURLClassLoader getSyscl0();
 }
