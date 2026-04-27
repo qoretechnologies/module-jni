@@ -59,17 +59,23 @@ class ClassModInfo {
                     cls = "Python::" + cls;
                     mod = null;
                 }
+            } else if (is_package) {
+                // Package enumeration: qoremod.<mod> names the module whose
+                // namespace contents getClassesInNamespace0() should list.
+                mod = bin_name.substring(8);
+                cls = null;
             } else {
-                // Legacy flat form: qoremod.<class-name> (no module qualifier).
-                // Older module-jni versions generated this shape for classes from
-                // modules; pre-compiled bytecode and previously-saved jni_bin_name
-                // values still reference it.  Treat the segment after `qoremod.`
-                // as a Qore class path; the native side's QoreProgram::findClass
-                // tree-walks the loaded namespace tree by simple name and finds
-                // it without needing the module qualifier.  The trade-off vs the
-                // standard form: we cannot lazy-load the owning module here
-                // (because we don't know which module owns the class), so the
-                // module must already be loaded for the lookup to succeed.
+                // Legacy flat class form: qoremod.<class-name> (no module
+                // qualifier).  Older module-jni versions generated this shape
+                // for classes from modules; pre-compiled bytecode and
+                // previously-saved jni_bin_name values still reference it.
+                // Treat the segment after `qoremod.` as a Qore class path; the
+                // native QoreProgram::findClass tree-walks the loaded
+                // namespace tree by simple name and finds it without needing
+                // the module qualifier.  Trade-off vs the standard form: we
+                // cannot lazy-load the owning module here (we do not know
+                // which module owns the class), so the module must already be
+                // loaded for the lookup to succeed.
                 cls = bin_name.substring(8);
                 mod = null;
             }
