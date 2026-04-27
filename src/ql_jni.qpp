@@ -356,6 +356,57 @@ binary get_byte_code(string class_name) {
     }
 }
 
+//! Returns the Java binary class name that @ref get_byte_code() will use for the given %Qore class
+/** @par Example:
+    @code{.py}
+string java_name = get_java_name("::Qore::Ocr::TesseractEngine");  # "qoremod.ocr.TesseractEngine"
+    @endcode
+
+    The returned name matches the internal class name embedded in the bytecode produced by
+    @ref get_byte_code() for the same class, so it is safe to pass to the \c "define-class" module
+    command.  Resolution mirrors @ref get_byte_code() (module root-namespace stripping, injected-module
+    handling, embedded \c jni_bin_name handling, etc.).
+
+    @param class_name the class name (can include a namespace path) to the %Qore class
+
+    @return the Java binary class name for the class
+
+    @throws CLASS-NOT-FOUND the %Qore class could not be found
+
+    @since jni 2.6
+*/
+string get_java_name(string class_name) {
+    TempEncodingHelper cn(class_name, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    try {
+        jni::Env env;
+
+        QoreProgram* pgm = nullptr;
+        JniExternalProgramData* jpc = jni_get_context(pgm);
+        assert(jpc);
+        assert(pgm);
+
+        const QoreClass* cls = pgm->findClass(cn->c_str(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (!cls) {
+            xsink->raiseException("CLASS-NOT-FOUND", "cannot find Qore class '%s'", cn->c_str());
+            return QoreValue();
+        }
+
+        LocalReference<jstring> jname = jpc->getJavaNameForClass(env, *cls);
+        Env::GetStringUtfChars jname_str(env, jname);
+        return new QoreStringNode(jname_str.c_str(), QCS_UTF8);
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+        return QoreValue();
+    }
+}
+
 //! Evaluates Kotlin script code and returns the result
 /** @par Example:
     @code{.py}
