@@ -479,19 +479,23 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
 
         if (isDynamic(bin_name)) {
-            // For qoremod.<mod>.* classes, prefer the canonical syscl-defined Class so all
-            // loaders that need the same module-owned type resolve to the same Class object.
-            // Without this, qjar / docs builds and Qorus workflow programs (which create
-            // per-task Programs whose loaders end up in chains disjoint from syscl)
-            // generate per-loader copies of shared types like
-            // qoremod.SqlUtil.AbstractForeignConstraint, and the JVM then rejects subsequent
-            // define-class for overriding subclasses with "loader constraint violation".
+            // For shared dynamic classes (qoremod.<mod>.* and qore.<X>.<rest> for system
+            // classes that have the same identity across Programs), prefer the canonical
+            // syscl-defined Class so all loaders that need the same type resolve to the same
+            // Class object.  Without this, every loader outside syscl's parent chain that
+            // needs e.g. qoremod.SqlUtil.AbstractForeignConstraint or
+            // qore.Qore.SQL.AbstractDatasource independently generates its own copy and the
+            // JVM rejects override resolution / method dispatch with "loader constraint
+            // violation".  qore.<X>.<Y> for module classes is already hard-rejected in the
+            // C++ layer (see JniExternalProgramData::generateByteCode).
             //
-            // Only qoremod.<mod>.<rest> needs this: qore.<X>.<Y> for module classes is
-            // hard-rejected at the C++ layer (see JniExternalProgramData::generateByteCode)
-            // and qore.* otherwise resolves to per-Program built-in / runtime-namespace
-            // classes that legitimately stay per-loader.
-            if (bin_name.startsWith("qoremod.") && bin_name.length() > 8) {
+            // We probe syscl with checkLoadedClass first (purely passive — won't trigger
+            // syscl-side bytecode generation) and then with sys.loadClass (which lets syscl
+            // generate the canonical Class).  If syscl can't resolve the name (CNFE), we
+            // fall through to local generation: this naturally keeps user-defined per-
+            // Program classes (e.g. a test Program parsing its own qore.Qore.* class) per-
+            // loader, since their QoreClass simply doesn't exist in syscl's program.
+            if (isSharedDynamicClassName(bin_name)) {
                 QoreURLClassLoader sys = getSyscl0();
                 if (sys != null && sys != this) {
                     Class<?> shared = sys.checkLoadedClass(bin_name);
@@ -502,7 +506,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                         return sys.loadClass(bin_name);
                     } catch (ClassNotFoundException e) {
                         // syscl can't resolve it (e.g. owning module not loaded in syscl's
-                        // program); fall through to local generation
+                        // program, or the class is genuinely per-Program); fall through to
+                        // local generation
                     }
                 }
             }
@@ -596,12 +601,12 @@ public class QoreURLClassLoader extends URLClassLoader {
                 return defineClass(bin_name, bytes, 0, bytes.length);
             }
 
-            // For qoremod.<mod>.* classes, prefer the canonical syscl-defined Class.  C++
-            // paths in JniExternalProgramData (parent-class lookup at line ~2515, forward
-            // references, etc.) call loadClassWithPtr directly — without this delegation
-            // each top-level loader independently generates its own copy.  See loadClass()
-            // for the qoremod.*-only restriction.
-            if (bin_name.startsWith("qoremod.") && bin_name.length() > 8) {
+            // Same syscl routing as loadClass() — the C++ bytecode-generation paths
+            // (parent-class lookup, getJavaTypeDefinition for parameter / return / field
+            // types) call loadClassWithPtr directly, and need to see the same canonical
+            // Class objects as JVM's standard loadClass paths so override resolution and
+            // method dispatch don't fail with "loader constraint violation" later.
+            if (isSharedDynamicClassName(bin_name)) {
                 QoreURLClassLoader sys = getSyscl0();
                 if (sys != null && sys != this) {
                     Class<?> shared = sys.checkLoadedClass(bin_name);
@@ -641,6 +646,40 @@ public class QoreURLClassLoader extends URLClassLoader {
             }
         }
         return rv;
+    }
+
+    //! Returns true if {@code bin_name} refers to a class that should be canonicalized
+    //! through the syscl loader (so all loaders that need the same shared type see the same
+    //! Class object).
+    /** Routing is required for two distinct shapes:
+        - <b><tt>qoremod.</tt></b><i>mod</i><tt>.</tt><i>...</i>: classes provided by a Qore
+          module.  The QoreClass is shared across Programs that load the module, so a single
+          canonical Java Class avoids loader-constraint violations on subclass override
+          resolution and ClassCastException on legitimate casts across Program boundaries.
+        - <b><tt>qore.Qore.</tt></b><i>...</i>: built-in <tt>Qore::*</tt> classes that have
+          a fixed identity across Programs.  Routing them through syscl is what lets, e.g.,
+          a workflow program's {@code JavaSimpleTestStep1} call into a syscl-defined
+          {@code qoremod.SqlUtil.Table.&lt;init&gt;(qore.Qore.SQL.AbstractDatasource, String)}
+          without the JVM rejecting the call site with "loader constraint violation".
+
+        We deliberately do NOT route bare <tt>qore.</tt><i>X</i><tt>.</tt><i>Y</i> when X is
+        not <tt>Qore</tt> (e.g. <tt>qore.OMQ.$Constants</tt>): such names address per-Program
+        runtime namespaces (Qorus' OMQ namespace, code-generation tests' custom classes etc.)
+        whose contents legitimately differ between Programs, and routing them up to syscl
+        would resolve to syscl's stripped-down copy and cause NoSuchFieldError /
+        ClassCastException at the use site.
+
+        We also do not route <tt>qore.</tt><i>X</i> single-segment names (no second dot) — they
+        also address per-Program top-level user classes.
+    */
+    static private boolean isSharedDynamicClassName(String bin_name) {
+        if (bin_name.startsWith("qoremod.") && bin_name.length() > 8) {
+            return true;
+        }
+        if (bin_name.startsWith("qore.Qore.") && bin_name.length() > 10) {
+            return true;
+        }
+        return false;
     }
 
     //! Returns true if the given package name is dynamic
