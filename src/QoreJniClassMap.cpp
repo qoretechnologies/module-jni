@@ -2096,37 +2096,66 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
         }
     }
 
-    // Hard-fail legacy qore.<X>.<Y> imports of a module-owned class.
+    // Hard-fail legacy qore.<X>.<Y> imports of a class that lives INSIDE its owning
+    // module's own namespace.
     //
-    // Qore module classes are emitted under one canonical Java binary name:
-    // qoremod.<mod>.<rest> (see getJavaNameForClass()).  Older module-jni also exposed them
-    // via qore.<class-path> — that form is still parsed by ClassModInfo for backward
-    // compatibility with truly non-module Qore.* classes (e.g. qore.Qore.File,
-    // qore.OMQ.$Constants), but accepting it for module-owned classes produces two distinct
-    // Java Class objects for the same QoreClass.  At runtime the JVM then fails legitimate
-    // casts with ClassCastException or rejects subclass / parent override resolution with
+    // Qore module classes whose qpath is under their module's own namespace are emitted
+    // under one canonical Java binary name: qoremod.<mod>.<rest> (see
+    // getJavaNameForClass()).  Older module-jni also exposed them via qore.<class-path> —
+    // that form is still parsed by ClassModInfo for backward compatibility with truly
+    // non-module Qore.* classes (e.g. qore.Qore.File, qore.OMQ.$Constants), but accepting
+    // it for in-namespace module classes produces two distinct Java Class objects for the
+    // same QoreClass.  At runtime the JVM then fails legitimate casts with
+    // ClassCastException or rejects subclass / parent override resolution with
     // "loader constraint violation" once the class is needed across loaders.
     //
-    // Refuse the legacy form for module classes so callers re-emit / re-import using the
-    // canonical qoremod.<mod>.<rest> name.  NOTE: we use the raw JNI APIs here rather than
-    // Env::GetStringUtfChars: the latter implicitly wraps a raw jstring in a
-    // LocalReference<jstring> whose destructor calls DeleteLocalRef on the jstring,
-    // invalidating the caller's `jname` for the rest of generateByteCode().
+    // Shadow / injection modules (e.g. QorusFakeApi* parse-time API stubs) are exempt:
+    // their classes have a qpath OUTSIDE the module's own namespace and resolve under
+    // the runtime qore.<class-path> form at execution time — there is no module-owned
+    // qoremod.<shadow-mod>.<rest> Java Class to alias against, so accepting the legacy
+    // form does not produce dual Class objects.  See getJavaNameForClass() for the
+    // matching emission rule.
+    //
+    // NOTE: we use the raw JNI APIs here rather than Env::GetStringUtfChars: the latter
+    // implicitly wraps a raw jstring in a LocalReference<jstring> whose destructor calls
+    // DeleteLocalRef on the jstring, invalidating the caller's `jname` for the rest of
+    // generateByteCode().
     if (qcls->getModuleName() && jname) {
         const char* jn = (*env)->GetStringUTFChars(jname, nullptr);
         bool is_legacy_module = jn
             && jn[0] == 'q' && jn[1] == 'o' && jn[2] == 'r' && jn[3] == 'e' && jn[4] == '.'
             && strchr(jn + 5, '.');
         if (is_legacy_module) {
-            const char* rest = strchr(jn + 5, '.') + 1;
-            QoreStringMaker desc("Java class '%s' refers to module-owned class '%s' (module '%s') " \
-                "via the legacy qore.<X>.<Y> binary name; module classes are exposed only under " \
-                "the canonical qoremod.<mod>.<rest> form.  Re-emit / re-import as " \
-                "'qoremod.%s.%s'.",
-                jn, qpath.c_str(), qcls->getModuleName(), qcls->getModuleName(), rest);
-            (*env)->ReleaseStringUTFChars(jname, jn);
-            env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc.c_str());
-            return nullptr;
+            // Determine whether the class lives inside its owning module's own namespace.
+            // Only those classes are subject to the qoremod.<mod>.<rest> canonicalization;
+            // shadow-module classes (qpath outside module namespace) are runtime-aliased
+            // and the legacy form is the correct binary name for them.
+            bool class_under_module_ns = false;
+            QoreProgram* qpgm = qcls->getProgram();
+            if (!qpgm) {
+                qpgm = pgm;
+            }
+            if (qpgm) {
+                const QoreNamespace* mod_ns = isInjectedModule(qcls->getModuleName())
+                    ? nullptr
+                    : get_module_root_ns(qcls->getModuleName(), qpgm);
+                if (mod_ns) {
+                    std::string nspath = mod_ns->getPath(true);
+                    class_under_module_ns = qpath.size() >= nspath.size()
+                        && !memcmp(qpath.c_str(), nspath.c_str(), nspath.size());
+                }
+            }
+            if (class_under_module_ns) {
+                const char* rest = strchr(jn + 5, '.') + 1;
+                QoreStringMaker desc("Java class '%s' refers to module-owned class '%s' (module '%s') " \
+                    "via the legacy qore.<X>.<Y> binary name; module classes are exposed only under " \
+                    "the canonical qoremod.<mod>.<rest> form.  Re-emit / re-import as " \
+                    "'qoremod.%s.%s'.",
+                    jn, qpath.c_str(), qcls->getModuleName(), qcls->getModuleName(), rest);
+                (*env)->ReleaseStringUTFChars(jname, jn);
+                env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc.c_str());
+                return nullptr;
+            }
         }
         if (jn) {
             (*env)->ReleaseStringUTFChars(jname, jn);
@@ -2195,37 +2224,59 @@ LocalReference<jstring> JniExternalProgramData::getJavaNameForClass(Env& env, co
             }
 #endif
             if (!done) {
-                // Module classes always use the qoremod.<mod>.<rest> shape — there is one
-                // canonical Java binary name per QoreClass.  We used to fall back to
-                // qore.<class-path> for injected modules and for cases where the module's
-                // root namespace couldn't be located, but that produced two distinct Java
-                // names referring to the same QoreClass: at runtime each name resolves to a
-                // different Java Class object (different defining loaders), so casts
-                // between the canonical and legacy forms fail with ClassCastException and
-                // override resolution between subclass / parent fails with
-                // LinkageError("loader constraint violation").  Emit qoremod.<mod>.<rest>
-                // unconditionally; the legacy qore.<X>.<Y> form is hard-rejected for
-                // module classes at resolution time (see generateByteCode()).
+                // Module classes that live INSIDE their owning module's own namespace use
+                // the canonical qoremod.<mod>.<rest> shape — there is one canonical Java
+                // binary name per QoreClass.  Accepting both qoremod.<mod>.<rest> AND
+                // legacy qore.<class-path> for the same class produced two distinct Java
+                // Class objects (different defining loaders) and surfaced at runtime as
+                // ClassCastException between the two forms, plus
+                // LinkageError("loader constraint violation") on subclass / parent override
+                // resolution.
+                //
+                // Shadow / injection modules are different.  A shadow module (e.g. the
+                // QorusFakeApi* parse-time API stubs in Qorus) declares classes whose
+                // Qore qualified path lies OUTSIDE the module's own namespace — those
+                // classes' "real" home is a runtime namespace (e.g. ::OMQ::UserApi::*)
+                // that is provided by the host program, NOT by any module, at runtime.
+                // The shadow module is loaded only into user-interface programs to give
+                // user code parse-time API verification; it is never loaded into the host
+                // (qorus-core) at runtime, so qoremod.<shadow-mod>.<rest> does not resolve
+                // there.  The only form that resolves at runtime IS the legacy
+                // qore.<class-path>: the bytecode loader looks up the class under the
+                // runtime qore.* namespace where it really lives.  Detect this case
+                // structurally — class qpath does not start with the module's own
+                // namespace path — and emit the legacy form so the bytecode generated for
+                // user code references the runtime class, not a phantom shadow-module
+                // class that cannot exist at run time.  There is no dual-name aliasing
+                // problem here because the qoremod.<shadow-mod>.<rest> form is never
+                // emitted, so only one Java Class object ever exists per shadow-class.
                 QoreProgram* pgm = qc.getProgram();
                 if (!pgm) {
                     pgm = getProgram();
                     assert(pgm);
                 }
                 const QoreNamespace* ns = isInjectedModule(mod) ? nullptr : get_module_root_ns(mod, pgm);
+                bool class_under_module_ns = false;
                 if (ns) {
                     std::string nspath = ns->getPath(true);
                     if (pname.rfind(nspath, 0) == 0) {
                         printd(5, "pname before '%s' (nspath: '%s')\n", pname.c_str(), nspath.c_str());
-                        // create namespace path from the module's main namespace
+                        // class lives inside its module's own namespace
                         pname.erase(0, nspath.size());
+                        class_under_module_ns = true;
                         printd(5, "pname after '%s' (pgm: %p jpc: %p mod: %s)\n", pname.c_str(), pgm, this, mod);
                     }
                 }
                 convert_qore_ns_to_java_pkg(pname);
 
-                pname.insert(0, mod);
-                if (strcmp(mod, "python")) {
-                    pname.insert(0, "qoremod.");
+                if (class_under_module_ns) {
+                    pname.insert(0, mod);
+                    if (strcmp(mod, "python")) {
+                        pname.insert(0, "qoremod.");
+                    }
+                } else {
+                    // shadow / runtime-aliased class — emit legacy qore.<class-path>
+                    pname.insert(0, "qore");
                 }
             }
 
