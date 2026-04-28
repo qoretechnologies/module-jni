@@ -542,15 +542,6 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
         return nullptr;
     }
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
-    // Prefer the caller's program context — see java_api_call_static_method_internal for
-    // the worked example (Qorus workflow step's UserApi.callFunction would hit the same
-    // step-program-vs-workflow-program mismatch otherwise).
-    {
-        QoreProgram* call_pgm = qore_get_call_program_context();
-        if (call_pgm && call_pgm != pgm) {
-            pgm = call_pgm;
-        }
-    }
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 
     ExceptionSink xsink;
@@ -574,6 +565,27 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
 
     ValueHolder rv(pgm->callFunction(fname.c_str(), *qore_args, &xsink), &xsink);
 
+    // Fall back to the caller's program context if the function isn't in pgm — for
+    // Qorus Java workflow steps, the loader's pgm is the step's parsing-time program
+    // (DataProvider, SqlUtil, ...) which lacks the Qorus runtime functions, but the
+    // workflow's program (the caller) has them.  Stays anchored to the loader's pgm in
+    // the common case (kotlin.qtest etc).
+    if (xsink) {
+        QoreProgram* call_pgm = qore_get_call_program_context();
+        if (call_pgm && call_pgm != pgm) {
+            ExceptionSink fallback_xsink;
+            ValueHolder fallback_rv(call_pgm->callFunction(fname.c_str(), *qore_args, &fallback_xsink),
+                &fallback_xsink);
+            if (!fallback_xsink) {
+                xsink.clear();
+                rv = fallback_rv.release();
+                pgm = call_pgm;
+                jpc = jni_get_context_unconditional(pgm);
+            } else {
+                fallback_xsink.clear();
+            }
+        }
+    }
     if (xsink) {
         QoreToJava::wrapException(env, xsink);
         return nullptr;
@@ -615,19 +627,6 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
     }
 
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
-    // Prefer the caller's program context when present and different from the loader's
-    // pgm — the loader's pgm is the program of whichever loader is `current` for this
-    // thread, which for a Qorus Java workflow step is the step's parsing-time program
-    // (DataProvider, SqlUtil, ... but NOT the Qorus runtime / OMQ namespace).  The
-    // caller's program is the Qore program whose code triggered the Java->Qore call —
-    // for a workflow step's UserApi.logInfo() etc. that's the workflow's program, which
-    // does have OMQ::UserApi.  Mirrors the same pattern used in java_api_new_object_save.
-    {
-        QoreProgram* call_pgm = qore_get_call_program_context();
-        if (call_pgm && call_pgm != pgm) {
-            pgm = call_pgm;
-        }
-    }
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 
     QoreJniStackLocationHelper slh;
@@ -658,6 +657,25 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
             CurrentProgramRuntimeExternalParseContextHelper pch;
 
             cls = pgm->findClass(cname.c_str(), &xsink);
+            if (!cls && !xsink) {
+                // Fall back to the caller's program context — for Qorus Java workflow
+                // steps, the loader's pgm is the step's parsing-time program (DataProvider,
+                // SqlUtil, ... but NOT the Qorus runtime / OMQ namespace), and a
+                // UserApi.logInfo() call needs to find OMQ::UserApi via the workflow's
+                // program (the caller).  We only do this on miss so the lookup remains
+                // anchored to the loader's pgm in the common case (e.g. kotlin.qtest's
+                // KotlinQoreApiTest tests, where the loader's pgm IS the right one).
+                QoreProgram* call_pgm = qore_get_call_program_context();
+                if (call_pgm && call_pgm != pgm) {
+                    cls = call_pgm->findClass(cname.c_str(), &xsink);
+                    if (cls) {
+                        // re-anchor pgm + jpc so subsequent calls (method dispatch, arg
+                        // marshalling) see the program that actually owns the class
+                        pgm = call_pgm;
+                        jpc = jni_get_context_unconditional(pgm);
+                    }
+                }
+            }
             if (!cls) {
                 if (!xsink) {
                     xsink.raiseException("UNKNOWN-CLASS", "cannot resolve class '%s'", cname.c_str());
