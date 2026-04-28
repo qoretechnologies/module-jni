@@ -542,6 +542,15 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
         return nullptr;
     }
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
+    // Prefer the caller's program context — see java_api_call_static_method_internal for
+    // the worked example (Qorus workflow step's UserApi.callFunction would hit the same
+    // step-program-vs-workflow-program mismatch otherwise).
+    {
+        QoreProgram* call_pgm = qore_get_call_program_context();
+        if (call_pgm && call_pgm != pgm) {
+            pgm = call_pgm;
+        }
+    }
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 
     ExceptionSink xsink;
@@ -606,6 +615,19 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
     }
 
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
+    // Prefer the caller's program context when present and different from the loader's
+    // pgm — the loader's pgm is the program of whichever loader is `current` for this
+    // thread, which for a Qorus Java workflow step is the step's parsing-time program
+    // (DataProvider, SqlUtil, ... but NOT the Qorus runtime / OMQ namespace).  The
+    // caller's program is the Qore program whose code triggered the Java->Qore call —
+    // for a workflow step's UserApi.logInfo() etc. that's the workflow's program, which
+    // does have OMQ::UserApi.  Mirrors the same pattern used in java_api_new_object_save.
+    {
+        QoreProgram* call_pgm = qore_get_call_program_context();
+        if (call_pgm && call_pgm != pgm) {
+            pgm = call_pgm;
+        }
+    }
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 
     QoreJniStackLocationHelper slh;
