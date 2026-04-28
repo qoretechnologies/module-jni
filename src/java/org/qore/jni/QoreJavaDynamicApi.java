@@ -44,8 +44,50 @@ import java.sql.SQLException;
     Any method that requires the ClassLoader context to be set should appear here.
  */
 public class QoreJavaDynamicApi {
+    //! Sets TCCL to the loader that defined the user-Java target before invoking it.
+    /** Many widely-used Java libraries (Apache Xalan, Xerces, log4j, JAXB, ...)
+        resolve their own resources (e.g. {@code Encodings.properties} in
+        Xalan's serializer) via
+        {@code Thread.currentThread().getContextClassLoader().getResourceAsStream(...)}.
+        When Qore code invokes a Java method through this bridge, the invoking
+        thread's TCCL is whatever happened to be set when the thread was
+        attached — typically the JVM's system classloader, NOT the per-Program
+        QoreURLClassLoader that has the user-deployed jars on its path.
+
+        If a library's class is first triggered to load during such an
+        invocation, its static initializer runs with that wrong TCCL.  Resource
+        lookups via TCCL.getResourceAsStream(...) return null and the library's
+        internal tables are permanently populated as empty.  In Xalan's
+        Encodings that surfaces as every encoding being "unsupported" — even
+        UTF-8 — the symptom that motivated this helper.  See the
+        OdpDataProvider.qtest failure analysis in module-jni for a worked
+        example.
+
+        Setting TCCL to the target's defining class loader for the duration of
+        the call gives library code a TCCL whose classpath matches the loader
+        that actually defined the target class, so static initializers find
+        their bundled resources.  We restore TCCL after the call so the change
+        is invisible to the caller. */
+    private static ClassLoader pushTccl(ClassLoader newTccl) {
+        Thread t = Thread.currentThread();
+        ClassLoader prev = t.getContextClassLoader();
+        if (newTccl != null && newTccl != prev) {
+            t.setContextClassLoader(newTccl);
+            return prev;
+        }
+        // no-change sentinel
+        return null;
+    }
+
+    private static void popTccl(ClassLoader prev) {
+        if (prev != null) {
+            Thread.currentThread().setContextClassLoader(prev);
+        }
+    }
+
     //! creates an instance of the given class
     public static Object newInstance(Constructor<?> c, Object... args) throws Throwable {
+        ClassLoader savedTccl = pushTccl(c.getDeclaringClass().getClassLoader());
         try {
             c.trySetAccessible();
             return c.newInstance(args);
@@ -55,11 +97,14 @@ public class QoreJavaDynamicApi {
                 e0 = e0.getCause();
             }
             throw e0;
+        } finally {
+            popTccl(savedTccl);
         }
     }
 
     //! invokes the given method on the given object and returns the return value
     public static Object invokeMethod(Method m, Object obj, Object... args) throws Throwable {
+        ClassLoader savedTccl = pushTccl(m.getDeclaringClass().getClassLoader());
         try {
             m.trySetAccessible();
             return m.invoke(obj, args);
@@ -69,6 +114,8 @@ public class QoreJavaDynamicApi {
                 e0 = e0.getCause();
             }
             throw e0;
+        } finally {
+            popTccl(savedTccl);
         }
     }
 
