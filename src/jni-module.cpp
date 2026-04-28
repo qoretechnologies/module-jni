@@ -522,11 +522,28 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
 
     assert(jpc->getClassLoader());
 
-    LocalReference<jclass> jcls = Globals::findDefineClass(env, binary_name.c_str(), jpc->getClassLoader(),
-        static_cast<const unsigned char*>(byte_code->getPtr()), byte_code->size());
+    // For module-owned classes (qoremod.<mod>.*) define the class in the loader of the
+    // owning user module's QoreProgram so every consumer Program references the same Class
+    // object — defining in the consumer's loader instead leaves child / parent classes in
+    // disjoint loaders and the JVM rejects override resolution with
+    // "loader constraint violation".  Built-in / unknown modules fall back to the consumer
+    // loader (current behaviour); the QoreURLClassLoader.loadClass routing still routes
+    // qore.Qore.* through syscl.
+    jobject define_loader = jpc->getClassLoader();
+    if (binary_name.size() > 8 && !strncmp(binary_name.c_str(), "qoremod.", 8)) {
+        const char* p = binary_name.c_str() + 8;
+        const char* dot = strchr(p, '.');
+        if (dot && dot > p) {
+            QoreString mod(p, dot - p);
+            jobject mod_loader = Globals::getModuleClassLoader(mod.c_str());
+            if (mod_loader) {
+                define_loader = mod_loader;
+            }
+        }
+    }
 
-    //LocalReference<jclass> jcls = env.defineClass(java_name.c_str(), jpc->getClassLoader(),
-    //    static_cast<const unsigned char*>(byte_code->getPtr()), byte_code->size());
+    LocalReference<jclass> jcls = Globals::findDefineClass(env, binary_name.c_str(), define_loader,
+        static_cast<const unsigned char*>(byte_code->getPtr()), byte_code->size());
 
     // import the class immediately
     qjcm.findCreateQoreClassInProgram(binary_name, java_name.c_str(), new Class(jcls), pgm);

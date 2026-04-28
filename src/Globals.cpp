@@ -37,6 +37,8 @@
 #include "QoreToJava.h"
 #include "QoreJniClassMap.h"
 
+#include <qore/ModuleManager.h>
+
 #include <bzlib.h>
 #include <dlfcn.h>
 #include <mutex>
@@ -1833,14 +1835,31 @@ static jobject JNICALL qore_url_classloader_dummy(JNIEnv* jenv, jclass jcls) {
 
 // Returns the canonical "system" QoreURLClassLoader.
 //
-// Used by QoreURLClassLoader.loadClass / loadClassWithPtr to route qoremod.<mod>.*
-// lookups to the loader that owns the canonical Class for module-owned types so all
-// loaders sharing the same module see the same Class object.  Without this, every loader
-// outside syscl's parent chain that needs e.g. qoremod.SqlUtil.AbstractForeignConstraint
-// independently generates its own copy and the JVM rejects subsequent define-class for
-// overriding subclasses with "loader constraint violation".
+// Syscl is now used only as the fallback home for `qore.Qore.*` built-in classes and for
+// module classes whose owning Program cannot be resolved (binary modules, modules not yet
+// loaded under their canonical name).  `qoremod.<mod>.*` classes route to the owning user
+// module's Program loader instead — see qore_url_classloader_get_module_loader().
 static jobject JNICALL qore_url_classloader_get_syscl(JNIEnv* jenv, jclass jcls) {
     return Globals::syscl ? (jobject)Globals::syscl : nullptr;
+}
+
+// Returns the QoreURLClassLoader of the named user module's owning Program, or null.
+//
+// Used by QoreURLClassLoader.loadClass / loadClassWithPtr (and by the C++ `define-class`
+// module command) to route every reference to `qoremod.<mod>.*` through a single loader so
+// all consumer Programs see the same Class object.  Returns null for unknown modules and
+// for binary modules that don't have an owning user Program — callers fall back to syscl.
+static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jclass jcls, jstring jname) {
+    if (!jname) {
+        return nullptr;
+    }
+    const char* utf = jenv->GetStringUTFChars(jname, nullptr);
+    if (!utf) {
+        return nullptr;
+    }
+    jobject loader = Globals::getModuleClassLoader(utf);
+    jenv->ReleaseStringUTFChars(jname, utf);
+    return loader;
 }
 
 static jobject JNICALL qore_url_classloader_debug(JNIEnv* jenv, jclass jcls, jlong ptr) {
@@ -2389,6 +2408,11 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
         const_cast<char*>("()Lorg/qore/jni/QoreURLClassLoader;"),
         reinterpret_cast<void*>(qore_url_classloader_get_syscl),
     },
+    {
+        const_cast<char*>("getModuleLoader0"),
+        const_cast<char*>("(Ljava/lang/String;)Lorg/qore/jni/QoreURLClassLoader;"),
+        reinterpret_cast<void*>(qore_url_classloader_get_module_loader),
+    },
 };
 
 static JNINativeMethod javaClassBuilderNativeMethods[] = {
@@ -2416,6 +2440,25 @@ static JNINativeMethod javaClassBuilderNativeMethods[] = {
 
 // calling Env::FindClass() when the class is not available will cause the class lookup to fail later after we define it
 // therefore we have to only define the class if the java classes have not already been loaded
+jobject Globals::getModuleClassLoader(const char* name) {
+    if (!name || !*name) {
+        return nullptr;
+    }
+    QoreProgram* pgm = ModuleManager::findUserModuleProgram(name);
+    if (!pgm) {
+        return nullptr;
+    }
+    // Lazily attach JniExternalProgramData (and thus a QoreURLClassLoader) to the module's
+    // Program if it doesn't already have one — modules that don't `%requires jni` themselves
+    // still need a single canonical loader to host their `qoremod.<mod>.*` Java classes for
+    // every consumer Program that references them.
+    JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
+    if (!jpc) {
+        return nullptr;
+    }
+    return jpc->getClassLoader();
+}
+
 LocalReference<jclass> Globals::findDefineClass(Env& env, const char* name, jobject loader, const unsigned char* buf,
     jsize bufLen) {
     if (!loader) {

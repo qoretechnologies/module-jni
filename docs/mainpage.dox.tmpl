@@ -991,10 +991,14 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
         share one Java identity.
       - <b>Cross-loader sharing.</b> Even with the canonical name, a class can still get
         loaded into multiple \c QoreURLClassLoader instances (qjar, docs builds, and Qorus
-        workflow Programs each create their own).  module-jni now routes
-        \c qoremod.<i>mod</i>.<i>...</i> and \c qore.Qore.<i>...</i> lookups through the
-        process-wide system classloader (\c Globals::syscl) so all loaders that need the
-        same shared type resolve to the same defining loader and the same \c Class object.
+        workflow Programs each create their own).  module-jni now defines each
+        \c qoremod.<i>mod</i>.<i>...</i> class in exactly one place — the
+        \c QoreURLClassLoader of the owning user module's QoreProgram — and every consumer
+        Program delegates \c loadClass / \c define-class for that prefix to it.  The
+        module's Program lazily acquires a JNI classloader on first access, so modules that
+        don't \c \%requires \c jni themselves still have a single canonical home for their
+        Java classes.  \c qore.Qore.<i>...</i> built-ins (which have no owning user Program)
+        keep routing through the process-wide system classloader (\c Globals::syscl).
         Genuinely per-Program names (\c qore.<i>X</i>.<i>Y</i> with X ≠ \c Qore, single-
         segment \c qore.<i>X</i>) stay per-loader by design.
     - added the <a href="../../JakartaJmsDataProvider/html/index.html">JakartaJmsDataProvider</a>

@@ -484,6 +484,19 @@ public:
     DLLLOCAL static LocalReference<jclass> findDefineClass(Env& env, const char* name, jobject loader,
             const unsigned char* buf, jsize bufLen);
 
+    //! Returns the QoreURLClassLoader of the named user module's owning Program.
+    /** User modules (.qm files) live in a dedicated QoreProgram that is the canonical home for
+        their %Qore classes — and thus for the corresponding `qoremod.<mod>.*` Java classes.
+        Routing every defineClass / loadClass for `qoremod.<mod>.*` through this single loader
+        is what keeps the class identity consistent across consumer Programs and avoids
+        cross-loader LinkageError on subclass/override resolution.
+
+        @param name the module name
+        @return the loader (a global jobject) or nullptr if the module is not loaded as a user
+                module or has no JNI external data attached
+    */
+    DLLLOCAL static jobject getModuleClassLoader(const char* name);
+
 private:
     DLLLOCAL static ExceptionSink global_xsink;
     DLLLOCAL static std::unique_ptr<QoreProgramHelper> qph;
