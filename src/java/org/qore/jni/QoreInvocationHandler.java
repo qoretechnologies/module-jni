@@ -1,51 +1,19 @@
 package org.qore.jni;
 
-import java.lang.ref.Cleaner;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
 public class QoreInvocationHandler implements InvocationHandler {
-    // Use volatile + double-checked locking for truly lazy initialization
-    // The holder pattern doesn't work during bootstrap because native library loading
-    // triggers class initialization. This pattern ensures the Cleaner is only created
-    // when getCleaner() is actually called from a constructor.
-    // Cleaner.create() calls getSystemClassLoader() which fails during system class loader setup
-    private static volatile Cleaner cleanerInstance;
-
-    private static Cleaner getCleaner() {
-        Cleaner c = cleanerInstance;
-        if (c == null) {
-            synchronized (QoreInvocationHandler.class) {
-                c = cleanerInstance;
-                if (c == null) {
-                    c = Cleaner.create();
-                    cleanerInstance = c;
-                }
-            }
-        }
-        return c;
-    }
-
-    private final CleanupState state;
-    private final Cleaner.Cleanable cleanable;
-
-    // Separate class to hold state - must NOT reference outer object
-    private static class CleanupState implements Runnable {
+    /** State holder for the explicit invoke()/destroy() ref-count protocol.
+        Phantom-driven cleanup goes through {@link NativeCleanup}; this state
+        only protects the explicit-destroy path against concurrent invokers. */
+    private static class State {
         private long ptr;
         private int counter;
 
-        CleanupState(long ptr) {
+        State(long ptr) {
             this.ptr = ptr;
             this.counter = 1;
-        }
-
-        @Override
-        public synchronized void run() {
-            if (ptr != 0) {
-                release0(ptr);
-                ptr = 0;
-                counter = 0;
-            }
         }
 
         synchronized long ref() {
@@ -63,27 +31,35 @@ public class QoreInvocationHandler implements InvocationHandler {
             }
         }
 
-        synchronized void destroy() {
-            while (true) {
-                if (counter == 0) {
-                    return;
-                }
-                if (counter == 1) {
-                    run();
-                    return;
-                }
+        /** Wait for in-flight invokers, then take ownership of the pointer
+            and reset state.  Returns the pointer to release (0 if already
+            destroyed); caller is responsible for the native release.  Does
+            not call release0 itself so the explicit-destroy path can also
+            inform NativeCleanup to suppress phantom dispatch. */
+        synchronized long acquireAndClearForDestroy() {
+            while (counter > 1) {
                 try {
                     wait();
                 } catch (InterruptedException e) {
-                    // ignored
+                    // ignored — re-enter the wait loop
                 }
             }
+            long p = ptr;
+            ptr = 0;
+            counter = 0;
+            return p;
         }
     }
 
+    private final State state;
+
+    /** Native cleanup handle for phantom-driven release.  See
+        {@link NativeCleanup}. */
+    private final NativeCleanup.Ref ref;
+
     QoreInvocationHandler(long ptr) {
-        this.state = new CleanupState(ptr);
-        this.cleanable = getCleaner().register(this, state);
+        this.state = new State(ptr);
+        this.ref = NativeCleanup.register(this, ptr, NativeCleanup.KIND_INVOCATION_HANDLER);
     }
 
     @Override
@@ -97,8 +73,11 @@ public class QoreInvocationHandler implements InvocationHandler {
     }
 
     private void destroy() {
-        state.destroy();
-        cleanable.clean();  // Deregister from cleaner
+        long p = state.acquireAndClearForDestroy();
+        NativeCleanup.unregister(ref);
+        if (p != 0) {
+            release0(p);
+        }
     }
 
     private static native void release0(long ptr);

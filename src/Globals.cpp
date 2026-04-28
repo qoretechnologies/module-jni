@@ -32,10 +32,13 @@
 #include "Globals.h"
 #include "Env.h"
 #include "Dispatcher.h"
+#include "InvocationHandler.h"
 #include "ModifiedUtf8String.h"
 #include "Array.h"
 #include "QoreToJava.h"
 #include "QoreJniClassMap.h"
+
+#include <thread>
 
 #include <qore/ModuleManager.h>
 
@@ -2016,16 +2019,15 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 }
 
 #include "JavaClassQoreInvocationHandler.inc"
-#include "JavaClassQoreInvocationHandler_CleanupState.inc"
+#include "JavaClassQoreInvocationHandler_State.inc"
 #include "JavaClassQoreExceptionWrapper.inc"
-#include "JavaClassQoreExceptionWrapper_CleanupState.inc"
 #include "JavaClassQoreException.inc"
 #include "JavaClassQoreObjectBase.inc"
-#include "JavaClassQoreObjectBase_CleanupState.inc"
 #include "JavaClassQoreObject.inc"
 #include "JavaClassQoreJavaClassBase.inc"
 #include "JavaClassQoreClosure.inc"
-#include "JavaClassQoreClosure_CleanupState.inc"
+#include "JavaClassNativeCleanup.inc"
+#include "JavaClassNativeCleanup_Ref.inc"
 #include "JavaClassQoreObjectWrapper.inc"
 #include "JavaClassQoreClosureMarker.inc"
 #include "JavaClassQoreClosureMarkerImpl.inc"
@@ -2098,14 +2100,14 @@ static ucmap_t ucmap = {
     {"org.qore.jni.JavaClassBuilder$2", {java_org_qore_jni_JavaClassBuilder_2_class_len, java_org_qore_jni_JavaClassBuilder_2_class}},
     {"org.qore.jni.StaticEntry", {java_org_qore_jni_StaticEntry_class_len, java_org_qore_jni_StaticEntry_class}},
     {"org.qore.jni.QoreClosure", {java_org_qore_jni_QoreClosure_class_len, java_org_qore_jni_QoreClosure_class}},
-    {"org.qore.jni.QoreClosure$CleanupState", {java_org_qore_jni_QoreClosure_CleanupState_class_len, java_org_qore_jni_QoreClosure_CleanupState_class}},
     {"org.qore.jni.QoreClosureMarker", {java_org_qore_jni_QoreClosureMarker_class_len, java_org_qore_jni_QoreClosureMarker_class}},
     {"org.qore.jni.QoreClosureMarkerImpl", {java_org_qore_jni_QoreClosureMarkerImpl_class_len, java_org_qore_jni_QoreClosureMarkerImpl_class}},
     {"org.qore.jni.QoreException", {java_org_qore_jni_QoreException_class_len, java_org_qore_jni_QoreException_class}},
     {"org.qore.jni.QoreExceptionWrapper", {java_org_qore_jni_QoreExceptionWrapper_class_len, java_org_qore_jni_QoreExceptionWrapper_class}},
-    {"org.qore.jni.QoreExceptionWrapper$CleanupState", {java_org_qore_jni_QoreExceptionWrapper_CleanupState_class_len, java_org_qore_jni_QoreExceptionWrapper_CleanupState_class}},
     {"org.qore.jni.QoreInvocationHandler", {java_org_qore_jni_QoreInvocationHandler_class_len, java_org_qore_jni_QoreInvocationHandler_class}},
-    {"org.qore.jni.QoreInvocationHandler$CleanupState", {java_org_qore_jni_QoreInvocationHandler_CleanupState_class_len, java_org_qore_jni_QoreInvocationHandler_CleanupState_class}},
+    {"org.qore.jni.QoreInvocationHandler$State", {java_org_qore_jni_QoreInvocationHandler_State_class_len, java_org_qore_jni_QoreInvocationHandler_State_class}},
+    {"org.qore.jni.NativeCleanup", {java_org_qore_jni_NativeCleanup_class_len, java_org_qore_jni_NativeCleanup_class}},
+    {"org.qore.jni.NativeCleanup$Ref", {java_org_qore_jni_NativeCleanup_Ref_class_len, java_org_qore_jni_NativeCleanup_Ref_class}},
     {"org.qore.jni.QoreJavaApi", {java_org_qore_jni_QoreJavaApi_class_len, java_org_qore_jni_QoreJavaApi_class}},
     {"org.qore.jni.QoreJavaClassBase", {java_org_qore_jni_QoreJavaClassBase_class_len, java_org_qore_jni_QoreJavaClassBase_class}},
     {"org.qore.jni.QoreJavaDynamicApi", {java_org_qore_jni_QoreJavaDynamicApi_class_len, java_org_qore_jni_QoreJavaDynamicApi_class}},
@@ -2113,7 +2115,6 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreJavaObjectPtr", {java_org_qore_jni_QoreJavaObjectPtr_class_len, java_org_qore_jni_QoreJavaObjectPtr_class}},
     {"org.qore.jni.QoreObject", {java_org_qore_jni_QoreObject_class_len, java_org_qore_jni_QoreObject_class}},
     {"org.qore.jni.QoreObjectBase", {java_org_qore_jni_QoreObjectBase_class_len, java_org_qore_jni_QoreObjectBase_class}},
-    {"org.qore.jni.QoreObjectBase$CleanupState", {java_org_qore_jni_QoreObjectBase_CleanupState_class_len, java_org_qore_jni_QoreObjectBase_CleanupState_class}},
     {"org.qore.jni.QoreObjectWrapper", {java_org_qore_jni_QoreObjectWrapper_class_len, java_org_qore_jni_QoreObjectWrapper_class}},
     {"org.qore.jni.QoreRelativeTime", {java_org_qore_jni_QoreRelativeTime_class_len, java_org_qore_jni_QoreRelativeTime_class}},
     {"org.qore.jni.QoreURLClassLoader", {java_org_qore_jni_QoreURLClassLoader_class_len, java_org_qore_jni_QoreURLClassLoader_class}},
@@ -2271,11 +2272,8 @@ static JNINativeMethod qoreJavaApiNativeMethods[] = {
 };
 
 static JNINativeMethod qoreExceptionWrapperNativeMethods[] = {
-    {
-        const_cast<char*>("release0"),
-        const_cast<char*>("(J)V"),
-        reinterpret_cast<void*>(qore_exception_wrapper_finalize)
-    },
+    // The release path runs in module-jni's NativeCleanup C++ thread, which calls
+    // qore_exception_wrapper_finalize directly without a JNI native-method binding.
     {
         const_cast<char*>("getMessage0"),
         const_cast<char*>("(J)Ljava/lang/String;"),
@@ -2299,11 +2297,11 @@ static JNINativeMethod qoreObjectBaseNativeMethods[] = {
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_object_destroy)
     },
-    {
-        const_cast<char*>("pointerRelease0"),
-        const_cast<char*>("(J)V"),
-        reinterpret_cast<void*>(qore_object_finalize)
-    },
+    // pointerRelease0 (formerly bound to qore_object_finalize) is gone: the
+    // weak-reference release path now runs in module-jni's NativeCleanup C++
+    // thread, which calls qore_object_finalize directly without going through
+    // a JNI native-method invocation adapter.  See native_cleanup_thread_main
+    // in Jvm.cpp.
 };
 
 static JNINativeMethod qoreObjectNativeMethods[] = {
@@ -2345,11 +2343,8 @@ static JNINativeMethod qoreClosureNativeMethods[] = {
         const_cast<char*>("(JJ[Ljava/lang/Object;)Ljava/lang/Object;"),
         reinterpret_cast<void*>(qore_closure_call_save)
     },
-    {
-        const_cast<char*>("release0"),
-        const_cast<char*>("(J)V"),
-        reinterpret_cast<void*>(qore_closure_finalize)
-    },
+    // The release path runs in module-jni's NativeCleanup C++ thread, which calls
+    // qore_closure_finalize directly without a JNI native-method binding.
 };
 
 static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
@@ -2541,6 +2536,15 @@ void Globals::defineQoreURLClassLoader(Env& env) {
     classBooleanWrapper = findDefineClass(env, "org.qore.jni.BooleanWrapper", nullptr,
         java_org_qore_jni_BooleanWrapper_class, java_org_qore_jni_BooleanWrapper_class_len).makeGlobal();
     methodBooleanWrapperSetTrue = env.getMethod(classBooleanWrapper, "setTrue", "()V");
+    // NativeCleanup must be defined in the same loader as the wrapper classes
+    // (QoreInvocationHandler, QoreClosure, QoreExceptionWrapper, QoreObjectBase) since
+    // their constructors call NativeCleanup.register(); the inner Ref class also needs
+    // to be available because we read its `ptr` and `kind` fields from the C++ cleanup
+    // thread.  See native_cleanup_thread_main in Jvm.cpp.
+    findDefineClass(env, "org.qore.jni.NativeCleanup", nullptr,
+        java_org_qore_jni_NativeCleanup_class, java_org_qore_jni_NativeCleanup_class_len).makeGlobal();
+    findDefineClass(env, "org.qore.jni.NativeCleanup$Ref", nullptr,
+        java_org_qore_jni_NativeCleanup_Ref_class, java_org_qore_jni_NativeCleanup_Ref_class_len).makeGlobal();
     findDefineClass(env, "org.qore.jni.ClassModInfo", nullptr,
         java_org_qore_jni_ClassModInfo_class, java_org_qore_jni_ClassModInfo_class_len).makeGlobal();
     findDefineClass(env, "org.qore.jni.QoreURLClassLoader$1", nullptr, java_org_qore_jni_QoreURLClassLoader_1_class,
@@ -2637,9 +2641,10 @@ bool Globals::init() {
 
     classQoreExceptionWrapper = findDefineClass(env, "org.qore.jni.QoreExceptionWrapper", nullptr,
         java_org_qore_jni_QoreExceptionWrapper_class, java_org_qore_jni_QoreExceptionWrapper_class_len).makeGlobal();
-    env.registerNatives(classQoreExceptionWrapper, qoreExceptionWrapperNativeMethods, 2);
-    findDefineClass(env, "org.qore.jni.QoreExceptionWrapper$CleanupState", nullptr,
-        java_org_qore_jni_QoreExceptionWrapper_CleanupState_class, java_org_qore_jni_QoreExceptionWrapper_CleanupState_class_len);
+    env.registerNatives(classQoreExceptionWrapper, qoreExceptionWrapperNativeMethods,
+        sizeof(qoreExceptionWrapperNativeMethods) / sizeof(JNINativeMethod));
+    // QoreExceptionWrapper no longer has a CleanupState inner class — phantom-driven
+    // release runs in the NativeCleanup C++ thread; see Jvm.cpp.
     ctorQoreExceptionWrapper = env.getMethod(classQoreExceptionWrapper, "<init>", "(J)V");
     methodQoreExceptionWrapperGet = env.getMethod(classQoreExceptionWrapper, "get", "()J");
 
@@ -2680,8 +2685,8 @@ bool Globals::init() {
         java_org_qore_jni_QoreObjectBase_class, java_org_qore_jni_QoreObjectBase_class_len).makeGlobal();
     env.registerNatives(classQoreObjectBase, qoreObjectBaseNativeMethods,
         sizeof(qoreObjectBaseNativeMethods) / sizeof(JNINativeMethod));
-    findDefineClass(env, "org.qore.jni.QoreObjectBase$CleanupState", nullptr,
-        java_org_qore_jni_QoreObjectBase_CleanupState_class, java_org_qore_jni_QoreObjectBase_CleanupState_class_len);
+    // QoreObjectBase no longer has a CleanupState inner class — phantom-driven release
+    // runs in the NativeCleanup C++ thread; see Jvm.cpp.
     //printd(5, "QoreObjectBase: %p\n", (jclass)classQoreObjectBase);
 
     classQoreObject = findDefineClass(env, "org.qore.jni.QoreObject", nullptr, java_org_qore_jni_QoreObject_class,
@@ -2704,8 +2709,8 @@ bool Globals::init() {
         java_org_qore_jni_QoreClosure_class_len).makeGlobal();
     env.registerNatives(classQoreClosure, qoreClosureNativeMethods,
         sizeof(qoreClosureNativeMethods) / sizeof(JNINativeMethod));
-    findDefineClass(env, "org.qore.jni.QoreClosure$CleanupState", nullptr,
-        java_org_qore_jni_QoreClosure_CleanupState_class, java_org_qore_jni_QoreClosure_CleanupState_class_len);
+    // QoreClosure no longer has a CleanupState inner class — phantom-driven release
+    // runs in the NativeCleanup C++ thread; see Jvm.cpp.
     ctorQoreClosure = env.getMethod(classQoreClosure, "<init>", "(J)V");
     methodQoreClosureGet = env.getMethod(classQoreClosure, "get", "()J");
 
@@ -2767,8 +2772,12 @@ bool Globals::init() {
     classQoreInvocationHandler = findDefineClass(env, "org.qore.jni.QoreInvocationHandler", nullptr,
         java_org_qore_jni_QoreInvocationHandler_class, java_org_qore_jni_QoreInvocationHandler_class_len).makeGlobal();
     env.registerNatives(classQoreInvocationHandler, invocationHandlerNativeMethods, 2);
-    findDefineClass(env, "org.qore.jni.QoreInvocationHandler$CleanupState", nullptr,
-        java_org_qore_jni_QoreInvocationHandler_CleanupState_class, java_org_qore_jni_QoreInvocationHandler_CleanupState_class_len);
+    // QoreInvocationHandler's inner class is now $State (formerly $CleanupState).
+    // It serves only the explicit-destroy synchronisation; phantom-driven release
+    // runs in the NativeCleanup C++ thread (see Jvm.cpp).
+    findDefineClass(env, "org.qore.jni.QoreInvocationHandler$State", nullptr,
+        java_org_qore_jni_QoreInvocationHandler_State_class,
+        java_org_qore_jni_QoreInvocationHandler_State_class_len);
     ctorQoreInvocationHandler = env.getMethod(classQoreInvocationHandler, "<init>", "(J)V");
     methodQoreInvocationHandlerDestroy = env.getMethod(classQoreInvocationHandler, "destroy", "()V");
 
@@ -3254,6 +3263,178 @@ void Globals::initKotlinScriptEngine() {
         classKotlinScriptEngine = nullptr;
         kotlinScriptEngineInitAttempted = false;
     }
+}
+
+// ---------------- NativeCleanup C++ background thread ---------------------
+//
+// Replaces the legacy java.lang.ref.Cleaner-driven release0 dispatch (which races
+// against JIT codecache reorganisation and class-unloading-driven adapter eviction)
+// with a dedicated C++ thread that polls org.qore.jni.NativeCleanup.queue and
+// dispatches the native release directly in C++ — no JNI native-method invocation
+// adapter on the path, so SIGSEGV in the daemon Common-Cleaner thread cannot
+// happen.
+//
+// Lifecycle:
+//   - startNativeCleanupThread(): called from Jvm::createVM after Globals::init.
+//     Caches NativeCleanup / Ref class refs, the queue static, the markProcessed
+//     and shutdown methods, and Ref's ptr/kind fields.  Spawns the thread.
+//   - The thread main loop calls queue.remove() (blocking).  On each Ref it reads
+//     ptr+kind via JNI field access, dispatches by kind, then calls back into
+//     NativeCleanup.markProcessed(ref) so Java can drop the strong ref.
+//   - stopNativeCleanupThread(): called from Jvm::destroyVM before DestroyJavaVM.
+//     Calls NativeCleanup.shutdown() (which enqueues a sentinel), then joins.
+
+namespace {
+
+GlobalReference<jclass> nativeCleanupClass;
+GlobalReference<jclass> nativeCleanupRefClass;
+GlobalReference<jobject> nativeCleanupQueue;     // global ref to ReferenceQueue
+jmethodID methodReferenceQueueRemove = nullptr;
+jmethodID methodNativeCleanupMarkProcessed = nullptr;
+jmethodID methodNativeCleanupShutdown = nullptr;
+jfieldID fieldNativeCleanupRefPtr = nullptr;
+jfieldID fieldNativeCleanupRefKind = nullptr;
+
+// Heap-allocated so we don't trigger std::terminate on abnormal exit.  A
+// std::thread destructor on a joinable thread aborts the process with
+// "terminate called without an active exception".  Some module-jni consumers
+// (notably the external `oload --compile-java` worker spawned by qorus-core)
+// can exit without going through Jvm::destroyVM, in which case
+// stopNativeCleanupThread is never called.  Leaking the heap pointer at
+// abnormal exit is benign — the kernel reaps the thread when the process is
+// torn down.
+std::thread* native_cleanup_thread = nullptr;
+std::atomic<bool> native_cleanup_thread_started{false};
+
+void native_cleanup_dispatch(jlong ptr, jint kind) {
+    if (!ptr) {
+        return;
+    }
+    switch (kind) {
+        case 0: {  // NativeCleanup.KIND_INVOCATION_HANDLER
+            delete reinterpret_cast<Dispatcher*>(ptr);
+            break;
+        }
+        case 1: {  // NativeCleanup.KIND_CLOSURE
+            ResolvedCallReferenceNode* call = reinterpret_cast<ResolvedCallReferenceNode*>(ptr);
+            ExceptionSink xsink;
+            call->deref(&xsink);
+            // any exception is unrecoverable at this point; drop it
+            xsink.clear();
+            break;
+        }
+        case 2: {  // NativeCleanup.KIND_EXCEPTION_WRAPPER
+            ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
+            xsink->clear();
+            delete xsink;
+            break;
+        }
+        case 3: {  // NativeCleanup.KIND_OBJECT_BASE_WEAK
+            reinterpret_cast<QoreObject*>(ptr)->tDeref();
+            break;
+        }
+        default:
+            // unknown kind — silently ignore
+            break;
+    }
+}
+
+void native_cleanup_thread_main(JavaVM* vm) {
+    JNIEnv* env;
+    JavaVMAttachArgs args = {JNI_VERSION_21, const_cast<char*>("QoreNativeCleanup"), nullptr};
+    if (vm->AttachCurrentThreadAsDaemon(reinterpret_cast<void**>(&env), &args) != JNI_OK) {
+        return;
+    }
+
+    while (true) {
+        // Block on queue.remove(); returns when a Ref has been enqueued (either by
+        // GC of its referent, or by NativeCleanup.shutdown() for the sentinel).
+        jobject ref = env->CallObjectMethod(static_cast<jobject>(nativeCleanupQueue),
+            methodReferenceQueueRemove);
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+            break;
+        }
+        if (!ref) {
+            // remove() with no timeout shouldn't return null; defensive break
+            break;
+        }
+
+        jlong ptr = env->GetLongField(ref, fieldNativeCleanupRefPtr);
+        jint kind = env->GetIntField(ref, fieldNativeCleanupRefKind);
+
+        if (kind == -1) {  // NativeCleanup.KIND_SENTINEL
+            // Notify Java side to release the sentinel ref, then exit.
+            env->CallStaticVoidMethod(static_cast<jclass>(nativeCleanupClass),
+                methodNativeCleanupMarkProcessed, ref);
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+            }
+            env->DeleteLocalRef(ref);
+            break;
+        }
+
+        // Dispatch native cleanup directly in C++ — no JNI adapter on the call path.
+        native_cleanup_dispatch(ptr, kind);
+
+        env->CallStaticVoidMethod(static_cast<jclass>(nativeCleanupClass),
+            methodNativeCleanupMarkProcessed, ref);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+        }
+        env->DeleteLocalRef(ref);
+    }
+
+    vm->DetachCurrentThread();
+}
+
+}  // anonymous namespace
+
+void Globals::startNativeCleanupThread() {
+    if (native_cleanup_thread_started.exchange(true)) {
+        return;
+    }
+
+    Env env;
+    nativeCleanupClass = env.findClass("org/qore/jni/NativeCleanup").makeGlobal();
+    nativeCleanupRefClass = env.findClass("org/qore/jni/NativeCleanup$Ref").makeGlobal();
+
+    fieldNativeCleanupRefPtr = env.getField(nativeCleanupRefClass, "ptr", "J");
+    fieldNativeCleanupRefKind = env.getField(nativeCleanupRefClass, "kind", "I");
+
+    jfieldID fieldQueue = env.getStaticField(nativeCleanupClass, "queue", "Ljava/lang/ref/ReferenceQueue;");
+    nativeCleanupQueue = env.getStaticObjectField(nativeCleanupClass, fieldQueue).makeGlobal();
+
+    LocalReference<jclass> refQueueCls = env.findClass("java/lang/ref/ReferenceQueue");
+    methodReferenceQueueRemove = env.getMethod(refQueueCls, "remove", "()Ljava/lang/ref/Reference;");
+
+    methodNativeCleanupMarkProcessed = env.getStaticMethod(nativeCleanupClass, "markProcessed",
+        "(Lorg/qore/jni/NativeCleanup$Ref;)V");
+    methodNativeCleanupShutdown = env.getStaticMethod(nativeCleanupClass, "shutdown", "()V");
+
+    JavaVM* vm = Jvm::getVm();
+    native_cleanup_thread = new std::thread([vm]() { native_cleanup_thread_main(vm); });
+}
+
+void Globals::stopNativeCleanupThread() {
+    if (!native_cleanup_thread_started.load()) {
+        return;
+    }
+    // Wake the thread by enqueueing the sentinel; loop will see kind=-1 and exit.
+    Env env;
+    env.callStaticVoidMethod(nativeCleanupClass, methodNativeCleanupShutdown, nullptr);
+
+    if (native_cleanup_thread && native_cleanup_thread->joinable()) {
+        native_cleanup_thread->join();
+    }
+    delete native_cleanup_thread;
+    native_cleanup_thread = nullptr;
+
+    nativeCleanupQueue = nullptr;
+    nativeCleanupClass = nullptr;
+    nativeCleanupRefClass = nullptr;
+    native_cleanup_thread_started.store(false);
 }
 
 void Globals::cleanup() {

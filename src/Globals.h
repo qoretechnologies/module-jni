@@ -450,6 +450,20 @@ public:
     DLLLOCAL static void cleanup();
     DLLLOCAL static Type getType(jclass cls);
 
+    //! Spawn the NativeCleanup C++ background thread.
+    /** Replaces the legacy java.lang.ref.Cleaner-driven release0 dispatch with a
+        thread that polls org.qore.jni.NativeCleanup.queue and dispatches the native
+        cleanup directly in C++ — no JNI native-method invocation adapter, so the
+        path is immune to JIT codecache reorganisation and class-unloading-driven
+        adapter eviction.  Called from Jvm::createVM after JNI_CreateJavaVM and
+        Globals static initialisation. */
+    DLLLOCAL static void startNativeCleanupThread();
+
+    //! Stop the NativeCleanup C++ background thread and join it.
+    /** Enqueues a sentinel onto NativeCleanup.queue to wake the thread, then joins.
+        Called from Jvm::destroyVM before DestroyJavaVM. */
+    DLLLOCAL static void stopNativeCleanupThread();
+
     DLLLOCAL static jlong getContextProgram(jobject new_syscl, bool& created);
     DLLLOCAL static QoreProgram* createJavaContextProgram();
     DLLLOCAL static QoreProgram* getJavaContextProgram();

@@ -225,6 +225,21 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         return;
     }
 
+    // Spawn the NativeCleanup C++ background thread now that the bootstrap
+    // classes (NativeCleanup, NativeCleanup$Ref, the wrapper classes) are
+    // defined and the JNI ID caches the thread depends on can be populated.
+    try {
+        Globals::startNativeCleanupThread();
+    } catch (JavaException& e) {
+        jni_init_failed = true;
+        xsink.raiseException("MODULE-INIT-ERROR", e.toString());
+        return;
+    } catch (Exception& e) {
+        jni_init_failed = true;
+        xsink.raiseException("MODULE-INIT-ERROR", "Failed to start native cleanup thread");
+        return;
+    }
+
     jni::setup_jdbc_driver();
 
     printd(5, "jni_module_init() initialized JVM\n");

@@ -3,67 +3,25 @@
  */
 package org.qore.jni;
 
-import java.lang.ref.Cleaner;
-
 //! Java QoreClosure class
 /**
     @since jni 1.2
 */
 public class QoreClosure implements QoreClosureMarkerImpl {
-    // Use volatile + double-checked locking for truly lazy initialization
-    // The holder pattern doesn't work during bootstrap because native library loading
-    // triggers class initialization. This pattern ensures the Cleaner is only created
-    // when getCleaner() is actually called from a constructor.
-    // Cleaner.create() calls getSystemClassLoader() which fails during system class loader setup
-    private static volatile Cleaner cleanerInstance;
-
-    private static Cleaner getCleaner() {
-        Cleaner c = cleanerInstance;
-        if (c == null) {
-            synchronized (QoreClosure.class) {
-                c = cleanerInstance;
-                if (c == null) {
-                    c = Cleaner.create();
-                    cleanerInstance = c;
-                }
-            }
-        }
-        return c;
-    }
-
-    private final CleanupState state;
-    private final Cleaner.Cleanable cleanable;
-
-    // Separate class to hold state - must NOT reference outer object
-    private static class CleanupState implements Runnable {
-        private long obj;
-
-        CleanupState(long obj) {
-            this.obj = obj;
-        }
-
-        @Override
-        public synchronized void run() {
-            if (obj != 0) {
-                release0(obj);
-                obj = 0;
-            }
-        }
-
-        synchronized long get() {
-            return obj;
-        }
-    }
+    /** Native cleanup handle.  Holds the Qore object pointer and the kind
+        discriminator used by module-jni's C++ cleanup thread to dispatch
+        the native release directly (avoiding the JIT-trampoline race in
+        the legacy java.lang.ref.Cleaner path).  See {@link NativeCleanup}. */
+    private final NativeCleanup.Ref ref;
 
     //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
     public QoreClosure(long obj) {
-        this.state = new CleanupState(obj);
-        this.cleanable = getCleaner().register(this, state);
+        this.ref = NativeCleanup.register(this, obj, NativeCleanup.KIND_CLOSURE);
     }
 
     //! returns the pointer to the object
     public long get() {
-        return state.get();
+        return ref.ptr;
     }
 
     //! calls the closure / call reference with the given arguments and returns the result
@@ -75,7 +33,7 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see callSave()
     */
     public Object call(Object... args) throws Throwable {
-        return call0(QoreURLClassLoader.getProgramPtr(), state.get(), args);
+        return call0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
     }
 
     //! calls the closure / call reference with the given arguments and returns the result
@@ -87,7 +45,7 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see callMethodArgsSave()
     */
     public Object callArgs(Object[] args) throws Throwable {
-        return call0(QoreURLClassLoader.getProgramPtr(), state.get(), args);
+        return call0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
     }
 
     //! Calls the closure / call reference with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
@@ -102,7 +60,7 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see jni_qore_object_lifecycle_management
      */
     public Object callSave(Object... args) throws Throwable {
-        return callSave0(QoreURLClassLoader.getProgramPtr(), state.get(), args);
+        return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
     }
 
     //! Calls the closure / call reference with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
@@ -117,10 +75,9 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see jni_qore_object_lifecycle_management
      */
     public Object callArgsSave(String name, Object[] args) throws Throwable {
-        return callSave0(QoreURLClassLoader.getProgramPtr(), state.get(), args);
+        return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
     }
 
     private native Object call0(long pgm_ptr, long obj_ptr, Object... args);
     private native Object callSave0(long pgm_ptr, long obj_ptr, Object... args);
-    private static native void release0(long obj_ptr);
 }

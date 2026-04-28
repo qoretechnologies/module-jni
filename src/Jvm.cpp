@@ -257,6 +257,11 @@ QoreStringNode* Jvm::createVM() {
 void Jvm::destroyVM() {
     assert(vm);
 
+    // Drain and join the NativeCleanup C++ background thread before the JVM
+    // teardown begins.  Must happen before Globals::cleanup() so the JNI ID
+    // caches the thread relies on are still valid.
+    Globals::stopNativeCleanupThread();
+
     Globals::cleanup();
     vm->DestroyJavaVM();
     vm = nullptr;

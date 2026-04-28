@@ -109,6 +109,15 @@ public:
         return native_access_option_enabled;
     }
 
+    /**
+     * \brief Returns the JavaVM pointer.  Used by the NativeCleanup C++
+     * background thread (Globals::startNativeCleanupThread) to attach
+     * itself as a daemon JNI thread.
+     */
+    static JavaVM* getVm() {
+        return vm;
+    }
+
 private:
     /**
      * \brief This is a static class - no instances are allowed.
