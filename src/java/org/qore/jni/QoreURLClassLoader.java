@@ -503,13 +503,25 @@ public class QoreURLClassLoader extends URLClassLoader {
                     if (shared != null) {
                         return shared;
                     }
+                    QoreURLClassLoader sys = getSyscl0();
+                    boolean targetIsSyscl = (target == sys);
                     try {
-                        // Generate via target's own Program context (target.generateByteCode
-                        // uses target's pgm_ptr) so the bytecode reflects target's canonical
-                        // QoreClass, then defineClassUnconditional on target so the resulting
-                        // Class is rooted there.  We deliberately do NOT call
-                        // target.loadClass(): when target is a peer QoreURLClassLoader its
-                        // parent chain can route back through this loader and recurse.
+                        if (targetIsSyscl) {
+                            // syscl's parent chain bottoms out at the platform loader, so
+                            // delegating syscl.loadClass() doesn't recurse back through any
+                            // QoreURLClassLoader.  Letting syscl's normal load path run also
+                            // preserves syscl's pre-registered natives (e.g.
+                            // org.qore.jni.JavaClassBuilder) and bootstrap-defined helpers
+                            // that we need bound on the canonical Class object.
+                            return target.loadClass(bin_name);
+                        }
+                        // Module-owned canonical loader: don't call target.loadClass —
+                        // target's parent chain goes back through other QoreURLClassLoader
+                        // instances (consumer Programs), which would reroute to target and
+                        // recurse.  Generate via target's own Program context (target.
+                        // generateByteCode uses target's pgm_ptr) so the bytecode reflects
+                        // target's canonical QoreClass, then defineClassUnconditional on
+                        // target so the resulting Class is rooted there.
                         byte[] bytes = target.generateByteCode(bin_name);
                         synchronized (target.getClassLoadingLock(bin_name)) {
                             shared = target.checkLoadedClass(bin_name);
@@ -637,7 +649,12 @@ public class QoreURLClassLoader extends URLClassLoader {
                     if (shared != null) {
                         return shared;
                     }
+                    QoreURLClassLoader sys = getSyscl0();
+                    boolean targetIsSyscl = (target == sys);
                     try {
+                        if (targetIsSyscl) {
+                            return target.loadClassWithPtr(bin_name, class_ptr);
+                        }
                         // generate in target's program context — see loadClass() above
                         byte[] bytes = target.generateByteCode(bin_name, class_ptr);
                         synchronized (target.getClassLoadingLock(bin_name)) {
@@ -715,29 +732,38 @@ public class QoreURLClassLoader extends URLClassLoader {
         if (bin_name.startsWith("qoremod.") && bin_name.length() > 8) {
             return true;
         }
-        // qore.<X>.<Y>... can be a shadow / runtime-aliased class from a binary module
-        // (e.g. qore.Qore.Logger.LoggerInterface from logger_bin) or a Qorus injection
-        // (qore.OMQ.UserApi.*); the owning loader is determined by QoreClass lookup at
-        // resolveSharedClassLoader() time, not by name shape.
-        if (bin_name.startsWith("qore.") && bin_name.length() > 5
-                && bin_name.indexOf('.', 5) > 0) {
+        if (bin_name.startsWith("qore.Qore.") && bin_name.length() > 10) {
             return true;
         }
         return false;
     }
 
     //! Resolves the canonical loader for a shared dynamic class name.
-    /** Routes to the loader of the QoreProgram that owns the underlying QoreClass.  For
-        {@code qoremod.<mod>.<X>} this is the module's user-Program; for legacy / shadow
-        {@code qore.<X>.<Y>...} forms it is whichever Program owns the QoreClass at qpath
-        {@code ::<X>::<Y>::...} as visible from the calling loader's Program (typically
-        the host Program that loaded the binary module providing the class).
-
-        Returns {@code null} when no canonical owner is known; callers should fall back
-        to local generation in that case.
+    /** For {@code qoremod.<mod>.*} returns the owning module's Program loader (preferred
+        home — every consumer Program references the same Class object).  For
+        {@code qore.Qore.*} returns syscl (built-in classes have no owning user Program).
+        Returns {@code null} if no canonical loader can be resolved (e.g. an unloaded
+        module or a binary module without an owning user Program); callers should fall
+        back to local generation in that case.
      */
-    private QoreURLClassLoader resolveSharedClassLoader(String bin_name) {
-        return getCanonicalLoader0(bin_name);
+    static private QoreURLClassLoader resolveSharedClassLoader(String bin_name) {
+        if (bin_name.startsWith("qoremod.") && bin_name.length() > 8) {
+            int dot = bin_name.indexOf('.', 8);
+            if (dot > 8) {
+                String mod = bin_name.substring(8, dot);
+                QoreURLClassLoader cl = getModuleLoader0(mod);
+                if (cl != null) {
+                    return cl;
+                }
+            }
+            // fall back to syscl — covers binary modules and modules whose owning user
+            // Program isn't reachable yet
+            return getSyscl0();
+        }
+        if (bin_name.startsWith("qore.Qore.") && bin_name.length() > 10) {
+            return getSyscl0();
+        }
+        return null;
     }
 
     //! Returns true if the given package name is dynamic
@@ -1231,22 +1257,4 @@ public class QoreURLClassLoader extends URLClassLoader {
         have an owning user Program; callers fall back to the syscl loader.
     */
     static private native QoreURLClassLoader getModuleLoader0(String module_name);
-
-    //! Returns the canonical {@link QoreURLClassLoader} for {@code bin_name}.
-    /** The canonical loader is the {@link QoreURLClassLoader} of the QoreProgram that owns
-        the underlying QoreClass.  Two name shapes are dispatched:
-        <ul>
-        <li>{@code qoremod.<mod>.<X>} resolves to the user module's owning Program
-        <li>{@code qore.<X>.<Y>...} converts to qpath {@code ::<X>::<Y>::...} and looks the
-            class up in the calling loader's Program (which is presumed to have the
-            relevant module loaded — that is how the Java reference reached us); routes to
-            {@code qc.getProgram()} of the matching QoreClass.  Catches binary-module
-            shadow classes such as {@code qore.Qore.Logger.LoggerInterface} and Qorus
-            injections such as {@code qore.OMQ.UserApi.AbstractUserApi}.
-        </ul>
-
-        Returns {@code null} when no canonical owner can be determined; callers fall back
-        to local generation.
-    */
-    private native QoreURLClassLoader getCanonicalLoader0(String bin_name);
 }

@@ -498,27 +498,6 @@ public:
     DLLLOCAL static LocalReference<jclass> findDefineClass(Env& env, const char* name, jobject loader,
             const unsigned char* buf, jsize bufLen);
 
-    //! Returns the canonical {@link QoreURLClassLoader} for a Java binary name.
-    /** The canonical loader is the one belonging to the QoreProgram that owns the
-        underlying QoreClass — every consumer Program then references the same Class
-        object regardless of which loader observed the name first.  Handles both shapes:
-        - `qoremod.<mod>.<X>` is resolved by module name (the owning user module's Program)
-        - `qore.<X>.<Y>...` is converted to a Qore qpath (`::X::Y::...`), looked up in the
-          calling loader's Program, and routed to `qc.getProgram()` of the matching QoreClass
-
-        Lazily attaches JniExternalProgramData (and thus a QoreURLClassLoader) to the
-        owning Program if it doesn't yet have one.  Returns nullptr when no canonical
-        owner can be determined (binary modules with no owning user Program, names that
-        don't resolve to a QoreClass in the calling Program, etc.); callers fall back to
-        local generation in that case.
-
-        @param env JNI Env
-        @param this_loader the calling QoreURLClassLoader (used to find the calling Program
-                           for the qpath lookup); may be nullptr to skip the qpath path
-        @param bin_name the Java binary name being resolved
-    */
-    DLLLOCAL static jobject getCanonicalLoader(Env& env, jobject this_loader, const char* bin_name);
-
     //! Returns the QoreURLClassLoader of the named user module's owning Program.
     /** User modules (.qm files) live in a dedicated QoreProgram that is the canonical home for
         their %Qore classes — and thus for the corresponding `qoremod.<mod>.*` Java classes.
