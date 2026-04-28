@@ -757,6 +757,7 @@ ENDMACRO(ADD_JAVA_COMPILER_SOURCE)
 # binaries to install
 set (JNI_BIN_FILES
     bin/qjava2jar
+    bin/qjava-migrate-imports
     bin/qjavac
     bin/qkotlinc
     bin/download-kotlin-scripting-jars

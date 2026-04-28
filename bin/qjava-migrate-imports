@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+
+/** Rewrites legacy `qore.<mod>.<rest>` Java imports / fully-qualified references to the
+    canonical `qoremod.<mod>.<rest>` form for module-owned classes.
+
+    Background: as of jni 2.7.0, %Qore module classes are exposed in Java under exactly
+    one canonical binary name, `qoremod.<mod>.<rest>`.  The legacy `qore.<mod>.<rest>`
+    shape is no longer accepted at runtime — looking it up raises ClassNotFoundException.
+    Built-in `qore.Qore.*` classes (e.g. qore.Qore.SQL.AbstractDatasource) and per-Program
+    runtime-namespace classes (e.g. qore.OMQ.* in Qorus) are not module-owned and stay as
+    `qore.<X>.<Y>`; they are NOT rewritten.
+
+    This script does a best-effort source-level rewrite by leading-segment match:
+
+      - `qore.<X>.<Y>...` is rewritten to `qoremod.<X>.<Y>...` when <X> is NOT in the
+        keep-list (default: Qore, OMQ).
+      - Add more "keep" prefixes via --keep=<X>,<Y>,... if your codebase uses other
+        per-Program qore.* namespaces (e.g. a custom runtime namespace).
+
+    The script does not consult the running %Qore process to verify module names — that
+    would require the script to load every candidate module and check checkFeature().
+    The leading-segment heuristic is correct for any codebase that follows the convention
+    "qore.<module>.* names a module-owned class" (which all current Qore modules do).
+    If the rewrite turns out to be wrong for a specific name, the resulting build will
+    fail with ClassNotFoundException naming the canonical form to use; revert that one
+    line and re-add it to --keep.
+*/
+
+%new-style
+%require-types
+%strict-args
+%enable-all-warnings
+%no-child-restrictions
+
+%exec-class QJavaMigrateImports
+
+const Opts = {
+    "help":      "h,help",
+    "dry_run":   "n,dry-run",
+    "in_place":  "i,in-place",
+    "backup":    "b,backup",
+    "keep":      "k,keep=s",
+    "verbose":   "v,verbose",
+};
+
+const DefaultKeep = ("Qore", "OMQ");
+
+class QJavaMigrateImports {
+    private {
+        hash<auto> opts;
+        list<string> keep;
+        # absolute path -> count of rewrites applied
+        hash<string, int> changed;
+        int total_rewrites = 0;
+    }
+
+    constructor() {
+        opts = GetOpt::parseExit(Opts, \ARGV);
+        if (opts.help || ARGV.empty()) {
+            usage();
+        }
+
+        if (!opts.dry_run && !opts.in_place) {
+            stderr.printf("error: pick exactly one of --dry-run or --in-place\n");
+            exit(2);
+        }
+
+        keep = DefaultKeep;
+        if (opts.keep) {
+            keep += (opts.keep =~ x/[^,\s]+/g);
+        }
+
+        foreach string arg in (ARGV) {
+            processArg(arg);
+        }
+
+        printf("\n%d file%s rewritten, %d import%s migrated%s\n",
+            changed.size(), changed.size() == 1 ? "" : "s",
+            total_rewrites, total_rewrites == 1 ? "" : "s",
+            opts.dry_run ? " (dry run — no files modified)" : "");
+    }
+
+    private processArg(string path) {
+        if (is_dir(path)) {
+            Dir d();
+            d.chdir(path);
+            foreach string f in (d.listFiles("\\.java$")) {
+                processFile(path + DirSep + f);
+            }
+            foreach string sub_dir in (d.listDirs()) {
+                if (sub_dir == "." || sub_dir == "..") {
+                    continue;
+                }
+                processArg(path + DirSep + sub_dir);
+            }
+        } else if (is_file(path)) {
+            processFile(path);
+        } else {
+            stderr.printf("warning: skipping non-existent path: %s\n", path);
+        }
+    }
+
+    private processFile(string path) {
+        string original = ReadOnlyFile::readTextFile(path);
+        string updated = rewrite(original, path);
+
+        int file_count = countDelta(original, updated);
+        if (file_count == 0) {
+            return;
+        }
+
+        changed{path} = file_count;
+        total_rewrites += file_count;
+        printf("%s: %d rewrite%s\n", path, file_count, file_count == 1 ? "" : "s");
+
+        if (opts.dry_run) {
+            return;
+        }
+        if (opts.backup) {
+            File backup_f();
+            backup_f.open2(path + ".bak", O_CREAT | O_WRONLY | O_TRUNC);
+            backup_f.write(original);
+        }
+        File out();
+        out.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        out.write(updated);
+    }
+
+    # walk through the source rewriting `qore.<X>.` to `qoremod.<X>.` unless X is in keep.
+    private string rewrite(string src, string path) {
+        string out = "";
+        int len = src.length();
+        int i = 0;
+        while (i < len) {
+            int next = src.find("qore.", i);
+            if (next < 0) {
+                out += src.substr(i);
+                break;
+            }
+            # word-boundary check: skip if preceded by an identifier char or a dot.
+            # The dot exclusion catches references like `org.qore.jni.*` and
+            # `com.example.qore.Util` where `qore.` is part of a longer dotted path.
+            if (next > 0) {
+                string prev = src.substr(next - 1, 1);
+                if (prev =~ /[A-Za-z0-9_\$.]/) {
+                    out += src.substr(i, next - i + 5);
+                    i = next + 5;
+                    continue;
+                }
+            }
+            # extract the identifier following "qore."
+            int id_start = next + 5;
+            int id_end = id_start;
+            while (id_end < len) {
+                string c = src.substr(id_end, 1);
+                if (c =~ /[A-Za-z0-9_\$]/) {
+                    ++id_end;
+                } else {
+                    break;
+                }
+            }
+            string ns = src.substr(id_start, id_end - id_start);
+            # only rewrite when followed by another `.` AND ns is not in the keep-list
+            if (id_end < len && src.substr(id_end, 1) == "." && ns != "" && !inlist(ns, keep)) {
+                if (opts.verbose) {
+                    printf("  %s: qore.%s.* -> qoremod.%s.*\n", path, ns, ns);
+                }
+                out += src.substr(i, next - i);
+                out += "qoremod." + ns;
+                i = id_end;
+            } else {
+                out += src.substr(i, id_end - i);
+                i = id_end;
+            }
+        }
+        return out;
+    }
+
+    # roughly count how many distinct `qoremod.` insertions happened
+    private int countDelta(string original, string updated) {
+        int orig_qoremod = 0;
+        int upd_qoremod = 0;
+        int p = 0;
+        while ((p = original.find("qoremod.", p)) >= 0) {
+            ++orig_qoremod;
+            ++p;
+        }
+        p = 0;
+        while ((p = updated.find("qoremod.", p)) >= 0) {
+            ++upd_qoremod;
+            ++p;
+        }
+        return upd_qoremod - orig_qoremod;
+    }
+
+    static usage() {
+        printf("usage: %s [options] <java-source-or-dir> [...]\n"
+            "\n"
+            "Rewrites legacy qore.<mod>.<rest> Java imports / references to the canonical\n"
+            "qoremod.<mod>.<rest> form (jni 2.7.0+).  Built-in qore.Qore.* and Qorus runtime\n"
+            "qore.OMQ.* are kept as-is by default.\n"
+            "\n"
+            "options:\n"
+            "  -n,--dry-run         scan and report rewrites without modifying files\n"
+            "  -i,--in-place        modify files in place\n"
+            "  -b,--backup          when modifying in place, write <file>.bak first\n"
+            "  -k,--keep=A,B,...    additional leading qore.<X>.* segments to keep\n"
+            "                       (defaults to: %s)\n"
+            "  -v,--verbose         print every individual rewrite\n"
+            "  -h,--help            show this help\n",
+            get_script_name(), DefaultKeep.join(", "));
+        exit(0);
+    }
+}
