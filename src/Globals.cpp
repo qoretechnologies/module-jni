@@ -39,6 +39,7 @@
 #include "QoreJniClassMap.h"
 
 #include <thread>
+#include <unordered_map>
 
 #include <qore/ModuleManager.h>
 
@@ -1455,6 +1456,31 @@ const QoreNamespace* get_module_root_ns(const char* name, QoreProgram* mod_pgm) 
     if (!rv) {
         rv = get_module_root_ns_intern(name, mod_pgm, *all_mod_info, mod_dep_map, false);
     }
+    // mod_pgm may be a consumer Program that loaded the module via a non-reexporting
+    // dependency chain (e.g. mod_pgm `%requires Foo` and Foo `%requires Bar` without
+    // reexport — Bar's namespace doesn't reach mod_pgm).  Fall back to any user-module
+    // Program that has the module's namespace registered, so emission stays consistent
+    // regardless of which consumer is currently driving codegen.  Without this the same
+    // class can be emitted under two different binary names depending on context (legacy
+    // qore.<class-path> vs. canonical qoremod.<mod>.<rest>), and JVM later rejects the
+    // mismatch with NoClassDefFoundError on cross-loader resolution.
+    if (!rv && all_mod_info) {
+        ConstHashIterator hi(*all_mod_info);
+        while (hi.next()) {
+            QoreProgram* probe = ModuleManager::findUserModuleProgram(hi.getKey());
+            if (!probe || probe == mod_pgm) {
+                continue;
+            }
+            mod_dep_map_t probe_dep_map;
+            rv = get_module_root_ns_intern(name, probe, *all_mod_info, probe_dep_map, true);
+            if (!rv) {
+                rv = get_module_root_ns_intern(name, probe, *all_mod_info, probe_dep_map, false);
+            }
+            if (rv) {
+                break;
+            }
+        }
+    }
     if (rv) {
         pi->second.insert(i, qmnc_t::value_type(name, rv));
     }
@@ -1861,6 +1887,28 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
         return nullptr;
     }
     jobject loader = Globals::getModuleClassLoader(utf);
+    jenv->ReleaseStringUTFChars(jname, utf);
+    return loader;
+}
+
+// Instance native: returns the canonical owning loader for `bin_name` from the
+// perspective of `jthis` (the calling QoreURLClassLoader).  See
+// Globals::getCanonicalLoader() for the dispatch rules.
+static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, jobject jthis, jstring jname) {
+    if (!jname) {
+        return nullptr;
+    }
+    const char* utf = jenv->GetStringUTFChars(jname, nullptr);
+    if (!utf) {
+        return nullptr;
+    }
+    jobject loader = nullptr;
+    try {
+        Env env(jenv);
+        loader = Globals::getCanonicalLoader(env, jthis, utf);
+    } catch (...) {
+        // swallow; null tells the Java caller to fall back to local generation
+    }
     jenv->ReleaseStringUTFChars(jname, utf);
     return loader;
 }
@@ -2408,6 +2456,11 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
         const_cast<char*>("(Ljava/lang/String;)Lorg/qore/jni/QoreURLClassLoader;"),
         reinterpret_cast<void*>(qore_url_classloader_get_module_loader),
     },
+    {
+        const_cast<char*>("getCanonicalLoader0"),
+        const_cast<char*>("(Ljava/lang/String;)Lorg/qore/jni/QoreURLClassLoader;"),
+        reinterpret_cast<void*>(qore_url_classloader_get_canonical_loader),
+    },
 };
 
 static JNINativeMethod javaClassBuilderNativeMethods[] = {
@@ -2433,8 +2486,167 @@ static JNINativeMethod javaClassBuilderNativeMethods[] = {
     },
 };
 
-// calling Env::FindClass() when the class is not available will cause the class lookup to fail later after we define it
-// therefore we have to only define the class if the java classes have not already been loaded
+// process-wide cache of canonical-loader resolutions: binary-name -> jobject (global ref).
+// Once a name is resolved, every subsequent caller gets the SAME loader, regardless of
+// which Program drove the first lookup.  Without this, MM.getModuleHash() iteration order
+// is non-deterministic and consumer Programs that locate a binary-module class via the
+// user-module fallback can land on different user-module Programs (and thus different
+// loaders) for the same name, which JVM later rejects with "different Class objects"
+// loader-constraint violations.  The jobject values are global refs (from
+// JniExternalProgramData::classLoader), so they remain valid for the loader's lifetime.
+static std::unordered_map<std::string, jobject> canonical_loader_cache;
+static QoreThreadLock canonical_loader_cache_lock;
+
+jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* bin_name) {
+    if (!bin_name || !*bin_name) {
+        return nullptr;
+    }
+    {
+        AutoLocker al(canonical_loader_cache_lock);
+        auto it = canonical_loader_cache.find(bin_name);
+        if (it != canonical_loader_cache.end()) {
+            return it->second;
+        }
+    }
+
+    // Module-owned: qoremod.<mod>.<X>.  For user modules we use the module's own Program.
+    // For binary modules (no user-module Program) we fall through to the qpath-search
+    // path below — a binary-module class like `qoremod.logger_bin.LoggerInterface` lives
+    // in `Qore::Logger::LoggerInterface` (logger_bin's root ns) and the QoreClass lookup
+    // finds it in any Program that has the module's parent module loaded.
+    bool tried_qpath_via_qoremod = false;
+    std::string qoremod_qpath;
+    if (!strncmp(bin_name, "qoremod.", 8)) {
+        const char* p = bin_name + 8;
+        const char* dot = strchr(p, '.');
+        if (!dot || dot == p) {
+            return nullptr;
+        }
+        std::string mod(p, dot - p);
+        jobject user_loader = getModuleClassLoader(mod.c_str());
+        if (user_loader) {
+            AutoLocker al(canonical_loader_cache_lock);
+            canonical_loader_cache.emplace(bin_name, user_loader);
+            return user_loader;
+        }
+        // binary module: build qpath = <module-root-ns>::<rest-with-dots-as-::>
+        QoreProgram* probe_pgm = nullptr;
+        if (this_loader) {
+            probe_pgm = (QoreProgram*)env.callLongMethod(this_loader,
+                Globals::methodQoreURLClassLoaderGetPtr, nullptr);
+        }
+        if (probe_pgm) {
+            const QoreNamespace* ns = get_module_root_ns(mod.c_str(), probe_pgm);
+            if (ns) {
+                qoremod_qpath = ns->getPath(true);
+                qoremod_qpath.append("::");
+                for (const char* q = dot + 1; *q; ++q) {
+                    if (*q == '.') {
+                        qoremod_qpath.append("::");
+                    } else {
+                        qoremod_qpath.push_back(*q);
+                    }
+                }
+                tried_qpath_via_qoremod = true;
+            }
+        }
+        if (!tried_qpath_via_qoremod) {
+            return nullptr;
+        }
+    }
+
+    // Legacy / shadow form: qore.X.Y.Z corresponds to QoreClass ::X::Y::Z.  The owning
+    // QoreProgram is whatever Program first instantiated the QoreClass — for shadow
+    // classes from a binary module (e.g. logger_bin's ::Qore::Logger::LoggerInterface),
+    // this is the user-module Program that pulled in the binary via `%requires(reexport)`
+    // (Logger's program for LoggerInterface).  We try the calling program first; if its
+    // namespace tree doesn't expose the class (e.g. consumer Program A uses module B,
+    // and B reexports binary module C — C's classes are in B's program but not A's),
+    // we iterate user-module Programs via QMM to find one that has the class.
+    // qore.Python.<X>... — Python module classes are emitted under qore.Python.<...> for
+    // shadow / per-Program forms, but a QoreProgram->findClass("Python::...") call has
+    // side effects on the python module's namespace (lazy class registration on lookup)
+    // that mutate the program's namespace mid-execution and break in-flight Java
+    // compilation.  Skip routing for these names; they go through local generation in
+    // the calling loader, which mirrors the pre-canonicalization behaviour.
+    if (!strncmp(bin_name, "qore.Python.", 12)) {
+        return nullptr;
+    }
+    if (tried_qpath_via_qoremod || !strncmp(bin_name, "qore.", 5)) {
+        std::string qpath;
+        if (tried_qpath_via_qoremod) {
+            qpath = std::move(qoremod_qpath);
+        } else {
+            for (const char* p = bin_name + 5; *p; ++p) {
+                if (*p == '.') {
+                    qpath.append("::");
+                } else {
+                    qpath.push_back(*p);
+                }
+            }
+        }
+
+        const QoreClass* qc = nullptr;
+        QoreProgram* found_pgm = nullptr;
+        if (this_loader) {
+            QoreProgram* this_pgm = (QoreProgram*)env.callLongMethod(this_loader,
+                Globals::methodQoreURLClassLoaderGetPtr, nullptr);
+            if (this_pgm) {
+                ExceptionSink xsink;
+                qc = this_pgm->findClass(qpath.c_str(), &xsink);
+                xsink.clear();
+                if (qc) {
+                    found_pgm = this_pgm;
+                }
+            }
+        }
+        if (!qc) {
+            ReferenceHolder<QoreHashNode> mod_hash(MM.getModuleHash(), nullptr);
+            if (mod_hash) {
+                ConstHashIterator i(*mod_hash);
+                while (i.next()) {
+                    QoreProgram* mod_pgm = ModuleManager::findUserModuleProgram(i.getKey());
+                    if (!mod_pgm) {
+                        continue;
+                    }
+                    ExceptionSink xsink;
+                    qc = mod_pgm->findClass(qpath.c_str(), &xsink);
+                    xsink.clear();
+                    if (qc) {
+                        found_pgm = mod_pgm;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!qc) {
+            return nullptr;
+        }
+        QoreProgram* owner_pgm = qc->getProgram();
+        if (!owner_pgm) {
+            owner_pgm = found_pgm;
+        }
+        if (!owner_pgm) {
+            return nullptr;
+        }
+        JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(owner_pgm);
+        if (!jpc) {
+            return nullptr;
+        }
+        jobject loader = jpc->getClassLoader();
+        AutoLocker al(canonical_loader_cache_lock);
+        // Re-check under lock in case another thread populated the cache concurrently.
+        auto it = canonical_loader_cache.find(bin_name);
+        if (it != canonical_loader_cache.end()) {
+            return it->second;
+        }
+        canonical_loader_cache.emplace(bin_name, loader);
+        return loader;
+    }
+
+    return nullptr;
+}
+
 jobject Globals::getModuleClassLoader(const char* name) {
     if (!name || !*name) {
         return nullptr;
