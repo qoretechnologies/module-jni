@@ -213,6 +213,8 @@ protected:
     GlobalReference<jobject> baseClassLoader;
 
     DLLLOCAL void doMethods(JniQoreClass& qc, Class* jc, QoreProgram* pgm = nullptr);
+    DLLLOCAL void doMethodsIntern(JniQoreClass& qc, Class* jc, QoreProgram* pgm, Env& env,
+        jobjectArray mArray, bool bridge_pass);
 
     DLLLOCAL void doFields(JniQoreClass& qc, Class* jc, QoreProgram* pgm = nullptr);
 

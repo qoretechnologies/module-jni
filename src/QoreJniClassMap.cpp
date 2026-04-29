@@ -1302,13 +1302,9 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
     return literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
 }
 
-void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm) {
-    Env env;
-    //printd(LogLevel, "QoreJniClassMap::doMethods() qc: %p jc: %p\n", qc, jc);
-
+void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm, Env& env,
+        jobjectArray mArray, bool bridge_pass) {
     bool abstract_class = jc->getModifiers() & JVM_ACC_ABSTRACT;
-
-    LocalReference<jobjectArray> mArray = jc->getDeclaredMethods();
 
     for (jsize i = 0, e = env.getArrayLength(mArray); i < e; ++i) {
         // get Method object
@@ -1319,9 +1315,21 @@ void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* p
         QoreString mname;
         meth->getName(mname);
 
-        // Skip synthetic and bridge methods (Kotlin/compiler-generated)
-        if (meth->isSynthetic() || meth->isBridge()) {
-            printd(LogLevel, "+ skipping synthetic/bridge method %s.%s()\n", qc.getName(), mname.c_str());
+        bool is_bridge = meth->isBridge();
+
+        // First pass: skip bridge methods; second pass: only process bridge methods
+        if (!bridge_pass && is_bridge) {
+            continue;
+        }
+        if (bridge_pass && !is_bridge) {
+            continue;
+        }
+
+        // Skip synthetic methods that are not bridge methods; bridge methods are typically
+        // also marked synthetic but are needed to satisfy interface contracts (e.g.
+        // Float.compareTo(Object) implementing Comparable.compareTo)
+        if (meth->isSynthetic() && !is_bridge) {
+            printd(LogLevel, "+ skipping synthetic method %s.%s()\n", qc.getName(), mname.c_str());
             continue;
         }
 
@@ -1331,7 +1339,7 @@ void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* p
             continue;
         }
 
-        printd(LogLevel, "+ adding method %s.%s()\n", qc.getName(), mname.c_str());
+        printd(LogLevel, "+ adding %smethod %s.%s()\n", bridge_pass ? "bridge " : "", qc.getName(), mname.c_str());
 
         // get method's parameter types
         type_vec_t paramTypeInfo;
@@ -1367,8 +1375,9 @@ void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* p
             }
         } else {
             if (mname == "copy" || mname == "constructor" || mname == "destructor" || mname == "methodGate"
-                || mname == "memberNotification" || mname == "memberGate")
+                || mname == "memberNotification" || mname == "memberGate") {
                 mname.prepend("java_");
+            }
 
             // check for duplicate signature
             const QoreMethod* qm = qc.findLocalMethod(mname.c_str());
@@ -1399,6 +1408,20 @@ void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* p
         }
         jc->trackMethod(meth.release());
     }
+}
+
+void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm) {
+    Env env;
+
+    LocalReference<jobjectArray> mArray = jc->getDeclaredMethods();
+
+    // Pass 1: process non-bridge methods first so they take priority
+    doMethodsIntern(qc, jc, pgm, env, mArray, false);
+    // Pass 2: process bridge methods; the duplicate-signature check will skip bridges that
+    // have the same Qore parameter types as an already-added non-bridge method, while bridges
+    // that provide unique signatures (e.g. Comparable.compareTo(auto) on concrete classes like
+    // Float) will be added — preventing spurious ABSTRACT-CLASS-ERROR
+    doMethodsIntern(qc, jc, pgm, env, mArray, true);
 }
 
 static int qore_jni_get_acc_visibility(ClassAccess access) {
