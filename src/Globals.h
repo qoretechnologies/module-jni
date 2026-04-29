@@ -532,6 +532,13 @@ public:
     */
     DLLLOCAL static jobject getModuleClassLoader(const char* name);
 
+    //! Removes all entries from the canonical loader cache that reference @a loader.
+    /** Must be called before the loader's JNI global reference is deleted (i.e. before
+        JniExternalProgramData destruction finishes) to prevent dangling jobject pointers
+        in the static cache.
+    */
+    DLLLOCAL static void removeCanonicalLoaderCacheEntries(jobject loader);
+
 private:
     DLLLOCAL static ExceptionSink global_xsink;
     DLLLOCAL static std::unique_ptr<QoreProgramHelper> qph;

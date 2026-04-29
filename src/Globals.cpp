@@ -2532,10 +2532,27 @@ static JNINativeMethod javaClassBuilderNativeMethods[] = {
 // is non-deterministic and consumer Programs that locate a binary-module class via the
 // user-module fallback can land on different user-module Programs (and thus different
 // loaders) for the same name, which JVM later rejects with "different Class objects"
-// loader-constraint violations.  The jobject values are global refs (from
-// JniExternalProgramData::classLoader), so they remain valid for the loader's lifetime.
+// loader-constraint violations.  Each cached value is an independent JNI global reference
+// (created via NewGlobalRef) so the classloader stays alive even after its owning
+// JniExternalProgramData is destroyed — this prevents dangling-pointer crashes in the
+// JVM's Dictionary::find / findLoadedClass0.
 static std::unordered_map<std::string, jobject> canonical_loader_cache;
 static QoreThreadLock canonical_loader_cache_lock;
+
+// Helper: cache a loader, creating an independent global ref to keep it alive.
+static void cacheCanonicalLoader(const char* bin_name, jobject loader) {
+    JNIEnv* jenv = jni::Jvm::getEnv();
+    jobject global = jenv->NewGlobalRef(loader);
+    if (!global) {
+        return;
+    }
+    AutoLocker al(canonical_loader_cache_lock);
+    auto [it, inserted] = canonical_loader_cache.emplace(bin_name, global);
+    if (!inserted) {
+        // Already cached by another thread; release our extra ref
+        jenv->DeleteGlobalRef(global);
+    }
+}
 
 jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* bin_name) {
     if (!bin_name || !*bin_name) {
@@ -2562,11 +2579,21 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
         if (!dot || dot == p) {
             return nullptr;
         }
+        // For qoremod.<mod>.* user modules, route to syscl (the system classloader) rather
+        // than the module's own classloader.  syscl is in the parent chain of every
+        // QoreURLClassLoader, so a Class defined there is visible to all consumers.  Using
+        // the module's own loader caused LinkageError ("loader constraint violation") when
+        // consumer loaders that are NOT children of the module loader referenced the same
+        // class: the JVM saw two different Class objects for the same name from loaders in
+        // different hierarchies.
+        if (Globals::syscl) {
+            cacheCanonicalLoader(bin_name, (jobject)Globals::syscl);
+            return (jobject)Globals::syscl;
+        }
         std::string mod(p, dot - p);
         jobject user_loader = getModuleClassLoader(mod.c_str());
         if (user_loader) {
-            AutoLocker al(canonical_loader_cache_lock);
-            canonical_loader_cache.emplace(bin_name, user_loader);
+            cacheCanonicalLoader(bin_name, user_loader);
             return user_loader;
         }
         // binary module: build qpath = <module-root-ns>::<rest-with-dots-as-::>
@@ -2674,13 +2701,7 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
             return nullptr;
         }
         jobject loader = jpc->getClassLoader();
-        AutoLocker al(canonical_loader_cache_lock);
-        // Re-check under lock in case another thread populated the cache concurrently.
-        auto it = canonical_loader_cache.find(bin_name);
-        if (it != canonical_loader_cache.end()) {
-            return it->second;
-        }
-        canonical_loader_cache.emplace(bin_name, loader);
+        cacheCanonicalLoader(bin_name, loader);
         return loader;
     }
 
@@ -2704,6 +2725,20 @@ jobject Globals::getModuleClassLoader(const char* name) {
         return nullptr;
     }
     return jpc->getClassLoader();
+}
+
+void Globals::removeCanonicalLoaderCacheEntries(jobject loader) {
+    JNIEnv* jenv = jni::Jvm::getEnv();
+    AutoLocker al(canonical_loader_cache_lock);
+    auto it = canonical_loader_cache.begin();
+    while (it != canonical_loader_cache.end()) {
+        if (jenv->IsSameObject(it->second, loader)) {
+            jenv->DeleteGlobalRef(it->second);
+            it = canonical_loader_cache.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 LocalReference<jclass> Globals::findDefineClass(Env& env, const char* name, jobject loader, const unsigned char* buf,
