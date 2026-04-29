@@ -2579,17 +2579,6 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
         if (!dot || dot == p) {
             return nullptr;
         }
-        // For qoremod.<mod>.* user modules, route to syscl (the system classloader) rather
-        // than the module's own classloader.  syscl is in the parent chain of every
-        // QoreURLClassLoader, so a Class defined there is visible to all consumers.  Using
-        // the module's own loader caused LinkageError ("loader constraint violation") when
-        // consumer loaders that are NOT children of the module loader referenced the same
-        // class: the JVM saw two different Class objects for the same name from loaders in
-        // different hierarchies.
-        if (Globals::syscl) {
-            cacheCanonicalLoader(bin_name, (jobject)Globals::syscl);
-            return (jobject)Globals::syscl;
-        }
         std::string mod(p, dot - p);
         jobject user_loader = getModuleClassLoader(mod.c_str());
         if (user_loader) {
