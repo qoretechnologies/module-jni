@@ -455,6 +455,42 @@ public class QoreURLClassLoader extends URLClassLoader {
             return rv;
         }
 
+        // Canonical routing for shared dynamic classes MUST come before tryGetPendingClass:
+        // pendingClasses may contain bytecode cached during a previous canonical routing
+        // (for Kotlin stub generation), and tryGetPendingClass would defineClass on THIS
+        // loader, creating a duplicate Class object that causes LinkageError.
+        if (isDynamic(bin_name) && isSharedDynamicClassName(bin_name)) {
+            QoreURLClassLoader target = resolveSharedClassLoader(bin_name);
+            if (target != null && target != this) {
+                Class<?> shared = target.checkLoadedClass(bin_name);
+                if (shared != null) {
+                    return shared;
+                }
+                try {
+                    byte[] bytes = target.generateByteCode(bin_name);
+                    // Also store in our own pendingClasses so callers like
+                    // QoreKotlinCompiler.generateDynamicStubs() that call
+                    // getAllPendingClasses() on this loader can retrieve the bytecode
+                    pendingClasses.put(bin_name, bytes);
+                    synchronized (target.getClassLoadingLock(bin_name)) {
+                        shared = target.checkLoadedClass(bin_name);
+                        if (shared != null) {
+                            return shared;
+                        }
+                        return target.defineClassUnconditional(bin_name, bytes);
+                    }
+                } catch (ClassNotFoundException e) {
+                    // canonical loader can't make this class; fall through
+                } catch (LinkageError le) {
+                    shared = target.checkLoadedClass(bin_name);
+                    if (shared != null) {
+                        return shared;
+                    }
+                    throw le;
+                }
+            }
+        }
+
         rv = tryGetPendingClass(bin_name);
         if (rv != null) {
             //System.out.printf("loadClass() %s returning pending\n", bin_name);
@@ -479,65 +515,6 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
 
         if (isDynamic(bin_name)) {
-            // For shared dynamic classes — qoremod.<mod>.* (every consumer Program references
-            // the same Class) and qore.Qore.* (built-in classes with fixed cross-Program
-            // identity) — make sure the class is defined in exactly one canonical loader so
-            // every consumer Program sees the same Class object.  Without this, every loader
-            // independently generates its own copy of the same class and the JVM rejects
-            // override resolution / method dispatch with "loader constraint violation".  The
-            // legacy qore.<X>.<Y> name shape for module classes is already hard-rejected in
-            // the C++ layer (see JniExternalProgramData::generateByteCode).
-            //
-            // We do NOT call target.loadClass() — that re-enters the JVM's standard
-            // delegation chain inside the canonical loader, which (when the canonical loader
-            // can't yet resolve the name itself) bounces through its parent and right back
-            // to one of the consumer loaders, recursing.  Instead: probe the canonical
-            // loader's class cache passively, and on a miss generate bytecode in the
-            // current Program context (which has the same module loaded — that's how we got
-            // the request in the first place) and then `defineClassUnconditional` straight
-            // onto the canonical loader so the resulting Class is rooted there.
-            if (isSharedDynamicClassName(bin_name)) {
-                QoreURLClassLoader target = resolveSharedClassLoader(bin_name);
-                if (target != null && target != this) {
-                    Class<?> shared = target.checkLoadedClass(bin_name);
-                    if (shared != null) {
-                        return shared;
-                    }
-                    try {
-                        // Generate via target's own Program context (target.generateByteCode
-                        // uses target's pgm_ptr) so the bytecode reflects target's canonical
-                        // QoreClass, then defineClassUnconditional on target so the resulting
-                        // Class is rooted there.  We deliberately do NOT call
-                        // target.loadClass(): when target is a peer QoreURLClassLoader its
-                        // parent chain can route back through this loader and recurse.
-                        byte[] bytes = target.generateByteCode(bin_name);
-                        // Also store in our own pendingClasses so callers like
-                        // QoreKotlinCompiler.generateDynamicStubs() that call
-                        // getAllPendingClasses() on this loader can retrieve the bytecode
-                        pendingClasses.put(bin_name, bytes);
-                        synchronized (target.getClassLoadingLock(bin_name)) {
-                            shared = target.checkLoadedClass(bin_name);
-                            if (shared != null) {
-                                return shared;
-                            }
-                            return target.defineClassUnconditional(bin_name, bytes);
-                        }
-                    } catch (ClassNotFoundException e) {
-                        // canonical loader can't make this class (e.g. the class is
-                        // genuinely per-Program rather than module-owned); fall through to
-                        // local generation
-                    } catch (LinkageError le) {
-                        // raced with another thread that already defined it on target; pick
-                        // up the existing Class
-                        shared = target.checkLoadedClass(bin_name);
-                        if (shared != null) {
-                            return shared;
-                        }
-                        throw le;
-                    }
-                }
-            }
-
             // only remove from set if successful
             try {
                 byte[] bytes = generateByteCode(bin_name);
@@ -612,6 +589,38 @@ public class QoreURLClassLoader extends URLClassLoader {
                 //System.out.printf("loadClassWithPtr() %s returning loaded\n", bin_name);
                 return rv;
             }
+
+            // Canonical routing MUST come before tryGetPendingClass — see loadClass() above.
+            if (isSharedDynamicClassName(bin_name)) {
+                QoreURLClassLoader target = resolveSharedClassLoader(bin_name);
+                if (target != null && target != this) {
+                    Class<?> shared = target.checkLoadedClass(bin_name);
+                    if (shared != null) {
+                        return shared;
+                    }
+                    try {
+                        byte[] bytes = target.generateByteCode(bin_name, class_ptr);
+                        // Also store in our own pendingClasses for Kotlin stub generation
+                        pendingClasses.put(bin_name, bytes);
+                        synchronized (target.getClassLoadingLock(bin_name)) {
+                            shared = target.checkLoadedClass(bin_name);
+                            if (shared != null) {
+                                return shared;
+                            }
+                            return target.defineClassUnconditional(bin_name, bytes);
+                        }
+                    } catch (ClassNotFoundException e) {
+                        // canonical loader can't make this class; fall through
+                    } catch (LinkageError le) {
+                        shared = target.checkLoadedClass(bin_name);
+                        if (shared != null) {
+                            return shared;
+                        }
+                        throw le;
+                    }
+                }
+            }
+
             rv = tryGetPendingClass(bin_name);
             if (rv != null) {
                 //System.out.printf("loadClassWithPtr() %s returning pending\n", bin_name);
@@ -625,45 +634,6 @@ public class QoreURLClassLoader extends URLClassLoader {
                 //    hashCode(), bin_name);
 
                 return defineClass(bin_name, bytes, 0, bytes.length);
-            }
-
-            // Same canonical-loader routing as loadClass() — the C++ bytecode-generation
-            // paths (parent-class lookup, getJavaTypeDefinition for parameter / return /
-            // field types) call loadClassWithPtr directly, and need to see the same Class
-            // objects as JVM's standard loadClass paths so override resolution and method
-            // dispatch don't fail with "loader constraint violation" later.  As in
-            // loadClass() we generate locally and define on target rather than calling
-            // target.loadClassWithPtr (which bounces through parent and recurses).
-            if (isSharedDynamicClassName(bin_name)) {
-                QoreURLClassLoader target = resolveSharedClassLoader(bin_name);
-                if (target != null && target != this) {
-                    Class<?> shared = target.checkLoadedClass(bin_name);
-                    if (shared != null) {
-                        return shared;
-                    }
-                    try {
-                        // generate in target's program context — see loadClass() above
-                        byte[] bytes = target.generateByteCode(bin_name, class_ptr);
-                        // Also store in our own pendingClasses — see loadClass() above
-                        pendingClasses.put(bin_name, bytes);
-                        synchronized (target.getClassLoadingLock(bin_name)) {
-                            shared = target.checkLoadedClass(bin_name);
-                            if (shared != null) {
-                                return shared;
-                            }
-                            return target.defineClassUnconditional(bin_name, bytes);
-                        }
-                    } catch (ClassNotFoundException e) {
-                        // canonical loader can't make this class; fall through to local
-                        // generation
-                    } catch (LinkageError le) {
-                        shared = target.checkLoadedClass(bin_name);
-                        if (shared != null) {
-                            return shared;
-                        }
-                        throw le;
-                    }
-                }
             }
 
             // only remove from set if successful
