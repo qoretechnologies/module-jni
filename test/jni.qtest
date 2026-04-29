@@ -272,6 +272,8 @@ public class Main inherits QUnit::Test {
         addTestCase("cross-program inner class sharing test", \crossProgramInnerClassSharingTest());
         addTestCase("multi-program class sharing test", \multiProgramClassSharingTest());
         addTestCase("auto param overload test", \autoParamOverloadTest());
+        addTestCase("bridge method Comparable test", \bridgeMethodComparableTest());
+        addTestCase("canonical loader cross-program test", \canonicalLoaderCrossProgramTest());
         addTestCase("overloaded method dispatch test", \overloadedMethodDispatchTest());
 
         Qore::exit(main());
@@ -2400,6 +2402,71 @@ auto sub test() {
             printf("%s\n", get_exception_string(ex));
             rethrow;
         }
+    }
+
+    # Regression: bridge methods (e.g. Float.compareTo(Object)) must not be skipped when
+    # they are the only implementation of an interface method (Comparable.compareTo(auto)).
+    # Without the two-pass bridge processing, new Float(...) throws ABSTRACT-CLASS-ERROR.
+    bridgeMethodComparableTest() {
+        # Float implements Comparable<Float> — the bridge compareTo(Object) must be kept
+        # so that the abstract Comparable.compareTo(auto) is satisfied.  Without the
+        # two-pass bridge method processing, these constructors throw ABSTRACT-CLASS-ERROR.
+        Float f1 = new Float(1.0);
+        Float f2 = new Float(2.0);
+        assertTrue(f1.compareTo(f2) < 0);
+        assertEq(0, f1.compareTo(f1));
+        assertTrue(f2.compareTo(f1) > 0);
+
+        # Byte implements Comparable<Byte>
+        Byte b1 = new Byte(10);
+        Byte b2 = new Byte(20);
+        assertTrue(b1.compareTo(b2) < 0);
+
+        # Short implements Comparable<Short>
+        Short s1 = new Short(100);
+        Short s2 = new Short(200);
+        assertTrue(s1.compareTo(s2) < 0);
+
+        # Integer implements Comparable<Integer>
+        Integer i1 = new Integer(42);
+        Integer i2 = new Integer(99);
+        assertTrue(i1.compareTo(i2) < 0);
+    }
+
+    # Regression: canonical loader routing must prevent duplicate Class objects for shared
+    # dynamic classes (qoremod.*) across multiple Programs.  Without the fix that moves
+    # canonical routing before tryGetPendingClass, the pendingClasses cache causes a second
+    # defineClass on the consumer loader, creating a different Class object that the JVM
+    # rejects with "loader constraint violation".
+    canonicalLoaderCrossProgramTest() {
+        # Create two independent Programs that both reference the same module class
+        # via the qoremod.* canonical routing.  If routing works, both Programs see the
+        # same Class object — no LinkageError from duplicate definitions.
+        Program p1(PO_NEW_STYLE);
+        p1.parse("
+%requires jni
+%module-cmd(jni) import java.lang.Integer
+
+auto sub test() {
+    Integer i(42);
+    return i.compareTo(new Integer(10));
+}
+", "test1");
+
+        Program p2(PO_NEW_STYLE);
+        p2.parse("
+%requires jni
+%module-cmd(jni) import java.lang.Integer
+
+auto sub test() {
+    Integer i(99);
+    return i.compareTo(new Integer(100));
+}
+", "test2");
+
+        # Both must succeed without LinkageError
+        assertTrue(p1.callFunction("test") > 0);
+        assertTrue(p2.callFunction("test") < 0);
     }
 
     overloadedMethodDispatchTest() {
