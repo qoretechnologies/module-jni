@@ -511,6 +511,10 @@ public class QoreURLClassLoader extends URLClassLoader {
                         // target.loadClass(): when target is a peer QoreURLClassLoader its
                         // parent chain can route back through this loader and recurse.
                         byte[] bytes = target.generateByteCode(bin_name);
+                        // Also store in our own pendingClasses so callers like
+                        // QoreKotlinCompiler.generateDynamicStubs() that call
+                        // getAllPendingClasses() on this loader can retrieve the bytecode
+                        pendingClasses.put(bin_name, bytes);
                         synchronized (target.getClassLoadingLock(bin_name)) {
                             shared = target.checkLoadedClass(bin_name);
                             if (shared != null) {
@@ -640,6 +644,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                     try {
                         // generate in target's program context — see loadClass() above
                         byte[] bytes = target.generateByteCode(bin_name, class_ptr);
+                        // Also store in our own pendingClasses — see loadClass() above
+                        pendingClasses.put(bin_name, bytes);
                         synchronized (target.getClassLoadingLock(bin_name)) {
                             shared = target.checkLoadedClass(bin_name);
                             if (shared != null) {
