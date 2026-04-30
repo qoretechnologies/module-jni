@@ -243,6 +243,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         //  byte_code.length, pendingClasses.size());
     }
 
+    //! Returns true if the given binary name has bytecode in pendingClasses.
+    public boolean hasPendingClass(String bin_name) {
+        return pendingClasses.containsKey(bin_name);
+    }
+
     public Class<?> getResolveClass(String name) throws ClassNotFoundException {
         Class<?> rv = tryGetPendingClass(name);
         if (rv == null) {

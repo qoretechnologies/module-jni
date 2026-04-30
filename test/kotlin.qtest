@@ -111,6 +111,47 @@ public class DynamicTestBase {
     }
 }
 
+# Multi-level Qore class hierarchy under nested namespaces, used by
+# kotlinCompilerTransitiveSupertypeTest.  Mirrors the shape of a Qorus
+# QorusJob -> JobApi -> UserApi chain that surfaced a regression where the
+# Kotlin compiler couldn't access the transitive supertype's class file
+# because only the directly-extended class was written to the stubs dir.
+public namespace KotlinFixT {
+    # top-level class so wildcard import qore.KotlinFixT.* resolves
+    public class KotlinFixTMarker {
+        string mark() {
+            return "fix-marker";
+        }
+    }
+    public namespace UserApiNs {
+        # peer mix-in that becomes a Java interface via Qore multi-inheritance
+        public class FixConfigItemProvider {
+            string getCfg() {
+                return "fix-cfg";
+            }
+        }
+        public class FixUserApi {
+            string fixUserApiMethod() {
+                return "fix-user-api";
+            }
+        }
+        public namespace JobNs {
+            public class FixJobApi inherits KotlinFixT::UserApiNs::FixUserApi {
+                string fixJobApiMethod() {
+                    return "fix-job-api-" + fixUserApiMethod();
+                }
+            }
+            public class FixQJob inherits
+                    KotlinFixT::UserApiNs::JobNs::FixJobApi,
+                    KotlinFixT::UserApiNs::FixConfigItemProvider {
+                string fixRunJob() {
+                    return "fix-run-" + fixJobApiMethod();
+                }
+            }
+        }
+    }
+}
+
 # Get library info for testing
 hash<auto> sub get_qore_library_info() {
     return {
@@ -366,6 +407,7 @@ public class KotlinTest inherits QUnit::Test {
         addTestCase("QoreKotlinCompiler basic test", \kotlinCompilerBasicTest());
         addTestCase("QoreKotlinCompiler dynamic import test", \kotlinCompilerDynamicImportTest());
         addTestCase("QoreKotlinCompiler shared class import test", \kotlinCompilerSharedClassImportTest());
+        addTestCase("QoreKotlinCompiler transitive supertype test", \kotlinCompilerTransitiveSupertypeTest());
         addTestCase("QoreKotlinCompiler syntax error test", \kotlinCompilerSyntaxErrorTest());
         addTestCase("QoreKotlinCompiler close idempotent test", \kotlinCompilerCloseIdempotentTest());
 
@@ -1114,6 +1156,54 @@ class DynamicTestChild(name: String) : DynamicTestBase(name) {
         # Verify pendingClasses is accessible (used by Kotlin stub generation).
         assertTrue(classloader.getAllPendingClasses() instanceof hash,
             "getAllPendingClasses returns a hash after shared class loading");
+    }
+
+    # Regression: a Kotlin class extending a Qore-bridged Java class whose
+    # supertype is itself a Qore-bridged class (multi-level chain across
+    # nested namespaces) must compile cleanly even when only the directly-
+    # extended class is registered as a Kotlin base class.  Without
+    # ensureQoreSupertypesPending() in QoreKotlinCompiler.generateDynamicStubs
+    # the transitive supertype's bytecode was generated on the canonical
+    # loader during defineClass but never copied to the calling loader's
+    # pendingClasses, so the supertype was missing from the stubs directory
+    # and Kotlin reported "Cannot access 'X' which is a supertype of 'Y'".
+    # This is the failure shape that broke Qorus install-test for the
+    # KotlinClassTest job (KtJob -> QorusJob -> JobApi -> UserApi).
+    kotlinCompilerTransitiveSupertypeTest() {
+        if (!ensureKotlinCompilerAvailable()) {
+            testSkip("Kotlin compiler JAR not available");
+            return;
+        }
+
+        object compiler = compilerClass.getDeclaredConstructor().newInstance();
+        on_exit compiler.close();
+
+        # Register only FixQJob (the directly-extended class) and one
+        # unrelated peer.  Do NOT register the transitive supertype FixJobApi
+        # — that's the case the fix makes work.
+        compiler.addBaseClass("qore.KotlinFixT.KotlinFixTMarker");
+        compiler.addBaseClass("qore.KotlinFixT.UserApiNs.FixUserApi");
+        compiler.addBaseClass("qore.KotlinFixT.UserApiNs.JobNs.FixQJob");
+
+        string source = "
+import qore.KotlinFixT.*
+import qore.KotlinFixT.UserApiNs.*
+import qore.KotlinFixT.UserApiNs.JobNs.*
+
+class KtTransitiveJob : FixQJob() {
+    fun shout(): String = fixRunJob().uppercase()
+}
+";
+        hash<string, string> sources = {
+            "KtTransitiveJob": source,
+        };
+
+        hash<string, binary> result = compiler.compile(sources);
+
+        assertTrue(result.hasKey("KtTransitiveJob"),
+            "Kotlin compile produced bytecode for class with transitive Qore supertype");
+        assertTrue(result.KtTransitiveJob.size() > 0,
+            "KtTransitiveJob bytecode is non-empty");
     }
 
     kotlinCompilerSyntaxErrorTest() {

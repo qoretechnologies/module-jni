@@ -363,7 +363,8 @@ public class QoreKotlinCompiler implements AutoCloseable {
                 try {
                     // Try to load the class - this will trigger bytecode generation
                     // for dynamic Qore classes AND their parent classes
-                    classLoader.loadClass(importPath);
+                    Class<?> cls = classLoader.loadClass(importPath);
+                    ensureQoreSupertypesPending(cls);
                 } catch (ClassNotFoundException e) {
                     // Class might be a package prefix - that's OK
                 }
@@ -399,11 +400,86 @@ public class QoreKotlinCompiler implements AutoCloseable {
     private void loadAdditionalBaseClasses() {
         for (String className : additionalBaseClasses) {
             try {
-                classLoader.loadClass(className);
+                Class<?> cls = classLoader.loadClass(className);
+                ensureQoreSupertypesPending(cls);
             } catch (ClassNotFoundException e) {
                 // Class not available - that's OK, might not be needed
             }
         }
+    }
+
+    /**
+     * Walk the loaded class's superclass and interface chain and ensure that
+     * every transitive {@code qore.*} ancestor's bytecode is present in the
+     * calling classLoader's pendingClasses.
+     *
+     * <p>When a class like {@code qore.OMQ.UserApi.Job.QorusJob} is defined,
+     * the JVM verifier resolves its supertype {@code qore.OMQ.UserApi.Job.JobApi}
+     * via the canonical (target) loader, which generates JobApi's bytecode
+     * into <em>target</em>'s pendingClasses — but not into this loader's.
+     * {@link #generateDynamicStubs} writes only this loader's pendingClasses to
+     * the stubs directory, so without this step JobApi.class is missing from
+     * the Kotlin compile classpath and the compiler reports "Cannot access
+     * 'JobApi' which is a supertype of ...".
+     *
+     * <p>For each {@code qore.*} ancestor (including interfaces, transitively)
+     * whose bytecode is not yet in this loader's pendingClasses, we ask the
+     * ancestor's owning {@link QoreURLClassLoader} for the cached bytecode
+     * via {@code generateByteCode()} (a cache hit at this point) and copy it
+     * into this loader's pendingClasses.
+     */
+    private void ensureQoreSupertypesPending(Class<?> cls) {
+        if (cls == null) {
+            return;
+        }
+        // Walk superclass chain
+        Class<?> sc = cls.getSuperclass();
+        while (sc != null) {
+            if (!ensureSinglePending(sc)) {
+                break;
+            }
+            sc = sc.getSuperclass();
+        }
+        // Walk interfaces (recursively, since interfaces can extend interfaces)
+        for (Class<?> iface : cls.getInterfaces()) {
+            if (ensureSinglePending(iface)) {
+                ensureQoreSupertypesPending(iface);
+            }
+        }
+    }
+
+    /**
+     * If {@code ancestor} is a {@code qore.*} class loaded by a
+     * {@link QoreURLClassLoader} and the calling loader doesn't yet have its
+     * bytecode in pendingClasses, copy the bytecode in.  Returns true if the
+     * caller should keep walking past this ancestor (i.e., it's a Qore-bridged
+     * class), false to stop.
+     */
+    private boolean ensureSinglePending(Class<?> ancestor) {
+        String name = ancestor.getName();
+        if (!name.startsWith("qore.")) {
+            return false;
+        }
+        if (classLoader.hasPendingClass(name)) {
+            return true;
+        }
+        ClassLoader ownerLoader = ancestor.getClassLoader();
+        if (!(ownerLoader instanceof QoreURLClassLoader)) {
+            return true;
+        }
+        QoreURLClassLoader qcl = (QoreURLClassLoader) ownerLoader;
+        try {
+            // generateByteCode() returns the cached bytecode from the owning
+            // loader's pendingClasses (the class is already defined, so this
+            // is a cache lookup, not a regeneration).
+            byte[] bytes = qcl.generateByteCode(name);
+            if (bytes != null) {
+                classLoader.addPendingClass(name, bytes);
+            }
+        } catch (ClassNotFoundException e) {
+            // shouldn't happen for an already-loaded class; ignore and keep walking
+        }
+        return true;
     }
 
     /**
