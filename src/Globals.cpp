@@ -425,6 +425,8 @@ int Globals::typeNull;
 int Globals::typeChar;
 
 GlobalReference<jstring> Globals::javaQoreClassField;
+GlobalReference<jstring> Globals::javaQoreClassPgmIdField;
+GlobalReference<jstring> Globals::javaQoreClassPathField;
 
 std::string QoreJniStackLocationHelper::jni_no_call_name = "<jni_module_java_no_runtime_stack_info>";
 QoreExternalProgramLocationWrapper QoreJniStackLocationHelper::jni_loc_builtin("<jni_module_unknown>", -1, -1);
@@ -1381,12 +1383,17 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
 typedef std::map<const char*, const QoreListNode*, ltstr> mod_dep_map_t;
 static bool is_module(const QoreNamespace* parent, const char* name, const QoreHashNode* all_mod_info,
         mod_dep_map_t& mod_dep_map) {
+    // Direct membership: parent namespace was contributed to by `name`.  Use
+    // QoreNamespace::isFromModule() so namespaces with multiple contributors
+    // (e.g. ::HttpServer fed by HttpServerUtil and qorus's HttpServer module)
+    // are attributed to every contributor — the old single-string getModuleName()
+    // check missed all but the canonical first contributor.
+    if (parent->isFromModule(name)) {
+        return true;
+    }
     const char* mod = parent->getModuleName();
     if (!mod) {
         return false;
-    }
-    if (!strcmp(mod, name)) {
-        return true;
     }
 
     if (!all_mod_info) {
@@ -1434,11 +1441,8 @@ static const QoreNamespace* get_module_root_ns_intern(const char* name, QoreProg
             *p = *p - 32;
         }
         const QoreNamespace* ns = mod_pgm->findNamespace(n);
-        if (ns) {
-            const char* mod = ns->getModuleName();
-            if (mod && !strcmp(mod, name)) {
-                return ns;
-            }
+        if (ns && ns->isFromModule(name)) {
+            return ns;
         }
     }
 
@@ -1453,8 +1457,9 @@ static const QoreNamespace* get_module_root_ns_intern(const char* name, QoreProg
             continue;
         }
 
-        const char* mod = ns->getModuleName();
-        if (!mod || strcmp(mod, name)) {
+        // Use isFromModule() membership test so namespaces with multiple module
+        // contributors are matched on any contributor, not just the canonical first.
+        if (!ns->isFromModule(name)) {
             continue;
         }
         //printd(5, "get_module_root_ns_intern('%s') found\n", name);
@@ -1742,13 +1747,21 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
             QoreString java_pfx;
 
             if (!mod_str && !ns->isRoot()) {
-                const char* mod = ns->getModuleName();
-                if (mod && !jpc->isInjectedModule(mod)) {
-                    // do not allow Qore symbols provided by modules to be accessed from the "qore" package
-                    // or Python symbols provided by modules to be accessed from the 'python' package
-                    printd(5, "qore_url_classloader_get_classes_in_namespace() not scanning ns %p (from mod %s)\n",
-                        ns, ns->getModuleName());
-                    return nullptr;
+                // The lookup arrived via the legacy `qore.<X>` form (no module
+                // qualifier).  Skip the rejection for multi-contributor
+                // namespaces — if more than one module declared/extended the
+                // namespace, no single module "owns" it and there is no
+                // unambiguous canonical `qoremod.<mod>.<rest>` form to enforce.
+                // Single-contributor namespaces still must be reached via the
+                // canonical form unless the contributor was marked injected
+                // with the `mark-module-injected` parse command.
+                if (ns->getModuleCount() == 1) {
+                    const char* mod = ns->getModuleName();
+                    if (mod && !jpc->isInjectedModule(mod)) {
+                        printd(5, "qore_url_classloader_get_classes_in_namespace() not scanning ns %p "
+                            "(from single module %s, not injected)\n", ns, mod);
+                        return nullptr;
+                    }
                 }
             }
 
@@ -2559,11 +2572,33 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
         return nullptr;
     }
     {
-        AutoLocker al(canonical_loader_cache_lock);
-        auto it = canonical_loader_cache.find(bin_name);
-        if (it != canonical_loader_cache.end()) {
-            return it->second;
+        jobject cached = nullptr;
+        {
+            AutoLocker al(canonical_loader_cache_lock);
+            auto it = canonical_loader_cache.find(bin_name);
+            if (it != canonical_loader_cache.end()) {
+                cached = it->second;
+                // Check if the cached loader's owning program has been
+                // destroyed (pgm_ptr cleared by JEPD destructor).  If so the
+                // entry is stale: classes loaded through it would call into
+                // freed program data.  Evict and re-resolve.
+                long pgm_ptr = 0;
+                try {
+                    pgm_ptr = env.callLongMethod(cached,
+                        Globals::methodQoreURLClassLoaderGetPtr, nullptr);
+                } catch (jni::Exception& e) { e.ignore(); }
+                if (pgm_ptr == 0) {
+                    JNIEnv* jenv = jni::Jvm::getEnv();
+                    jenv->DeleteGlobalRef(cached);
+                    canonical_loader_cache.erase(it);
+                    cached = nullptr;
+                }
+            }
         }
+        if (cached) {
+            return cached;
+        }
+        // if stale, fall through to fresh resolution
     }
 
     // Module-owned: qoremod.<mod>.<X>.  For user modules we use the module's own Program.
@@ -2611,14 +2646,24 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
         }
     }
 
-    // Legacy / shadow form: qore.X.Y.Z corresponds to QoreClass ::X::Y::Z.  The owning
-    // QoreProgram is whatever Program first instantiated the QoreClass — for shadow
-    // classes from a binary module (e.g. logger_bin's ::Qore::Logger::LoggerInterface),
-    // this is the user-module Program that pulled in the binary via `%requires(reexport)`
-    // (Logger's program for LoggerInterface).  We try the calling program first; if its
-    // namespace tree doesn't expose the class (e.g. consumer Program A uses module B,
-    // and B reexports binary module C — C's classes are in B's program but not A's),
-    // we iterate user-module Programs via QMM to find one that has the class.
+    // Legacy / shadow form: qore.X.Y.Z corresponds to QoreClass ::X::Y::Z.
+    //
+    // Pick a stable canonical owner from the user-module Programs registered
+    // with ModuleManager (held alive by MM, so they outlive transient
+    // validator/sandbox/side Programs that often initiate these lookups).
+    // We deliberately do NOT use the calling Program (this_loader's pgm) as
+    // a canonical-owner candidate even if its findClass succeeds: the
+    // calling Program may be transient, and binding the canonical_loader_cache
+    // to it leaves cache entries pointing at a destroyed classloader.
+    //
+    // Cross-program class-identity used to be a concern here (validators
+    // need their getClass() result to match the Java wrapper's parent).
+    // That invariant is now preserved at the bytecode level: $qore_cls_pgm_id
+    // + $qore_cls_path embed (programId, qpath) and tryGetQoreClass resolves
+    // them via QoreProgram::resolveProgramId() + findClass() at access time,
+    // yielding a current QoreClass in the canonical owner's namespace tree
+    // whose classID matches every importer (preserved across importClass).
+    //
     // qore.Python.<X>... — Python module classes are emitted under qore.Python.<...> for
     // shadow / per-Program forms, but a QoreProgram->findClass("Python::...") call has
     // side effects on the python module's namespace (lazy class registration on lookup)
@@ -2642,45 +2687,38 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
             }
         }
 
+        // Walk module programs to find one with the class.  These are stable
+        // (held by ModuleManager) so they're safe canonical owners.
         const QoreClass* qc = nullptr;
-        QoreProgram* found_pgm = nullptr;
-        if (this_loader) {
-            QoreProgram* this_pgm = (QoreProgram*)env.callLongMethod(this_loader,
-                Globals::methodQoreURLClassLoaderGetPtr, nullptr);
-            if (this_pgm) {
+        QoreProgram* finder_pgm = nullptr;
+        ReferenceHolder<QoreHashNode> mod_hash(MM.getModuleHash(), nullptr);
+        if (mod_hash) {
+            ConstHashIterator i(*mod_hash);
+            while (i.next()) {
+                QoreProgram* mod_pgm = ModuleManager::findUserModuleProgram(i.getKey());
+                if (!mod_pgm) {
+                    continue;
+                }
                 ExceptionSink xsink;
-                qc = this_pgm->findClass(qpath.c_str(), &xsink);
+                qc = mod_pgm->findClass(qpath.c_str(), &xsink);
                 xsink.clear();
                 if (qc) {
-                    found_pgm = this_pgm;
-                }
-            }
-        }
-        if (!qc) {
-            ReferenceHolder<QoreHashNode> mod_hash(MM.getModuleHash(), nullptr);
-            if (mod_hash) {
-                ConstHashIterator i(*mod_hash);
-                while (i.next()) {
-                    QoreProgram* mod_pgm = ModuleManager::findUserModuleProgram(i.getKey());
-                    if (!mod_pgm) {
-                        continue;
-                    }
-                    ExceptionSink xsink;
-                    qc = mod_pgm->findClass(qpath.c_str(), &xsink);
-                    xsink.clear();
-                    if (qc) {
-                        found_pgm = mod_pgm;
-                        break;
-                    }
+                    finder_pgm = mod_pgm;
+                    break;
                 }
             }
         }
         if (!qc) {
             return nullptr;
         }
-        QoreProgram* owner_pgm = qc->getProgram();
+        // Prefer the source program (where the class was originally declared,
+        // preserved across imports).  Fall back to the finder program when
+        // the class has no source program recorded (binary-module classes
+        // typically lack an spgm and must be canonicalised on the program
+        // that surfaces them).
+        QoreProgram* owner_pgm = qc->getSourceProgram();
         if (!owner_pgm) {
-            owner_pgm = found_pgm;
+            owner_pgm = finder_pgm;
         }
         if (!owner_pgm) {
             return nullptr;
@@ -2717,7 +2755,12 @@ jobject Globals::getModuleClassLoader(const char* name) {
 }
 
 void Globals::removeCanonicalLoaderCacheEntries(jobject loader) {
-    JNIEnv* jenv = jni::Jvm::getEnv();
+    JNIEnv* jenv = nullptr;
+    try {
+        jenv = jni::Jvm::getEnv();
+    } catch (...) {
+        return;
+    }
     AutoLocker al(canonical_loader_cache_lock);
     auto it = canonical_loader_cache.begin();
     while (it != canonical_loader_cache.end()) {
@@ -3309,6 +3352,8 @@ bool Globals::init() {
     defineQoreURLClassLoader(env);
 
     javaQoreClassField = env.newString(JAVA_QORE_CLASS_FIELD).makeGlobal();
+    javaQoreClassPgmIdField = env.newString(JAVA_QORE_CLASS_PGM_ID_FIELD).makeGlobal();
+    javaQoreClassPathField = env.newString(JAVA_QORE_CLASS_PATH_FIELD).makeGlobal();
 
     if (bootstrap) {
         classJavaClassBuilder = env.findClass("org/qore/jni/JavaClassBuilder").makeGlobal();
@@ -3383,7 +3428,7 @@ bool Globals::init() {
         sizeof(javaClassBuilderNativeMethods) / sizeof(JNINativeMethod));
 
     methodJavaClassBuilderGetClassBuilder = env.getStaticMethod(classJavaClassBuilder, "getClassBuilder",
-        "(Ljava/lang/String;Ljava/lang/Class;Ljava/util/ArrayList;ZJ)" \
+        "(Ljava/lang/String;Ljava/lang/Class;Ljava/util/ArrayList;ZJJLjava/lang/String;)" \
         "Lnet/bytebuddy/dynamic/DynamicType$Builder;");
     methodJavaClassBuilderGetFunctionConstantClassBuilder = env.getStaticMethod(classJavaClassBuilder,
         "getFunctionConstantClassBuilder",
@@ -3794,6 +3839,8 @@ void Globals::cleanup() {
     classServiceLoader = nullptr;
     classDriver = nullptr;
     javaQoreClassField = nullptr;
+    javaQoreClassPgmIdField = nullptr;
+    javaQoreClassPathField = nullptr;
 }
 
 GlobalReference<jclass> Globals::getQoreJavaClassBase(Env& env, jobject classLoader) {

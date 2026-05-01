@@ -47,7 +47,35 @@ public class JavaClassBuilder {
     private static Method mNormalCall;
     private static Method mFunctionCall;
     private static Method mGetConstantValue;
+    // Class-identity fields embedded in bytecode at class generation time.
+    //
+    // $qore_cls_ptr (long) — raw QoreClass* used by the constructor delegation
+    // chain (QoreJavaClassBase(long cptr, ...) → QoreObjectBase) at object
+    // instantiation time.  Kept as-is because instantiation can only succeed
+    // when the canonical owner Program is alive (the Java code path leading
+    // there pins it), so the pointer is valid in this narrow scope.
+    //
+    // $qore_cls_pgm_id (long) + $qore_cls_path (String) — added for safe
+    // late-read paths (tryGetQoreClass, getQoreType).  Earlier code embedded
+    // only the raw QoreClass* and dereferenced it from arbitrary contexts
+    // (parent-class walks during a different program's class definition,
+    // type-info queries during reflection, etc.); when the canonical owner
+    // had been destroyed but the canonical_loader_cache still held the
+    // class, the read returned freed memory and equal()/inHierarchy()
+    // matched against garbage.  By embedding the (programId, qpath) tuple
+    // and resolving via QoreProgram::resolveProgramId() + findClass() at
+    // every late read, we get either the current QoreClass at that path
+    // or a clean nullptr (caller throws cleanly) when the owner is dead.
+    //
+    // programId is stable: assigned monotonically, never reused across
+    // program destruction.  qpath is the Qore-namespace-qualified path
+    // (e.g. "::OMQ::UserApi::Job::QorusJob") and serves as the
+    // identity-preserving lookup key — findClass() across import chains
+    // yields classes with the same classID, so equal() between the
+    // resolved class and any imported copy succeeds via classID match.
     private static final String CLASS_FIELD = "$qore_cls_ptr";
+    private static final String CLASS_PGM_ID_FIELD = "$qore_cls_pgm_id";
+    private static final String CLASS_PATH_FIELD = "$qore_cls_path";
 
     // copied from org.objectweb.asm.Opcodes
     public static final int ACC_PUBLIC    = (1 << 0);
@@ -182,7 +210,8 @@ public class JavaClassBuilder {
 
     //! Returns a builder object for a dynamic class
     public static DynamicType.Builder<?> getClassBuilder(String className, Class<?> parentClass,
-            ArrayList<Type> interfaces, boolean is_abstract, long cptr) throws NoSuchMethodException {
+            ArrayList<Type> interfaces, boolean is_abstract, long cptr, long cls_pgm_id,
+            String cls_path) throws NoSuchMethodException {
         DynamicType.Builder<?> bb;
         bb = new ByteBuddy()
             .with(TypeValidation.DISABLED)
@@ -208,10 +237,22 @@ public class JavaClassBuilder {
 
         bb = bb.modifiers(modifiers);
 
-        // add a static field for storing the class ptr
+        // add a static field for storing the class ptr (used in constructor
+        // delegation chain, where the QoreClass is alive by construction)
         bb = (DynamicType.Builder<?>)bb.defineField(CLASS_FIELD, Long.TYPE,
             Modifier.FINAL | Modifier.PUBLIC | Modifier.STATIC)
             .value(cptr);
+
+        // add static fields for late-read class identity resolution
+        // (read by tryGetQoreClass / getQoreType): programId of canonical
+        // owner + qpath, used to look up a live QoreClass at access time
+        // even if the original generator's class instance has been freed
+        bb = (DynamicType.Builder<?>)bb.defineField(CLASS_PGM_ID_FIELD, Long.TYPE,
+            Modifier.FINAL | Modifier.PUBLIC | Modifier.STATIC)
+            .value(cls_pgm_id);
+        bb = (DynamicType.Builder<?>)bb.defineField(CLASS_PATH_FIELD, String.class,
+            Modifier.FINAL | Modifier.PUBLIC | Modifier.STATIC)
+            .value(cls_path);
 
         // add default constructor for already-created Qore objects
         ArrayList<Type> paramTypes = new ArrayList<Type>();

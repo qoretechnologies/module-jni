@@ -1200,12 +1200,17 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
         jvalue jarg;
         jarg.l = cls;
         if (env.callBooleanMethod(Globals::classQoreJavaClassBase, Globals::methodClassIsAssignableFrom, &jarg)) {
-            jfieldID class_field = env.getStaticField(cls, JAVA_QORE_CLASS_FIELD, "J");
-            const QoreClass* qc = reinterpret_cast<const QoreClass*>(
-                env.getStaticLongField(cls, class_field)
-            );
-            assert(qc);
-            return literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
+            // Use the safe (programId, qpath) lookup path to avoid dangling
+            // QoreClass* dereferences when the canonical owner has been
+            // destroyed but the cached classloader still surfaces the class.
+            // tryGetQoreClass(... inherited=true) does the resolve and
+            // returns nullptr cleanly on dead-owner.
+            const QoreClass* qc = JniExternalProgramData::tryGetQoreClass(env, cls, true);
+            if (qc) {
+                return literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
+            }
+            // dead canonical owner — fall through to standard Java type
+            // resolution below
         }
     }
 
@@ -1442,23 +1447,93 @@ static LocalReference<jobject> get_type_def_from_class(Env& env, jclass jcls) {
         Globals::methodJavaClassBuilderGetTypeDescriptionCls, &arg);
 }
 
+// Resolves a Qore wrapper Java class to its current QoreClass* via the
+// programId+qpath fields embedded at bytecode generation time.  Returns
+// nullptr if the canonical owner Program has been destroyed, or if the
+// class is no longer reachable in that program's namespace tree, or if
+// the bytecode predates this scheme (no $qore_cls_pgm_id field).
+//
+// Falls back to the raw-pointer $qore_cls_ptr only when the new fields
+// can't be read AND when called from the constructor-side path (inherited
+// = false) where stale-pointer risk is acceptable because the caller is
+// instantiating an object and the canonical Program must already be
+// reachable.  In the late-read case (inherited = true), we never fall
+// back to the raw pointer — better to return nullptr and let the caller
+// handle absence than to dereference freed memory.
 QoreClass* JniExternalProgramData::tryGetQoreClass(Env& env, jclass jcls, bool inherited) {
+    // Try the (programId, qpath) lookup first — safe across canonical-loader
+    // cache pinning.
+    //
+    // We must restrict the lookup to fields DECLARED on `jcls` itself.  Java
+    // inherits static fields from parent classes, so a user Java class
+    // (e.g. `Issue3485JavaTest extends qore.OMQ.UserApi.Job.QorusJob`) with no
+    // own embed would otherwise read its parent's `$qore_cls_pgm_id` /
+    // `$qore_cls_path` and resolve to the PARENT's QoreClass — which then
+    // surfaces in `qore_object_create()` as instantiating the (abstract)
+    // parent class instead of the concrete subclass.  Use Java reflection's
+    // `getDeclaredField()` (declared-only; throws NoSuchFieldException for
+    // inherited fields) to detect "no embed on this class" and fall through
+    // to `findCreateQoreClass()` which builds the proper Qore wrapper for
+    // the user class.
     try {
-        if (inherited) {
-            jfieldID class_field = env.getStaticField(jcls, JAVA_QORE_CLASS_FIELD, "J");
-            return reinterpret_cast<QoreClass*>(
-                env.getStaticLongField(jcls, class_field)
-            );
+        jvalue jarg_pgm_id;
+        jarg_pgm_id.l = Globals::javaQoreClassPgmIdField;
+        LocalReference<jobject> pgm_id_field_obj = env.callObjectMethod(jcls,
+            Globals::methodClassGetDeclaredField, &jarg_pgm_id);
+        jvalue jarg_path;
+        jarg_path.l = Globals::javaQoreClassPathField;
+        LocalReference<jobject> path_field_obj = env.callObjectMethod(jcls,
+            Globals::methodClassGetDeclaredField, &jarg_path);
+        jvalue jarg_null;
+        jarg_null.l = nullptr;
+        jlong pgm_id_raw = env.callLongMethod(pgm_id_field_obj,
+            Globals::methodFieldGetLong, &jarg_null);
+        if (pgm_id_raw) {
+            unsigned pgm_id = (unsigned)pgm_id_raw;
+            QoreProgram* owner_pgm = QoreProgram::resolveProgramId(pgm_id);
+            if (owner_pgm) {
+                LocalReference<jstring> path_str = env.callObjectMethod(path_field_obj,
+                    Globals::methodFieldGet, &jarg_null).as<jstring>();
+                if (path_str) {
+                    Env::GetStringUtfChars path_chars(env, path_str);
+                    ExceptionSink xsink;
+                    QoreClass* qc = const_cast<QoreClass*>(
+                        owner_pgm->findClass(path_chars.c_str(), &xsink));
+                    xsink.clear();
+                    if (qc) {
+                        return qc;
+                    }
+                }
+            }
+            // owner program destroyed or class no longer there — surface as
+            // not-found rather than crashing; in the inherited-walk case we
+            // never want to fall back to a raw pointer that may be stale.
+            if (inherited) {
+                return nullptr;
+            }
         }
+    } catch (jni::Exception& e) {
+        // ignore exceptions when the new fields aren't present (older bytecode
+        // or user-compiled classes without an own embed)
+        e.ignore();
+    }
 
-        // check if the "$qore_cls_ptr" static field is declared in this class
+    // Fallback path: only for the constructor-side use (inherited=false).
+    // The raw pointer is safe to dereference here only if the caller has
+    // somehow ensured the QoreClass is alive (instantiation pins the
+    // canonical owner via the loader chain).  Otherwise this is the
+    // pre-fix behaviour and may surface as a UAF — which is at least no
+    // worse than what we had before this change.
+    if (inherited) {
+        return nullptr;
+    }
+    try {
         jvalue jarg;
         jarg.l = Globals::javaQoreClassField;
         LocalReference<jobject> field = env.callObjectMethod(jcls, Globals::methodClassGetDeclaredField, &jarg);
         jarg.l = nullptr;
         return reinterpret_cast<QoreClass*>(env.callLongMethod(field, Globals::methodFieldGetLong, &jarg));
     } catch (jni::Exception& e) {
-        // ignore exceptions when the field is not found
         e.ignore();
     }
     return nullptr;
@@ -2162,6 +2237,14 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
                 const QoreNamespace* mod_ns = isInjectedModule(qcls->getModuleName())
                     ? nullptr
                     : get_module_root_ns(qcls->getModuleName(), qpgm);
+                // Skip the canonicalization rule when the module's root namespace
+                // has multiple module contributors — no single module is the
+                // canonical "owner" so there is no unambiguous qoremod.<mod>.*
+                // form to canonicalise to.  In that case the legacy `qore.<X>.<Y>`
+                // form is the correct binary name for the class.
+                if (mod_ns && mod_ns->getModuleCount() > 1) {
+                    mod_ns = nullptr;
+                }
                 if (mod_ns) {
                     std::string nspath = mod_ns->getPath(true);
                     class_under_module_ns = qpath.size() >= nspath.size()
@@ -2671,12 +2754,28 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
         jname = njname;
     }
 
-    std::vector<jvalue> jargs(5);
+    // programId + qpath are embedded for late-read class-identity resolution
+    // (see JavaClassBuilder.CLASS_PGM_ID_FIELD / CLASS_PATH_FIELD).  Use the
+    // class's source program (where it was originally declared, preserved
+    // across imports) so consumers in other Programs that import this class
+    // resolve to the same canonical entry.  Fall back to the namespace's
+    // host program when the class has no recorded source program.
+    QoreProgram* id_pgm = qcls->getSourceProgram();
+    if (!id_pgm) {
+        id_pgm = qcls->getProgram();
+    }
+    jlong cls_pgm_id = id_pgm ? (jlong)id_pgm->getProgramId() : 0;
+    std::string id_qpath = qcls->getNamespacePath(true);
+    LocalReference<jstring> cls_path_str = env.newString(id_qpath.c_str());
+
+    std::vector<jvalue> jargs(7);
     jargs[0].l = jname;
     jargs[1].l = parent_ptr;
     jargs[2].l = parent_interfaces;
     jargs[3].z = qcls->isAbstract();
     jargs[4].j = cptr;
+    jargs[5].j = cls_pgm_id;
+    jargs[6].l = cls_path_str;
 
     LocalReference<jobject> bb = env.callStaticObjectMethod(Globals::classJavaClassBuilder,
         Globals::methodJavaClassBuilderGetClassBuilder, &jargs[0]);
@@ -3080,6 +3179,21 @@ JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& par
 }
 
 JniExternalProgramData::~JniExternalProgramData() {
+    // NOTE: cache invalidation is intentionally NOT performed here.  With the
+    // cross-program-import strong-ref activation in qore_class_private (imported
+    // classes hold a strong ref on their source Program via spgm + programRefSelf),
+    // a JEPD destructor only fires once nothing references its program's classes.
+    // The canonical_loader_cache holds an independent NewGlobalRef on the
+    // classloader (see cacheCanonicalLoader), which keeps the Java classloader
+    // object alive even after the JEPD is destroyed; future lookups for the same
+    // class name return that loader and load classes from it without ever calling
+    // back into the dead program (the classes' bytecode stops being usable, but
+    // the JVM won't observe that until something tries to access an spgm-resolved
+    // entry — which requires the program to still be alive, contradicted by our
+    // strong-ref invariant).  Cache entries thus leak harmlessly until process
+    // exit; they would only be reachable from new consumer Programs, which would
+    // re-resolve through getCanonicalLoader and create fresh entries.
+
     // NOTE: any exception thrown here will be printed out to stderr
     ExceptionSink xsink;
     try {

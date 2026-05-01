@@ -42,7 +42,13 @@ DLLLOCAL QoreStringNode* jni_module_init_intern();
 
 namespace jni {
 
+// raw QoreClass* (used by constructor delegation chain at object instantiation)
 constexpr const char* JAVA_QORE_CLASS_FIELD = "$qore_cls_ptr";
+// programId of the canonical owner Program, used for late-read class identity
+// resolution via QoreProgram::resolveProgramId() — see JavaClassBuilder
+constexpr const char* JAVA_QORE_CLASS_PGM_ID_FIELD = "$qore_cls_pgm_id";
+// qpath of the class within the owner Program (e.g. "::OMQ::UserApi::Job::QorusJob")
+constexpr const char* JAVA_QORE_CLASS_PATH_FIELD = "$qore_cls_path";
 
 enum class Type {
     Void, Boolean, Byte, Char, Short, Int, Long, Float, Double, Reference
@@ -438,6 +444,8 @@ public:
     DLLLOCAL static int typeChar; // java.sql.Type.CHAR value
 
     DLLLOCAL static GlobalReference<jstring> javaQoreClassField;
+    DLLLOCAL static GlobalReference<jstring> javaQoreClassPgmIdField;
+    DLLLOCAL static GlobalReference<jstring> javaQoreClassPathField;
 
     DLLLOCAL static GlobalReference<jclass> getQoreJavaClassBase(Env& env, jobject classLoader);
 
