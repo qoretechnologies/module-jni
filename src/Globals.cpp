@@ -2567,10 +2567,59 @@ static void cacheCanonicalLoader(const char* bin_name, jobject loader) {
     }
 }
 
+// RAII helper: snapshots the calling thread's QoreURLClassLoader.current at
+// construction and restores it at destruction.  Used to wrap canonical-loader
+// resolution so that lazily creating a JEPD for a module Program (whose
+// QoreURLClassLoader constructor calls `setContext()` on itself) does not
+// displace the parser's classloader from the thread-local — which would
+// otherwise reroute later JNI-driven Qore API calls (notably the
+// `QoreJavaApi.callFunction("load_module", ...)` invocations from Java
+// wrapper class static initializers like `org.qore.lang.mailmessage.Message`)
+// into the wrong Program, breaking parse-time resolution of symbols defined
+// by the loaded Qore module (e.g. `MailMessage::ContentEncoding`).
+class QoreUrlClassLoaderContextSaver {
+public:
+    DLLLOCAL QoreUrlClassLoaderContextSaver(Env& env) : env(env) {
+        try {
+            LocalReference<jobject> current = env.callStaticObjectMethod(Globals::classQoreURLClassLoader,
+                Globals::methodQoreURLClassLoaderGetCurrent, nullptr);
+            // QoreURLClassLoader.getCurrent() returns null when no thread-
+            // local context has been set on this thread; LocalReference::
+            // makeGlobal() asserts on null, so guard explicitly.
+            if (current) {
+                saved = current.makeGlobal();
+            }
+        } catch (jni::Exception& e) {
+            e.ignore();
+        }
+    }
+
+    DLLLOCAL ~QoreUrlClassLoaderContextSaver() {
+        try {
+            if (saved) {
+                env.callVoidMethod(saved, Globals::methodQoreURLClassLoaderSetContext, nullptr);
+            }
+            // If saved was null, leave the (possibly newly-set) context in
+            // place — there is no prior context to restore, and clearing
+            // here could regress callers that genuinely needed the new
+            // context to take effect.
+        } catch (jni::Exception& e) {
+            e.ignore();
+        }
+    }
+
+private:
+    Env& env;
+    GlobalReference<jobject> saved;
+};
+
 jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* bin_name) {
     if (!bin_name || !*bin_name) {
         return nullptr;
     }
+    // Preserve the calling thread's QoreURLClassLoader across this lookup.
+    // See QoreUrlClassLoaderContextSaver above for why.
+    QoreUrlClassLoaderContextSaver ctx_saver(env);
     {
         jobject cached = nullptr;
         {
