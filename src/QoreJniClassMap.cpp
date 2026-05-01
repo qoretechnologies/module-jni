@@ -1475,6 +1475,17 @@ QoreClass* JniExternalProgramData::tryGetQoreClass(Env& env, jclass jcls, bool i
     // inherited fields) to detect "no embed on this class" and fall through
     // to `findCreateQoreClass()` which builds the proper Qore wrapper for
     // the user class.
+    //
+    // `embed_present` tracks whether the new fields are declared on this
+    // class.  If they are, then `jcls` is JNI-generated and the raw-pointer
+    // fallback below is safe even on the inherited-walk path: pgm_id_raw==0
+    // identifies a system Qore class (no source/host Program at bytecode-
+    // generation time, e.g. ::Qore::AbstractIterator), whose QoreClass*
+    // lives for the qore-library's lifetime.  Without this distinction,
+    // inherited-walk lookups for system-class parents return nullptr and
+    // the resulting Qore wrapper has no parent class — surfacing as a
+    // PARSE-TYPE-ERROR when callers expect e.g. Qore::AbstractIterator.
+    bool embed_present = false;
     try {
         jvalue jarg_pgm_id;
         jarg_pgm_id.l = Globals::javaQoreClassPgmIdField;
@@ -1484,6 +1495,8 @@ QoreClass* JniExternalProgramData::tryGetQoreClass(Env& env, jclass jcls, bool i
         jarg_path.l = Globals::javaQoreClassPathField;
         LocalReference<jobject> path_field_obj = env.callObjectMethod(jcls,
             Globals::methodClassGetDeclaredField, &jarg_path);
+        // both fields exist if we got here without exception
+        embed_present = true;
         jvalue jarg_null;
         jarg_null.l = nullptr;
         jlong pgm_id_raw = env.callLongMethod(pgm_id_field_obj,
@@ -1505,26 +1518,37 @@ QoreClass* JniExternalProgramData::tryGetQoreClass(Env& env, jclass jcls, bool i
                     }
                 }
             }
-            // owner program destroyed or class no longer there — surface as
-            // not-found rather than crashing; in the inherited-walk case we
-            // never want to fall back to a raw pointer that may be stale.
+            // pgm_id was set but the owner program is destroyed or no longer
+            // has the class — surface as not-found rather than crashing; in
+            // the inherited-walk case we never want to fall back to a raw
+            // pointer that may be stale.
             if (inherited) {
                 return nullptr;
             }
         }
+        // pgm_id_raw == 0 with embed_present: system class — fall through to
+        // raw-pointer fallback below (safe since system QoreClass instances
+        // are process-lifetime).
     } catch (jni::Exception& e) {
         // ignore exceptions when the new fields aren't present (older bytecode
-        // or user-compiled classes without an own embed)
+        // or user-compiled classes without an own embed); embed_present stays
+        // false and the inherited-walk falls through to nullptr below.
         e.ignore();
     }
 
-    // Fallback path: only for the constructor-side use (inherited=false).
-    // The raw pointer is safe to dereference here only if the caller has
-    // somehow ensured the QoreClass is alive (instantiation pins the
-    // canonical owner via the loader chain).  Otherwise this is the
-    // pre-fix behaviour and may surface as a UAF — which is at least no
-    // worse than what we had before this change.
-    if (inherited) {
+    // Fallback path: raw `$qore_cls_ptr`.
+    //
+    // For inherited=false (constructor delegation) we use it unconditionally
+    // — instantiation pins the canonical owner via the loader chain, so the
+    // pointer is alive in this scope.
+    //
+    // For inherited=true (parent-class walk), only use it when embed_present
+    // — the class is JNI-generated and `$qore_cls_pgm_id == 0` means
+    // "no source/host Program", which only happens for Qore system classes
+    // whose QoreClass* lives as long as libqore.  User Java classes have no
+    // embed and we must NOT walk to a raw `$qore_cls_ptr` field that doesn't
+    // exist on them.
+    if (inherited && !embed_present) {
         return nullptr;
     }
     try {
