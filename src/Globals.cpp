@@ -2708,6 +2708,35 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
                 }
             }
         }
+        if (!qc && this_loader) {
+            // Fallback: ask the calling loader's Program.  Classes provided
+            // natively by a host application (qorus-core, qwf, qsvc, qjob —
+            // OMQ::StreamConfig and friends from COMMON_INTERFACE_CORE_SRC)
+            // are NOT in any user-module Program, so the user-module walk
+            // above misses them.  The class's source Program (preserved
+            // across `importClass` via spgm) gives us a stable canonical
+            // owner: the host main program lives as long as the process,
+            // far longer than transient validator / per-workflow / per-
+            // service programs that initiate lookups.  Without this, two
+            // loaders (e.g. qwf-main and per-workflow) each generate their
+            // own qore.OMQ.StreamConfig and the JVM rejects use across
+            // them with a LinkageError.
+            QoreProgram* caller_pgm = nullptr;
+            try {
+                caller_pgm = reinterpret_cast<QoreProgram*>(env.callLongMethod(
+                    this_loader, Globals::methodQoreURLClassLoaderGetPtr, nullptr));
+            } catch (jni::Exception& e) {
+                e.ignore();
+            }
+            if (caller_pgm) {
+                ExceptionSink xsink;
+                qc = caller_pgm->findClass(qpath.c_str(), &xsink);
+                xsink.clear();
+                if (qc) {
+                    finder_pgm = caller_pgm;
+                }
+            }
+        }
         if (!qc) {
             return nullptr;
         }
