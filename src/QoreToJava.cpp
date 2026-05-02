@@ -28,7 +28,7 @@
 
 namespace jni {
 
-static jstring jni_string_to_jstring(const QoreStringNode& qstr) {
+static jstring jni_string_to_jstring(const QoreString& qstr) {
     ModifiedUtf8String str(qstr);
     Env env;
     return env.newString(str.c_str()).release();
@@ -81,7 +81,8 @@ jobject QoreToJava::toAnyObject(Env& env, const QoreValue& value, JniExternalPro
             return env.newObject(Globals::classDouble, Globals::ctorDouble, &arg).release();
         }
         case NT_STRING: {
-            return jni_string_to_jstring(*value.get<QoreStringNode>());
+            QoreStringValueHelper str(value);
+            return jni_string_to_jstring(**str);
         }
         case NT_DATE: {
             return jni_date_to_jobject(*value.get<const DateTimeNode>());
@@ -200,7 +201,8 @@ jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniEx
     LocalReference<jobject> javaObjectRef;
     switch (value.getType()) {
         case NT_STRING: {
-            javaObjectRef = jni_string_to_jstring(*value.get<QoreStringNode>());
+            QoreStringValueHelper str(value);
+            javaObjectRef = jni_string_to_jstring(**str);
             break;
         }
         case NT_LIST: {

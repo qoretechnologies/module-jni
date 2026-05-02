@@ -46,6 +46,7 @@
 #include <bzlib.h>
 #include <dlfcn.h>
 #include <mutex>
+#include <string>
 
 namespace jni {
 
@@ -451,12 +452,15 @@ static int save_object_thread(Env& env, const QoreValue& rv, QoreProgram* pgm, E
     QoreHashNode* data = pgm->getThreadData();
     assert(data);
     const char* domain_name;
+    std::string domain_storage;
     // get key name where to save the data if possible
     QoreValue v = data->getKeyValue("_jni_save");
     if (v.getType() != NT_STRING) {
         domain_name = "_jni_save";
     } else {
-        domain_name = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper domain(v);
+        domain_storage.assign(domain->c_str(), domain->size());
+        domain_name = domain_storage.c_str();
     }
 
     QoreValue kv = data->getKeyValue(domain_name);
@@ -950,10 +954,12 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
                 // injection issues
                 if (xsink && obj->isValid()
                     && !obj->validInstanceOfStrict(*m->getClass())
-                    && xsink.getExceptionErr().getType() == NT_STRING
-                    && *xsink.getExceptionErr().get<const QoreStringNode>() == "OBJECT-ALREADY-DELETED") {
-                    xsink.clear();
-                    val = obj->evalMethod(m->getName(), *qore_args, &xsink);
+                    && xsink.getExceptionErr().getType() == NT_STRING) {
+                    QoreStringValueHelper err(xsink.getExceptionErr());
+                    if (!strcmp(err->c_str(), "OBJECT-ALREADY-DELETED")) {
+                        xsink.clear();
+                        val = obj->evalMethod(m->getName(), *qore_args, &xsink);
+                    }
                 }
             }
         } else {
@@ -1253,9 +1259,9 @@ static jobject JNICALL java_class_builder_get_constant_value(JNIEnv* jenv, jclas
 static int load_module(Env& env, Env::GetStringUtfChars& mod_str, QoreProgram* pgm) {
     ExceptionSink xsink;
     if (ModuleManager::runTimeLoadModule(mod_str.c_str(), pgm, &xsink)) {
-        const char* err = xsink.getExceptionErr().get<const QoreStringNode>()->c_str();
-        const char* desc = xsink.getExceptionDesc().get<const QoreStringNode>()->c_str();
-        QoreStringMaker errdesc("%s: %s", err, desc);
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        QoreStringMaker errdesc("%s: %s", err->c_str(), desc->c_str());
         env.throwNew(env.findClass("java/lang/ClassNotFoundException"), errdesc.c_str());
         //printd(5, "load_module() '%s': %s\n", mod_str.c_str(), errdesc.c_str());
         return -1;
@@ -1421,8 +1427,11 @@ static bool is_module(const QoreNamespace* parent, const char* name, const QoreH
     ConstListIterator li(reexport_list);
     while (li.next()) {
         const QoreValue v = li.getValue();
-        if (v.getType() == NT_STRING && (*v.get<const QoreStringNode>() == mod)) {
-            return true;
+        if (v.getType() == NT_STRING) {
+            QoreStringValueHelper str(v);
+            if (mod && !strcmp(str->c_str(), mod)) {
+                return true;
+            }
         }
     }
 
@@ -1639,6 +1648,7 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
     ExceptionSink xsink;
 
     Env::GetStringUtfChars mod_str(env);
+    std::string mod_str_storage;
     if (module) {
         mod_str.set(module);
     }
@@ -1713,10 +1723,14 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
 #if QORE_VERSION_CODE >= 10013
             if (python && !module) {
                 ValueHolder pm(ns->getReferencedKeyValue("python_module"), nullptr);
-                printd(5, "python_module: '%s'\n", pm ? pm->get<QoreStringNode>()->c_str() : "n/a");
-                if (pm->getType() == NT_STRING) {
-                    mod_str = pm->get<QoreStringNode>()->c_str();
+                std::string python_module;
+                if (pm && pm->getType() == NT_STRING) {
+                    QoreStringValueHelper pm_str(*pm);
+                    python_module.assign(pm_str->c_str(), pm_str->size());
+                    mod_str_storage = python_module;
+                    mod_str = mod_str_storage.c_str();
                 }
+                printd(5, "python_module: '%s'\n", python_module.empty() ? "n/a" : python_module.c_str());
             }
 #endif
             printd(5, "qore_url_classloader_get_classes_in_namespace() lang_path: '%s' => '%s' ns: %p\n",

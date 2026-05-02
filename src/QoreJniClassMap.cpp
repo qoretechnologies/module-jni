@@ -2209,7 +2209,11 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
                 "modules: ", java_name.c_str(), qpath.c_str());
             ConstListIterator fi(*feature_list);
             while (fi.next()) {
-                desc.sprintf("%s, ", fi.getValue().get<const QoreStringNode>()->c_str());
+                QoreValue feature = fi.getValue();
+                if (feature.getType() == NT_STRING) {
+                    QoreStringValueHelper str(feature);
+                    desc.sprintf("%s, ", str->c_str());
+                }
             }
             desc.terminate(desc.size() - 2);
             desc.concat(')');
@@ -2321,7 +2325,8 @@ LocalReference<jstring> JniExternalProgramData::getJavaNameForClass(Env& env, co
     ValueHolder v(qc.getReferencedKeyValue(JNI_CK_JAVA_BIN_NAME), nullptr);
     if (v) {
         assert(v->getType() == NT_STRING);
-        const char* jname = v->get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper jname_str(*v);
+        const char* jname = jname_str->c_str();
         if (!mod || !is_dynamic_qore_bin_name(jname)) {
             printd(5, "JniExternalProgramData::getJavaNameForClass() cls '%s' -> embedded java '%s'\n",
                 qc.getName(), jname);
@@ -2342,9 +2347,10 @@ LocalReference<jstring> JniExternalProgramData::getJavaNameForClass(Env& env, co
                 const QoreNamespace* ns = qc.getNamespace();
                 ValueHolder pm(ns->getReferencedKeyValue("python_module"), nullptr);
                 printd(5, "JniExternalProgramData::getJavaNameForClass() pname: '%s' ns: '%s pm: %s\n", pname.c_str(),
-                    ns->getPath(true).c_str(), pm->getFullTypeName());
-                if (pm) {
-                    pname = pm->get<QoreStringNode>()->c_str();
+                    ns->getPath(true).c_str(), pm ? pm->getFullTypeName() : "n/a");
+                if (pm && pm->getType() == NT_STRING) {
+                    QoreStringValueHelper pm_str(*pm);
+                    pname.assign(pm_str->c_str(), pm_str->size());
                     convert_qore_ns_to_java_pkg(pname);
                     pname += ".";
                     pname += qc.getName();

@@ -175,7 +175,8 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                 JDBC_OPT_CLASSPATH, val.getFullTypeName());
             return -1;
         }
-        const char* cp = val.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper cp_str(val);
+        const char* cp = cp_str->c_str();
         if (!strcmp(classpath.c_str(), cp)) {
             return 0;
         }
@@ -225,7 +226,8 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                 JDBC_OPT_URL, val.getFullTypeName());
             return -1;
         }
-        db = val.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper db_str(val);
+        db.assign(db_str->c_str(), db_str->size());
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_OPT)) {
         numeric = ENO_OPTIMAL;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_STRING)) {

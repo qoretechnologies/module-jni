@@ -198,7 +198,8 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
             e.convert(&xsink);
             const QoreValue desc = xsink.getExceptionDesc();
             if (desc.getType() == NT_STRING) {
-                err = new QoreStringNode(*desc.get<const QoreStringNode>());
+                QoreStringValueHelper desc_str(desc);
+                err = new QoreStringNode(**desc_str);
             } else {
                 err = new QoreStringNode("unknown exception calling Jvm::createVM()");
             }

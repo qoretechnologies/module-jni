@@ -181,7 +181,7 @@ public class JdbcTableDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Returns data provider static info
     hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
-        return ProviderInfo + {"name": table_name};
+        return ProviderInfo + <DataProviderInfo>{"name": table_name};
     }
 
     #! Returns an iterator for zero or more records matching the search options

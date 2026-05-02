@@ -47,17 +47,14 @@ QoreValue JniQoreClass::memberGate(const QoreMethod& meth, void* m, QoreObject* 
         return QoreValue();
 
     bool cls_access;
-    const QoreStringNode* mname;
-    {
-        QoreValue qv = args->retrieveEntry(0);
-        if (qv.getType() != NT_STRING)
-            return QoreValue();
-        mname = qv.get<QoreStringNode>();
-        qv = args->retrieveEntry(1);
-        if (qv.getType() != NT_BOOLEAN)
-            return QoreValue();
-        cls_access = qv.getAsBool();
-    }
+    QoreValue mname_val = args->retrieveEntry(0);
+    if (mname_val.getType() != NT_STRING)
+        return QoreValue();
+    QoreStringValueHelper mname(mname_val);
+    QoreValue qv = args->retrieveEntry(1);
+    if (qv.getType() != NT_BOOLEAN)
+        return QoreValue();
+    cls_access = qv.getAsBool();
 
     //printd(LogLevel, "JniQoreClass::memberGate: '%s'\n", mname->c_str());
 

@@ -449,7 +449,10 @@ QoreValue QoreJdbcStatement::getColumnValue(Env& env, int column, QoreJdbcColumn
         xsink);
     // strip trailing spaces in CHAR columns if necessary
     if (col.strip && rv->getType() == NT_STRING) {
-        rv->get<QoreStringNode>()->trim_trailing(' ');
+        QoreStringNodeValueHelper str(*rv);
+        QoreStringNode* trimmed = new QoreStringNode(**str);
+        trimmed->trim_trailing(' ');
+        rv = trimmed;
     }
     return rv.release();
 }
@@ -645,7 +648,8 @@ int QoreJdbcStatement::bindParamSingleValue(Env& env, int column, QoreValue arg,
         }
 
         case NT_STRING: {
-            LocalReference<jstring> jstr = env.newString(arg.get<const QoreStringNode>()->c_str());
+            QoreStringValueHelper str(arg);
+            LocalReference<jstring> jstr = env.newString(str->c_str());
             jargs[1].l = jstr;
             env.callVoidMethod(stmt, Globals::methodPreparedStatementSetString, &jargs[0]);
             break;
