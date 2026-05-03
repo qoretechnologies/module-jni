@@ -658,6 +658,7 @@ add_custom_command(
     OUTPUT ${KAFKA_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=. ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-kafka ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E copy ${KAFKA_JAR} ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/
     DEPENDS ${module_name} ${KAFKA_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -1085,14 +1086,14 @@ qore_external_user_module("qlib/BusyLightDataProvider" "MqttDataProvider")
 qore_external_user_module("qlib/ExcelDataProvider" "")
 qore_external_user_module("qlib/KafkaDataProvider" "")
 qore_external_user_module("qlib/JakartaJmsDataProvider" "")
-qore_external_user_module("qlib/WordDataProvider" "")
-qore_external_user_module("qlib/VisioDataProvider" "")
+qore_external_user_module("qlib/WordDataProvider" "ExcelDataProvider")
+qore_external_user_module("qlib/VisioDataProvider" "ExcelDataProvider")
 qore_external_user_module("qlib/AccessDataProvider" "")
-qore_external_user_module("qlib/EmailDataProvider" "")
-qore_external_user_module("qlib/PowerPointDataProvider" "")
+qore_external_user_module("qlib/EmailDataProvider" "ExcelDataProvider")
+qore_external_user_module("qlib/PowerPointDataProvider" "ExcelDataProvider")
 qore_external_user_module("qlib/OdsDataProvider" "")
-qore_external_user_module("qlib/OdtDataProvider" "")
-qore_external_user_module("qlib/OdpDataProvider" "")
+qore_external_user_module("qlib/OdtDataProvider" "OdsDataProvider")
+qore_external_user_module("qlib/OdpDataProvider" "OdsDataProvider")
 qore_external_user_module("qlib/VcfDataProvider" "")
 qore_external_user_module("qlib/IcsDataProvider" "")
 qore_external_user_module("qlib/AvroDataProvider" "")
@@ -1101,6 +1102,31 @@ qore_external_user_module("qlib/FlywayDataProvider" "")
 qore_external_user_module("qlib/TikaDataProvider" "")
 qore_external_user_module("qlib/JdbcDataProvider" "")
 qore_external_user_module("qlib/CamelDataProvider" "")
+
+function(add_jni_qlib_jar_dependency _module _jar_target)
+    if (TARGET ${_module}-qmod)
+        add_dependencies(${_module}-qmod ${_jar_target})
+    endif()
+endfunction()
+
+add_jni_qlib_jar_dependency(ExcelDataProvider qore-excel-jar)
+add_jni_qlib_jar_dependency(KafkaDataProvider qore-kafka-jar)
+add_jni_qlib_jar_dependency(WordDataProvider qore-word-jar)
+add_jni_qlib_jar_dependency(VisioDataProvider qore-visio-jar)
+add_jni_qlib_jar_dependency(AccessDataProvider qore-access-jar)
+add_jni_qlib_jar_dependency(EmailDataProvider qore-email-jar)
+add_jni_qlib_jar_dependency(PowerPointDataProvider qore-powerpoint-jar)
+add_jni_qlib_jar_dependency(OdsDataProvider qore-ods-jar)
+add_jni_qlib_jar_dependency(OdtDataProvider qore-odt-jar)
+add_jni_qlib_jar_dependency(OdpDataProvider qore-odp-jar)
+add_jni_qlib_jar_dependency(VcfDataProvider qore-vcf-jar)
+add_jni_qlib_jar_dependency(IcsDataProvider qore-ics-jar)
+add_jni_qlib_jar_dependency(AvroDataProvider qore-avro-jar)
+add_jni_qlib_jar_dependency(JasperReportsDataProvider qore-jasper-jar)
+add_jni_qlib_jar_dependency(FlywayDataProvider qore-flyway-jar)
+add_jni_qlib_jar_dependency(TikaDataProvider qore-tika-jar)
+add_jni_qlib_jar_dependency(JdbcDataProvider qore-jdbc-dp-jar)
+add_jni_qlib_jar_dependency(CamelDataProvider qore-camel-jar)
 
 qore_dist(${PROJECT_VERSION})
 
