@@ -1032,6 +1032,11 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       parent classloader is not a \c QoreURLClassLoader (bootstrap program case)
     - fixed \c getQoreType() to gracefully handle class loading failures during type resolution by
       falling back to \c auto type instead of aborting class population
+    - fixed \c MqttDataProvider to bundle the \c org.eclipse.paho.mqttv5.common jar alongside the
+      \c org.eclipse.paho.mqttv5.client jar; the Paho MQTTv5 client jar contains only the
+      \c org.eclipse.paho.mqttv5.client package and depends on the separate \c common artifact at
+      runtime, so loading the module previously failed with
+      \c ClassNotFoundException: org.eclipse.paho.mqttv5.common.MqttSubscription
 
     @subsection jni_2_6_0 jni Module Version 2.6.0
     - added Kotlin language integration support

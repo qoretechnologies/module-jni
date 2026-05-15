@@ -26,7 +26,12 @@
 %requires qore >= 2.0
 %modern
 
-# import MQTT Paho Java Client Library: JAR must be added to the global classloader
+# import MQTT Paho Java Client Library: JARs must be added to the global classloader.
+# The Paho MQTTv5 client jar contains only the org.eclipse.paho.mqttv5.client
+# package; classes like org.eclipse.paho.mqttv5.common.MqttSubscription live in
+# the separate org.eclipse.paho.mqttv5.common artifact, which the client depends
+# on at runtime.  Both jars must be on the classpath.
+%module-cmd(jni) global-add-relative-classpath ./jar/org.eclipse.paho.mqttv5.common-1.2.5.jar
 %module-cmd(jni) global-add-relative-classpath ./jar/org.eclipse.paho.mqttv5.client-1.2.5.jar
 
 # implements a data provider for MQTT functionality
