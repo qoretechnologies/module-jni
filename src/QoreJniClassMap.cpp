@@ -2841,7 +2841,11 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
         }
     }
 
-    if (addClassConstants(env, jname, *qcls, bb, pgm)) {
+    // Static constant initializers must materialize object constants through the
+    // owning Program's class loader.  When bytecode is generated from a
+    // transient consumer Program for a module-owned class, using the consumer
+    // Program here creates same-name Java classes in two loaders.
+    if (addClassConstants(env, jname, *qcls, bb, id_pgm ? id_pgm : pgm)) {
         return nullptr;
     }
 
