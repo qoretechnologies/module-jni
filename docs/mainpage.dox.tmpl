@@ -989,6 +989,14 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
         \c Class objects, leaving the loader-constraint and cast errors in place.  The
         canonical-only design is what ensures cross-loader instances of the same QoreClass
         share one Java identity.
+      - <b>Qore generic class signatures.</b> When built against Qore headers exposing
+        \c QORE_HAVE_GENERIC_CLASSES, generated Java classes now preserve parameterized
+        Qore parent, interface, method return, and method argument types in their generic
+        signatures.  For example, Java code can compile against
+        <tt>qore.Qore.AbstractIterator&lt;String&gt;</tt> when the underlying Qore class is
+        <tt>AbstractIterator&lt;string&gt;</tt>.  The build keeps compatibility with plain
+        Qore releases that do not expose this API by falling back to raw Java class
+        signatures.
       - <b>Cross-loader sharing.</b> Even with the canonical name, a class can still get
         loaded into multiple \c QoreURLClassLoader instances (qjar, docs builds, and Qorus
         workflow Programs each create their own).  module-jni now defines each

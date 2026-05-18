@@ -806,6 +806,40 @@ auto sub test() {
             }
 
             {
+                QoreJavaCompiler compiler();
+                DiagnosticCollector diags();
+                string source = "package org.qore.test;
+import qore.Qore.AbstractIterator;
+
+public class GenericIteratorProbe {
+    public static AbstractIterator<String> make() throws Throwable {
+        return null;
+    }
+
+    public static String returnTypeName() throws Throwable {
+        return GenericIteratorProbe.class.getMethod(\"make\").getGenericReturnType().getTypeName();
+    }
+}";
+
+                try {
+                    compiler::CompilerOutput newClassData = compiler.compile("org.qore.test.GenericIteratorProbe",
+                        source, diags, ());
+                    reflect::Method m = newClassData.cls.getMethod("returnTypeName");
+                    assertEq("qore.Qore.AbstractIterator<java.lang.String>", m.invoke());
+                } catch (hash<ExceptionInfo> ex) {
+                    bool generic_unsupported;
+                    foreach string msg in (QoreJavaCompilerException::extractDiagnosticMessages(diags)) {
+                        if (msg =~ /does not take parameters/) {
+                            generic_unsupported = True;
+                        }
+                    }
+                    if (!generic_unsupported) {
+                        rethrow;
+                    }
+                }
+            }
+
+            {
                 # compile and execute QoreDynamicTest3.java
                 QoreJavaCompiler compiler();
                 compiler::CompilerOutput newClassData = compiler.compile("org.qore.test.QoreDynamicTest3",

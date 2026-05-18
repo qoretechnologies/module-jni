@@ -351,8 +351,14 @@ public:
     DLLLOCAL LocalReference<jbyteArray> generateByteCode(Env& env, jobject class_loader,
             const QoreString& qpath, jstring jname, const char* module, const QoreClass* qc);
 
+    // returns a raw class type description for Java bytecode generation
+    DLLLOCAL LocalReference<jobject> getJavaRawClassTypeDefinition(Env& env, jobject class_loader,
+        const QoreClass* cls);
+
     // returns a type description for a concrete type or a future type for Java bytecode generation
-    DLLLOCAL LocalReference<jobject> getJavaTypeDefinition(Env& env, jobject class_loader, const QoreTypeInfo* ti, bool no_void = false);
+    DLLLOCAL LocalReference<jobject> getJavaTypeDefinition(Env& env, jobject class_loader,
+        const QoreTypeInfo* ti, bool no_void = false, const QoreClass* generic_context = nullptr,
+        bool generic_position = false);
 
     DLLLOCAL void overrideCompatTypes(bool compat_types) {
         override_compat_types = true;
@@ -517,7 +523,7 @@ protected:
 
     // Returns a param list of Java type corresponding to the Qore types
     DLLLOCAL jobject getJavaParamList(Env& env, jobject class_loader, const QoreExternalVariant& v,
-        unsigned& len, bool do_varargs, bool is_abstract = false);
+        unsigned& len, bool do_varargs, bool is_abstract = false, const QoreClass* generic_context = nullptr);
 
     DLLLOCAL int addConstructorVariant(Env& env, jobject class_loader, const QoreClass& qcls,
         LocalReference<jobject>& bb, const QoreMethod& m, const QoreExternalMethodVariant& v, jclass parent_class,

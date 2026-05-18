@@ -68,6 +68,46 @@ else()
     message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 endif()
 
+if(DEFINED QORE_HAVE_GENERIC_CLASSES)
+    set(QORE_JNI_HAVE_GENERIC_CLASS_TYPES ${QORE_HAVE_GENERIC_CLASSES})
+else()
+    include(CheckCXXSourceCompiles)
+    set(_save_CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES}")
+    set(_save_CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
+    set(CMAKE_REQUIRED_INCLUDES ${QORE_INCLUDE_DIRS})
+    set(CMAKE_REQUIRED_LIBRARIES ${QORE_LIBRARY})
+    check_cxx_source_compiles("
+#include <qore/Qore.h>
+
+#ifndef QORE_HAVE_GENERIC_CLASSES
+#error missing QORE_HAVE_GENERIC_CLASSES
+#endif
+
+int main() {
+    const QoreTypeInfo* ti = nullptr;
+    (void)qore_type_is_type_parameter(ti);
+    (void)qore_type_get_type_parameter_owner_class(ti);
+    (void)qore_type_get_type_parameter_index(ti);
+    (void)qore_type_get_type_parameter_name(ti);
+
+    const QoreClass* cls = nullptr;
+    (void)cls->getTypeParameterCount();
+    (void)cls->getTypeParameterName(0);
+
+    const QoreParentClassIterator* parent = nullptr;
+    (void)parent->getTypeInfo();
+    return 0;
+}
+" QORE_JNI_HAVE_GENERIC_CLASS_TYPES)
+    set(CMAKE_REQUIRED_INCLUDES "${_save_CMAKE_REQUIRED_INCLUDES}")
+    set(CMAKE_REQUIRED_LIBRARIES "${_save_CMAKE_REQUIRED_LIBRARIES}")
+endif()
+
+if(QORE_JNI_HAVE_GENERIC_CLASS_TYPES)
+    add_definitions(-DQORE_JNI_HAVE_GENERIC_CLASS_TYPES=1)
+endif()
+message(STATUS "Qore generic class type API support: ${QORE_JNI_HAVE_GENERIC_CLASS_TYPES}")
+
 SET(_qore_jni_sentinel ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.sentinel)
 SET(_qore_jni_compiler_sentinel ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-compiler.sentinel)
 

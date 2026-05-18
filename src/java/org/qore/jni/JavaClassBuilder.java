@@ -210,8 +210,10 @@ public class JavaClassBuilder {
 
     //! Returns a builder object for a dynamic class
     public static DynamicType.Builder<?> getClassBuilder(String className, Class<?> parentClass,
-            ArrayList<Type> interfaces, boolean is_abstract, long cptr, long cls_pgm_id,
-            String cls_path) throws NoSuchMethodException {
+            TypeDefinition parentType, ArrayList<TypeDefinition> interfaces, ArrayList<String> typeParams,
+            boolean is_abstract, long cptr, long cls_pgm_id, String cls_path) throws NoSuchMethodException {
+        TypeDefinition superType = parentType != null ? parentType : new TypeDescription.ForLoadedType(parentClass);
+
         DynamicType.Builder<?> bb;
         bb = new ByteBuddy()
             .with(TypeValidation.DISABLED)
@@ -221,11 +223,17 @@ public class JavaClassBuilder {
                     return className;
                 }
             })
-            .subclass(parentClass, ConstructorStrategy.Default.NO_CONSTRUCTORS);
+            .subclass(superType, ConstructorStrategy.Default.NO_CONSTRUCTORS);
+
+        if (typeParams != null) {
+            for (String typeParam : typeParams) {
+                bb = bb.typeVariable(typeParam);
+            }
+        }
 
         // add interfaces to class
         if (interfaces != null) {
-            for (Type t : interfaces) {
+            for (TypeDefinition t : interfaces) {
                 bb = bb.implement(t);
             }
         }
@@ -489,6 +497,52 @@ public class JavaClassBuilder {
         return InstrumentedType.Default.of(future_name, null, Modifier.PUBLIC);
     }
 
+    /** Returns a symbolic type variable for generic Java signatures
+     *
+     * @param name The type variable name
+     */
+    public static TypeDefinition getTypeVariable(String name) {
+        return TypeDescription.Generic.Builder.typeVariable(name).build();
+    }
+
+    /** Returns a parameterized type for generic Java signatures
+     *
+     * @param rawType The raw class type
+     * @param typeArgs The generic type arguments
+     */
+    public static TypeDefinition getParameterizedType(TypeDescription rawType, List<TypeDefinition> typeArgs) {
+        if (typeArgs == null || typeArgs.size() == 0) {
+            return rawType;
+        }
+        return TypeDescription.Generic.Builder.parameterizedType(rawType, typeArgs).build();
+    }
+
+    private static String getErasureName(Type type) {
+        if (type instanceof Class) {
+            return ((Class)type).getCanonicalName();
+        } else if (type instanceof java.lang.reflect.ParameterizedType) {
+            return getErasureName(((java.lang.reflect.ParameterizedType)type).getRawType());
+        } else if (type instanceof java.lang.reflect.TypeVariable) {
+            Type[] bounds = ((java.lang.reflect.TypeVariable)type).getBounds();
+            return bounds.length == 0 ? Object.class.getCanonicalName() : getErasureName(bounds[0]);
+        } else if (type instanceof java.lang.reflect.WildcardType) {
+            Type[] bounds = ((java.lang.reflect.WildcardType)type).getUpperBounds();
+            return bounds.length == 0 ? Object.class.getCanonicalName() : getErasureName(bounds[0]);
+        } else if (type instanceof java.lang.reflect.GenericArrayType) {
+            String component = getErasureName(((java.lang.reflect.GenericArrayType)type).getGenericComponentType());
+            try {
+                return Class.forName("[L" + component + ";").getCanonicalName();
+            } catch (ClassNotFoundException e) {
+                return Object[].class.getCanonicalName();
+            }
+        }
+        return type.getTypeName();
+    }
+
+    private static boolean sameErasure(Type javaType, TypeDefinition generatedType) {
+        return generatedType.asErasure().getCanonicalName().equals(getErasureName(javaType));
+    }
+
     /** Check if a parent class has a final method with matching name and parameters.
      *
      *  This prevents creating Java methods that would override final methods in parent classes
@@ -497,7 +551,7 @@ public class JavaClassBuilder {
      *
      *  @return true if the parent class has a final method with matching name and params
      */
-    public static boolean isFinalBaseClassMethod(Class<?> parentClass, String name, List<TypeDescription> params) {
+    public static boolean isFinalBaseClassMethod(Class<?> parentClass, String name, List<TypeDefinition> params) {
         for (Method m : parentClass.getMethods()) {
             if (!m.getName().equals(name) || !Modifier.isFinal(m.getModifiers())) {
                 continue;
@@ -515,15 +569,7 @@ public class JavaClassBuilder {
             }
             boolean ok = true;
             for (int i = 0; i < mparams.length; ++i) {
-                Type mtype = mparams[i];
-                TypeDescription ptype = params.get(i);
-                if (mtype instanceof Class) {
-                    Class cls = (Class)mtype;
-                    if (!ptype.getCanonicalName().equals(cls.getCanonicalName())) {
-                        ok = false;
-                        break;
-                    }
-                } else if (!ptype.getCanonicalName().equals(mtype.getTypeName())) {
+                if (!sameErasure(mparams[i], params.get(i))) {
                     ok = false;
                     break;
                 }
@@ -538,7 +584,7 @@ public class JavaClassBuilder {
     /** Check a class for methods matching a name an TypeDescription list
      *
      */
-    public static boolean findBaseClassMethodConflict(Class<?> parentClass, String name, List<TypeDescription> params,
+    public static boolean findBaseClassMethodConflict(Class<?> parentClass, String name, List<TypeDefinition> params,
             boolean check_static) {
         for (Method m : parentClass.getMethods()) {
             if (!m.getName().equals(name) || Modifier.isStatic(m.getModifiers()) != check_static) {
@@ -557,15 +603,7 @@ public class JavaClassBuilder {
             }
             boolean ok = true;
             for (int i = 0; i < mparams.length; ++i) {
-                Type mtype = mparams[i];
-                TypeDescription ptype = params.get(i);
-                if (mtype instanceof Class) {
-                    Class cls = (Class)mtype;
-                    if (!ptype.getCanonicalName().equals(cls.getCanonicalName())) {
-                        ok = false;
-                        break;
-                    }
-                } else if (!ptype.getCanonicalName().equals(mtype.getTypeName())) {
+                if (!sameErasure(mparams[i], params.get(i))) {
                     ok = false;
                     break;
                 }

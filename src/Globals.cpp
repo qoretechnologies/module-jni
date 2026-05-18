@@ -218,6 +218,8 @@ jmethodID Globals::methodJavaClassBuilderAddStaticMethod;
 jmethodID Globals::methodJavaClassBuilderGetByteCodeFromBuilder;
 jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionCls;
 jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionStr;
+jmethodID Globals::methodJavaClassBuilderGetTypeVariable;
+jmethodID Globals::methodJavaClassBuilderGetParameterizedType;
 jmethodID Globals::methodJavaClassBuilderFindBaseClassMethodConflict;
 jmethodID Globals::methodJavaClassBuilderIsFinalBaseClassMethod;
 
@@ -3520,7 +3522,8 @@ bool Globals::init() {
         sizeof(javaClassBuilderNativeMethods) / sizeof(JNINativeMethod));
 
     methodJavaClassBuilderGetClassBuilder = env.getStaticMethod(classJavaClassBuilder, "getClassBuilder",
-        "(Ljava/lang/String;Ljava/lang/Class;Ljava/util/ArrayList;ZJJLjava/lang/String;)" \
+        "(Ljava/lang/String;Ljava/lang/Class;Lnet/bytebuddy/description/type/TypeDefinition;" \
+        "Ljava/util/ArrayList;Ljava/util/ArrayList;ZJJLjava/lang/String;)" \
         "Lnet/bytebuddy/dynamic/DynamicType$Builder;");
     methodJavaClassBuilderGetFunctionConstantClassBuilder = env.getStaticMethod(classJavaClassBuilder,
         "getFunctionConstantClassBuilder",
@@ -3555,6 +3558,11 @@ bool Globals::init() {
         "(Ljava/lang/Class;)Lnet/bytebuddy/description/type/TypeDescription;");
     methodJavaClassBuilderGetTypeDescriptionStr = env.getStaticMethod(classJavaClassBuilder, "getTypeDescription",
         "(Ljava/lang/String;)Lnet/bytebuddy/description/type/TypeDescription;");
+    methodJavaClassBuilderGetTypeVariable = env.getStaticMethod(classJavaClassBuilder, "getTypeVariable",
+        "(Ljava/lang/String;)Lnet/bytebuddy/description/type/TypeDefinition;");
+    methodJavaClassBuilderGetParameterizedType = env.getStaticMethod(classJavaClassBuilder, "getParameterizedType",
+        "(Lnet/bytebuddy/description/type/TypeDescription;Ljava/util/List;)" \
+        "Lnet/bytebuddy/description/type/TypeDefinition;");
     methodJavaClassBuilderFindBaseClassMethodConflict = env.getStaticMethod(classJavaClassBuilder,
         "findBaseClassMethodConflict", "(Ljava/lang/Class;Ljava/lang/String;Ljava/util/List;Z)Z");
     methodJavaClassBuilderIsFinalBaseClassMethod = env.getStaticMethod(classJavaClassBuilder,
