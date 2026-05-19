@@ -254,6 +254,7 @@ public class Main inherits QUnit::Test {
         addTestCase("defineClass", \defineClassTest());
         addTestCase("issue 2950", \issue2950());
         addTestCase("class test", \testJniClasses());
+        addTestCase("generic Qore class codegen cycle test", \genericQoreClassCodegenCycleTest());
         addTestCase("static method invocation test", \testStaticMethods());
         addTestCase("instance method invocation test", \testInstanceMethods());
         addTestCase("float conversion test", \testFloatConversions());
@@ -1786,6 +1787,20 @@ lorem ipsum\r
         appendDoubleMethod.invoke(buf, acosMethod.invoke(NOTHING, -1.0));
 
         assertEq("1.01.03.1415926535897933.141592653589793", toStringMethod.invoke(buf));
+    }
+
+    genericQoreClassCodegenCycleTest() {
+        lang::Class channelClass = load_class("qore/Qore/Thread/Channel");
+        lang::Class iteratorClass = load_class("qore/Qore/Thread/ChannelIterator");
+
+        assertEq("qore.Qore.Thread.Channel", channelClass.getCanonicalName());
+        assertEq("qore.Qore.Thread.ChannelIterator", iteratorClass.getCanonicalName());
+
+        # Channel<T>::iterator() returns ChannelIterator<T>, and
+        # ChannelIterator<T>::constructor() accepts Channel<T>.  This validates
+        # that JNI can create parameterized forward refs for that cycle.
+        channelClass.getDeclaredMethod("iterator");
+        iteratorClass.getDeclaredMethod("getValue");
     }
 
     testStaticMethods() {

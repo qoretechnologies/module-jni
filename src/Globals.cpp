@@ -218,6 +218,7 @@ jmethodID Globals::methodJavaClassBuilderAddStaticMethod;
 jmethodID Globals::methodJavaClassBuilderGetByteCodeFromBuilder;
 jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionCls;
 jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionStr;
+jmethodID Globals::methodJavaClassBuilderGetTypeDescriptionGenericStr;
 jmethodID Globals::methodJavaClassBuilderGetTypeVariable;
 jmethodID Globals::methodJavaClassBuilderGetParameterizedType;
 jmethodID Globals::methodJavaClassBuilderFindBaseClassMethodConflict;
@@ -3558,6 +3559,9 @@ bool Globals::init() {
         "(Ljava/lang/Class;)Lnet/bytebuddy/description/type/TypeDescription;");
     methodJavaClassBuilderGetTypeDescriptionStr = env.getStaticMethod(classJavaClassBuilder, "getTypeDescription",
         "(Ljava/lang/String;)Lnet/bytebuddy/description/type/TypeDescription;");
+    methodJavaClassBuilderGetTypeDescriptionGenericStr = env.getStaticMethod(classJavaClassBuilder,
+        "getTypeDescription", "(Ljava/lang/String;Ljava/util/ArrayList;)" \
+        "Lnet/bytebuddy/description/type/TypeDescription;");
     methodJavaClassBuilderGetTypeVariable = env.getStaticMethod(classJavaClassBuilder, "getTypeVariable",
         "(Ljava/lang/String;)Lnet/bytebuddy/description/type/TypeDefinition;");
     methodJavaClassBuilderGetParameterizedType = env.getStaticMethod(classJavaClassBuilder, "getParameterizedType",

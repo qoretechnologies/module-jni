@@ -3057,10 +3057,17 @@ LocalReference<jobject> JniExternalProgramData::getJavaRawClassTypeDefinition(En
 
     printd(5, "JniExternalProgramData::getJavaRawClassTypeDefinition() this: %p creating forward ref for Java "
         "class for '%s' (%p)\n", this, cls->getPath(), cls);
-    jvalue jarg;
-    jarg.l = jname;
+    jvalue jargs[2];
+    jargs[0].l = jname;
+#ifdef QORE_JNI_HAVE_GENERIC_CLASS_TYPES
+    LocalReference<jobject> type_params = get_java_type_param_list(env, *cls);
+    jargs[1].l = type_params;
     return env.callStaticObjectMethod(Globals::classJavaClassBuilder,
-        Globals::methodJavaClassBuilderGetTypeDescriptionStr, &jarg);
+        Globals::methodJavaClassBuilderGetTypeDescriptionGenericStr, &jargs[0]);
+#else
+    return env.callStaticObjectMethod(Globals::classJavaClassBuilder,
+        Globals::methodJavaClassBuilderGetTypeDescriptionStr, &jargs[0]);
+#endif
 }
 
 LocalReference<jobject> JniExternalProgramData::getJavaTypeDefinition(Env& env, jobject class_loader,

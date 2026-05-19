@@ -19,6 +19,7 @@ import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.description.type.TypeDefinition;
 import net.bytebuddy.description.type.TypeList;
+import net.bytebuddy.description.type.TypeVariableToken;
 import net.bytebuddy.description.modifier.MethodArguments;
 import net.bytebuddy.description.method.MethodDescription.Token;
 import net.bytebuddy.description.field.FieldDescription;
@@ -495,6 +496,23 @@ public class JavaClassBuilder {
      */
     public static TypeDescription getTypeDescription(String future_name) {
         return InstrumentedType.Default.of(future_name, null, Modifier.PUBLIC);
+    }
+
+    /** Returns a TypeDescription for a future generic type based on the binary name
+     *
+     * @param future_name The binary name of the type to be created
+     * @param typeParams The generic type parameter names declared by the future type
+     */
+    public static TypeDescription getTypeDescription(String future_name, ArrayList<String> typeParams) {
+        InstrumentedType type = InstrumentedType.Default.of(future_name, null, Modifier.PUBLIC);
+        if (typeParams != null) {
+            for (String typeParam : typeParams) {
+                if (typeParam != null && !typeParam.isEmpty()) {
+                    type = type.withTypeVariable(new TypeVariableToken(typeParam, Collections.emptyList()));
+                }
+            }
+        }
+        return type;
     }
 
     /** Returns a symbolic type variable for generic Java signatures

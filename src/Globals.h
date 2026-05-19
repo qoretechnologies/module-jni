@@ -227,6 +227,7 @@ public:
     DLLLOCAL static jmethodID methodJavaClassBuilderGetByteCodeFromBuilder;       // static byte[] getByteCodeFromBuilder(DynamicType.Builder<?>, QoreURLClassLoader)
     DLLLOCAL static jmethodID methodJavaClassBuilderGetTypeDescriptionCls;        // static TypeDescription getTypeDescription(Class<?>)
     DLLLOCAL static jmethodID methodJavaClassBuilderGetTypeDescriptionStr;        // static TypeDescription getTypeDescription(String)
+    DLLLOCAL static jmethodID methodJavaClassBuilderGetTypeDescriptionGenericStr; // static TypeDescription getTypeDescription(String, ArrayList<String>)
     DLLLOCAL static jmethodID methodJavaClassBuilderGetTypeVariable;              // static TypeDefinition getTypeVariable(String)
     DLLLOCAL static jmethodID methodJavaClassBuilderGetParameterizedType;         // static TypeDefinition getParameterizedType(TypeDescription, List<TypeDefinition>)
     DLLLOCAL static jmethodID methodJavaClassBuilderFindBaseClassMethodConflict;  // static boolean findBaseClassMethodConflict(Class<?>, String, List<TypeDescription>, boolean)
