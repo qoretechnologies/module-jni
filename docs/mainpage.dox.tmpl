@@ -1009,6 +1009,10 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
         keep routing through the process-wide system classloader (\c Globals::syscl).
         Genuinely per-Program names (\c qore.<i>X</i>.<i>Y</i> with X ≠ \c Qore, single-
         segment \c qore.<i>X</i>) stay per-loader by design.
+    - added Java wrapper methods for columnar DBI results:
+      \c org.qore.lang.AbstractDatasource.selectColumnar(),
+      \c org.qore.lang.AbstractDatasource.vselectColumnar(), and
+      \c org.qore.lang.AbstractSQLStatement.fetchColumnar()
     - added the <a href="../../JakartaJmsDataProvider/html/index.html">JakartaJmsDataProvider</a>
       module for Jakarta JMS 3.x messaging brokers
       - supports ActiveMQ Artemis, TIBCO EMS, IBM MQ, Oracle AQ, and any Jakarta Messaging 3.x

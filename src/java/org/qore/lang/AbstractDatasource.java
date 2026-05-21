@@ -161,6 +161,39 @@ public class AbstractDatasource extends QoreObjectWrapper {
         return obj.callMethod("vselect", sql, args);
     }
 
+    //! Executes an %SQL select statement and returns a Qore ColumnarResult object.
+    /** The returned object can be passed back to Qore code or accessed with QoreObject.callMethod().
+
+        @param sql The %SQL command to execute on the server
+
+        @return a Qore::SQL::ColumnarResult object
+    */
+    public Object selectColumnar(String sql) throws Throwable {
+        return obj.callMethod("selectColumnar", sql);
+    }
+
+    //! Executes an %SQL select statement and returns a Qore ColumnarResult object.
+    /** The returned object can be passed back to Qore code or accessed with QoreObject.callMethod().
+
+        @param sql The %SQL command to execute on the server
+        @param args bind arguments
+
+        @return a Qore::SQL::ColumnarResult object
+    */
+    public Object selectColumnar(String sql, Object... args) throws Throwable {
+        return obj.callMethod("vselectColumnar", sql, args);
+    }
+
+    //! Executes an %SQL select statement and returns a Qore ColumnarResult object, taking all bind arguments as an array.
+    /** @param sql The %SQL command to execute on the server
+        @param vargs bind arguments
+
+        @return a Qore::SQL::ColumnarResult object
+    */
+    public Object vselectColumnar(String sql, Object[] vargs) throws Throwable {
+        return obj.callMethod("vselectColumnar", sql, vargs);
+    }
+
     //! Executes an %SQL select statement on the server and returns the first row as a hash (the column values)
     /** If more than one row is returned, then it is treated as an error and a \c DBI-SELECT-ROW-ERROR is returned (however the DBI driver should raise its own exception here to avoid retrieving more than one row from the server). For a similar method taking a list for all bind arguments, see vselectRow().
 

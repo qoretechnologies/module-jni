@@ -602,6 +602,23 @@ public class AbstractSQLStatement extends QoreObjectWrapper {
         return (HashMap<String, Object>)obj.callMethod("fetchColumns");
     }
 
+    //! Retrieves a block of rows as a Qore ColumnarResult object.
+    /** @param rows The maximum number of rows to retrieve; if omitted, negative, or zero, all available rows are
+        retrieved
+
+        @return a Qore::SQL::ColumnarResult object
+    */
+    public Object fetchColumnar(int rows) throws Throwable {
+        return obj.callMethod("fetchColumnar", rows);
+    }
+
+    //! Retrieves all available rows as a Qore ColumnarResult object.
+    /** @return a Qore::SQL::ColumnarResult object
+    */
+    public Object fetchColumnar() throws Throwable {
+        return obj.callMethod("fetchColumnar");
+    }
+
     //! Describes columns in the statement result.
     /**
         @return a Map<String, Object> with (<i>column_name</i>: <i>description_hash</i>) format, where each <i>description_hash</i> has the following keys:
