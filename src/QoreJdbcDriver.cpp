@@ -90,6 +90,15 @@ static QoreValue jdbc_select(Datasource* ds, const QoreString* qstr, const QoreL
     return conn->select(qstr, args, xsink);
 }
 
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+static QoreColumnarResult* jdbc_select_columnar(Datasource* ds, const QoreString* qstr, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    QoreJdbcConnection* conn = ds->getPrivateData<QoreJdbcConnection>();
+    assert(conn);
+    return conn->selectColumnar(qstr, args, xsink);
+}
+#endif
+
 static QoreHashNode* jdbc_select_row(Datasource* ds, const QoreString* qstr, const QoreListNode* args,
         ExceptionSink* xsink) {
     QoreJdbcConnection* conn = ds->getPrivateData<QoreJdbcConnection>();
@@ -248,6 +257,15 @@ static QoreHashNode* jdbc_stmt_fetch_columns(SQLStatement* stmt, int maxRows, Ex
     return ps->fetchColumns(maxRows, xsink);
 }
 
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+static QoreColumnarResult* jdbc_stmt_fetch_columnar(SQLStatement* stmt, int maxRows, ExceptionSink* xsink) {
+    QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
+    assert(ps);
+
+    return ps->fetchColumnar(maxRows, xsink);
+}
+#endif
+
 static QoreHashNode* jdbc_stmt_describe(SQLStatement* stmt, ExceptionSink* xsink) {
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
@@ -305,6 +323,9 @@ void setup_jdbc_driver() {
     methods.add(QDBI_METHOD_ROLLBACK, jdbc_rollback);
     methods.add(QDBI_METHOD_BEGIN_TRANSACTION, jdbc_begin_transaction);
     methods.add(QDBI_METHOD_SELECT, jdbc_select);
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+    methods.add(QDBI_METHOD_SELECT_COLUMNAR, jdbc_select_columnar);
+#endif
     methods.add(QDBI_METHOD_SELECT_ROWS, jdbc_select_rows);
     methods.add(QDBI_METHOD_SELECT_ROW, jdbc_select_row);
     methods.add(QDBI_METHOD_EXEC, jdbc_exec);
@@ -323,6 +344,9 @@ void setup_jdbc_driver() {
     methods.add(QDBI_METHOD_STMT_FETCH_ROW, jdbc_stmt_fetch_row);
     methods.add(QDBI_METHOD_STMT_FETCH_ROWS, jdbc_stmt_fetch_rows);
     methods.add(QDBI_METHOD_STMT_FETCH_COLUMNS, jdbc_stmt_fetch_columns);
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+    methods.add(QDBI_METHOD_STMT_FETCH_COLUMNAR, jdbc_stmt_fetch_columnar);
+#endif
     methods.add(QDBI_METHOD_STMT_DESCRIBE, jdbc_stmt_describe);
     methods.add(QDBI_METHOD_STMT_NEXT, jdbc_stmt_next);
     methods.add(QDBI_METHOD_STMT_FREE, jdbc_stmt_free);

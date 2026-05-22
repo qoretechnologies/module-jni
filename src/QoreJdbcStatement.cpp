@@ -26,12 +26,17 @@
 #include "QoreToJava.h"
 #include "JavaToQore.h"
 
+#include <cstdint>
+#include <cstring>
+#include <memory>
 #include <set>
 
 namespace jni {
 
-QoreJdbcColumn::QoreJdbcColumn(std::string&& name, std::string&& qname, jint ctype) : name(name), qname(qname),
-        strip(ctype == Globals::typeChar) {
+QoreJdbcColumn::QoreJdbcColumn(std::string&& name, std::string&& qname, jint ctype,
+        std::string&& native_type, jint precision, jint scale, bool nullable) : name(std::move(name)),
+        qname(std::move(qname)), strip(ctype == Globals::typeChar), ctype(ctype),
+        native_type(std::move(native_type)), precision(precision), scale(scale), nullable(nullable) {
 }
 
 QoreJdbcStatement::~QoreJdbcStatement() {
@@ -239,7 +244,18 @@ int QoreJdbcStatement::describeResultSet(Env& env, ExceptionSink* xsink) {
 
         // get column type
         jint ctype = env.callIntMethod(info, Globals::methodResultSetMetaDataGetColumnType, &jarg);
-        cvec.emplace_back(QoreJdbcColumn(qname.c_str(), std::move(unique_qname), ctype));
+        LocalReference<jstring> type_name = env.callObjectMethod(info,
+            Globals::methodResultSetMetaDataGetColumnTypeName, &jarg).as<jstring>();
+        std::string native_type;
+        if (type_name) {
+            Env::GetStringUtfChars nt(env, type_name);
+            native_type = nt.c_str();
+        }
+        jint precision = env.callIntMethod(info, Globals::methodResultSetMetaDataGetPrecision, &jarg);
+        jint scale = env.callIntMethod(info, Globals::methodResultSetMetaDataGetScale, &jarg);
+        jint nullable = env.callIntMethod(info, Globals::methodResultSetMetaDataIsNullable, &jarg);
+        cvec.emplace_back(QoreJdbcColumn(qname.c_str(), std::move(unique_qname), ctype,
+            std::move(native_type), precision, scale, nullable != 0));
     }
 
     return 0;
@@ -347,6 +363,12 @@ QoreHashNode* QoreJdbcStatement::getOutputHashIntern(Env& env, ExceptionSink* xs
             assert(!*xsink);
         }
         ++row_count;
+        if (max_rows > 0 && row_count == static_cast<size_t>(max_rows)) {
+            break;
+        }
+        if (row_count && !(row_count % 100) && qore_check_cancel(xsink, "JDBC column result fetch")) {
+            return nullptr;
+        }
     }
 
     if (!row_count && !empty_hash_if_nothing) {
@@ -383,10 +405,455 @@ QoreListNode* QoreJdbcStatement::getOutputListIntern(Env& env, ExceptionSink* xs
         if (max_rows > 0 && rowCount == max_rows) {
             break;
         }
+        if (rowCount && !(rowCount % 100) && qore_check_cancel(xsink, "JDBC row result fetch")) {
+            return nullptr;
+        }
     }
 
     return l.release();
 }
+
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+
+static size_t jdbc_bitmap_bytes(size_t elements) {
+    return ((elements + 63) / 64) * 8;
+}
+
+static QoreColumnarTypeDescriptor jdbc_make_schema(const QoreJdbcColumn& col, QoreColumnarTypeKind kind,
+        QoreColumnarColumnType column_type, QoreBufferElementType buffer_type, bool nullable) {
+    QoreColumnarTypeDescriptor schema;
+    schema.name = col.qname;
+    schema.kind = kind;
+    schema.column_type = column_type;
+    schema.buffer_type = buffer_type;
+    schema.nullable = nullable;
+    schema.native_type = col.native_type;
+    if (kind == QoreColumnarTypeKind::Decimal128) {
+        schema.precision = col.precision;
+        schema.scale = col.scale;
+    } else if (kind == QoreColumnarTypeKind::Timestamp) {
+        schema.time_unit = "ns";
+    }
+    return schema;
+}
+
+class JdbcColumnarBuilder {
+public:
+    DLLLOCAL JdbcColumnarBuilder(QoreColumnarTypeDescriptor schema) : schema(std::move(schema)) {
+    }
+
+    DLLLOCAL virtual ~JdbcColumnarBuilder() {
+    }
+
+    DLLLOCAL virtual bool needsGenericValue() const {
+        return false;
+    }
+
+    DLLLOCAL virtual int appendJdbcValue(Env& env, jobject rs, int column, const QoreJdbcColumn& col,
+            ExceptionSink* xsink) {
+        (void)env;
+        (void)rs;
+        (void)column;
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "internal columnar builder for column '%s' does not support direct JDBC value retrieval",
+            col.qname.c_str());
+        return -1;
+    }
+
+    DLLLOCAL virtual int appendQoreValue(QoreValue value, ExceptionSink* xsink) {
+        (void)value;
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "internal columnar builder does not support generic Qore value retrieval");
+        return -1;
+    }
+
+    DLLLOCAL virtual QoreValue makeValue(ExceptionSink* xsink) = 0;
+
+    DLLLOCAL const QoreColumnarTypeDescriptor& getSchema() const {
+        return schema;
+    }
+
+protected:
+    QoreColumnarTypeDescriptor schema;
+};
+
+template <typename T>
+struct JdbcExternalColumnOwner {
+    std::vector<T> data;
+    std::vector<uint8_t> validity;
+};
+
+enum class JdbcFixedGetter {
+    Byte,
+    Short,
+    Int,
+    Long,
+    Float,
+    Double,
+};
+
+template <typename T, JdbcFixedGetter getter>
+class JdbcFixedColumnarBuilder : public JdbcColumnarBuilder {
+public:
+    DLLLOCAL JdbcFixedColumnarBuilder(QoreColumnarTypeDescriptor schema, QoreBufferElementType element_type)
+            : JdbcColumnarBuilder(std::move(schema)), element_type(element_type),
+            owner(new JdbcExternalColumnOwner<T>) {
+    }
+
+    DLLLOCAL virtual int appendJdbcValue(Env& env, jobject rs, int column, const QoreJdbcColumn& col,
+            ExceptionSink* xsink) {
+        jvalue jarg;
+        jarg.i = column;
+        T value = 0;
+        switch (getter) {
+            case JdbcFixedGetter::Byte:
+                value = static_cast<T>(env.callByteMethod(rs, Globals::methodResultSetGetByte, &jarg));
+                break;
+            case JdbcFixedGetter::Short:
+                value = static_cast<T>(env.callShortMethod(rs, Globals::methodResultSetGetShort, &jarg));
+                break;
+            case JdbcFixedGetter::Int:
+                value = static_cast<T>(env.callIntMethod(rs, Globals::methodResultSetGetInt, &jarg));
+                break;
+            case JdbcFixedGetter::Long:
+                value = static_cast<T>(env.callLongMethod(rs, Globals::methodResultSetGetLong, &jarg));
+                break;
+            case JdbcFixedGetter::Float:
+                value = static_cast<T>(env.callFloatMethod(rs, Globals::methodResultSetGetFloat, &jarg));
+                break;
+            case JdbcFixedGetter::Double:
+                value = static_cast<T>(env.callDoubleMethod(rs, Globals::methodResultSetGetDouble, &jarg));
+                break;
+        }
+        bool is_null = env.callBooleanMethod(rs, Globals::methodResultSetWasNull, nullptr);
+        owner->data.push_back(is_null ? T() : value);
+        appendValidity(is_null);
+        return 0;
+    }
+
+    DLLLOCAL virtual QoreValue makeValue(ExceptionSink* xsink) {
+        bool nullable = schema.nullable || null_count > 0;
+        schema.nullable = nullable;
+        return QoreBufferNode::wrapExternalStorage(element_type, nullable, rows,
+            owner->data.empty() ? nullptr : owner->data.data(),
+            nullable && !owner->validity.empty() ? owner->validity.data() : nullptr, owner, null_count, xsink);
+    }
+
+private:
+    QoreBufferElementType element_type;
+    std::shared_ptr<JdbcExternalColumnOwner<T>> owner;
+    size_t rows = 0;
+    int64_t null_count = 0;
+
+    DLLLOCAL void appendValidity(bool is_null) {
+        size_t row = rows++;
+        if (is_null || !owner->validity.empty()) {
+            size_t bytes = jdbc_bitmap_bytes(rows);
+            if (owner->validity.size() < bytes) {
+                owner->validity.resize(bytes, 0xff);
+            }
+            if (is_null) {
+                owner->validity[row / 8] &= ~(uint8_t(1) << (row % 8));
+                ++null_count;
+            }
+        }
+    }
+};
+
+class JdbcBoolColumnarBuilder : public JdbcColumnarBuilder {
+public:
+    DLLLOCAL JdbcBoolColumnarBuilder(QoreColumnarTypeDescriptor schema) : JdbcColumnarBuilder(std::move(schema)),
+            owner(new JdbcExternalColumnOwner<uint8_t>) {
+    }
+
+    DLLLOCAL virtual int appendJdbcValue(Env& env, jobject rs, int column, const QoreJdbcColumn& col,
+            ExceptionSink* xsink) {
+        jvalue jarg;
+        jarg.i = column;
+        bool value = env.callBooleanMethod(rs, Globals::methodResultSetGetBoolean, &jarg);
+        bool is_null = env.callBooleanMethod(rs, Globals::methodResultSetWasNull, nullptr);
+        size_t row = rows++;
+        size_t bytes = jdbc_bitmap_bytes(rows);
+        if (owner->data.size() < bytes) {
+            owner->data.resize(bytes, 0);
+        }
+        if (!is_null && value) {
+            owner->data[row / 8] |= uint8_t(1) << (row % 8);
+        }
+        appendValidity(row, is_null);
+        return 0;
+    }
+
+    DLLLOCAL virtual QoreValue makeValue(ExceptionSink* xsink) {
+        bool nullable = schema.nullable || null_count > 0;
+        schema.nullable = nullable;
+        return QoreBufferNode::wrapExternalStorage(QoreBufferElementType::Bool, nullable, rows,
+            owner->data.empty() ? nullptr : owner->data.data(),
+            nullable && !owner->validity.empty() ? owner->validity.data() : nullptr, owner, null_count, xsink);
+    }
+
+private:
+    std::shared_ptr<JdbcExternalColumnOwner<uint8_t>> owner;
+    size_t rows = 0;
+    int64_t null_count = 0;
+
+    DLLLOCAL void appendValidity(size_t row, bool is_null) {
+        if (is_null || !owner->validity.empty()) {
+            size_t bytes = jdbc_bitmap_bytes(rows);
+            if (owner->validity.size() < bytes) {
+                owner->validity.resize(bytes, 0xff);
+            }
+            if (is_null) {
+                owner->validity[row / 8] &= ~(uint8_t(1) << (row % 8));
+                ++null_count;
+            }
+        }
+    }
+};
+
+class JdbcStringColumnarBuilder : public JdbcColumnarBuilder {
+public:
+    DLLLOCAL JdbcStringColumnarBuilder(QoreColumnarTypeDescriptor schema) : JdbcColumnarBuilder(std::move(schema)) {
+    }
+
+    DLLLOCAL virtual int appendJdbcValue(Env& env, jobject rs, int column, const QoreJdbcColumn& col,
+            ExceptionSink* xsink) {
+        jvalue jarg;
+        jarg.i = column;
+        LocalReference<jstring> jstr = env.callObjectMethod(rs, Globals::methodResultSetGetString, &jarg)
+            .as<jstring>();
+        if (!jstr) {
+            values.emplace_back();
+            nulls.push_back(1);
+            has_nulls = true;
+            return 0;
+        }
+
+        Env::GetStringUtfChars str(env, jstr);
+        values.emplace_back(str.c_str());
+        if (col.strip) {
+            size_t trimmed = 0;
+            while (!values.back().empty() && values.back().back() == ' ') {
+                if (trimmed && !(trimmed % 100) && qore_check_cancel(xsink, "JDBC CHAR column trimming")) {
+                    return -1;
+                }
+                values.back().pop_back();
+                ++trimmed;
+            }
+        }
+        nulls.push_back(0);
+        return 0;
+    }
+
+    DLLLOCAL virtual QoreValue makeValue(ExceptionSink* xsink) {
+        schema.nullable = schema.nullable || has_nulls;
+        ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+        for (size_t i = 0, e = values.size(); i < e; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC string column buffer creation")) {
+                return QoreValue();
+            }
+            if (nulls[i]) {
+                list->push(QoreValue(), xsink);
+            } else {
+                list->push(new QoreStringNode(values[i], QCS_UTF8), xsink);
+            }
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        return new QoreBufferNode(QoreBufferElementType::String, schema.nullable, *list, xsink);
+    }
+
+private:
+    std::vector<std::string> values;
+    std::vector<uint8_t> nulls;
+    bool has_nulls = false;
+};
+
+class JdbcListColumnarBuilder : public JdbcColumnarBuilder {
+public:
+    DLLLOCAL JdbcListColumnarBuilder(QoreColumnarTypeDescriptor schema, ExceptionSink* xsink)
+            : JdbcColumnarBuilder(std::move(schema)), list(new QoreListNode(autoTypeInfo)) {
+        (void)xsink;
+    }
+
+    DLLLOCAL virtual ~JdbcListColumnarBuilder() {
+        ExceptionSink xsink;
+        if (list) {
+            list->deref(&xsink);
+        }
+    }
+
+    DLLLOCAL virtual bool needsGenericValue() const {
+        return true;
+    }
+
+    DLLLOCAL virtual int appendQoreValue(QoreValue value, ExceptionSink* xsink) {
+        assert(list);
+        if (value.isNullOrNothing()) {
+            has_nulls = true;
+        }
+        list->push(value, xsink);
+        return *xsink ? -1 : 0;
+    }
+
+    DLLLOCAL virtual QoreValue makeValue(ExceptionSink* xsink) {
+        schema.nullable = schema.nullable || has_nulls;
+        QoreListNode* rv = list;
+        list = nullptr;
+        return rv;
+    }
+
+private:
+    QoreListNode* list = nullptr;
+    bool has_nulls = false;
+};
+
+static bool jdbc_is_string_type(jint ctype) {
+    return ctype == Globals::typeChar || ctype == Globals::typeVarchar || ctype == Globals::typeLongVarchar
+        || ctype == Globals::typeNChar || ctype == Globals::typeNVarchar || ctype == Globals::typeLongNVarchar;
+}
+
+static std::unique_ptr<JdbcColumnarBuilder> jdbc_make_columnar_builder(const QoreJdbcColumn& col,
+        ExceptionSink* xsink) {
+    if (col.ctype == Globals::typeTinyInt) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcFixedColumnarBuilder<int8_t, JdbcFixedGetter::Byte>(
+            jdbc_make_schema(col, QoreColumnarTypeKind::Int, QoreColumnarColumnType::Int,
+                QoreBufferElementType::Int8, col.nullable), QoreBufferElementType::Int8));
+    }
+    if (col.ctype == Globals::typeSmallInt) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcFixedColumnarBuilder<int16_t, JdbcFixedGetter::Short>(
+            jdbc_make_schema(col, QoreColumnarTypeKind::Int, QoreColumnarColumnType::Int,
+                QoreBufferElementType::Int16, col.nullable), QoreBufferElementType::Int16));
+    }
+    if (col.ctype == Globals::typeInteger) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcFixedColumnarBuilder<int32_t, JdbcFixedGetter::Int>(
+            jdbc_make_schema(col, QoreColumnarTypeKind::Int, QoreColumnarColumnType::Int,
+                QoreBufferElementType::Int32, col.nullable), QoreBufferElementType::Int32));
+    }
+    if (col.ctype == Globals::typeBigInt) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcFixedColumnarBuilder<int64_t, JdbcFixedGetter::Long>(
+            jdbc_make_schema(col, QoreColumnarTypeKind::Int, QoreColumnarColumnType::Int,
+                QoreBufferElementType::Int64, col.nullable), QoreBufferElementType::Int64));
+    }
+    if ((col.ctype == Globals::typeNumeric || col.ctype == Globals::typeDecimal)
+            && !col.scale && col.precision > 0 && col.precision <= 18) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcFixedColumnarBuilder<int64_t, JdbcFixedGetter::Long>(
+            jdbc_make_schema(col, QoreColumnarTypeKind::Int, QoreColumnarColumnType::Int,
+                QoreBufferElementType::Int64, col.nullable), QoreBufferElementType::Int64));
+    }
+    if (col.ctype == Globals::typeReal) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcFixedColumnarBuilder<float, JdbcFixedGetter::Float>(
+            jdbc_make_schema(col, QoreColumnarTypeKind::Float, QoreColumnarColumnType::Float,
+                QoreBufferElementType::Float32, col.nullable), QoreBufferElementType::Float32));
+    }
+    if (col.ctype == Globals::typeFloat || col.ctype == Globals::typeDouble) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcFixedColumnarBuilder<double, JdbcFixedGetter::Double>(
+            jdbc_make_schema(col, QoreColumnarTypeKind::Float, QoreColumnarColumnType::Float,
+                QoreBufferElementType::Float64, col.nullable), QoreBufferElementType::Float64));
+    }
+    if (col.ctype == Globals::typeBit || col.ctype == Globals::typeBoolean) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcBoolColumnarBuilder(
+            jdbc_make_schema(col, QoreColumnarTypeKind::Bool, QoreColumnarColumnType::Bool,
+                QoreBufferElementType::Bool, col.nullable)));
+    }
+    if (jdbc_is_string_type(col.ctype)) {
+        return std::unique_ptr<JdbcColumnarBuilder>(new JdbcStringColumnarBuilder(
+            jdbc_make_schema(col, QoreColumnarTypeKind::String, QoreColumnarColumnType::String,
+                QoreBufferElementType::String, col.nullable)));
+    }
+
+    QoreColumnarTypeKind kind = QoreColumnarTypeKind::Auto;
+    QoreColumnarColumnType column_type = QoreColumnarColumnType::Auto;
+    if (col.ctype == Globals::typeNumeric || col.ctype == Globals::typeDecimal) {
+        kind = QoreColumnarTypeKind::Decimal128;
+        column_type = QoreColumnarColumnType::Number;
+    } else if (col.ctype == Globals::typeDate) {
+        kind = QoreColumnarTypeKind::Date;
+        column_type = QoreColumnarColumnType::Date;
+    } else if (col.ctype == Globals::typeTimestamp || col.ctype == Globals::typeTimestampWithTimezone) {
+        kind = QoreColumnarTypeKind::Timestamp;
+        column_type = QoreColumnarColumnType::Date;
+    } else if (col.ctype == Globals::typeBinary || col.ctype == Globals::typeVarbinary
+            || col.ctype == Globals::typeLongVarbinary) {
+        kind = QoreColumnarTypeKind::Binary;
+        column_type = QoreColumnarColumnType::Binary;
+    }
+
+    return std::unique_ptr<JdbcColumnarBuilder>(new JdbcListColumnarBuilder(
+        jdbc_make_schema(col, kind, column_type, QoreBufferElementType::Invalid, col.nullable), xsink));
+}
+
+QoreColumnarResult* QoreJdbcStatement::getOutputColumnar(Env& env, ExceptionSink* xsink, int max_rows) {
+    if (acquireResultSet(env, xsink) || describeResultSet(env, xsink)) {
+        return nullptr;
+    }
+
+    return getOutputColumnarIntern(env, xsink, max_rows);
+}
+
+QoreColumnarResult* QoreJdbcStatement::getOutputColumnarIntern(Env& env, ExceptionSink* xsink, int max_rows) {
+    std::vector<std::unique_ptr<JdbcColumnarBuilder>> builders;
+    builders.reserve(cvec.size());
+    for (size_t i = 0, e = cvec.size(); i < e; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC columnar builder creation")) {
+            return nullptr;
+        }
+        builders.push_back(jdbc_make_columnar_builder(cvec[i], xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    size_t row_count = 0;
+    while (true) {
+        if (!next(env)) {
+            break;
+        }
+
+        for (size_t c = 0, e = cvec.size(); c < e; ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "JDBC columnar row conversion")) {
+                return nullptr;
+            }
+            QoreJdbcColumn& col = cvec[c];
+            if (builders[c]->needsGenericValue()) {
+                ValueHolder val(getColumnValue(env, static_cast<int>(c + 1), col, xsink), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (builders[c]->appendQoreValue(val.release(), xsink)) {
+                    return nullptr;
+                }
+            } else if (builders[c]->appendJdbcValue(env, rs, static_cast<int>(c + 1), col, xsink)) {
+                return nullptr;
+            }
+        }
+        ++row_count;
+        if (max_rows > 0 && row_count == static_cast<size_t>(max_rows)) {
+            break;
+        }
+        if (row_count && !(row_count % 100) && qore_check_cancel(xsink, "JDBC columnar result fetch")) {
+            return nullptr;
+        }
+    }
+
+    ReferenceHolder<QoreColumnarResult> rv(new QoreColumnarResult, xsink);
+    for (size_t i = 0, e = cvec.size(); i < e; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC columnar result creation")) {
+            return nullptr;
+        }
+        ValueHolder value(builders[i]->makeValue(xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->addColumn(cvec[i].qname.c_str(), value.release(), builders[i]->getSchema(), xsink)) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+#endif
 
 QoreHashNode* QoreJdbcStatement::getSingleRow(Env& env, ExceptionSink* xsink) {
     assert(!rs);

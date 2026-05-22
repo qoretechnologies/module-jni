@@ -405,15 +405,28 @@ jmethodID Globals::methodTimeToString;
 GlobalReference<jclass> Globals::classResultSet;
 jmethodID Globals::methodResultSetClose;
 jmethodID Globals::methodResultSetNext;
+jmethodID Globals::methodResultSetWasNull;
 jmethodID Globals::methodResultSetGetMetaData;
 jmethodID Globals::methodResultSetGetArray;
+jmethodID Globals::methodResultSetGetBoolean;
+jmethodID Globals::methodResultSetGetByte;
+jmethodID Globals::methodResultSetGetDouble;
+jmethodID Globals::methodResultSetGetFloat;
+jmethodID Globals::methodResultSetGetInt;
+jmethodID Globals::methodResultSetGetLong;
 jmethodID Globals::methodResultSetGetObject;
+jmethodID Globals::methodResultSetGetShort;
+jmethodID Globals::methodResultSetGetString;
 
 GlobalReference<jclass> Globals::classResultSetMetaData;
 jmethodID Globals::methodResultSetMetaDataGetColumnClassName;
 jmethodID Globals::methodResultSetMetaDataGetColumnCount;
 jmethodID Globals::methodResultSetMetaDataGetColumnLabel;
 jmethodID Globals::methodResultSetMetaDataGetColumnType;
+jmethodID Globals::methodResultSetMetaDataGetColumnTypeName;
+jmethodID Globals::methodResultSetMetaDataGetPrecision;
+jmethodID Globals::methodResultSetMetaDataGetScale;
+jmethodID Globals::methodResultSetMetaDataIsNullable;
 
 GlobalReference<jclass> Globals::classArray;
 jmethodID Globals::methodArrayGetArray;
@@ -425,8 +438,32 @@ jmethodID Globals::methodServiceLoaderIterator;
 
 GlobalReference<jclass> Globals::classDriver;
 
-int Globals::typeNull;
+int Globals::typeBigInt;
+int Globals::typeBinary;
+int Globals::typeBit;
+int Globals::typeBoolean;
 int Globals::typeChar;
+int Globals::typeDate;
+int Globals::typeDecimal;
+int Globals::typeDouble;
+int Globals::typeFloat;
+int Globals::typeInteger;
+int Globals::typeLongNVarchar;
+int Globals::typeLongVarbinary;
+int Globals::typeLongVarchar;
+int Globals::typeNChar;
+int Globals::typeNull;
+int Globals::typeNumeric;
+int Globals::typeNVarchar;
+int Globals::typeReal;
+int Globals::typeSmallInt;
+int Globals::typeTime;
+int Globals::typeTimeWithTimezone;
+int Globals::typeTimestamp;
+int Globals::typeTimestampWithTimezone;
+int Globals::typeTinyInt;
+int Globals::typeVarbinary;
+int Globals::typeVarchar;
 
 GlobalReference<jstring> Globals::javaQoreClassField;
 GlobalReference<jstring> Globals::javaQoreClassPgmIdField;
@@ -3411,9 +3448,18 @@ bool Globals::init() {
     classResultSet = env.findClass("java/sql/ResultSet").makeGlobal();
     methodResultSetClose = env.getMethod(classResultSet, "close", "()V");
     methodResultSetNext = env.getMethod(classResultSet, "next", "()Z");
+    methodResultSetWasNull = env.getMethod(classResultSet, "wasNull", "()Z");
     methodResultSetGetMetaData = env.getMethod(classResultSet, "getMetaData", "()Ljava/sql/ResultSetMetaData;");
     methodResultSetGetArray = env.getMethod(classResultSet, "getArray", "(I)Ljava/sql/Array;");
+    methodResultSetGetBoolean = env.getMethod(classResultSet, "getBoolean", "(I)Z");
+    methodResultSetGetByte = env.getMethod(classResultSet, "getByte", "(I)B");
+    methodResultSetGetDouble = env.getMethod(classResultSet, "getDouble", "(I)D");
+    methodResultSetGetFloat = env.getMethod(classResultSet, "getFloat", "(I)F");
+    methodResultSetGetInt = env.getMethod(classResultSet, "getInt", "(I)I");
+    methodResultSetGetLong = env.getMethod(classResultSet, "getLong", "(I)J");
     methodResultSetGetObject = env.getMethod(classResultSet, "getObject", "(I)Ljava/lang/Object;");
+    methodResultSetGetShort = env.getMethod(classResultSet, "getShort", "(I)S");
+    methodResultSetGetString = env.getMethod(classResultSet, "getString", "(I)Ljava/lang/String;");
 
     classResultSetMetaData = env.findClass("java/sql/ResultSetMetaData").makeGlobal();
     methodResultSetMetaDataGetColumnClassName = env.getMethod(classResultSetMetaData, "getColumnClassName",
@@ -3423,6 +3469,11 @@ bool Globals::init() {
         "(I)Ljava/lang/String;");
     methodResultSetMetaDataGetColumnType = env.getMethod(classResultSetMetaData, "getColumnType",
         "(I)I");
+    methodResultSetMetaDataGetColumnTypeName = env.getMethod(classResultSetMetaData, "getColumnTypeName",
+        "(I)Ljava/lang/String;");
+    methodResultSetMetaDataGetPrecision = env.getMethod(classResultSetMetaData, "getPrecision", "(I)I");
+    methodResultSetMetaDataGetScale = env.getMethod(classResultSetMetaData, "getScale", "(I)I");
+    methodResultSetMetaDataIsNullable = env.getMethod(classResultSetMetaData, "isNullable", "(I)I");
 
     classArray = env.findClass("java/sql/Array").makeGlobal();
     methodArrayGetArray = env.getMethod(classArray, "getArray", "()Ljava/lang/Object;");
@@ -3439,8 +3490,56 @@ bool Globals::init() {
         LocalReference<jclass> classTypes = env.findClass("java/sql/Types");
         jfieldID field = env.getStaticField(classTypes, "NULL", "I");
         typeNull = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "BIGINT", "I");
+        typeBigInt = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "BINARY", "I");
+        typeBinary = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "BIT", "I");
+        typeBit = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "BOOLEAN", "I");
+        typeBoolean = env.getStaticIntField(classTypes, field);
         field = env.getStaticField(classTypes, "CHAR", "I");
         typeChar = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "DATE", "I");
+        typeDate = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "DECIMAL", "I");
+        typeDecimal = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "DOUBLE", "I");
+        typeDouble = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "FLOAT", "I");
+        typeFloat = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "INTEGER", "I");
+        typeInteger = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "LONGNVARCHAR", "I");
+        typeLongNVarchar = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "LONGVARBINARY", "I");
+        typeLongVarbinary = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "LONGVARCHAR", "I");
+        typeLongVarchar = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "NCHAR", "I");
+        typeNChar = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "NUMERIC", "I");
+        typeNumeric = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "NVARCHAR", "I");
+        typeNVarchar = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "REAL", "I");
+        typeReal = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "SMALLINT", "I");
+        typeSmallInt = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "TIME", "I");
+        typeTime = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "TIME_WITH_TIMEZONE", "I");
+        typeTimeWithTimezone = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "TIMESTAMP", "I");
+        typeTimestamp = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "TIMESTAMP_WITH_TIMEZONE", "I");
+        typeTimestampWithTimezone = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "TINYINT", "I");
+        typeTinyInt = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "VARBINARY", "I");
+        typeVarbinary = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "VARCHAR", "I");
+        typeVarchar = env.getStaticIntField(classTypes, field);
     }
 
     assert(!classQoreURLClassLoader);

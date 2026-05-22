@@ -108,6 +108,38 @@ if(QORE_JNI_HAVE_GENERIC_CLASS_TYPES)
 endif()
 message(STATUS "Qore generic class type API support: ${QORE_JNI_HAVE_GENERIC_CLASS_TYPES}")
 
+if(DEFINED QORE_HAVE_COLUMNAR_RESULT_V2)
+    set(QORE_JNI_HAVE_COLUMNAR_RESULT_V2 ${QORE_HAVE_COLUMNAR_RESULT_V2})
+else()
+    include(CheckCXXSourceCompiles)
+    set(_save_CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES}")
+    set(_save_CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
+    set(CMAKE_REQUIRED_INCLUDES ${QORE_INCLUDE_DIRS})
+    set(CMAKE_REQUIRED_LIBRARIES ${QORE_LIBRARY})
+    check_cxx_source_compiles("
+#include <qore/Qore.h>
+#include <qore/QoreColumnarResult.h>
+
+#ifndef QORE_HAVE_COLUMNAR_RESULT_V2
+#error missing QORE_HAVE_COLUMNAR_RESULT_V2
+#endif
+
+int main() {
+    QoreColumnarTypeDescriptor desc;
+    desc.kind = QoreColumnarTypeKind::Int;
+    desc.buffer_type = QoreBufferElementType::Int64;
+    return qore_columnar_type_kind_name(desc.kind) ? 0 : 1;
+}
+" QORE_JNI_HAVE_COLUMNAR_RESULT_V2)
+    set(CMAKE_REQUIRED_INCLUDES "${_save_CMAKE_REQUIRED_INCLUDES}")
+    set(CMAKE_REQUIRED_LIBRARIES "${_save_CMAKE_REQUIRED_LIBRARIES}")
+endif()
+
+if(QORE_JNI_HAVE_COLUMNAR_RESULT_V2)
+    add_definitions(-DQORE_JNI_HAVE_COLUMNAR_RESULT_V2=1)
+endif()
+message(STATUS "Qore columnar result v2 API support: ${QORE_JNI_HAVE_COLUMNAR_RESULT_V2}")
+
 SET(_qore_jni_sentinel ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.sentinel)
 SET(_qore_jni_compiler_sentinel ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-compiler.sentinel)
 

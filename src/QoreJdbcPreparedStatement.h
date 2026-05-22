@@ -26,6 +26,9 @@
 #define _QORE_JNI_QOREJDBCPREPAREDSTATEMENT_H
 
 #include <qore/Qore.h>
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+#include <qore/QoreColumnarResult.h>
+#endif
 
 #include "QoreJdbcStatement.h"
 
@@ -90,6 +93,16 @@ public:
         @return hash of result column lists
     */
     DLLLOCAL QoreHashNode* fetchColumns(int max_rows, ExceptionSink* xsink);
+
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+    //! Get result columns as a ColumnarResult
+    /** @param xsink exception sink
+        @param rows maximum count of rows to return; if <= 0 the count of returned rows is not limited
+
+        @return columnar result
+    */
+    DLLLOCAL QoreColumnarResult* fetchColumnar(int rows, ExceptionSink* xsink);
+#endif
 
     //! Retrieve the next result-set row
     /** @param xsink exception sink

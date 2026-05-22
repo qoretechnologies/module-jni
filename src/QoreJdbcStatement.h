@@ -26,6 +26,9 @@
 #define _QORE_JNI_QOREJDBCSTATEMENT_H
 
 #include <qore/Qore.h>
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+#include <qore/QoreColumnarResult.h>
+#endif
 
 #include "QoreJdbcConnection.h"
 #include "Env.h"
@@ -47,8 +50,24 @@ struct QoreJdbcColumn {
     //! Strip trailing spaces from string values retrieved (CHAR columns)
     bool strip = false;
 
+    //! JDBC column type from java.sql.Types
+    jint ctype = 0;
+
+    //! JDBC-native column type name
+    std::string native_type;
+
+    //! JDBC-reported precision
+    jint precision = 0;
+
+    //! JDBC-reported scale
+    jint scale = 0;
+
+    //! True if ResultSetMetaData reports nullable or unknown nullability
+    bool nullable = true;
+
     //! Constructor
-    DLLLOCAL QoreJdbcColumn(std::string&& name, std::string&& qname, jint ctype);
+    DLLLOCAL QoreJdbcColumn(std::string&& name, std::string&& qname, jint ctype, std::string&& native_type,
+        jint precision, jint scale, bool nullable);
 };
 
 // column vector
@@ -93,6 +112,17 @@ public:
         @return list of row hashes
     */
     DLLLOCAL QoreListNode* getOutputList(Env& env, ExceptionSink* xsink, int max_rows = -1);
+
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+    //! Get result columns as a ColumnarResult
+    /** @param env the JNI environment variable
+        @param xsink exception sink
+        @param max_rows maximum count of rows to return; if <= 0 the count of returned rows is not limited
+
+        @return columnar result
+    */
+    DLLLOCAL QoreColumnarResult* getOutputColumnar(Env& env, ExceptionSink* xsink, int max_rows = -1);
+#endif
 
     //! Get one result row as a hash
     /** @param enc the JNI environment variable
@@ -234,6 +264,10 @@ protected:
             int max_rows = -1);
 
     DLLLOCAL QoreListNode* getOutputListIntern(Env& env, ExceptionSink* xsink, int max_rows = -1);
+
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+    DLLLOCAL QoreColumnarResult* getOutputColumnarIntern(Env& env, ExceptionSink* xsink, int max_rows = -1);
+#endif
 
     //! Get a column's value and return a Qore value for it
     /** @param enc the JNI environment variable

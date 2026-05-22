@@ -131,6 +131,18 @@ QoreHashNode* QoreJdbcPreparedStatement::fetchColumns(int max_rows, ExceptionSin
     return nullptr;
 }
 
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+QoreColumnarResult* QoreJdbcPreparedStatement::fetchColumnar(int rows, ExceptionSink* xsink) {
+    try {
+        Env env;
+        return getOutputColumnarIntern(env, xsink, rows);
+    } catch (JavaException& e) {
+        e.convert(xsink);
+    }
+    return nullptr;
+}
+#endif
+
 bool QoreJdbcPreparedStatement::next(ExceptionSink* xsink) {
     try {
         Env env;

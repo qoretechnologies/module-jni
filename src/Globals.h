@@ -423,8 +423,17 @@ public:
     DLLLOCAL static GlobalReference<jclass> classResultSet;                       // java.sql.ResultSet
     DLLLOCAL static jmethodID methodResultSetClose;                               // void close()
     DLLLOCAL static jmethodID methodResultSetGetArray;                            // Array getArray(int)
+    DLLLOCAL static jmethodID methodResultSetGetBoolean;                          // boolean getBoolean(int)
+    DLLLOCAL static jmethodID methodResultSetGetByte;                             // byte getByte(int)
+    DLLLOCAL static jmethodID methodResultSetGetDouble;                           // double getDouble(int)
+    DLLLOCAL static jmethodID methodResultSetGetFloat;                            // float getFloat(int)
+    DLLLOCAL static jmethodID methodResultSetGetInt;                              // int getInt(int)
+    DLLLOCAL static jmethodID methodResultSetGetLong;                             // long getLong(int)
     DLLLOCAL static jmethodID methodResultSetGetObject;                           // Object getObject(int)
+    DLLLOCAL static jmethodID methodResultSetGetShort;                            // short getShort(int)
+    DLLLOCAL static jmethodID methodResultSetGetString;                           // String getString(int)
     DLLLOCAL static jmethodID methodResultSetNext;                                // boolean next()
+    DLLLOCAL static jmethodID methodResultSetWasNull;                             // boolean wasNull()
     DLLLOCAL static jmethodID methodResultSetGetMetaData;                         // ResultSetMetaData getMetaData()
 
     DLLLOCAL static GlobalReference<jclass> classResultSetMetaData;               // java.sql.ResultSetMetadata
@@ -432,6 +441,10 @@ public:
     DLLLOCAL static jmethodID methodResultSetMetaDataGetColumnCount;              // int getColumnCount()
     DLLLOCAL static jmethodID methodResultSetMetaDataGetColumnLabel;              // String getColumnLabel(int)
     DLLLOCAL static jmethodID methodResultSetMetaDataGetColumnType;               // int getColumnType(int)
+    DLLLOCAL static jmethodID methodResultSetMetaDataGetColumnTypeName;           // String getColumnTypeName(int)
+    DLLLOCAL static jmethodID methodResultSetMetaDataGetPrecision;                // int getPrecision(int)
+    DLLLOCAL static jmethodID methodResultSetMetaDataGetScale;                    // int getScale(int)
+    DLLLOCAL static jmethodID methodResultSetMetaDataIsNullable;                  // int isNullable(int)
 
     DLLLOCAL static GlobalReference<jclass> classArray;                           // java.sql.Array
     DLLLOCAL static jmethodID methodArrayGetArray;                                // Object getArray()
@@ -443,8 +456,32 @@ public:
 
     DLLLOCAL static GlobalReference<jclass> classDriver;                          // java.sql.Driver
 
-    DLLLOCAL static int typeNull; // java.sql.Type.NULL value
-    DLLLOCAL static int typeChar; // java.sql.Type.CHAR value
+    DLLLOCAL static int typeBigInt;                 // java.sql.Type.BIGINT value
+    DLLLOCAL static int typeBinary;                 // java.sql.Type.BINARY value
+    DLLLOCAL static int typeBit;                    // java.sql.Type.BIT value
+    DLLLOCAL static int typeBoolean;                // java.sql.Type.BOOLEAN value
+    DLLLOCAL static int typeChar;                   // java.sql.Type.CHAR value
+    DLLLOCAL static int typeDate;                   // java.sql.Type.DATE value
+    DLLLOCAL static int typeDecimal;                // java.sql.Type.DECIMAL value
+    DLLLOCAL static int typeDouble;                 // java.sql.Type.DOUBLE value
+    DLLLOCAL static int typeFloat;                  // java.sql.Type.FLOAT value
+    DLLLOCAL static int typeInteger;                // java.sql.Type.INTEGER value
+    DLLLOCAL static int typeLongNVarchar;           // java.sql.Type.LONGNVARCHAR value
+    DLLLOCAL static int typeLongVarbinary;          // java.sql.Type.LONGVARBINARY value
+    DLLLOCAL static int typeLongVarchar;            // java.sql.Type.LONGVARCHAR value
+    DLLLOCAL static int typeNChar;                  // java.sql.Type.NCHAR value
+    DLLLOCAL static int typeNull;                   // java.sql.Type.NULL value
+    DLLLOCAL static int typeNumeric;                // java.sql.Type.NUMERIC value
+    DLLLOCAL static int typeNVarchar;               // java.sql.Type.NVARCHAR value
+    DLLLOCAL static int typeReal;                   // java.sql.Type.REAL value
+    DLLLOCAL static int typeSmallInt;               // java.sql.Type.SMALLINT value
+    DLLLOCAL static int typeTime;                   // java.sql.Type.TIME value
+    DLLLOCAL static int typeTimeWithTimezone;       // java.sql.Type.TIME_WITH_TIMEZONE value
+    DLLLOCAL static int typeTimestamp;              // java.sql.Type.TIMESTAMP value
+    DLLLOCAL static int typeTimestampWithTimezone;  // java.sql.Type.TIMESTAMP_WITH_TIMEZONE value
+    DLLLOCAL static int typeTinyInt;                // java.sql.Type.TINYINT value
+    DLLLOCAL static int typeVarbinary;              // java.sql.Type.VARBINARY value
+    DLLLOCAL static int typeVarchar;                // java.sql.Type.VARCHAR value
 
     DLLLOCAL static GlobalReference<jstring> javaQoreClassField;
     DLLLOCAL static GlobalReference<jstring> javaQoreClassPgmIdField;

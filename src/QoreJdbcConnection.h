@@ -26,6 +26,9 @@
 #define _QORE_JNI_QOREJDBCCONNECTION_H
 
 #include <qore/Qore.h>
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+#include <qore/QoreColumnarResult.h>
+#endif
 
 #include "GlobalReference.h"
 #include "QoreJniClassMap.h"
@@ -81,6 +84,18 @@ public:
     DLLLOCAL QoreStringNode* getDriverRealName(ExceptionSink* xsink);
 
     DLLLOCAL QoreValue select(const QoreString* qstr, const QoreListNode* args, ExceptionSink* xsink);
+
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+    //! Select multiple rows from the database as a columnar result.
+    /** @param qstr Qore-style SQL statement
+        @param args SQL parameters
+        @param xsink exception sink
+
+        @return columnar result
+    */
+    DLLLOCAL QoreColumnarResult* selectColumnar(const QoreString* qstr, const QoreListNode* args,
+        ExceptionSink* xsink);
+#endif
 
     //! Select multiple rows from the database.
     /** @param qstr Qore-style SQL statement

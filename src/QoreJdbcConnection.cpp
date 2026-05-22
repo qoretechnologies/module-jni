@@ -445,6 +445,34 @@ QoreValue QoreJdbcConnection::select(const QoreString* qstr, const QoreListNode*
     return QoreValue();
 }
 
+#ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
+QoreColumnarResult* QoreJdbcConnection::selectColumnar(const QoreString* qstr, const QoreListNode* args,
+        ExceptionSink* xsink) {
+    assert(connection);
+    Env env;
+    try {
+        QoreJdbcStatement stmt(xsink, this);
+
+        bool result_set = stmt.exec(env, xsink, qstr, args);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        if (!result_set) {
+            xsink->raiseException("JDBC-SELECT-COLUMNAR-ERROR",
+                "SQL passed to selectColumnar() did not return a result set");
+            return nullptr;
+        }
+
+        return stmt.getOutputColumnar(env, xsink, -1);
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+    }
+    assert(*xsink);
+    return nullptr;
+}
+#endif
+
 QoreListNode* QoreJdbcConnection::selectRows(const QoreString* qstr, const QoreListNode* args, ExceptionSink* xsink) {
     assert(connection);
     ValueHolder rv(xsink);

@@ -909,6 +909,42 @@ set_save_object_callback(callback);
     @note the initial \c jdbc: in the \c db value is optional; if missing, it is added automatically by the %Qore
     \c jdbc driver when the internal URL string is passed to the internal Java JDBC call.
 
+    @subsection jdbc_columnar_results jdbc Columnar Result Support
+
+    When module-jni is built against %Qore headers exposing the columnar result API, the \c jdbc DBI driver provides
+    native implementations of \c Datasource::selectColumnar() and \c SQLStatement::fetchColumnar().  Fixed-width JDBC
+    result types are returned as dense %Qore buffers:
+    - \c TINYINT, \c SMALLINT, \c INTEGER, and \c BIGINT map to \c buffer<*int8>, \c buffer<*int16>,
+      \c buffer<*int32>, and \c buffer<*int64>
+    - integer \c NUMERIC / \c DECIMAL values with precision <= 18 map to \c buffer<*int64>
+    - \c REAL, \c FLOAT, and \c DOUBLE map to \c buffer<*float32> or \c buffer<*float64>
+    - \c BOOLEAN and \c BIT map to \c buffer<*bool>
+    - character columns map to \c buffer<*string>
+
+    Decimal values that cannot be represented safely as integers are returned as lists and carry \c decimal128
+    schema metadata with JDBC precision and scale.  Date, timestamp, binary, and driver-specific values are returned
+    through the compatibility list path with schema metadata where the JDBC type is known.
+
+    @par Columnar JDBC Example
+    @code
+Datasource ds("jdbc:user/pass@ignored{url=postgresql://db.example.com/sales,classpath=/usr/share/java/postgresql.jar}");
+ds.open();
+
+ColumnarResult result = ds.selectColumnar(
+    "select id, customer_name, total, active from orders order by id");
+
+buffer<*int64> ids = result.getColumn("id");
+buffer<*string> customers = result.getColumn("customer_name");
+buffer<*bool> active = result.getColumn("active");
+
+foreach hash<auto> column in (result.schemaV2()) {
+    printf("%s: %s%s\n", column.name, column.kind, column.nullable ? " nullable" : "");
+}
+    @endcode
+
+    Builds against older %Qore releases that do not expose the columnar result API keep the previous \c jdbc DBI
+    behavior and do not register these native columnar DBI hooks.
+
     @subsection jdbc_driver_options jdbc DBI Driver Options
 
     The jdbc driver supports the following DBI options:
@@ -1013,6 +1049,10 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       \c org.qore.lang.AbstractDatasource.selectColumnar(),
       \c org.qore.lang.AbstractDatasource.vselectColumnar(), and
       \c org.qore.lang.AbstractSQLStatement.fetchColumnar()
+    - added native \c jdbc DBI support for \c Datasource::selectColumnar() and \c SQLStatement::fetchColumnar()
+      when built against %Qore versions exposing the columnar result API; fixed-width JDBC result columns are returned
+      as dense nullable %Qore buffers, while decimal, date/time, binary, and driver-specific values retain schema
+      metadata and fall back to list storage where needed
     - improved the <a href="../../JdbcDataProvider/html/index.html">JdbcDataProvider</a>
       module so provider and connection options can load JDBC driver JARs with \c classpath
       and explicitly register drivers with \c driver_class before opening a connection
