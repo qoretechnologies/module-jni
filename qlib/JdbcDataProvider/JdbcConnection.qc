@@ -58,6 +58,23 @@ public class JdbcConnection inherits ConnectionProvider::AbstractConnectionWithI
                     "sensitive": True,
                     "required": True,
                 },
+                "classpath": <ConnectionOptionInfo>{
+                    "display_name": "Driver Classpath",
+                    "short_desc": "Classpath for JDBC driver JAR files",
+                    "type": "string",
+                    "desc": "JDBC driver JAR file, directory, or classpath list to add to the "
+                        "JNI classpath before opening the connection. Comma-separated entries "
+                        "are also accepted",
+                    "example_value": "/usr/share/java/postgresql.jar",
+                },
+                "driver_class": <ConnectionOptionInfo>{
+                    "display_name": "Driver Class",
+                    "short_desc": "Java JDBC driver class name",
+                    "type": "string",
+                    "desc": "Optional Java JDBC driver class to instantiate before connecting, "
+                        "for example `org.postgresql.Driver`",
+                    "example_value": "org.postgresql.Driver",
+                },
             },
             "schemes": {
                 "jdbc-dp": True,
@@ -151,6 +168,7 @@ public class JdbcConnection inherits ConnectionProvider::AbstractConnectionWithI
         if (rtopts) {
             copts += rtopts;
         }
+        Priv::prepareJdbcDriver(copts);
         return DriverManager::getConnection(copts.url, copts.user, copts.password);
     }
 }

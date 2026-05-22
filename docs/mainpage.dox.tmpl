@@ -1013,6 +1013,9 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       \c org.qore.lang.AbstractDatasource.selectColumnar(),
       \c org.qore.lang.AbstractDatasource.vselectColumnar(), and
       \c org.qore.lang.AbstractSQLStatement.fetchColumnar()
+    - improved the <a href="../../JdbcDataProvider/html/index.html">JdbcDataProvider</a>
+      module so provider and connection options can load JDBC driver JARs with \c classpath
+      and explicitly register drivers with \c driver_class before opening a connection
     - added the <a href="../../JakartaJmsDataProvider/html/index.html">JakartaJmsDataProvider</a>
       module for Jakarta JMS 3.x messaging brokers
       - supports ActiveMQ Artemis, TIBCO EMS, IBM MQ, Oracle AQ, and any Jakarta Messaging 3.x

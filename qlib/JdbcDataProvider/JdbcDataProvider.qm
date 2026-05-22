@@ -68,7 +68,9 @@ module JdbcDataProvider {
                 "- Execute DDL and DML statements (CREATE, INSERT, UPDATE, DELETE)\n"
                 "- Browse database tables and introspect column metadata\n"
                 "- Dynamic column type mapping from SQL types to Qore types\n\n"
-                "Database-specific JDBC drivers must be on the Java classpath.\n\n"
+                "Database-specific JDBC drivers can be loaded with the `classpath` and "
+                "`driver_class` connection options, or made available with JNI classpath "
+                "configuration before the provider is created.\n\n"
                 "**Supported databases**: PostgreSQL, Oracle, MySQL, SQL Server, and any "
                 "database with a JDBC driver.",
             "groups": (DataProvider::AppGroup::Databases,),
@@ -141,15 +143,17 @@ module JdbcDataProvider {
     the same name, supporting database table browsing, SQL query execution, and SQL statement execution
     (class @ref JdbcDataProvider::JdbcDataProvider "JdbcDataProvider").
 
-    Database-specific JDBC drivers must be available on the Java classpath before loading this module.
-    Add them via the \c QORE_CLASSPATH environment variable or JNI classpath configuration.
+    Database-specific JDBC drivers must be available to the JVM before a JDBC connection is opened.
+    Pass \c classpath and, when the driver is not auto-registered by the JVM, \c driver_class in the
+    provider or connection options.  Drivers can also be made available with the \c QORE_JNI_CLASSPATH
+    environment variable or JNI classpath configuration.
 
     @section jdbcdataprovider_examples JDBC Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
 
     @par API Example: List Tables
-    @verbatim qdp 'jdbc-dp{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret}/tables' children
+    @verbatim qdp 'jdbc-dp{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret,classpath=/usr/share/java/postgresql.jar,driver_class=org.postgresql.Driver}/tables' children
     @endverbatim
 
     @par API Example: Execute Query
@@ -173,6 +177,29 @@ public const AppName = "JdbcDP";
 }
 
 namespace Priv {
+
+#! Adds JDBC driver classpath entries and optionally instantiates the driver class
+/** @param copts connection options; supports optional \c classpath and \c driver_class keys
+
+    @note Instantiating the driver class triggers the static JDBC driver registration used by
+    java.sql.DriverManager for drivers that are not otherwise discovered.
+*/
+sub prepareJdbcDriver(hash<auto> copts) {
+    if (copts.classpath) {
+        list<string> paths = copts.classpath.split(",");
+        foreach string path in (paths) {
+            path = trim(path);
+            if (path.val()) {
+                Program::issueModuleCmd("jni", "add-classpath " + path);
+            }
+        }
+    }
+
+    if (copts.driver_class) {
+        load_class(copts.driver_class).getConstructor().newInstance();
+    }
+}
+
 #! JDBC logo
 const JdbcLogo = File::readTextFile(get_script_dir() + "/jdbc-dp-logo.svg");
 }

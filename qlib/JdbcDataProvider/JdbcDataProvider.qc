@@ -64,6 +64,24 @@ public class JdbcDataProvider inherits DataProvider::AbstractDataProvider {
                 "required": True,
                 "sensitive": True,
             },
+            "classpath": <DataProviderOptionInfo>{
+                "display_name": "Driver Classpath",
+                "short_desc": "Classpath for JDBC driver JAR files",
+                "desc": "JDBC driver JAR file, directory, or classpath list to add to the JNI "
+                    "classpath before opening the connection. Comma-separated entries are also "
+                    "accepted.",
+                "type": AbstractDataProviderTypeMap."string",
+                "example_value": "/usr/share/java/postgresql.jar",
+            },
+            "driver_class": <DataProviderOptionInfo>{
+                "display_name": "Driver Class",
+                "short_desc": "Java JDBC driver class name",
+                "desc": "Optional Java JDBC driver class to instantiate before connecting, for "
+                    "example `org.postgresql.Driver`. This triggers JDBC driver registration "
+                    "when the driver is not auto-discovered.",
+                "type": AbstractDataProviderTypeMap."string",
+                "example_value": "org.postgresql.Driver",
+            },
         };
 
         #! Child data provider names
@@ -96,6 +114,7 @@ public class JdbcDataProvider inherits DataProvider::AbstractDataProvider {
         if (!copts.password) {
             error("JDBC-CONSTRUCTOR-ERROR", "the \"password\" option is required");
         }
+        Priv::prepareJdbcDriver(copts);
         connection = DriverManager::getConnection(copts.url, copts.user, copts.password);
         introspector = new JdbcSchemaIntrospector(connection);
         executor = new JdbcQueryExecutor(connection);
@@ -107,6 +126,7 @@ public class JdbcDataProvider inherits DataProvider::AbstractDataProvider {
         if (options) {
             copts += options;
         }
+        Priv::prepareJdbcDriver(copts);
         connection = DriverManager::getConnection(copts.url, copts.user, copts.password);
         introspector = new JdbcSchemaIntrospector(connection);
         executor = new JdbcQueryExecutor(connection);

@@ -38,6 +38,8 @@ public class JdbcDataProviderTest inherits QUnit::Test {
         *string jdbc_url;
         *string jdbc_user;
         *string jdbc_password;
+        *string jdbc_classpath;
+        *string jdbc_driver_class;
     }
 
     constructor() : Test("JdbcDataProviderTest", "1.0", \ARGV) {
@@ -45,6 +47,8 @@ public class JdbcDataProviderTest inherits QUnit::Test {
         jdbc_url = ENV.QORE_DB_CONNSTR_JDBC_PGSQL;
         jdbc_user = ENV.JDBC_DB_USER ?? "postgres";
         jdbc_password = ENV.JDBC_DB_PASSWORD ?? "omq";
+        jdbc_classpath = ENV.JDBC_DB_CLASSPATH;
+        jdbc_driver_class = ENV.JDBC_DB_DRIVER_CLASS;
 
         addTestCase("factory test", \testFactory());
         addTestCase("action registration", \testActionRegistration());
@@ -87,11 +91,7 @@ public class JdbcDataProviderTest inherits QUnit::Test {
         if (!jdbc_url) {
             testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
         }
-        JdbcDataProvider dp({
-            "url": jdbc_url,
-            "user": jdbc_user,
-            "password": jdbc_password,
-        });
+        JdbcDataProvider dp(getJdbcOptions());
         list<string> children = dp.getChildProviderNames();
         assertTrue(children.size() >= 3);
         assertTrue(inlist("tables", children));
@@ -103,11 +103,7 @@ public class JdbcDataProviderTest inherits QUnit::Test {
         if (!jdbc_url) {
             testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
         }
-        JdbcDataProvider dp({
-            "url": jdbc_url,
-            "user": jdbc_user,
-            "password": jdbc_password,
-        });
+        JdbcDataProvider dp(getJdbcOptions());
 
         # Create a test table
         AbstractDataProvider execDp = dp.getChildProvider("exec");
@@ -133,15 +129,26 @@ public class JdbcDataProviderTest inherits QUnit::Test {
         if (!jdbc_url) {
             testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
         }
-        JdbcDataProvider dp({
-            "url": jdbc_url,
-            "user": jdbc_user,
-            "password": jdbc_password,
-        });
+        JdbcDataProvider dp(getJdbcOptions());
 
         AbstractDataProvider tablesDp = dp.getChildProvider("tables");
         list<hash<auto>> tables = map $1, tablesDp.searchRecords();
         # PostgreSQL always has system tables
         assertTrue(tables.size() >= 0);
+    }
+
+    private hash<auto> getJdbcOptions() {
+        hash<auto> rv = {
+            "url": jdbc_url,
+            "user": jdbc_user,
+            "password": jdbc_password,
+        };
+        if (jdbc_classpath) {
+            rv.classpath = jdbc_classpath;
+        }
+        if (jdbc_driver_class) {
+            rv.driver_class = jdbc_driver_class;
+        }
+        return rv;
     }
 }
