@@ -25,6 +25,15 @@ public class Main inherits QUnit::Test {
         set_return_value(main());
     }
 
+    private auto getColumn(ColumnarResult result, string name) {
+        string cname = result.columnNames().contains(name) ? name : name.upr();
+        return result.getColumn(cname);
+    }
+
+    private list asList(auto value) {
+        return value.type() == Type::List ? value : value.toList();
+    }
+
     private oracleTest() {
         *AbstractDatasource ds = getConnection("QORE_DB_CONNSTR_JDBC_ORACLE");
         if (!ds) {
@@ -110,8 +119,33 @@ public class Main inherits QUnit::Test {
         list<auto> rows = ds.selectRows("select * from jdbc_test");
         assertEq(({"input_1": 1, "input_2": "test"},), rows);
 
-        rows_affected = ds.exec("delete from jdbc_test where input_1 = %v", 1);
+        rows_affected = ds.exec("insert into jdbc_test (input_1, input_2) values (%v, %v)", 2, "next");
         assertEq(1, rows_affected);
+        rows_affected = ds.exec("insert into jdbc_test (input_1, input_2) values (%v, %v)", 3, "last");
+        assertEq(1, rows_affected);
+
+        ColumnarResult columnar = ds.selectColumnar("select input_1, input_2 from jdbc_test order by input_1");
+        assertEq(3, columnar.numRows());
+        assertEq(2, columnar.numCols());
+        assertEq((1, 2, 3), map int($1), asList(getColumn(columnar, "input_1")));
+        assertEq(("test", "next", "last"), asList(getColumn(columnar, "input_2")));
+
+        SQLStatement stmt(ds);
+        stmt.prepare("select input_1, input_2 from jdbc_test order by input_1");
+        stmt.exec();
+        on_exit stmt.commit();
+
+        ColumnarResult first = stmt.fetchColumnar(rows: 2);
+        ColumnarResult rest = stmt.fetchColumnar(rows: -1);
+        assertEq(2, first.numRows());
+        assertEq(1, rest.numRows());
+        assertEq((1, 2), map int($1), asList(getColumn(first, "input_1")));
+        assertEq((3,), map int($1), asList(getColumn(rest, "input_1")));
+        assertEq(("test", "next"), asList(getColumn(first, "input_2")));
+        assertEq(("last",), asList(getColumn(rest, "input_2")));
+
+        rows_affected = ds.exec("delete from jdbc_test");
+        assertEq(3, rows_affected);
     }
 
     private usageIntern() {
