@@ -408,6 +408,7 @@ jmethodID Globals::methodResultSetNext;
 jmethodID Globals::methodResultSetWasNull;
 jmethodID Globals::methodResultSetGetMetaData;
 jmethodID Globals::methodResultSetGetArray;
+jmethodID Globals::methodResultSetGetBigDecimal;
 jmethodID Globals::methodResultSetGetBoolean;
 jmethodID Globals::methodResultSetGetByte;
 jmethodID Globals::methodResultSetGetDouble;
@@ -3451,6 +3452,7 @@ bool Globals::init() {
     methodResultSetWasNull = env.getMethod(classResultSet, "wasNull", "()Z");
     methodResultSetGetMetaData = env.getMethod(classResultSet, "getMetaData", "()Ljava/sql/ResultSetMetaData;");
     methodResultSetGetArray = env.getMethod(classResultSet, "getArray", "(I)Ljava/sql/Array;");
+    methodResultSetGetBigDecimal = env.getMethod(classResultSet, "getBigDecimal", "(I)Ljava/math/BigDecimal;");
     methodResultSetGetBoolean = env.getMethod(classResultSet, "getBoolean", "(I)Z");
     methodResultSetGetByte = env.getMethod(classResultSet, "getByte", "(I)B");
     methodResultSetGetDouble = env.getMethod(classResultSet, "getDouble", "(I)D");

@@ -26,6 +26,7 @@
 #include "QoreToJava.h"
 #include "JavaToQore.h"
 
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -428,7 +429,7 @@ static QoreColumnarTypeDescriptor jdbc_make_schema(const QoreJdbcColumn& col, Qo
     schema.buffer_type = buffer_type;
     schema.nullable = nullable;
     schema.native_type = col.native_type;
-    if (kind == QoreColumnarTypeKind::Decimal128) {
+    if (kind == QoreColumnarTypeKind::Decimal128 || column_type == QoreColumnarColumnType::Number) {
         schema.precision = col.precision;
         schema.scale = col.scale;
     } else if (kind == QoreColumnarTypeKind::Timestamp) {
@@ -482,6 +483,238 @@ struct JdbcExternalColumnOwner {
     std::vector<T> data;
     std::vector<uint8_t> validity;
 };
+
+#ifdef QORE_JNI_HAVE_DECIMAL128_BUFFER
+
+constexpr int32_t JDBC_DECIMAL128_MAX_PRECISION = 38;
+
+struct JdbcDecimalParseResult {
+    __int128 unscaled = 0;
+    int32_t scale = 0;
+    int32_t precision = 1;
+};
+
+static unsigned __int128 jdbc_decimal_abs_unsigned(__int128 value) {
+    return value < 0
+        ? static_cast<unsigned __int128>(-(value + 1)) + 1
+        : static_cast<unsigned __int128>(value);
+}
+
+static int32_t jdbc_decimal_precision(__int128 value) {
+    unsigned __int128 abs_value = jdbc_decimal_abs_unsigned(value);
+    int32_t rv = 1;
+    while (abs_value >= 10) {
+        abs_value /= 10;
+        ++rv;
+    }
+    return rv;
+}
+
+static __int128 jdbc_decimal_pow10(int32_t exponent) {
+    __int128 rv = 1;
+    for (int32_t i = 0; i < exponent; ++i) {
+        rv *= 10;
+    }
+    return rv;
+}
+
+static QoreBufferDecimal128 jdbc_decimal_storage_from_int128(__int128 value) {
+    unsigned __int128 bits = static_cast<unsigned __int128>(value);
+    return QoreBufferDecimal128{static_cast<uint64_t>(bits), static_cast<int64_t>(bits >> 64)};
+}
+
+static int jdbc_decimal_parse_string(const std::string& input, JdbcDecimalParseResult& out,
+        const QoreJdbcColumn& col, ExceptionSink* xsink) {
+    size_t begin = 0;
+    while (begin < input.size() && std::isspace(static_cast<unsigned char>(input[begin]))) {
+        if (begin && !(begin % 100) && qore_check_cancel(xsink, "JDBC decimal parsing")) {
+            return -1;
+        }
+        ++begin;
+    }
+    size_t end = input.size();
+    size_t trailing = 0;
+    while (end > begin && std::isspace(static_cast<unsigned char>(input[end - 1]))) {
+        if (trailing && !(trailing % 100) && qore_check_cancel(xsink, "JDBC decimal parsing")) {
+            return -1;
+        }
+        --end;
+        ++trailing;
+    }
+    if (begin == end) {
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "JDBC DECIMAL column '%s' returned an empty value", col.qname.c_str());
+        return -1;
+    }
+
+    bool negative = false;
+    size_t pos = begin;
+    if (input[pos] == '+' || input[pos] == '-') {
+        negative = input[pos] == '-';
+        ++pos;
+    }
+
+    bool seen_digit = false;
+    bool seen_dot = false;
+    int64_t fractional_digits = 0;
+    std::string digits;
+    size_t scanned = 0;
+    for (; pos < end; ++pos) {
+        if (scanned && !(scanned % 100) && qore_check_cancel(xsink, "JDBC decimal parsing")) {
+            return -1;
+        }
+        ++scanned;
+        unsigned char c = static_cast<unsigned char>(input[pos]);
+        if (std::isdigit(c)) {
+            seen_digit = true;
+            digits.push_back(static_cast<char>(c));
+            if (seen_dot) {
+                ++fractional_digits;
+            }
+            continue;
+        }
+        if (input[pos] == '.' && !seen_dot) {
+            seen_dot = true;
+            continue;
+        }
+        break;
+    }
+
+    if (!seen_digit) {
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "JDBC DECIMAL column '%s' returned value '%s' without decimal digits",
+            col.qname.c_str(), input.c_str());
+        return -1;
+    }
+
+    int64_t exponent = 0;
+    if (pos < end && (input[pos] == 'e' || input[pos] == 'E')) {
+        ++pos;
+        bool exponent_negative = false;
+        if (pos < end && (input[pos] == '+' || input[pos] == '-')) {
+            exponent_negative = input[pos] == '-';
+            ++pos;
+        }
+        if (pos == end || !std::isdigit(static_cast<unsigned char>(input[pos]))) {
+            xsink->raiseException("JDBC-COLUMNAR-ERROR",
+                "JDBC DECIMAL column '%s' returned value '%s' with an invalid exponent",
+                col.qname.c_str(), input.c_str());
+            return -1;
+        }
+        size_t exponent_digits = 0;
+        while (pos < end && std::isdigit(static_cast<unsigned char>(input[pos]))) {
+            if (exponent_digits && !(exponent_digits % 100) && qore_check_cancel(xsink, "JDBC decimal parsing")) {
+                return -1;
+            }
+            exponent = (exponent * 10) + (input[pos] - '0');
+            if (exponent > JDBC_DECIMAL128_MAX_PRECISION * 2) {
+                xsink->raiseException("JDBC-COLUMNAR-ERROR",
+                    "JDBC DECIMAL column '%s' returned value '%s' with an exponent too large for decimal128",
+                    col.qname.c_str(), input.c_str());
+                return -1;
+            }
+            ++pos;
+            ++exponent_digits;
+        }
+        if (exponent_negative) {
+            exponent = -exponent;
+        }
+    }
+
+    if (pos != end) {
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "JDBC DECIMAL column '%s' returned value '%s' with unexpected character '%c'",
+            col.qname.c_str(), input.c_str(), input[pos]);
+        return -1;
+    }
+
+    int64_t scale = fractional_digits - exponent;
+    if (scale < 0) {
+        digits.append(static_cast<size_t>(-scale), '0');
+        scale = 0;
+    }
+    if (scale > JDBC_DECIMAL128_MAX_PRECISION) {
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "JDBC DECIMAL column '%s' returned value '%s' with scale %lld; maximum decimal128 scale is %d",
+            col.qname.c_str(), input.c_str(), static_cast<long long>(scale), JDBC_DECIMAL128_MAX_PRECISION);
+        return -1;
+    }
+
+    size_t first_non_zero = digits.find_first_not_of('0');
+    size_t significant_digits = first_non_zero == std::string::npos ? 1 : digits.size() - first_non_zero;
+    if (significant_digits > JDBC_DECIMAL128_MAX_PRECISION) {
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "JDBC DECIMAL column '%s' returned value '%s' with %lld significant digits; maximum decimal128 "
+            "precision is %d", col.qname.c_str(), input.c_str(), static_cast<long long>(significant_digits),
+            JDBC_DECIMAL128_MAX_PRECISION);
+        return -1;
+    }
+
+    __int128 unscaled = 0;
+    for (size_t i = 0, e = digits.size(); i < e; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC decimal parsing")) {
+            return -1;
+        }
+        char c = digits[i];
+        unscaled = (unscaled * 10) + (c - '0');
+    }
+    if (negative) {
+        unscaled = -unscaled;
+    }
+
+    out.unscaled = unscaled;
+    out.scale = static_cast<int32_t>(scale);
+    out.precision = static_cast<int32_t>(significant_digits);
+    return 0;
+}
+
+static int jdbc_decimal_rescale(JdbcDecimalParseResult& value, int32_t target_precision, int32_t target_scale,
+        const std::string& source, const QoreJdbcColumn& col, ExceptionSink* xsink) {
+    assert(target_precision > 0 && target_precision <= JDBC_DECIMAL128_MAX_PRECISION);
+    assert(target_scale >= 0 && target_scale <= target_precision);
+
+    if (value.scale < target_scale) {
+        int32_t diff = target_scale - value.scale;
+        __int128 multiplier = jdbc_decimal_pow10(diff);
+        unsigned __int128 limit = static_cast<unsigned __int128>(jdbc_decimal_pow10(target_precision) - 1);
+        if (jdbc_decimal_abs_unsigned(value.unscaled) > limit / static_cast<unsigned __int128>(multiplier)) {
+            xsink->raiseException("JDBC-COLUMNAR-ERROR",
+                "JDBC DECIMAL column '%s' value '%s' exceeds decimal128 precision %d after scaling",
+                col.qname.c_str(), source.c_str(), target_precision);
+            return -1;
+        }
+        value.unscaled *= multiplier;
+        value.scale = target_scale;
+    } else if (value.scale > target_scale) {
+        int32_t diff = value.scale - target_scale;
+        __int128 divisor = jdbc_decimal_pow10(diff);
+        if (value.unscaled % divisor) {
+            xsink->raiseException("JDBC-COLUMNAR-ERROR",
+                "JDBC DECIMAL column '%s' value '%s' cannot be represented at JDBC scale %d without losing "
+                "precision", col.qname.c_str(), source.c_str(), target_scale);
+            return -1;
+        }
+        value.unscaled /= divisor;
+        value.scale = target_scale;
+    }
+
+    value.precision = jdbc_decimal_precision(value.unscaled);
+    if (value.precision > target_precision) {
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "JDBC DECIMAL column '%s' value '%s' exceeds decimal128 precision %d",
+            col.qname.c_str(), source.c_str(), target_precision);
+        return -1;
+    }
+    return 0;
+}
+
+static bool jdbc_decimal128_metadata_supported(const QoreJdbcColumn& col, int32_t& precision, int32_t& scale) {
+    precision = col.precision > 0 ? col.precision : JDBC_DECIMAL128_MAX_PRECISION;
+    scale = col.scale >= 0 ? col.scale : 0;
+    return precision > 0 && precision <= JDBC_DECIMAL128_MAX_PRECISION && scale >= 0 && scale <= precision;
+}
+
+#endif
 
 enum class JdbcFixedGetter {
     Byte,
@@ -610,6 +843,77 @@ private:
         }
     }
 };
+
+#ifdef QORE_JNI_HAVE_DECIMAL128_BUFFER
+
+class JdbcDecimal128ColumnarBuilder : public JdbcColumnarBuilder {
+public:
+    DLLLOCAL JdbcDecimal128ColumnarBuilder(QoreColumnarTypeDescriptor schema, int32_t precision, int32_t scale)
+            : JdbcColumnarBuilder(std::move(schema)), owner(new JdbcExternalColumnOwner<QoreBufferDecimal128>),
+            precision(precision), scale(scale) {
+        this->schema.precision = precision;
+        this->schema.scale = scale;
+        this->schema.buffer_type = QoreBufferElementType::Decimal128;
+    }
+
+    DLLLOCAL virtual int appendJdbcValue(Env& env, jobject rs, int column, const QoreJdbcColumn& col,
+            ExceptionSink* xsink) {
+        jvalue jarg;
+        jarg.i = column;
+        LocalReference<jobject> num = env.callObjectMethod(rs, Globals::methodResultSetGetBigDecimal, &jarg);
+        if (!num) {
+            owner->data.push_back(QoreBufferDecimal128{0, 0});
+            appendValidity(true);
+            return 0;
+        }
+
+        LocalReference<jstring> jstr = env.callObjectMethod(num, Globals::methodBigDecimalToString, nullptr)
+            .as<jstring>();
+        Env::GetStringUtfChars str(env, jstr);
+        std::string value(str.c_str());
+
+        JdbcDecimalParseResult parsed;
+        if (jdbc_decimal_parse_string(value, parsed, col, xsink)
+                || jdbc_decimal_rescale(parsed, precision, scale, value, col, xsink)) {
+            return -1;
+        }
+        owner->data.push_back(jdbc_decimal_storage_from_int128(parsed.unscaled));
+        appendValidity(false);
+        return 0;
+    }
+
+    DLLLOCAL virtual QoreValue makeValue(ExceptionSink* xsink) {
+        bool nullable = schema.nullable || null_count > 0;
+        schema.nullable = nullable;
+        return QoreBufferNode::wrapExternalStorage(QoreBufferElementType::Decimal128, nullable, rows,
+            owner->data.empty() ? nullptr : owner->data.data(),
+            nullable && !owner->validity.empty() ? owner->validity.data() : nullptr, owner, null_count,
+            precision, scale, xsink);
+    }
+
+private:
+    std::shared_ptr<JdbcExternalColumnOwner<QoreBufferDecimal128>> owner;
+    int32_t precision;
+    int32_t scale;
+    size_t rows = 0;
+    int64_t null_count = 0;
+
+    DLLLOCAL void appendValidity(bool is_null) {
+        size_t row = rows++;
+        if (is_null || !owner->validity.empty()) {
+            size_t bytes = jdbc_bitmap_bytes(rows);
+            if (owner->validity.size() < bytes) {
+                owner->validity.resize(bytes, 0xff);
+            }
+            if (is_null) {
+                owner->validity[row / 8] &= ~(uint8_t(1) << (row % 8));
+                ++null_count;
+            }
+        }
+    }
+};
+
+#endif
 
 class JdbcStringColumnarBuilder : public JdbcColumnarBuilder {
 public:
@@ -757,6 +1061,17 @@ static std::unique_ptr<JdbcColumnarBuilder> jdbc_make_columnar_builder(const Qor
             jdbc_make_schema(col, QoreColumnarTypeKind::Bool, QoreColumnarColumnType::Bool,
                 QoreBufferElementType::Bool, col.nullable)));
     }
+#ifdef QORE_JNI_HAVE_DECIMAL128_BUFFER
+    if (col.ctype == Globals::typeNumeric || col.ctype == Globals::typeDecimal) {
+        int32_t precision;
+        int32_t scale;
+        if (jdbc_decimal128_metadata_supported(col, precision, scale)) {
+            return std::unique_ptr<JdbcColumnarBuilder>(new JdbcDecimal128ColumnarBuilder(
+                jdbc_make_schema(col, QoreColumnarTypeKind::Decimal128, QoreColumnarColumnType::Number,
+                    QoreBufferElementType::Decimal128, col.nullable), precision, scale));
+        }
+    }
+#endif
     if (jdbc_is_string_type(col.ctype)) {
         return std::unique_ptr<JdbcColumnarBuilder>(new JdbcStringColumnarBuilder(
             jdbc_make_schema(col, QoreColumnarTypeKind::String, QoreColumnarColumnType::String,
@@ -766,8 +1081,17 @@ static std::unique_ptr<JdbcColumnarBuilder> jdbc_make_columnar_builder(const Qor
     QoreColumnarTypeKind kind = QoreColumnarTypeKind::Auto;
     QoreColumnarColumnType column_type = QoreColumnarColumnType::Auto;
     if (col.ctype == Globals::typeNumeric || col.ctype == Globals::typeDecimal) {
-        kind = QoreColumnarTypeKind::Decimal128;
         column_type = QoreColumnarColumnType::Number;
+#ifdef QORE_JNI_HAVE_DECIMAL128_BUFFER
+        int32_t precision;
+        int32_t scale;
+        if (jdbc_decimal128_metadata_supported(col, precision, scale)) {
+            kind = QoreColumnarTypeKind::Decimal128;
+        } else
+#endif
+        {
+            kind = QoreColumnarTypeKind::Number;
+        }
     } else if (col.ctype == Globals::typeDate) {
         kind = QoreColumnarTypeKind::Date;
         column_type = QoreColumnarColumnType::Date;

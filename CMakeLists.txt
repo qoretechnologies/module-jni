@@ -140,6 +140,37 @@ if(QORE_JNI_HAVE_COLUMNAR_RESULT_V2)
 endif()
 message(STATUS "Qore columnar result v2 API support: ${QORE_JNI_HAVE_COLUMNAR_RESULT_V2}")
 
+if(DEFINED QORE_HAVE_DECIMAL128_BUFFER)
+    set(QORE_JNI_HAVE_DECIMAL128_BUFFER ${QORE_HAVE_DECIMAL128_BUFFER})
+else()
+    include(CheckCXXSourceCompiles)
+    set(_save_CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES}")
+    set(_save_CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
+    set(CMAKE_REQUIRED_INCLUDES ${QORE_INCLUDE_DIRS})
+    set(CMAKE_REQUIRED_LIBRARIES ${QORE_LIBRARY})
+    check_cxx_source_compiles("
+#include <qore/Qore.h>
+#include <qore/QoreBufferNode.h>
+
+#ifndef QORE_HAVE_DECIMAL128_BUFFER
+#error missing QORE_HAVE_DECIMAL128_BUFFER
+#endif
+
+int main() {
+    QoreBufferDecimal128 value{0, 0};
+    (void)value;
+    return qore_buffer_element_type_is_decimal(QoreBufferElementType::Decimal128) ? 0 : 1;
+}
+" QORE_JNI_HAVE_DECIMAL128_BUFFER)
+    set(CMAKE_REQUIRED_INCLUDES "${_save_CMAKE_REQUIRED_INCLUDES}")
+    set(CMAKE_REQUIRED_LIBRARIES "${_save_CMAKE_REQUIRED_LIBRARIES}")
+endif()
+
+if(QORE_JNI_HAVE_DECIMAL128_BUFFER)
+    add_definitions(-DQORE_JNI_HAVE_DECIMAL128_BUFFER=1)
+endif()
+message(STATUS "Qore decimal128 buffer API support: ${QORE_JNI_HAVE_DECIMAL128_BUFFER}")
+
 SET(_qore_jni_sentinel ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.sentinel)
 SET(_qore_jni_compiler_sentinel ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-compiler.sentinel)
 

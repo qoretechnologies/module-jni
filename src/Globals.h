@@ -423,6 +423,7 @@ public:
     DLLLOCAL static GlobalReference<jclass> classResultSet;                       // java.sql.ResultSet
     DLLLOCAL static jmethodID methodResultSetClose;                               // void close()
     DLLLOCAL static jmethodID methodResultSetGetArray;                            // Array getArray(int)
+    DLLLOCAL static jmethodID methodResultSetGetBigDecimal;                       // BigDecimal getBigDecimal(int)
     DLLLOCAL static jmethodID methodResultSetGetBoolean;                          // boolean getBoolean(int)
     DLLLOCAL static jmethodID methodResultSetGetByte;                             // byte getByte(int)
     DLLLOCAL static jmethodID methodResultSetGetDouble;                           // double getDouble(int)

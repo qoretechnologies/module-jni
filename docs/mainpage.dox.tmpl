@@ -917,13 +917,15 @@ set_save_object_callback(callback);
     - \c TINYINT, \c SMALLINT, \c INTEGER, and \c BIGINT map to \c buffer<*int8>, \c buffer<*int16>,
       \c buffer<*int32>, and \c buffer<*int64>
     - integer \c NUMERIC / \c DECIMAL values with precision <= 18 map to \c buffer<*int64>
+    - other \c NUMERIC / \c DECIMAL values with precision <= 38 map to \c buffer<*decimal128> when module-jni
+      is built against %Qore headers exposing the decimal128 buffer API
     - \c REAL, \c FLOAT, and \c DOUBLE map to \c buffer<*float32> or \c buffer<*float64>
     - \c BOOLEAN and \c BIT map to \c buffer<*bool>
     - character columns map to \c buffer<*string>
 
-    Decimal values that cannot be represented safely as integers are returned as lists and carry \c decimal128
-    schema metadata with JDBC precision and scale.  Date, timestamp, binary, and driver-specific values are returned
-    through the compatibility list path with schema metadata where the JDBC type is known.
+    Decimal values that exceed decimal128 limits, or builds against %Qore headers without the decimal128 buffer API,
+    are returned as lists with JDBC precision and scale metadata.  Date, timestamp, binary, and driver-specific
+    values are returned through the compatibility list path with schema metadata where the JDBC type is known.
 
     @par Columnar JDBC Example
     @code
@@ -1051,8 +1053,9 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       \c org.qore.lang.AbstractSQLStatement.fetchColumnar()
     - added native \c jdbc DBI support for \c Datasource::selectColumnar() and \c SQLStatement::fetchColumnar()
       when built against %Qore versions exposing the columnar result API; fixed-width JDBC result columns are returned
-      as dense nullable %Qore buffers, while decimal, date/time, binary, and driver-specific values retain schema
-      metadata and fall back to list storage where needed
+      as dense nullable %Qore buffers; \c NUMERIC / \c DECIMAL values with precision <= 38 are returned as packed
+      \c buffer<*decimal128> columns when built against %Qore versions exposing the decimal128 buffer API, while
+      date/time, binary, and driver-specific values retain schema metadata and fall back to list storage where needed
     - improved the <a href="../../JdbcDataProvider/html/index.html">JdbcDataProvider</a>
       module so provider and connection options can load JDBC driver JARs with \c classpath
       and explicitly register drivers with \c driver_class before opening a connection
