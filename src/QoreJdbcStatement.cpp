@@ -26,6 +26,7 @@
 #include "QoreToJava.h"
 #include "JavaToQore.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -420,6 +421,84 @@ static size_t jdbc_bitmap_bytes(size_t elements) {
     return ((elements + 63) / 64) * 8;
 }
 
+static bool jdbc_bitmap_is_set(const uint8_t* bitmap, size_t row) {
+    return bitmap[row / 8] & (uint8_t(1) << (row % 8));
+}
+
+static void jdbc_bitmap_clear(std::vector<uint8_t>& bitmap, size_t row) {
+    bitmap[row / 8] &= ~(uint8_t(1) << (row % 8));
+}
+
+static int jdbc_append_validity(std::vector<uint8_t>& dest, size_t dest_rows, const uint8_t* src, size_t src_rows,
+        int64_t src_null_count, ExceptionSink* xsink) {
+    if (!src_rows) {
+        return 0;
+    }
+    if (!src_null_count && dest.empty()) {
+        return 0;
+    }
+
+    size_t new_rows = dest_rows + src_rows;
+    size_t new_bytes = jdbc_bitmap_bytes(new_rows);
+    if (dest.empty()) {
+        dest.assign(new_bytes, 0xff);
+    } else if (dest.size() < new_bytes) {
+        dest.resize(new_bytes, 0xff);
+    }
+
+    if (!src_null_count) {
+        return 0;
+    }
+    if (!src) {
+        xsink->raiseException("JDBC-COLUMNAR-ERROR", "JDBC Java batch returned null counts without a validity bitmap");
+        return -1;
+    }
+
+    if (!(dest_rows % 8)) {
+        memcpy(dest.data() + (dest_rows / 8), src, jdbc_bitmap_bytes(src_rows));
+        return 0;
+    }
+
+    for (size_t i = 0; i < src_rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC columnar validity bitmap merge")) {
+            return -1;
+        }
+        if (!jdbc_bitmap_is_set(src, i)) {
+            jdbc_bitmap_clear(dest, dest_rows + i);
+        }
+    }
+    return 0;
+}
+
+static int jdbc_append_bitmap(std::vector<uint8_t>& dest, size_t dest_rows, const uint8_t* src, size_t src_rows,
+        ExceptionSink* xsink) {
+    if (!src_rows) {
+        return 0;
+    }
+
+    size_t new_rows = dest_rows + src_rows;
+    size_t old_bytes = dest.size();
+    size_t new_bytes = jdbc_bitmap_bytes(new_rows);
+    if (old_bytes < new_bytes) {
+        dest.resize(new_bytes, 0);
+    }
+
+    if (!(dest_rows % 8)) {
+        memcpy(dest.data() + (dest_rows / 8), src, jdbc_bitmap_bytes(src_rows));
+        return 0;
+    }
+
+    for (size_t i = 0; i < src_rows; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC columnar boolean bitmap merge")) {
+            return -1;
+        }
+        if (jdbc_bitmap_is_set(src, i)) {
+            dest[(dest_rows + i) / 8] |= uint8_t(1) << ((dest_rows + i) % 8);
+        }
+    }
+    return 0;
+}
+
 static QoreColumnarTypeDescriptor jdbc_make_schema(const QoreJdbcColumn& col, QoreColumnarTypeKind kind,
         QoreColumnarColumnType column_type, QoreBufferElementType buffer_type, bool nullable) {
     QoreColumnarTypeDescriptor schema;
@@ -437,6 +516,21 @@ static QoreColumnarTypeDescriptor jdbc_make_schema(const QoreJdbcColumn& col, Qo
     }
     return schema;
 }
+
+enum class JdbcJavaBatchMode : jint {
+    Unsupported = 0,
+    Byte = 1,
+    Short = 2,
+    Int = 3,
+    Long = 4,
+    Float = 5,
+    Double = 6,
+    Boolean = 7,
+    String = 8,
+    DecimalString = 9,
+};
+
+constexpr int JDBC_COLUMNAR_JAVA_BATCH_ROWS = 8192;
 
 class JdbcColumnarBuilder {
 public:
@@ -465,6 +559,24 @@ public:
         (void)value;
         xsink->raiseException("JDBC-COLUMNAR-ERROR",
             "internal columnar builder does not support generic Qore value retrieval");
+        return -1;
+    }
+
+    DLLLOCAL virtual JdbcJavaBatchMode getJavaBatchMode(const QoreJdbcColumn& col) const {
+        (void)col;
+        return JdbcJavaBatchMode::Unsupported;
+    }
+
+    DLLLOCAL virtual int appendJavaBatch(Env& env, jobject data, jbyteArray validity, int row_count,
+            int64_t batch_null_count, const QoreJdbcColumn& col, ExceptionSink* xsink) {
+        (void)env;
+        (void)data;
+        (void)validity;
+        (void)row_count;
+        (void)batch_null_count;
+        xsink->raiseException("JDBC-COLUMNAR-ERROR",
+            "internal columnar builder for column '%s' does not support Java batch retrieval",
+            col.qname.c_str());
         return -1;
     }
 
@@ -764,6 +876,86 @@ public:
         return 0;
     }
 
+    DLLLOCAL virtual JdbcJavaBatchMode getJavaBatchMode(const QoreJdbcColumn& col) const {
+        (void)col;
+        switch (getter) {
+            case JdbcFixedGetter::Byte:
+                return JdbcJavaBatchMode::Byte;
+            case JdbcFixedGetter::Short:
+                return JdbcJavaBatchMode::Short;
+            case JdbcFixedGetter::Int:
+                return JdbcJavaBatchMode::Int;
+            case JdbcFixedGetter::Long:
+                return JdbcJavaBatchMode::Long;
+            case JdbcFixedGetter::Float:
+                return JdbcJavaBatchMode::Float;
+            case JdbcFixedGetter::Double:
+                return JdbcJavaBatchMode::Double;
+        }
+        return JdbcJavaBatchMode::Unsupported;
+    }
+
+    DLLLOCAL virtual int appendJavaBatch(Env& env, jobject data, jbyteArray validity, int row_count,
+            int64_t batch_null_count, const QoreJdbcColumn& col, ExceptionSink* xsink) {
+        (void)col;
+        if (!row_count) {
+            return 0;
+        }
+
+        size_t old_rows = rows;
+        owner->data.resize(old_rows + static_cast<size_t>(row_count));
+        JNIEnv* jenv = *env;
+        switch (getter) {
+            case JdbcFixedGetter::Byte:
+                jenv->GetByteArrayRegion(static_cast<jbyteArray>(data), 0, row_count,
+                    reinterpret_cast<jbyte*>(owner->data.data() + old_rows));
+                break;
+            case JdbcFixedGetter::Short:
+                jenv->GetShortArrayRegion(static_cast<jshortArray>(data), 0, row_count,
+                    reinterpret_cast<jshort*>(owner->data.data() + old_rows));
+                break;
+            case JdbcFixedGetter::Int:
+                jenv->GetIntArrayRegion(static_cast<jintArray>(data), 0, row_count,
+                    reinterpret_cast<jint*>(owner->data.data() + old_rows));
+                break;
+            case JdbcFixedGetter::Long:
+                jenv->GetLongArrayRegion(static_cast<jlongArray>(data), 0, row_count,
+                    reinterpret_cast<jlong*>(owner->data.data() + old_rows));
+                break;
+            case JdbcFixedGetter::Float:
+                jenv->GetFloatArrayRegion(static_cast<jfloatArray>(data), 0, row_count,
+                    reinterpret_cast<jfloat*>(owner->data.data() + old_rows));
+                break;
+            case JdbcFixedGetter::Double:
+                jenv->GetDoubleArrayRegion(static_cast<jdoubleArray>(data), 0, row_count,
+                    reinterpret_cast<jdouble*>(owner->data.data() + old_rows));
+                break;
+        }
+        if (jenv->ExceptionCheck()) {
+            throw JavaException();
+        }
+
+        std::vector<uint8_t> validity_data;
+        const uint8_t* validity_ptr = nullptr;
+        if (batch_null_count) {
+            validity_data.resize(jdbc_bitmap_bytes(static_cast<size_t>(row_count)));
+            jenv->GetByteArrayRegion(validity, 0, static_cast<jsize>(validity_data.size()),
+                reinterpret_cast<jbyte*>(validity_data.data()));
+            if (jenv->ExceptionCheck()) {
+                throw JavaException();
+            }
+            validity_ptr = validity_data.data();
+        }
+        if (jdbc_append_validity(owner->validity, old_rows, validity_ptr, static_cast<size_t>(row_count),
+                batch_null_count, xsink)) {
+            return -1;
+        }
+
+        rows += static_cast<size_t>(row_count);
+        null_count += batch_null_count;
+        return 0;
+    }
+
     DLLLOCAL virtual QoreValue makeValue(ExceptionSink* xsink) {
         bool nullable = schema.nullable || null_count > 0;
         schema.nullable = nullable;
@@ -814,6 +1006,52 @@ public:
             owner->data[row / 8] |= uint8_t(1) << (row % 8);
         }
         appendValidity(row, is_null);
+        return 0;
+    }
+
+    DLLLOCAL virtual JdbcJavaBatchMode getJavaBatchMode(const QoreJdbcColumn& col) const {
+        (void)col;
+        return JdbcJavaBatchMode::Boolean;
+    }
+
+    DLLLOCAL virtual int appendJavaBatch(Env& env, jobject data, jbyteArray validity, int row_count,
+            int64_t batch_null_count, const QoreJdbcColumn& col, ExceptionSink* xsink) {
+        (void)col;
+        if (!row_count) {
+            return 0;
+        }
+
+        JNIEnv* jenv = *env;
+        std::vector<uint8_t> data_bits(jdbc_bitmap_bytes(static_cast<size_t>(row_count)));
+        jenv->GetByteArrayRegion(static_cast<jbyteArray>(data), 0, static_cast<jsize>(data_bits.size()),
+            reinterpret_cast<jbyte*>(data_bits.data()));
+        if (jenv->ExceptionCheck()) {
+            throw JavaException();
+        }
+
+        size_t old_rows = rows;
+        if (jdbc_append_bitmap(owner->data, old_rows, data_bits.data(), static_cast<size_t>(row_count), xsink)) {
+            return -1;
+        }
+
+        std::vector<uint8_t> validity_data;
+        const uint8_t* validity_ptr = nullptr;
+        if (batch_null_count) {
+            validity_data.resize(jdbc_bitmap_bytes(static_cast<size_t>(row_count)));
+            jenv->GetByteArrayRegion(validity, 0, static_cast<jsize>(validity_data.size()),
+                reinterpret_cast<jbyte*>(validity_data.data()));
+            if (jenv->ExceptionCheck()) {
+                throw JavaException();
+            }
+            validity_ptr = validity_data.data();
+        }
+        if (jdbc_append_validity(owner->validity, old_rows, validity_ptr, static_cast<size_t>(row_count),
+                batch_null_count, xsink)) {
+            return -1;
+        }
+
+        rows += static_cast<size_t>(row_count);
+        null_count += batch_null_count;
         return 0;
     }
 
@@ -882,6 +1120,62 @@ public:
         return 0;
     }
 
+    DLLLOCAL virtual JdbcJavaBatchMode getJavaBatchMode(const QoreJdbcColumn& col) const {
+        (void)col;
+        return JdbcJavaBatchMode::DecimalString;
+    }
+
+    DLLLOCAL virtual int appendJavaBatch(Env& env, jobject data, jbyteArray validity, int row_count,
+            int64_t batch_null_count, const QoreJdbcColumn& col, ExceptionSink* xsink) {
+        if (!row_count) {
+            return 0;
+        }
+
+        size_t old_rows = rows;
+        jobjectArray strings = static_cast<jobjectArray>(data);
+        for (int i = 0; i < row_count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC decimal batch conversion")) {
+                return -1;
+            }
+            LocalReference<jstring> jstr = env.getObjectArrayElement(strings, i).as<jstring>();
+            if (!jstr) {
+                owner->data.push_back(QoreBufferDecimal128{0, 0});
+                continue;
+            }
+
+            Env::GetStringUtfChars str(env, jstr);
+            std::string value(str.c_str());
+
+            JdbcDecimalParseResult parsed;
+            if (jdbc_decimal_parse_string(value, parsed, col, xsink)
+                    || jdbc_decimal_rescale(parsed, precision, scale, value, col, xsink)) {
+                return -1;
+            }
+            owner->data.push_back(jdbc_decimal_storage_from_int128(parsed.unscaled));
+        }
+
+        std::vector<uint8_t> validity_data;
+        const uint8_t* validity_ptr = nullptr;
+        if (batch_null_count) {
+            validity_data.resize(jdbc_bitmap_bytes(static_cast<size_t>(row_count)));
+            JNIEnv* jenv = *env;
+            jenv->GetByteArrayRegion(validity, 0, static_cast<jsize>(validity_data.size()),
+                reinterpret_cast<jbyte*>(validity_data.data()));
+            if (jenv->ExceptionCheck()) {
+                throw JavaException();
+            }
+            validity_ptr = validity_data.data();
+        }
+        if (jdbc_append_validity(owner->validity, old_rows, validity_ptr, static_cast<size_t>(row_count),
+                batch_null_count, xsink)) {
+            return -1;
+        }
+
+        rows += static_cast<size_t>(row_count);
+        null_count += batch_null_count;
+        return 0;
+    }
+
     DLLLOCAL virtual QoreValue makeValue(ExceptionSink* xsink) {
         bool nullable = schema.nullable || null_count > 0;
         schema.nullable = nullable;
@@ -946,6 +1240,37 @@ public:
             }
         }
         nulls.push_back(0);
+        return 0;
+    }
+
+    DLLLOCAL virtual JdbcJavaBatchMode getJavaBatchMode(const QoreJdbcColumn& col) const {
+        (void)col;
+        return JdbcJavaBatchMode::String;
+    }
+
+    DLLLOCAL virtual int appendJavaBatch(Env& env, jobject data, jbyteArray validity, int row_count,
+            int64_t batch_null_count, const QoreJdbcColumn& col, ExceptionSink* xsink) {
+        (void)validity;
+        (void)col;
+        if (batch_null_count) {
+            has_nulls = true;
+        }
+        jobjectArray strings = static_cast<jobjectArray>(data);
+        for (int i = 0; i < row_count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC string batch conversion")) {
+                return -1;
+            }
+            LocalReference<jstring> jstr = env.getObjectArrayElement(strings, i).as<jstring>();
+            if (!jstr) {
+                values.emplace_back();
+                nulls.push_back(1);
+                has_nulls = true;
+                continue;
+            }
+            Env::GetStringUtfChars str(env, jstr);
+            values.emplace_back(str.c_str());
+            nulls.push_back(0);
+        }
         return 0;
     }
 
@@ -1116,9 +1441,140 @@ QoreColumnarResult* QoreJdbcStatement::getOutputColumnar(Env& env, ExceptionSink
     return getOutputColumnarIntern(env, xsink, max_rows);
 }
 
+static int jdbc_set_int_array(Env& env, jintArray array, const std::vector<jint>& values) {
+    if (values.empty()) {
+        return 0;
+    }
+    JNIEnv* jenv = *env;
+    jenv->SetIntArrayRegion(array, 0, static_cast<jsize>(values.size()), values.data());
+    if (jenv->ExceptionCheck()) {
+        throw JavaException();
+    }
+    return 0;
+}
+
+static int jdbc_set_boolean_array(Env& env, jbooleanArray array, const std::vector<jboolean>& values) {
+    if (values.empty()) {
+        return 0;
+    }
+    JNIEnv* jenv = *env;
+    jenv->SetBooleanArrayRegion(array, 0, static_cast<jsize>(values.size()), values.data());
+    if (jenv->ExceptionCheck()) {
+        throw JavaException();
+    }
+    return 0;
+}
+
+static int jdbc_get_long_array(Env& env, jlongArray array, std::vector<jlong>& values) {
+    if (values.empty()) {
+        return 0;
+    }
+    JNIEnv* jenv = *env;
+    jenv->GetLongArrayRegion(array, 0, static_cast<jsize>(values.size()), values.data());
+    if (jenv->ExceptionCheck()) {
+        throw JavaException();
+    }
+    return 0;
+}
+
+static int jdbc_fetch_columnar_java_batches(Env& env, jobject rs,
+        std::vector<std::unique_ptr<JdbcColumnarBuilder>>& builders, const cvec_t& cvec,
+        const std::vector<jint>& modes, int max_rows, ExceptionSink* xsink) {
+    size_t column_count = builders.size();
+    assert(column_count == cvec.size());
+    assert(column_count == modes.size());
+
+    LocalReference<jintArray> columns = env.newIntArray(static_cast<jsize>(column_count)).as<jintArray>();
+    LocalReference<jintArray> jmodes = env.newIntArray(static_cast<jsize>(column_count)).as<jintArray>();
+    LocalReference<jbooleanArray> trim = env.newBooleanArray(static_cast<jsize>(column_count)).as<jbooleanArray>();
+
+    std::vector<jint> column_numbers(column_count);
+    std::vector<jboolean> trim_values(column_count);
+    for (size_t i = 0; i < column_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC columnar Java batch setup")) {
+            return -1;
+        }
+        column_numbers[i] = static_cast<jint>(i + 1);
+        trim_values[i] = cvec[i].strip ? JNI_TRUE : JNI_FALSE;
+    }
+    jdbc_set_int_array(env, columns, column_numbers);
+    jdbc_set_int_array(env, jmodes, modes);
+    jdbc_set_boolean_array(env, trim, trim_values);
+
+    size_t fetched = 0;
+    while (max_rows <= 0 || fetched < static_cast<size_t>(max_rows)) {
+        int rows_to_fetch = JDBC_COLUMNAR_JAVA_BATCH_ROWS;
+        if (max_rows > 0) {
+            rows_to_fetch = std::min(rows_to_fetch, max_rows - static_cast<int>(fetched));
+        }
+
+        std::vector<jvalue> jargs(5);
+        jargs[0].l = rs;
+        jargs[1].l = columns;
+        jargs[2].l = jmodes;
+        jargs[3].l = trim;
+        jargs[4].i = rows_to_fetch;
+        LocalReference<jobject> batch = env.callStaticObjectMethod(Globals::classJdbcColumnarBatch,
+            Globals::methodJdbcColumnarBatchRead, &jargs[0]);
+        if (!batch) {
+            xsink->raiseException("JDBC-COLUMNAR-ERROR", "JDBC Java batch reader returned no batch object");
+            return -1;
+        }
+
+        int batch_rows = env.getIntField(batch, Globals::fieldJdbcColumnarBatchRows);
+        if (!batch_rows) {
+            break;
+        }
+
+        LocalReference<jobjectArray> data = env.getObjectField(batch, Globals::fieldJdbcColumnarBatchData)
+            .as<jobjectArray>();
+        LocalReference<jobjectArray> validity = env.getObjectField(batch, Globals::fieldJdbcColumnarBatchValidity)
+            .as<jobjectArray>();
+        LocalReference<jlongArray> null_counts = env.getObjectField(batch,
+            Globals::fieldJdbcColumnarBatchNullCounts).as<jlongArray>();
+        if (!data || !validity || !null_counts) {
+            xsink->raiseException("JDBC-COLUMNAR-ERROR", "JDBC Java batch reader returned incomplete batch metadata");
+            return -1;
+        }
+
+        std::vector<jlong> null_count_values(column_count);
+        jdbc_get_long_array(env, null_counts, null_count_values);
+
+        for (size_t c = 0; c < column_count; ++c) {
+            if (c && !(c % 100) && qore_check_cancel(xsink, "JDBC columnar Java batch import")) {
+                return -1;
+            }
+            LocalReference<jobject> column_data = env.getObjectArrayElement(data, static_cast<jsize>(c));
+            LocalReference<jbyteArray> column_validity = env.getObjectArrayElement(validity, static_cast<jsize>(c))
+                .as<jbyteArray>();
+            if (!column_data || !column_validity) {
+                xsink->raiseException("JDBC-COLUMNAR-ERROR",
+                    "JDBC Java batch reader returned incomplete data for column '%s'", cvec[c].qname.c_str());
+                return -1;
+            }
+            if (builders[c]->appendJavaBatch(env, column_data, column_validity, batch_rows, null_count_values[c],
+                    cvec[c], xsink)) {
+                return -1;
+            }
+        }
+
+        fetched += static_cast<size_t>(batch_rows);
+        if (batch_rows < rows_to_fetch) {
+            break;
+        }
+        if (qore_check_cancel(xsink, "JDBC columnar Java batch result fetch")) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 QoreColumnarResult* QoreJdbcStatement::getOutputColumnarIntern(Env& env, ExceptionSink* xsink, int max_rows) {
     std::vector<std::unique_ptr<JdbcColumnarBuilder>> builders;
     builders.reserve(cvec.size());
+    std::vector<jint> java_batch_modes;
+    java_batch_modes.reserve(cvec.size());
+    bool java_batch_supported = true;
     for (size_t i = 0, e = cvec.size(); i < e; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC columnar builder creation")) {
             return nullptr;
@@ -1127,37 +1583,48 @@ QoreColumnarResult* QoreJdbcStatement::getOutputColumnarIntern(Env& env, Excepti
         if (*xsink) {
             return nullptr;
         }
+        JdbcJavaBatchMode mode = builders.back()->getJavaBatchMode(cvec[i]);
+        if (mode == JdbcJavaBatchMode::Unsupported) {
+            java_batch_supported = false;
+        }
+        java_batch_modes.push_back(static_cast<jint>(mode));
     }
 
-    size_t row_count = 0;
-    while (true) {
-        if (!next(env)) {
-            break;
-        }
-
-        for (size_t c = 0, e = cvec.size(); c < e; ++c) {
-            if (c && !(c % 100) && qore_check_cancel(xsink, "JDBC columnar row conversion")) {
-                return nullptr;
-            }
-            QoreJdbcColumn& col = cvec[c];
-            if (builders[c]->needsGenericValue()) {
-                ValueHolder val(getColumnValue(env, static_cast<int>(c + 1), col, xsink), xsink);
-                if (*xsink) {
-                    return nullptr;
-                }
-                if (builders[c]->appendQoreValue(val.release(), xsink)) {
-                    return nullptr;
-                }
-            } else if (builders[c]->appendJdbcValue(env, rs, static_cast<int>(c + 1), col, xsink)) {
-                return nullptr;
-            }
-        }
-        ++row_count;
-        if (max_rows > 0 && row_count == static_cast<size_t>(max_rows)) {
-            break;
-        }
-        if (row_count && !(row_count % 100) && qore_check_cancel(xsink, "JDBC columnar result fetch")) {
+    if (java_batch_supported) {
+        if (jdbc_fetch_columnar_java_batches(env, rs, builders, cvec, java_batch_modes, max_rows, xsink)) {
             return nullptr;
+        }
+    } else {
+        size_t row_count = 0;
+        while (true) {
+            if (!next(env)) {
+                break;
+            }
+
+            for (size_t c = 0, e = cvec.size(); c < e; ++c) {
+                if (c && !(c % 100) && qore_check_cancel(xsink, "JDBC columnar row conversion")) {
+                    return nullptr;
+                }
+                QoreJdbcColumn& col = cvec[c];
+                if (builders[c]->needsGenericValue()) {
+                    ValueHolder val(getColumnValue(env, static_cast<int>(c + 1), col, xsink), xsink);
+                    if (*xsink) {
+                        return nullptr;
+                    }
+                    if (builders[c]->appendQoreValue(val.release(), xsink)) {
+                        return nullptr;
+                    }
+                } else if (builders[c]->appendJdbcValue(env, rs, static_cast<int>(c + 1), col, xsink)) {
+                    return nullptr;
+                }
+            }
+            ++row_count;
+            if (max_rows > 0 && row_count == static_cast<size_t>(max_rows)) {
+                break;
+            }
+            if (row_count && !(row_count % 100) && qore_check_cancel(xsink, "JDBC columnar result fetch")) {
+                return nullptr;
+            }
         }
     }
 

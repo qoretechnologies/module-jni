@@ -429,6 +429,13 @@ jmethodID Globals::methodResultSetMetaDataGetPrecision;
 jmethodID Globals::methodResultSetMetaDataGetScale;
 jmethodID Globals::methodResultSetMetaDataIsNullable;
 
+GlobalReference<jclass> Globals::classJdbcColumnarBatch;
+jmethodID Globals::methodJdbcColumnarBatchRead;
+jfieldID Globals::fieldJdbcColumnarBatchRows;
+jfieldID Globals::fieldJdbcColumnarBatchData;
+jfieldID Globals::fieldJdbcColumnarBatchValidity;
+jfieldID Globals::fieldJdbcColumnarBatchNullCounts;
+
 GlobalReference<jclass> Globals::classArray;
 jmethodID Globals::methodArrayGetArray;
 
@@ -2200,6 +2207,7 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassStaticEntry.inc"
 #include "JavaClassQoreJavaApi.inc"
 #include "JavaClassQoreRelativeTime.inc"
+#include "JavaClassJdbcColumnarBatch.inc"
 #include "JavaClassQoreJavaDynamicApi.inc"
 #include "JavaClassHash.inc"
 #include "JavaClassHash_1.inc"
@@ -2254,6 +2262,7 @@ static ucmap_t ucmap = {
     {"org.qore.jni.JavaClassBuilder", {java_org_qore_jni_JavaClassBuilder_class_len, java_org_qore_jni_JavaClassBuilder_class}},
     {"org.qore.jni.JavaClassBuilder$1", {java_org_qore_jni_JavaClassBuilder_1_class_len, java_org_qore_jni_JavaClassBuilder_1_class}},
     {"org.qore.jni.JavaClassBuilder$2", {java_org_qore_jni_JavaClassBuilder_2_class_len, java_org_qore_jni_JavaClassBuilder_2_class}},
+    {"org.qore.jni.JdbcColumnarBatch", {java_org_qore_jni_JdbcColumnarBatch_class_len, java_org_qore_jni_JdbcColumnarBatch_class}},
     {"org.qore.jni.StaticEntry", {java_org_qore_jni_StaticEntry_class_len, java_org_qore_jni_StaticEntry_class}},
     {"org.qore.jni.QoreClosure", {java_org_qore_jni_QoreClosure_class_len, java_org_qore_jni_QoreClosure_class}},
     {"org.qore.jni.QoreClosureMarker", {java_org_qore_jni_QoreClosureMarker_class_len, java_org_qore_jni_QoreClosureMarker_class}},
@@ -3620,6 +3629,15 @@ bool Globals::init() {
         }
     }
 
+    classJdbcColumnarBatch = findDefineClass(env, "org.qore.jni.JdbcColumnarBatch", syscl,
+        java_org_qore_jni_JdbcColumnarBatch_class, java_org_qore_jni_JdbcColumnarBatch_class_len).makeGlobal();
+    methodJdbcColumnarBatchRead = env.getStaticMethod(classJdbcColumnarBatch, "read",
+        "(Ljava/sql/ResultSet;[I[I[ZI)Lorg/qore/jni/JdbcColumnarBatch;");
+    fieldJdbcColumnarBatchRows = env.getField(classJdbcColumnarBatch, "rows", "I");
+    fieldJdbcColumnarBatchData = env.getField(classJdbcColumnarBatch, "data", "[Ljava/lang/Object;");
+    fieldJdbcColumnarBatchValidity = env.getField(classJdbcColumnarBatch, "validity", "[[B");
+    fieldJdbcColumnarBatchNullCounts = env.getField(classJdbcColumnarBatch, "nullCounts", "[J");
+
     env.registerNatives(classJavaClassBuilder, javaClassBuilderNativeMethods,
         sizeof(javaClassBuilderNativeMethods) / sizeof(JNINativeMethod));
 
@@ -4039,6 +4057,7 @@ void Globals::cleanup() {
     classTime = nullptr;
     classResultSet = nullptr;
     classResultSetMetaData = nullptr;
+    classJdbcColumnarBatch = nullptr;
     classArray = nullptr;
     classSQLException = nullptr;
     classServiceLoader = nullptr;

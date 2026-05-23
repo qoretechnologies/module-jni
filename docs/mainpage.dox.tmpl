@@ -1056,6 +1056,10 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       as dense nullable %Qore buffers; \c NUMERIC / \c DECIMAL values with precision <= 38 are returned as packed
       \c buffer<*decimal128> columns when built against %Qore versions exposing the decimal128 buffer API, while
       date/time, binary, and driver-specific values retain schema metadata and fall back to list storage where needed
+    - optimized native \c jdbc columnar reads for packed result sets with a Java-side batch reader; supported
+      integer, floating-point, boolean, string, and decimal columns are extracted into primitive Java arrays in
+      chunks and imported into %Qore buffers, avoiding per-cell JNI/JDBC getter calls while preserving null bitmaps,
+      \c CHAR trimming, and the mixed-column fallback path for driver-specific object values
     - improved the <a href="../../JdbcDataProvider/html/index.html">JdbcDataProvider</a>
       module so provider and connection options can load JDBC driver JARs with \c classpath
       and explicitly register drivers with \c driver_class before opening a connection

@@ -447,6 +447,13 @@ public:
     DLLLOCAL static jmethodID methodResultSetMetaDataGetScale;                    // int getScale(int)
     DLLLOCAL static jmethodID methodResultSetMetaDataIsNullable;                  // int isNullable(int)
 
+    DLLLOCAL static GlobalReference<jclass> classJdbcColumnarBatch;               // org.qore.jni.JdbcColumnarBatch
+    DLLLOCAL static jmethodID methodJdbcColumnarBatchRead;                        // static JdbcColumnarBatch read()
+    DLLLOCAL static jfieldID fieldJdbcColumnarBatchRows;                          // int rows
+    DLLLOCAL static jfieldID fieldJdbcColumnarBatchData;                          // Object[] data
+    DLLLOCAL static jfieldID fieldJdbcColumnarBatchValidity;                      // byte[][] validity
+    DLLLOCAL static jfieldID fieldJdbcColumnarBatchNullCounts;                    // long[] nullCounts
+
     DLLLOCAL static GlobalReference<jclass> classArray;                           // java.sql.Array
     DLLLOCAL static jmethodID methodArrayGetArray;                                // Object getArray()
 
