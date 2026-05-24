@@ -264,6 +264,7 @@ public class Main inherits QUnit::Test {
         addTestCase("constructor test", \testConstructor());
         addTestCase("string test", \testString());
         addTestCase("array test", \testArray());
+        addTestCase("named argument call test", \namedArgumentCallTest());
         addTestCase("dispatcher destructor throws a Qore exception", \testDispatchDtorThrows());
         addTestCase("callback return value test", \testCallbackRetVal());
         addTestCase("special conversions test", \testSpecialConversions());
@@ -281,9 +282,9 @@ public class Main inherits QUnit::Test {
     }
 
     javaCodegenTest() {
-        binary b0 = get_byte_code("::Qore::Thread::Mutex");
+        binary b0 = get_byte_code(class_name: "::Qore::Thread::Mutex");
         assertEq(Type::Binary, b0.type());
-        binary b1 = get_byte_code("Mutex");
+        binary b1 = get_byte_code(class_name: "Mutex");
         assertEq(Type::Binary, b1.type());
         assertEq(b0, b1);
 
@@ -1663,7 +1664,7 @@ lorem ipsum\r
         assertThrows("JNI-ERROR", "java.lang.ClassFormatError", \jni::define_class(), ("test", <abcd>));
 
         # issue #3023: create class from bytecode
-        lang::Class jcls = define_class("Test", TestClass1ByteCode);
+        lang::Class jcls = define_class(class_name: "Test", bytecode: TestClass1ByteCode);
         assertEq("Test", jcls.getName());
         # create object from dynamically-created class
         object obj = jcls.getDeclaredConstructor().newInstance();
@@ -2282,6 +2283,37 @@ lorem ipsum\r
         assertEq(3, a.get(1).get(0));
         assertEq(4, a.get(1).get(1));
         */
+    }
+
+    namedArgumentCallTest() {
+        lang::Class stringClass = load_class(class_name: "java/lang/String");
+        assertEq("java.lang.String", stringClass.getName());
+
+        JavaArray a = new_array(component_class: stringClass, size: 2);
+        a.set(index: 0, value: "first");
+        assertEq("first", a.get(index: 0));
+        assertEq(NOTHING, a.get(index: 1));
+
+        JavaArray bytes = JavaArray::get(binary_value: <0102>);
+        assertEq(2, bytes.length());
+        assertEq(1, bytes.get(index: 0));
+        assertEq(2, bytes.get(index: 1));
+
+        assertEq(Type::Binary, get_byte_code(class_name: "::Qore::Thread::Mutex").type());
+        assertEq("qore.Qore.Thread.Mutex", get_java_name(class_name: "::Qore::Thread::Mutex"));
+
+        code callback = sub(object obj) {};
+        set_save_object_callback(save_object_callback: callback);
+        set_save_object_callback(save_object_callback: NOTHING);
+
+        int count;
+        QoreInvocationHandler h(dispatcher: sub(Method method, *list args) { ++count; });
+        lang::Class runnableClass = load_class(class_name: "java/lang/Runnable");
+        Object runnable = implement_interface(invocation_handler: h, interface_class: runnableClass);
+        lang::Class callbacksClass = load_class(class_name: "org/qore/jni/test/Callbacks");
+        callbacksClass.getDeclaredMethod("callNow", (runnableClass,)).invoke(NOTHING, runnable);
+        assertEq(1, count);
+        h.destroy();
     }
 
     testDispatchDtorThrows() {

@@ -51,7 +51,7 @@ qclass QoreInvocationHandler [arg=jni::InvocationHandler* handler; ns=Jni::org::
     });
     @endcode
  */
-QoreInvocationHandler::constructor(code dispatcher) {
+QoreInvocationHandler::constructor(code dispatcher) [flags=NAMED_ARGS] {
     try {
         self->setPrivate(CID_QOREINVOCATIONHANDLER, new jni::InvocationHandler(dispatcher));
     } catch (jni::Exception &e) {

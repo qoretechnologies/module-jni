@@ -81,7 +81,7 @@ int JavaArray::length() {
     @return the value of the element
     @throws JNI-ERROR if the index is out of bounds
  */
-auto JavaArray::get(int index) {
+auto JavaArray::get(int index) [flags=NAMED_ARGS] {
     try {
         return array->get(index, self->getProgram(), false);
     } catch (jni::Exception &e) {
@@ -96,7 +96,7 @@ auto JavaArray::get(int index) {
     @param value the value of the element
     @throws JNI-ERROR if the index is out of bounds or if the value type is incompatible with the array type
  */
-nothing JavaArray::set(int index, auto value) {
+nothing JavaArray::set(int index, auto value) [flags=NAMED_ARGS] {
     try {
         array->set(index, value);
     } catch (jni::Exception &e) {
@@ -146,15 +146,17 @@ string JavaArray::deepToString() [flags=CONSTANT] {
 //! Returns a byte[] array for the binary object as an explicit conversion
 /** @par Example:
     @code{.py}
-JavaArray a = JavaArray::get(bin);
+JavaArray a = JavaArray::get(binary_value: bin);
     @endcode
+
+    @param binary_value the binary value to convert
 
     @return a byte[] array for the binary object as an explicit conversion
 
     @since jni 1.1
 */
-static JavaArray JavaArray::get(binary b) [flags=CONSTANT] {
+static JavaArray JavaArray::get(binary binary_value) [flags=CONSTANT,NAMED_ARGS] {
     Env env;
     return new QoreObject(QC_JAVAARRAY, qore_get_call_program_context(),
-        new Array(QoreToJava::makeByteArray(env, *b)));
+        new Array(QoreToJava::makeByteArray(env, *binary_value)));
 }
