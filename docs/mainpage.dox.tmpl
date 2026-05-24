@@ -922,10 +922,12 @@ set_save_object_callback(callback);
     - \c REAL, \c FLOAT, and \c DOUBLE map to \c buffer<*float32> or \c buffer<*float64>
     - \c BOOLEAN and \c BIT map to \c buffer<*bool>
     - character columns map to \c buffer<*string>
+    - \c DATE and \c TIMESTAMP values carry logical date/timestamp schema metadata and map to microsecond
+      \c buffer<*int64> columns when the linked %Qore runtime supports dense temporal column conversion
 
     Decimal values that exceed decimal128 limits, or builds against %Qore headers without the decimal128 buffer API,
-    are returned as lists with JDBC precision and scale metadata.  Date, timestamp, binary, and driver-specific
-    values are returned through the compatibility list path with schema metadata where the JDBC type is known.
+    are returned as lists with JDBC precision and scale metadata.  Binary and driver-specific values are returned
+    through the compatibility list path with schema metadata where the JDBC type is known.
 
     @par Columnar JDBC Example
     @code
@@ -1055,7 +1057,9 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       when built against %Qore versions exposing the columnar result API; fixed-width JDBC result columns are returned
       as dense nullable %Qore buffers; \c NUMERIC / \c DECIMAL values with precision <= 38 are returned as packed
       \c buffer<*decimal128> columns when built against %Qore versions exposing the decimal128 buffer API, while
-      date/time, binary, and driver-specific values retain schema metadata and fall back to list storage where needed
+      date/time values retain logical schema metadata and use microsecond dense temporal storage when linked with
+      %Qore dense temporal support; binary and driver-specific values retain schema metadata and fall back to list
+      storage where needed
     - optimized native \c jdbc columnar reads for packed result sets with a Java-side batch reader; supported
       integer, floating-point, boolean, string, and decimal columns are extracted into primitive Java arrays in
       chunks and imported into %Qore buffers, avoiding per-cell JNI/JDBC getter calls while preserving null bitmaps,
