@@ -512,7 +512,7 @@ static QoreColumnarTypeDescriptor jdbc_make_schema(const QoreJdbcColumn& col, Qo
         schema.precision = col.precision;
         schema.scale = col.scale;
     } else if (kind == QoreColumnarTypeKind::Timestamp) {
-        schema.time_unit = "ns";
+        schema.time_unit = "us";
     }
     return schema;
 }
