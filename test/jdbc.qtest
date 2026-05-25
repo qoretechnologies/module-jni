@@ -25,13 +25,17 @@ public class Main inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private auto getColumn(ColumnarResult result, string name) {
+    private auto getColumn(auto result, string name) {
         string cname = result.columnNames().contains(name) ? name : name.upr();
         return result.getColumn(cname);
     }
 
     private list asList(auto value) {
         return value.type() == Type::List ? value : value.toList();
+    }
+
+    private bool isMissingColumnarApi(hash<ExceptionInfo> ex) {
+        return ex.err == "METHOD-DOES-NOT-EXIST" || ex.err == "UNKNOWN-METHOD";
     }
 
     private oracleTest() {
@@ -98,7 +102,7 @@ public class Main inherits QUnit::Test {
         doTestIntern(ds);
     }
 
-    private doTestIntern(AbstractDatasource ds) {
+    private doTestIntern(auto ds) {
         # insert a row with all null values
         int rows_affected = ds.exec("insert into jdbc_test (input_1, input_2) values (%v, %v)");
         assertEq(1, rows_affected);
@@ -124,25 +128,32 @@ public class Main inherits QUnit::Test {
         rows_affected = ds.exec("insert into jdbc_test (input_1, input_2) values (%v, %v)", 3, "last");
         assertEq(1, rows_affected);
 
-        ColumnarResult columnar = ds.selectColumnar("select input_1, input_2 from jdbc_test order by input_1");
-        assertEq(3, columnar.numRows());
-        assertEq(2, columnar.numCols());
-        assertEq((1, 2, 3), map int($1), asList(getColumn(columnar, "input_1")));
-        assertEq(("test", "next", "last"), asList(getColumn(columnar, "input_2")));
+        try {
+            auto columnar = ds.selectColumnar("select input_1, input_2 from jdbc_test order by input_1");
+            assertEq(3, columnar.numRows());
+            assertEq(2, columnar.numCols());
+            assertEq((1, 2, 3), map int($1), asList(getColumn(columnar, "input_1")));
+            assertEq(("test", "next", "last"), asList(getColumn(columnar, "input_2")));
 
-        SQLStatement stmt(ds);
-        stmt.prepare("select input_1, input_2 from jdbc_test order by input_1");
-        stmt.exec();
-        on_exit stmt.commit();
+            SQLStatement stmt(ds);
+            stmt.prepare("select input_1, input_2 from jdbc_test order by input_1");
+            stmt.exec();
+            on_exit stmt.commit();
 
-        ColumnarResult first = stmt.fetchColumnar(rows: 2);
-        ColumnarResult rest = stmt.fetchColumnar(rows: -1);
-        assertEq(2, first.numRows());
-        assertEq(1, rest.numRows());
-        assertEq((1, 2), map int($1), asList(getColumn(first, "input_1")));
-        assertEq((3,), map int($1), asList(getColumn(rest, "input_1")));
-        assertEq(("test", "next"), asList(getColumn(first, "input_2")));
-        assertEq(("last",), asList(getColumn(rest, "input_2")));
+            auto columnar_stmt = stmt;
+            auto first = columnar_stmt.fetchColumnar(2);
+            auto rest = columnar_stmt.fetchColumnar(-1);
+            assertEq(2, first.numRows());
+            assertEq(1, rest.numRows());
+            assertEq((1, 2), map int($1), asList(getColumn(first, "input_1")));
+            assertEq((3,), map int($1), asList(getColumn(rest, "input_1")));
+            assertEq(("test", "next"), asList(getColumn(first, "input_2")));
+            assertEq(("last",), asList(getColumn(rest, "input_2")));
+        } catch (hash<ExceptionInfo> ex) {
+            if (!isMissingColumnarApi(ex)) {
+                rethrow;
+            }
+        }
 
         rows_affected = ds.exec("delete from jdbc_test");
         assertEq(3, rows_affected);
