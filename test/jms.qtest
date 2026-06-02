@@ -30,7 +30,7 @@
 public class Main inherits QUnit::Test {
     private {
         Counter c(1);
-        any data;
+        auto data;
 
         const TextMsg = "Hello, world!";
     }

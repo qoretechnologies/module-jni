@@ -2326,7 +2326,7 @@ lorem ipsum\r
     }
 
     testCallbackRetVal() {
-        QoreInvocationHandler h(any sub(Method m, *list args) { return "STR"; });
+        QoreInvocationHandler h(auto sub(Method m, *list args) { return "STR"; });
         lang::Class stringFactoryClass = load_class("org/qore/jni/test/StringFactory");
         Object f = implement_interface(h, stringFactoryClass);
         lang::Class clazz = load_class("org/qore/jni/test/Callbacks");
