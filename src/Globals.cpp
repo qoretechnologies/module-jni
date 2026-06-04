@@ -3841,12 +3841,14 @@ jfieldID fieldNativeCleanupRefKind = nullptr;
 
 // Heap-allocated so we don't trigger std::terminate on abnormal exit.  A
 // std::thread destructor on a joinable thread aborts the process with
-// "terminate called without an active exception".  Some module-jni consumers
-// (notably the external `oload --compile-java` worker spawned by qorus-core)
-// can exit without going through Jvm::destroyVM, in which case
-// stopNativeCleanupThread is never called.  Leaking the heap pointer at
-// abnormal exit is benign — the kernel reaps the thread when the process is
-// torn down.
+// "terminate called without an active exception".  The common exit-without-
+// Jvm::destroyVM case — the external `oload --compile-java` worker spawned by
+// qorus-core calling the Qore exit() builtin — is now handled by the atexit
+// handler registered in jni_module_init() (jni_atexit_destroy_vm), which runs
+// destroyVM() -> stopNativeCleanupThread() before static destructors run.  This
+// heap allocation remains a safety net for truly abnormal exits that bypass
+// atexit entirely (_Exit(), fatal signals); leaking the pointer there is benign
+// — the kernel reaps the thread when the process is torn down.
 std::thread* native_cleanup_thread = nullptr;
 std::atomic<bool> native_cleanup_thread_started{false};
 

@@ -12,6 +12,7 @@
 %requires HttpServer
 %requires Mime
 %requires Logger
+%requires FsUtil
 
 %requires reflection
 
@@ -276,8 +277,61 @@ public class Main inherits QUnit::Test {
         addTestCase("bridge method Comparable test", \bridgeMethodComparableTest());
         addTestCase("canonical loader cross-program test", \canonicalLoaderCrossProgramTest());
         addTestCase("overloaded method dispatch test", \overloadedMethodDispatchTest());
+        addTestCase("exit() JVM teardown test", \exitTeardownTest());
 
         Qore::exit(main());
+    }
+
+    #! Returns the path to the qore binary running this test
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    #! A JVM-embedding process that terminates via the Qore exit() builtin must shut down cleanly
+    /** This guards the JVM-teardown-on-exit invariant.  The \c oload \c --compile-java worker (and
+        the \c --kotlinc / validation workers) spawned by qorus-core finish by calling the Qore
+        exit() builtin, which calls C exit() — running static destructors but NOT the Qore
+        module-manager teardown.  The jni module registers an atexit handler (jni-module.cpp) that
+        quiesces the JVM (stops the NativeCleanup thread, calls DestroyJavaVM) before those static
+        destructors run, so a leftover JVM daemon thread (GC, Reference-Handler, NativeCleanup)
+        cannot fault (SIGSEGV) in the JVM<->Qore chained signal handler while libqore is torn down.
+
+        Qore's system() returns the child's exit code on a normal exit and -1 if the child is killed
+        by a signal (e.g. a SIGSEGV/SIGABRT crash), so a clean teardown returns 0.  The child runs in
+        a separate process because exit() would otherwise terminate the test harness itself. */
+    exitTeardownTest() {
+        if (!Qore::Option::HAVE_SYSTEM) {
+            testSkip("system() is not available on this platform");
+        }
+
+        # child: load the JVM, generate Java + GC activity to spin up the JVM daemon threads and
+        # pending cleanup refs, then terminate via the Qore exit() builtin
+        string src = "%modern
+%requires jni
+%module-cmd(jni) import java.util.HashMap
+%module-cmd(jni) import java.lang.System
+
+for (int i = 0; i < 5000; ++i) {
+    HashMap hm();
+    hm.put(\"k\" + i, \"v\" + i);
+    hm.size();
+}
+System::gc();
+exit(0);
+";
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(src);
+        tmp.file.close();
+
+        string cmd = sprintf("%s %s", qoreBin(), tmp.path);
+        # run a few times to exercise the timing-sensitive teardown path
+        for (int i = 0; i < 3; ++i) {
+            int rc = system(cmd);
+            assertEq(0, rc, sprintf("JVM-embedding child (run %d) must exit cleanly via exit(); "
+                "rc=%d (-1 means killed by a signal = teardown crash)", i + 1, rc));
+        }
     }
 
     javaCodegenTest() {
