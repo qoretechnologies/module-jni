@@ -637,7 +637,16 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
         int dot = name.rfind('.');
 
         // check for name conflict
-        while ((qc = static_cast<JniQoreClass*>(ns->findLocalClass(sn)))) {
+        while (QoreClass* ec = ns->findLocalClass(sn)) {
+            // a non-"Java" language means a hand-written builtin Qore class (e.g. the qpp-defined
+            // QoreInvocationHandler / JavaArray system classes) already occupies this name; those
+            // are QoreBuiltinClass, not JniQoreClass, and are already usable directly, so importing
+            // the underlying Java class is both impossible and unnecessary
+            if (strcmp(ec->getLanguage(), "Java")) {
+                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in "
+                    "Qore class with that name already exists in the Jni namespace", name.c_str());
+            }
+            qc = static_cast<JniQoreClass*>(ec);
             // make sure the class is not already a representation of the new class
             if (qc->getJavaName() == name.c_str()) {
                 return qc;
@@ -657,7 +666,9 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
     path.insert("::Jni::", 0);
     qc = new JniQoreClass(pgm, sn, path.c_str(), name.c_str());
     assert(qc->isSystem());
-    createClassInNamespace(ns, *jpc->getJniNamespace(), jpath, cls.release(), qc, *jpc, pgm);
+    // use the return value: createClassInNamespace() may delete qc and return a pre-existing class
+    // on a name collision — using the freed qc afterwards would be a use-after-free
+    qc = createClassInNamespace(ns, *jpc->getJniNamespace(), jpath, cls.release(), qc, *jpc, pgm);
 
     return qc;
 }
@@ -766,11 +777,22 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
 
     // check if the class already exists in the namespace (e.g., same Java class loaded from
     // multiple JARs on the classpath)
-    if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(sn))) {
-        if (existing->getJavaName() == name.c_str()) {
+    if (QoreClass* existing = ns->findLocalClass(sn)) {
+        // reflection-created classes (JniQoreClass) report language "Java"; any other language
+        // means a hand-written builtin Qore class already occupies this name — in particular the
+        // qpp-defined Jni::org::qore::jni::QoreInvocationHandler and JavaArray system classes,
+        // which are QoreBuiltinClass, not JniQoreClass.  We must not treat those as JniQoreClass
+        // (that reads JniQoreClass-only members and crashes); they are already usable directly, so
+        // importing the underlying Java class is both impossible and unnecessary
+        if (strcmp(existing->getLanguage(), "Java")) {
+            throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in "
+                "Qore class with that name already exists in the Jni namespace", name.c_str());
+        }
+        JniQoreClass* jexisting = static_cast<JniQoreClass*>(existing);
+        if (jexisting->getJavaName() == name.c_str()) {
             // same Java class already registered; add to calling Program and return existing
-            addClassToProgram(existing, jpath, pgm);
-            return existing;
+            addClassToProgram(jexisting, jpath, pgm);
+            return jexisting;
         }
     }
 
@@ -794,8 +816,11 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
     JniQoreClass* qc = new JniQoreClass(pgm, sn, path.c_str(), name.c_str());
     assert(qc->isSystem());
 
-    // createClassInNamespace() will "save" qc in the namespace
-    createClassInNamespace(ns, *default_jns, jpath, cls.release(), qc, *this, pgm);
+    // createClassInNamespace() will "save" qc in the namespace; it may delete the passed-in qc and
+    // return a pre-existing class on a name collision (e.g. the same Java class loaded recursively
+    // via addSuperClasses()), so we must use its return value — using the freed qc here would be a
+    // use-after-free
+    qc = createClassInNamespace(ns, *default_jns, jpath, cls.release(), qc, *this, pgm);
 
     // add to the calling Program's namespace
     addClassToProgram(qc, jpath, pgm);

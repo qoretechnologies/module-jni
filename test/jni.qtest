@@ -278,6 +278,7 @@ public class Main inherits QUnit::Test {
         addTestCase("canonical loader cross-program test", \canonicalLoaderCrossProgramTest());
         addTestCase("overloaded method dispatch test", \overloadedMethodDispatchTest());
         addTestCase("exit() JVM teardown test", \exitTeardownTest());
+        addTestCase("import builtin-class collision test", \importBuiltinClassCollisionTest());
 
         Qore::exit(main());
     }
@@ -287,6 +288,25 @@ public class Main inherits QUnit::Test {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
         assertTrue(exists qore_bin, "no qore binary path available");
         return qore_bin;
+    }
+
+    #! Importing a Java class that collides with a qpp builtin Qore class must raise cleanly, not crash
+    /** Regression test: `import org.qore.jni.QoreInvocationHandler` previously crashed with a
+        use-after-free.  The qpp-defined builtin QoreInvocationHandler / JavaArray system classes are
+        QoreBuiltinClass (language "Qore"), not JniQoreClass, and the reflection-import path mis-treated
+        a found class as a JniQoreClass — copying it read a garbage `priv` (ROreference on freed memory).
+        The import must instead raise a clean JNI-IMPORT-ERROR; the builtin class stays usable directly
+        without any import (which is how it is meant to be used). */
+    importBuiltinClassCollisionTest() {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("jni");
+        assertThrows("JNI-IMPORT-ERROR", "built-in Qore class with that name already exists",
+            sub () { p.issueModuleCmd("jni", "import org.qore.jni.QoreInvocationHandler"); });
+
+        # the builtin class remains usable directly, with no import required
+        p.parse("auto sub make() { return new Jni::org::qore::jni::QoreInvocationHandler("
+            "sub (auto m, *list a) {}); }", "");
+        assertEq("object<QoreInvocationHandler>", p.callFunction("make").fullType());
     }
 
     #! A JVM-embedding process that terminates via the Qore exit() builtin must shut down cleanly
