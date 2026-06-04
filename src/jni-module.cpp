@@ -36,6 +36,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <cstdlib>
 #include <map>
 #include <vector>
 
@@ -130,6 +131,31 @@ static bool bootstrap = false;
 static bool already_initialized = false;
 static bool deferred_ns_init = false;
 
+// Ensures the JVM is quiesced before process exit even when the module's del
+// function is never run.  The `oload --compile-java` / `--kotlinc` / validation
+// workers spawned by qorus-core finish by calling the Qore exit() builtin, which
+// (for a single-threaded Qore process) calls C exit() — running atexit handlers
+// and static destructors but NOT the Qore module-manager teardown that would
+// otherwise invoke jni_module_delete() -> Jvm::destroyVM().  If the JVM is left
+// running while libqore's static destructors tear down global state, a JVM daemon
+// thread (GC, JIT, Reference-Handler, NativeCleanup) can fault (SIGSEGV) and die
+// fatally inside the JVM<->Qore chained signal handler, crashing the process.
+//
+// Registering this handler from jni_module_init() (after createVM() succeeds)
+// guarantees it runs before those static destructors: C++ runs atexit handlers
+// and static destructors in reverse order of registration/construction, and the
+// module is initialized long after libqore's globals are constructed, so our
+// handler runs first.  destroyVM() is idempotent, so this is a no-op when the
+// normal del path already ran.  Only registered when we created the VM ourselves
+// (not when a host process passed in an existing JVM via the jvm-ptr option).
+static void jni_atexit_destroy_vm() {
+    try {
+        jni::Jvm::destroyVM();
+    } catch (...) {
+        // an atexit handler must never propagate an exception
+    }
+}
+
 QoreStringNode* jni_module_init_finalize(bool system) {
     tclist.push(jni_thread_cleanup, nullptr);
 
@@ -209,6 +235,16 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
             err->prepend("Could not create the Java Virtual Machine: ");
             xsink.raiseException("MODULE-INIT-ERROR", err);
             return;
+        }
+
+        // We created the VM, so we own its teardown: register an atexit handler to
+        // quiesce the JVM before C exit() runs static destructors, covering exit
+        // paths that bypass jni_module_delete() (see jni_atexit_destroy_vm()).
+        // A registration failure is non-fatal — the JVM is still fully usable; only
+        // the bare-exit() teardown safety net is lost — so log it and continue.
+        if (atexit(jni_atexit_destroy_vm)) {
+            printd(0, "jni module: failed to register atexit JVM teardown handler; "
+                "the JVM will not be quiesced on exit paths that bypass module teardown\n");
         }
     }
 

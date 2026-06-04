@@ -255,7 +255,18 @@ QoreStringNode* Jvm::createVM() {
 }
 
 void Jvm::destroyVM() {
-    assert(vm);
+    // Idempotent teardown.  destroyVM() can be reached by two paths that may both
+    // run during a single process exit:
+    //   1. jni_module_delete() — the normal Qore module-manager teardown; and
+    //   2. the atexit handler registered by jni_module_init() — which guarantees
+    //      the JVM is quiesced even when the module's del function is never run
+    //      (e.g. the `oload --compile-java` worker exits via the Qore exit()
+    //      builtin, which runs C atexit handlers + static destructors but not the
+    //      Qore module-manager teardown).
+    // Only the first call does the work; subsequent calls are no-ops.
+    if (!vm) {
+        return;
+    }
 
     // Drain and join the NativeCleanup C++ background thread before the JVM
     // teardown begins.  Must happen before Globals::cleanup() so the JNI ID
