@@ -61,9 +61,9 @@ bool native_access_option_enabled() {
     return jni::Functions::nativeAccessOptionEnabled();
 }
 
-//! Loads a Java class with given name.
+//! Loads a Java class with the given name.
 /**
-    @param name the name of the class to load in internal (\c "java/lang/String") format
+    @param class_name the name of the class to load in internal (\c "java/lang/String") format
 
     @return the loaded class
 
@@ -71,14 +71,14 @@ bool native_access_option_enabled() {
 
     @par Example:
     @code{.py}
-    Class c = Jni::load_class("java/lang/String");
+    Class c = Jni::load_class(class_name: "java/lang/String");
     @endcode
  */
-Jni::java::lang::Class load_class(string name) {
+Jni::java::lang::Class load_class(string class_name) [flags=NAMED_ARGS] {
     try {
         QoreProgram* pgm = jni::jni_get_program_context();
         //printd(5, "load_class() pgm: %p\n", pgm);
-        return new QoreObject(QC_CLASS, pgm, new QoreJniPrivateData(qjcm.findLoadClass(*name, pgm)));
+        return new QoreObject(QC_CLASS, pgm, new QoreJniPrivateData(qjcm.findLoadClass(*class_name, pgm)));
     } catch (jni::Exception& e) {
         e.convert(xsink);
     }
@@ -135,31 +135,33 @@ Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJ
 
 //! Creates a Java object that implements given interface using an invocation handler.
 /**
-    @param invocationHandler the invocation handler
-    @param cls the interface to implement
+    @param invocation_handler the invocation handler
+    @param interface_class the interface to implement
     @return a Java object that implements the interface by calling the invocation handler
 
     @par Example:
     @code{.py}
-    Class runnableClass = Jni::load_class("java/lang/Runnable");
+    Class runnableClass = Jni::load_class(class_name: "java/lang/Runnable");
     QoreInvocationHandler h(any sub(Method m, *list args) { doRun(); });
-    Object runnableInstance = Jni::implement_interface(h, runnableClass);
+    Object runnableInstance = Jni::implement_interface(invocation_handler: h, interface_class: runnableClass);
     # runnableInstance now has a Java method void run() that calls Qore function doRun()
     @endcode
  */
-Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocationHandler, Jni::java::lang::Class[QoreJniPrivateData] cls) {
+Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [flags=NAMED_ARGS] {
     // get Qore class for Class object
     jni::Env env;
-    jni::LocalReference<jstring> clsName = env.callObjectMethod(cls->getObject(), jni::Globals::methodClassGetName, nullptr).as<jstring>();
+    jni::LocalReference<jstring> clsName = env.callObjectMethod(interface_class->getObject(),
+        jni::Globals::methodClassGetName, nullptr).as<jstring>();
     jni::Env::GetStringUtfChars cname(env, clsName);
     QoreString jcname(cname.c_str());
     jcname.replaceAll(".", "/");
-    LocalReference<jclass> jc = cls->makeLocal().as<jclass>();
+    LocalReference<jclass> jc = interface_class->makeLocal().as<jclass>();
     QoreProgram* pgm = jni_get_program_context();
     QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
 
     try {
-        return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(jni::Functions::implementInterface(nullptr, *invocationHandler, jc)));
+        return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(
+            jni::Functions::implementInterface(nullptr, *invocation_handler, jc)));
     } catch (jni::Exception& e) {
         e.convert(xsink);
         return QoreValue();
@@ -168,33 +170,36 @@ Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationH
 
 //! Creates a Java object that implements given interface using an invocation handler using an explicit class loader.
 /**
-    @param classLoader the class loader that loaded the interface
-    @param invocationHandler the invocation handler
-    @param cls the interface to implement
+    @param class_loader the class loader that loaded the interface
+    @param invocation_handler the invocation handler
+    @param interface_class the interface to implement
     @return a Java object that implements the interface by calling the invocation handler
 
     @par Example:
     @code{.py}
     ClassLoader classLoader = ...;
-    Class runnableClass = load_class("java/lang/Runnable");
+    Class runnableClass = load_class(class_name: "java/lang/Runnable");
     QoreInvocationHandler h(any sub(Method m, *list args) { doRun(); });
-    Object runnableInstance = Jni::implement_interface(classLoader, h, runnableClass);
+    Object runnableInstance = Jni::implement_interface(class_loader: classLoader, invocation_handler: h,
+        interface_class: runnableClass);
     # runnableInstance now has a Java method void run() that calls Qore function doRun()
     @endcode
  */
-Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] classLoader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocationHandler, Jni::java::lang::Class[QoreJniPrivateData] cls) {
+Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] class_loader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [flags=NAMED_ARGS] {
     // get Qore class for Class object
     jni::Env env;
-    jni::LocalReference<jstring> clsName = env.callObjectMethod(cls->getObject(), jni::Globals::methodClassGetName, nullptr).as<jstring>();
+    jni::LocalReference<jstring> clsName = env.callObjectMethod(interface_class->getObject(),
+        jni::Globals::methodClassGetName, nullptr).as<jstring>();
     jni::Env::GetStringUtfChars cname(env, clsName);
     QoreString jcname(cname.c_str());
     jcname.replaceAll(".", "/");
-    LocalReference<jclass> jc = cls->makeLocal().as<jclass>();
+    LocalReference<jclass> jc = interface_class->makeLocal().as<jclass>();
     QoreProgram* pgm = jni_get_program_context();
     QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
 
     try {
-        return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(jni::Functions::implementInterface(classLoader->getObject(), *invocationHandler, jc)));
+        return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(
+            jni::Functions::implementInterface(class_loader->getObject(), *invocation_handler, jc)));
     } catch (jni::Exception& e) {
         e.convert(xsink);
         return QoreValue();
@@ -202,14 +207,15 @@ Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJni
 }
 
 //! Allocates a new Java array
-/** @param cls the Class of the component type of the Array
+/** @param component_class the Class of the component type of the Array
     @param size the size of the array to allocate
 
     @return the allocated array
  */
-Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateData] cls, int size) {
+Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateData] component_class, int size) [flags=NAMED_ARGS] {
     try {
-        return new QoreObject(QC_JAVAARRAY, jni::jni_get_program_context(), new Array(cls->makeLocal().as<jclass>(), size));
+        return new QoreObject(QC_JAVAARRAY, jni::jni_get_program_context(),
+            new Array(component_class->makeLocal().as<jclass>(), size));
     } catch (jni::Exception& e) {
         e.convert(xsink);
         return QoreValue();
@@ -219,19 +225,19 @@ Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateDa
 //! Creates a class object from bytecode data
 /** @par Example:
     @code{.py}
-java::lang::Class cls = define_class(name, bytecode);
+java::lang::Class cls = define_class(class_name: class_name, bytecode: bytecode);
     @endcode
 
-    @param name the name of the class (ex: \c "org/qore/my_package/ClassName")
+    @param class_name the name of the class (ex: \c "org/qore/my_package/ClassName")
     @param bytecode the byte code of the class
 
     @note the class will be created using the classloader for the containing %Program object
 
     @since %jni 1.1
 */
-Jni::org::qore::jni::Class define_class(string name, binary bytecode) {
+Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [flags=NAMED_ARGS] {
     try {
-        ModifiedUtf8String utf8_name(name);
+        ModifiedUtf8String utf8_name(class_name);
         jni::Env env;
         // NOTE: this must be qore_get_call_program_context() and not jni::jni_get_program_context()
         // as the caller's program context must be used in all cases
@@ -255,7 +261,7 @@ code callback = sub (object obj) {
     # save object in object cache, so it doesn't go out of scope
     object_cache{obj.uniqueHash()} = obj;
 }
-set_save_object_callback(callback);
+set_save_object_callback(save_object_callback: callback);
     @endcode
 
     @param save_object_callback the callback to save any %Qore objects created in Java code, must take an argument of
@@ -270,12 +276,16 @@ set_save_object_callback(callback);
 
     @see @ref jni_qore_object_lifecycle_management for more information
 */
-set_save_object_callback(*code save_object_callback) [dom=PROCESS] {
+set_save_object_callback(*code save_object_callback) [dom=PROCESS;flags=NAMED_ARGS] {
     // NOTE: this must be qore_get_call_program_context() and not jni::jni_get_program_context() or jni_get_context()
     // as the caller's program context must be used in all cases
     QoreProgram* pgm = qore_get_call_program_context();
-    JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
-    assert(jpc);
+    JniExternalProgramData* jpc = pgm ? JniExternalProgramData::getCreateJniProgramData(pgm)
+        : jni_get_context_unconditional(pgm);
+    if (!jpc) {
+        xsink->raiseException("JNI-ERROR", "cannot set the save object callback without a valid Program context");
+        return QoreValue();
+    }
     jpc->setSaveObjectCallback(save_object_callback);
 }
 
@@ -310,7 +320,7 @@ Jni::java::lang::Object get_class_loader() {
 //! Returns dynamically generated Java byte code for the given %Qore class
 /** @par Example:
     @code{.py}
-binary byte_code = get_byte_code("::Qore::Thread::Condition");
+binary byte_code = get_byte_code(class_name: "::Qore::Thread::Condition");
     @endcode
 
     @param class_name the class name (can include a namespace path) to the %Qore class
@@ -323,7 +333,7 @@ binary byte_code = get_byte_code("::Qore::Thread::Condition");
 
     @since jni 2.0
 */
-binary get_byte_code(string class_name) {
+binary get_byte_code(string class_name) [flags=NAMED_ARGS] {
     TempEncodingHelper cn(class_name, QCS_UTF8, xsink);
     if (*xsink) {
         return QoreValue();
@@ -359,7 +369,7 @@ binary get_byte_code(string class_name) {
 //! Returns the Java binary class name that @ref get_byte_code() will use for the given %Qore class
 /** @par Example:
     @code{.py}
-string java_name = get_java_name("::Qore::Ocr::TesseractEngine");  # "qoremod.ocr.TesseractEngine"
+string java_name = get_java_name(class_name: "::Qore::Ocr::TesseractEngine");  # "qoremod.ocr.TesseractEngine"
     @endcode
 
     The returned name matches the internal class name embedded in the bytecode produced by
@@ -375,7 +385,7 @@ string java_name = get_java_name("::Qore::Ocr::TesseractEngine");  # "qoremod.oc
 
     @since jni 2.6
 */
-string get_java_name(string class_name) {
+string get_java_name(string class_name) [flags=NAMED_ARGS] {
     TempEncodingHelper cn(class_name, QCS_UTF8, xsink);
     if (*xsink) {
         return QoreValue();
@@ -410,7 +420,7 @@ string get_java_name(string class_name) {
 //! Evaluates Kotlin script code and returns the result
 /** @par Example:
     @code{.py}
-auto result = kotlin_eval("1 + 2");  // returns 3
+auto result = kotlin_eval(script: "1 + 2");  // returns 3
     @endcode
 
     @param script the Kotlin script code to evaluate
@@ -430,7 +440,7 @@ auto result = kotlin_eval("1 + 2");  // returns 3
 
     @since jni 2.6
 */
-auto kotlin_eval(string script) {
+auto kotlin_eval(string script) [flags=NAMED_ARGS] {
     try {
         jni::Env env;
 
@@ -487,7 +497,7 @@ auto kotlin_eval(string script) {
 /** @par Example:
     @code{.py}
 if (kotlin_scripting_available()) {
-    auto result = kotlin_eval("println(\"Hello from Kotlin!\")");
+    auto result = kotlin_eval(script: "println(\"Hello from Kotlin!\")");
 }
     @endcode
 
@@ -530,7 +540,7 @@ bool kotlin_scripting_available() {
 classloader.addPath("/path/to/kotlin-scripting-jsr223.jar");
 # Retry initialization
 if (kotlin_scripting_retry()) {
-    auto result = kotlin_eval("1 + 2");
+    auto result = kotlin_eval(script: "1 + 2");
 }
     @endcode
 
