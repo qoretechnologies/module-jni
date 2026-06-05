@@ -42,7 +42,7 @@ variables:
 
 test-ubuntu:
   stage: test
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   script:
     - |
         if test/docker_test/test-ubuntu.sh; then
@@ -59,7 +59,7 @@ test-ubuntu:
 
 test-alpine:
   stage: test
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:jit-alpine
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   script:
     - |
         if test/docker_test/test-alpine.sh; then
