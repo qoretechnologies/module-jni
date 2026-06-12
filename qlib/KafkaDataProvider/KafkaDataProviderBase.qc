@@ -53,11 +53,15 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
     }
 
     #! Returns the current AsyncAPI validator, if any
+    /** @return the configured AsyncAPI schema validator or NOTHING
+    */
     *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
         return asyncapi_validator;
     }
 
     #! Returns the current AsyncAPI channel name, if any
+    /** @return the configured AsyncAPI channel name or NOTHING
+    */
     *string getAsyncApiChannel() {
         return asyncapi_channel;
     }
@@ -69,6 +73,11 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
     }
 
     #! Configures AsyncAPI validation from provider options
+    /** @param opts provider options that may contain \c asyncapi, \c validator, and \c asyncapi_channel
+
+        @throw CONSTRUCTOR-ERROR invalid or conflicting AsyncAPI options
+        @throw an exception from @ref AsyncApi::AsyncApi3Loader::fromUrl() if loading \c asyncapi fails
+    */
     configureAsyncApiOptions(hash<auto> opts) {
         *AsyncApi::AsyncApi3Schema new_validator = asyncapi_validator;
         *string new_channel = asyncapi_channel;
@@ -112,6 +121,11 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
     }
 
     #! Validates an incoming Kafka value against the AsyncAPI schema, if configured
+    /** @param value Kafka message value to validate; may be modified by schema default handling
+        @param headers Kafka message headers used as AsyncAPI message headers
+
+        @throw SCHEMA-VALIDATION-ERROR the message value or headers do not match the configured schema
+    */
     validateIncomingMessage(reference<auto> value, hash<auto> headers = {}) {
         if (asyncapi_validator && asyncapi_channel) {
             asyncapi_validator.validateIncomingMessage(asyncapi_channel, \value, headers);
@@ -119,6 +133,11 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
     }
 
     #! Validates an outgoing Kafka value against the AsyncAPI schema, if configured
+    /** @param value Kafka message value to validate; may be modified by schema default handling
+        @param headers Kafka message headers used as AsyncAPI message headers; may be modified by validation
+
+        @throw SCHEMA-VALIDATION-ERROR the message value or headers do not match the configured schema
+    */
     validateOutgoingMessage(reference<auto> value, reference<hash<auto>> headers) {
         if (asyncapi_validator && asyncapi_channel) {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \value, \headers);
@@ -126,6 +145,8 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
     }
 
     #! Removes AsyncAPI-only options before passing hashes to Java Kafka clients
+    /** @param opts option hash to modify in place
+    */
     static removeAsyncApiOptions(reference<hash<auto>> opts) {
         remove opts{"asyncapi", "asyncapi_channel", "validator"};
     }

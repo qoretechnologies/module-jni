@@ -530,11 +530,15 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     }
 
     #! Returns the current AsyncAPI validator, if any
+    /** @return the configured AsyncAPI schema validator or NOTHING
+    */
     *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
         return asyncapi_validator;
     }
 
     #! Returns the current AsyncAPI channel name, if any
+    /** @return the configured AsyncAPI channel name or NOTHING
+    */
     *string getAsyncApiChannel() {
         return asyncapi_channel;
     }
@@ -546,6 +550,11 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     }
 
     #! Validates an incoming MQTT payload against the AsyncAPI schema, if configured
+    /** @param payload MQTT message payload to validate; may be modified by schema default handling
+        @param headers MQTT user properties used as AsyncAPI message headers
+
+        @throw SCHEMA-VALIDATION-ERROR the message payload or headers do not match the configured schema
+    */
     validateIncomingMessage(reference<auto> payload, hash<auto> headers = {}) {
         if (asyncapi_validator && asyncapi_channel) {
             asyncapi_validator.validateIncomingMessage(asyncapi_channel, \payload, headers);
@@ -553,6 +562,11 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     }
 
     #! Validates an outgoing MQTT payload against the AsyncAPI schema, if configured
+    /** @param payload MQTT message payload to validate; may be modified by schema default handling
+        @param headers MQTT user properties used as AsyncAPI message headers; may be modified by validation
+
+        @throw SCHEMA-VALIDATION-ERROR the message payload or headers do not match the configured schema
+    */
     validateOutgoingMessage(reference<auto> payload, reference<hash<auto>> headers) {
         if (asyncapi_validator && asyncapi_channel) {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \payload, \headers);
