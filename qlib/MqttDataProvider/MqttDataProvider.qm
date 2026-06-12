@@ -126,6 +126,7 @@ module MqttDataProvider {
                 MqttMessageDataType::Fields{"qos", "retained", "content_type", "response_topic",
                     "correlation_data", "message_expiry_interval", "payload_format", "user_properties"}
             ),
+            "output_type": MqttMessageDataType,
         });
     };
 }
@@ -185,6 +186,27 @@ module MqttDataProvider {
     @par API Example: Listen for Messages
     @verbatim qdp 'mqtt{url=ssl://eu1.cloud.thethings.network:8883,topic=#,username=my-username,password=my-password}' listen
     @endverbatim
+
+    @par API Example: Validate Messages with AsyncAPI
+    @code{.py}
+%requires MqttDataProvider
+%requires AsyncApi
+
+AsyncApi::AsyncApi3Schema validator = AsyncApi::AsyncApi3Loader::fromUrl(
+    "file:///opt/schemas/mqtt-events.yaml");
+
+MqttDataProvider mqtt({
+    "url": "tcp://broker.example.com:1883",
+    "topic": "sensors/#",
+    "validator": validator,
+    "asyncapi_channel": "messages",
+});
+mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
+    "topic": "sensors/temperature",
+    "payload": {"device_id": "sensor-1", "value": 22.5},
+    "content_type": "application/json",
+});
+    @endcode
 
     @section MqttDataProvider_relnotes Release Notes
 

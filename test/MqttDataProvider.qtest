@@ -28,6 +28,7 @@ public class MqttDataProviderTest inherits QUnit::Test {
 
         const OptionColumn = 22;
         const AsyncApiChannel = "messages";
+        const SiemensDatabusChannel = "databusDpValue";
     }
 
     constructor() : Test("MqttDataProviderTest Test", "1.0", \ARGV, MyOpts) {
@@ -41,6 +42,7 @@ public class MqttDataProviderTest inherits QUnit::Test {
         addTestCase("connection options phase 3", \connectionOptionsPhase3Test());
         addTestCase("AsyncAPI options", \asyncApiOptionsTest());
         addTestCase("AsyncAPI validation", \asyncApiValidationTest());
+        addTestCase("Siemens Databus AsyncAPI regression", \siemensDatabusAsyncApiRegressionTest());
         addTestCase("AsyncAPI option validation", \asyncApiOptionValidationTest());
         addTestCase("factory info", \factoryInfoTest());
         addTestCase("action registration", \actionRegistrationTest());
@@ -437,6 +439,62 @@ public class MqttDataProviderTest inherits QUnit::Test {
         assertFalse(exists cleared_channel, "channel should be cleared");
     }
 
+    siemensDatabusAsyncApiRegressionTest() {
+        AsyncApi::AsyncApi3Schema schema = createSiemensDatabusAsyncApiSchema();
+        MqttDataProvider prov({
+            "url": "tcp://localhost:1883",
+            "validator": schema,
+            "asyncapi_channel": SiemensDatabusChannel,
+        });
+
+        auto incoming = {
+            "seq": 1,
+            "vals": ({
+                "id": "PLC_1.Temperature",
+                "val": 22.5,
+                "ts": "2026-06-12T12:00:00.000Z",
+                "qc": 3,
+            },),
+        };
+        prov.validateIncomingMessage(\incoming);
+        assertEq("PLC_1.Temperature", incoming.vals[0].id);
+        assertEq(22.5, incoming.vals[0].val);
+
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            auto invalid_incoming = {
+                "seq": 2,
+                "vals": ({
+                    "id": "PLC_1.Temperature",
+                    "val": 22.5,
+                },),
+            };
+            prov.validateIncomingMessage(\invalid_incoming);
+        });
+
+        auto outgoing = {
+            "seq": 3,
+            "vals": ({
+                "id": "PLC_1.SetPoint",
+                "val": 21.0,
+            },),
+        };
+        hash<auto> headers;
+        prov.validateOutgoingMessage(\outgoing, \headers);
+        assertEq("PLC_1.SetPoint", outgoing.vals[0].id);
+        assertEq(21.0, outgoing.vals[0].val);
+
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            auto invalid_outgoing = {
+                "seq": 4,
+                "vals": ({
+                    "val": 21.0,
+                },),
+            };
+            hash<auto> invalid_headers;
+            prov.validateOutgoingMessage(\invalid_outgoing, \invalid_headers);
+        });
+    }
+
     asyncApiOptionValidationTest() {
         AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
 
@@ -512,6 +570,7 @@ public class MqttDataProviderTest inherits QUnit::Test {
         assertTrue(action_map.hasKey("send-msg"), "should have 'send-msg' action");
         assertEq("Send MQTT Message", action_map."send-msg".display_name);
         assertEq(DPAT_SEND_MESSAGE, action_map."send-msg".action_code);
+        assertEq(MqttMessageDataType, action_map."send-msg".output_type);
 
         # verify send-msg has all expected options including MQTT 5 fields
         hash<auto> send_opts = action_map."send-msg".options;
@@ -679,16 +738,30 @@ public class MqttDataProviderTest inherits QUnit::Test {
             error("missing -c,--connection option or MQTT_CONNECTION environment variable");
         }
 
-        AbstractConnection conn = get_connection(conn_name);
-        if (!(conn instanceof MqttConnection)) {
-            error("connection %y is type %y; expecting \"MqttConnection\"", conn_name, conn.className());
+        # try get_connection() first (works in CI with connection providers)
+        try {
+            AbstractConnection conn = get_connection(conn_name);
+            if (!(conn instanceof MqttConnection)) {
+                error("connection %y is type %y; expecting \"MqttConnection\"", conn_name, conn.className());
+            }
+            # store the real URL for creating additional providers in integration tests
+            mqtt_url = conn.getUrl();
+            mqtt = conn.getDataProvider();
+        } catch (hash<ExceptionInfo> ex) {
+            # fall back to direct URL if get_connection() fails (local testing)
+            if (conn_name =~ /^(mqtt(tcp|ssl)?|tcp|ssl)[.:\/]/) {
+                mqtt_url = conn_name;
+            } else {
+                rethrow;
+            }
         }
-        # store the real URL for creating additional providers in integration tests
-        mqtt_url = conn.getUrl();
+
         # convert mqtttcp:// to tcp:// and mqttssl:// to ssl://
         mqtt_url =~ s/^mqtt:/tcp:/;
         mqtt_url =~ s/^mqtt//;
-        mqtt = conn.getDataProvider();
+        if (!mqtt) {
+            mqtt = new MqttDataProvider({"url": mqtt_url});
+        }
     }
 
     private static AsyncApi::AsyncApi3Schema createAsyncApiSchema() {
@@ -748,6 +821,140 @@ public class MqttDataProviderTest inherits QUnit::Test {
                         "properties": {
                             "message": {
                                 "type": "string",
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    private static AsyncApi::AsyncApi3Schema createSiemensDatabusAsyncApiSchema() {
+        return new AsyncApi::AsyncApi3Schema("", {
+            "asyncapi": "3.0.0",
+            "info": {
+                "title": "Siemens Industrial Edge Databus MQTT DP Value API",
+                "version": "1.3.0",
+            },
+            "servers": {
+                "broker": {
+                    "host": "localhost:1883",
+                    "protocol": "mqtt",
+                },
+            },
+            "channels": {
+                SiemensDatabusChannel: {
+                    "address": "ie/d/j/simatic/v1/{providerAppInstanceId}/dp/r/"
+                        "{dpConnectionNamePath}{dpCollectionNamePath}",
+                    "messages": {
+                        "read": {
+                            "$ref": "#/components/messages/DatabusValueRead",
+                        },
+                        "write": {
+                            "$ref": "#/components/messages/DatabusValueWrite",
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "receiveDatabusValue": {
+                    "action": "receive",
+                    "channel": {
+                        "$ref": "#/channels/databusDpValue",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/databusDpValue/messages/read",
+                        },
+                    ),
+                },
+                "sendDatabusValue": {
+                    "action": "send",
+                    "channel": {
+                        "$ref": "#/channels/databusDpValue",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/databusDpValue/messages/write",
+                        },
+                    ),
+                },
+            },
+            "components": {
+                "messages": {
+                    "DatabusValueRead": {
+                        "payload": {
+                            "$ref": "#/components/schemas/DatabusValueReadPayload",
+                        },
+                    },
+                    "DatabusValueWrite": {
+                        "payload": {
+                            "$ref": "#/components/schemas/DatabusValueWritePayload",
+                        },
+                    },
+                },
+                "schemas": {
+                    "DatabusValueReadPayload": {
+                        "type": "object",
+                        "required": ("seq", "vals",),
+                        "additionalProperties": False,
+                        "properties": {
+                            "seq": {
+                                "type": "integer",
+                            },
+                            "vals": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/DatabusValueReadItem",
+                                },
+                            },
+                        },
+                    },
+                    "DatabusValueReadItem": {
+                        "type": "object",
+                        "required": ("id", "val", "ts", "qc",),
+                        "additionalProperties": False,
+                        "properties": {
+                            "id": {
+                                "type": "string",
+                            },
+                            "val": {
+                                "type": "number",
+                            },
+                            "ts": {
+                                "type": "string",
+                            },
+                            "qc": {
+                                "type": "integer",
+                            },
+                        },
+                    },
+                    "DatabusValueWritePayload": {
+                        "type": "object",
+                        "required": ("seq", "vals",),
+                        "additionalProperties": False,
+                        "properties": {
+                            "seq": {
+                                "type": "integer",
+                            },
+                            "vals": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/DatabusValueWriteItem",
+                                },
+                            },
+                        },
+                    },
+                    "DatabusValueWriteItem": {
+                        "type": "object",
+                        "required": ("id", "val",),
+                        "additionalProperties": False,
+                        "properties": {
+                            "id": {
+                                "type": "string",
+                            },
+                            "val": {
+                                "type": "number",
                             },
                         },
                     },
