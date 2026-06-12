@@ -76,9 +76,12 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
             },
             "validator": <DataProviderOptionInfo>{
                 "display_name": "AsyncAPI Validator",
-                "short_desc": "AsyncAPI validator object",
-                "type": AbstractDataProviderTypeMap."object",
-                "desc": "Preloaded `AsyncApi::AsyncApi3Schema` object used by child producer and consumer "
+                "short_desc": "AsyncAPI schema location or file data",
+                "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                    DTT_FromFile: True,
+                    DTT_FromLocation: True,
+                }),
+                "desc": "An AsyncAPI schema location or schema file data used by child producer and consumer "
                     "providers to validate Kafka message values. This option conflicts with `asyncapi` and "
                     "requires `asyncapi_channel`",
             },

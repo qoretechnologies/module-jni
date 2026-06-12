@@ -39,6 +39,7 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
                 map {
                     $1.key: cast<hash<ConnectionOptionInfo>>($1.value - ("type", "required") + {
                         "type": MqttConnection::getType($1.value),
+                        "freeform": MqttConnection::isFreeform($1.value),
                     })
                 }, MqttDataProvider::ConstructorOptions.pairIterator(),
                 $1.key !~ /^subscription_/ && $1.key !~ /^will_/ && $1.key != "url"
@@ -122,11 +123,21 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
 
     #! Returns the string type for the first data provider type
     static string getType(hash<DataProviderOptionInfo> opt) {
+        *hash<auto> tags = opt.type[0].getTags();
+        if (tags && tags{DTT_FromFile}) {
+            return "file-as-string";
+        }
         string type = opt.type[0].getName();
         if (type[0] == "*") {
             splice type, 0, 1;
         }
         return type;
+    }
+
+    #! Returns True if the first data provider type supports freeform file locations
+    static bool isFreeform(hash<DataProviderOptionInfo> opt) {
+        *hash<auto> tags = opt.type[0].getTags();
+        return tags ? (tags{DTT_FromLocation} ?? False) : False;
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
@@ -182,4 +193,3 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
     }
 }
 }
-

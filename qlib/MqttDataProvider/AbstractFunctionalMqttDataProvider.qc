@@ -381,9 +381,12 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
             },
             "validator": <DataProviderOptionInfo>{
                 "display_name": "AsyncAPI Validator",
-                "short_desc": "AsyncAPI validator object",
-                "type": AbstractDataProviderTypeMap."object",
-                "desc": "Preloaded `AsyncApi::AsyncApi3Schema` object used to validate outgoing and incoming MQTT "
+                "short_desc": "AsyncAPI schema location or file data",
+                "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                    DTT_FromFile: True,
+                    DTT_FromLocation: True,
+                }),
+                "desc": "An AsyncAPI schema location or schema file data used to validate outgoing and incoming MQTT "
                     "payloads. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
             },
             "will_content_type": <DataProviderOptionInfo>{
@@ -925,11 +928,12 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
             throw "CONSTRUCTOR-ERROR", "options 'validator' and 'asyncapi' cannot be used together";
         }
         if (exists opts.validator) {
-            if (!(opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
-                throw "CONSTRUCTOR-ERROR", sprintf("option 'validator' has type %y; expecting "
-                    "AsyncApi::AsyncApi3Schema", opts.validator.fullType());
+            if (opts.validator.typeCode() != NT_STRING || !opts.validator.val()) {
+                throw "CONSTRUCTOR-ERROR", sprintf("option 'validator' has type %y and value %y; expecting a "
+                    "non-empty string AsyncAPI schema location or schema file data", opts.validator.fullType(),
+                    opts.validator);
             }
-            new_validator = opts.validator;
+            new_validator = AbstractFunctionalMqttDataProvider::loadAsyncApiValidator(opts.validator);
         }
         if (exists opts.asyncapi) {
             if (opts.asyncapi.typeCode() != NT_STRING || !opts.asyncapi.val()) {
@@ -957,6 +961,19 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         }
         asyncapi_validator = new_validator;
         asyncapi_channel = new_channel;
+    }
+
+    private static AsyncApi::AsyncApi3Schema loadAsyncApiValidator(string validator) {
+        if (AbstractFunctionalMqttDataProvider::isAsyncApiSchemaData(validator)) {
+            return AsyncApi::AsyncApi3Loader::fromString(validator);
+        }
+        return AsyncApi::AsyncApi3Loader::fromString(
+            FileLocationHandler::FileLocationHandler::getTextFileFromLocation(validator));
+    }
+
+    private static bool isAsyncApiSchemaData(string validator) {
+        return validator =~ /[\r\n]/ || validator =~ /^\s*asyncapi:/ || validator =~ /^\s*{/
+            || validator =~ /^\s*"asyncapi":/;
     }
 
     private static hash<auto> getAsyncApiHeaders(hash<auto> msg) {

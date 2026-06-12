@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires Util
 %requires QUnit
+%requires FsUtil
 %requires DataProvider
 %requires ConnectionProvider
 %requires MqttDataProvider
@@ -391,17 +392,19 @@ public class MqttDataProviderTest inherits QUnit::Test {
         assertTrue(opts.hasKey("validator"), "should have 'validator' option");
         assertDataProviderOptionType(opts.asyncapi, "string");
         assertDataProviderOptionType(opts.asyncapi_channel, "string");
-        assertDataProviderOptionType(opts.validator, "object");
+        assertDataProviderFileLocationOption(opts.validator, "validator");
 
         hash<auto> conn_opts = MqttConnection::ConnectionScheme.options;
         assertTrue(conn_opts.hasKey("asyncapi"), "ConnectionScheme should have 'asyncapi' option");
         assertTrue(conn_opts.hasKey("asyncapi_channel"),
             "ConnectionScheme should have 'asyncapi_channel' option");
         assertTrue(conn_opts.hasKey("validator"), "ConnectionScheme should have 'validator' option");
+        assertEq("file-as-string", conn_opts.validator.type);
+        assertTrue(conn_opts.validator.freeform, "ConnectionScheme validator should allow freeform locations");
     }
 
     asyncApiValidationTest() {
-        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+        string schema = createAsyncApiSchemaSource();
         MqttDataProvider prov({
             "url": "tcp://localhost:1883",
             "validator": schema,
@@ -437,15 +440,28 @@ public class MqttDataProviderTest inherits QUnit::Test {
         *string cleared_channel = prov.getAsyncApiChannel();
         assertFalse(exists cleared_validator, "validator should be cleared");
         assertFalse(exists cleared_channel, "channel should be cleared");
+
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+        string schema_path = tmp_dir + "/mqtt-schema.yaml";
+        File f();
+        f.open2(schema_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(schema);
+        f.close();
+
+        MqttDataProvider location_prov({
+            "url": "tcp://localhost:1883",
+            "validator": schema_path,
+            "asyncapi_channel": AsyncApiChannel,
+        });
+        assertTrue(location_prov.getAsyncApiValidator() instanceof AsyncApi::AsyncApi3Schema,
+            "provider should load AsyncAPI validator from a file location");
     }
 
     siemensDatabusAsyncApiRegressionTest() {
         AsyncApi::AsyncApi3Schema schema = createSiemensDatabusAsyncApiSchema();
-        MqttDataProvider prov({
-            "url": "tcp://localhost:1883",
-            "validator": schema,
-            "asyncapi_channel": SiemensDatabusChannel,
-        });
+        MqttDataProvider prov({"url": "tcp://localhost:1883"});
+        prov.setAsyncApiValidator(schema, SiemensDatabusChannel);
 
         auto incoming = {
             "seq": 1,
@@ -496,7 +512,7 @@ public class MqttDataProviderTest inherits QUnit::Test {
     }
 
     asyncApiOptionValidationTest() {
-        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+        string schema = createAsyncApiSchemaSource();
 
         assertThrows("CONSTRUCTOR-ERROR", sub () {
             new MqttDataProvider({"url": "tcp://localhost:1883", "validator": schema});
@@ -521,6 +537,13 @@ public class MqttDataProviderTest inherits QUnit::Test {
         });
         assertThrows("CONSTRUCTOR-ERROR", sub () {
             new MqttDataProvider({"url": "tcp://localhost:1883", "asyncapi": ""});
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new MqttDataProvider({
+                "url": "tcp://localhost:1883",
+                "validator": "",
+                "asyncapi_channel": AsyncApiChannel,
+            });
         });
     }
 
@@ -829,6 +852,47 @@ public class MqttDataProviderTest inherits QUnit::Test {
         });
     }
 
+    private static string createAsyncApiSchemaSource() {
+        return sprintf("asyncapi: 3.0.0
+info:
+  title: MQTT Data Provider Test API
+  version: 1.0.0
+channels:
+  %s:
+    address: qore/test
+    messages:
+      message:
+        $ref: '#/components/messages/TestMessage'
+operations:
+  sendMessage:
+    action: send
+    channel:
+      $ref: '#/channels/%s'
+    messages:
+      - $ref: '#/channels/%s/messages/message'
+  receiveMessage:
+    action: receive
+    channel:
+      $ref: '#/channels/%s'
+    messages:
+      - $ref: '#/channels/%s/messages/message'
+components:
+  messages:
+    TestMessage:
+      payload:
+        $ref: '#/components/schemas/TestPayload'
+  schemas:
+    TestPayload:
+      type: object
+      required:
+        - message
+      additionalProperties: false
+      properties:
+        message:
+          type: string
+", AsyncApiChannel, AsyncApiChannel, AsyncApiChannel, AsyncApiChannel, AsyncApiChannel);
+    }
+
     private static AsyncApi::AsyncApi3Schema createSiemensDatabusAsyncApiSchema() {
         return new AsyncApi::AsyncApi3Schema("", {
             "asyncapi": "3.0.0",
@@ -966,6 +1030,14 @@ public class MqttDataProviderTest inherits QUnit::Test {
     private assertDataProviderOptionType(hash<DataProviderOptionInfo> opt, string name) {
         assertEq(1, opt.type.size(), sprintf("option should have one data provider type for %y", name));
         assertEq(name, opt.type[0].getName());
+    }
+
+    private assertDataProviderFileLocationOption(hash<DataProviderOptionInfo> opt, string name) {
+        assertDataProviderOptionType(opt, "string");
+        assertTrue(opt.type[0].getTag(DTT_FromFile) ?? False,
+            sprintf("%s option should allow file data", name));
+        assertTrue(opt.type[0].getTag(DTT_FromLocation) ?? False,
+            sprintf("%s option should allow locations", name));
     }
 }
 

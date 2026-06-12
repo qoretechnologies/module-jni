@@ -64,9 +64,10 @@ public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWith
                 },
                 "validator": <ConnectionOptionInfo>{
                     "display_name": "AsyncAPI Validator",
-                    "short_desc": "AsyncAPI validator object",
-                    "type": "object",
-                    "desc": "Preloaded `AsyncApi::AsyncApi3Schema` object used by child producer and consumer "
+                    "short_desc": "AsyncAPI schema location or file data",
+                    "type": "file-as-string",
+                    "freeform": True,
+                    "desc": "An AsyncAPI schema location or schema file data used by child producer and consumer "
                         "providers to validate Kafka message values. This option conflicts with `asyncapi` "
                         "and requires `asyncapi_channel`",
                 },

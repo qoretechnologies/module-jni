@@ -39,6 +39,7 @@
 # implements support for MQTT connections
 %requires(reexport) ConnectionProvider
 %requires AsyncApi >= 1.0
+%requires FileLocationHandler
 
 module MqttDataProvider {
     version = "3.0";
@@ -190,15 +191,11 @@ module MqttDataProvider {
     @par API Example: Validate Messages with AsyncAPI
     @code{.py}
 %requires MqttDataProvider
-%requires AsyncApi
-
-AsyncApi::AsyncApi3Schema validator = AsyncApi::AsyncApi3Loader::fromUrl(
-    "file:///opt/schemas/mqtt-events.yaml");
 
 MqttDataProvider mqtt({
     "url": "tcp://broker.example.com:1883",
     "topic": "sensors/#",
-    "validator": validator,
+    "validator": "file:///opt/schemas/mqtt-events.yaml",
     "asyncapi_channel": "messages",
 });
 mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
@@ -232,7 +229,8 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
     - added connection lifecycle events: \c mqtt-connected-event and \c mqtt-disconnected-event
     - added \c connected and \c disconnected event actions to the data provider action catalog
     - added AsyncAPI 3.0 validation support for outgoing and incoming MQTT payloads via the \c asyncapi,
-      \c validator, and \c asyncapi_channel options
+      \c validator, and \c asyncapi_channel options; \c validator accepts AsyncAPI schema file data or a schema
+      location
 
     @subsection MqttDataProvider_v2_0 MqttDataProvider v2.0
     - added support for the data provider action catalog API

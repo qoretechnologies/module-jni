@@ -39,6 +39,7 @@
 # implements support for Kafka connections
 %requires(reexport) ConnectionProvider
 %requires AsyncApi >= 1.0
+%requires FileLocationHandler
 
 %try-module json >= 1.5
 %define NoJson
@@ -138,7 +139,8 @@ module KafkaDataProvider {
 
     @subsection kafkadataprovider_v2_1 KafkaDataProvider v2.1
     - added AsyncAPI 3.0 validation support for producer request values and consumer event values via the
-      \c asyncapi, \c validator, and \c asyncapi_channel options
+      \c asyncapi, \c validator, and \c asyncapi_channel options; \c validator accepts AsyncAPI schema file data or
+      a schema location
 
     @subsection kafkadataprovider_v1_0 KafkaDataProvider v1.0
     - initial release of the module

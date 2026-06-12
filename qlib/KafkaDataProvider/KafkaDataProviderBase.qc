@@ -77,6 +77,8 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
 
         @throw CONSTRUCTOR-ERROR invalid or conflicting AsyncAPI options
         @throw an exception from @ref AsyncApi::AsyncApi3Loader::fromUrl() if loading \c asyncapi fails
+        @throw an exception from @ref FileLocationHandler::FileLocationHandler::getTextFileFromLocation() if loading
+            a \c validator location fails
     */
     configureAsyncApiOptions(hash<auto> opts) {
         *AsyncApi::AsyncApi3Schema new_validator = asyncapi_validator;
@@ -86,11 +88,12 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
             throw "CONSTRUCTOR-ERROR", "options 'validator' and 'asyncapi' cannot be used together";
         }
         if (exists opts.validator) {
-            if (!(opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
-                throw "CONSTRUCTOR-ERROR", sprintf("option 'validator' has type %y; expecting "
-                    "AsyncApi::AsyncApi3Schema", opts.validator.fullType());
+            if (opts.validator.typeCode() != NT_STRING || !opts.validator.val()) {
+                throw "CONSTRUCTOR-ERROR", sprintf("option 'validator' has type %y and value %y; expecting a "
+                    "non-empty string AsyncAPI schema location or schema file data", opts.validator.fullType(),
+                    opts.validator);
             }
-            new_validator = opts.validator;
+            new_validator = KafkaDataProviderBase::loadAsyncApiValidator(opts.validator);
         }
         if (exists opts.asyncapi) {
             if (opts.asyncapi.typeCode() != NT_STRING || !opts.asyncapi.val()) {
@@ -149,6 +152,19 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
     */
     static removeAsyncApiOptions(reference<hash<auto>> opts) {
         remove opts{"asyncapi", "asyncapi_channel", "validator"};
+    }
+
+    private static AsyncApi::AsyncApi3Schema loadAsyncApiValidator(string validator) {
+        if (KafkaDataProviderBase::isAsyncApiSchemaData(validator)) {
+            return AsyncApi::AsyncApi3Loader::fromString(validator);
+        }
+        return AsyncApi::AsyncApi3Loader::fromString(
+            FileLocationHandler::FileLocationHandler::getTextFileFromLocation(validator));
+    }
+
+    private static bool isAsyncApiSchemaData(string validator) {
+        return validator =~ /[\r\n]/ || validator =~ /^\s*asyncapi:/ || validator =~ /^\s*{/
+            || validator =~ /^\s*"asyncapi":/;
     }
 }
 }
