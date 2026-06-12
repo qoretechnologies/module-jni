@@ -1758,14 +1758,14 @@ lorem ipsum\r
 
     issue2950() {
         int i = 0;
+        Counter c(1);
         Program p(PO_NEW_STYLE);
-        p.parse("list<auto> sub get_closure() {
-    Counter c(1);
-    return (sub (Method m, *list args) { }, c);
+        p.parse("code sub get_closure() {
+    return sub (Method m, *list args) { };
 }
         ", "");
 
-        (code closure1, Counter c) = p.callFunction("get_closure");
+        code closure1 = p.callFunction("get_closure");
         delete p;
 
         code closure2 = sub(Method m, *list args) { ++i; c.dec(); };
