@@ -27,7 +27,7 @@ default:
       variables:
         AMQ_USER: admin
         AMQ_PASSWORD: admin
-        AMQ_EXTRA_ARGS: "--no-fsync"
+        AMQ_EXTRA_ARGS: "--no-fsync --silent --no-mqtt-acceptor"
         HEALTHCHECK_TCP_PORT: "61616"
   before_script:
     - |
