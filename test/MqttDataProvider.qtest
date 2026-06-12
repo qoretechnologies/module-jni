@@ -4,11 +4,13 @@
 %modern
 %allow-injection
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires Util
 %requires QUnit
 %requires DataProvider
 %requires ConnectionProvider
-%requires ../qlib/MqttDataProvider
+%requires MqttDataProvider
+%requires AsyncApi
 
 %exec-class MqttDataProviderTest
 
@@ -25,6 +27,7 @@ public class MqttDataProviderTest inherits QUnit::Test {
         };
 
         const OptionColumn = 22;
+        const AsyncApiChannel = "messages";
     }
 
     constructor() : Test("MqttDataProviderTest Test", "1.0", \ARGV, MyOpts) {
@@ -36,6 +39,9 @@ public class MqttDataProviderTest inherits QUnit::Test {
         addTestCase("ssl options", \sslOptionsTest());
         addTestCase("will options", \willOptionsTest());
         addTestCase("connection options phase 3", \connectionOptionsPhase3Test());
+        addTestCase("AsyncAPI options", \asyncApiOptionsTest());
+        addTestCase("AsyncAPI validation", \asyncApiValidationTest());
+        addTestCase("AsyncAPI option validation", \asyncApiOptionValidationTest());
         addTestCase("factory info", \factoryInfoTest());
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("provider info", \providerInfoTest());
@@ -375,6 +381,91 @@ public class MqttDataProviderTest inherits QUnit::Test {
             "auth_method should be in ConnectionScheme");
     }
 
+    asyncApiOptionsTest() {
+        hash<auto> opts = AbstractFunctionalMqttDataProvider::ConstructorOptions;
+
+        assertTrue(opts.hasKey("asyncapi"), "should have 'asyncapi' option");
+        assertTrue(opts.hasKey("asyncapi_channel"), "should have 'asyncapi_channel' option");
+        assertTrue(opts.hasKey("validator"), "should have 'validator' option");
+        assertDataProviderOptionType(opts.asyncapi, "string");
+        assertDataProviderOptionType(opts.asyncapi_channel, "string");
+        assertDataProviderOptionType(opts.validator, "object");
+
+        hash<auto> conn_opts = MqttConnection::ConnectionScheme.options;
+        assertTrue(conn_opts.hasKey("asyncapi"), "ConnectionScheme should have 'asyncapi' option");
+        assertTrue(conn_opts.hasKey("asyncapi_channel"),
+            "ConnectionScheme should have 'asyncapi_channel' option");
+        assertTrue(conn_opts.hasKey("validator"), "ConnectionScheme should have 'validator' option");
+    }
+
+    asyncApiValidationTest() {
+        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+        MqttDataProvider prov({
+            "url": "tcp://localhost:1883",
+            "validator": schema,
+            "asyncapi_channel": AsyncApiChannel,
+        });
+
+        assertTrue(prov.getAsyncApiValidator() instanceof AsyncApi::AsyncApi3Schema,
+            "provider should retain AsyncAPI validator");
+        assertEq(AsyncApiChannel, prov.getAsyncApiChannel());
+
+        auto outgoing = {"message": "hello"};
+        hash<auto> headers;
+        prov.validateOutgoingMessage(\outgoing, \headers);
+        assertEq("hello", outgoing.message);
+
+        auto incoming = {"message": "received"};
+        prov.validateIncomingMessage(\incoming);
+        assertEq("received", incoming.message);
+
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            auto invalid = {"unexpected": True};
+            hash<auto> invalid_headers;
+            prov.validateOutgoingMessage(\invalid, \invalid_headers);
+        });
+
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            auto invalid = {"unexpected": True};
+            prov.validateIncomingMessage(\invalid);
+        });
+
+        prov.clearAsyncApiValidator();
+        *AsyncApi::AsyncApi3Schema cleared_validator = prov.getAsyncApiValidator();
+        *string cleared_channel = prov.getAsyncApiChannel();
+        assertFalse(exists cleared_validator, "validator should be cleared");
+        assertFalse(exists cleared_channel, "channel should be cleared");
+    }
+
+    asyncApiOptionValidationTest() {
+        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new MqttDataProvider({"url": "tcp://localhost:1883", "validator": schema});
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new MqttDataProvider({"url": "tcp://localhost:1883", "asyncapi_channel": AsyncApiChannel});
+        });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            new MqttDataProvider({
+                "url": "tcp://localhost:1883",
+                "validator": {},
+                "asyncapi_channel": AsyncApiChannel,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new MqttDataProvider({
+                "url": "tcp://localhost:1883",
+                "validator": schema,
+                "asyncapi": "file:///tmp/schema.yaml",
+                "asyncapi_channel": AsyncApiChannel,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            new MqttDataProvider({"url": "tcp://localhost:1883", "asyncapi": ""});
+        });
+    }
+
     factoryInfoTest() {
         MqttDataProviderFactory factory();
 
@@ -598,6 +689,76 @@ public class MqttDataProviderTest inherits QUnit::Test {
         mqtt_url =~ s/^mqtt:/tcp:/;
         mqtt_url =~ s/^mqtt//;
         mqtt = conn.getDataProvider();
+    }
+
+    private static AsyncApi::AsyncApi3Schema createAsyncApiSchema() {
+        return new AsyncApi::AsyncApi3Schema("", {
+            "asyncapi": "3.0.0",
+            "info": {
+                "title": "MQTT Data Provider Test API",
+                "version": "1.0.0",
+            },
+            "channels": {
+                AsyncApiChannel: {
+                    "address": "qore/test",
+                    "messages": {
+                        "message": {
+                            "$ref": "#/components/messages/TestMessage",
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "sendMessage": {
+                    "action": "send",
+                    "channel": {
+                        "$ref": "#/channels/messages",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/messages/messages/message",
+                        },
+                    ),
+                },
+                "receiveMessage": {
+                    "action": "receive",
+                    "channel": {
+                        "$ref": "#/channels/messages",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/messages/messages/message",
+                        },
+                    ),
+                },
+            },
+            "components": {
+                "messages": {
+                    "TestMessage": {
+                        "payload": {
+                            "$ref": "#/components/schemas/TestPayload",
+                        },
+                    },
+                },
+                "schemas": {
+                    "TestPayload": {
+                        "type": "object",
+                        "required": ("message",),
+                        "additionalProperties": False,
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    private assertDataProviderOptionType(hash<DataProviderOptionInfo> opt, string name) {
+        assertEq(1, opt.type.size(), sprintf("option should have one data provider type for %y", name));
+        assertEq(name, opt.type[0].getName());
     }
 }
 

@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 2.0
+%requires qore >= 3.0
 %modern
 
 # import MQTT Paho Java Client Library: JARs must be added to the global classloader.
@@ -38,6 +38,7 @@
 %requires(reexport) DataProvider
 # implements support for MQTT connections
 %requires(reexport) ConnectionProvider
+%requires AsyncApi >= 1.0
 
 module MqttDataProvider {
     version = "3.0";
@@ -208,6 +209,8 @@ module MqttDataProvider {
       \c connect_user_properties, \c auth_method, \c auth_data
     - added connection lifecycle events: \c mqtt-connected-event and \c mqtt-disconnected-event
     - added \c connected and \c disconnected event actions to the data provider action catalog
+    - added AsyncAPI 3.0 validation support for outgoing and incoming MQTT payloads via the \c asyncapi,
+      \c validator, and \c asyncapi_channel options
 
     @subsection MqttDataProvider_v2_0 MqttDataProvider v2.0
     - added support for the data provider action catalog API

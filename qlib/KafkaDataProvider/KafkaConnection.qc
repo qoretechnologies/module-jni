@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore KafkaDataProvider module definition
 
-/** KafkaConnection.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** KafkaConnection.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -48,6 +48,27 @@ public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWith
                         "list need not contain the full set of servers (you may want more than one, though, in case "
                         "a server is down).",
                     "type": "list",
+                },
+                "asyncapi": <ConnectionOptionInfo>{
+                    "display_name": "AsyncAPI Schema",
+                    "short_desc": "AsyncAPI schema URL or file path",
+                    "type": "string",
+                    "desc": "AsyncAPI schema URL or file path used by child producer and consumer providers to "
+                        "validate Kafka message values. This option conflicts with `validator`",
+                },
+                "asyncapi_channel": <ConnectionOptionInfo>{
+                    "display_name": "AsyncAPI Channel",
+                    "short_desc": "AsyncAPI channel for validation",
+                    "type": "string",
+                    "desc": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
+                },
+                "validator": <ConnectionOptionInfo>{
+                    "display_name": "AsyncAPI Validator",
+                    "short_desc": "AsyncAPI validator object",
+                    "type": "object",
+                    "desc": "Preloaded `AsyncApi::AsyncApi3Schema` object used by child producer and consumer "
+                        "providers to validate Kafka message values. This option conflicts with `asyncapi` "
+                        "and requires `asyncapi_channel`",
                 },
                 "ssl.key.password": <ConnectionOptionInfo>{
                     "display_name": "SSL Key Password",
@@ -471,4 +492,3 @@ public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWith
     }
 }
 }
-

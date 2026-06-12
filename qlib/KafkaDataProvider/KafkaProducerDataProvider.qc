@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore KafkaDataProvider module definition
 
-/** KafkaProducerDataProvider.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** KafkaProducerDataProvider.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,6 +61,19 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
                     "replica remains alive. This is the strongest available guarantee. This is equivalent to the "
                     "`acks=-1` setting.",
                 "default_value": "1",
+            },
+            "asyncapi": <DataProviderOptionInfo>{
+                "display_name": "AsyncAPI Schema",
+                "short_desc": "AsyncAPI schema URL or file path",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "AsyncAPI schema URL or file path used to validate outgoing Kafka message values. "
+                    "This option conflicts with `validator`",
+            },
+            "asyncapi_channel": <DataProviderOptionInfo>{
+                "display_name": "AsyncAPI Channel",
+                "short_desc": "AsyncAPI channel for validation",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
             },
             "key.serializer": <DataProviderOptionInfo>{
                 "display_name": "Key Serializer",
@@ -132,6 +145,13 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
                     "acknowledgement. Users should generally prefer to leave this config unset and instead use "
                     "`delivery.timeout.ms` to control retry behavior",
             },
+            "validator": <DataProviderOptionInfo>{
+                "display_name": "AsyncAPI Validator",
+                "short_desc": "AsyncAPI validator object",
+                "type": AbstractDataProviderTypeMap."object",
+                "desc": "Preloaded `AsyncApi::AsyncApi3Schema` object used to validate outgoing Kafka message "
+                    "values. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
+            },
         };
     }
 
@@ -146,6 +166,8 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions,
             DataProviderDataContextHelper::getHash(){keys ConstructorOptions} + options) + conn.getKafkaOptions();
+        configureAsyncApiOptions(copts);
+        removeAsyncApiOptions(\copts);
         # add default values automatically
         map copts{$1.key} = $1.value.default_value, ConstructorOptions.pairIterator(),
             exists $1.value.default_value && !copts.hasKey($1.key);
@@ -171,6 +193,10 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
         @debug {
             LoggerWrapper::debug("KafkaProducerDataProvider::doRequestImpl() req: %y", req);
         }
+        auto value = req.value;
+        hash<auto> headers;
+        validateOutgoingMessage(\value, \headers);
+        req.value = value;
         return prod.sendMessage(req);
     }
 

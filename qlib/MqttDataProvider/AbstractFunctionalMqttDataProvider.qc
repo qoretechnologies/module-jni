@@ -55,6 +55,19 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                 "desc": "The name of the MQTT 5 enhanced authentication method (e.g., `SCRAM-SHA-256`). "
                     "When set, the broker and client will perform an extended authentication exchange",
             },
+            "asyncapi": <DataProviderOptionInfo>{
+                "display_name": "AsyncAPI Schema",
+                "short_desc": "AsyncAPI schema URL or file path",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "AsyncAPI schema URL or file path used to validate outgoing and incoming MQTT payloads. "
+                    "This option conflicts with `validator`",
+            },
+            "asyncapi_channel": <DataProviderOptionInfo>{
+                "display_name": "AsyncAPI Channel",
+                "short_desc": "AsyncAPI channel for validation",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
+            },
             "auto_reconnect": <DataProviderOptionInfo>{
                 "display_name": "Auto Reconnect",
                 "short_desc": "Sets whether the client will automatically attempt to reconnect",
@@ -366,6 +379,13 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The username to use for the connection; if any",
             },
+            "validator": <DataProviderOptionInfo>{
+                "display_name": "AsyncAPI Validator",
+                "short_desc": "AsyncAPI validator object",
+                "type": AbstractDataProviderTypeMap."object",
+                "desc": "Preloaded `AsyncApi::AsyncApi3Schema` object used to validate outgoing and incoming MQTT "
+                    "payloads. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
+            },
             "will_content_type": <DataProviderOptionInfo>{
                 "display_name": "Will Content Type",
                 "short_desc": "MQTT 5 content type for the will message",
@@ -458,6 +478,14 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         const MESSAGE_MQTT_MESSAGE = "message";
     }
 
+    private {
+        #! Optional AsyncAPI validator
+        *AsyncApi::AsyncApi3Schema asyncapi_validator;
+
+        #! AsyncAPI channel name for validation
+        *string asyncapi_channel;
+    }
+
     #! Creates the object from another object of the same class
     constructor(AbstractMqttDataProvider prev) : AbstractMqttDataProvider(prev) {
     }
@@ -469,6 +497,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                 options.url, options.client_id);
         }
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        configureAsyncApiOptions(copts);
         hash<auto> cinfo = getClient(copts, logger);
         client = cinfo.client;
         opts = cinfo.opts;
@@ -489,6 +518,45 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         }
 %endif
         encoding = copts.encoding;
+    }
+
+    #! Sets an AsyncAPI validator for MQTT payload validation
+    /** @param validator the AsyncAPI schema validator
+        @param channel the channel name to use for validation
+    */
+    setAsyncApiValidator(AsyncApi::AsyncApi3Schema validator, string channel) {
+        asyncapi_validator = validator;
+        asyncapi_channel = channel;
+    }
+
+    #! Returns the current AsyncAPI validator, if any
+    *AsyncApi::AsyncApi3Schema getAsyncApiValidator() {
+        return asyncapi_validator;
+    }
+
+    #! Returns the current AsyncAPI channel name, if any
+    *string getAsyncApiChannel() {
+        return asyncapi_channel;
+    }
+
+    #! Clears the AsyncAPI validator
+    clearAsyncApiValidator() {
+        delete asyncapi_validator;
+        delete asyncapi_channel;
+    }
+
+    #! Validates an incoming MQTT payload against the AsyncAPI schema, if configured
+    validateIncomingMessage(reference<auto> payload, hash<auto> headers = {}) {
+        if (asyncapi_validator && asyncapi_channel) {
+            asyncapi_validator.validateIncomingMessage(asyncapi_channel, \payload, headers);
+        }
+    }
+
+    #! Validates an outgoing MQTT payload against the AsyncAPI schema, if configured
+    validateOutgoingMessage(reference<auto> payload, reference<hash<auto>> headers) {
+        if (asyncapi_validator && asyncapi_channel) {
+            asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \payload, \headers);
+        }
     }
 
     destructor() {
@@ -626,6 +694,9 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                 "user_properties": props ? getUserPropertiesHash(props) : NOTHING,
                 "subscription_identifiers": props ? props.getSubscriptionIdentifiers() : NOTHING,
             };
+            payload = msghash.payload;
+            validateIncomingMessage(\payload, getAsyncApiHeaders(msghash));
+            msghash.payload = payload;
             debug("MQTT: Message received: %y", msghash);
             notifyObservers(EVENT_MQTT_MESSAGE, msghash);
         } catch (hash<ExceptionInfo> ex) {
@@ -761,6 +832,10 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         try {
             switch (message_id) {
                 case MESSAGE_MQTT_MESSAGE: {
+                    auto out_payload = msg.payload;
+                    hash<auto> headers = getAsyncApiHeaders(msg);
+                    validateOutgoingMessage(\out_payload, \headers);
+                    msg.payload = out_payload;
                     {
                         int pt = msg.payload.typeCode();
                         if (pt != NT_STRING && pt != NT_BINARY) {
@@ -826,6 +901,52 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
             LoggerWrapper::error("MQTT: Error sending message: %s", ex.err, ex.desc);
             rethrow;
         }
+    }
+
+    private configureAsyncApiOptions(hash<auto> opts) {
+        *AsyncApi::AsyncApi3Schema new_validator = asyncapi_validator;
+        *string new_channel = asyncapi_channel;
+        *string asyncapi_url;
+        if (exists opts.validator && exists opts.asyncapi) {
+            throw "CONSTRUCTOR-ERROR", "options 'validator' and 'asyncapi' cannot be used together";
+        }
+        if (exists opts.validator) {
+            if (!(opts.validator instanceof AsyncApi::AsyncApi3Schema)) {
+                throw "CONSTRUCTOR-ERROR", sprintf("option 'validator' has type %y; expecting "
+                    "AsyncApi::AsyncApi3Schema", opts.validator.fullType());
+            }
+            new_validator = opts.validator;
+        }
+        if (exists opts.asyncapi) {
+            if (opts.asyncapi.typeCode() != NT_STRING || !opts.asyncapi.val()) {
+                throw "CONSTRUCTOR-ERROR", sprintf("option 'asyncapi' has type %y and value %y; expecting a "
+                    "non-empty string URL or file path", opts.asyncapi.fullType(), opts.asyncapi);
+            }
+            asyncapi_url = opts.asyncapi;
+        }
+        if (exists opts.asyncapi_channel) {
+            if (opts.asyncapi_channel.typeCode() != NT_STRING || !opts.asyncapi_channel.val()) {
+                throw "CONSTRUCTOR-ERROR", sprintf("option 'asyncapi_channel' has type %y and value %y; expecting "
+                    "a non-empty string channel name", opts.asyncapi_channel.fullType(), opts.asyncapi_channel);
+            }
+            new_channel = opts.asyncapi_channel;
+        }
+        if (asyncapi_url) {
+            new_validator = AsyncApi::AsyncApi3Loader::fromUrl(asyncapi_url);
+        }
+        if (new_validator && !new_channel) {
+            throw "CONSTRUCTOR-ERROR", "option 'asyncapi_channel' is required when 'asyncapi' or 'validator' is "
+                "configured";
+        }
+        if (!new_validator && new_channel) {
+            throw "CONSTRUCTOR-ERROR", "option 'asyncapi_channel' requires 'asyncapi' or 'validator'";
+        }
+        asyncapi_validator = new_validator;
+        asyncapi_channel = new_channel;
+    }
+
+    private static hash<auto> getAsyncApiHeaders(hash<auto> msg) {
+        return msg.user_properties ?? {};
     }
 }
 }

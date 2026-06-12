@@ -1,0 +1,243 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires KafkaDataProvider
+%requires AsyncApi
+
+%exec-class KafkaDataProviderTest
+
+public class KafkaDataProviderTest inherits QUnit::Test {
+    private {
+        const AsyncApiChannel = "messages";
+    }
+
+    constructor() : Test("KafkaDataProviderTest Test", "1.0", \ARGV) {
+        addTestCase("AsyncAPI options", \asyncApiOptionsTest());
+        addTestCase("AsyncAPI validation", \asyncApiValidationTest());
+        addTestCase("AsyncAPI option validation", \asyncApiOptionValidationTest());
+        addTestCase("action registration", \actionRegistrationTest());
+
+        set_return_value(main());
+    }
+
+    asyncApiOptionsTest() {
+        checkAsyncApiProviderOptions(KafkaDataProvider::ConstructorOptions, "parent");
+        checkAsyncApiProviderOptions(KafkaProducerDataProvider::ConstructorOptions, "producer");
+        checkAsyncApiProviderOptions(KafkaConsumerDataProvider::ConstructorOptions, "consumer");
+
+        hash<auto> conn_opts = KafkaConnection::ConnectionScheme.options;
+        assertTrue(conn_opts.hasKey("asyncapi"), "connection should have 'asyncapi' option");
+        assertTrue(conn_opts.hasKey("asyncapi_channel"),
+            "connection should have 'asyncapi_channel' option");
+        assertTrue(conn_opts.hasKey("validator"), "connection should have 'validator' option");
+        assertEq("string", conn_opts.asyncapi.type);
+        assertEq("string", conn_opts.asyncapi_channel.type);
+        assertEq("object", conn_opts.validator.type);
+
+        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+        hash<auto> opts = {
+            "bootstrap.servers": "localhost:9092",
+            "asyncapi": "file:///tmp/schema.yaml",
+            "asyncapi_channel": AsyncApiChannel,
+            "validator": schema,
+        };
+        KafkaDataProviderBase::removeAsyncApiOptions(\opts);
+        assertEq("localhost:9092", opts."bootstrap.servers");
+        assertFalse(opts.hasKey("asyncapi"), "asyncapi option should be stripped");
+        assertFalse(opts.hasKey("asyncapi_channel"), "asyncapi_channel option should be stripped");
+        assertFalse(opts.hasKey("validator"), "validator option should be stripped");
+    }
+
+    asyncApiValidationTest() {
+        KafkaDataProvider prov(createConnection());
+        prov.configureAsyncApiOptions({
+            "validator": createAsyncApiSchema(),
+            "asyncapi_channel": AsyncApiChannel,
+        });
+
+        assertTrue(prov.getAsyncApiValidator() instanceof AsyncApi::AsyncApi3Schema,
+            "provider should retain AsyncAPI validator");
+        assertEq(AsyncApiChannel, prov.getAsyncApiChannel());
+
+        auto outgoing = {"message": "hello"};
+        hash<auto> headers;
+        prov.validateOutgoingMessage(\outgoing, \headers);
+        assertEq("hello", outgoing.message);
+
+        auto incoming = {"message": "received"};
+        prov.validateIncomingMessage(\incoming);
+        assertEq("received", incoming.message);
+
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            auto invalid = {"unexpected": True};
+            hash<auto> invalid_headers;
+            prov.validateOutgoingMessage(\invalid, \invalid_headers);
+        });
+
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            auto invalid = {"unexpected": True};
+            prov.validateIncomingMessage(\invalid);
+        });
+
+        prov.clearAsyncApiValidator();
+        *AsyncApi::AsyncApi3Schema cleared_validator = prov.getAsyncApiValidator();
+        *string cleared_channel = prov.getAsyncApiChannel();
+        assertFalse(exists cleared_validator, "validator should be cleared");
+        assertFalse(exists cleared_channel, "channel should be cleared");
+    }
+
+    asyncApiOptionValidationTest() {
+        KafkaDataProvider prov(createConnection());
+        AsyncApi::AsyncApi3Schema schema = createAsyncApiSchema();
+
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            prov.configureAsyncApiOptions({"validator": schema});
+        });
+        assertNoAsyncApiConfig(prov);
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            prov.configureAsyncApiOptions({"asyncapi_channel": AsyncApiChannel});
+        });
+        assertNoAsyncApiConfig(prov);
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            prov.configureAsyncApiOptions({
+                "validator": {},
+                "asyncapi_channel": AsyncApiChannel,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            prov.configureAsyncApiOptions({
+                "validator": schema,
+                "asyncapi": "file:///tmp/schema.yaml",
+                "asyncapi_channel": AsyncApiChannel,
+            });
+        });
+        assertThrows("CONSTRUCTOR-ERROR", sub () {
+            prov.configureAsyncApiOptions({"asyncapi": ""});
+        });
+    }
+
+    actionRegistrationTest() {
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(KafkaDataProvider::AppName);
+        assertTrue(exists actions, "should have actions registered for Kafka app");
+        assertEq(2, actions.size(), "should have 2 actions");
+
+        hash<string, hash<DataProviderActionInfo>> action_map;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            action_map{action.action} = action;
+        }
+
+        assertTrue(action_map.hasKey("msg-received"), "should have 'msg-received' action");
+        assertTrue(action_map."msg-received".options.hasKey("asyncapi"),
+            "consumer action should expose 'asyncapi' option");
+        assertTrue(action_map."msg-received".options.hasKey("asyncapi_channel"),
+            "consumer action should expose 'asyncapi_channel' option");
+        assertTrue(action_map."msg-received".options.hasKey("validator"),
+            "consumer action should expose 'validator' option");
+
+        assertTrue(action_map.hasKey("send-msg"), "should have 'send-msg' action");
+        assertTrue(action_map."send-msg".options.hasKey("asyncapi"),
+            "producer action should expose 'asyncapi' option");
+        assertTrue(action_map."send-msg".options.hasKey("asyncapi_channel"),
+            "producer action should expose 'asyncapi_channel' option");
+        assertTrue(action_map."send-msg".options.hasKey("validator"),
+            "producer action should expose 'validator' option");
+    }
+
+    private checkAsyncApiProviderOptions(hash<auto> opts, string provider) {
+        assertTrue(opts.hasKey("asyncapi"), sprintf("%s provider should have 'asyncapi' option", provider));
+        assertTrue(opts.hasKey("asyncapi_channel"),
+            sprintf("%s provider should have 'asyncapi_channel' option", provider));
+        assertTrue(opts.hasKey("validator"), sprintf("%s provider should have 'validator' option", provider));
+        assertDataProviderOptionType(opts.asyncapi, "string");
+        assertDataProviderOptionType(opts.asyncapi_channel, "string");
+        assertDataProviderOptionType(opts.validator, "object");
+    }
+
+    private assertDataProviderOptionType(hash<DataProviderOptionInfo> opt, string name) {
+        assertEq(1, opt.type.size(), sprintf("option should have one data provider type for %y", name));
+        assertEq(name, opt.type[0].getName());
+    }
+
+    private assertNoAsyncApiConfig(KafkaDataProvider prov) {
+        *AsyncApi::AsyncApi3Schema validator = prov.getAsyncApiValidator();
+        *string channel = prov.getAsyncApiChannel();
+        assertFalse(exists validator, "failed config should not retain validator");
+        assertFalse(exists channel, "failed config should not retain channel");
+    }
+
+    private KafkaConnection createConnection() {
+        return new KafkaConnection("test-kafka", "Kafka test connection", "kafka://localhost:9092");
+    }
+
+    private static AsyncApi::AsyncApi3Schema createAsyncApiSchema() {
+        return new AsyncApi::AsyncApi3Schema("", {
+            "asyncapi": "3.0.0",
+            "info": {
+                "title": "Kafka Data Provider Test API",
+                "version": "1.0.0",
+            },
+            "channels": {
+                AsyncApiChannel: {
+                    "address": "qore.test",
+                    "messages": {
+                        "message": {
+                            "$ref": "#/components/messages/TestMessage",
+                        },
+                    },
+                },
+            },
+            "operations": {
+                "sendMessage": {
+                    "action": "send",
+                    "channel": {
+                        "$ref": "#/channels/messages",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/messages/messages/message",
+                        },
+                    ),
+                },
+                "receiveMessage": {
+                    "action": "receive",
+                    "channel": {
+                        "$ref": "#/channels/messages",
+                    },
+                    "messages": (
+                        {
+                            "$ref": "#/channels/messages/messages/message",
+                        },
+                    ),
+                },
+            },
+            "components": {
+                "messages": {
+                    "TestMessage": {
+                        "payload": {
+                            "$ref": "#/components/schemas/TestPayload",
+                        },
+                    },
+                },
+                "schemas": {
+                    "TestPayload": {
+                        "type": "object",
+                        "required": ("message",),
+                        "additionalProperties": False,
+                        "properties": {
+                            "message": {
+                                "type": "string",
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    }
+}
