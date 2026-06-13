@@ -39,8 +39,8 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
             "constructor_options": ConstructorOptions,
         };
 
-        #! Constructor options
-        const ConstructorOptions = {
+        #! Constructor options used to create the shared Kafka connection
+        const ConnectionConstructorOptions = {
             "asyncapi": <DataProviderOptionInfo>{
                 "display_name": "AsyncAPI Schema",
                 "short_desc": "AsyncAPI schema URL or file path",
@@ -87,6 +87,17 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
             },
         };
 
+        #! Child provider options accepted at the root factory boundary for forwarding to children
+        const ChildConstructorOptions =
+            KafkaConsumerDataProvider::ConstructorOptions - ("asyncapi", "asyncapi_channel", "validator",
+                "topics") + {
+                    "topics": KafkaConsumerDataProvider::ConstructorOptions.topics - "required",
+                }
+            + KafkaProducerDataProvider::ConstructorOptions - ("asyncapi", "asyncapi_channel", "validator");
+
+        #! Constructor options accepted by the factory
+        const ConstructorOptions = ConnectionConstructorOptions + ChildConstructorOptions;
+
         #! Child data provider map
         const ChildMap = {
             "consumer": Class::forName("KafkaConsumerDataProvider"),
@@ -98,11 +109,18 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
         *hash<auto> opts;
     }
 
-    constructor(*hash<auto> opts) : KafkaDataProviderBase(new KafkaConnection({
-        "name": "kafka-connection",
-        "url": remove opts.server,
-        "opts": opts,
-    })) {
+    private static hash<auto> makeConnectionConfig(*hash<auto> opts) {
+        hash<auto> conn_opts = opts ? opts{keys ConnectionConstructorOptions} : {};
+        return {
+            "name": "kafka-connection",
+            "url": remove conn_opts.server,
+            "opts": conn_opts,
+        };
+    }
+
+    constructor(*hash<auto> opts) : KafkaDataProviderBase(
+            new KafkaConnection(KafkaDataProvider::makeConnectionConfig(opts))) {
+        self.opts = opts ? opts - keys ConnectionConstructorOptions : NOTHING;
         @debug {
             LoggerWrapper::debug("KafkaDataProvider::constructor() opts: %y", self.opts);
         }

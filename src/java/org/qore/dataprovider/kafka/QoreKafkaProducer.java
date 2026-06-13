@@ -127,7 +127,6 @@ public class QoreKafkaProducer {
     }
 
     protected Future<RecordMetadata> sendMessageAsyncIntern(Map<String, Object> info, Callback callback) throws Throwable {
-        System.out.printf("Send msg: %s\n", info.toString());
         String topic = (String)info.get("topic");
         Object value = info.get("value");
 
@@ -135,7 +134,7 @@ public class QoreKafkaProducer {
         if (info.containsKey("key")) {
             Object key = (String)info.get("key");
             if (info.containsKey("partition")) {
-                int partition = (int)info.get("partition");
+                int partition = ((Number)info.get("partition")).intValue();
                 rec = new ProducerRecord<Object, Object>(topic, partition, key, value);
             } else {
                 rec = new ProducerRecord<Object, Object>(topic, key, value);
@@ -143,10 +142,7 @@ public class QoreKafkaProducer {
         } else {
             rec = new ProducerRecord<Object, Object>(topic, value);
         }
-        if (callback != null) {
-            return prod.send(rec);
-        }
-        return prod.send(rec, callback);
+        return callback != null ? prod.send(rec, callback) : prod.send(rec);
     }
 
      /** Returns a KafkaProducer object based on configuration

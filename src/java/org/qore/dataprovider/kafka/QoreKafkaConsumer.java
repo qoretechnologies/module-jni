@@ -10,12 +10,10 @@ import org.apache.kafka.common.header.Header;
 
 import org.qore.jni.Hash;
 
-import qoremod.DataProvider.Observable;
-import qoremod.DataProvider.Observer;
-
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Arrays;
 import java.util.concurrent.locks.ReentrantLock;
@@ -30,7 +28,7 @@ import java.time.Duration;
 
 /** Creates a KafkaConsumer object based on configuration
  */
-class QoreKafkaConsumer extends Observable {
+class QoreKafkaConsumer {
     /** The consumer
     */
     protected KafkaConsumer<Object, Object> cons;
@@ -47,10 +45,7 @@ class QoreKafkaConsumer extends Observable {
     private Condition done_cond = lock.newCondition();
     /** running flag
     */
-    private boolean running = false;
-    /** event to raise
-    */
-    private String event_name;
+    private volatile boolean running = false;
     // array of subscription topics
     String topic_array[];
 
@@ -85,11 +80,9 @@ class QoreKafkaConsumer extends Observable {
     public QoreKafkaConsumer(Hash conf, String event_name) throws Throwable {
         topic_array = (String[])conf.get("topics");
         cons = createConsumer(conf);
-        this.event_name = event_name;
     }
 
-    public void registerObserver(Observer observer) throws Throwable {
-        super.registerObserver(observer);
+    public void registerObserver(Object ignored) throws Throwable {
     }
 
     /** Stops polling and closes the object
@@ -106,7 +99,6 @@ class QoreKafkaConsumer extends Observable {
         } finally {
             lock.unlock();
         }
-        cons.close();
         return null;
     }
 
@@ -136,71 +128,53 @@ class QoreKafkaConsumer extends Observable {
      */
     public Boolean start(Object ignored) throws Throwable {
         // make sure this only runs once
-        {
-            lock.lock();
-            try {
-                if (running) {
-                    return false;
-                }
-                running = true;
-            } finally {
-                lock.unlock();
+        lock.lock();
+        try {
+            if (running) {
+                return false;
             }
+            running = true;
+        } finally {
+            lock.unlock();
         }
 
-        eventLoop();
+        cons.subscribe(Arrays.asList(topic_array));
         return true;
     }
 
-    /** the actual event loop
+    /** Returns true if polling should continue
      */
-    private void eventLoop() throws Throwable {
+    public Boolean isRunning() throws Throwable {
+        return running && !quit.get();
+    }
+
+    /** Polls Kafka records and returns converted event hashes
+     */
+    public ArrayList<Hash> poll(long timeoutMillis) throws Throwable {
+        ArrayList<Hash> events = new ArrayList<Hash>();
+        if (quit.get()) {
+            return events;
+        }
+
         try {
-            //System.out.printf("subscribing to: %s\n", Arrays.toString(topic_array));
-            cons.subscribe(Arrays.asList(topic_array));
-            while (!quit.get()) {
-                try {
-                    // we use an interruptible poll, so we can use a very log poll interval
-                    ConsumerRecords<Object, Object> recs = cons.poll(Duration.ofMillis(Long.MAX_VALUE));
-                    Iterator<ConsumerRecord<Object, Object>> i = recs.iterator();
-                    while (i.hasNext()) {
-                        ConsumerRecord<Object, Object> rec = i.next();
-                        Hash event = new Hash();
-                        event.put("key", rec.key());
-                        event.put("value", rec.value());
-                        event.put("headers", headerToHash(rec.headers()));
-                        Optional<Integer> leader_epoch = rec.leaderEpoch();
-                        if (leader_epoch.isPresent()) {
-                            event.put("leader_epoch", leader_epoch.get());
-                        }
-                        event.put("offset", rec.offset());
-                        event.put("partition", rec.partition());
-                        event.put("serialized_key_size", rec.serializedKeySize());
-                        event.put("serialized_value_size", rec.serializedValueSize());
-                        {
-                            TimestampType tt = rec.timestampType();
-                            switch (tt) {
-                                case CREATE_TIME: event.put("timestamp_type", "CreateTime"); break;
-                                case LOG_APPEND_TIME: event.put("timestamp_type", "LogAppendTime"); break;
-                                case NO_TIMESTAMP_TYPE: event.put("timestamp_type", "NotAvailable"); break;
-                                default: event.put("timestamp_type", "unknown"); break;
-                            }
-                        }
-                        ZonedDateTime ts_date = ZonedDateTime.ofInstant(Instant.ofEpochMilli(rec.timestamp()),
-                            TimeZone.getDefault().toZoneId());
-                        event.put("timestamp", ts_date);
-                        //System.out.printf("J %s -> %s\n", event_name, rec.toString());
-                        event.put("topic", rec.topic());
-                        notifyObservers(event_name, event);
-                    }
-                } catch (WakeupException e) {
-                    if (!quit.get()) {
-                        throw e;
-                    }
-                    //System.out.printf("exiting KafkaConsumer event loop\n");
-                    break;
-                }
+            ConsumerRecords<Object, Object> recs = cons.poll(Duration.ofMillis(timeoutMillis));
+            Iterator<ConsumerRecord<Object, Object>> i = recs.iterator();
+            while (i.hasNext()) {
+                events.add(recordToHash(i.next()));
             }
+        } catch (WakeupException e) {
+            if (!quit.get()) {
+                throw e;
+            }
+        }
+        return events;
+    }
+
+    /** Marks polling done and closes this consumer
+     */
+    public void done() {
+        try {
+            cons.close();
         } finally {
             lock.lock();
             try {
@@ -210,6 +184,37 @@ class QoreKafkaConsumer extends Observable {
                 lock.unlock();
             }
         }
+    }
+
+    /** Converts a Kafka consumer record to a Qore event hash
+     */
+    private Hash recordToHash(ConsumerRecord<Object, Object> rec) {
+        Hash event = new Hash();
+        event.put("key", rec.key());
+        event.put("value", rec.value());
+        event.put("headers", headerToHash(rec.headers()));
+        Optional<Integer> leader_epoch = rec.leaderEpoch();
+        if (leader_epoch.isPresent()) {
+            event.put("leader_epoch", leader_epoch.get());
+        }
+        event.put("offset", rec.offset());
+        event.put("partition", rec.partition());
+        event.put("serialized_key_size", rec.serializedKeySize());
+        event.put("serialized_value_size", rec.serializedValueSize());
+        {
+            TimestampType tt = rec.timestampType();
+            switch (tt) {
+                case CREATE_TIME: event.put("timestamp_type", "CreateTime"); break;
+                case LOG_APPEND_TIME: event.put("timestamp_type", "LogAppendTime"); break;
+                case NO_TIMESTAMP_TYPE: event.put("timestamp_type", "NotAvailable"); break;
+                default: event.put("timestamp_type", "unknown"); break;
+            }
+        }
+        ZonedDateTime ts_date = ZonedDateTime.ofInstant(Instant.ofEpochMilli(rec.timestamp()),
+            TimeZone.getDefault().toZoneId());
+        event.put("timestamp", ts_date);
+        event.put("topic", rec.topic());
+        return event;
     }
 
     /** Returns a hash of Headers
@@ -223,4 +228,5 @@ class QoreKafkaConsumer extends Observable {
         }
         return rv;
     }
+
 }

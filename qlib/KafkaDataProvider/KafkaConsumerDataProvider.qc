@@ -216,6 +216,10 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
 
     private {
         QoreKafkaConsumer cons;
+        Mutex event_m();
+        WaitGroup event_wg();
+        bool events_started = False;
+        bool events_closed = False;
     }
 
     #! Creates the object from a connection object
@@ -231,7 +235,6 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
         map copts{$1.key} = $1.value.default_value, ConstructorOptions.pairIterator(),
             exists $1.value.default_value && !copts.hasKey($1.key);
         cons = new QoreKafkaConsumer(copts ?? {}, EVENT_KAFKA_MESSAGE);
-        cons.registerObserver(self);
     }
 
     destructor() {
@@ -253,9 +256,29 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
     /** This method is meant to trigger event generation
     */
     observersReady() {
+        {
+            AutoLock al(event_m);
+            if (events_started || events_closed) {
+                return;
+            }
+            events_started = True;
+            event_wg.add();
+        }
         background sub () {
+            on_exit {
+                closeConsumer();
+                {
+                    AutoLock al(event_m);
+                    events_started = False;
+                }
+                event_wg.done();
+            }
             cons.start();
-            delete cons;
+            while (cons.isRunning()) {
+                foreach hash<auto> data in ((cons.poll(1000))) {
+                    update(EVENT_KAFKA_MESSAGE, data);
+                }
+            }
         }();
     }
 
@@ -263,7 +286,29 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
     /** Stops polling for new events
     */
     stopEvents() {
+        bool wait;
+        {
+            AutoLock al(event_m);
+            wait = events_started;
+        }
+        if (!wait) {
+            closeConsumer();
+            return;
+        }
         cons.stop();
+        event_wg.wait();
+    }
+
+    private closeConsumer() {
+        bool close;
+        {
+            AutoLock al(event_m);
+            close = !events_closed;
+            events_closed = True;
+        }
+        if (close) {
+            cons.done();
+        }
     }
 
     #! This method is called when an event is raised

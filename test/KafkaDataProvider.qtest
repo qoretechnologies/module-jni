@@ -23,6 +23,7 @@ public class KafkaDataProviderTest inherits QUnit::Test {
         addTestCase("AsyncAPI options", \asyncApiOptionsTest());
         addTestCase("AsyncAPI validation", \asyncApiValidationTest());
         addTestCase("AsyncAPI option validation", \asyncApiOptionValidationTest());
+        addTestCase("factory child option forwarding", \factoryChildOptionForwardingTest());
         addTestCase("action registration", \actionRegistrationTest());
 
         set_return_value(main());
@@ -144,6 +145,32 @@ public class KafkaDataProviderTest inherits QUnit::Test {
                 "asyncapi_channel": AsyncApiChannel,
             });
         });
+    }
+
+    factoryChildOptionForwardingTest() {
+        hash<auto> root_opts = KafkaDataProvider::ConstructorOptions;
+        assertTrue(root_opts.hasKey("topics"), "root factory should expose consumer 'topics' option");
+        assertTrue(root_opts.hasKey("group.id"), "root factory should expose consumer 'group.id' option");
+        assertTrue(root_opts.hasKey("acks"), "root factory should expose producer 'acks' option");
+        assertFalse(root_opts.topics.required ?? False,
+            "root factory should not require consumer-only 'topics' for producer providers");
+        assertTrue(KafkaConsumerDataProvider::ConstructorOptions.topics.required,
+            "consumer provider should still require 'topics'");
+
+        KafkaDataProvider consumer_root({
+            "server": "localhost:9092",
+            "topics": ("qore-test-topic",),
+            "group.id": "qore-test-group",
+            "auto.offset.reset": "earliest",
+        });
+        *DataProvider::AbstractDataProvider consumer = consumer_root.getChildProviderEx("consumer");
+        assertTrue(exists consumer, "root factory forwards consumer-only options to /consumer");
+
+        KafkaDataProvider producer_root({
+            "server": "localhost:9092",
+        });
+        *DataProvider::AbstractDataProvider producer = producer_root.getChildProviderEx("producer");
+        assertTrue(exists producer, "root factory can create /producer without consumer-only topics");
     }
 
     actionRegistrationTest() {
