@@ -13,6 +13,7 @@
 # in-process Milo 1.1.4 OPC UA test server (rebuild with test/java/build-test-server.sh)
 %module-cmd(jni) add-relative-classpath ./opcua-test-server.jar
 %module-cmd(jni) import org.qore.opcua.test.QoreOpcUaTestServer
+%module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
 
 %exec-class OpcUaDataProviderTest
 
@@ -779,6 +780,22 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         # discover-endpoints
         hash<auto> ep = prov.doRequest({"action": "discover-endpoints"});
         assertTrue(ep.endpoints.size() >= 1, "discover endpoints");
+
+        # Phase 1: schema snapshot of the custom namespace subtree
+        hash<auto> snap = prov.getSchemaSnapshot("ns=2;s=TestFolder");
+        assertEq(1, snap.contract_version, "snapshot contract version");
+        assertEq("live", snap.source, "snapshot source");
+        assertEq("urn:qore:opcua:test", snap.namespaces{"2"}, "namespace uri resolved");
+        # 6 variables + 1 method endpoint under TestFolder
+        assertEq(7, snap.endpoints.size(), "snapshot endpoint count");
+        hash<string, hash<auto>> by_name = map {$1.browse_name: $1}, snap.endpoints;
+        assertEq("variable", by_name."2:Int32Var".kind, "variable endpoint kind");
+        assertEq("method-call", by_name."2:Add".kind, "method endpoint kind");
+        assertEq("urn:qore:opcua:test", by_name."2:Int32Var".namespace_uri, "endpoint namespace uri");
+        # endpoint_id is a stable, deterministic, namespace-URI-derived hash
+        assertEq(64, by_name."2:Int32Var".endpoint_id.size(), "endpoint_id is a sha-256 hex");
+        assertEq(SchemaResolver::deriveEndpointId("urn:qore:opcua:test", "/2:Int32Var", "variable"),
+            by_name."2:Int32Var".endpoint_id, "endpoint_id is deterministic and index-independent");
     }
 
     opcuaIntegrationTest() {

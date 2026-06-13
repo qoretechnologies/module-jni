@@ -101,8 +101,11 @@ All confirmed via `javap` against the 1.1.4 jars.
    `getClient`/config/identity/security, `call`, encoding context, and the subscription path; re-run the
    Phase 0 regression baseline (decision 9). Port `OpcUaStatusMapping` (unchanged) and adjust
    `OpcUaTypeConversion` `valueOf` coercion.
-3. **Phase 1** — compiled Java schema-snapshot resolver + DTO contract (`org.qore.opcua.*`), backed by
-   the 1.1.4 type trees; deterministic `endpoint_id` derivation (#312 decision 5).
+3. **Phase 1 (DONE, module v1.3)** — compiled Java schema-snapshot resolver
+   (`org.qore.dataprovider.opcua.SchemaResolver`) returning an `org.qore.jni.Hash`; contract-versioned
+   snapshot with namespace table + variable/method endpoints; deterministic `endpoint_id` =
+   SHA-256(namespace URI, browse path, kind) (#312 decision 5). Exposed via `getSchemaSnapshot()`;
+   verified against the test server.
 4. **Phase 2** — live introspection into the snapshot; integration tests against the test server.
 5. **Phase 3** — Java value codec (Variant/DataValue/ExtensionObject <-> Qore), including the narrow
    signed/Float types that Phase 0 currently rejects.

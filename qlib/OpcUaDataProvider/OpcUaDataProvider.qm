@@ -47,6 +47,8 @@
 %module-cmd(jni) global-add-relative-classpath ./jar/jspecify-1.0.0.jar
 %module-cmd(jni) global-add-relative-classpath ./jar/slf4j-api-2.0.18.jar
 %module-cmd(jni) global-add-relative-classpath ./jar/slf4j-nop-2.0.18.jar
+# first-party OPC UA schema resolver (compiled from src/java/org/qore/dataprovider/opcua)
+%module-cmd(jni) global-add-relative-classpath ./jar/qore-dataprovider-opcua.jar
 
 # implements a data provider for OPC UA functionality
 %requires(reexport) DataProvider
@@ -54,7 +56,7 @@
 %requires(reexport) ConnectionProvider
 
 module OpcUaDataProvider {
-    version = "1.2";
+    version = "1.3";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -459,6 +461,15 @@ module OpcUaDataProvider {
     @endverbatim
 
     @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_3 OpcUaDataProvider v1.3
+    - added a generic, versioned OPC UA schema snapshot: \c AbstractFunctionalOpcUaDataProvider's
+      \c getSchemaSnapshot() browses the connected server's address space and returns a contract-versioned
+      snapshot (namespace table plus resolved variable/method endpoints, each with a stable, deterministic
+      \c endpoint_id derived from the namespace URI, browse path, and endpoint kind)
+    - the snapshot is produced by a compiled first-party Java resolver
+      (\c org.qore.dataprovider.opcua.SchemaResolver in \c src/java) returning an \c org.qore.jni.Hash,
+      so the whole address-space walk is one JNI round-trip
 
     @subsection OpcUaDataProvider_v1_2 OpcUaDataProvider v1.2
     - upgraded the bundled Eclipse Milo OPC UA SDK from 0.6.13 to <b>1.1.4</b>; the client API was

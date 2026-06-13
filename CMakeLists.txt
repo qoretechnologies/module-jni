@@ -430,6 +430,34 @@ add_custom_target(qore-email-jar
 # install the Email jar file manually
 install(FILES ${EMAIL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/EmailDataProvider/jar)
 
+# OPC UA data provider jar (first-party schema resolver compiled against the bundled Milo jars)
+set(OPCUA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-opcua.jar)
+set(OPCUA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-client-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-core-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-stack-core-1.1.4.jar)
+set(OPCUA_ROOT ${CMAKE_SOURCE_DIR}/src/java)
+set(OPCUA_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/)
+set(OPCUA_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/SchemaResolver.java
+)
+
+add_custom_command(
+    OUTPUT ${OPCUA_JAR}
+    COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
+        --root=${OPCUA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-opcua ${OPCUA_JAR} ${OPCUA_SOURCES_DIR}
+        ${QORE_STREAM_SOURCES} -cp ${OPCUA_CLASSPATH}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar
+    COMMAND ${CMAKE_COMMAND} -E copy ${OPCUA_JAR} ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/
+    DEPENDS ${module_name} ${OPCUA_SOURCES} ${QORE_STREAM_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+
+add_custom_target(qore-opcua-jar
+    DEPENDS ${OPCUA_JAR}
+)
+
+# install the OPC UA jar file manually
+install(FILES ${OPCUA_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/OpcUaDataProvider/jar)
+
 # PowerPoint data provider jar
 set(POWERPOINT_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-powerpoint.jar)
 set(POWERPOINT_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar)
@@ -1045,7 +1073,7 @@ add_custom_target(qore-jni-jar
 )
 
 # build and install this jar file so that java code using native classes can be compiled
-add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar qore-tika-jar qore-jdbc-dp-jar qore-camel-jar)
+add_custom_target(qore-jni ALL DEPENDS qore-jni-jar qore-jni-compiler.jar qore-excel-jar qore-kafka-jar qore-word-jar qore-powerpoint-jar qore-ods-jar qore-odt-jar qore-odp-jar qore-email-jar qore-ics-jar qore-vcf-jar qore-visio-jar qore-access-jar qore-avro-jar qore-jasper-jar qore-flyway-jar qore-tika-jar qore-jdbc-dp-jar qore-camel-jar qore-opcua-jar)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar DESTINATION ${CMAKE_INSTALL_PREFIX}/share/qore/java)
 
 if (HAVE_KOTLIN_COMPILER)
@@ -1241,6 +1269,7 @@ add_jni_qlib_jar_dependency(FlywayDataProvider qore-flyway-jar)
 add_jni_qlib_jar_dependency(TikaDataProvider qore-tika-jar)
 add_jni_qlib_jar_dependency(JdbcDataProvider qore-jdbc-dp-jar)
 add_jni_qlib_jar_dependency(CamelDataProvider qore-camel-jar)
+add_jni_qlib_jar_dependency(OpcUaDataProvider qore-opcua-jar)
 
 qore_dist(${PROJECT_VERSION})
 

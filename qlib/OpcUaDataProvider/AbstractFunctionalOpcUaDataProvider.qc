@@ -45,6 +45,7 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.NodeIds
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.Argument
+%module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.List
 %module-cmd(jni) import java.util.concurrent.TimeUnit
@@ -957,6 +958,22 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             LoggerWrapper::error("OPC UA: Error sending message: %s: %s", ex.err, ex.desc);
             rethrow;
         }
+    }
+
+    #! Returns a generic, versioned OPC UA schema snapshot of the connected server's address space
+    /** Browses the address space starting at the given root node and returns a stable schema snapshot
+        (contract version, namespace table, and the resolved variable/method endpoints with deterministic
+        @ref OpcUaDataProvider::OpcUaStatusInfo "endpoint_id" values). The multi-step browse runs in the
+        compiled Java resolver and returns the whole snapshot in a single JNI call.
+
+        @param root_node_id the node id to browse from; defaults to the standard Objects folder
+        (\c ns=0;i=85)
+
+        @return the schema snapshot as a Qore hash (see @ref OpcUaDataProvider::SchemaResolver)
+    */
+    hash<auto> getSchemaSnapshot(*string root_node_id) {
+        ensureConnected();
+        return SchemaResolver::resolve(client, root_node_id ?? "ns=0;i=85");
     }
 
     #! Returns the request type for this provider
