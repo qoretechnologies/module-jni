@@ -69,10 +69,37 @@ public class OpcUaReadAttributesResponseDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "desc": "Whether the node value can be written",
             },
+            "user_access_level": {
+                "display_name": "User Access Level",
+                "type": SoftIntOrNothingType,
+                "desc": "The access level bitmask for the node taking user permissions into account",
+            },
+            "user_writable": {
+                "display_name": "User Writable",
+                "type": SoftBoolOrNothingType,
+                "desc": "Whether the node value can be written by the current user",
+            },
             "historizing": {
                 "display_name": "Historizing",
                 "type": SoftBoolOrNothingType,
                 "desc": "Whether the node is currently historizing data",
+            },
+            "value_rank": {
+                "display_name": "Value Rank",
+                "type": SoftIntOrNothingType,
+                "desc": "The value rank of the node: `-1` = scalar, `0` = one or more dimensions, "
+                    "`1` = one dimension, `n` = n dimensions; only present for Variable nodes",
+            },
+            "array_dimensions": {
+                "display_name": "Array Dimensions",
+                "type": SoftListOrNothingType,
+                "desc": "The length of each dimension for an array value, if specified by the node",
+            },
+            "minimum_sampling_interval": {
+                "display_name": "Minimum Sampling Interval",
+                "type": SoftFloatOrNothingType,
+                "desc": "The minimum sampling interval (in milliseconds) supported by the node, if "
+                    "specified",
             },
             "status_code": {
                 "display_name": "Status Code",
@@ -83,6 +110,22 @@ public class OpcUaReadAttributesResponseDataType inherits HashDataType {
                 "display_name": "Status Text",
                 "type": StringType,
                 "desc": "A human-readable description of the status code",
+            },
+            "symbolic_name": {
+                "display_name": "Status Symbolic Name",
+                "type": StringType,
+                "desc": "The OPC UA symbolic status name (e.g., `Good`, `BadNodeIdUnknown`), or the "
+                    "hexadecimal status code if the symbolic name is not known",
+            },
+            "severity": {
+                "display_name": "Status Severity",
+                "type": StringType,
+                "desc": "The OPC UA status severity: `Good`, `Uncertain`, or `Bad`",
+            },
+            "diagnostics": {
+                "display_name": "Status Diagnostics",
+                "type": SoftStringOrNothingType,
+                "desc": "A human-readable description of the status code, if known",
             },
         };
     }

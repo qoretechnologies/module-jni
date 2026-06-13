@@ -51,6 +51,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("provider info", \providerInfoTest());
         addTestCase("example event data", \exampleEventDataTest());
         addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("status mapping", \statusMappingTest());
+        addTestCase("write type conversion", \writeTypeConversionTest());
+        addTestCase("connection detection", \connectionDetectionTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
         try {
@@ -80,8 +83,13 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("server_timestamp"), "should have 'server_timestamp' field");
         assertTrue(fields.hasKey("namespace_index"), "should have 'namespace_index' field");
 
+        # additive enriched status fields (legacy status_code/status_text are preserved above)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+
         # verify field count
-        assertEq(8, fields.size(), "data change event should have 8 fields");
+        assertEq(11, fields.size(), "data change event should have 11 fields");
 
         # verify field types
         assertEq(StringType, fields.node_id.type);
@@ -183,7 +191,11 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
         assertTrue(fields.hasKey("source_timestamp"), "should have 'source_timestamp' field");
         assertTrue(fields.hasKey("server_timestamp"), "should have 'server_timestamp' field");
-        assertEq(6, fields.size(), "read response should have 6 fields");
+        # additive enriched status fields (legacy status_code/status_text preserved above)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(9, fields.size(), "read response should have 9 fields");
     }
 
     browseResponseDataTypeFieldTest() {
@@ -201,7 +213,13 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
         assertTrue(fields.hasKey("output_arguments"), "should have 'output_arguments' field");
-        assertEq(3, fields.size(), "call method response should have 3 fields");
+        # additive resolved method-argument metadata and enriched status fields
+        assertTrue(fields.hasKey("input_argument_metadata"), "should have 'input_argument_metadata' field");
+        assertTrue(fields.hasKey("output_argument_metadata"), "should have 'output_argument_metadata' field");
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(8, fields.size(), "call method response should have 8 fields");
     }
 
     readValuesResponseDataTypeFieldTest() {
@@ -229,7 +247,18 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("historizing"), "should have 'historizing' field");
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
-        assertEq(11, fields.size(), "read attributes response should have 11 fields");
+        # additive node metadata resolved by the extended read-attributes implementation
+        assertTrue(fields.hasKey("user_access_level"), "should have 'user_access_level' field");
+        assertTrue(fields.hasKey("user_writable"), "should have 'user_writable' field");
+        assertTrue(fields.hasKey("value_rank"), "should have 'value_rank' field");
+        assertTrue(fields.hasKey("array_dimensions"), "should have 'array_dimensions' field");
+        assertTrue(fields.hasKey("minimum_sampling_interval"),
+            "should have 'minimum_sampling_interval' field");
+        # additive enriched status fields
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(19, fields.size(), "read attributes response should have 19 fields");
     }
 
     historyReadResponseDataTypeFieldTest() {
@@ -591,6 +620,87 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(schemes.hasKey("opcua"), "should have 'opcua' scheme");
         assertTrue(schemes.hasKey("opcuatcp"), "should have 'opcuatcp' scheme");
         assertTrue(schemes.hasKey("opcuahttps"), "should have 'opcuahttps' scheme");
+    }
+
+    #! Tests the generic OPC UA status code mapping (Phase 0)
+    statusMappingTest() {
+        # Good: severity derived from the spec bit layout, authoritative symbolic name
+        hash<OpcUaStatusInfo> good = OpcUaStatusMapping::get(0);
+        assertEq(0, good.code, "Good code");
+        assertEq("Good", good.symbolic_name, "Good symbolic name");
+        assertEq("Good", good.severity, "Good severity");
+        assertTrue(good.is_good, "Good is_good");
+        assertFalse(good.is_bad, "Good not is_bad");
+
+        # a known Bad code resolves to its OPC UA symbolic name and Bad severity
+        hash<OpcUaStatusInfo> bad = OpcUaStatusMapping::get(0x80340000);
+        assertEq("BadNodeIdUnknown", bad.symbolic_name, "BadNodeIdUnknown symbolic name");
+        assertEq("Bad", bad.severity, "BadNodeIdUnknown severity");
+        assertTrue(bad.is_bad, "BadNodeIdUnknown is_bad");
+        assertTrue(bad.description.val(), "BadNodeIdUnknown has a description");
+
+        # an Uncertain severity is derived from the bits even without a known symbolic name
+        hash<OpcUaStatusInfo> unc = OpcUaStatusMapping::get(0x40000000);
+        assertEq("Uncertain", unc.severity, "Uncertain severity from bits");
+        assertTrue(unc.is_uncertain, "is_uncertain");
+
+        # an unknown code yields a deterministic hex symbolic name, never an exception
+        hash<OpcUaStatusInfo> unknown = OpcUaStatusMapping::get(0x81230000);
+        assertEq("0x81230000", unknown.symbolic_name, "unknown code hex fallback");
+        assertEq("Bad", unknown.severity, "unknown high-bit code is Bad");
+
+        # reserved severity bits (0b11) are treated as Bad per the spec
+        assertEq("Bad", OpcUaStatusMapping::get(0xC0000000).severity, "reserved severity bits are Bad");
+
+        # only the low 32 bits are significant
+        assertEq(OpcUaStatusMapping::get(0x80340000), OpcUaStatusMapping::get(0x180340000),
+            "only the low 32 bits are significant");
+    }
+
+    #! Tests the OPC UA write value type conversion / data type hint (Phase 0)
+    writeTypeConversionTest() {
+        # positive: an explicit hint constructs the correct OPC UA built-in type
+        assertEq("UShort", OpcUaTypeConversion::getVariant(40000, "UInt16").getValue().getClass().getSimpleName(),
+            "UInt16 hint produces a UShort-backed variant");
+        assertEq("UByte", OpcUaTypeConversion::getVariant(200, "Byte").getValue().getClass().getSimpleName(),
+            "Byte hint produces a UByte-backed variant");
+        assertEq("UInteger", OpcUaTypeConversion::getVariant(3000000000, "UInt32").getValue().getClass().getSimpleName(),
+            "UInt32 hint produces a UInteger-backed variant");
+        assertEq("ULong", OpcUaTypeConversion::getVariant(5, "UInt64").getValue().getClass().getSimpleName(),
+            "UInt64 hint produces a ULong-backed variant");
+
+        # no hint: type inferred from the Qore value (no exception, returns a variant)
+        assertTrue(OpcUaTypeConversion::getVariant(5) instanceof object,
+            "no-hint conversion returns a variant");
+
+        # negative: narrow signed / single-precision hints are rejected before any write
+        foreach string t in (OpcUaTypeConversion::UnsupportedWriteHints) {
+            assertThrows("OPCUA-TYPE-CONVERSION-ERROR", \OpcUaTypeConversion::getVariant(), (5, t),
+                sprintf("%s hint is rejected (requires Java codec)", t));
+        }
+
+        # negative: an unknown hint is rejected
+        assertThrows("OPCUA-TYPE-CONVERSION-ERROR", \OpcUaTypeConversion::getVariant(), (5, "Bogus"),
+            "unknown hint is rejected");
+    }
+
+    #! Tests OPC UA connection-loss detection by status name (Phase 0 reconnect detection)
+    connectionDetectionTest() {
+        # connection/session loss status names trigger reconnect
+        assertTrue(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadSessionClosed"),
+            "BadSessionClosed is a connection loss");
+        assertTrue(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadConnectionClosed"),
+            "BadConnectionClosed is a connection loss");
+        assertTrue(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadServerNotConnected"),
+            "BadServerNotConnected is a connection loss");
+
+        # non-connection errors must NOT trigger reconnect (the false-positive the old regex risked)
+        assertFalse(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadNodeIdUnknown"),
+            "BadNodeIdUnknown is not a connection loss");
+        assertFalse(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadTypeMismatch"),
+            "BadTypeMismatch is not a connection loss");
+        assertFalse(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("Good"),
+            "Good is not a connection loss");
     }
 
     opcuaIntegrationTest() {

@@ -75,6 +75,24 @@ public class OpcUaDataChangeEventDataType inherits HashDataType {
                 "type": IntType,
                 "desc": "The namespace index of the node",
             },
+            "symbolic_name": {
+                "display_name": "Status Symbolic Name",
+                "type": StringType,
+                "desc": "The OPC UA symbolic status name (e.g., `Good`, `BadNodeIdUnknown`), or the "
+                    "hexadecimal status code if the symbolic name is not known",
+                "example_value": "Good",
+            },
+            "severity": {
+                "display_name": "Status Severity",
+                "type": StringType,
+                "desc": "The OPC UA status severity: `Good`, `Uncertain`, or `Bad`",
+                "example_value": "Good",
+            },
+            "diagnostics": {
+                "display_name": "Status Diagnostics",
+                "type": SoftStringOrNothingType,
+                "desc": "A human-readable description of the status code, if known",
+            },
         };
     }
 
