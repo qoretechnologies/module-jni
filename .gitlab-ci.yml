@@ -24,10 +24,26 @@ default:
         HEALTHCHECK_TCP_PORT: "4840"
     - name: quay.io/artemiscloud/activemq-artemis-broker:artemis.2.38.0
       alias: artemis
+      entrypoint: ["/bin/sh", "-ec"]
+      command:
+        - |
+          /opt/amq/bin/artemis create \
+            --user "$AMQ_USER" \
+            --password "$AMQ_PASSWORD" \
+            --role admin \
+            --name broker \
+            --allow-anonymous \
+            --host 0.0.0.0 \
+            --http-host 0.0.0.0 \
+            --force \
+            --no-fsync \
+            --silent \
+            --no-mqtt-acceptor \
+            /home/jboss/broker
+          exec /home/jboss/broker/bin/artemis run
       variables:
         AMQ_USER: admin
         AMQ_PASSWORD: admin
-        AMQ_EXTRA_ARGS: "--no-fsync --silent --no-mqtt-acceptor"
         HEALTHCHECK_TCP_PORT: "61616"
   before_script:
     - |
