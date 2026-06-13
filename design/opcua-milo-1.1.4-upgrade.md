@@ -1,8 +1,9 @@
 # OPC UA: Milo 1.1.4 Upgrade and Epic A Phases 1-5 Plan
 
-Status: in progress. Phase 0 is implemented, tested, and committed on the Milo 0.6.13 client. The
-Milo 1.1.4 upgrade and client migration are now being executed against this verified API delta, after
-which Epic A Phases 1-5 proceed in order. This document is the working plan and migration reference.
+Status: Phase 0 and the Milo 1.1.4 upgrade + client migration are DONE (module v1.2). The client is
+migrated to Milo 1.1.4, a deterministic in-process test server is in place, and the integration
+regression baseline passes. Epic A Phases 1-4 (schema snapshot resolver, live introspection, value
+codec, NodeSet2 import) proceed next on the 1.1.4 base. This document remains the migration reference.
 
 Tracking issues: qoretechnologies/qorus#312 (umbrella), #313 (Epic A), #314, #315.
 

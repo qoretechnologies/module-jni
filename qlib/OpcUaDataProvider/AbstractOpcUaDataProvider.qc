@@ -23,18 +23,16 @@
 */
 
 %module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.OpcUaClient
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.config.OpcUaClientConfigBuilder
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.identity.AnonymousProvider
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.identity.UsernameProvider
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.identity.X509IdentityProvider
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.OpcUaClientConfigBuilder
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.AnonymousProvider
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.UsernameProvider
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.X509IdentityProvider
 %module-cmd(jni) import java.security.KeyStore
 %module-cmd(jni) import java.io.ByteArrayInputStream
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.LocalizedText
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.EndpointDescription
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.client.DiscoveryClient
-%module-cmd(jni) import java.util.List
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.DiscoveryClient
 %module-cmd(jni) import java.util.Optional
 %module-cmd(jni) import java.lang.reflect.Method
 
@@ -72,7 +70,7 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
     destructor() {
         if (client) {
             try {
-                client.disconnect().get();
+                client.disconnectAsync().get();
                 debug("OPC UA: Disconnected from %y", url);
             } catch (hash<ExceptionInfo> ex) {
                 # ignore disconnect errors in destructor
@@ -115,10 +113,11 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
             load_class("java/util/function/Function")
         );
 
-        # create config builder function
+        # create config builder consumer (Milo 1.1.x: a Consumer<OpcUaClientConfigBuilder> that mutates
+        # the builder in place; it no longer returns a built config)
         auto config_builder = implement_interface(
             new QoreInvocationHandler(auto sub (Method method, *list<auto> args) {
-                if (method.getName() != "apply") {
+                if (method.getName() != "accept") {
                     return;
                 }
                 auto cfg = args[0];
@@ -127,7 +126,6 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
                 cfg.setApplicationUri(copts.application_uri ?? "urn:qore:opcua:client");
                 cfg.setRequestTimeout(UInteger::valueOf(copts.request_timeout ?? 10000));
                 cfg.setSessionTimeout(UInteger::valueOf(copts.session_timeout ?? 120000));
-                cfg.setConnectTimeout(UInteger::valueOf(copts.connect_timeout ?? 10000));
 
                 # set identity provider based on auth_type
                 string auth_type = copts.auth_type ?? "Anonymous";
@@ -164,14 +162,22 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
                         cfg.setIdentityProvider(new AnonymousProvider());
                         break;
                 }
-                return cfg.build();
             }),
-            load_class("java/util/function/Function")
+            load_class("java/util/function/Consumer")
         );
 
+        # transport config consumer (Milo 1.1.x): left at defaults
+        auto transport_config = implement_interface(
+            new QoreInvocationHandler(auto sub (Method method, *list<auto> args) {
+            }),
+            load_class("java/util/function/Consumer")
+        );
+
+        # Milo 1.1.x create(): endpoint url, endpoint selector, transport config consumer, config consumer
         OpcUaClient opcua_client = OpcUaClient::create(
             copts.url,
             endpoint_selector,
+            transport_config,
             config_builder
         );
 

@@ -10,6 +10,10 @@
 %requires ConnectionProvider
 %requires ../qlib/OpcUaDataProvider
 
+# in-process Milo 1.1.4 OPC UA test server (rebuild with test/java/build-test-server.sh)
+%module-cmd(jni) add-relative-classpath ./opcua-test-server.jar
+%module-cmd(jni) import org.qore.opcua.test.QoreOpcUaTestServer
+
 %exec-class OpcUaDataProviderTest
 
 public class OpcUaDataProviderTest inherits QUnit::Test {
@@ -54,6 +58,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("status mapping", \statusMappingTest());
         addTestCase("write type conversion", \writeTypeConversionTest());
         addTestCase("connection detection", \connectionDetectionTest());
+        addTestCase("embedded server integration", \embeddedServerIntegrationTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
         try {
@@ -701,6 +706,79 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             "BadTypeMismatch is not a connection loss");
         assertFalse(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("Good"),
             "Good is not a connection loss");
+    }
+
+    #! Integration test against the in-process Milo 1.1.4 test server (regression baseline)
+    embeddedServerIntegrationTest() {
+        # use a per-process port to avoid collisions across parallel runs
+        int port = 54000 + (getpid() % 1500);
+        auto server = new QoreOpcUaTestServer(port);
+        server.start();
+        on_exit server.stop();
+
+        OpcUaDataProvider prov({"url": server.getEndpointUrl(), "monitored_nodes": ()});
+
+        # read-value with status enrichment (Phase 0 status mapping over a real server)
+        hash<auto> r = prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int32Var"});
+        assertEq(42, r.value, "read Int32Var value");
+        assertEq("Good", r.status_text, "read status_text");
+        assertEq("Good", r.symbolic_name, "read symbolic_name");
+        assertEq("Good", r.severity, "read severity");
+
+        # write a native Int64 value and read it back
+        prov.sendMessage("write-value", {"node_id": "ns=2;s=Int64Var", "value": 4242});
+        hash<auto> rb = prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int64Var"});
+        assertEq(4242, rb.value, "Int64 write/read-back");
+
+        # write a UInt16 using the data_type hint (typed conversion to the correct OPC UA type)
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=UInt16Var", "value": 321, "data_type": "UInt16"});
+        hash<auto> rb2 = prov.doRequest({"action": "read-value", "node_id": "ns=2;s=UInt16Var"});
+        assertEq(321, rb2.value.intValue(), "UInt16 typed write/read-back");
+
+        # negative: an unsupported narrow type hint is rejected before any write
+        assertThrows("SEND-MESSAGE-ERROR",
+            \prov.sendMessage(), ("write-value",
+                {"node_id": "ns=2;s=Int32Var", "value": 5, "data_type": "Int16"}),
+            "Int16 hint rejected before write");
+
+        # read-values batch
+        hash<auto> rv = prov.doRequest({"action": "read-values",
+            "node_ids": ("ns=2;s=Int32Var", "ns=2;s=DoubleVar", "ns=2;s=StringVar")});
+        assertEq((42, 3.5, "hello"), (map $1.value, rv.results), "read-values batch");
+
+        # browse the custom folder
+        hash<auto> b = prov.doRequest({"action": "browse-nodes", "node_id": "ns=2;s=TestFolder"});
+        assertTrue(b.references.size() >= 6, "browse TestFolder children");
+
+        # read-attributes: extended metadata fields + cache consistency
+        hash<auto> a = prov.doRequest({"action": "read-attributes", "node_id": "ns=2;s=Int32Var"});
+        assertEq(-1, a.value_rank, "Int32Var value_rank (scalar)");
+        assertTrue(a.writable, "Int32Var writable");
+        assertEq("Good", a.symbolic_name, "read-attributes symbolic_name");
+        assertTrue(a.hasKey("array_dimensions"), "read-attributes has array_dimensions");
+        assertTrue(a.hasKey("minimum_sampling_interval"), "read-attributes has minimum_sampling_interval");
+        hash<auto> a2 = prov.doRequest({"action": "read-attributes", "node_id": "ns=2;s=Int32Var"});
+        assertEq(a.value_rank, a2.value_rank, "cached read-attributes consistent");
+
+        # call-method with resolved argument metadata + count validation
+        hash<auto> c = prov.doRequest({"action": "call-method", "object_id": "ns=2;s=TestFolder",
+            "method_id": "ns=2;s=Add", "arguments": (7, 5)});
+        assertEq("Good", c.status_text, "call Add status");
+        assertEq(12, c.output_arguments[0], "Add(7, 5) = 12");
+        assertEq("a", c.input_argument_metadata[0].name, "resolved input argument metadata");
+        assertThrows("OPCUA-METHOD-ARG-ERROR",
+            \prov.doRequest(), ({"action": "call-method", "object_id": "ns=2;s=TestFolder",
+                "method_id": "ns=2;s=Add", "arguments": (7,)}),
+            "wrong argument count rejected before invocation");
+
+        # get-server-status (well-known ns=0 nodes)
+        hash<auto> st = prov.doRequest({"action": "get-server-status"});
+        assertEq("Running", st.state, "server state");
+
+        # discover-endpoints
+        hash<auto> ep = prov.doRequest({"action": "discover-endpoints"});
+        assertTrue(ep.endpoints.size() >= 1, "discover endpoints");
     }
 
     opcuaIntegrationTest() {

@@ -26,33 +26,27 @@
 %requires qore >= 2.0
 %modern
 
-# import Eclipse Milo OPC UA SDK JARs: must be added to the global classloader
-%module-cmd(jni) global-add-relative-classpath ./jar/sdk-client-0.6.13.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/sdk-core-0.6.13.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/stack-client-0.6.13.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/stack-core-0.6.13.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-buffer-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-channel-fsm-0.9.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-codec-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-codec-http-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-common-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-handler-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-resolver-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-native-unix-common-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/guava-33.0.0-jre.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/failureaccess-1.0.2.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/bcprov-jdk18on-1.78.1.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/bcpkix-jdk18on-1.78.1.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/bcutil-jdk18on-1.78.1.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/strict-machine-0.7.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/jaxb-runtime-2.3.6.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.xml.bind-api-2.3.3.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.activation-1.2.2.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/txw2-2.3.6.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/istack-commons-runtime-3.0.12.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-api-2.0.16.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-nop-2.0.16.jar
+# import Eclipse Milo OPC UA SDK JARs (1.1.4): must be added to the global classloader
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-sdk-client-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-sdk-core-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-sdk-server-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-stack-core-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-transport-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-buffer-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-channel-fsm-1.0.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-codec-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-common-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-handler-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-resolver-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-native-unix-common-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcprov-jdk18on-1.84.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcpkix-jdk18on-1.84.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcutil-jdk18on-1.84.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/strict-machine-1.0.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jspecify-1.0.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-api-2.0.18.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-nop-2.0.18.jar
 
 # implements a data provider for OPC UA functionality
 %requires(reexport) DataProvider
@@ -60,7 +54,7 @@
 %requires(reexport) ConnectionProvider
 
 module OpcUaDataProvider {
-    version = "1.1";
+    version = "1.2";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -465,6 +459,17 @@ module OpcUaDataProvider {
     @endverbatim
 
     @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_2 OpcUaDataProvider v1.2
+    - upgraded the bundled Eclipse Milo OPC UA SDK from 0.6.13 to <b>1.1.4</b>; the client API was
+      migrated to the new Milo 1.1.x APIs (config/identity packages, list-based \c call(), the
+      redesigned \c OpcUaSubscription / \c OpcUaMonitoredItem subscription API, and the
+      \c EncodingContext), preserving the existing provider behavior and options
+    - <b>requires JDK 17 or later</b> (the Milo 1.1.x baseline); the dependency set drops the Guava and
+      JAXB libraries and adds \c milo-transport
+    - added a deterministic in-process OPC UA test server (Milo 1.1.4) and an integration test that
+      exercises read, write (including typed \c data_type hints), browse, read-attributes, call-method
+      (with argument-metadata resolution), batch reads, server status, and endpoint discovery against it
 
     @subsection OpcUaDataProvider_v1_1 OpcUaDataProvider v1.1
     - added a generic OPC UA status mapping (@ref OpcUaDataProvider::OpcUaStatusMapping "OpcUaStatusMapping")

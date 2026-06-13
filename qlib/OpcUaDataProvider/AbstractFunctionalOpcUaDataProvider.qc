@@ -22,8 +22,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaSubscription
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaMonitoredItem
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaSubscription
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaMonitoredItem
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
@@ -33,20 +33,16 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadValueId
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.CallMethodRequest
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.CallMethodResult
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseDescription
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseResult
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReferenceDescription
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.MonitoredItemCreateRequest
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.MonitoringParameters
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.BrowseDirection
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.MonitoringMode
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadValueId
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadRawModifiedDetails
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ViewDescription
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.AttributeId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.Identifiers
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.NodeIds
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.Argument
 %module-cmd(jni) import java.util.ArrayList
@@ -534,10 +530,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         bool discard_oldest;
 
         #! OPC UA subscription (prevent GC)
-        *UaSubscription subscription;
+        *OpcUaSubscription subscription;
 
-        #! Notification listener callback (prevent GC)
-        *object notification_listener;
+        #! Per-monitored-item data value listener callbacks (prevent GC)
+        list<auto> monitored_item_listeners;
 
         #! Mutex serializing access to the node metadata cache
         Qore::Thread::Mutex schema_cache_lock();
@@ -588,14 +584,14 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private stop() {
         if (client) {
             try {
-                client.disconnect().get();
+                client.disconnectAsync().get();
                 debug("OPC UA: Disconnected from %y", url);
             } catch () {
                 # ignore all disconnect errors during stop/destructor
             }
         }
         delete subscription;
-        delete notification_listener;
+        delete monitored_item_listeners;
         delete client;
     }
 
@@ -603,7 +599,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private start() {
         try {
             client = getClient(copts, logger);
-            awaitFuture(client.connect(), "connect");
+            awaitFuture(client.connectAsync(), "connect");
             debug("OPC UA: Connected to %y", url);
 
             # notify connected event
@@ -628,88 +624,60 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
     }
 
-    #! Creates a subscription and adds monitored items
+    #! Creates a subscription and adds monitored items (Milo 1.1.x OpcUaSubscription API)
     private createSubscription() {
-        # create subscription
-        subscription = awaitFuture(client.getSubscriptionManager()
-            .createSubscription(publishing_interval * 1.0), "create subscription");
+        subscription = new OpcUaSubscription(client);
+        subscription.setPublishingInterval(publishing_interval * 1.0);
+        awaitFuture(subscription.createAsync(), "create subscription");
 
-        # create monitored item requests
-        ArrayList requests();
         foreach string node_id_str in (monitored_nodes) {
-            NodeId node_id = NodeId::parse(node_id_str);
-            ReadValueId read_value_id(
-                node_id,
-                AttributeId::Value.uid(),
-                NOTHING,
-                QualifiedName::NULL_VALUE
+            OpcUaMonitoredItem item = OpcUaMonitoredItem::newDataItem(NodeId::parse(node_id_str));
+            item.setSamplingInterval(sampling_interval * 1.0);
+            item.setQueueSize(UInteger::valueOf(queue_size));
+
+            # bind the node id into a per-item data value listener; capturing the id avoids relying on
+            # the item to report it back and gives a stable namespace index for the event
+            string captured_node_id = node_id_str;
+            code listener_cb = sub (Method method, *list<auto> args) {
+                if (method.getName() == "onDataReceived") {
+                    handleDataChange(captured_node_id, args[1]);
+                }
+            };
+            auto listener = implement_interface(
+                new QoreInvocationHandler(listener_cb),
+                load_class(
+                    "org/eclipse/milo/opcua/sdk/client/subscriptions/OpcUaMonitoredItem$DataValueListener")
             );
-            MonitoringParameters params(
-                subscription.nextClientHandle(),
-                sampling_interval * 1.0,    # sampling interval
-                NOTHING,                    # filter
-                UInteger::valueOf(queue_size),
-                discard_oldest
-            );
-            requests.add(new MonitoredItemCreateRequest(
-                read_value_id,
-                MonitoringMode::Reporting,
-                params
-            ));
+            item.setDataValueListener(listener);
+            # retain the listener to prevent garbage collection while the subscription is active
+            monitored_item_listeners += listener;
+            subscription.addMonitoredItem(item);
         }
 
-        # add notification listener to subscription before creating items
-        notification_listener = implement_interface(
-            new QoreInvocationHandler(\notificationHandler()),
-            load_class(
-                "org/eclipse/milo/opcua/sdk/client/api/subscriptions/UaSubscription$NotificationListener")
-        );
-        subscription.addNotificationListener(notification_listener);
-
-        # create monitored items
-        auto monitored_items = awaitFuture(subscription.createMonitoredItems(
-            TimestampsToReturn::Both,
-            requests
-        ), "create monitored items");
-
-        debug("OPC UA: Created subscription with %d monitored items", monitored_items.size());
+        subscription.createMonitoredItems();
+        debug("OPC UA: Created subscription with %d monitored items", monitored_nodes.size());
     }
 
-    #! Qore callback for the NotificationListener interface
-    private notificationHandler(Method method, *list<auto> args) {
-        string method_name = method.getName();
-        debug("OPC UA: notification callback: %s", method_name);
-        try {
-            if (method_name == "onDataChangeNotification") {
-                handleDataChangeNotification(args);
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            debug("OPC UA CALLBACK ERROR: %s", get_exception_string(ex));
-        }
-    }
-
-    #! Handles data change notifications from the subscription NotificationListener
-    /** @param args [0]=subscription, [1]=items (list), [2]=values (list), [3]=publishTime
+    #! Handles a data change for a monitored item (callback from the OPC UA subscription thread)
+    /** @param node_id_str the monitored node id (captured when the item was created)
+        @param value the Milo \c DataValue received from the server
     */
-    private handleDataChangeNotification(*list<auto> args) {
-        auto items = args[1];
-        auto values = args[2];
-        debug("OPC UA: data change notification: %d items", items.size());
-        for (int i = 0; i < items.size(); ++i) {
-            auto item = items[i];
-            auto value = values[i];
+    private handleDataChange(string node_id_str, auto value) {
+        try {
             auto status = value.getStatusCode();
-            auto node_id_obj = item.getReadValueId().getNodeId();
             hash<auto> event_data = {
-                "node_id": node_id_obj.toParseableString(),
+                "node_id": node_id_str,
                 "display_name": NOTHING,
                 "value": convertValue(value.getValue()),
                 "source_timestamp": convertDateTime(value.getSourceTime()),
                 "server_timestamp": convertDateTime(value.getServerTime()),
-                "namespace_index": int(node_id_obj.getNamespaceIndex().intValue()),
+                "namespace_index": int(NodeId::parse(node_id_str).getNamespaceIndex().intValue()),
             } + statusFields(status);
             debug("OPC UA: Data change: %y", event_data);
             notifyObservers(EVENT_OPCUA_DATA_CHANGE, event_data);
+        } catch (hash<ExceptionInfo> ex) {
+            # exceptions in the subscription callback must not escape into the Milo thread
+            debug("OPC UA CALLBACK ERROR: %s", get_exception_string(ex));
         }
     }
 
@@ -933,8 +901,12 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     Variant variant = OpcUaTypeConversion::getVariant(msg.value, msg.data_type);
                     DataValue data_value(variant);
 
-                    StatusCode result = awaitFuture(
-                        client.writeValue(node_id, data_value), "write value");
+                    # Milo 1.1.x: write a single WriteValue via the batch write service
+                    ArrayList write_values();
+                    write_values.add(new WriteValue(node_id, AttributeId::Value.uid(), NOTHING,
+                        data_value));
+                    auto response = awaitFuture(client.writeAsync(write_values), "write value");
+                    auto result = response.getResults()[0];
                     if (result.isBad()) {
                         throw "OPCUA-WRITE-ERROR", sprintf("failed to write value to node %y: "
                             "status code %d", msg.node_id, int(result.getValue()));
@@ -960,7 +932,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                         ));
                     }
                     auto response = awaitFuture(
-                        client.write(write_values), "write values");
+                        client.writeAsync(write_values), "write values");
                     auto results = response.getResults();
                     for (int i = 0; i < results.size(); ++i) {
                         if (results[i].isBad()) {
@@ -1058,8 +1030,12 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             throw "OPCUA-REQUEST-ERROR", "`node_id` is required for the `read-value` action";
         }
         auto node_id = NodeId::parse(request.node_id);
-        auto data_value = awaitFuture(
-            client.readValue(0.0, TimestampsToReturn::Both, node_id), "read value");
+        # Milo 1.1.x has no async single readValue; read a one-node list and take the first result
+        ArrayList read_nodes();
+        read_nodes.add(node_id);
+        auto values = awaitFuture(
+            client.readValuesAsync(0.0, TimestampsToReturn::Both, read_nodes), "read value");
+        auto data_value = values[0];
 
         auto status = data_value.getStatusCode();
         return {
@@ -1093,7 +1069,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         BrowseDescription browse_desc(
             node_id,
             direction,
-            Identifiers::References,
+            NodeIds::References,
             True,  # include subtypes
             UInteger::valueOf(0),  # node class mask (all)
             UInteger::valueOf(63)  # result mask (all)
@@ -1102,8 +1078,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # use server-side pagination via maxReferencesPerNode
         ArrayList browse_descs();
         browse_descs.add(browse_desc);
-        auto response = awaitFuture(client.browse(
-            ViewDescription::builder().build(),
+        auto response = awaitFuture(client.browseAsync(
+            new ViewDescription(NodeId::NULL_VALUE, DateTime::MIN_VALUE, UInteger::valueOf(0)),
             UInteger::valueOf(max_results),
             browse_descs
         ), "browse nodes");
@@ -1165,9 +1141,11 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             input_args = map new Variant($1), request.arguments;
         }
 
-        auto result = awaitFuture(client.call(
-            new CallMethodRequest(object_id, method_id, input_args)
-        ), "call method");
+        # Milo 1.1.x: call() takes a list of requests and returns a CallResponse
+        ArrayList call_requests();
+        call_requests.add(new CallMethodRequest(object_id, method_id, input_args));
+        auto response = awaitFuture(client.callAsync(call_requests), "call method");
+        auto result = response.getResults()[0];
 
         auto status = result.getStatusCode();
         list<auto> output_args = ();
@@ -1204,11 +1182,11 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         hash<auto> resolved;
         try {
             # browse the method node for its HasProperty children
-            BrowseDescription bd(method_id, BrowseDirection::Forward, Identifiers::HasProperty, True,
+            BrowseDescription bd(method_id, BrowseDirection::Forward, NodeIds::HasProperty, True,
                 UInteger::valueOf(0), UInteger::valueOf(63));
             ArrayList bds();
             bds.add(bd);
-            auto resp = awaitFuture(client.browse(ViewDescription::builder().build(),
+            auto resp = awaitFuture(client.browseAsync(new ViewDescription(NodeId::NULL_VALUE, DateTime::MIN_VALUE, UInteger::valueOf(0)),
                 UInteger::valueOf(0), bds), "browse method properties");
             auto refs = resp.getResults()[0].getReferences();
             *string input_id;
@@ -1237,8 +1215,11 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     #! Reads and decodes an OPC UA \c Argument[] property value into a list of argument metadata hashes
     private list<hash<auto>> readArgumentArray(string node_id_str) {
         NodeId nid = NodeId::parse(node_id_str);
-        auto dv = awaitFuture(client.readValue(0.0, TimestampsToReturn::Neither, nid),
+        ArrayList arg_nodes();
+        arg_nodes.add(nid);
+        auto values = awaitFuture(client.readValuesAsync(0.0, TimestampsToReturn::Neither, arg_nodes),
             "read method arguments");
+        auto dv = values[0];
         auto variant = dv.getValue();
         if (!variant) {
             return ();
@@ -1247,7 +1228,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         if (!arr) {
             return ();
         }
-        auto ctx = client.getStaticSerializationContext();
+        auto ctx = client.getStaticEncodingContext();
         list<hash<auto>> rv = ();
         foreach auto eo in (arr) {
             Argument arg = eo.decode(ctx);
@@ -1278,7 +1259,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             ));
         }
         auto response = awaitFuture(
-            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results_list = response.getResults();
 
         list<hash<auto>> results = ();
@@ -1318,7 +1299,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             value_ids.add(new ReadValueId(node_id, AttributeId::Value.uid(), NOTHING,
                 QualifiedName::NULL_VALUE));
             auto value_response = awaitFuture(
-                client.read(0.0, TimestampsToReturn::Both, value_ids), "read");
+                client.readAsync(0.0, TimestampsToReturn::Both, value_ids), "read");
             auto value_results = value_response.getResults();
             auto value_status = value_results[0].getStatusCode();
             return {"node_id": node_id_str, "value": convertValue(value_results[0].getValue())}
@@ -1346,7 +1327,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
 
         auto response = awaitFuture(
-            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results = response.getResults();
 
         # the overall status is from the Value attribute read
@@ -1427,26 +1408,27 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             : DateTime::now();
         int max_values = int(request.max_values ?? 0);
 
-        auto details = ReadRawModifiedDetails::builder()
-            .setIsReadModified(False)
-            .setStartTime(start_date)
-            .setEndTime(end_date)
-            .setNumValuesPerNode(UInteger::valueOf(max_values))
-            .setReturnBounds(True)
-            .build();
+        # Milo 1.1.x: ReadRawModifiedDetails(isReadModified, startTime, endTime, numValuesPerNode,
+        # returnBounds)
+        auto details = new ReadRawModifiedDetails(
+            False,
+            start_date,
+            end_date,
+            UInteger::valueOf(max_values),
+            True);
 
         ArrayList hrvids();
         hrvids.add(new HistoryReadValueId(node_id, NOTHING, QualifiedName::NULL_VALUE, NOTHING));
 
         auto response = awaitFuture(
-            client.historyRead(details, TimestampsToReturn::Both, False, hrvids),
+            client.historyReadAsync(details, TimestampsToReturn::Both, False, hrvids),
             "read history");
         auto results = response.getResults();
         auto result = results[0];
         auto status = result.getStatusCode();
 
         list<hash<auto>> data_values = ();
-        auto history_data = result.getHistoryData().decode();
+        auto history_data = result.getHistoryData().decode(client.getStaticEncodingContext());
         if (history_data) {
             auto dv_list = history_data.getDataValues();
             if (dv_list) {
@@ -1514,7 +1496,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
 
         auto response = awaitFuture(
-            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results = response.getResults();
 
         auto status = results[0].getStatusCode();
@@ -1562,7 +1544,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private ensureConnected() {
         if (!client) {
             client = getClient(copts, logger);
-            awaitFuture(client.connect(), "connect");
+            awaitFuture(client.connectAsync(), "connect");
             debug("OPC UA: Connected to %y", url);
         }
     }
@@ -1576,13 +1558,13 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # the session is being recreated; cached node metadata may be stale, so invalidate it
         clearSchemaCache();
         try {
-            client.disconnect().get();
+            client.disconnectAsync().get();
         } catch () {
             # ignore disconnect errors
         }
         delete client;
         client = getClient(copts, logger);
-        awaitFuture(client.connect(), "reconnect");
+        awaitFuture(client.connectAsync(), "reconnect");
         debug("OPC UA: Reconnected to %y", url);
     }
 }
