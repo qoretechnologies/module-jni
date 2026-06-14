@@ -22,8 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.StatusCodes
-
 #! contains all public definitions in the OpcUaDataProvider module
 public namespace OpcUaDataProvider {
 #! Detailed information about an OPC UA \c StatusCode

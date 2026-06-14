@@ -13,8 +13,6 @@
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 */
 
-%module-cmd(jni) import org.qore.dataprovider.opcua.GenericServer
-
 #! contains all public definitions in the OpcUaDataProvider module
 public namespace OpcUaDataProvider {
 #! Generic OPC UA server runtime materialized from an OPC UA schema snapshot

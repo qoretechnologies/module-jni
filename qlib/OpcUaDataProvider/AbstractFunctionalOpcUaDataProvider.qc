@@ -22,37 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaSubscription
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaMonitoredItem
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.StatusCode
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.QualifiedName
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadValueId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.CallMethodRequest
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseDescription
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseResult
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReferenceDescription
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.BrowseDirection
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadValueId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadRawModifiedDetails
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ViewDescription
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.AttributeId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.NodeIds
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.Argument
-%module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
-%module-cmd(jni) import org.qore.dataprovider.opcua.ValueCodec
-%module-cmd(jni) import org.qore.dataprovider.opcua.NodeSet2Importer
-%module-cmd(jni) import java.util.ArrayList
-%module-cmd(jni) import java.util.List
-%module-cmd(jni) import java.util.concurrent.TimeUnit
-%module-cmd(jni) import java.lang.reflect.Method
-
 #! contains all public definitions in the OpcUaDataProvider module
 public namespace OpcUaDataProvider {
 #! Abstract base data provider for OPC UA data provider classes providing event, message, and API functionality
@@ -258,14 +227,18 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "type": AbstractDataProviderTypeMap."hash",
                 "desc": "A generic OPC UA schema snapshot hash used for schema-driven API management. "
                     "When this option is provided, the provider can expose API-management endpoints without "
-                    "connecting to a remote OPC UA server",
+                    "connecting to a remote OPC UA server. The hash must follow the module's schema snapshot "
+                    "contract with `namespaces` and `endpoints` keys",
             },
             "schema_location": <DataProviderOptionInfo>{
                 "display_name": "OPC UA Schema Location",
                 "short_desc": "Schema snapshot or NodeSet2 location",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "A FileLocationHandler location containing a NodeSet2 XML document for schema-driven "
-                    "API management. Sandboxed embedders should restrict this to service resources",
+                "desc": "A `FileLocationHandler` location containing a `NodeSet2` XML document for "
+                    "schema-driven API management.\n\n"
+                    "**Sandbox note**: sandboxed embedders should restrict this option to `resource://` "
+                    "service resources",
+                "example_value": "resource://opcua/nodeset2.xml",
             },
             "schema-location": <DataProviderOptionInfo>{
                 "display_name": "OPC UA Schema Location",
@@ -273,18 +246,20 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "Deprecated hyphenated alias for `schema_location`; accepted for declarative "
                     "service metadata compatibility",
+                "example_value": "resource://opcua/nodeset2.xml",
             },
             "nodeset2": <DataProviderOptionInfo>{
                 "display_name": "OPC UA NodeSet2",
                 "short_desc": "Inline NodeSet2 XML document",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Inline OPC UA NodeSet2 XML to import into the generic schema snapshot contract",
+                "desc": "Inline OPC UA `NodeSet2` XML to import into the generic schema snapshot contract",
             },
             "nodeset2_location": <DataProviderOptionInfo>{
                 "display_name": "OPC UA NodeSet2 Location",
                 "short_desc": "NodeSet2 XML location",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "A FileLocationHandler location containing an OPC UA NodeSet2 XML document",
+                "desc": "A `FileLocationHandler` location containing an OPC UA `NodeSet2` XML document",
+                "example_value": "resource://opcua/nodeset2.xml",
             },
             "nodeset2-location": <DataProviderOptionInfo>{
                 "display_name": "OPC UA NodeSet2 Location",
@@ -292,6 +267,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "Deprecated hyphenated alias for `nodeset2_location`; accepted for declarative "
                     "service metadata compatibility",
+                "example_value": "resource://opcua/nodeset2.xml",
             },
             "ssl.keystore.location": <DataProviderOptionInfo>{
                 "display_name": "SSL Keystore Location",

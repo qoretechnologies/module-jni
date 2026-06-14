@@ -22,11 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.ByteString
-%module-cmd(jni) import org.qore.dataprovider.opcua.ValueCodec
-
 #! contains all public definitions in the OpcUaDataProvider module
 public namespace OpcUaDataProvider {
 #! Generic helper that converts Qore values to Milo \c Variant values for OPC UA writes
