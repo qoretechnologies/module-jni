@@ -252,6 +252,47 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     "activity is detected within this interval",
                 "default_value": 120000,
             },
+            "schema": <DataProviderOptionInfo>{
+                "display_name": "OPC UA Schema",
+                "short_desc": "Schema snapshot for API management",
+                "type": AbstractDataProviderTypeMap."hash",
+                "desc": "A generic OPC UA schema snapshot hash used for schema-driven API management. "
+                    "When this option is provided, the provider can expose API-management endpoints without "
+                    "connecting to a remote OPC UA server",
+            },
+            "schema_location": <DataProviderOptionInfo>{
+                "display_name": "OPC UA Schema Location",
+                "short_desc": "Schema snapshot or NodeSet2 location",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "A FileLocationHandler location containing a NodeSet2 XML document for schema-driven "
+                    "API management. Sandboxed embedders should restrict this to service resources",
+            },
+            "schema-location": <DataProviderOptionInfo>{
+                "display_name": "OPC UA Schema Location",
+                "short_desc": "Schema snapshot or NodeSet2 location",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Deprecated hyphenated alias for `schema_location`; accepted for declarative "
+                    "service metadata compatibility",
+            },
+            "nodeset2": <DataProviderOptionInfo>{
+                "display_name": "OPC UA NodeSet2",
+                "short_desc": "Inline NodeSet2 XML document",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Inline OPC UA NodeSet2 XML to import into the generic schema snapshot contract",
+            },
+            "nodeset2_location": <DataProviderOptionInfo>{
+                "display_name": "OPC UA NodeSet2 Location",
+                "short_desc": "NodeSet2 XML location",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "A FileLocationHandler location containing an OPC UA NodeSet2 XML document",
+            },
+            "nodeset2-location": <DataProviderOptionInfo>{
+                "display_name": "OPC UA NodeSet2 Location",
+                "short_desc": "NodeSet2 XML location",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Deprecated hyphenated alias for `nodeset2_location`; accepted for declarative "
+                    "service metadata compatibility",
+            },
             "ssl.keystore.location": <DataProviderOptionInfo>{
                 "display_name": "SSL Keystore Location",
                 "short_desc": "Path to the client keystore file",
@@ -326,8 +367,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "display_name": "URL",
                 "short_desc": "The OPC UA server endpoint URL",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The OPC UA server endpoint URL (e.g., `opc.tcp://host:4840/path`)",
-                "required": True,
+                "desc": "The OPC UA server endpoint URL (e.g., `opc.tcp://host:4840/path`). Required for "
+                    "client requests and subscriptions; schema-only API-management use may provide `schema`, "
+                    "`schema_location`, or `nodeset2_location` instead",
             },
             "username": <DataProviderOptionInfo>{
                 "display_name": "Username",
@@ -547,6 +589,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             with @ref schema_cache_lock.
         */
         hash<string, hash<auto>> schema_cache;
+
+        #! Schema snapshot supplied for schema-driven API management; avoids live server connection during scanning
+        *hash<auto> api_schema_snapshot;
     }
 
     #! Creates the object from another object of the same class
@@ -561,7 +606,12 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
         hash<auto> checked_opts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         copts = checked_opts;
-        url = checked_opts.url;
+        api_schema_snapshot = resolveApiManagementSchema(checked_opts);
+        if (!checked_opts.url && !api_schema_snapshot) {
+            throw "CONSTRUCTOR-ERROR", "OPC UA data provider requires `url` for client operations or a schema "
+                "source (`schema`, `schema_location`, `nodeset2`, or `nodeset2_location`) for API management";
+        }
+        url = checked_opts.url ?? "";
         monitored_nodes = checked_opts.monitored_nodes ?? ();
         publishing_interval = checked_opts.publishing_interval ?? 1000;
         sampling_interval = checked_opts.sampling_interval ?? 500;
@@ -1014,6 +1064,98 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     hash<auto> importNodeSet2(string location) {
         string xml = FileLocationHandler::getTextFileFromLocation(location);
         return NodeSet2Importer::parse(xml);
+    }
+
+    #! Returns the schema snapshot used for generic API management
+    /** If a schema source was provided in constructor options, the snapshot is returned without opening a client
+        connection. Otherwise this method resolves the connected server schema through @ref getSchemaSnapshot().
+
+        @return a generic OPC UA schema snapshot
+    */
+    hash<auto> getApiManagementSchemaSnapshot() {
+        if (api_schema_snapshot) {
+            return api_schema_snapshot;
+        }
+        return getSchemaSnapshot();
+    }
+
+    #! Returns schema-defined API-management endpoints keyed by stable \c endpoint_id
+    /** Each returned endpoint includes the schema snapshot endpoint metadata plus an \c endpoint key for generic
+        scanners, an \c expanded_node_id diagnostic alias, and normalized \c direction / \c directions metadata.
+
+        @return list of generic API-management endpoint hashes
+    */
+    list<hash<auto>> getApiManagementEndpoints() {
+        hash<auto> snapshot = getApiManagementSchemaSnapshot();
+        list<hash<auto>> rv;
+        foreach hash<auto> endpoint in (snapshot.endpoints) {
+            *string endpoint_id = endpoint.endpoint_id;
+            if (!endpoint_id) {
+                continue;
+            }
+            list<string> directions = getApiEndpointDirections(endpoint);
+            hash<auto> item = endpoint + {
+                "endpoint": endpoint_id,
+                "expanded_node_id": endpoint.expanded_node_id ?? endpoint.node_id,
+                "directions": directions,
+                "direction": directions ? directions[0] : NOTHING,
+            };
+            rv += item;
+        }
+        return rv;
+    }
+
+    #! Returns one API-management endpoint by stable \c endpoint_id
+    *hash<auto> getApiManagementEndpoint(string endpoint_id) {
+        foreach hash<auto> endpoint in (getApiManagementEndpoints()) {
+            if (endpoint.endpoint_id == endpoint_id) {
+                return endpoint;
+            }
+        }
+    }
+
+    private static *hash<auto> resolveApiManagementSchema(hash<auto> opts) {
+        if (opts.schema.typeCode() == NT_HASH) {
+            return opts.schema;
+        }
+        if (opts.nodeset2.typeCode() == NT_STRING) {
+            return NodeSet2Importer::parse(opts.nodeset2);
+        }
+
+        *string location = opts.schema_location ?? opts."schema-location"
+            ?? opts.nodeset2_location ?? opts."nodeset2-location";
+        if (location) {
+            return NodeSet2Importer::parse(FileLocationHandler::getTextFileFromLocation(location));
+        }
+    }
+
+    private static list<string> getApiEndpointDirections(hash<auto> endpoint) {
+        list<string> rv;
+        if (endpoint.directions.typeCode() == NT_LIST) {
+            foreach auto dir in (endpoint.directions) {
+                rv += dir.toString();
+            }
+            return rv;
+        }
+
+        string kind = endpoint.kind ?? "";
+        if (kind =~ /^method/) {
+            return ("call",);
+        }
+        if (kind =~ /event/) {
+            return ("observe",);
+        }
+        if (endpoint.readable ?? True) {
+            rv += "read";
+        }
+        if (endpoint.writable ?? endpoint.user_writable ?? False) {
+            rv += "write";
+        }
+        if (endpoint.historizing ?? False) {
+            rv += "history-read";
+        }
+        rv += "observe";
+        return rv;
     }
 
     #! Returns the request type for this provider

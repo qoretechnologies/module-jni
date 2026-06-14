@@ -59,6 +59,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("security options", \securityOptionsTest());
         addTestCase("subscription options", \subscriptionOptionsTest());
         addTestCase("factory info", \factoryInfoTest());
+        addTestCase("API-management schema endpoints", \apiManagementSchemaEndpointsTest());
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("provider info", \providerInfoTest());
         addTestCase("example event data", \exampleEventDataTest());
@@ -340,9 +341,15 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(opts.hasKey("auto_reconnect"), "should have 'auto_reconnect' option");
         assertTrue(opts.hasKey("username"), "should have 'username' option");
         assertTrue(opts.hasKey("password"), "should have 'password' option");
+        assertTrue(opts.hasKey("schema"), "should have 'schema' option");
+        assertTrue(opts.hasKey("schema_location"), "should have 'schema_location' option");
+        assertTrue(opts.hasKey("schema-location"), "should have 'schema-location' option");
+        assertTrue(opts.hasKey("nodeset2"), "should have 'nodeset2' option");
+        assertTrue(opts.hasKey("nodeset2_location"), "should have 'nodeset2_location' option");
+        assertTrue(opts.hasKey("nodeset2-location"), "should have 'nodeset2-location' option");
 
         # verify required flags
-        assertTrue(opts.url.required, "url should be required");
+        assertFalse(opts.url.required, "url should be optional for schema-only API management");
         assertTrue(opts.monitored_nodes.required, "monitored_nodes should be required");
 
         # verify sensitive flags
@@ -460,6 +467,64 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(pinfo.supports_observable, "provider should support observable");
         assertTrue(pinfo.supports_request, "provider should support request");
         assertEq(MSG_Async, pinfo.supports_messages);
+    }
+
+    apiManagementSchemaEndpointsTest() {
+        string ns = "urn:qore:opcua:api-management-test";
+        hash<auto> schema = {
+            "contract_version": 1,
+            "source": "test",
+            "namespaces": {"1": ns},
+            "endpoints": (
+                {
+                    "endpoint_id": "setpoint",
+                    "node_id": "ns=1;s=Setpoint",
+                    "browse_name": "1:Setpoint",
+                    "browse_path": "/1:Machine/1:Setpoint",
+                    "namespace_uri": ns,
+                    "kind": "variable",
+                    "data_type": "Double",
+                    "value_rank": -1,
+                    "readable": True,
+                    "writable": True,
+                    "historizing": True,
+                },
+                {
+                    "endpoint_id": "start",
+                    "node_id": "ns=1;s=Start",
+                    "object_node_id": "ns=1;s=Machine",
+                    "browse_name": "1:Start",
+                    "browse_path": "/1:Machine/1:Start",
+                    "namespace_uri": ns,
+                    "kind": "method-call",
+                    "input_arguments": (
+                        {"name": "speed", "data_type": "Int32", "value_rank": -1},
+                    ),
+                    "output_arguments": (
+                        {"name": "accepted", "data_type": "Boolean", "value_rank": -1},
+                    ),
+                },
+            ),
+        };
+
+        OpcUaDataProviderFactory factory();
+        OpcUaDataProvider prov = cast<OpcUaDataProvider>(factory.create({"schema": schema}));
+        list<hash<auto>> endpoints = prov.getApiManagementEndpoints();
+        assertEq(2, endpoints.size(), "schema-only provider exposes API-management endpoints");
+
+        hash<string, hash<auto>> by_id = map {$1.endpoint_id: $1}, endpoints;
+        assertEq("setpoint", by_id.setpoint.endpoint, "generic scanner endpoint key is endpoint_id");
+        assertEq(("read", "write", "history-read", "observe"), by_id.setpoint.directions,
+            "writable historizing variable directions");
+        assertEq("ns=1;s=Setpoint", by_id.setpoint.expanded_node_id, "expanded_node_id diagnostic alias");
+        assertEq(("call",), by_id.start.directions, "method call direction");
+        assertEq("ns=1;s=Machine", by_id.start.object_node_id, "method object id retained");
+
+        hash<auto> same = prov.getApiManagementEndpoint("start");
+        assertEq("method-call", same.kind, "lookup by endpoint_id returns method metadata");
+
+        assertThrows("CONSTRUCTOR-ERROR", "requires `url`", \factory.create(), ({}),
+            "provider still rejects missing url unless a schema source is provided");
     }
 
     actionRegistrationTest() {

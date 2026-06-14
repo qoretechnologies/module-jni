@@ -473,6 +473,8 @@ module OpcUaDataProvider {
       call, subscription, history-read, data-change, and event operations
     - the \c opcua data provider factory now advertises generic API-management capability through the
       \c opcua API profile
+    - added schema-only API-management endpoint accessors on the \c OpcUaDataProvider provider so embedders can
+      scan schema endpoints by stable \c endpoint_id without opening a client connection
 
     @subsection OpcUaDataProvider_v1_7 OpcUaDataProvider v1.7
     - made the declared response data types consistent with the actual runtime responses: the enriched
