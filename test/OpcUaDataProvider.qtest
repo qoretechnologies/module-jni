@@ -679,10 +679,12 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(OpcUaTypeConversion::getVariant(5) instanceof object,
             "no-hint conversion returns a variant");
 
-        # negative: narrow signed / single-precision hints are rejected before any write
-        foreach string t in (OpcUaTypeConversion::UnsupportedWriteHints) {
-            assertThrows("OPCUA-TYPE-CONVERSION-ERROR", \OpcUaTypeConversion::getVariant(), (5, t),
-                sprintf("%s hint is rejected (requires Java codec)", t));
+        # narrow signed and single-precision types are now constructed by the Java value codec (Phase 3);
+        # they return a variant rather than being rejected. End-to-end typing correctness is verified by
+        # the embedded-server integration test (the server accepts the exact OPC UA type).
+        foreach string t in (("SByte", "Int16", "Int32", "Float")) {
+            assertTrue(OpcUaTypeConversion::getVariant(5, t) instanceof object,
+                sprintf("%s hint produces a variant via the Java codec", t));
         }
 
         # negative: an unknown hint is rejected
@@ -731,22 +733,29 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         hash<auto> rb = prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int64Var"});
         assertEq(4242, rb.value, "Int64 write/read-back");
 
-        # write a UInt16 using the data_type hint (typed conversion to the correct OPC UA type)
+        # write typed values using the data_type hint (Phase 3 Java codec) and read them back; the
+        # server accepts the exact OPC UA type. Unsigned reads come back as native integers.
         prov.sendMessage("write-value",
             {"node_id": "ns=2;s=UInt16Var", "value": 321, "data_type": "UInt16"});
-        hash<auto> rb2 = prov.doRequest({"action": "read-value", "node_id": "ns=2;s=UInt16Var"});
-        assertEq(321, rb2.value.intValue(), "UInt16 typed write/read-back");
+        assertEq(321, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=UInt16Var"}).value,
+            "UInt16 typed write/read-back (native int)");
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=Int32Var", "value": 777, "data_type": "Int32"});
+        assertEq(777, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int32Var"}).value,
+            "Int32 typed write/read-back");
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=Int16Var", "value": -1234, "data_type": "Int16"});
+        assertEq(-1234, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int16Var"}).value,
+            "Int16 (narrow signed) typed write/read-back");
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=FloatVar", "value": 2.5, "data_type": "Float"});
+        assertEq(2.5, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=FloatVar"}).value,
+            "Float (single-precision) typed write/read-back");
 
-        # negative: an unsupported narrow type hint is rejected before any write
-        assertThrows("SEND-MESSAGE-ERROR",
-            \prov.sendMessage(), ("write-value",
-                {"node_id": "ns=2;s=Int32Var", "value": 5, "data_type": "Int16"}),
-            "Int16 hint rejected before write");
-
-        # read-values batch
+        # read-values batch (read-only nodes, unaffected by the typed writes above)
         hash<auto> rv = prov.doRequest({"action": "read-values",
-            "node_ids": ("ns=2;s=Int32Var", "ns=2;s=DoubleVar", "ns=2;s=StringVar")});
-        assertEq((42, 3.5, "hello"), (map $1.value, rv.results), "read-values batch");
+            "node_ids": ("ns=2;s=DoubleVar", "ns=2;s=StringVar", "ns=2;s=BoolVar")});
+        assertEq((3.5, "hello", True), (map $1.value, rv.results), "read-values batch");
 
         # browse the custom folder
         hash<auto> b = prov.doRequest({"action": "browse-nodes", "node_id": "ns=2;s=TestFolder"});
@@ -787,7 +796,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq("live", snap.source, "snapshot source");
         assertEq("urn:qore:opcua:test", snap.namespaces{"2"}, "namespace uri resolved");
         # 6 variables + 1 method endpoint under TestFolder
-        assertEq(7, snap.endpoints.size(), "snapshot endpoint count");
+        assertEq(9, snap.endpoints.size(), "snapshot endpoint count");
         hash<string, hash<auto>> by_name = map {$1.browse_name: $1}, snap.endpoints;
         assertEq("variable", by_name."2:Int32Var".kind, "variable endpoint kind");
         assertEq("method-call", by_name."2:Add".kind, "method endpoint kind");

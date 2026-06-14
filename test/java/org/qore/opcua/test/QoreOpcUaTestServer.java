@@ -136,6 +136,8 @@ public class QoreOpcUaTestServer {
             addVariable(folder, idx, "BoolVar", NodeIds.Boolean, new Variant(true), false);
             addVariable(folder, idx, "UInt16Var", NodeIds.UInt16, new Variant(UShort.valueOf(7)), true);
             addVariable(folder, idx, "Int64Var", NodeIds.Int64, new Variant(100L), true);
+            addVariable(folder, idx, "Int16Var", NodeIds.Int16, new Variant((short) 11), true);
+            addVariable(folder, idx, "FloatVar", NodeIds.Float, new Variant(1.5f), true);
 
             // a method: Add(a: Int64, b: Int64) -> sum: Int64, owned by the folder
             UaMethodNode addMethod = UaMethodNode.builder(getNodeContext())

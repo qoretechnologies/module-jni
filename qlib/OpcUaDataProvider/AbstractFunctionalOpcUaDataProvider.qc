@@ -46,6 +46,7 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.Argument
 %module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
+%module-cmd(jni) import org.qore.dataprovider.opcua.ValueCodec
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.List
 %module-cmd(jni) import java.util.concurrent.TimeUnit
@@ -683,11 +684,14 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     }
 
     #! Converts a Milo Variant value to a Qore value
+    /** OPC UA unsigned wrapper types are unwrapped to native integers by the Java value codec so Qore
+        receives native values rather than Java objects.
+    */
     private static auto convertValue(auto variant) {
         if (!variant) {
             return NOTHING;
         }
-        return variant.getValue();
+        return ValueCodec::readVariant(variant);
     }
 
     #! Converts a Milo DateTime to a Qore date with millisecond precision

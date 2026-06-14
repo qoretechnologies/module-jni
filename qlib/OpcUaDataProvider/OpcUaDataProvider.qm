@@ -56,7 +56,7 @@
 %requires(reexport) ConnectionProvider
 
 module OpcUaDataProvider {
-    version = "1.4";
+    version = "1.5";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -461,6 +461,15 @@ module OpcUaDataProvider {
     @endverbatim
 
     @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_5 OpcUaDataProvider v1.5
+    - added a compiled Java value codec (\c org.qore.dataprovider.opcua.ValueCodec):
+      - \c write-value / \c write-values now support the full set of OPC UA built-in scalar types via
+        the \c data_type hint, including the narrow signed types \c SByte / \c Int16 / \c Int32 and
+        single-precision \c Float that previously could not be typed exactly across the Qore/JNI
+        boundary (they are no longer rejected)
+      - values read from the server now unwrap the OPC UA unsigned wrapper types
+        (\c Byte / \c UInt16 / \c UInt32 / \c UInt64) to native Qore integers instead of Java objects
 
     @subsection OpcUaDataProvider_v1_4 OpcUaDataProvider v1.4
     - the schema snapshot (\c getSchemaSnapshot()) is now enriched with live introspection metadata:

@@ -109,8 +109,9 @@ All confirmed via `javap` against the 1.1.4 jars.
 4. **Phase 2 (DONE, module v1.4)** — live introspection enriches each snapshot endpoint: variables
    get data type / value rank / array dimensions / access levels / directions / historizing /
    min-sampling-interval; methods get resolved input/output argument metadata. Verified vs the test server.
-5. **Phase 3** — Java value codec (Variant/DataValue/ExtensionObject <-> Qore), including the narrow
-   signed/Float types that Phase 0 currently rejects.
+5. **Phase 3 (DONE, module v1.5)** — Java value codec (`org.qore.dataprovider.opcua.ValueCodec`):
+   typed writes for all built-in scalars incl. narrow signed (SByte/Int16/Int32) and Float (no longer
+   rejected), and unsigned-value unwrapping to native Qore ints on read. Verified vs the test server.
 6. **Phase 4** — optional NodeSet2 import via Milo's loader.
 7. **Phase 5** (Qorus repo) — client design-time integration.
 
