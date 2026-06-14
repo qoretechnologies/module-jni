@@ -1732,6 +1732,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Ensures the client is connected; reconnects on failure if auto_reconnect is enabled
     private ensureConnected() {
+        if (!url) {
+            throw "OPCUA-REQUEST-ERROR", "this OPC UA provider was created without a `url`; it is configured "
+                "for schema/API-management use only and cannot perform client operations";
+        }
         if (!client) {
             client = getClient(copts, logger);
             awaitFuture(client.connectAsync(), "connect");

@@ -671,6 +671,10 @@ public class GenericServer {
 
         private void setEndpointValue(Endpoint endpoint, Object value, boolean invokeEventCallback)
                 throws Exception {
+            if (endpoint.method || endpoint.node == null) {
+                throw new IllegalArgumentException("OPC UA endpoint id " + endpoint.endpointId
+                    + " is a method endpoint and has no variable value to set");
+            }
             endpoint.node.setValue(new DataValue(variantFor(endpoint, value), StatusCode.GOOD,
                 new DateTime(Instant.now())));
             addHistory(endpoint, endpoint.node.getValue());
