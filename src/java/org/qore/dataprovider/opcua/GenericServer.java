@@ -14,8 +14,10 @@
 package org.qore.dataprovider.opcua;
 
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,6 +90,9 @@ public class GenericServer {
     /** Default custom namespace URI used when the schema does not carry one. */
     public static final String DEFAULT_NAMESPACE_URI = "urn:qore:opcua:server";
 
+    /** Default per-node cap for implicit in-memory history values. */
+    public static final int DEFAULT_MAX_HISTORY_VALUES = 1024;
+
     private static final String UA_NAMESPACE = "http://opcfoundation.org/UA/";
 
     private final Map<String, Object> options;
@@ -97,6 +102,7 @@ public class GenericServer {
     private final int port;
     private final String path;
     private final String namespaceUri;
+    private final int maxHistoryValues;
     private final OpcUaServer server;
     private final RuntimeNamespace namespace;
     private final Hash schemaSnapshot = new Hash();
@@ -116,6 +122,11 @@ public class GenericServer {
         this.port = intOption("port", 48400);
         this.path = normalizePath(stringOption("path", "/qore"));
         this.namespaceUri = resolveNamespaceUri(this.options);
+        this.maxHistoryValues = intOption("max_history_values", DEFAULT_MAX_HISTORY_VALUES);
+        if (maxHistoryValues < 0) {
+            throw new IllegalArgumentException("max_history_values must be greater than or equal to 0");
+        }
+        validateLoopbackOnlyEndpoint();
 
         MemoryCertificateQuarantine quarantine = new MemoryCertificateQuarantine();
         DefaultCertificateManager certificateManager = new DefaultCertificateManager(quarantine);
@@ -224,6 +235,51 @@ public class GenericServer {
         }
         xml.append("</UANodeSet>\n");
         return xml.toString();
+    }
+
+    private void validateLoopbackOnlyEndpoint() {
+        if (!isLoopbackAddress(bindAddress) || !isLoopbackAddress(hostname)) {
+            throw new IllegalArgumentException("GenericServer uses anonymous SecurityPolicy.None endpoints and "
+                + "therefore accepts only loopback bind_address and hostname values; got bind_address="
+                + bindAddress + ", hostname=" + hostname);
+        }
+    }
+
+    private static boolean isLoopbackAddress(String address) {
+        if (address == null) {
+            return false;
+        }
+        String normalized = address.trim().toLowerCase();
+        if (normalized.startsWith("[") && normalized.endsWith("]")) {
+            normalized = normalized.substring(1, normalized.length() - 1);
+        }
+        return "localhost".equals(normalized)
+            || "::1".equals(normalized)
+            || "0:0:0:0:0:0:0:1".equals(normalized)
+            || isIpv4LoopbackAddress(normalized);
+    }
+
+    private static boolean isIpv4LoopbackAddress(String address) {
+        String[] parts = address.split("\\.", -1);
+        if (parts.length != 4 || !"127".equals(parts[0])) {
+            return false;
+        }
+        for (int i = 1; i < parts.length; ++i) {
+            String part = parts[i];
+            if (part.isEmpty() || part.length() > 3) {
+                return false;
+            }
+            for (int j = 0; j < part.length(); ++j) {
+                if (!Character.isDigit(part.charAt(j))) {
+                    return false;
+                }
+            }
+            int value = Integer.parseInt(part);
+            if (value < 0 || value > 255) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String stringOption(String key, String defaultValue) {
@@ -400,7 +456,7 @@ public class GenericServer {
         private final List<Endpoint> orderedEndpoints = new ArrayList<>();
         private final Map<String, Endpoint> byEndpointId = new ConcurrentHashMap<>();
         private final Map<NodeId, Endpoint> byNodeId = new ConcurrentHashMap<>();
-        private final Map<NodeId, List<DataValue>> history = new ConcurrentHashMap<>();
+        private final Map<NodeId, Deque<DataValue>> history = new ConcurrentHashMap<>();
 
         RuntimeNamespace(OpcUaServer server) {
             super(server, namespaceUri);
@@ -543,8 +599,7 @@ public class GenericServer {
                     continue;
                 }
                 try {
-                    List<DataValue> values = new ArrayList<>(history.getOrDefault(id.getNodeId(),
-                        Collections.emptyList()));
+                    List<DataValue> values = historySnapshot(id.getNodeId());
                     Hash cb = invokeCallback("history-read", endpointInfo(endpoint));
                     StatusCode status = statusFromCallback(cb, StatusCode.GOOD);
                     if (status.isBad()) {
@@ -685,7 +740,7 @@ public class GenericServer {
                     .setDisplayName(LocalizedText.english(displayName))
                     .build();
                 Endpoint endpoint = new Endpoint(endpointId, nodeId, localName, displayName, true,
-                    null, -1, null, null, endpointSnapshot);
+                    null, -1, null, false, null, endpointSnapshot);
                 MethodHandler handler = new MethodHandler(node, endpoint, spec);
                 node.setInputArguments(handler.getInputArguments());
                 node.setOutputArguments(handler.getOutputArguments());
@@ -707,10 +762,11 @@ public class GenericServer {
 
             NodeId dataType = dataTypeNodeId(spec.get("data_type"));
             int valueRank = intValue(spec.get("value_rank"), -1);
-            boolean writable = boolValue(spec.get("writable"),
-                asList(spec.get("directions")).contains("write"));
+            List<Object> declaredDirections = asList(spec.get("directions"));
+            boolean writable = boolValue(spec.get("writable"), declaredDirections.contains("write"));
+            boolean historizing = boolValue(spec.get("historizing"), declaredDirections.contains("history-read"));
             int accessLevel = writable ? 3 : 1;
-            if (boolValue(spec.get("historizing"), false)) {
+            if (historizing) {
                 accessLevel |= 4;
             }
             Object initialValue = spec.containsKey("value") ? spec.get("value")
@@ -743,6 +799,9 @@ public class GenericServer {
             if (writable) {
                 directions.add("write");
             }
+            if (historizing) {
+                directions.add("history-read");
+            }
             endpointSnapshot.put("data_type", dataType.toParseableString());
             endpointSnapshot.put("value_rank", valueRank);
             endpointSnapshot.put("array_dimensions", null);
@@ -752,11 +811,11 @@ public class GenericServer {
             endpointSnapshot.put("writable", writable);
             endpointSnapshot.put("user_writable", writable);
             endpointSnapshot.put("directions", directions);
-            endpointSnapshot.put("historizing", (accessLevel & 4) != 0);
+            endpointSnapshot.put("historizing", historizing);
             endpointSnapshot.put("minimum_sampling_interval", 0.0);
 
             return new Endpoint(endpointId, nodeId, localName, displayName, false, dataType, valueRank,
-                builtinName(dataType), node, endpointSnapshot);
+                builtinName(dataType), historizing, node, endpointSnapshot);
         }
 
         private UaFolderNode folderFor(int idx, Map<String, UaFolderNode> folders, String path) {
@@ -851,11 +910,13 @@ public class GenericServer {
         final NodeId dataType;
         final int valueRank;
         final String dataTypeName;
+        final boolean historizing;
         final UaVariableNode node;
         final Hash snapshot;
 
         Endpoint(String endpointId, NodeId nodeId, String localName, String displayName, boolean method,
-                NodeId dataType, int valueRank, String dataTypeName, UaVariableNode node, Hash snapshot) {
+                NodeId dataType, int valueRank, String dataTypeName, boolean historizing, UaVariableNode node,
+                Hash snapshot) {
             this.endpointId = endpointId;
             this.nodeId = nodeId;
             this.localName = localName;
@@ -864,6 +925,7 @@ public class GenericServer {
             this.dataType = dataType;
             this.valueRank = valueRank;
             this.dataTypeName = dataTypeName;
+            this.historizing = historizing;
             this.node = node;
             this.snapshot = snapshot;
         }
@@ -1069,8 +1131,26 @@ public class GenericServer {
         return value instanceof Boolean ? (Boolean) value : defaultValue;
     }
 
+    private List<DataValue> historySnapshot(NodeId nodeId) {
+        Deque<DataValue> values = namespace.history.get(nodeId);
+        if (values == null) {
+            return Collections.emptyList();
+        }
+        synchronized (values) {
+            return new ArrayList<>(values);
+        }
+    }
+
     private void addHistory(Endpoint endpoint, DataValue value) {
-        namespace.history.computeIfAbsent(endpoint.nodeId, k -> Collections.synchronizedList(new ArrayList<>()))
-            .add(value);
+        if (!endpoint.historizing || maxHistoryValues == 0) {
+            return;
+        }
+        Deque<DataValue> values = namespace.history.computeIfAbsent(endpoint.nodeId, k -> new ArrayDeque<>());
+        synchronized (values) {
+            while (values.size() >= maxHistoryValues) {
+                values.removeFirst();
+            }
+            values.addLast(value);
+        }
     }
 }

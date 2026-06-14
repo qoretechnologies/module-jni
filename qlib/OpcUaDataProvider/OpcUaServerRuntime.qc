@@ -22,16 +22,20 @@ public namespace OpcUaDataProvider {
 public class OpcUaServerRuntime {
     private {
         GenericServer server;
-        *code callback;
+        *code<hash<auto>(string, hash<auto>)> callback;
     }
 
     #! Creates a generic OPC UA server runtime
     /** @param options server options; required schema data can be passed as \c schema, \c schema_snapshot, or
         \c endpoints. Common options are \c port, \c bind_address, \c hostname, \c path, \c namespace_uri,
-        \c application_name, \c application_uri, and \c product_uri.
+        \c application_name, \c application_uri, \c product_uri, and \c max_history_values.
         @param runtime_callback optional dispatcher called as \c runtime_callback(operation, info)
+        @note The embedded runtime uses an anonymous \c SecurityPolicy.None endpoint and therefore accepts only
+            loopback \c bind_address and \c hostname values.
+        @note \c max_history_values bounds implicit in-memory history retained per historizing variable; the
+            default is 1024 and 0 disables implicit history retention.
     */
-    constructor(hash<auto> options, *code runtime_callback) {
+    constructor(hash<auto> options, *code<hash<auto>(string, hash<auto>)> runtime_callback) {
         callback = runtime_callback;
         if (callback) {
             server = new GenericServer(options, callback);

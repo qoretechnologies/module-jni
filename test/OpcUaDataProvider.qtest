@@ -72,6 +72,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("data change subscription and history", \subscriptionAndHistoryTest());
         addTestCase("nodeset2 import", \nodeSet2ImportTest());
         addTestCase("nodeset2 import robustness", \nodeSet2ImportRobustnessTest());
+        addTestCase("generic OPC UA server runtime rejects non-loopback endpoints",
+            \genericServerRuntimeLoopbackOnlyTest());
         addTestCase("generic OPC UA server runtime", \genericServerRuntimeTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
@@ -1071,6 +1073,31 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(threw, "out-of-range namespace index raises a parse error");
     }
 
+    genericServerRuntimeLoopbackOnlyTest() {
+        assertGenericServerRuntimeRejects("0.0.0.0", "0.0.0.0",
+            "anonymous generic runtime rejects non-loopback bind and host names");
+        assertGenericServerRuntimeRejects("127.0.0.1", "127.0.0.1.example",
+            "anonymous generic runtime rejects hostnames with loopback-looking prefixes");
+    }
+
+    private assertGenericServerRuntimeRejects(string bind_address, string hostname, string msg) {
+        bool threw = False;
+        try {
+            OpcUaServerRuntime runtime({
+                "port": 57200 + (getpid() % 1000),
+                "bind_address": bind_address,
+                "hostname": hostname,
+                "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-loopback-test"),
+            }, NOTHING);
+            delete runtime;
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertTrue(get_exception_string(ex) =~ /loopback/,
+                "non-loopback anonymous endpoint rejection explains the loopback requirement");
+        }
+        assertTrue(threw, msg);
+    }
+
     #! Tests the generic schema-backed OPC UA server runtime (Epic B1)
     genericServerRuntimeTest() {
         generic_server_callback_counts = {};
@@ -1078,61 +1105,10 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         string temp_id = "temperature";
         string readonly_id = "readonly";
         string denied_id = "denied-write";
+        string limited_id = "limited-history";
         string add_id = "add";
 
-        hash<auto> schema = {
-            "contract_version": 1,
-            "source": "test",
-            "namespaces": {
-                "1": ns,
-            },
-            "endpoints": (
-                {
-                    "endpoint_id": temp_id,
-                    "browse_name": "1:Temperature",
-                    "browse_path": "/1:Line/1:Temperature",
-                    "kind": "variable",
-                    "data_type": "Int32",
-                    "value_rank": -1,
-                    "writable": True,
-                    "historizing": True,
-                    "value": 21,
-                },
-                {
-                    "endpoint_id": readonly_id,
-                    "browse_name": "1:ReadOnly",
-                    "browse_path": "/1:Line/1:ReadOnly",
-                    "kind": "variable",
-                    "data_type": "String",
-                    "value_rank": -1,
-                    "writable": False,
-                    "value": "fixed",
-                },
-                {
-                    "endpoint_id": denied_id,
-                    "browse_name": "1:DeniedWrite",
-                    "browse_path": "/1:Line/1:DeniedWrite",
-                    "kind": "variable",
-                    "data_type": "Int32",
-                    "value_rank": -1,
-                    "writable": True,
-                    "value": 1,
-                },
-                {
-                    "endpoint_id": add_id,
-                    "browse_name": "1:Add",
-                    "browse_path": "/1:Line/1:Add",
-                    "kind": "method-call",
-                    "input_arguments": (
-                        {"name": "a", "data_type": "Int32", "value_rank": -1},
-                        {"name": "b", "data_type": "Int32", "value_rank": -1},
-                    ),
-                    "output_arguments": (
-                        {"name": "sum", "data_type": "Int64", "value_rank": -1},
-                    ),
-                },
-            ),
-        };
+        hash<auto> schema = genericServerRuntimeSchema(ns);
 
         int port = 57200 + (getpid() % 1000);
         OpcUaServerRuntime runtime({
@@ -1140,13 +1116,14 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             "namespace_uri": ns,
             "schema": schema,
             "application_name": "Qore Generic OPC UA Runtime Test",
+            "max_history_values": 3,
         }, \genericServerRuntimeCallback());
         runtime.start();
         on_exit runtime.stop();
 
         hash<auto> materialized = runtime.getSchemaSnapshot();
         assertEq("server", materialized.source, "runtime schema source");
-        assertEq(4, materialized.endpoints.size(), "runtime endpoint count");
+        assertEq(5, materialized.endpoints.size(), "runtime endpoint count");
         hash<string, hash<auto>> by_id = map {$1.endpoint_id: $1}, materialized.endpoints;
         assertEq(ns, by_id{temp_id}.namespace_uri, "runtime endpoint namespace");
         assertTrue(by_id{add_id}.object_node_id.val(), "method endpoint exposes object_node_id");
@@ -1165,6 +1142,17 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue((generic_server_callback_counts.write ?? 0) > 0, "write callback invoked");
         assertEq(33, prov.doRequest({"action": "read-value", "node_id": by_id{temp_id}.node_id}).value,
             "generic runtime write/read-back");
+
+        for (int i = 1; i <= 5; ++i) {
+            prov.sendMessage("write-value", {
+                "node_id": by_id{limited_id}.node_id,
+                "value": i,
+                "data_type": "Int32",
+            });
+        }
+        hash<auto> limited_history = prov.doRequest({"action": "read-history", "node_id": by_id{limited_id}.node_id});
+        assertEq((3, 4, 5), (map $1.value, limited_history.data_values),
+            "implicit in-memory history is bounded to the newest retained values");
 
         assertThrows("SEND-MESSAGE-ERROR", \prov.sendMessage(), ("write-value", {
             "node_id": by_id{readonly_id}.node_id,
@@ -1223,7 +1211,74 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
 
         hash<auto> imported = NodeSet2Importer::parse(runtime.exportNodeSet2());
         assertEq("imported", imported.source, "exported NodeSet2 imports");
-        assertEq(4, imported.endpoints.size(), "exported NodeSet2 endpoint count");
+        assertEq(5, imported.endpoints.size(), "exported NodeSet2 endpoint count");
+    }
+
+    private hash<auto> genericServerRuntimeSchema(string ns) {
+        return {
+            "contract_version": 1,
+            "source": "test",
+            "namespaces": {
+                "1": ns,
+            },
+            "endpoints": (
+                {
+                    "endpoint_id": "temperature",
+                    "browse_name": "1:Temperature",
+                    "browse_path": "/1:Line/1:Temperature",
+                    "kind": "variable",
+                    "data_type": "Int32",
+                    "value_rank": -1,
+                    "writable": True,
+                    "historizing": True,
+                    "value": 21,
+                },
+                {
+                    "endpoint_id": "readonly",
+                    "browse_name": "1:ReadOnly",
+                    "browse_path": "/1:Line/1:ReadOnly",
+                    "kind": "variable",
+                    "data_type": "String",
+                    "value_rank": -1,
+                    "writable": False,
+                    "value": "fixed",
+                },
+                {
+                    "endpoint_id": "denied-write",
+                    "browse_name": "1:DeniedWrite",
+                    "browse_path": "/1:Line/1:DeniedWrite",
+                    "kind": "variable",
+                    "data_type": "Int32",
+                    "value_rank": -1,
+                    "writable": True,
+                    "value": 1,
+                },
+                {
+                    "endpoint_id": "limited-history",
+                    "browse_name": "1:LimitedHistory",
+                    "browse_path": "/1:Line/1:LimitedHistory",
+                    "kind": "variable",
+                    "data_type": "Int32",
+                    "value_rank": -1,
+                    "writable": True,
+                    "historizing": True,
+                    "value": 0,
+                },
+                {
+                    "endpoint_id": "add",
+                    "browse_name": "1:Add",
+                    "browse_path": "/1:Line/1:Add",
+                    "kind": "method-call",
+                    "input_arguments": (
+                        {"name": "a", "data_type": "Int32", "value_rank": -1},
+                        {"name": "b", "data_type": "Int32", "value_rank": -1},
+                    ),
+                    "output_arguments": (
+                        {"name": "sum", "data_type": "Int64", "value_rank": -1},
+                    ),
+                },
+            ),
+        };
     }
 
     private hash<auto> genericServerRuntimeCallback(string operation, hash<auto> info) {
@@ -1239,9 +1294,12 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
                     "output_arguments": (info.arguments[0] + info.arguments[1],),
                 };
             case "history-read":
-                return {
-                    "values": (4, 5, 6),
-                };
+                if (info.endpoint_id == "temperature") {
+                    return {
+                        "values": (4, 5, 6),
+                    };
+                }
+                break;
             case "event":
                 return {"accepted": True};
         }

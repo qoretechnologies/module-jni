@@ -507,6 +507,16 @@ module OpcUaDataProvider {
     @verbatim qdp 'opcua{url=opc.tcp://localhost:4840,monitored_nodes=(ns=2;s=Temperature)}' listen
     @endverbatim
 
+    @par Generic Runtime Security
+    \c OpcUaServerRuntime uses an anonymous \c SecurityPolicy.None endpoint and rejects non-loopback
+    \c bind_address and \c hostname values.  Use loopback addresses such as \c 127.0.0.1,
+    \c localhost, or \c ::1 when embedding the runtime.
+
+    @par Generic Runtime History Retention
+    The generic runtime retains implicit in-memory history only for historizing variables.  The
+    \c max_history_values option caps retained values per variable; the default is 1024 and 0 disables
+    implicit history retention.  Runtime callbacks may still return explicit values for \c history-read.
+
     @section opcuadataproviderrelnotes Release Notes
 
     @subsection opcuadataproviderv18 OpcUaDataProvider v1.8
@@ -514,6 +524,9 @@ module OpcUaDataProvider {
       the existing schema snapshot contract through the bundled Milo 1.1.4 server SDK
     - \c OpcUaServerRuntime supports lifecycle management, schema/endpoint accessors, data-change
       publishing, application event dispatching, and a NodeSet2 export subset
+    - generic runtime endpoints are loopback-only while using anonymous \c SecurityPolicy.None security
+      and reject non-loopback bind or advertised host names
+    - implicit generic runtime history is bounded per historizing variable by \c max_history_values
     - the runtime accepts an optional callback dispatcher for authorization, browse, read, write,
       call, subscription, history-read, data-change, and event operations
     - the \c opcua data provider factory now advertises generic API-management capability through the
