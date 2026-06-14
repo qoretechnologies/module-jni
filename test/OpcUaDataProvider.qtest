@@ -74,6 +74,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("nodeset2 import robustness", \nodeSet2ImportRobustnessTest());
         addTestCase("generic OPC UA server runtime rejects non-loopback endpoints",
             \genericServerRuntimeLoopbackOnlyTest());
+        addTestCase("generic OPC UA server runtime honors network sandbox",
+            \genericServerRuntimeNetworkSandboxTest());
         addTestCase("generic OPC UA server runtime", \genericServerRuntimeTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
@@ -1096,6 +1098,62 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
                 "non-loopback anonymous endpoint rejection explains the loopback requirement");
         }
         assertTrue(threw, msg);
+    }
+
+    genericServerRuntimeNetworkSandboxTest() {
+        SandboxManager sm();
+        sm.blockLocalhost();
+        sm.setNetworkDefaultPolicy(True);
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setScriptPath(get_script_path());
+        p.setSandboxManager(sm);
+        p.parse("
+%modern
+%prepend-module-path \"${SCRIPT_DIR}/../qlib\"
+%requires OpcUaDataProvider
+
+hash<auto> sub sandboxRuntimeSchema() {
+    return {
+        \"contract_version\": 1,
+        \"source\": \"sandbox-test\",
+        \"namespaces\": {
+            \"1\": \"urn:qore:opcua:generic-runtime-sandbox-test\",
+        },
+        \"endpoints\": (
+            {
+                \"endpoint_id\": \"value\",
+                \"browse_name\": \"1:Value\",
+                \"browse_path\": \"/1:Sandbox/1:Value\",
+                \"kind\": \"variable\",
+                \"data_type\": \"Int32\",
+                \"value_rank\": -1,
+                \"writable\": True,
+                \"value\": 1,
+            },
+        ),
+    };
+}
+
+sub startSandboxedRuntime(int port) {
+    OpcUaServerRuntime runtime({
+        \"port\": port,
+        \"schema\": sandboxRuntimeSchema(),
+    }, NOTHING);
+    on_error runtime.stop();
+    runtime.start();
+    runtime.stop();
+}
+", "opcua_runtime_sandbox");
+
+        bool threw = False;
+        try {
+            p.callFunction("startSandboxedRuntime", 57200 + (getpid() % 1000));
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            assertEq("NETWORK-ACCESS-DENIED", ex.err, "sandboxed runtime bind is denied before listener startup");
+        }
+        assertTrue(threw, "generic runtime honors active network sandbox bind restrictions");
     }
 
     #! Tests the generic schema-backed OPC UA server runtime (Epic B1)

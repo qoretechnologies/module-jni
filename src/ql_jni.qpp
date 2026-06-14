@@ -33,7 +33,67 @@
 #include "QoreJniClassMap.h"
 #include "JavaToQore.h"
 
+#include <qore/QoreSandboxManager.h>
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+
+#ifdef _Q_WINDOWS
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#endif
+
 using namespace jni;
+
+static std::string jni_normalize_bind_address(const char* address) {
+    std::string rv(address ? address : "");
+    size_t start = rv.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+        return std::string();
+    }
+    size_t end = rv.find_last_not_of(" \t\r\n");
+    rv = rv.substr(start, end - start + 1);
+    if (rv.size() > 2 && rv.front() == '[' && rv.back() == ']') {
+        rv = rv.substr(1, rv.size() - 2);
+    }
+    std::transform(rv.begin(), rv.end(), rv.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return rv;
+}
+
+static bool jni_check_tcp_bind_address(QoreSandboxManager* sm, const struct sockaddr* addr, socklen_t len,
+        ExceptionSink* xsink) {
+    if (!sm) {
+        return true;
+    }
+    return sm->network().checkBind(addr, len, QSEC_NET_TCP, xsink);
+}
+
+static bool jni_check_tcp_bind_ipv4(QoreSandboxManager* sm, const char* address, int port, ExceptionSink* xsink) {
+    struct sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<uint16_t>(port));
+    if (inet_pton(AF_INET, address, &addr.sin_addr) != 1) {
+        return false;
+    }
+    return jni_check_tcp_bind_address(sm, reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), xsink);
+}
+
+static bool jni_check_tcp_bind_ipv6(QoreSandboxManager* sm, const char* address, int port, ExceptionSink* xsink) {
+    struct sockaddr_in6 addr = {};
+    addr.sin6_family = AF_INET6;
+    addr.sin6_port = htons(static_cast<uint16_t>(port));
+    if (inet_pton(AF_INET6, address, &addr.sin6_addr) != 1) {
+        return false;
+    }
+    return jni_check_tcp_bind_address(sm, reinterpret_cast<const struct sockaddr*>(&addr), sizeof(addr), xsink);
+}
 
 /** @defgroup JNI functions.
  */
@@ -59,6 +119,58 @@ string get_version() {
  */
 bool native_access_option_enabled() {
     return jni::Functions::nativeAccessOptionEnabled();
+}
+
+//! Checks the active sandbox network policy before native/Java code binds a TCP listener.
+/**
+    @param address the local bind address; numeric IPv4/IPv6 addresses and \c localhost are supported
+    @param port the TCP port to bind
+    @param owner an optional owner object whose Program context should be used for sandbox lookup
+
+    @throw JNI-NETWORK-BIND-ERROR the address cannot be checked safely or the port is invalid
+    @throw NETWORK-ACCESS-DENIED the active sandbox network policy denies the bind
+
+    This helper is for Java libraries that open sockets outside QoreSocket. It performs a DNS-free check so it does
+    not introduce an uninterruptible native lookup before the Java library starts.
+    When this helper is called from a module class method, pass \c self as \c owner so the sandbox attached to the
+    caller-created object is used instead of the module Program context.
+ */
+nothing check_network_bind(string address, int port, *object owner) [flags=NAMED_ARGS] {
+    QoreProgram* pgm = owner ? owner->getProgram() : qore_get_call_program_context();
+    QoreSandboxManagerHelper smh(pgm);
+    if (!smh) {
+        return QoreValue();
+    }
+
+    if (port < 0 || port > 65535) {
+        xsink->raiseException("JNI-NETWORK-BIND-ERROR", "TCP bind port %d is outside the valid range 0..65535", port);
+        return QoreValue();
+    }
+
+    std::string normalized = jni_normalize_bind_address(address->c_str());
+    if (normalized.empty()) {
+        xsink->raiseException("JNI-NETWORK-BIND-ERROR", "TCP bind address must not be empty");
+        return QoreValue();
+    }
+
+    if (normalized == "localhost") {
+        if (!jni_check_tcp_bind_ipv4(smh.get(), "127.0.0.1", port, xsink) || *xsink) {
+            return QoreValue();
+        }
+        jni_check_tcp_bind_ipv6(smh.get(), "::1", port, xsink);
+        return QoreValue();
+    }
+
+    if (jni_check_tcp_bind_ipv4(smh.get(), normalized.c_str(), port, xsink) || *xsink) {
+        return QoreValue();
+    }
+    if (jni_check_tcp_bind_ipv6(smh.get(), normalized.c_str(), port, xsink) || *xsink) {
+        return QoreValue();
+    }
+
+    xsink->raiseException("JNI-NETWORK-BIND-ERROR", "cannot apply sandbox bind checks to address '%s'; use a "
+        "numeric IPv4/IPv6 address or \"localhost\"", address->c_str());
+    return QoreValue();
 }
 
 //! Loads a Java class with the given name.

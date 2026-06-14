@@ -53,7 +53,10 @@ public class OpcUaServerRuntime {
     }
 
     #! Starts the server endpoint
+    /** @throw NETWORK-ACCESS-DENIED if an active Qore network sandbox denies the configured TCP bind address or port.
+    */
     start() {
+        Jni::org::qore::jni::check_network_bind(server.getBindAddress(), server.getPort(), self);
         server.start();
     }
 

@@ -120,6 +120,9 @@ public class GenericServer {
         this.bindAddress = stringOption("bind_address", "127.0.0.1");
         this.hostname = stringOption("hostname", bindAddress);
         this.port = intOption("port", 48400);
+        if (port < 0 || port > 65535) {
+            throw new IllegalArgumentException("port must be between 0 and 65535");
+        }
         this.path = normalizePath(stringOption("path", "/qore"));
         this.namespaceUri = resolveNamespaceUri(this.options);
         this.maxHistoryValues = intOption("max_history_values", DEFAULT_MAX_HISTORY_VALUES);
@@ -179,6 +182,16 @@ public class GenericServer {
     /** Returns the configured endpoint URL. */
     public String getEndpointUrl() {
         return "opc.tcp://" + hostname + ":" + port + path;
+    }
+
+    /** Returns the local address used for the server socket bind. */
+    public String getBindAddress() {
+        return bindAddress;
+    }
+
+    /** Returns the TCP port used for the server socket bind. */
+    public int getPort() {
+        return port;
     }
 
     /** Returns the materialized schema snapshot with actual server NodeIds. */

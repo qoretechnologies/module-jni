@@ -510,7 +510,8 @@ module OpcUaDataProvider {
     @par Generic Runtime Security
     \c OpcUaServerRuntime uses an anonymous \c SecurityPolicy.None endpoint and rejects non-loopback
     \c bind_address and \c hostname values.  Use loopback addresses such as \c 127.0.0.1,
-    \c localhost, or \c ::1 when embedding the runtime.
+    \c localhost, or \c ::1 when embedding the runtime.  When a Qore network sandbox is active,
+    \c start() checks the configured TCP bind address and port before the Java/Milo listener is opened.
 
     @par Generic Runtime History Retention
     The generic runtime retains implicit in-memory history only for historizing variables.  The
@@ -526,6 +527,8 @@ module OpcUaDataProvider {
       publishing, application event dispatching, and a NodeSet2 export subset
     - generic runtime endpoints are loopback-only while using anonymous \c SecurityPolicy.None security
       and reject non-loopback bind or advertised host names
+    - generic runtime listener startup honors active Qore network sandbox bind restrictions before opening
+      the Java/Milo server socket
     - implicit generic runtime history is bounded per historizing variable by \c max_history_values
     - the runtime accepts an optional callback dispatcher for authorization, browse, read, write,
       call, subscription, history-read, data-change, and event operations
