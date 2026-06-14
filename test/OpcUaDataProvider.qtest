@@ -60,6 +60,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("write type conversion", \writeTypeConversionTest());
         addTestCase("connection detection", \connectionDetectionTest());
         addTestCase("embedded server integration", \embeddedServerIntegrationTest());
+        addTestCase("nodeset2 import", \nodeSet2ImportTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
         try {
@@ -823,6 +824,36 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq(("a", "b"), (map $1.name, addm.input_arguments), "Add input argument names");
         assertEq(("i=8", "i=8"), (map $1.data_type, addm.input_arguments), "Add input argument types");
         assertEq(("sum",), (map $1.name, addm.output_arguments), "Add output argument names");
+    }
+
+    #! Tests offline OPC UA NodeSet2 import (Phase 4); no server connection required
+    nodeSet2ImportTest() {
+        string file = normalize_dir(get_script_dir()) + DirSep + "opcua-nodeset2-minimal.xml";
+        # importNodeSet2 does not connect; a placeholder url satisfies the required option
+        OpcUaDataProvider prov({"url": "opc.tcp://localhost:14840", "monitored_nodes": ()});
+        hash<auto> snap = prov.importNodeSet2(file);
+
+        assertEq("imported", snap.source, "imported snapshot source");
+        assertEq(1, snap.contract_version, "imported contract version");
+        assertEq("urn:qore:opcua:imported", snap.namespaces{"1"}, "imported namespace uri");
+        assertEq(3, snap.endpoints.size(), "imported endpoint count");
+
+        hash<string, hash<auto>> bn = map {$1.browse_name: $1}, snap.endpoints;
+        assertEq("variable", bn."1:ImportedTemperature".kind, "imported variable kind");
+        assertEq("i=11", bn."1:ImportedTemperature".data_type, "imported variable data_type");
+        assertEq(-1, bn."1:ImportedTemperature".value_rank, "imported variable value_rank");
+        assertEq("method-call", bn."1:ImportedReset".kind, "imported method kind");
+
+        # required model dependencies and missing-dependency detection
+        assertEq(("http://opcfoundation.org/UA/", "http://opcfoundation.org/UA/DI/"),
+            snap.required_models, "imported required models");
+        assertEq(("http://opcfoundation.org/UA/DI/",), snap.missing_dependencies,
+            "unsatisfied companion-spec dependency detected");
+
+        # imported endpoint_id uses the same derivation as the live resolver, so the same model maps to
+        # the same id whether resolved live or imported offline
+        assertEq(SchemaResolver::deriveEndpointId("urn:qore:opcua:imported", "/1:ImportedTemperature",
+            "variable"), bn."1:ImportedTemperature".endpoint_id, "imported endpoint_id derivation");
     }
 
     opcuaIntegrationTest() {

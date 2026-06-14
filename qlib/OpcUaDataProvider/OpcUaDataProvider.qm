@@ -54,9 +54,11 @@
 %requires(reexport) DataProvider
 # implements support for OPC UA connections
 %requires(reexport) ConnectionProvider
+# implements file/resource location handling for offline NodeSet2 import
+%requires FileLocationHandler
 
 module OpcUaDataProvider {
-    version = "1.5";
+    version = "1.6";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -461,6 +463,15 @@ module OpcUaDataProvider {
     @endverbatim
 
     @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_6 OpcUaDataProvider v1.6
+    - added offline OPC UA NodeSet2 import: \c importNodeSet2() retrieves a NodeSet2 XML model with
+      \c FileLocationHandler (path / \c file:// / \c resource://) and parses it into the same schema
+      snapshot shape as live introspection, including the namespace table, resolved variable/method
+      endpoints (with the same deterministic \c endpoint_id derivation), \c required_models, and
+      \c missing_dependencies (required model namespaces not present in the model). Parsing uses the
+      compiled Java \c org.qore.dataprovider.opcua.NodeSet2Importer with the JDK's built-in XML parser,
+      so no \c module-xml or JAXB dependency is required
 
     @subsection OpcUaDataProvider_v1_5 OpcUaDataProvider v1.5
     - added a compiled Java value codec (\c org.qore.dataprovider.opcua.ValueCodec):

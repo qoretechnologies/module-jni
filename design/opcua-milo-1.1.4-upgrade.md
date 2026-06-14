@@ -112,7 +112,11 @@ All confirmed via `javap` against the 1.1.4 jars.
 5. **Phase 3 (DONE, module v1.5)** — Java value codec (`org.qore.dataprovider.opcua.ValueCodec`):
    typed writes for all built-in scalars incl. narrow signed (SByte/Int16/Int32) and Float (no longer
    rejected), and unsigned-value unwrapping to native Qore ints on read. Verified vs the test server.
-6. **Phase 4** — optional NodeSet2 import via Milo's loader.
+6. **Phase 4 (DONE, module v1.6)** — offline NodeSet2 import. Milo 1.1.4 ships no general NodeSet2 XML
+   parser (and the 1.x set drops JAXB), so `org.qore.dataprovider.opcua.NodeSet2Importer` parses it with
+   the JDK's built-in XML parser (no new dependency); file retrieval is Qore-side via `FileLocationHandler`.
+   Produces the same snapshot shape (matching `endpoint_id`s) plus `required_models` /
+   `missing_dependencies`. Exposed via `importNodeSet2()`; verified with a minimal NodeSet2 file.
 7. **Phase 5** (Qorus repo) — client design-time integration.
 
 ## Build/packaging tasks for the migration commit

@@ -47,6 +47,7 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.Argument
 %module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
 %module-cmd(jni) import org.qore.dataprovider.opcua.ValueCodec
+%module-cmd(jni) import org.qore.dataprovider.opcua.NodeSet2Importer
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.List
 %module-cmd(jni) import java.util.concurrent.TimeUnit
@@ -978,6 +979,22 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     hash<auto> getSchemaSnapshot(*string root_node_id) {
         ensureConnected();
         return SchemaResolver::resolve(client, root_node_id ?? "ns=0;i=85");
+    }
+
+    #! Imports an offline OPC UA NodeSet2 model into a generic schema snapshot
+    /** Retrieves the NodeSet2 XML from the given location with @ref FileLocationHandler (so file/resource
+        access honors the standard location handling and any sandbox restrictions) and parses it with the
+        compiled Java importer. No server connection is required.
+
+        @param location a \c FileLocationHandler location (e.g. a path, \c file://..., or \c resource://...)
+
+        @return an imported schema snapshot (\c source is \c "imported"); it carries the namespace table,
+        the resolved variable/method endpoints, the \c required_models, and \c missing_dependencies (the
+        required model namespaces not present in the imported model's namespace table)
+    */
+    hash<auto> importNodeSet2(string location) {
+        string xml = FileLocationHandler::getTextFileFromLocation(location);
+        return NodeSet2Importer::parse(xml);
     }
 
     #! Returns the request type for this provider
