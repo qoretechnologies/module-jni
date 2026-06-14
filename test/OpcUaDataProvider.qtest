@@ -14,6 +14,7 @@
 %module-cmd(jni) add-relative-classpath ./opcua-test-server.jar
 %module-cmd(jni) import org.qore.opcua.test.QoreOpcUaTestServer
 %module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
+%module-cmd(jni) import org.qore.dataprovider.opcua.NodeSet2Importer
 
 %exec-class OpcUaDataProviderTest
 
@@ -23,6 +24,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
 
         #! The OPC UA server URL for integration tests
         string opcua_url;
+
+        #! callback counters for the generic server runtime test
+        hash<auto> generic_server_callback_counts;
 
         # command-line options
         const MyOpts = Opts + {
@@ -66,6 +70,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("data change subscription and history", \subscriptionAndHistoryTest());
         addTestCase("nodeset2 import", \nodeSet2ImportTest());
         addTestCase("nodeset2 import robustness", \nodeSet2ImportRobustnessTest());
+        addTestCase("generic OPC UA server runtime", \genericServerRuntimeTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
         try {
@@ -448,6 +453,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq("opcua", info.name);
         assertTrue(info.children_can_support_observers, "factory should support observers");
         assertTrue(info.children_can_support_messages, "factory should support messages");
+        assertTrue(info.api_management, "factory should support API management");
+        assertEq(("opcua",), info.api_profiles, "factory should advertise the opcua API profile");
 
         hash<DataProviderInfo> pinfo = factory.getProviderInfo();
         assertTrue(pinfo.supports_observable, "provider should support observable");
@@ -996,6 +1003,183 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             assertFalse(info =~ /NullPointer/, "no NullPointerException leaks to the caller");
         }
         assertTrue(threw, "out-of-range namespace index raises a parse error");
+    }
+
+    #! Tests the generic schema-backed OPC UA server runtime (Epic B1)
+    genericServerRuntimeTest() {
+        generic_server_callback_counts = {};
+        string ns = "urn:qore:opcua:generic-runtime-test";
+        string temp_id = "temperature";
+        string readonly_id = "readonly";
+        string denied_id = "denied-write";
+        string add_id = "add";
+
+        hash<auto> schema = {
+            "contract_version": 1,
+            "source": "test",
+            "namespaces": {
+                "1": ns,
+            },
+            "endpoints": (
+                {
+                    "endpoint_id": temp_id,
+                    "browse_name": "1:Temperature",
+                    "browse_path": "/1:Line/1:Temperature",
+                    "kind": "variable",
+                    "data_type": "Int32",
+                    "value_rank": -1,
+                    "writable": True,
+                    "historizing": True,
+                    "value": 21,
+                },
+                {
+                    "endpoint_id": readonly_id,
+                    "browse_name": "1:ReadOnly",
+                    "browse_path": "/1:Line/1:ReadOnly",
+                    "kind": "variable",
+                    "data_type": "String",
+                    "value_rank": -1,
+                    "writable": False,
+                    "value": "fixed",
+                },
+                {
+                    "endpoint_id": denied_id,
+                    "browse_name": "1:DeniedWrite",
+                    "browse_path": "/1:Line/1:DeniedWrite",
+                    "kind": "variable",
+                    "data_type": "Int32",
+                    "value_rank": -1,
+                    "writable": True,
+                    "value": 1,
+                },
+                {
+                    "endpoint_id": add_id,
+                    "browse_name": "1:Add",
+                    "browse_path": "/1:Line/1:Add",
+                    "kind": "method-call",
+                    "input_arguments": (
+                        {"name": "a", "data_type": "Int64", "value_rank": -1},
+                        {"name": "b", "data_type": "Int64", "value_rank": -1},
+                    ),
+                    "output_arguments": (
+                        {"name": "sum", "data_type": "Int64", "value_rank": -1},
+                    ),
+                },
+            ),
+        };
+
+        int port = 57200 + (getpid() % 1000);
+        OpcUaServerRuntime runtime({
+            "port": port,
+            "namespace_uri": ns,
+            "schema": schema,
+            "application_name": "Qore Generic OPC UA Runtime Test",
+        }, \genericServerRuntimeCallback());
+        runtime.start();
+        on_exit runtime.stop();
+
+        hash<auto> materialized = runtime.getSchemaSnapshot();
+        assertEq("server", materialized.source, "runtime schema source");
+        assertEq(4, materialized.endpoints.size(), "runtime endpoint count");
+        hash<string, hash<auto>> by_id = map {$1.endpoint_id: $1}, materialized.endpoints;
+        assertEq(ns, by_id{temp_id}.namespace_uri, "runtime endpoint namespace");
+        assertTrue(by_id{add_id}.object_node_id.val(), "method endpoint exposes object_node_id");
+
+        OpcUaDataProvider prov({"url": runtime.getEndpointUrl(), "monitored_nodes": ()});
+
+        hash<auto> read = prov.doRequest({"action": "read-value", "node_id": by_id{temp_id}.node_id});
+        assertEq(21, read.value, "generic runtime read");
+        assertTrue((generic_server_callback_counts.read ?? 0) > 0, "read callback invoked");
+
+        prov.sendMessage("write-value", {
+            "node_id": by_id{temp_id}.node_id,
+            "value": 33,
+            "data_type": "Int32",
+        });
+        assertTrue((generic_server_callback_counts.write ?? 0) > 0, "write callback invoked");
+        assertEq(33, prov.doRequest({"action": "read-value", "node_id": by_id{temp_id}.node_id}).value,
+            "generic runtime write/read-back");
+
+        assertThrows("SEND-MESSAGE-ERROR", \prov.sendMessage(), ("write-value", {
+            "node_id": by_id{readonly_id}.node_id,
+            "value": "changed",
+            "data_type": "String",
+        }), "read-only endpoint write rejected");
+        assertThrows("SEND-MESSAGE-ERROR", \prov.sendMessage(), ("write-value", {
+            "node_id": by_id{denied_id}.node_id,
+            "value": 10,
+            "data_type": "Int32",
+        }), "authorization callback rejects write");
+        assertTrue((generic_server_callback_counts.authorize ?? 0) > 0, "authorization callback invoked");
+
+        hash<auto> call = prov.doRequest({
+            "action": "call-method",
+            "object_id": by_id{add_id}.object_node_id,
+            "method_id": by_id{add_id}.node_id,
+            "arguments": (7, 8),
+        });
+        assertEq(15, call.output_arguments[0], "generic runtime method callback result");
+        assertTrue((generic_server_callback_counts.call ?? 0) > 0, "call callback invoked");
+
+        hash<auto> history = prov.doRequest({"action": "read-history", "node_id": by_id{temp_id}.node_id});
+        assertEq((4, 5, 6), (map $1.value, history.data_values), "history callback values");
+        assertTrue((generic_server_callback_counts{"history-read"} ?? 0) > 0, "history callback invoked");
+
+        Queue events();
+        OpcUaTestObserver obs(events);
+        OpcUaDataProvider subscriber({
+            "url": runtime.getEndpointUrl(),
+            "monitored_nodes": (by_id{temp_id}.node_id,),
+            "publishing_interval": 100,
+            "sampling_interval": 50,
+        });
+        subscriber.registerObserver(obs);
+        subscriber.observersReady();
+        on_exit subscriber.stopEvents();
+
+        runtime.publishDataChange(temp_id, 44);
+        bool observed = False;
+        hash<auto> changed;
+        for (int i = 0; i < 16; ++i) {
+            changed = events.get(EventTimeoutMs);
+            if (changed.value == 44) {
+                observed = True;
+                break;
+            }
+        }
+        assertTrue(observed, "generic runtime data-change observed by client");
+        assertTrue((generic_server_callback_counts.subscription ?? 0) > 0, "subscription callback invoked");
+        assertTrue((generic_server_callback_counts{"data-change"} ?? 0) > 0, "data-change callback invoked");
+
+        hash<auto> event_result = runtime.publishEvent({"message": "test"});
+        assertTrue(event_result.accepted, "event callback result");
+        assertTrue((generic_server_callback_counts.event ?? 0) > 0, "event callback invoked");
+
+        hash<auto> imported = NodeSet2Importer::parse(runtime.exportNodeSet2());
+        assertEq("imported", imported.source, "exported NodeSet2 imports");
+        assertEq(4, imported.endpoints.size(), "exported NodeSet2 endpoint count");
+    }
+
+    private hash<auto> genericServerRuntimeCallback(string operation, hash<auto> info) {
+        generic_server_callback_counts{operation} = (generic_server_callback_counts{operation} ?? 0) + 1;
+        switch (operation) {
+            case "authorize":
+                if (info.endpoint_id == "denied-write" && info.requested_operation == "write") {
+                    return {"allow": False};
+                }
+                break;
+            case "call":
+                return {
+                    "output_arguments": (info.arguments[0] + info.arguments[1],),
+                };
+            case "history-read":
+                return {
+                    "values": (4, 5, 6),
+                };
+            case "event":
+                return {"accepted": True};
+        }
+        return {};
     }
 
     opcuaIntegrationTest() {

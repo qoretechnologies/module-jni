@@ -58,7 +58,7 @@
 %requires FileLocationHandler
 
 module OpcUaDataProvider {
-    version = "1.7";
+    version = "1.8";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -463,6 +463,16 @@ module OpcUaDataProvider {
     @endverbatim
 
     @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_8 OpcUaDataProvider v1.8
+    - added \c OpcUaServerRuntime, a generic Qorus-agnostic OPC UA server runtime that materializes
+      the existing schema snapshot contract through the bundled Milo 1.1.4 server SDK
+    - \c OpcUaServerRuntime supports lifecycle management, schema/endpoint accessors, data-change
+      publishing, application event dispatching, and a NodeSet2 export subset
+    - the runtime accepts an optional callback dispatcher for authorization, browse, read, write,
+      call, subscription, history-read, data-change, and event operations
+    - the \c opcua data provider factory now advertises generic API-management capability through the
+      \c opcua API profile
 
     @subsection OpcUaDataProvider_v1_7 OpcUaDataProvider v1.7
     - made the declared response data types consistent with the actual runtime responses: the enriched

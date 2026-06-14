@@ -34,6 +34,8 @@ public class OpcUaDataProviderFactory inherits DataProvider::AbstractDataProvide
         const FactoryInfo = <DataProviderFactoryInfo>{
             "name": "opcua",
             "desc": "OPC UA client data provider factory",
+            "api_management": True,
+            "api_profiles": ("opcua",),
             "children_can_support_observers": True,
             "children_can_support_messages": True,
         };
