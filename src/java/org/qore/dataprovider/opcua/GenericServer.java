@@ -57,7 +57,6 @@ import org.eclipse.milo.opcua.stack.core.encoding.EncodingContext;
 import org.eclipse.milo.opcua.stack.core.security.DefaultCertificateManager;
 import org.eclipse.milo.opcua.stack.core.security.MemoryCertificateQuarantine;
 import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy;
-import org.eclipse.milo.opcua.stack.core.transport.TransportProfile;
 import org.eclipse.milo.opcua.stack.core.types.builtin.ByteString;
 import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue;
 import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime;
@@ -153,12 +152,8 @@ public class GenericServer {
             .setIdentityValidator(AnonymousIdentityValidator.INSTANCE)
             .build();
 
-        this.server = new OpcUaServer(config, transportProfile -> {
-            if (!TransportProfile.TCP_UASC_UABINARY.equals(transportProfile)) {
-                return new OpcTcpServerTransport(OpcTcpServerTransportConfig.newBuilder().build());
-            }
-            return new OpcTcpServerTransport(OpcTcpServerTransportConfig.newBuilder().build());
-        });
+        this.server = new OpcUaServer(config, transportProfile ->
+            new OpcTcpServerTransport(OpcTcpServerTransportConfig.newBuilder().build()));
         this.namespace = new RuntimeNamespace(server);
         this.namespace.startup();
     }
@@ -181,7 +176,15 @@ public class GenericServer {
 
     /** Returns the configured endpoint URL. */
     public String getEndpointUrl() {
-        return "opc.tcp://" + hostname + ":" + port + path;
+        return "opc.tcp://" + formatHostForUrl(hostname) + ":" + port + path;
+    }
+
+    /** Wraps unbracketed IPv6 literals in {@code [...]} so the host is valid in a URL. */
+    private static String formatHostForUrl(String host) {
+        if (host.indexOf(':') >= 0 && host.indexOf('[') < 0) {
+            return "[" + host + "]";
+        }
+        return host;
     }
 
     /** Returns the local address used for the server socket bind. */

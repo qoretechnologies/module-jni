@@ -1063,7 +1063,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     */
     list<hash<auto>> getApiManagementEndpoints() {
         hash<auto> snapshot = getApiManagementSchemaSnapshot();
-        list<hash<auto>> rv;
+        list<hash<auto>> rv = ();
         foreach hash<auto> endpoint in (snapshot.endpoints) {
             *string endpoint_id = endpoint.endpoint_id;
             if (!endpoint_id) {
@@ -1106,7 +1106,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     }
 
     private static list<string> getApiEndpointDirections(hash<auto> endpoint) {
-        list<string> rv;
+        list<string> rv = ();
         if (endpoint.directions.typeCode() == NT_LIST) {
             foreach auto dir in (endpoint.directions) {
                 rv += dir.toString();
