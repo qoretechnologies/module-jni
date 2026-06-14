@@ -1337,7 +1337,15 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # convert arguments to Variant array
         auto input_args;
         if (request.arguments) {
-            input_args = map new Variant($1), request.arguments;
+            if (arg_meta) {
+                input_args = ();
+                for (int i = 0; i < request.arguments.size(); ++i) {
+                    *string data_type = OpcUaTypeConversion::normalizeDataTypeHint(arg_meta.input[i].data_type);
+                    input_args += OpcUaTypeConversion::getVariant(request.arguments[i], data_type);
+                }
+            } else {
+                input_args = map new Variant($1), request.arguments;
+            }
         }
 
         # Milo 1.1.x: call() takes a list of requests and returns a CallResponse

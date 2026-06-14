@@ -8,7 +8,8 @@
 %requires QUnit
 %requires DataProvider
 %requires ConnectionProvider
-%requires ../qlib/OpcUaDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires OpcUaDataProvider
 
 # in-process Milo 1.1.4 OPC UA test server (rebuild with test/java/build-test-server.sh)
 %module-cmd(jni) add-relative-classpath ./opcua-test-server.jar
@@ -1123,8 +1124,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
                     "browse_path": "/1:Line/1:Add",
                     "kind": "method-call",
                     "input_arguments": (
-                        {"name": "a", "data_type": "Int64", "value_rank": -1},
-                        {"name": "b", "data_type": "Int64", "value_rank": -1},
+                        {"name": "a", "data_type": "Int32", "value_rank": -1},
+                        {"name": "b", "data_type": "Int32", "value_rank": -1},
                     ),
                     "output_arguments": (
                         {"name": "sum", "data_type": "Int64", "value_rank": -1},

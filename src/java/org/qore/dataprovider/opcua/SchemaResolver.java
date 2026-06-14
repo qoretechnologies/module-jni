@@ -127,6 +127,7 @@ public class SchemaResolver {
             } else if (nodeClass == NodeClass.Method) {
                 Hash endpoint = addEndpoint(endpoints, seenEndpointIds, namespaceUri, browsePath,
                     "method-call", child, qualifiedName, "Method", reference);
+                endpoint.put("object_node_id", nodeId.toParseableString());
                 enrichMethod(client, namespaceTable, endpoint, child);
             } else if (nodeClass == NodeClass.Object) {
                 walk(client, namespaceTable, uris, child, browsePath, endpoints, seenEndpointIds, depth + 1);
