@@ -115,7 +115,7 @@ public class NodeSet2Importer {
                 continue;
             }
             Element element = (Element) node;
-            String tag = element.getTagName();
+            String tag = localName(element.getTagName());
             String kind;
             if ("UAVariable".equals(tag)) {
                 kind = "variable";
@@ -136,7 +136,12 @@ public class NodeSet2Importer {
         String nodeId = element.getAttribute("NodeId");
         String browseName = element.getAttribute("BrowseName");
         int nsIndex = namespaceIndexOf(nodeId);
-        String namespaceUri = nsIndex < uris.size() ? uris.get(nsIndex) : null;
+        if (nsIndex >= uris.size()) {
+            // fail with a clear parse error rather than deriving an endpoint id from a null namespace
+            throw new IllegalStateException("NodeSet2 node '" + nodeId + "' references namespace index "
+                + nsIndex + ", which is not declared in the model's NamespaceUris table");
+        }
+        String namespaceUri = uris.get(nsIndex);
         String browsePath = "/" + browseName;
         String endpointId = SchemaResolver.deriveEndpointId(namespaceUri, browsePath, kind);
         if (!seen.add(endpointId)) {
@@ -187,10 +192,26 @@ public class NodeSet2Importer {
         NodeList children = parent.getChildNodes();
         for (int i = 0; i < children.getLength(); ++i) {
             Node node = children.item(i);
-            if (node.getNodeType() == Node.ELEMENT_NODE && ((Element) node).getTagName().equals(tag)) {
+            if (node.getNodeType() == Node.ELEMENT_NODE
+                    && localName(((Element) node).getTagName()).equals(tag)) {
                 rv.add((Element) node);
             }
         }
         return rv;
+    }
+
+    /**
+     * Returns the local name of an XML tag (the part after any {@code prefix:}).
+     *
+     * <p>Namespace awareness is disabled while parsing, so a tag may arrive either bare
+     * (e.g. {@code UAVariable}) or prefixed (e.g. {@code u:UAVariable}) depending on how the NodeSet2
+     * document is serialized. Matching on the local name makes import robust across both forms.
+     *
+     * @param tagName the raw tag name as returned by {@link Element#getTagName()}
+     * @return the local name with any namespace prefix removed
+     */
+    private static String localName(String tagName) {
+        int colon = tagName.indexOf(':');
+        return colon >= 0 ? tagName.substring(colon + 1) : tagName;
     }
 }

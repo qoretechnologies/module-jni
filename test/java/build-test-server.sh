@@ -5,7 +5,9 @@
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-cp=$(ls "$root"/qlib/OpcUaDataProvider/jar/*.jar | tr '\n' ':')
+# join the jar paths with ':' WITHOUT a trailing separator (a trailing ':' adds an empty classpath
+# element, which Java interprets as the current directory and can pollute compilation)
+cp=$(ls "$root"/qlib/OpcUaDataProvider/jar/*.jar | paste -sd: -)
 rm -rf "$here/classes"
 mkdir -p "$here/classes"
 javac -cp "$cp" -d "$here/classes" "$here/org/qore/opcua/test/QoreOpcUaTestServer.java"

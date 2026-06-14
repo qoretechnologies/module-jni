@@ -638,6 +638,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             OpcUaMonitoredItem item = OpcUaMonitoredItem::newDataItem(NodeId::parse(node_id_str));
             item.setSamplingInterval(sampling_interval * 1.0);
             item.setQueueSize(UInteger::valueOf(queue_size));
+            # apply the configured queue-overflow policy (discard oldest vs. newest sample) rather than
+            # leaving it at the Milo default
+            item.setDiscardOldest(discard_oldest);
 
             # bind the node id into a per-item data value listener; capturing the id avoids relying on
             # the item to report it back and gives a stable namespace index for the event
