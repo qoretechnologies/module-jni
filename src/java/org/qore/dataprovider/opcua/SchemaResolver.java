@@ -109,7 +109,13 @@ public class SchemaResolver {
             NodeId child = childOpt.get();
             QualifiedName browseName = reference.getBrowseName();
             int childNsIndex = child.getNamespaceIndex().intValue();
-            String namespaceUri = childNsIndex < uris.length ? uris[childNsIndex] : null;
+            if (childNsIndex >= uris.length) {
+                // the child references a namespace index outside the server's namespace table (e.g. the
+                // table changed mid-walk); skip it rather than deriving an endpoint id from a null
+                // namespace uri, consistent with the unresolvable-child skip above
+                continue;
+            }
+            String namespaceUri = uris[childNsIndex];
             String qualifiedName = browseName.getNamespaceIndex().intValue() + ":" + browseName.getName();
             String browsePath = parentPath + "/" + qualifiedName;
             NodeClass nodeClass = reference.getNodeClass();

@@ -882,13 +882,21 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         # write a new value and wait for the data-change that reflects it
         prov.sendMessage("write-value",
             {"node_id": "ns=2;s=Int32Var", "value": 31337, "data_type": "Int32"});
+        # bounded wait: each events.get() blocks (event-signaled, not polling) and throws on timeout, so
+        # this never hangs; the iteration cap additionally fails clearly if the subscription only ever
+        # delivers other values and the written change is never observed
         hash<auto> changed;
-        while (True) {
+        bool observed = False;
+        int max_events = 16;
+        for (int i = 0; i < max_events; ++i) {
             changed = events.get(EventTimeoutMs);
             if (changed.value == 31337) {
+                observed = True;
                 break;
             }
         }
+        assertTrue(observed,
+            sprintf("observed the written data-change value within %d data-change events", max_events));
         assertEq(31337, changed.value, "data-change reflects the written value");
 
         # --- read-history ---
