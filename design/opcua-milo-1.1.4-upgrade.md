@@ -106,7 +106,9 @@ All confirmed via `javap` against the 1.1.4 jars.
    snapshot with namespace table + variable/method endpoints; deterministic `endpoint_id` =
    SHA-256(namespace URI, browse path, kind) (#312 decision 5). Exposed via `getSchemaSnapshot()`;
    verified against the test server.
-4. **Phase 2** — live introspection into the snapshot; integration tests against the test server.
+4. **Phase 2 (DONE, module v1.4)** — live introspection enriches each snapshot endpoint: variables
+   get data type / value rank / array dimensions / access levels / directions / historizing /
+   min-sampling-interval; methods get resolved input/output argument metadata. Verified vs the test server.
 5. **Phase 3** — Java value codec (Variant/DataValue/ExtensionObject <-> Qore), including the narrow
    signed/Float types that Phase 0 currently rejects.
 6. **Phase 4** — optional NodeSet2 import via Milo's loader.

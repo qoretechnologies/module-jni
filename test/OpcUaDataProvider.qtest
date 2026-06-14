@@ -796,6 +796,24 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq(64, by_name."2:Int32Var".endpoint_id.size(), "endpoint_id is a sha-256 hex");
         assertEq(SchemaResolver::deriveEndpointId("urn:qore:opcua:test", "/2:Int32Var", "variable"),
             by_name."2:Int32Var".endpoint_id, "endpoint_id is deterministic and index-independent");
+
+        # Phase 2: live introspection enriches each endpoint with type/access/argument metadata
+        hash<auto> int32 = by_name."2:Int32Var";
+        assertEq("i=6", int32.data_type, "Int32Var data_type resolved");
+        assertEq(-1, int32.value_rank, "Int32Var value_rank (scalar)");
+        assertTrue(int32.readable, "Int32Var readable");
+        assertTrue(int32.writable, "Int32Var writable");
+        assertEq(("read", "observe", "write"), int32.directions, "Int32Var directions");
+        assertEq(False, int32.historizing, "Int32Var not historizing");
+        hash<auto> dbl = by_name."2:DoubleVar";
+        assertEq("i=11", dbl.data_type, "DoubleVar data_type resolved");
+        assertFalse(dbl.writable, "DoubleVar read-only");
+        assertEq(("read", "observe"), dbl.directions, "DoubleVar directions");
+        # method argument metadata resolved into the snapshot
+        hash<auto> addm = by_name."2:Add";
+        assertEq(("a", "b"), (map $1.name, addm.input_arguments), "Add input argument names");
+        assertEq(("i=8", "i=8"), (map $1.data_type, addm.input_arguments), "Add input argument types");
+        assertEq(("sum",), (map $1.name, addm.output_arguments), "Add output argument names");
     }
 
     opcuaIntegrationTest() {

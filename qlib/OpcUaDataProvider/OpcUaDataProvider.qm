@@ -56,7 +56,7 @@
 %requires(reexport) ConnectionProvider
 
 module OpcUaDataProvider {
-    version = "1.3";
+    version = "1.4";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -461,6 +461,13 @@ module OpcUaDataProvider {
     @endverbatim
 
     @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_4 OpcUaDataProvider v1.4
+    - the schema snapshot (\c getSchemaSnapshot()) is now enriched with live introspection metadata:
+      variable endpoints carry \c data_type, \c value_rank, \c array_dimensions, \c access_level /
+      \c user_access_level, \c readable / \c writable, \c directions, \c historizing, and
+      \c minimum_sampling_interval; method endpoints carry resolved \c input_arguments and
+      \c output_arguments (name, data type, value rank, description)
 
     @subsection OpcUaDataProvider_v1_3 OpcUaDataProvider v1.3
     - added a generic, versioned OPC UA schema snapshot: \c AbstractFunctionalOpcUaDataProvider's
