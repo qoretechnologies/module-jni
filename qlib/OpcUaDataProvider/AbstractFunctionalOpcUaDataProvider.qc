@@ -594,7 +594,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             }
         }
         delete subscription;
-        delete monitored_item_listeners;
+        # clear to an empty list (not NOTHING) so a restart can append listeners again
+        monitored_item_listeners = ();
         delete client;
     }
 
@@ -803,6 +804,21 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
         auto variant = result.getValue();
         return variant ? variant.getValue() : NOTHING;
+    }
+
+    #! Resolves a Milo \c ExpandedNodeId to a parseable absolute NodeId string via the namespace table
+    /** Browse results return \c ExpandedNodeIds, which may use the \c nsu= (namespace URI) form rather
+        than \c ns= (namespace index); this resolves them to an absolute NodeId so the string can be
+        parsed by \c NodeId::parse().
+
+        @param expanded_node_id a Milo \c ExpandedNodeId
+        @param namespace_table the client's Milo \c NamespaceTable
+
+        @return a parseable NodeId string, or @ref nothing if the id cannot be resolved
+    */
+    private static *string expandedNodeIdToString(auto expanded_node_id, auto namespace_table) {
+        auto resolved = expanded_node_id.toNodeId(namespace_table);
+        return resolved.isPresent() ? resolved.get().toParseableString() : NOTHING;
     }
 
     #! Awaits a CompletableFuture with cooperative cancellation support
@@ -1227,13 +1243,20 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             auto resp = awaitFuture(client.browseAsync(new ViewDescription(NodeId::NULL_VALUE, DateTime::MIN_VALUE, UInteger::valueOf(0)),
                 UInteger::valueOf(0), bds), "browse method properties");
             auto refs = resp.getResults()[0].getReferences();
+            # browse results return ExpandedNodeIds, which may use the `nsu=` (namespace URI) form that
+            # NodeId::parse() cannot parse; resolve them to absolute NodeIds via the namespace table
+            auto namespace_table = client.getNamespaceTable();
             *string input_id;
             *string output_id;
             if (refs) {
                 foreach auto ref in (refs) {
+                    *string node_id_str = expandedNodeIdToString(ref.getNodeId(), namespace_table);
+                    if (!node_id_str) {
+                        continue;
+                    }
                     switch (ref.getBrowseName().getName()) {
-                        case "InputArguments": input_id = ref.getNodeId().toParseableString(); break;
-                        case "OutputArguments": output_id = ref.getNodeId().toParseableString(); break;
+                        case "InputArguments": input_id = node_id_str; break;
+                        case "OutputArguments": output_id = node_id_str; break;
                     }
                 }
             }

@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -46,8 +47,12 @@ public class NodeSet2Importer {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         // NodeSet2 declares a default namespace; local-name lookups are simplest with awareness off
         factory.setNamespaceAware(false);
-        // harden the parser against external entity / DTD attacks
+        // harden the parser against XXE: enable secure processing, forbid DOCTYPE entirely, and deny
+        // all external DTD/schema resolution and entity expansion
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
         factory.setExpandEntityReferences(false);
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document doc = builder.parse(new InputSource(new StringReader(xml)));
