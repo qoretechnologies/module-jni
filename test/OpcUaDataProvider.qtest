@@ -819,7 +819,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq(1, snap.contract_version, "snapshot contract version");
         assertEq("live", snap.source, "snapshot source");
         assertEq("urn:qore:opcua:test", snap.namespaces{"2"}, "namespace uri resolved");
-        # 6 variables + 1 method endpoint under TestFolder
+        # 9 variables (including HistoryVar) + 1 method endpoint under TestFolder
         assertEq(10, snap.endpoints.size(), "snapshot endpoint count");
         hash<string, hash<auto>> by_name = map {$1.browse_name: $1}, snap.endpoints;
         assertEq("variable", by_name."2:Int32Var".kind, "variable endpoint kind");
