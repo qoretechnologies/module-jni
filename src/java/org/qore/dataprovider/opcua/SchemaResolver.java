@@ -280,7 +280,7 @@ public class SchemaResolver {
      */
     public static String deriveEndpointId(String namespaceUri, String browsePath, String kind)
             throws Exception {
-        String canonical = namespaceUri + " " + browsePath + " " + kind;
+        String canonical = namespaceUri.length() + ":" + namespaceUri + browsePath.length() + ":" + browsePath + kind.length() + ":" + kind;
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         byte[] hash = digest.digest(canonical.getBytes(StandardCharsets.UTF_8));
         StringBuilder sb = new StringBuilder(hash.length * 2);
