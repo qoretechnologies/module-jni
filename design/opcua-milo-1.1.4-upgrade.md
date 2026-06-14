@@ -93,10 +93,16 @@ All confirmed via `javap` against the 1.1.4 jars.
 
 ## Remaining plan (each: implement -> verify against test server -> audit -> commit)
 
-1. **Embedded test server** (`src/java/org/qore/opcua/test/*` compiled Java; `ManagedNamespace`
-   subclass with a fixed custom namespace: typed variables, a method with typed args, an enum +
-   structure DataType, a subscribable variable, an event). In-process, deterministic, checked-in test
-   certs. Prerequisite for Phase 2 verification (decision 10).
+1. **Embedded test server** (`test/java/org/qore/opcua/test/QoreOpcUaTestServer.java`, in-process Milo
+   1.1.4; `ManagedNamespaceWithLifecycle` with a fixed custom namespace: typed variables incl. writable
+   narrow/unsigned/float, an `Add` method with typed args, a `SubscriptionModel` so monitored items are
+   sampled and data-change notifications fire, and a historizing node served by a `historyRead` override).
+   This closes the two paths that were migrated-but-not-round-trip-verified during the Milo upgrade
+   (data-change subscription delivery and `read-history`): the integration suite now verifies both
+   against the server, the data-change test using an event-signaled queue wait (no polling).
+   Note: server-side history/sampling here is a **throwaway test fixture**, not a product abstraction;
+   the generic, abstract history/data-change provider (extended in Qorus) belongs in Epic B's server
+   runtime (#314) as additional callbacks on the B1 contract.
 2. **Milo 1.1.4 upgrade / client migration** (atomic): swap jars + `.qm` classpath + CMake/spec; migrate
    `getClient`/config/identity/security, `call`, encoding context, and the subscription path; re-run the
    Phase 0 regression baseline (decision 9). Port `OpcUaStatusMapping` (unchanged) and adjust

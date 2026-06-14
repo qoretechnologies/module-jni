@@ -30,6 +30,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         };
 
         const OptionColumn = 22;
+
+        #! timeout (ms) for the event-signaled wait on asynchronous data-change notifications
+        const EventTimeoutMs = 15000;
     }
 
     constructor() : Test("OpcUaDataProviderTest Test", "1.0", \ARGV, MyOpts) {
@@ -60,6 +63,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("write type conversion", \writeTypeConversionTest());
         addTestCase("connection detection", \connectionDetectionTest());
         addTestCase("embedded server integration", \embeddedServerIntegrationTest());
+        addTestCase("data change subscription and history", \subscriptionAndHistoryTest());
         addTestCase("nodeset2 import", \nodeSet2ImportTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
@@ -797,7 +801,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq("live", snap.source, "snapshot source");
         assertEq("urn:qore:opcua:test", snap.namespaces{"2"}, "namespace uri resolved");
         # 6 variables + 1 method endpoint under TestFolder
-        assertEq(9, snap.endpoints.size(), "snapshot endpoint count");
+        assertEq(10, snap.endpoints.size(), "snapshot endpoint count");
         hash<string, hash<auto>> by_name = map {$1.browse_name: $1}, snap.endpoints;
         assertEq("variable", by_name."2:Int32Var".kind, "variable endpoint kind");
         assertEq("method-call", by_name."2:Add".kind, "method endpoint kind");
@@ -824,6 +828,57 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq(("a", "b"), (map $1.name, addm.input_arguments), "Add input argument names");
         assertEq(("i=8", "i=8"), (map $1.data_type, addm.input_arguments), "Add input argument types");
         assertEq(("sum",), (map $1.name, addm.output_arguments), "Add output argument names");
+    }
+
+    #! Tests data-change subscription delivery and historical-data reads against the in-process server
+    /** Data-change delivery is asynchronous; the test blocks on an event-signaled queue (with a timeout
+        safety net) rather than polling, per the deterministic-test requirement.
+    */
+    subscriptionAndHistoryTest() {
+        int port = 55600 + (getpid() % 1500);
+        auto server = new QoreOpcUaTestServer(port);
+        server.start();
+        on_exit server.stop();
+
+        # --- data-change subscription ---
+        OpcUaDataProvider prov({
+            "url": server.getEndpointUrl(),
+            "monitored_nodes": ("ns=2;s=Int32Var",),
+            "publishing_interval": 100,
+            "sampling_interval": 50,
+        });
+        Queue events();
+        OpcUaTestObserver obs(events);
+        prov.registerObserver(obs);
+        prov.observersReady();   # connects and creates the subscription
+        on_exit prov.stopEvents();
+
+        # the server reports the monitored item's initial value; wait for it (event-signaled)
+        hash<auto> first = events.get(EventTimeoutMs);
+        assertEq("ns=2;s=Int32Var", first.node_id, "data-change node id");
+        assertEq(42, first.value, "initial monitored value");
+        assertEq("Good", first.status_text, "data-change status_text");
+        assertEq("Good", first.symbolic_name, "data-change carries enriched status (Phase 0)");
+
+        # write a new value and wait for the data-change that reflects it
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=Int32Var", "value": 31337, "data_type": "Int32"});
+        hash<auto> changed;
+        while (True) {
+            changed = events.get(EventTimeoutMs);
+            if (changed.value == 31337) {
+                break;
+            }
+        }
+        assertEq(31337, changed.value, "data-change reflects the written value");
+
+        # --- read-history ---
+        hash<auto> h = prov.doRequest({"action": "read-history", "node_id": "ns=2;s=HistoryVar"});
+        assertEq("Good", h.status_text, "read-history status");
+        assertEq(3, h.data_values.size(), "read-history value count");
+        assertEq((10, 20, 30), (map $1.value, h.data_values), "read-history values");
+        assertTrue(h.data_values[0].source_timestamp < h.data_values[2].source_timestamp,
+            "read-history values are time-ordered");
     }
 
     #! Tests offline OPC UA NodeSet2 import (Phase 4); no server connection required

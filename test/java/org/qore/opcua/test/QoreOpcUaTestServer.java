@@ -39,6 +39,20 @@ import org.eclipse.milo.opcua.stack.transport.server.tcp.OpcTcpServerTransport;
 import org.eclipse.milo.opcua.stack.transport.server.tcp.OpcTcpServerTransportConfig;
 import org.eclipse.milo.opcua.sdk.server.items.DataItem;
 import org.eclipse.milo.opcua.sdk.server.items.MonitoredItem;
+import org.eclipse.milo.opcua.sdk.server.util.SubscriptionModel;
+import org.eclipse.milo.opcua.sdk.server.AddressSpace.HistoryReadContext;
+import org.eclipse.milo.opcua.stack.core.encoding.EncodingContext;
+import org.eclipse.milo.opcua.stack.core.types.builtin.ByteString;
+import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime;
+import org.eclipse.milo.opcua.stack.core.types.builtin.ExtensionObject;
+import org.eclipse.milo.opcua.stack.core.types.builtin.StatusCode;
+import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn;
+import org.eclipse.milo.opcua.stack.core.types.structured.HistoryData;
+import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadDetails;
+import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadResult;
+import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadValueId;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /** A minimal, deterministic Milo 1.1.4 OPC UA test server. */
@@ -105,10 +119,15 @@ public class QoreOpcUaTestServer {
         Thread.currentThread().join();
     }
 
-    /** The custom test namespace: a folder with typed variables. */
+    /** The custom test namespace: a folder with typed variables, a method, and a history node. */
     static class TestNamespace extends ManagedNamespaceWithLifecycle {
+        // drives sampling/notification for monitored items so data-change subscriptions fire
+        private final SubscriptionModel subscriptionModel;
+
         TestNamespace(OpcUaServer server) {
             super(server, NAMESPACE_URI);
+            subscriptionModel = new SubscriptionModel(server, this);
+            getLifecycleManager().addLifecycle(subscriptionModel);
             getLifecycleManager().addLifecycle(new Lifecycle() {
                 @Override public void startup() { addNodes(); }
                 @Override public void shutdown() {}
@@ -138,6 +157,13 @@ public class QoreOpcUaTestServer {
             addVariable(folder, idx, "Int64Var", NodeIds.Int64, new Variant(100L), true);
             addVariable(folder, idx, "Int16Var", NodeIds.Int16, new Variant((short) 11), true);
             addVariable(folder, idx, "FloatVar", NodeIds.Float, new Variant(1.5f), true);
+            // a historizing variable whose history is served by the historyRead override below;
+            // AccessLevel includes CurrentRead (1) + HistoryRead (4)
+            UaVariableNode hist = addVariable(folder, idx, "HistoryVar", NodeIds.Int32,
+                new Variant(0), false);
+            hist.setHistorizing(true);
+            hist.setAccessLevel(UByte.valueOf(5));
+            hist.setUserAccessLevel(UByte.valueOf(5));
 
             // a method: Add(a: Int64, b: Int64) -> sum: Int64, owned by the folder
             UaMethodNode addMethod = UaMethodNode.builder(getNodeContext())
@@ -183,13 +209,47 @@ public class QoreOpcUaTestServer {
             }
         }
 
-        // Subscription hooks; no-op (the test server exposes static values for read/write/browse/call).
-        @Override public void onDataItemsCreated(List<DataItem> dataItems) {}
-        @Override public void onDataItemsModified(List<DataItem> dataItems) {}
-        @Override public void onDataItemsDeleted(List<DataItem> dataItems) {}
-        @Override public void onMonitoringModeChanged(List<MonitoredItem> monitoredItems) {}
+        // Subscription hooks delegate to the SubscriptionModel so monitored items are sampled and
+        // data-change notifications are delivered to clients.
+        @Override public void onDataItemsCreated(List<DataItem> dataItems) {
+            subscriptionModel.onDataItemsCreated(dataItems);
+        }
+        @Override public void onDataItemsModified(List<DataItem> dataItems) {
+            subscriptionModel.onDataItemsModified(dataItems);
+        }
+        @Override public void onDataItemsDeleted(List<DataItem> dataItems) {
+            subscriptionModel.onDataItemsDeleted(dataItems);
+        }
+        @Override public void onMonitoringModeChanged(List<MonitoredItem> monitoredItems) {
+            subscriptionModel.onMonitoringModeChanged(monitoredItems);
+        }
 
-        private void addVariable(UaFolderNode folder, int idx, String name, NodeId dataType,
+        // Serves a small canned history for HistoryVar so the client read-history path can be verified.
+        @Override public List<HistoryReadResult> historyRead(HistoryReadContext context,
+                HistoryReadDetails details, TimestampsToReturn timestamps,
+                List<HistoryReadValueId> nodesToRead) {
+            EncodingContext ctx = getServer().getStaticEncodingContext();
+            NodeId historyNode = new NodeId(getNamespaceIndex(), "HistoryVar");
+            List<HistoryReadResult> results = new ArrayList<>();
+            for (HistoryReadValueId id : nodesToRead) {
+                if (historyNode.equals(id.getNodeId())) {
+                    Instant now = Instant.now();
+                    DataValue[] values = {
+                        new DataValue(new Variant(10), StatusCode.GOOD, new DateTime(now.minusSeconds(30))),
+                        new DataValue(new Variant(20), StatusCode.GOOD, new DateTime(now.minusSeconds(20))),
+                        new DataValue(new Variant(30), StatusCode.GOOD, new DateTime(now.minusSeconds(10))),
+                    };
+                    ExtensionObject encoded = ExtensionObject.encode(ctx, new HistoryData(values));
+                    results.add(new HistoryReadResult(StatusCode.GOOD, ByteString.NULL_VALUE, encoded));
+                } else {
+                    results.add(new HistoryReadResult(new StatusCode(0x80340000L),
+                        ByteString.NULL_VALUE, null));
+                }
+            }
+            return results;
+        }
+
+        private UaVariableNode addVariable(UaFolderNode folder, int idx, String name, NodeId dataType,
                 Variant value, boolean writable) {
             UaVariableNode node = UaVariableNode.builder(getNodeContext())
                 .setNodeId(new NodeId(idx, name))
@@ -198,13 +258,14 @@ public class QoreOpcUaTestServer {
                 .setDataType(dataType)
                 .setTypeDefinition(NodeIds.BaseDataVariableType)
                 .build();
-            // AccessLevel bitmask: CurrentRead = 1, CurrentWrite = 2
+            // AccessLevel bitmask: CurrentRead = 1, CurrentWrite = 2, HistoryRead = 4
             UByte access = UByte.valueOf(writable ? 3 : 1);
             node.setAccessLevel(access);
             node.setUserAccessLevel(access);
             node.setValue(new DataValue(value));
             getNodeManager().addNode(node);
             folder.addOrganizes(node);
+            return node;
         }
     }
 }
