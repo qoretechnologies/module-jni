@@ -22,37 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaSubscription
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaMonitoredItem
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.StatusCode
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.QualifiedName
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadValueId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.CallMethodRequest
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseDescription
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseResult
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReferenceDescription
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.BrowseDirection
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadValueId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadRawModifiedDetails
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ViewDescription
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.AttributeId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.NodeIds
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.Argument
-%module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
-%module-cmd(jni) import org.qore.dataprovider.opcua.ValueCodec
-%module-cmd(jni) import org.qore.dataprovider.opcua.NodeSet2Importer
-%module-cmd(jni) import java.util.ArrayList
-%module-cmd(jni) import java.util.List
-%module-cmd(jni) import java.util.concurrent.TimeUnit
-%module-cmd(jni) import java.lang.reflect.Method
-
 #! contains all public definitions in the OpcUaDataProvider module
 public namespace OpcUaDataProvider {
 #! Abstract base data provider for OPC UA data provider classes providing event, message, and API functionality
@@ -252,6 +221,54 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     "activity is detected within this interval",
                 "default_value": 120000,
             },
+            "schema": <DataProviderOptionInfo>{
+                "display_name": "OPC UA Schema",
+                "short_desc": "Schema snapshot for API management",
+                "type": AbstractDataProviderTypeMap."hash",
+                "desc": "A generic OPC UA schema snapshot hash used for schema-driven API management. "
+                    "When this option is provided, the provider can expose API-management endpoints without "
+                    "connecting to a remote OPC UA server. The hash must follow the module's schema snapshot "
+                    "contract with `namespaces` and `endpoints` keys",
+            },
+            "schema_location": <DataProviderOptionInfo>{
+                "display_name": "OPC UA Schema Location",
+                "short_desc": "Schema snapshot or NodeSet2 location",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "A `FileLocationHandler` location containing a `NodeSet2` XML document for "
+                    "schema-driven API management.\n\n"
+                    "**Sandbox note**: sandboxed embedders should restrict this option to `resource://` "
+                    "service resources",
+                "example_value": "resource://opcua/nodeset2.xml",
+            },
+            "schema-location": <DataProviderOptionInfo>{
+                "display_name": "OPC UA Schema Location",
+                "short_desc": "Schema snapshot or NodeSet2 location",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Deprecated hyphenated alias for `schema_location`; accepted for declarative "
+                    "service metadata compatibility",
+                "example_value": "resource://opcua/nodeset2.xml",
+            },
+            "nodeset2": <DataProviderOptionInfo>{
+                "display_name": "OPC UA NodeSet2",
+                "short_desc": "Inline NodeSet2 XML document",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Inline OPC UA `NodeSet2` XML to import into the generic schema snapshot contract",
+            },
+            "nodeset2_location": <DataProviderOptionInfo>{
+                "display_name": "OPC UA NodeSet2 Location",
+                "short_desc": "NodeSet2 XML location",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "A `FileLocationHandler` location containing an OPC UA `NodeSet2` XML document",
+                "example_value": "resource://opcua/nodeset2.xml",
+            },
+            "nodeset2-location": <DataProviderOptionInfo>{
+                "display_name": "OPC UA NodeSet2 Location",
+                "short_desc": "NodeSet2 XML location",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Deprecated hyphenated alias for `nodeset2_location`; accepted for declarative "
+                    "service metadata compatibility",
+                "example_value": "resource://opcua/nodeset2.xml",
+            },
             "ssl.keystore.location": <DataProviderOptionInfo>{
                 "display_name": "SSL Keystore Location",
                 "short_desc": "Path to the client keystore file",
@@ -326,8 +343,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "display_name": "URL",
                 "short_desc": "The OPC UA server endpoint URL",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The OPC UA server endpoint URL (e.g., `opc.tcp://host:4840/path`)",
-                "required": True,
+                "desc": "The OPC UA server endpoint URL (e.g., `opc.tcp://host:4840/path`). Required for "
+                    "client requests and subscriptions; schema-only API-management use may provide `schema`, "
+                    "`schema_location`, or `nodeset2_location` instead",
             },
             "username": <DataProviderOptionInfo>{
                 "display_name": "Username",
@@ -547,6 +565,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             with @ref schema_cache_lock.
         */
         hash<string, hash<auto>> schema_cache;
+
+        #! Schema snapshot supplied for schema-driven API management; avoids live server connection during scanning
+        *hash<auto> api_schema_snapshot;
     }
 
     #! Creates the object from another object of the same class
@@ -561,7 +582,12 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
         hash<auto> checked_opts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         copts = checked_opts;
-        url = checked_opts.url;
+        api_schema_snapshot = resolveApiManagementSchema(checked_opts);
+        if (!checked_opts.url && !api_schema_snapshot) {
+            throw "CONSTRUCTOR-ERROR", "OPC UA data provider requires `url` for client operations or a schema "
+                "source (`schema`, `schema_location`, `nodeset2`, or `nodeset2_location`) for API management";
+        }
+        url = checked_opts.url ?? "";
         monitored_nodes = checked_opts.monitored_nodes ?? ();
         publishing_interval = checked_opts.publishing_interval ?? 1000;
         sampling_interval = checked_opts.sampling_interval ?? 500;
@@ -1016,6 +1042,98 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         return NodeSet2Importer::parse(xml);
     }
 
+    #! Returns the schema snapshot used for generic API management
+    /** If a schema source was provided in constructor options, the snapshot is returned without opening a client
+        connection. Otherwise this method resolves the connected server schema through @ref getSchemaSnapshot().
+
+        @return a generic OPC UA schema snapshot
+    */
+    hash<auto> getApiManagementSchemaSnapshot() {
+        if (api_schema_snapshot) {
+            return api_schema_snapshot;
+        }
+        return getSchemaSnapshot();
+    }
+
+    #! Returns schema-defined API-management endpoints keyed by stable \c endpoint_id
+    /** Each returned endpoint includes the schema snapshot endpoint metadata plus an \c endpoint key for generic
+        scanners, an \c expanded_node_id diagnostic alias, and normalized \c direction / \c directions metadata.
+
+        @return list of generic API-management endpoint hashes
+    */
+    list<hash<auto>> getApiManagementEndpoints() {
+        hash<auto> snapshot = getApiManagementSchemaSnapshot();
+        list<hash<auto>> rv = ();
+        foreach hash<auto> endpoint in (snapshot.endpoints) {
+            *string endpoint_id = endpoint.endpoint_id;
+            if (!endpoint_id) {
+                continue;
+            }
+            list<string> directions = getApiEndpointDirections(endpoint);
+            hash<auto> item = endpoint + {
+                "endpoint": endpoint_id,
+                "expanded_node_id": endpoint.expanded_node_id ?? endpoint.node_id,
+                "directions": directions,
+                "direction": directions ? directions[0] : NOTHING,
+            };
+            rv += item;
+        }
+        return rv;
+    }
+
+    #! Returns one API-management endpoint by stable \c endpoint_id
+    *hash<auto> getApiManagementEndpoint(string endpoint_id) {
+        foreach hash<auto> endpoint in (getApiManagementEndpoints()) {
+            if (endpoint.endpoint_id == endpoint_id) {
+                return endpoint;
+            }
+        }
+    }
+
+    private static *hash<auto> resolveApiManagementSchema(hash<auto> opts) {
+        if (opts.schema.typeCode() == NT_HASH) {
+            return opts.schema;
+        }
+        if (opts.nodeset2.typeCode() == NT_STRING) {
+            return NodeSet2Importer::parse(opts.nodeset2);
+        }
+
+        *string location = opts.schema_location ?? opts."schema-location"
+            ?? opts.nodeset2_location ?? opts."nodeset2-location";
+        if (location) {
+            return NodeSet2Importer::parse(FileLocationHandler::getTextFileFromLocation(location));
+        }
+    }
+
+    private static list<string> getApiEndpointDirections(hash<auto> endpoint) {
+        list<string> rv = ();
+        if (endpoint.directions.typeCode() == NT_LIST) {
+            foreach auto dir in (endpoint.directions) {
+                rv += dir.toString();
+            }
+            return rv;
+        }
+
+        string kind = endpoint.kind ?? "";
+        if (kind =~ /^method/) {
+            return ("call",);
+        }
+        if (kind =~ /event/) {
+            return ("observe",);
+        }
+        if (endpoint.readable ?? True) {
+            rv += "read";
+        }
+        if (endpoint.writable ?? endpoint.user_writable ?? False) {
+            rv += "write";
+        }
+        if (endpoint.historizing ?? False) {
+            rv += "history-read";
+        }
+        rv += "observe";
+        return rv;
+    }
+
     #! Returns the request type for this provider
     private *AbstractDataProviderType getRequestTypeImpl() {
         return RequestType;
@@ -1195,7 +1313,15 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # convert arguments to Variant array
         auto input_args;
         if (request.arguments) {
-            input_args = map new Variant($1), request.arguments;
+            if (arg_meta) {
+                input_args = ();
+                for (int i = 0; i < request.arguments.size(); ++i) {
+                    *string data_type = OpcUaTypeConversion::normalizeDataTypeHint(arg_meta.input[i].data_type);
+                    input_args += OpcUaTypeConversion::getVariant(request.arguments[i], data_type);
+                }
+            } else {
+                input_args = map new Variant($1), request.arguments;
+            }
         }
 
         # Milo 1.1.x: call() takes a list of requests and returns a CallResponse
@@ -1606,6 +1732,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Ensures the client is connected; reconnects on failure if auto_reconnect is enabled
     private ensureConnected() {
+        if (!url) {
+            throw "OPCUA-REQUEST-ERROR", "this OPC UA provider was created without a `url`; it is configured "
+                "for schema/API-management use only and cannot perform client operations";
+        }
         if (!client) {
             client = getClient(copts, logger);
             awaitFuture(client.connectAsync(), "connect");

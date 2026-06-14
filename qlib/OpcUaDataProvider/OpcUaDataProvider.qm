@@ -50,6 +50,51 @@
 # first-party OPC UA schema resolver (compiled from src/java/org/qore/dataprovider/opcua)
 %module-cmd(jni) global-add-relative-classpath ./jar/qore-dataprovider-opcua.jar
 
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.OpcUaClient
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.OpcUaClientConfigBuilder
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.DiscoveryClient
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.AnonymousProvider
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.UsernameProvider
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.X509IdentityProvider
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaSubscription
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaMonitoredItem
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.AttributeId
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.NodeIds
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.StatusCodes
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.ByteString
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.LocalizedText
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.QualifiedName
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.StatusCode
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.BrowseDirection
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.Argument
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseDescription
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseResult
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.CallMethodRequest
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadValueId
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadRawModifiedDetails
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadValueId
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReferenceDescription
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ViewDescription
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue
+%module-cmd(jni) import org.qore.dataprovider.opcua.GenericServer
+%module-cmd(jni) import org.qore.dataprovider.opcua.NodeSet2Importer
+%module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
+%module-cmd(jni) import org.qore.dataprovider.opcua.ValueCodec
+%module-cmd(jni) import java.io.ByteArrayInputStream
+%module-cmd(jni) import java.lang.reflect.Method
+%module-cmd(jni) import java.security.KeyStore
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import java.util.List
+%module-cmd(jni) import java.util.Optional
+%module-cmd(jni) import java.util.concurrent.TimeUnit
+
 # implements a data provider for OPC UA functionality
 %requires(reexport) DataProvider
 # implements support for OPC UA connections
@@ -58,7 +103,7 @@
 %requires FileLocationHandler
 
 module OpcUaDataProvider {
-    version = "1.7";
+    version = "1.8";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -422,7 +467,7 @@ module OpcUaDataProvider {
     - **SSL/TLS**: keystore and truststore configuration for secure connections
     - **Cooperative cancellation**: all blocking operations support thread/program cancellation
 
-    @section opcuadataprovider_examples OPC UA Data Provider Examples
+    @section opcuadataproviderexamples OPC UA Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
 
@@ -462,9 +507,37 @@ module OpcUaDataProvider {
     @verbatim qdp 'opcua{url=opc.tcp://localhost:4840,monitored_nodes=(ns=2;s=Temperature)}' listen
     @endverbatim
 
-    @section OpcUaDataProvider_relnotes Release Notes
+    @par Generic Runtime Security
+    \c OpcUaServerRuntime uses an anonymous \c SecurityPolicy.None endpoint and rejects non-loopback
+    \c bind_address and \c hostname values.  Use loopback addresses such as \c 127.0.0.1,
+    \c localhost, or \c ::1 when embedding the runtime.  When a Qore network sandbox is active,
+    \c start() checks the configured TCP bind address and port before the Java/Milo listener is opened.
 
-    @subsection OpcUaDataProvider_v1_7 OpcUaDataProvider v1.7
+    @par Generic Runtime History Retention
+    The generic runtime retains implicit in-memory history only for historizing variables.  The
+    \c max_history_values option caps retained values per variable; the default is 1024 and 0 disables
+    implicit history retention.  Runtime callbacks may still return explicit values for \c history-read.
+
+    @section opcuadataproviderrelnotes Release Notes
+
+    @subsection opcuadataproviderv18 OpcUaDataProvider v1.8
+    - added \c OpcUaServerRuntime, a generic Qorus-agnostic OPC UA server runtime that materializes
+      the existing schema snapshot contract through the bundled Milo 1.1.4 server SDK
+    - \c OpcUaServerRuntime supports lifecycle management, schema/endpoint accessors, data-change
+      publishing, application event dispatching, and a NodeSet2 export subset
+    - generic runtime endpoints are loopback-only while using anonymous \c SecurityPolicy.None security
+      and reject non-loopback bind or advertised host names
+    - generic runtime listener startup honors active Qore network sandbox bind restrictions before opening
+      the Java/Milo server socket
+    - implicit generic runtime history is bounded per historizing variable by \c max_history_values
+    - the runtime accepts an optional callback dispatcher for authorization, browse, read, write,
+      call, subscription, history-read, data-change, and event operations
+    - the \c opcua data provider factory now advertises generic API-management capability through the
+      \c opcua API profile
+    - added schema-only API-management endpoint accessors on the \c OpcUaDataProvider provider so embedders can
+      scan schema endpoints by stable \c endpoint_id without opening a client connection
+
+    @subsection opcuadataproviderv17 OpcUaDataProvider v1.7
     - made the declared response data types consistent with the actual runtime responses: the enriched
       status fields (\c symbolic_name, \c severity, and \c diagnostics) produced for every response are
       now declared in the browse, history-read, and server-status response types as well (previously
@@ -475,7 +548,7 @@ module OpcUaDataProvider {
       that it carries the status severity (retained under that name for backwards compatibility), with
       the human-readable status description now available in \c diagnostics
 
-    @subsection OpcUaDataProvider_v1_6 OpcUaDataProvider v1.6
+    @subsection opcuadataproviderv16 OpcUaDataProvider v1.6
     - added offline OPC UA NodeSet2 import: \c importNodeSet2() retrieves a NodeSet2 XML model with
       \c FileLocationHandler (path / \c file:// / \c resource://) and parses it into the same schema
       snapshot shape as live introspection, including the namespace table, resolved variable/method
@@ -484,7 +557,7 @@ module OpcUaDataProvider {
       compiled Java \c org.qore.dataprovider.opcua.NodeSet2Importer with the JDK's built-in XML parser,
       so no \c module-xml or JAXB dependency is required
 
-    @subsection OpcUaDataProvider_v1_5 OpcUaDataProvider v1.5
+    @subsection opcuadataproviderv15 OpcUaDataProvider v1.5
     - added a compiled Java value codec (\c org.qore.dataprovider.opcua.ValueCodec):
       - \c write-value / \c write-values now support the full set of OPC UA built-in scalar types via
         the \c data_type hint, including the narrow signed types \c SByte / \c Int16 / \c Int32 and
@@ -493,14 +566,14 @@ module OpcUaDataProvider {
       - values read from the server now unwrap the OPC UA unsigned wrapper types
         (\c Byte / \c UInt16 / \c UInt32 / \c UInt64) to native Qore integers instead of Java objects
 
-    @subsection OpcUaDataProvider_v1_4 OpcUaDataProvider v1.4
+    @subsection opcuadataproviderv14 OpcUaDataProvider v1.4
     - the schema snapshot (\c getSchemaSnapshot()) is now enriched with live introspection metadata:
       variable endpoints carry \c data_type, \c value_rank, \c array_dimensions, \c access_level /
       \c user_access_level, \c readable / \c writable, \c directions, \c historizing, and
       \c minimum_sampling_interval; method endpoints carry resolved \c input_arguments and
       \c output_arguments (name, data type, value rank, description)
 
-    @subsection OpcUaDataProvider_v1_3 OpcUaDataProvider v1.3
+    @subsection opcuadataproviderv13 OpcUaDataProvider v1.3
     - added a generic, versioned OPC UA schema snapshot: \c AbstractFunctionalOpcUaDataProvider's
       \c getSchemaSnapshot() browses the connected server's address space and returns a contract-versioned
       snapshot (namespace table plus resolved variable/method endpoints, each with a stable, deterministic
@@ -509,7 +582,7 @@ module OpcUaDataProvider {
       (\c org.qore.dataprovider.opcua.SchemaResolver in \c src/java) returning an \c org.qore.jni.Hash,
       so the whole address-space walk is one JNI round-trip
 
-    @subsection OpcUaDataProvider_v1_2 OpcUaDataProvider v1.2
+    @subsection opcuadataproviderv12 OpcUaDataProvider v1.2
     - upgraded the bundled Eclipse Milo OPC UA SDK from 0.6.13 to <b>1.1.4</b>; the client API was
       migrated to the new Milo 1.1.x APIs (config/identity packages, list-based \c call(), the
       redesigned \c OpcUaSubscription / \c OpcUaMonitoredItem subscription API, and the
@@ -520,7 +593,7 @@ module OpcUaDataProvider {
       exercises read, write (including typed \c data_type hints), browse, read-attributes, call-method
       (with argument-metadata resolution), batch reads, server status, and endpoint discovery against it
 
-    @subsection OpcUaDataProvider_v1_1 OpcUaDataProvider v1.1
+    @subsection opcuadataproviderv11 OpcUaDataProvider v1.1
     - added a generic OPC UA status mapping (@ref OpcUaDataProvider::OpcUaStatusMapping "OpcUaStatusMapping")
       that resolves status codes to symbolic names, spec-defined severity, and diagnostics; all responses
       and events now expose additive \c symbolic_name, \c severity, and \c diagnostics fields instead of
@@ -538,7 +611,7 @@ module OpcUaDataProvider {
       chain rather than fragile text matching
     - batch writes are fully validated before any write is sent (no partial writes on validation failure)
 
-    @subsection OpcUaDataProvider_v1_0 OpcUaDataProvider v1.0
+    @subsection opcuadataproviderv10 OpcUaDataProvider v1.0
     - initial release of the module with support for:
       - data change subscriptions for monitored nodes
       - single and batch reading/writing of node values

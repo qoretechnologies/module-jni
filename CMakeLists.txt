@@ -432,13 +432,14 @@ install(FILES ${EMAIL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/EmailDataProvide
 
 # OPC UA data provider jar (first-party schema resolver compiled against the bundled Milo jars)
 set(OPCUA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-opcua.jar)
-set(OPCUA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-client-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-core-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-stack-core-1.1.4.jar)
+set(OPCUA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-client-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-core-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-server-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-stack-core-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-transport-1.1.4.jar)
 set(OPCUA_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(OPCUA_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/)
 set(OPCUA_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/SchemaResolver.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/ValueCodec.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/NodeSet2Importer.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/GenericServer.java
 )
 
 add_custom_command(

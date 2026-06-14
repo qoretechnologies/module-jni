@@ -22,20 +22,6 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.OpcUaClient
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.OpcUaClientConfigBuilder
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.AnonymousProvider
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.UsernameProvider
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.identity.X509IdentityProvider
-%module-cmd(jni) import java.security.KeyStore
-%module-cmd(jni) import java.io.ByteArrayInputStream
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.LocalizedText
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UInteger
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.security.SecurityPolicy
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.DiscoveryClient
-%module-cmd(jni) import java.util.Optional
-%module-cmd(jni) import java.lang.reflect.Method
-
 #! contains all public definitions in the OpcUaDataProvider module
 public namespace OpcUaDataProvider {
 #! Abstract base class for OPC UA data provider classes
