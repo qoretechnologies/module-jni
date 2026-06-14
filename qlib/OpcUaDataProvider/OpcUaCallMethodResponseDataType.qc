@@ -37,12 +37,53 @@ public class OpcUaCallMethodResponseDataType inherits HashDataType {
             "status_text": {
                 "display_name": "Status Text",
                 "type": StringType,
-                "desc": "A human-readable description of the status code",
+                "desc": "The OPC UA status severity (`Good`, `Uncertain`, or `Bad`); retained under "
+                    "this name for backwards compatibility (identical to `severity`)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Good", "display_name": "Good"},
+                    <AllowedValueInfo>{"value": "Uncertain", "display_name": "Uncertain"},
+                    <AllowedValueInfo>{"value": "Bad", "display_name": "Bad"},
+                ),
             },
             "output_arguments": {
                 "display_name": "Output Arguments",
                 "type": SoftListOrNothingType,
                 "desc": "The output arguments returned by the method call",
+            },
+            "input_argument_metadata": {
+                "display_name": "Input Argument Metadata",
+                "type": SoftListOrNothingType,
+                "desc": "Resolved metadata (name, description, data type, value rank) for each declared "
+                    "input argument of the method, when the method's `InputArguments` property can be "
+                    "resolved",
+            },
+            "output_argument_metadata": {
+                "display_name": "Output Argument Metadata",
+                "type": SoftListOrNothingType,
+                "desc": "Resolved metadata (name, description, data type, value rank) for each declared "
+                    "output argument of the method, when the method's `OutputArguments` property can be "
+                    "resolved",
+            },
+            "symbolic_name": {
+                "display_name": "Status Symbolic Name",
+                "type": StringType,
+                "desc": "The OPC UA symbolic status name (e.g., `Good`, `BadNodeIdUnknown`), or the "
+                    "hexadecimal status code if the symbolic name is not known",
+            },
+            "severity": {
+                "display_name": "Status Severity",
+                "type": StringType,
+                "desc": "The OPC UA status severity: `Good`, `Uncertain`, or `Bad`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Good", "display_name": "Good"},
+                    <AllowedValueInfo>{"value": "Uncertain", "display_name": "Uncertain"},
+                    <AllowedValueInfo>{"value": "Bad", "display_name": "Bad"},
+                ),
+            },
+            "diagnostics": {
+                "display_name": "Status Diagnostics",
+                "type": SoftStringOrNothingType,
+                "desc": "A human-readable description of the status code, if known",
             },
         };
     }

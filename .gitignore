@@ -21,3 +21,6 @@ test/powerpoint-test-data/
 
 # JVM crash logs
 hs_err_pid*.log
+
+# OPC UA test server build output (jar is committed; classes are intermediate)
+test/java/classes/

@@ -10,6 +10,11 @@
 %requires ConnectionProvider
 %requires ../qlib/OpcUaDataProvider
 
+# in-process Milo 1.1.4 OPC UA test server (rebuild with test/java/build-test-server.sh)
+%module-cmd(jni) add-relative-classpath ./opcua-test-server.jar
+%module-cmd(jni) import org.qore.opcua.test.QoreOpcUaTestServer
+%module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
+
 %exec-class OpcUaDataProviderTest
 
 public class OpcUaDataProviderTest inherits QUnit::Test {
@@ -25,6 +30,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         };
 
         const OptionColumn = 22;
+
+        #! timeout (ms) for the event-signaled wait on asynchronous data-change notifications
+        const EventTimeoutMs = 15000;
     }
 
     constructor() : Test("OpcUaDataProviderTest Test", "1.0", \ARGV, MyOpts) {
@@ -51,6 +59,13 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("provider info", \providerInfoTest());
         addTestCase("example event data", \exampleEventDataTest());
         addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("status mapping", \statusMappingTest());
+        addTestCase("write type conversion", \writeTypeConversionTest());
+        addTestCase("connection detection", \connectionDetectionTest());
+        addTestCase("embedded server integration", \embeddedServerIntegrationTest());
+        addTestCase("data change subscription and history", \subscriptionAndHistoryTest());
+        addTestCase("nodeset2 import", \nodeSet2ImportTest());
+        addTestCase("nodeset2 import robustness", \nodeSet2ImportRobustnessTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
         try {
@@ -80,8 +95,13 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("server_timestamp"), "should have 'server_timestamp' field");
         assertTrue(fields.hasKey("namespace_index"), "should have 'namespace_index' field");
 
+        # additive enriched status fields (legacy status_code/status_text are preserved above)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+
         # verify field count
-        assertEq(8, fields.size(), "data change event should have 8 fields");
+        assertEq(11, fields.size(), "data change event should have 11 fields");
 
         # verify field types
         assertEq(StringType, fields.node_id.type);
@@ -183,7 +203,17 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
         assertTrue(fields.hasKey("source_timestamp"), "should have 'source_timestamp' field");
         assertTrue(fields.hasKey("server_timestamp"), "should have 'server_timestamp' field");
-        assertEq(6, fields.size(), "read response should have 6 fields");
+        # additive enriched status fields (legacy status_code/status_text preserved above)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(9, fields.size(), "read response should have 9 fields");
+        # the severity and (backwards-compatible) status_text fields enumerate a finite value set,
+        # so they must advertise allowed_values for UI/introspection rather than only describing them
+        foreach string fn in (("severity", "status_text")) {
+            list<auto> av = map $1.value, fields{fn}.allowed_values;
+            assertEq(("Good", "Uncertain", "Bad"), av, sprintf("%s allowed_values", fn));
+        }
     }
 
     browseResponseDataTypeFieldTest() {
@@ -192,7 +222,11 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("references"), "should have 'references' field");
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
-        assertEq(3, fields.size(), "browse response should have 3 fields");
+        # enriched status fields (must match the runtime statusFields() output)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(6, fields.size(), "browse response should have 6 fields");
     }
 
     callMethodResponseDataTypeFieldTest() {
@@ -201,7 +235,13 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
         assertTrue(fields.hasKey("output_arguments"), "should have 'output_arguments' field");
-        assertEq(3, fields.size(), "call method response should have 3 fields");
+        # additive resolved method-argument metadata and enriched status fields
+        assertTrue(fields.hasKey("input_argument_metadata"), "should have 'input_argument_metadata' field");
+        assertTrue(fields.hasKey("output_argument_metadata"), "should have 'output_argument_metadata' field");
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(8, fields.size(), "call method response should have 8 fields");
     }
 
     readValuesResponseDataTypeFieldTest() {
@@ -229,7 +269,18 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("historizing"), "should have 'historizing' field");
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
-        assertEq(11, fields.size(), "read attributes response should have 11 fields");
+        # additive node metadata resolved by the extended read-attributes implementation
+        assertTrue(fields.hasKey("user_access_level"), "should have 'user_access_level' field");
+        assertTrue(fields.hasKey("user_writable"), "should have 'user_writable' field");
+        assertTrue(fields.hasKey("value_rank"), "should have 'value_rank' field");
+        assertTrue(fields.hasKey("array_dimensions"), "should have 'array_dimensions' field");
+        assertTrue(fields.hasKey("minimum_sampling_interval"),
+            "should have 'minimum_sampling_interval' field");
+        # additive enriched status fields
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(19, fields.size(), "read attributes response should have 19 fields");
     }
 
     historyReadResponseDataTypeFieldTest() {
@@ -238,7 +289,11 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("data_values"), "should have 'data_values' field");
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
-        assertEq(4, fields.size(), "history read response should have 4 fields");
+        # enriched status fields (must match the runtime statusFields() output)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(7, fields.size(), "history read response should have 7 fields");
     }
 
     endpointDescriptionDataTypeFieldTest() {
@@ -259,7 +314,11 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             "should have 'build_info_software_version'");
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
-        assertEq(9, fields.size(), "server status should have 9 fields");
+        # enriched status fields (must match the runtime statusFields() output)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(12, fields.size(), "server status should have 12 fields");
     }
 
     constructorOptionsTest() {
@@ -591,6 +650,352 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(schemes.hasKey("opcua"), "should have 'opcua' scheme");
         assertTrue(schemes.hasKey("opcuatcp"), "should have 'opcuatcp' scheme");
         assertTrue(schemes.hasKey("opcuahttps"), "should have 'opcuahttps' scheme");
+    }
+
+    #! Tests the generic OPC UA status code mapping (Phase 0)
+    statusMappingTest() {
+        # Good: severity derived from the spec bit layout, authoritative symbolic name
+        hash<OpcUaStatusInfo> good = OpcUaStatusMapping::get(0);
+        assertEq(0, good.code, "Good code");
+        assertEq("Good", good.symbolic_name, "Good symbolic name");
+        assertEq("Good", good.severity, "Good severity");
+        assertTrue(good.is_good, "Good is_good");
+        assertFalse(good.is_bad, "Good not is_bad");
+
+        # a known Bad code resolves to its OPC UA symbolic name and Bad severity
+        hash<OpcUaStatusInfo> bad = OpcUaStatusMapping::get(0x80340000);
+        assertEq("BadNodeIdUnknown", bad.symbolic_name, "BadNodeIdUnknown symbolic name");
+        assertEq("Bad", bad.severity, "BadNodeIdUnknown severity");
+        assertTrue(bad.is_bad, "BadNodeIdUnknown is_bad");
+        assertTrue(bad.description.val(), "BadNodeIdUnknown has a description");
+
+        # an Uncertain severity is derived from the bits even without a known symbolic name
+        hash<OpcUaStatusInfo> unc = OpcUaStatusMapping::get(0x40000000);
+        assertEq("Uncertain", unc.severity, "Uncertain severity from bits");
+        assertTrue(unc.is_uncertain, "is_uncertain");
+
+        # an unknown code yields a deterministic hex symbolic name, never an exception
+        hash<OpcUaStatusInfo> unknown = OpcUaStatusMapping::get(0x81230000);
+        assertEq("0x81230000", unknown.symbolic_name, "unknown code hex fallback");
+        assertEq("Bad", unknown.severity, "unknown high-bit code is Bad");
+
+        # reserved severity bits (0b11) are treated as Bad per the spec
+        assertEq("Bad", OpcUaStatusMapping::get(0xC0000000).severity, "reserved severity bits are Bad");
+
+        # only the low 32 bits are significant
+        assertEq(OpcUaStatusMapping::get(0x80340000), OpcUaStatusMapping::get(0x180340000),
+            "only the low 32 bits are significant");
+    }
+
+    #! Tests the OPC UA write value type conversion / data type hint (Phase 0)
+    writeTypeConversionTest() {
+        # positive: an explicit hint constructs the correct OPC UA built-in type
+        assertEq("UShort", OpcUaTypeConversion::getVariant(40000, "UInt16").getValue().getClass().getSimpleName(),
+            "UInt16 hint produces a UShort-backed variant");
+        assertEq("UByte", OpcUaTypeConversion::getVariant(200, "Byte").getValue().getClass().getSimpleName(),
+            "Byte hint produces a UByte-backed variant");
+        assertEq("UInteger", OpcUaTypeConversion::getVariant(3000000000, "UInt32").getValue().getClass().getSimpleName(),
+            "UInt32 hint produces a UInteger-backed variant");
+        assertEq("ULong", OpcUaTypeConversion::getVariant(5, "UInt64").getValue().getClass().getSimpleName(),
+            "UInt64 hint produces a ULong-backed variant");
+
+        # no hint: type inferred from the Qore value (no exception, returns a variant)
+        assertTrue(OpcUaTypeConversion::getVariant(5) instanceof object,
+            "no-hint conversion returns a variant");
+
+        # narrow signed and single-precision types are now constructed by the Java value codec (Phase 3);
+        # they return a variant rather than being rejected. End-to-end typing correctness is verified by
+        # the embedded-server integration test (the server accepts the exact OPC UA type).
+        foreach string t in (("SByte", "Int16", "Int32", "Float")) {
+            assertTrue(OpcUaTypeConversion::getVariant(5, t) instanceof object,
+                sprintf("%s hint produces a variant via the Java codec", t));
+        }
+
+        # negative: an unknown hint is rejected
+        assertThrows("OPCUA-TYPE-CONVERSION-ERROR", \OpcUaTypeConversion::getVariant(), (5, "Bogus"),
+            "unknown hint is rejected");
+    }
+
+    #! Tests OPC UA connection-loss detection by status name (Phase 0 reconnect detection)
+    connectionDetectionTest() {
+        # connection/session loss status names trigger reconnect
+        assertTrue(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadSessionClosed"),
+            "BadSessionClosed is a connection loss");
+        assertTrue(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadConnectionClosed"),
+            "BadConnectionClosed is a connection loss");
+        assertTrue(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadServerNotConnected"),
+            "BadServerNotConnected is a connection loss");
+
+        # non-connection errors must NOT trigger reconnect (the false-positive the old regex risked)
+        assertFalse(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadNodeIdUnknown"),
+            "BadNodeIdUnknown is not a connection loss");
+        assertFalse(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("BadTypeMismatch"),
+            "BadTypeMismatch is not a connection loss");
+        assertFalse(AbstractFunctionalOpcUaDataProvider::isConnectionStatusName("Good"),
+            "Good is not a connection loss");
+    }
+
+    #! Integration test against the in-process Milo 1.1.4 test server (regression baseline)
+    embeddedServerIntegrationTest() {
+        # use a per-process port to avoid collisions across parallel runs
+        int port = 54000 + (getpid() % 1500);
+        auto server = new QoreOpcUaTestServer(port);
+        server.start();
+        on_exit server.stop();
+
+        OpcUaDataProvider prov({"url": server.getEndpointUrl(), "monitored_nodes": ()});
+
+        # read-value with status enrichment (Phase 0 status mapping over a real server)
+        hash<auto> r = prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int32Var"});
+        assertEq(42, r.value, "read Int32Var value");
+        assertEq("Good", r.status_text, "read status_text");
+        assertEq("Good", r.symbolic_name, "read symbolic_name");
+        assertEq("Good", r.severity, "read severity");
+
+        # write a native Int64 value and read it back
+        prov.sendMessage("write-value", {"node_id": "ns=2;s=Int64Var", "value": 4242});
+        hash<auto> rb = prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int64Var"});
+        assertEq(4242, rb.value, "Int64 write/read-back");
+
+        # write typed values using the data_type hint (Phase 3 Java codec) and read them back; the
+        # server accepts the exact OPC UA type. Unsigned reads come back as native integers.
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=UInt16Var", "value": 321, "data_type": "UInt16"});
+        assertEq(321, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=UInt16Var"}).value,
+            "UInt16 typed write/read-back (native int)");
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=Int32Var", "value": 777, "data_type": "Int32"});
+        assertEq(777, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int32Var"}).value,
+            "Int32 typed write/read-back");
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=Int16Var", "value": -1234, "data_type": "Int16"});
+        assertEq(-1234, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int16Var"}).value,
+            "Int16 (narrow signed) typed write/read-back");
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=FloatVar", "value": 2.5, "data_type": "Float"});
+        assertEq(2.5, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=FloatVar"}).value,
+            "Float (single-precision) typed write/read-back");
+
+        # read-values batch (read-only nodes, unaffected by the typed writes above)
+        hash<auto> rv = prov.doRequest({"action": "read-values",
+            "node_ids": ("ns=2;s=DoubleVar", "ns=2;s=StringVar", "ns=2;s=BoolVar")});
+        assertEq((3.5, "hello", True), (map $1.value, rv.results), "read-values batch");
+
+        # browse the custom folder
+        hash<auto> b = prov.doRequest({"action": "browse-nodes", "node_id": "ns=2;s=TestFolder"});
+        assertTrue(b.references.size() >= 6, "browse TestFolder children");
+
+        # read-attributes: extended metadata fields + cache consistency
+        hash<auto> a = prov.doRequest({"action": "read-attributes", "node_id": "ns=2;s=Int32Var"});
+        assertEq(-1, a.value_rank, "Int32Var value_rank (scalar)");
+        assertTrue(a.writable, "Int32Var writable");
+        assertEq("Good", a.symbolic_name, "read-attributes symbolic_name");
+        assertTrue(a.hasKey("array_dimensions"), "read-attributes has array_dimensions");
+        assertTrue(a.hasKey("minimum_sampling_interval"), "read-attributes has minimum_sampling_interval");
+        hash<auto> a2 = prov.doRequest({"action": "read-attributes", "node_id": "ns=2;s=Int32Var"});
+        assertEq(a.value_rank, a2.value_rank, "cached read-attributes consistent");
+
+        # call-method with resolved argument metadata + count validation
+        hash<auto> c = prov.doRequest({"action": "call-method", "object_id": "ns=2;s=TestFolder",
+            "method_id": "ns=2;s=Add", "arguments": (7, 5)});
+        assertEq("Good", c.status_text, "call Add status");
+        assertEq(12, c.output_arguments[0], "Add(7, 5) = 12");
+        assertEq("a", c.input_argument_metadata[0].name, "resolved input argument metadata");
+        assertThrows("OPCUA-METHOD-ARG-ERROR",
+            \prov.doRequest(), ({"action": "call-method", "object_id": "ns=2;s=TestFolder",
+                "method_id": "ns=2;s=Add", "arguments": (7,)}),
+            "wrong argument count rejected before invocation");
+
+        # get-server-status (well-known ns=0 nodes)
+        hash<auto> st = prov.doRequest({"action": "get-server-status"});
+        assertEq("Running", st.state, "server state");
+
+        # discover-endpoints
+        hash<auto> ep = prov.doRequest({"action": "discover-endpoints"});
+        assertTrue(ep.endpoints.size() >= 1, "discover endpoints");
+
+        # Phase 1: schema snapshot of the custom namespace subtree
+        hash<auto> snap = prov.getSchemaSnapshot("ns=2;s=TestFolder");
+        assertEq(1, snap.contract_version, "snapshot contract version");
+        assertEq("live", snap.source, "snapshot source");
+        assertEq("urn:qore:opcua:test", snap.namespaces{"2"}, "namespace uri resolved");
+        # 9 variables (including HistoryVar) + 1 method endpoint under TestFolder
+        assertEq(10, snap.endpoints.size(), "snapshot endpoint count");
+        hash<string, hash<auto>> by_name = map {$1.browse_name: $1}, snap.endpoints;
+        assertEq("variable", by_name."2:Int32Var".kind, "variable endpoint kind");
+        assertEq("method-call", by_name."2:Add".kind, "method endpoint kind");
+        assertEq("urn:qore:opcua:test", by_name."2:Int32Var".namespace_uri, "endpoint namespace uri");
+        # endpoint_id is a stable, deterministic, namespace-URI-derived hash
+        assertEq(64, by_name."2:Int32Var".endpoint_id.size(), "endpoint_id is a sha-256 hex");
+        assertEq(SchemaResolver::deriveEndpointId("urn:qore:opcua:test", "/2:Int32Var", "variable"),
+            by_name."2:Int32Var".endpoint_id, "endpoint_id is deterministic and index-independent");
+
+        # Phase 2: live introspection enriches each endpoint with type/access/argument metadata
+        hash<auto> int32 = by_name."2:Int32Var";
+        assertEq("i=6", int32.data_type, "Int32Var data_type resolved");
+        assertEq(-1, int32.value_rank, "Int32Var value_rank (scalar)");
+        assertTrue(int32.readable, "Int32Var readable");
+        assertTrue(int32.writable, "Int32Var writable");
+        assertEq(("read", "observe", "write"), int32.directions, "Int32Var directions");
+        assertEq(False, int32.historizing, "Int32Var not historizing");
+        hash<auto> dbl = by_name."2:DoubleVar";
+        assertEq("i=11", dbl.data_type, "DoubleVar data_type resolved");
+        assertFalse(dbl.writable, "DoubleVar read-only");
+        assertEq(("read", "observe"), dbl.directions, "DoubleVar directions");
+        # method argument metadata resolved into the snapshot
+        hash<auto> addm = by_name."2:Add";
+        assertEq(("a", "b"), (map $1.name, addm.input_arguments), "Add input argument names");
+        assertEq(("i=8", "i=8"), (map $1.data_type, addm.input_arguments), "Add input argument types");
+        assertEq(("sum",), (map $1.name, addm.output_arguments), "Add output argument names");
+    }
+
+    #! Tests data-change subscription delivery and historical-data reads against the in-process server
+    /** Data-change delivery is asynchronous; the test blocks on an event-signaled queue (with a timeout
+        safety net) rather than polling, per the deterministic-test requirement.
+    */
+    subscriptionAndHistoryTest() {
+        int port = 55600 + (getpid() % 1500);
+        auto server = new QoreOpcUaTestServer(port);
+        server.start();
+        on_exit server.stop();
+
+        # --- data-change subscription ---
+        OpcUaDataProvider prov({
+            "url": server.getEndpointUrl(),
+            "monitored_nodes": ("ns=2;s=Int32Var",),
+            "publishing_interval": 100,
+            "sampling_interval": 50,
+        });
+        Queue events();
+        OpcUaTestObserver obs(events);
+        prov.registerObserver(obs);
+        prov.observersReady();   # connects and creates the subscription
+        on_exit prov.stopEvents();
+
+        # the server reports the monitored item's initial value; wait for it (event-signaled)
+        hash<auto> first = events.get(EventTimeoutMs);
+        assertEq("ns=2;s=Int32Var", first.node_id, "data-change node id");
+        assertEq(42, first.value, "initial monitored value");
+        assertEq("Good", first.status_text, "data-change status_text");
+        assertEq("Good", first.symbolic_name, "data-change carries enriched status (Phase 0)");
+
+        # write a new value and wait for the data-change that reflects it
+        prov.sendMessage("write-value",
+            {"node_id": "ns=2;s=Int32Var", "value": 31337, "data_type": "Int32"});
+        # bounded wait: each events.get() blocks (event-signaled, not polling) and throws on timeout, so
+        # this never hangs; the iteration cap additionally fails clearly if the subscription only ever
+        # delivers other values and the written change is never observed
+        hash<auto> changed;
+        bool observed = False;
+        int max_events = 16;
+        for (int i = 0; i < max_events; ++i) {
+            changed = events.get(EventTimeoutMs);
+            if (changed.value == 31337) {
+                observed = True;
+                break;
+            }
+        }
+        assertTrue(observed,
+            sprintf("observed the written data-change value within %d data-change events", max_events));
+        assertEq(31337, changed.value, "data-change reflects the written value");
+
+        # --- read-history ---
+        hash<auto> h = prov.doRequest({"action": "read-history", "node_id": "ns=2;s=HistoryVar"});
+        assertEq("Good", h.status_text, "read-history status");
+        assertEq(3, h.data_values.size(), "read-history value count");
+        assertEq((10, 20, 30), (map $1.value, h.data_values), "read-history values");
+        assertTrue(h.data_values[0].source_timestamp < h.data_values[2].source_timestamp,
+            "read-history values are time-ordered");
+    }
+
+    #! Tests offline OPC UA NodeSet2 import (Phase 4); no server connection required
+    nodeSet2ImportTest() {
+        string file = normalize_dir(get_script_dir()) + DirSep + "opcua-nodeset2-minimal.xml";
+        # importNodeSet2 does not connect; a placeholder url satisfies the required option
+        OpcUaDataProvider prov({"url": "opc.tcp://localhost:14840", "monitored_nodes": ()});
+        hash<auto> snap = prov.importNodeSet2(file);
+
+        assertEq("imported", snap.source, "imported snapshot source");
+        assertEq(1, snap.contract_version, "imported contract version");
+        assertEq("urn:qore:opcua:imported", snap.namespaces{"1"}, "imported namespace uri");
+        assertEq(3, snap.endpoints.size(), "imported endpoint count");
+
+        hash<string, hash<auto>> bn = map {$1.browse_name: $1}, snap.endpoints;
+        assertEq("variable", bn."1:ImportedTemperature".kind, "imported variable kind");
+        assertEq("i=11", bn."1:ImportedTemperature".data_type, "imported variable data_type");
+        assertEq(-1, bn."1:ImportedTemperature".value_rank, "imported variable value_rank");
+        assertEq("method-call", bn."1:ImportedReset".kind, "imported method kind");
+
+        # required model dependencies and missing-dependency detection
+        assertEq(("http://opcfoundation.org/UA/", "http://opcfoundation.org/UA/DI/"),
+            snap.required_models, "imported required models");
+        assertEq(("http://opcfoundation.org/UA/DI/",), snap.missing_dependencies,
+            "unsatisfied companion-spec dependency detected");
+
+        # imported endpoint_id uses the same derivation as the live resolver, so the same model maps to
+        # the same id whether resolved live or imported offline
+        assertEq(SchemaResolver::deriveEndpointId("urn:qore:opcua:imported", "/1:ImportedTemperature",
+            "variable"), bn."1:ImportedTemperature".endpoint_id, "imported endpoint_id derivation");
+    }
+
+    #! Writes @a content to a unique temporary file, returning the path; the file is removed on exit
+    private string writeTempXml(string content) {
+        string path = sprintf("%s%sopcua-nodeset2-%d-%d.xml", tmp_location(), DirSep, getpid(),
+            rand());
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(content);
+        return path;
+    }
+
+    nodeSet2ImportRobustnessTest() {
+        OpcUaDataProvider prov({"url": "opc.tcp://localhost:14840", "monitored_nodes": ()});
+
+        # namespace-prefixed serialization: the same model with an explicit prefix (e.g. <ua:UAVariable>)
+        # must import identically to the default-namespace form (element matching is on the local name)
+        string prefixed = '<?xml version="1.0" encoding="utf-8"?>
+<ua:UANodeSet xmlns:ua="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+  <ua:NamespaceUris>
+    <ua:Uri>urn:qore:opcua:prefixed</ua:Uri>
+  </ua:NamespaceUris>
+  <ua:UAVariable NodeId="ns=1;s=PfxVar" BrowseName="1:PfxVar" DataType="i=11" ValueRank="-1">
+    <ua:DisplayName>PfxVar</ua:DisplayName>
+  </ua:UAVariable>
+  <ua:UAMethod NodeId="ns=1;s=PfxReset" BrowseName="1:PfxReset">
+    <ua:DisplayName>PfxReset</ua:DisplayName>
+  </ua:UAMethod>
+</ua:UANodeSet>';
+        string pfx_file = writeTempXml(prefixed);
+        on_exit unlink(pfx_file);
+        hash<auto> snap = prov.importNodeSet2(pfx_file);
+        assertEq("urn:qore:opcua:prefixed", snap.namespaces{"1"}, "prefixed namespace uri parsed");
+        assertEq(2, snap.endpoints.size(), "prefixed endpoints found despite namespace prefix");
+        hash<string, hash<auto>> bn = map {$1.browse_name: $1}, snap.endpoints;
+        assertEq("variable", bn."1:PfxVar".kind, "prefixed variable kind");
+        assertEq("method-call", bn."1:PfxReset".kind, "prefixed method kind");
+
+        # an out-of-range namespace index must fail with a clear parse error rather than a Java NPE
+        string bad = '<?xml version="1.0" encoding="utf-8"?>
+<UANodeSet xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+  <NamespaceUris>
+    <Uri>urn:qore:opcua:bad</Uri>
+  </NamespaceUris>
+  <UAVariable NodeId="ns=5;s=Bad" BrowseName="5:Bad" DataType="i=11" ValueRank="-1">
+    <DisplayName>Bad</DisplayName>
+  </UAVariable>
+</UANodeSet>';
+        string bad_file = writeTempXml(bad);
+        on_exit unlink(bad_file);
+        bool threw = False;
+        try {
+            prov.importNodeSet2(bad_file);
+        } catch (hash<ExceptionInfo> ex) {
+            threw = True;
+            string info = sprintf("%s %s %s", ex.err, ex.desc, ex.arg);
+            assertTrue(info =~ /namespace index/, "parse error names the undeclared namespace index");
+            assertFalse(info =~ /NullPointer/, "no NullPointerException leaks to the caller");
+        }
+        assertTrue(threw, "out-of-range namespace index raises a parse error");
     }
 
     opcuaIntegrationTest() {

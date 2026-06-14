@@ -26,41 +26,39 @@
 %requires qore >= 2.0
 %modern
 
-# import Eclipse Milo OPC UA SDK JARs: must be added to the global classloader
-%module-cmd(jni) global-add-relative-classpath ./jar/sdk-client-0.6.13.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/sdk-core-0.6.13.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/stack-client-0.6.13.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/stack-core-0.6.13.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-buffer-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-channel-fsm-0.9.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-codec-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-codec-http-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-common-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-handler-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-resolver-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-native-unix-common-4.1.109.Final.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/guava-33.0.0-jre.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/failureaccess-1.0.2.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/bcprov-jdk18on-1.78.1.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/bcpkix-jdk18on-1.78.1.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/bcutil-jdk18on-1.78.1.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/strict-machine-0.7.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/jaxb-runtime-2.3.6.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.xml.bind-api-2.3.3.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/jakarta.activation-1.2.2.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/txw2-2.3.6.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/istack-commons-runtime-3.0.12.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-api-2.0.16.jar
-%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-nop-2.0.16.jar
+# import Eclipse Milo OPC UA SDK JARs (1.1.4): must be added to the global classloader
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-sdk-client-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-sdk-core-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-sdk-server-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-stack-core-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/milo-transport-1.1.4.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-buffer-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-channel-fsm-1.0.2.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-codec-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-common-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-handler-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-resolver-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/netty-transport-native-unix-common-4.1.133.Final.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcprov-jdk18on-1.84.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcpkix-jdk18on-1.84.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/bcutil-jdk18on-1.84.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/strict-machine-1.0.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/jspecify-1.0.0.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-api-2.0.18.jar
+%module-cmd(jni) global-add-relative-classpath ./jar/slf4j-nop-2.0.18.jar
+# first-party OPC UA schema resolver (compiled from src/java/org/qore/dataprovider/opcua)
+%module-cmd(jni) global-add-relative-classpath ./jar/qore-dataprovider-opcua.jar
 
 # implements a data provider for OPC UA functionality
 %requires(reexport) DataProvider
 # implements support for OPC UA connections
 %requires(reexport) ConnectionProvider
+# implements file/resource location handling for offline NodeSet2 import
+%requires FileLocationHandler
 
 module OpcUaDataProvider {
-    version = "1.0";
+    version = "1.7";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -465,6 +463,80 @@ module OpcUaDataProvider {
     @endverbatim
 
     @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_7 OpcUaDataProvider v1.7
+    - made the declared response data types consistent with the actual runtime responses: the enriched
+      status fields (\c symbolic_name, \c severity, and \c diagnostics) produced for every response are
+      now declared in the browse, history-read, and server-status response types as well (previously
+      only in the read, read-attributes, call-method, and data-change types)
+    - the \c severity and (backwards-compatible) \c status_text fields now advertise \c allowed_values
+      (\c Good, \c Uncertain, \c Bad) for introspection and UI form generation rather than only
+      describing the value set in text; the \c status_text field description was corrected to reflect
+      that it carries the status severity (retained under that name for backwards compatibility), with
+      the human-readable status description now available in \c diagnostics
+
+    @subsection OpcUaDataProvider_v1_6 OpcUaDataProvider v1.6
+    - added offline OPC UA NodeSet2 import: \c importNodeSet2() retrieves a NodeSet2 XML model with
+      \c FileLocationHandler (path / \c file:// / \c resource://) and parses it into the same schema
+      snapshot shape as live introspection, including the namespace table, resolved variable/method
+      endpoints (with the same deterministic \c endpoint_id derivation), \c required_models, and
+      \c missing_dependencies (required model namespaces not present in the model). Parsing uses the
+      compiled Java \c org.qore.dataprovider.opcua.NodeSet2Importer with the JDK's built-in XML parser,
+      so no \c module-xml or JAXB dependency is required
+
+    @subsection OpcUaDataProvider_v1_5 OpcUaDataProvider v1.5
+    - added a compiled Java value codec (\c org.qore.dataprovider.opcua.ValueCodec):
+      - \c write-value / \c write-values now support the full set of OPC UA built-in scalar types via
+        the \c data_type hint, including the narrow signed types \c SByte / \c Int16 / \c Int32 and
+        single-precision \c Float that previously could not be typed exactly across the Qore/JNI
+        boundary (they are no longer rejected)
+      - values read from the server now unwrap the OPC UA unsigned wrapper types
+        (\c Byte / \c UInt16 / \c UInt32 / \c UInt64) to native Qore integers instead of Java objects
+
+    @subsection OpcUaDataProvider_v1_4 OpcUaDataProvider v1.4
+    - the schema snapshot (\c getSchemaSnapshot()) is now enriched with live introspection metadata:
+      variable endpoints carry \c data_type, \c value_rank, \c array_dimensions, \c access_level /
+      \c user_access_level, \c readable / \c writable, \c directions, \c historizing, and
+      \c minimum_sampling_interval; method endpoints carry resolved \c input_arguments and
+      \c output_arguments (name, data type, value rank, description)
+
+    @subsection OpcUaDataProvider_v1_3 OpcUaDataProvider v1.3
+    - added a generic, versioned OPC UA schema snapshot: \c AbstractFunctionalOpcUaDataProvider's
+      \c getSchemaSnapshot() browses the connected server's address space and returns a contract-versioned
+      snapshot (namespace table plus resolved variable/method endpoints, each with a stable, deterministic
+      \c endpoint_id derived from the namespace URI, browse path, and endpoint kind)
+    - the snapshot is produced by a compiled first-party Java resolver
+      (\c org.qore.dataprovider.opcua.SchemaResolver in \c src/java) returning an \c org.qore.jni.Hash,
+      so the whole address-space walk is one JNI round-trip
+
+    @subsection OpcUaDataProvider_v1_2 OpcUaDataProvider v1.2
+    - upgraded the bundled Eclipse Milo OPC UA SDK from 0.6.13 to <b>1.1.4</b>; the client API was
+      migrated to the new Milo 1.1.x APIs (config/identity packages, list-based \c call(), the
+      redesigned \c OpcUaSubscription / \c OpcUaMonitoredItem subscription API, and the
+      \c EncodingContext), preserving the existing provider behavior and options
+    - <b>requires JDK 17 or later</b> (the Milo 1.1.x baseline); the dependency set drops the Guava and
+      JAXB libraries and adds \c milo-transport
+    - added a deterministic in-process OPC UA test server (Milo 1.1.4) and an integration test that
+      exercises read, write (including typed \c data_type hints), browse, read-attributes, call-method
+      (with argument-metadata resolution), batch reads, server status, and endpoint discovery against it
+
+    @subsection OpcUaDataProvider_v1_1 OpcUaDataProvider v1.1
+    - added a generic OPC UA status mapping (@ref OpcUaDataProvider::OpcUaStatusMapping "OpcUaStatusMapping")
+      that resolves status codes to symbolic names, spec-defined severity, and diagnostics; all responses
+      and events now expose additive \c symbolic_name, \c severity, and \c diagnostics fields instead of
+      collapsing status to \c Good / \c Bad / \c Uncertain
+    - the \c write-value / \c write-values \c data_type hint is now honored: values are converted to the
+      requested OPC UA built-in type via
+      @ref OpcUaDataProvider::OpcUaTypeConversion "OpcUaTypeConversion" (narrow signed/single-precision
+      types are rejected with an actionable error rather than silently widened)
+    - \c read-attributes now also returns \c value_rank, \c array_dimensions, \c user_access_level,
+      \c user_writable, and \c minimum_sampling_interval
+    - \c call-method now resolves and validates method \c InputArguments / \c OutputArguments metadata
+      (best-effort) and rejects argument-count mismatches before invocation
+    - node metadata is cached per NodeId and invalidated deterministically on reconnect/session recreation
+    - connection-loss detection for auto-reconnect is now based on the OPC UA status code in the exception
+      chain rather than fragile text matching
+    - batch writes are fully validated before any write is sent (no partial writes on validation failure)
 
     @subsection OpcUaDataProvider_v1_0 OpcUaDataProvider v1.0
     - initial release of the module with support for:

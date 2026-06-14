@@ -57,7 +57,13 @@ public class OpcUaDataChangeEventDataType inherits HashDataType {
             "status_text": {
                 "display_name": "Status Text",
                 "type": StringType,
-                "desc": "A human-readable description of the status code",
+                "desc": "The OPC UA status severity (`Good`, `Uncertain`, or `Bad`); retained under "
+                    "this name for backwards compatibility (identical to `severity`)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Good", "display_name": "Good"},
+                    <AllowedValueInfo>{"value": "Uncertain", "display_name": "Uncertain"},
+                    <AllowedValueInfo>{"value": "Bad", "display_name": "Bad"},
+                ),
                 "example_value": "Good",
             },
             "source_timestamp": {
@@ -74,6 +80,29 @@ public class OpcUaDataChangeEventDataType inherits HashDataType {
                 "display_name": "Namespace Index",
                 "type": IntType,
                 "desc": "The namespace index of the node",
+            },
+            "symbolic_name": {
+                "display_name": "Status Symbolic Name",
+                "type": StringType,
+                "desc": "The OPC UA symbolic status name (e.g., `Good`, `BadNodeIdUnknown`), or the "
+                    "hexadecimal status code if the symbolic name is not known",
+                "example_value": "Good",
+            },
+            "severity": {
+                "display_name": "Status Severity",
+                "type": StringType,
+                "desc": "The OPC UA status severity: `Good`, `Uncertain`, or `Bad`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Good", "display_name": "Good"},
+                    <AllowedValueInfo>{"value": "Uncertain", "display_name": "Uncertain"},
+                    <AllowedValueInfo>{"value": "Bad", "display_name": "Bad"},
+                ),
+                "example_value": "Good",
+            },
+            "diagnostics": {
+                "display_name": "Status Diagnostics",
+                "type": SoftStringOrNothingType,
+                "desc": "A human-readable description of the status code, if known",
             },
         };
     }

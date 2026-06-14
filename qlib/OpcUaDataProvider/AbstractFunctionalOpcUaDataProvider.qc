@@ -22,8 +22,8 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaSubscription
-%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.api.subscriptions.UaMonitoredItem
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaSubscription
+%module-cmd(jni) import org.eclipse.milo.opcua.sdk.client.subscriptions.OpcUaMonitoredItem
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.NodeId
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DataValue
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.Variant
@@ -33,21 +33,21 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadValueId
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.CallMethodRequest
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.CallMethodResult
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseDescription
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.BrowseResult
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReferenceDescription
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.MonitoredItemCreateRequest
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.MonitoringParameters
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.BrowseDirection
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.TimestampsToReturn
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.enumerated.MonitoringMode
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadValueId
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ReadRawModifiedDetails
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ViewDescription
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.AttributeId
-%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.Identifiers
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.NodeIds
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.builtin.DateTime
+%module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.Argument
+%module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
+%module-cmd(jni) import org.qore.dataprovider.opcua.ValueCodec
+%module-cmd(jni) import org.qore.dataprovider.opcua.NodeSet2Importer
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.List
 %module-cmd(jni) import java.util.concurrent.TimeUnit
@@ -493,6 +493,27 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     "`read-history` action; `0` or omitted means no limit",
             },
         });
+
+        #! OPC UA symbolic status names that indicate a lost/invalid connection or session
+        /** Used by @ref isConnectionException() to decide whether a failed operation should trigger
+            an automatic reconnect; based on the exception's OPC UA status code rather than fragile
+            text matching.
+        */
+        const ConnectionStatusNames = {
+            "BadConnectionClosed": True,
+            "BadConnectionRejected": True,
+            "BadDisconnect": True,
+            "BadServerNotConnected": True,
+            "BadServerHalted": True,
+            "BadNotConnected": True,
+            "BadSessionClosed": True,
+            "BadSessionIdInvalid": True,
+            "BadSessionNotActivated": True,
+            "BadSecureChannelClosed": True,
+            "BadSecureChannelIdInvalid": True,
+            "BadCommunicationError": True,
+            "BadTcpInternalError": True,
+        };
     }
 
     private {
@@ -512,10 +533,20 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         bool discard_oldest;
 
         #! OPC UA subscription (prevent GC)
-        *UaSubscription subscription;
+        *OpcUaSubscription subscription;
 
-        #! Notification listener callback (prevent GC)
-        *object notification_listener;
+        #! Per-monitored-item data value listener callbacks (prevent GC)
+        list<auto> monitored_item_listeners;
+
+        #! Mutex serializing access to the node metadata cache
+        Qore::Thread::Mutex schema_cache_lock();
+
+        #! NodeId-keyed cache of resolved node attribute metadata (the `read-attributes` response hash)
+        /** Populated on demand and invalidated deterministically on reconnect / session recreation;
+            accessed from both request and subscription callback threads, so all access is serialized
+            with @ref schema_cache_lock.
+        */
+        hash<string, hash<auto>> schema_cache;
     }
 
     #! Creates the object from another object of the same class
@@ -556,14 +587,15 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private stop() {
         if (client) {
             try {
-                client.disconnect().get();
+                client.disconnectAsync().get();
                 debug("OPC UA: Disconnected from %y", url);
             } catch () {
                 # ignore all disconnect errors during stop/destructor
             }
         }
         delete subscription;
-        delete notification_listener;
+        # clear to an empty list (not NOTHING) so a restart can append listeners again
+        monitored_item_listeners = ();
         delete client;
     }
 
@@ -571,7 +603,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private start() {
         try {
             client = getClient(copts, logger);
-            awaitFuture(client.connect(), "connect");
+            awaitFuture(client.connectAsync(), "connect");
             debug("OPC UA: Connected to %y", url);
 
             # notify connected event
@@ -596,100 +628,75 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
     }
 
-    #! Creates a subscription and adds monitored items
+    #! Creates a subscription and adds monitored items (Milo 1.1.x OpcUaSubscription API)
     private createSubscription() {
-        # create subscription
-        subscription = awaitFuture(client.getSubscriptionManager()
-            .createSubscription(publishing_interval * 1.0), "create subscription");
+        subscription = new OpcUaSubscription(client);
+        subscription.setPublishingInterval(publishing_interval * 1.0);
+        awaitFuture(subscription.createAsync(), "create subscription");
 
-        # create monitored item requests
-        ArrayList requests();
         foreach string node_id_str in (monitored_nodes) {
-            NodeId node_id = NodeId::parse(node_id_str);
-            ReadValueId read_value_id(
-                node_id,
-                AttributeId::Value.uid(),
-                NOTHING,
-                QualifiedName::NULL_VALUE
+            OpcUaMonitoredItem item = OpcUaMonitoredItem::newDataItem(NodeId::parse(node_id_str));
+            item.setSamplingInterval(sampling_interval * 1.0);
+            item.setQueueSize(UInteger::valueOf(queue_size));
+            # apply the configured queue-overflow policy (discard oldest vs. newest sample) rather than
+            # leaving it at the Milo default
+            item.setDiscardOldest(discard_oldest);
+
+            # bind the node id into a per-item data value listener; capturing the id avoids relying on
+            # the item to report it back and gives a stable namespace index for the event
+            string captured_node_id = node_id_str;
+            code listener_cb = sub (Method method, *list<auto> args) {
+                if (method.getName() == "onDataReceived") {
+                    handleDataChange(captured_node_id, args[1]);
+                }
+            };
+            auto listener = implement_interface(
+                new QoreInvocationHandler(listener_cb),
+                load_class(
+                    "org/eclipse/milo/opcua/sdk/client/subscriptions/OpcUaMonitoredItem$DataValueListener")
             );
-            MonitoringParameters params(
-                subscription.nextClientHandle(),
-                sampling_interval * 1.0,    # sampling interval
-                NOTHING,                    # filter
-                UInteger::valueOf(queue_size),
-                discard_oldest
-            );
-            requests.add(new MonitoredItemCreateRequest(
-                read_value_id,
-                MonitoringMode::Reporting,
-                params
-            ));
+            item.setDataValueListener(listener);
+            # retain the listener to prevent garbage collection while the subscription is active
+            monitored_item_listeners += listener;
+            subscription.addMonitoredItem(item);
         }
 
-        # add notification listener to subscription before creating items
-        notification_listener = implement_interface(
-            new QoreInvocationHandler(\notificationHandler()),
-            load_class(
-                "org/eclipse/milo/opcua/sdk/client/api/subscriptions/UaSubscription$NotificationListener")
-        );
-        subscription.addNotificationListener(notification_listener);
-
-        # create monitored items
-        auto monitored_items = awaitFuture(subscription.createMonitoredItems(
-            TimestampsToReturn::Both,
-            requests
-        ), "create monitored items");
-
-        debug("OPC UA: Created subscription with %d monitored items", monitored_items.size());
+        subscription.createMonitoredItems();
+        debug("OPC UA: Created subscription with %d monitored items", monitored_nodes.size());
     }
 
-    #! Qore callback for the NotificationListener interface
-    private notificationHandler(Method method, *list<auto> args) {
-        string method_name = method.getName();
-        debug("OPC UA: notification callback: %s", method_name);
+    #! Handles a data change for a monitored item (callback from the OPC UA subscription thread)
+    /** @param node_id_str the monitored node id (captured when the item was created)
+        @param value the Milo \c DataValue received from the server
+    */
+    private handleDataChange(string node_id_str, auto value) {
         try {
-            if (method_name == "onDataChangeNotification") {
-                handleDataChangeNotification(args);
-            }
+            auto status = value.getStatusCode();
+            hash<auto> event_data = {
+                "node_id": node_id_str,
+                "display_name": NOTHING,
+                "value": convertValue(value.getValue()),
+                "source_timestamp": convertDateTime(value.getSourceTime()),
+                "server_timestamp": convertDateTime(value.getServerTime()),
+                "namespace_index": int(NodeId::parse(node_id_str).getNamespaceIndex().intValue()),
+            } + statusFields(status);
+            debug("OPC UA: Data change: %y", event_data);
+            notifyObservers(EVENT_OPCUA_DATA_CHANGE, event_data);
         } catch (hash<ExceptionInfo> ex) {
+            # exceptions in the subscription callback must not escape into the Milo thread
             debug("OPC UA CALLBACK ERROR: %s", get_exception_string(ex));
         }
     }
 
-    #! Handles data change notifications from the subscription NotificationListener
-    /** @param args [0]=subscription, [1]=items (list), [2]=values (list), [3]=publishTime
-    */
-    private handleDataChangeNotification(*list<auto> args) {
-        auto items = args[1];
-        auto values = args[2];
-        debug("OPC UA: data change notification: %d items", items.size());
-        for (int i = 0; i < items.size(); ++i) {
-            auto item = items[i];
-            auto value = values[i];
-            auto status = value.getStatusCode();
-            auto node_id_obj = item.getReadValueId().getNodeId();
-            hash<auto> event_data = {
-                "node_id": node_id_obj.toParseableString(),
-                "display_name": NOTHING,
-                "value": convertValue(value.getValue()),
-                "status_code": int(status.getValue()),
-                "status_text": status.isGood() ? "Good"
-                    : (status.isBad() ? "Bad" : "Uncertain"),
-                "source_timestamp": convertDateTime(value.getSourceTime()),
-                "server_timestamp": convertDateTime(value.getServerTime()),
-                "namespace_index": int(node_id_obj.getNamespaceIndex().intValue()),
-            };
-            debug("OPC UA: Data change: %y", event_data);
-            notifyObservers(EVENT_OPCUA_DATA_CHANGE, event_data);
-        }
-    }
-
     #! Converts a Milo Variant value to a Qore value
+    /** OPC UA unsigned wrapper types are unwrapped to native integers by the Java value codec so Qore
+        receives native values rather than Java objects.
+    */
     private static auto convertValue(auto variant) {
         if (!variant) {
             return NOTHING;
         }
-        return variant.getValue();
+        return ValueCodec::readVariant(variant);
     }
 
     #! Converts a Milo DateTime to a Qore date with millisecond precision
@@ -704,6 +711,117 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
         int epoch_ms = int(java_date.getTime());
         return date(epoch_ms / 1000) + milliseconds(epoch_ms % 1000);
+    }
+
+    #! Returns the standard status fields for an OPC UA response from a Milo \c StatusCode object
+    /** The returned hash preserves the existing \c status_code (numeric) and \c status_text
+        (severity: \c "Good" / \c "Uncertain" / \c "Bad") fields for backwards compatibility and adds
+        the richer \c symbolic_name, \c severity, and \c diagnostics fields derived from
+        @ref OpcUaStatusMapping. Status information is therefore no longer collapsed to three values.
+
+        @param status_code_obj a Milo \c StatusCode object
+    */
+    private static hash<auto> statusFields(auto status_code_obj) {
+        hash<OpcUaStatusInfo> si = OpcUaStatusMapping::getFromStatusCode(status_code_obj);
+        return {
+            # preserved for backwards compatibility
+            "status_code": si.code,
+            "status_text": si.severity,
+            # additive richer status information
+            "symbolic_name": si.symbolic_name,
+            "severity": si.severity,
+            "diagnostics": si.description,
+        };
+    }
+
+    #! Returns @ref True if the given exception indicates a lost or invalid OPC UA connection/session
+    /** Walks the Java exception cause chain and inspects OPC UA status codes (via
+        @ref OpcUaStatusMapping) rather than matching exception text, so detection does not depend on
+        locale or message formatting. Used to decide whether to auto-reconnect.
+
+        @param ex the Qore exception raised by a failed OPC UA operation
+    */
+    private static bool isConnectionException(hash<ExceptionInfo> ex) {
+        auto t = ex.arg;
+        int depth = 0;
+        # bound the walk to avoid pathological/cyclic cause chains
+        while (t instanceof object && depth < 16) {
+            if (t.hasCallableMethod("getStatusCode")) {
+                try {
+                    auto sc = t.getStatusCode();
+                    if (sc && isConnectionStatusName(OpcUaStatusMapping::getFromStatusCode(sc).symbolic_name)) {
+                        return True;
+                    }
+                } catch (hash<ExceptionInfo> inner) {
+                    # not all objects exposing getStatusCode() return an OPC UA StatusCode; ignore
+                }
+            }
+            if (!t.hasCallableMethod("getCause")) {
+                break;
+            }
+            auto cause = t.getCause();
+            if (!(cause instanceof object) || cause === t) {
+                break;
+            }
+            t = cause;
+            ++depth;
+        }
+        return False;
+    }
+
+    #! Returns @ref True if the given OPC UA symbolic status name indicates a connection/session loss
+    /** Pure decision function (no Java dependency) used by @ref isConnectionException().
+    */
+    static bool isConnectionStatusName(string symbolic_name) {
+        return ConnectionStatusNames{symbolic_name} ?? False;
+    }
+
+    #! Clears the node metadata cache (thread-safe); called on reconnect / session recreation
+    private clearSchemaCache() {
+        schema_cache_lock.lock();
+        on_exit schema_cache_lock.unlock();
+        schema_cache = {};
+    }
+
+    #! Returns the cached node metadata for the given node id, or @ref nothing if not cached
+    private *hash<auto> getCachedMetadata(string node_id_str) {
+        schema_cache_lock.lock();
+        on_exit schema_cache_lock.unlock();
+        return schema_cache{node_id_str};
+    }
+
+    #! Stores node metadata in the cache for the given node id (thread-safe)
+    private putCachedMetadata(string node_id_str, hash<auto> metadata) {
+        schema_cache_lock.lock();
+        on_exit schema_cache_lock.unlock();
+        schema_cache{node_id_str} = metadata;
+    }
+
+    #! Returns the raw value of a read attribute result, or @ref nothing if the read was not good
+    /** @param result a Milo \c DataValue from a read response
+        @return the unwrapped attribute value (a Java object), or @ref nothing
+    */
+    private static auto attrValue(auto result) {
+        if (!result.getStatusCode().isGood()) {
+            return NOTHING;
+        }
+        auto variant = result.getValue();
+        return variant ? variant.getValue() : NOTHING;
+    }
+
+    #! Resolves a Milo \c ExpandedNodeId to a parseable absolute NodeId string via the namespace table
+    /** Browse results return \c ExpandedNodeIds, which may use the \c nsu= (namespace URI) form rather
+        than \c ns= (namespace index); this resolves them to an absolute NodeId so the string can be
+        parsed by \c NodeId::parse().
+
+        @param expanded_node_id a Milo \c ExpandedNodeId
+        @param namespace_table the client's Milo \c NamespaceTable
+
+        @return a parseable NodeId string, or @ref nothing if the id cannot be resolved
+    */
+    private static *string expandedNodeIdToString(auto expanded_node_id, auto namespace_table) {
+        auto resolved = expanded_node_id.toNodeId(namespace_table);
+        return resolved.isPresent() ? resolved.get().toParseableString() : NOTHING;
     }
 
     #! Awaits a CompletableFuture with cooperative cancellation support
@@ -803,12 +921,17 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     ensureConnected();
                     NodeId node_id = NodeId::parse(msg.node_id);
 
-                    # create Variant from the value
-                    Variant variant(msg.value);
+                    # create Variant from the value, honoring the optional data type hint; an invalid
+                    # hint throws here, before any write is sent
+                    Variant variant = OpcUaTypeConversion::getVariant(msg.value, msg.data_type);
                     DataValue data_value(variant);
 
-                    StatusCode result = awaitFuture(
-                        client.writeValue(node_id, data_value), "write value");
+                    # Milo 1.1.x: write a single WriteValue via the batch write service
+                    ArrayList write_values();
+                    write_values.add(new WriteValue(node_id, AttributeId::Value.uid(), NOTHING,
+                        data_value));
+                    auto response = awaitFuture(client.writeAsync(write_values), "write value");
+                    auto result = response.getResults()[0];
                     if (result.isBad()) {
                         throw "OPCUA-WRITE-ERROR", sprintf("failed to write value to node %y: "
                             "status code %d", msg.node_id, int(result.getValue()));
@@ -819,10 +942,12 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
                 case MESSAGE_WRITE_VALUES: {
                     ensureConnected();
+                    # pre-pass: build and validate every WriteValue (node id parse + type hint) before
+                    # sending any write, so an invalid item aborts the whole batch with no partial writes
                     ArrayList write_values();
                     foreach hash<auto> item in (msg.values) {
                         NodeId node_id = NodeId::parse(item.node_id);
-                        Variant variant(item.value);
+                        Variant variant = OpcUaTypeConversion::getVariant(item.value, item.data_type);
                         DataValue data_value(variant);
                         write_values.add(new WriteValue(
                             node_id,
@@ -832,7 +957,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                         ));
                     }
                     auto response = awaitFuture(
-                        client.write(write_values), "write values");
+                        client.writeAsync(write_values), "write values");
                     auto results = response.getResults();
                     for (int i = 0; i < results.size(); ++i) {
                         if (results[i].isBad()) {
@@ -859,6 +984,38 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
     }
 
+    #! Returns a generic, versioned OPC UA schema snapshot of the connected server's address space
+    /** Browses the address space starting at the given root node and returns a stable schema snapshot
+        (contract version, namespace table, and the resolved variable/method endpoints with deterministic
+        @ref OpcUaDataProvider::OpcUaStatusInfo "endpoint_id" values). The multi-step browse runs in the
+        compiled Java resolver and returns the whole snapshot in a single JNI call.
+
+        @param root_node_id the node id to browse from; defaults to the standard Objects folder
+        (\c ns=0;i=85)
+
+        @return the schema snapshot as a Qore hash (see @ref OpcUaDataProvider::SchemaResolver)
+    */
+    hash<auto> getSchemaSnapshot(*string root_node_id) {
+        ensureConnected();
+        return SchemaResolver::resolve(client, root_node_id ?? "ns=0;i=85");
+    }
+
+    #! Imports an offline OPC UA NodeSet2 model into a generic schema snapshot
+    /** Retrieves the NodeSet2 XML from the given location with @ref FileLocationHandler (so file/resource
+        access honors the standard location handling and any sandbox restrictions) and parses it with the
+        compiled Java importer. No server connection is required.
+
+        @param location a \c FileLocationHandler location (e.g. a path, \c file://..., or \c resource://...)
+
+        @return an imported schema snapshot (\c source is \c "imported"); it carries the namespace table,
+        the resolved variable/method endpoints, the \c required_models, and \c missing_dependencies (the
+        required model namespaces not present in the imported model's namespace table)
+    */
+    hash<auto> importNodeSet2(string location) {
+        string xml = FileLocationHandler::getTextFileFromLocation(location);
+        return NodeSet2Importer::parse(xml);
+    }
+
     #! Returns the request type for this provider
     private *AbstractDataProviderType getRequestTypeImpl() {
         return RequestType;
@@ -879,9 +1036,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             try {
                 return doRequestIntern(req);
             } catch (hash<ExceptionInfo> ex) {
-                # retry on connection errors if auto_reconnect is enabled
-                if (attempt == 0 && auto_reconnect
-                        && (ex.desc =~ /UaException|Connection|Disconnect|closed|Session/i)) {
+                # retry on connection errors if auto_reconnect is enabled; detection is based on the
+                # OPC UA status code in the exception chain, not fragile text matching
+                if (attempt == 0 && auto_reconnect && isConnectionException(ex)) {
                     reconnect();
                     continue;
                 }
@@ -930,18 +1087,20 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             throw "OPCUA-REQUEST-ERROR", "`node_id` is required for the `read-value` action";
         }
         auto node_id = NodeId::parse(request.node_id);
-        auto data_value = awaitFuture(
-            client.readValue(0.0, TimestampsToReturn::Both, node_id), "read value");
+        # Milo 1.1.x has no async single readValue; read a one-node list and take the first result
+        ArrayList read_nodes();
+        read_nodes.add(node_id);
+        auto values = awaitFuture(
+            client.readValuesAsync(0.0, TimestampsToReturn::Both, read_nodes), "read value");
+        auto data_value = values[0];
 
         auto status = data_value.getStatusCode();
         return {
             "node_id": request.node_id,
             "value": convertValue(data_value.getValue()),
-            "status_code": int(status.getValue()),
-            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
             "source_timestamp": convertDateTime(data_value.getSourceTime()),
             "server_timestamp": convertDateTime(data_value.getServerTime()),
-        };
+        } + statusFields(status);
     }
 
     #! Browses the OPC UA address space
@@ -967,7 +1126,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         BrowseDescription browse_desc(
             node_id,
             direction,
-            Identifiers::References,
+            NodeIds::References,
             True,  # include subtypes
             UInteger::valueOf(0),  # node class mask (all)
             UInteger::valueOf(63)  # result mask (all)
@@ -976,8 +1135,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # use server-side pagination via maxReferencesPerNode
         ArrayList browse_descs();
         browse_descs.add(browse_desc);
-        auto response = awaitFuture(client.browse(
-            ViewDescription::builder().build(),
+        auto response = awaitFuture(client.browseAsync(
+            new ViewDescription(NodeId::NULL_VALUE, DateTime::MIN_VALUE, UInteger::valueOf(0)),
             UInteger::valueOf(max_results),
             browse_descs
         ), "browse nodes");
@@ -1002,12 +1161,15 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
         return {
             "references": refs,
-            "status_code": int(status.getValue()),
-            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
-        };
+        } + statusFields(status);
     }
 
     #! Calls a method on an OPC UA server
+    /** When the method's \c InputArguments / \c OutputArguments metadata can be resolved, the input
+        argument count is validated before the call and the resolved argument metadata is included in
+        the response. Argument resolution is best-effort: any failure to resolve metadata leaves the
+        call behaving exactly as if no metadata were available, so it never breaks a valid call.
+    */
     private hash<auto> doCallMethod(auto request) {
         if (!request.object_id) {
             throw "OPCUA-REQUEST-ERROR", "`object_id` is required for the `call-method` action";
@@ -1018,15 +1180,29 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         auto object_id = NodeId::parse(request.object_id);
         auto method_id = NodeId::parse(request.method_id);
 
+        # resolve method argument metadata (best-effort, cached); validate input arg count if available
+        *hash<auto> arg_meta = resolveMethodArguments(method_id);
+        if (arg_meta) {
+            int provided = request.arguments.size();
+            int expected = arg_meta.input.size();
+            if (provided != expected) {
+                throw "OPCUA-METHOD-ARG-ERROR", sprintf("method %y expects %d input argument%s, but %d "
+                    "%s provided", request.method_id, expected, expected == 1 ? "" : "s", provided,
+                    provided == 1 ? "was" : "were");
+            }
+        }
+
         # convert arguments to Variant array
         auto input_args;
         if (request.arguments) {
             input_args = map new Variant($1), request.arguments;
         }
 
-        auto result = awaitFuture(client.call(
-            new CallMethodRequest(object_id, method_id, input_args)
-        ), "call method");
+        # Milo 1.1.x: call() takes a list of requests and returns a CallResponse
+        ArrayList call_requests();
+        call_requests.add(new CallMethodRequest(object_id, method_id, input_args));
+        auto response = awaitFuture(client.callAsync(call_requests), "call method");
+        auto result = response.getResults()[0];
 
         auto status = result.getStatusCode();
         list<auto> output_args = ();
@@ -1038,10 +1214,98 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
 
         return {
-            "status_code": int(status.getValue()),
-            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
             "output_arguments": output_args,
-        };
+        } + (arg_meta ? {
+            "input_argument_metadata": arg_meta.input,
+            "output_argument_metadata": arg_meta.output,
+        } : {}) + statusFields(status);
+    }
+
+    #! Resolves the input/output argument metadata for an OPC UA method (best-effort, cached)
+    /** Browses the method node for its \c InputArguments and \c OutputArguments property nodes and
+        decodes their \c Argument values. Returns @ref nothing on any failure so the caller can proceed
+        without argument validation.
+
+        @param method_id the method node id
+
+        @return a hash with \c "input" and \c "output" lists of argument metadata, or @ref nothing
+    */
+    private *hash<auto> resolveMethodArguments(NodeId method_id) {
+        string cache_key = "method:" + method_id.toParseableString();
+        *hash<auto> cached = getCachedMetadata(cache_key);
+        if (cached) {
+            return cached;
+        }
+        hash<auto> resolved;
+        try {
+            # browse the method node for its HasProperty children
+            BrowseDescription bd(method_id, BrowseDirection::Forward, NodeIds::HasProperty, True,
+                UInteger::valueOf(0), UInteger::valueOf(63));
+            ArrayList bds();
+            bds.add(bd);
+            auto resp = awaitFuture(client.browseAsync(new ViewDescription(NodeId::NULL_VALUE, DateTime::MIN_VALUE, UInteger::valueOf(0)),
+                UInteger::valueOf(0), bds), "browse method properties");
+            auto refs = resp.getResults()[0].getReferences();
+            # browse results return ExpandedNodeIds, which may use the `nsu=` (namespace URI) form that
+            # NodeId::parse() cannot parse; resolve them to absolute NodeIds via the namespace table
+            auto namespace_table = client.getNamespaceTable();
+            *string input_id;
+            *string output_id;
+            if (refs) {
+                foreach auto ref in (refs) {
+                    *string node_id_str = expandedNodeIdToString(ref.getNodeId(), namespace_table);
+                    if (!node_id_str) {
+                        continue;
+                    }
+                    switch (ref.getBrowseName().getName()) {
+                        case "InputArguments": input_id = node_id_str; break;
+                        case "OutputArguments": output_id = node_id_str; break;
+                    }
+                }
+            }
+            resolved = {
+                "input": input_id ? readArgumentArray(input_id) : (),
+                "output": output_id ? readArgumentArray(output_id) : (),
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            # best-effort: resolution failures must not break the method call
+            debug("OPC UA: could not resolve method arguments: %s: %s", ex.err, ex.desc);
+            return NOTHING;
+        }
+        putCachedMetadata(cache_key, resolved);
+        return resolved;
+    }
+
+    #! Reads and decodes an OPC UA \c Argument[] property value into a list of argument metadata hashes
+    private list<hash<auto>> readArgumentArray(string node_id_str) {
+        NodeId nid = NodeId::parse(node_id_str);
+        ArrayList arg_nodes();
+        arg_nodes.add(nid);
+        auto values = awaitFuture(client.readValuesAsync(0.0, TimestampsToReturn::Neither, arg_nodes),
+            "read method arguments");
+        auto dv = values[0];
+        auto variant = dv.getValue();
+        if (!variant) {
+            return ();
+        }
+        auto arr = variant.getValue();
+        if (!arr) {
+            return ();
+        }
+        auto ctx = client.getStaticEncodingContext();
+        list<hash<auto>> rv = ();
+        foreach auto eo in (arr) {
+            Argument arg = eo.decode(ctx);
+            auto arg_desc = arg.getDescription();
+            auto arg_dt = arg.getDataType();
+            rv += {
+                "name": arg.getName(),
+                "description": arg_desc ? arg_desc.getText() : NOTHING,
+                "data_type": arg_dt ? arg_dt.toParseableString() : NOTHING,
+                "value_rank": int(arg.getValueRank()),
+            };
+        }
+        return rv;
     }
 
     #! Reads values from multiple OPC UA nodes in a single request
@@ -1059,7 +1323,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             ));
         }
         auto response = awaitFuture(
-            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results_list = response.getResults();
 
         list<hash<auto>> results = ();
@@ -1069,116 +1333,127 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             results += {
                 "node_id": request.node_ids[i],
                 "value": convertValue(dv.getValue()),
-                "status_code": int(status.getValue()),
-                "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
                 "source_timestamp": convertDateTime(dv.getSourceTime()),
                 "server_timestamp": convertDateTime(dv.getServerTime()),
-            };
+            } + statusFields(status);
         }
         return {"results": results};
     }
 
     #! Reads node attributes from an OPC UA node
+    /** The live \c value attribute is always read fresh. The static node metadata (display name, data
+        type, value rank, array dimensions, access levels, etc.) is resolved through the NodeId-keyed
+        metadata cache: on a cache hit only the live value is read; on a miss the full attribute set is
+        read and the metadata is cached. The cache is invalidated on reconnect/session recreation.
+
+        @note The \c DataTypeDefinition attribute is not exposed by the bundled OPC UA stack and is
+        therefore omitted here; it becomes available with the Milo upgrade.
+    */
     private hash<auto> doReadAttributes(auto request) {
         if (!request.node_id) {
             throw "OPCUA-REQUEST-ERROR", "`node_id` is required for the `read-attributes` action";
         }
-        NodeId node_id = NodeId::parse(request.node_id);
+        string node_id_str = request.node_id;
+        NodeId node_id = NodeId::parse(node_id_str);
 
-        # read multiple attributes in one request
+        *hash<auto> metadata = getCachedMetadata(node_id_str);
+        if (metadata) {
+            # cache hit: read only the live value attribute; metadata served from cache
+            ArrayList value_ids();
+            value_ids.add(new ReadValueId(node_id, AttributeId::Value.uid(), NOTHING,
+                QualifiedName::NULL_VALUE));
+            auto value_response = awaitFuture(
+                client.readAsync(0.0, TimestampsToReturn::Both, value_ids), "read");
+            auto value_results = value_response.getResults();
+            auto value_status = value_results[0].getStatusCode();
+            return {"node_id": node_id_str, "value": convertValue(value_results[0].getValue())}
+                + metadata + statusFields(value_status);
+        }
+
+        # cache miss: read the live value plus all metadata attributes in a single request
         ArrayList read_value_ids();
-        read_value_ids.add(new ReadValueId(node_id, AttributeId::Value.uid(), NOTHING,
-            QualifiedName::NULL_VALUE));
-        read_value_ids.add(new ReadValueId(node_id, AttributeId::DisplayName.uid(), NOTHING,
-            QualifiedName::NULL_VALUE));
-        read_value_ids.add(new ReadValueId(node_id, AttributeId::Description.uid(), NOTHING,
-            QualifiedName::NULL_VALUE));
-        read_value_ids.add(new ReadValueId(node_id, AttributeId::NodeClass.uid(), NOTHING,
-            QualifiedName::NULL_VALUE));
-        read_value_ids.add(new ReadValueId(node_id, AttributeId::DataType.uid(), NOTHING,
-            QualifiedName::NULL_VALUE));
-        read_value_ids.add(new ReadValueId(node_id, AttributeId::AccessLevel.uid(), NOTHING,
-            QualifiedName::NULL_VALUE));
-        read_value_ids.add(new ReadValueId(node_id, AttributeId::Historizing.uid(), NOTHING,
-            QualifiedName::NULL_VALUE));
+        list<auto> attribute_ids = (
+            AttributeId::Value,                     # 0
+            AttributeId::DisplayName,               # 1
+            AttributeId::Description,               # 2
+            AttributeId::NodeClass,                 # 3
+            AttributeId::DataType,                  # 4
+            AttributeId::AccessLevel,               # 5
+            AttributeId::UserAccessLevel,           # 6
+            AttributeId::Historizing,               # 7
+            AttributeId::ValueRank,                 # 8
+            AttributeId::ArrayDimensions,           # 9
+            AttributeId::MinimumSamplingInterval,   # 10
+        );
+        foreach auto attr_id in (attribute_ids) {
+            read_value_ids.add(new ReadValueId(node_id, attr_id.uid(), NOTHING,
+                QualifiedName::NULL_VALUE));
+        }
 
         auto response = awaitFuture(
-            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results = response.getResults();
 
         # the overall status is from the Value attribute read
         auto status = results[0].getStatusCode();
 
-        # extract display name text
-        *string display_name;
-        if (results[1].getStatusCode().isGood()) {
-            auto dn_val = results[1].getValue();
-            if (dn_val) {
-                display_name = dn_val.getValue().getText();
-            }
+        # display name / description are LocalizedText
+        auto dn = attrValue(results[1]);
+        *string display_name = dn ? dn.getText() : NOTHING;
+        auto de = attrValue(results[2]);
+        *string desc_text = de ? de.getText() : NOTHING;
+
+        # node class is an enum; data type is a NodeId
+        auto nc = attrValue(results[3]);
+        *string node_class = nc ? nc.toString() : NOTHING;
+        auto dt = attrValue(results[4]);
+        *string data_type = dt ? dt.toParseableString() : NOTHING;
+
+        # access level / user access level are unsigned byte bitmasks (bit 1 = CurrentWrite)
+        auto al = attrValue(results[5]);
+        *int access_level = al ? int(al.intValue()) : NOTHING;
+        *bool writable = exists access_level ? boolean(access_level & 2) : NOTHING;
+        auto ual = attrValue(results[6]);
+        *int user_access_level = ual ? int(ual.intValue()) : NOTHING;
+        *bool user_writable = exists user_access_level ? boolean(user_access_level & 2) : NOTHING;
+
+        # historizing flag
+        auto hist = attrValue(results[7]);
+        *bool historizing = exists hist ? boolean(hist) : NOTHING;
+
+        # value rank is a signed Int32 (-3..-1 special, >=0 fixed rank)
+        auto vr = attrValue(results[8]);
+        *int value_rank = exists vr ? int(vr) : NOTHING;
+
+        # array dimensions is an array of UInt32 values
+        *list<int> array_dimensions;
+        auto ad = attrValue(results[9]);
+        if (ad) {
+            array_dimensions = map int($1.longValue()), ad;
         }
 
-        # extract description text
-        *string desc_text;
-        if (results[2].getStatusCode().isGood()) {
-            auto desc_val = results[2].getValue();
-            if (desc_val) {
-                desc_text = desc_val.getValue().getText();
-            }
-        }
+        # minimum sampling interval is a Double (milliseconds)
+        auto msi = attrValue(results[10]);
+        *float minimum_sampling_interval = exists msi ? float(msi) : NOTHING;
 
-        # extract node class
-        *string node_class;
-        if (results[3].getStatusCode().isGood()) {
-            auto nc_val = results[3].getValue();
-            if (nc_val) {
-                node_class = nc_val.getValue().toString();
-            }
-        }
-
-        # extract data type
-        *string data_type;
-        if (results[4].getStatusCode().isGood()) {
-            auto dt_val = results[4].getValue();
-            if (dt_val) {
-                data_type = dt_val.getValue().toParseableString();
-            }
-        }
-
-        # extract access level
-        *int access_level;
-        *bool writable;
-        if (results[5].getStatusCode().isGood()) {
-            auto al_val = results[5].getValue();
-            if (al_val) {
-                access_level = int(al_val.getValue().intValue());
-                # bit 1 = CurrentWrite
-                writable = boolean(access_level & 2);
-            }
-        }
-
-        # extract historizing flag
-        *bool historizing;
-        if (results[6].getStatusCode().isGood()) {
-            auto hist_val = results[6].getValue();
-            if (hist_val) {
-                historizing = boolean(hist_val.getValue());
-            }
-        }
-
-        return {
-            "node_id": request.node_id,
+        metadata = {
             "display_name": display_name,
             "description": desc_text,
             "node_class": node_class,
             "data_type": data_type,
-            "value": convertValue(results[0].getValue()),
+            "value_rank": value_rank,
+            "array_dimensions": array_dimensions,
             "access_level": access_level,
+            "user_access_level": user_access_level,
             "writable": writable,
+            "user_writable": user_writable,
             "historizing": historizing,
-            "status_code": int(status.getValue()),
-            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
+            "minimum_sampling_interval": minimum_sampling_interval,
         };
+        putCachedMetadata(node_id_str, metadata);
+
+        return {"node_id": node_id_str, "value": convertValue(results[0].getValue())}
+            + metadata + statusFields(status);
     }
 
     #! Reads historical data from an OPC UA node
@@ -1197,26 +1472,27 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             : DateTime::now();
         int max_values = int(request.max_values ?? 0);
 
-        auto details = ReadRawModifiedDetails::builder()
-            .setIsReadModified(False)
-            .setStartTime(start_date)
-            .setEndTime(end_date)
-            .setNumValuesPerNode(UInteger::valueOf(max_values))
-            .setReturnBounds(True)
-            .build();
+        # Milo 1.1.x: ReadRawModifiedDetails(isReadModified, startTime, endTime, numValuesPerNode,
+        # returnBounds)
+        auto details = new ReadRawModifiedDetails(
+            False,
+            start_date,
+            end_date,
+            UInteger::valueOf(max_values),
+            True);
 
         ArrayList hrvids();
         hrvids.add(new HistoryReadValueId(node_id, NOTHING, QualifiedName::NULL_VALUE, NOTHING));
 
         auto response = awaitFuture(
-            client.historyRead(details, TimestampsToReturn::Both, False, hrvids),
+            client.historyReadAsync(details, TimestampsToReturn::Both, False, hrvids),
             "read history");
         auto results = response.getResults();
         auto result = results[0];
         auto status = result.getStatusCode();
 
         list<hash<auto>> data_values = ();
-        auto history_data = result.getHistoryData().decode();
+        auto history_data = result.getHistoryData().decode(client.getStaticEncodingContext());
         if (history_data) {
             auto dv_list = history_data.getDataValues();
             if (dv_list) {
@@ -1235,9 +1511,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         return {
             "node_id": request.node_id,
             "data_values": data_values,
-            "status_code": int(status.getValue()),
-            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
-        };
+        } + statusFields(status);
     }
 
     #! Discovers available endpoints on the OPC UA server
@@ -1286,7 +1560,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
 
         auto response = awaitFuture(
-            client.read(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results = response.getResults();
 
         auto status = results[0].getStatusCode();
@@ -1327,16 +1601,14 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 ? convertValue(results[5].getValue()) : NOTHING,
             "build_info_software_version": results[6].getStatusCode().isGood()
                 ? convertValue(results[6].getValue()) : NOTHING,
-            "status_code": int(status.getValue()),
-            "status_text": status.isGood() ? "Good" : (status.isBad() ? "Bad" : "Uncertain"),
-        };
+        } + statusFields(status);
     }
 
     #! Ensures the client is connected; reconnects on failure if auto_reconnect is enabled
     private ensureConnected() {
         if (!client) {
             client = getClient(copts, logger);
-            awaitFuture(client.connect(), "connect");
+            awaitFuture(client.connectAsync(), "connect");
             debug("OPC UA: Connected to %y", url);
         }
     }
@@ -1347,14 +1619,16 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     */
     private reconnect() {
         debug("OPC UA: Connection lost, reconnecting to %y", url);
+        # the session is being recreated; cached node metadata may be stale, so invalidate it
+        clearSchemaCache();
         try {
-            client.disconnect().get();
+            client.disconnectAsync().get();
         } catch () {
             # ignore disconnect errors
         }
         delete client;
         client = getClient(copts, logger);
-        awaitFuture(client.connect(), "reconnect");
+        awaitFuture(client.connectAsync(), "reconnect");
         debug("OPC UA: Reconnected to %y", url);
     }
 }
