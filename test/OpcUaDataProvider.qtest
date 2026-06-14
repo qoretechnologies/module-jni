@@ -207,6 +207,12 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("severity"), "should have 'severity' field");
         assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
         assertEq(9, fields.size(), "read response should have 9 fields");
+        # the severity and (backwards-compatible) status_text fields enumerate a finite value set,
+        # so they must advertise allowed_values for UI/introspection rather than only describing them
+        foreach string fn in (("severity", "status_text")) {
+            list<auto> av = map $1.value, fields{fn}.allowed_values;
+            assertEq(("Good", "Uncertain", "Bad"), av, sprintf("%s allowed_values", fn));
+        }
     }
 
     browseResponseDataTypeFieldTest() {
@@ -215,7 +221,11 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("references"), "should have 'references' field");
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
-        assertEq(3, fields.size(), "browse response should have 3 fields");
+        # enriched status fields (must match the runtime statusFields() output)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(6, fields.size(), "browse response should have 6 fields");
     }
 
     callMethodResponseDataTypeFieldTest() {
@@ -278,7 +288,11 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("data_values"), "should have 'data_values' field");
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
-        assertEq(4, fields.size(), "history read response should have 4 fields");
+        # enriched status fields (must match the runtime statusFields() output)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(7, fields.size(), "history read response should have 7 fields");
     }
 
     endpointDescriptionDataTypeFieldTest() {
@@ -299,7 +313,11 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             "should have 'build_info_software_version'");
         assertTrue(fields.hasKey("status_code"), "should have 'status_code' field");
         assertTrue(fields.hasKey("status_text"), "should have 'status_text' field");
-        assertEq(9, fields.size(), "server status should have 9 fields");
+        # enriched status fields (must match the runtime statusFields() output)
+        assertTrue(fields.hasKey("symbolic_name"), "should have 'symbolic_name' field");
+        assertTrue(fields.hasKey("severity"), "should have 'severity' field");
+        assertTrue(fields.hasKey("diagnostics"), "should have 'diagnostics' field");
+        assertEq(12, fields.size(), "server status should have 12 fields");
     }
 
     constructorOptionsTest() {

@@ -109,7 +109,13 @@ public class OpcUaReadAttributesResponseDataType inherits HashDataType {
             "status_text": {
                 "display_name": "Status Text",
                 "type": StringType,
-                "desc": "A human-readable description of the status code",
+                "desc": "The OPC UA status severity (`Good`, `Uncertain`, or `Bad`); retained under "
+                    "this name for backwards compatibility (identical to `severity`)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Good", "display_name": "Good"},
+                    <AllowedValueInfo>{"value": "Uncertain", "display_name": "Uncertain"},
+                    <AllowedValueInfo>{"value": "Bad", "display_name": "Bad"},
+                ),
             },
             "symbolic_name": {
                 "display_name": "Status Symbolic Name",
@@ -121,6 +127,11 @@ public class OpcUaReadAttributesResponseDataType inherits HashDataType {
                 "display_name": "Status Severity",
                 "type": StringType,
                 "desc": "The OPC UA status severity: `Good`, `Uncertain`, or `Bad`",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Good", "display_name": "Good"},
+                    <AllowedValueInfo>{"value": "Uncertain", "display_name": "Uncertain"},
+                    <AllowedValueInfo>{"value": "Bad", "display_name": "Bad"},
+                ),
             },
             "diagnostics": {
                 "display_name": "Status Diagnostics",

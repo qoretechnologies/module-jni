@@ -58,7 +58,7 @@
 %requires FileLocationHandler
 
 module OpcUaDataProvider {
-    version = "1.6";
+    version = "1.7";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -463,6 +463,17 @@ module OpcUaDataProvider {
     @endverbatim
 
     @section OpcUaDataProvider_relnotes Release Notes
+
+    @subsection OpcUaDataProvider_v1_7 OpcUaDataProvider v1.7
+    - made the declared response data types consistent with the actual runtime responses: the enriched
+      status fields (\c symbolic_name, \c severity, and \c diagnostics) produced for every response are
+      now declared in the browse, history-read, and server-status response types as well (previously
+      only in the read, read-attributes, call-method, and data-change types)
+    - the \c severity and (backwards-compatible) \c status_text fields now advertise \c allowed_values
+      (\c Good, \c Uncertain, \c Bad) for introspection and UI form generation rather than only
+      describing the value set in text; the \c status_text field description was corrected to reflect
+      that it carries the status severity (retained under that name for backwards compatibility), with
+      the human-readable status description now available in \c diagnostics
 
     @subsection OpcUaDataProvider_v1_6 OpcUaDataProvider v1.6
     - added offline OPC UA NodeSet2 import: \c importNodeSet2() retrieves a NodeSet2 XML model with
