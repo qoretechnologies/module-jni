@@ -297,7 +297,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${EXCEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-excel ${EXCEL_JAR} ${EXCEL_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${EXCEL_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${EXCEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXCEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/
     DEPENDS ${module_name} ${EXCEL_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -327,7 +327,7 @@ add_custom_command(
         --root=${WORD_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-word ${WORD_JAR} ${WORD_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${WORD_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${WORD_JAR} ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${WORD_JAR} ${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/jar/
     DEPENDS ${module_name} ${WORD_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -356,7 +356,7 @@ add_custom_command(
         --root=${VISIO_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-visio ${VISIO_JAR} ${VISIO_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${VISIO_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/VisioDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${VISIO_JAR} ${CMAKE_SOURCE_DIR}/qlib/VisioDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${VISIO_JAR} ${CMAKE_SOURCE_DIR}/qlib/VisioDataProvider/jar/
     DEPENDS ${module_name} ${VISIO_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -385,7 +385,7 @@ add_custom_command(
         --root=${ACCESS_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-access ${ACCESS_JAR} ${ACCESS_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${ACCESS_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${ACCESS_JAR} ${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ACCESS_JAR} ${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/jar/
     DEPENDS ${module_name} ${ACCESS_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -417,7 +417,7 @@ add_custom_command(
         --root=${EMAIL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-email ${EMAIL_JAR} ${EMAIL_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${EMAIL_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${EMAIL_JAR} ${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EMAIL_JAR} ${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/jar/
     DEPENDS ${module_name} ${EMAIL_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -448,7 +448,7 @@ add_custom_command(
         --root=${OPCUA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-opcua ${OPCUA_JAR} ${OPCUA_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${OPCUA_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${OPCUA_JAR} ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OPCUA_JAR} ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/
     DEPENDS ${module_name} ${OPCUA_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -478,7 +478,7 @@ add_custom_command(
         --root=${POWERPOINT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-powerpoint ${POWERPOINT_JAR} ${POWERPOINT_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${POWERPOINT_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${POWERPOINT_JAR} ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${POWERPOINT_JAR} ${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/jar/
     DEPENDS ${module_name} ${POWERPOINT_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -507,7 +507,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${ODS_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-ods ${ODS_JAR} ${ODS_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${ODS_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${ODS_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ODS_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/
     DEPENDS ${module_name} ${ODS_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -537,7 +537,7 @@ add_custom_command(
         --root=${ODT_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-odt ${ODT_JAR} ${ODT_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${ODT_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/OdtDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${ODT_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdtDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ODT_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdtDataProvider/jar/
     DEPENDS ${module_name} ${ODT_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -567,7 +567,7 @@ add_custom_command(
         --root=${ODP_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-odp ${ODP_JAR} ${ODP_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${ODP_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/OdpDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${ODP_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdpDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ODP_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdpDataProvider/jar/
     DEPENDS ${module_name} ${ODP_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -596,7 +596,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${ICS_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-ics ${ICS_JAR} ${ICS_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${ICS_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${ICS_JAR} ${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ICS_JAR} ${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/jar/
     DEPENDS ${module_name} ${ICS_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -625,7 +625,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${VCF_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-vcf ${VCF_JAR} ${VCF_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${VCF_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${VCF_JAR} ${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${VCF_JAR} ${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/jar/
     DEPENDS ${module_name} ${VCF_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -654,7 +654,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${AVRO_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-avro ${AVRO_JAR} ${AVRO_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${AVRO_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${AVRO_JAR} ${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${AVRO_JAR} ${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/jar/
     DEPENDS ${module_name} ${AVRO_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -682,7 +682,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${JASPER_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-jasper ${JASPER_JAR} ${JASPER_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${JASPER_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${JASPER_JAR} ${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${JASPER_JAR} ${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jar/
     DEPENDS ${module_name} ${JASPER_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -705,7 +705,7 @@ add_custom_command(
     OUTPUT ${FLYWAY_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${FLYWAY_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-flyway ${FLYWAY_JAR} ${FLYWAY_SOURCES} -cp ${FLYWAY_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${FLYWAY_JAR} ${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FLYWAY_JAR} ${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/jar/
     DEPENDS ${module_name} ${FLYWAY_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -733,7 +733,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${TIKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-tika ${TIKA_JAR} ${TIKA_SOURCES_DIR}
         ${QORE_STREAM_SOURCES} -cp ${TIKA_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${TIKA_JAR} ${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TIKA_JAR} ${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/jar/
     DEPENDS ${module_name} ${TIKA_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -756,7 +756,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${JDBC_DP_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-jdbc-dp ${JDBC_DP_JAR} ${JDBC_DP_SOURCES}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/qlib/JdbcDataProvider/jar
-    COMMAND ${CMAKE_COMMAND} -E copy ${JDBC_DP_JAR} ${CMAKE_SOURCE_DIR}/qlib/JdbcDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${JDBC_DP_JAR} ${CMAKE_SOURCE_DIR}/qlib/JdbcDataProvider/jar/
     DEPENDS ${module_name} ${JDBC_DP_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -779,7 +779,7 @@ add_custom_command(
     OUTPUT ${CAMEL_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${CAMEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-camel ${CAMEL_JAR} ${CAMEL_SOURCES} -cp ${CAMEL_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CAMEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CAMEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/jar/
     DEPENDS ${module_name} ${CAMEL_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
@@ -802,7 +802,7 @@ add_custom_command(
     OUTPUT ${KAFKA_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${KAFKA_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-kafka ${KAFKA_JAR} ${KAFKA_SOURCES} -cp ${KAFKA_CLASSPATH}
-    COMMAND ${CMAKE_COMMAND} -E copy ${KAFKA_JAR} ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${KAFKA_JAR} ${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/jar/
     DEPENDS ${module_name} ${KAFKA_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM

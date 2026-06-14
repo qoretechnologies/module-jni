@@ -37,6 +37,12 @@ class QJava2Jar {
         const ERR_NO_SOURCES          = 3;
 
         const BufSize = 16384;
+
+        # fixed ISO-8601 timestamp applied to all jar entries so that rebuilding from unchanged
+        # sources produces byte-identical jars; this prevents the generated provider jars (which are
+        # committed to the source tree and overwritten by the build) from showing as modified after
+        # every build (must be in the range 1980-01-01..2099-12-31 accepted by "jar --date")
+        const JarEntryDate = "2026-01-01T00:00:00Z";
     }
 
     constructor() {
@@ -74,7 +80,9 @@ class QJava2Jar {
         on_error
             map printf("%s\n", $1),
                 QoreJavaCompilerException::extractDiagnosticMessages(diags);
-        string file_list;
+        # jar entry names collected here and sorted before jar creation so that entry order is
+        # deterministic regardless of the compiler's output map iteration order
+        list<string> jar_entries();
         # track class file paths for cleanup after jar creation
         list<string> class_file_paths();
         hash<string, CompilerOutput> cv = compiler.compile(srcs, diags);
@@ -130,13 +138,10 @@ class QJava2Jar {
                 outStream.write(b, 0, b.size());
             }
 
-            if (file_list) {
-                file_list += " ";
-            }
             # must escape "$" chars in the name
             class_file_name = sprintf("%y", class_file_name);
             class_file_name =~ s/\$/\\$/g;
-            file_list += class_file_name;
+            jar_entries += class_file_name;
             class_file_paths += fn;
             if (!opts.quiet) {
                 printf("wrote: %y\n", fn);
@@ -148,8 +153,13 @@ class QJava2Jar {
             jar_path = normalize_dir(getcwd() + "/" + jar_path);
         }
         chdir(opts.output_dir ?? opts.root ?? base_dir ?? start_dir);
-        string args = opts.quiet ? "cf" : "cvf";
-        string cmd = sprintf("jar " + args + " %y %s", jar_path, file_list);
+        # sort entries for a deterministic archive order and pin a fixed entry timestamp with
+        # "--date" (requires the GNU long-form options; the legacy "cf"/"cvf" syntax does not accept
+        # "--date") so that rebuilds from unchanged sources are byte-identical
+        string file_list = join(" ", sort(jar_entries));
+        string verbose = opts.quiet ? "" : " --verbose";
+        string cmd = sprintf("jar --create%s --file %y --date=%s %s", verbose, jar_path,
+            JarEntryDate, file_list);
         if (!opts.quiet) {
             printf("cmd: %y\n", cmd);
         }
