@@ -1257,10 +1257,16 @@ sub startSandboxedRuntime(int port) {
 
         hash<auto> materialized = runtime.getSchemaSnapshot();
         assertEq("server", materialized.source, "runtime schema source");
+        assertTrue(materialized.root_node_id =~ /^ns=[0-9]+;s=Line$/,
+            "runtime materializes declared string root NodeId in the live namespace");
+        assertTrue(materialized.root_browse_path =~ /^\/[0-9]+:Line$/,
+            "runtime materializes declared root browse path in the live namespace");
         assertEq(5, materialized.endpoints.size(), "runtime endpoint count");
         hash<string, hash<auto>> by_id = map {$1.endpoint_id: $1}, materialized.endpoints;
         assertEq(ns, by_id{temp_id}.namespace_uri, "runtime endpoint namespace");
         assertTrue(by_id{add_id}.object_node_id.val(), "method endpoint exposes object_node_id");
+        assertEq(materialized.root_node_id, by_id{add_id}.object_node_id,
+            "method endpoint owns the declared root object");
         list<hash<auto>> projection_artifacts = runtime.getSchemaProjectionArtifacts({
             "service_name": "GenericRuntime",
         });
@@ -1363,6 +1369,8 @@ sub startSandboxedRuntime(int port) {
             "namespaces": {
                 "1": ns,
             },
+            "root_node_id": "ns=1;s=Line",
+            "root_browse_path": "/1:Line",
             "endpoints": (
                 {
                     "endpoint_id": "temperature",

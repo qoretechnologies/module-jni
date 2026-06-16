@@ -689,6 +689,7 @@ public class GenericServer {
             List<Object> endpointSnapshots = new ArrayList<>();
 
             Map<String, Object> snapshot = mapOption(options, "schema", "schema_snapshot");
+            RootConfig rootConfig = rootConfigFor(idx, snapshot);
             List<Object> endpointSpecs = snapshot != null ? asList(snapshot.get("endpoints"))
                 : asList(options.get("endpoints"));
             if (endpointSpecs.isEmpty()) {
@@ -701,7 +702,7 @@ public class GenericServer {
                     continue;
                 }
                 try {
-                    Endpoint endpoint = buildEndpoint(idx, folders, spec);
+                    Endpoint endpoint = buildEndpoint(idx, folders, rootConfig, spec);
                     orderedEndpoints.add(endpoint);
                     byEndpointId.put(endpoint.endpointId, endpoint);
                     if (!endpoint.method) {
@@ -723,17 +724,21 @@ public class GenericServer {
                 schemaSnapshot.put("contract_version", SchemaResolver.CONTRACT_VERSION);
                 schemaSnapshot.put("source", "server");
                 schemaSnapshot.put("namespaces", namespaces);
+                if (rootConfig != null) {
+                    schemaSnapshot.put("root_node_id", rootConfig.materializedNodeId.toParseableString());
+                    schemaSnapshot.put("root_browse_path", rootConfig.materializedBrowsePath);
+                }
                 schemaSnapshot.put("endpoints", endpointSnapshots);
             }
         }
 
         private Endpoint buildEndpoint(int idx, Map<String, UaFolderNode> folders,
-                Map<String, Object> spec) throws Exception {
+                RootConfig rootConfig, Map<String, Object> spec) throws Exception {
             String kind = stringValue(spec.get("kind"), "variable");
             boolean method = kind.startsWith("method");
             String localName = endpointLocalName(spec);
             String parentPath = parentPath(spec);
-            UaFolderNode parent = parentPath.isEmpty() ? null : folderFor(idx, folders, parentPath);
+            UaFolderNode parent = parentPath.isEmpty() ? null : folderFor(idx, folders, rootConfig, parentPath);
             String actualBrowsePath = actualBrowsePath(idx, parentPath, localName);
             String endpointId = stringValue(spec.get("endpoint_id"), null);
             if (endpointId == null || endpointId.isEmpty()) {
@@ -838,7 +843,8 @@ public class GenericServer {
                 builtinName(dataType), historizing, node, endpointSnapshot);
         }
 
-        private UaFolderNode folderFor(int idx, Map<String, UaFolderNode> folders, String path) {
+        private UaFolderNode folderFor(int idx, Map<String, UaFolderNode> folders, RootConfig rootConfig,
+                String path) {
             UaFolderNode existing = folders.get(path);
             if (existing != null) {
                 return existing;
@@ -851,9 +857,11 @@ public class GenericServer {
                 parentPath = path.substring(0, slash);
                 local = path.substring(slash + 1);
             }
-            UaFolderNode parent = parentPath.isEmpty() ? null : folderFor(idx, folders, parentPath);
+            UaFolderNode parent = parentPath.isEmpty() ? null : folderFor(idx, folders, rootConfig, parentPath);
+            NodeId folderNodeId = rootConfig != null && path.equals(rootConfig.localPath)
+                ? rootConfig.materializedNodeId : new NodeId(idx, "folder:" + path);
             UaFolderNode folder = new UaFolderNode(getNodeContext(),
-                new NodeId(idx, "folder:" + path),
+                folderNodeId,
                 new QualifiedName(idx, local),
                 LocalizedText.english(local));
             getNodeManager().addNode(folder);
@@ -951,6 +959,18 @@ public class GenericServer {
         }
     }
 
+    private static final class RootConfig {
+        final String localPath;
+        final NodeId materializedNodeId;
+        final String materializedBrowsePath;
+
+        RootConfig(String localPath, NodeId materializedNodeId, String materializedBrowsePath) {
+            this.localPath = localPath;
+            this.materializedNodeId = materializedNodeId;
+            this.materializedBrowsePath = materializedBrowsePath;
+        }
+    }
+
     private void callbackOnly(String operation, Endpoint endpoint, Object... pairs) {
         if (callback == null) {
             return;
@@ -995,16 +1015,54 @@ public class GenericServer {
         if (browsePath == null || browsePath.isEmpty()) {
             return "";
         }
+        List<String> local = localBrowsePathParts(browsePath);
+        if (local.size() <= 1) {
+            return "";
+        }
+        return String.join("/", local.subList(0, local.size() - 1));
+    }
+
+    private static RootConfig rootConfigFor(int idx, Map<String, Object> snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+        String rootNodeId = stringValue(snapshot.get("root_node_id"), null);
+        String rootBrowsePath = stringValue(snapshot.get("root_browse_path"), null);
+        if (rootNodeId == null || rootNodeId.isEmpty() || rootBrowsePath == null
+                || rootBrowsePath.isEmpty()) {
+            return null;
+        }
+
+        List<String> local = localBrowsePathParts(rootBrowsePath);
+        if (local.isEmpty()) {
+            throw new IllegalArgumentException("schema root_browse_path has no local path: " + rootBrowsePath);
+        }
+        NodeId materializedNodeId = configuredNodeIdFor(idx, rootNodeId);
+        if (materializedNodeId == null) {
+            throw new IllegalArgumentException("schema root_node_id is not supported: " + rootNodeId);
+        }
+        String localPath = String.join("/", local);
+        return new RootConfig(localPath, materializedNodeId, qualifiedBrowsePath(idx, local));
+    }
+
+    private static List<String> localBrowsePathParts(String browsePath) {
         List<String> local = new ArrayList<>();
         for (String part : browsePath.split("/")) {
             if (!part.isEmpty()) {
                 local.add(stripQualifiedName(part));
             }
         }
-        if (local.size() <= 1) {
-            return "";
+        return local;
+    }
+
+    private static String qualifiedBrowsePath(int idx, List<String> localParts) {
+        StringBuilder rv = new StringBuilder();
+        for (String part : localParts) {
+            if (!part.isEmpty()) {
+                rv.append('/').append(idx).append(':').append(part);
+            }
         }
-        return String.join("/", local.subList(0, local.size() - 1));
+        return rv.length() == 0 ? "/" : rv.toString();
     }
 
     private static String actualBrowsePath(int idx, String parentPath, String localName) {
@@ -1028,21 +1086,30 @@ public class GenericServer {
     private static NodeId nodeIdFor(int idx, Map<String, Object> spec, String localName,
             String endpointId, boolean method) {
         String nodeId = stringValue(spec.get("node_id"), null);
-        if (nodeId != null) {
-            int s = nodeId.indexOf(";s=");
-            if (s >= 0) {
-                return new NodeId(idx, nodeId.substring(s + 3));
-            }
-            int i = nodeId.indexOf(";i=");
-            if (i >= 0) {
-                try {
-                    return new NodeId(idx, UInteger.valueOf(Long.parseLong(nodeId.substring(i + 3))));
-                } catch (NumberFormatException ignored) {
-                    // fall back below
-                }
-            }
+        NodeId configuredNodeId = configuredNodeIdFor(idx, nodeId);
+        if (configuredNodeId != null) {
+            return configuredNodeId;
         }
         return new NodeId(idx, (method ? "method:" : "var:") + localName + ":" + endpointId);
+    }
+
+    private static NodeId configuredNodeIdFor(int idx, String nodeId) {
+        if (nodeId == null) {
+            return null;
+        }
+        int s = nodeId.indexOf(";s=");
+        if (s >= 0) {
+            return new NodeId(idx, nodeId.substring(s + 3));
+        }
+        int i = nodeId.indexOf(";i=");
+        if (i >= 0) {
+            try {
+                return new NodeId(idx, UInteger.valueOf(Long.parseLong(nodeId.substring(i + 3))));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static Argument[] argumentsFromSpec(Object spec) {
