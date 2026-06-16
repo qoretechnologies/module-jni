@@ -101,9 +101,11 @@
 %requires(reexport) ConnectionProvider
 # implements file/resource location handling for offline NodeSet2 import
 %requires FileLocationHandler
+# implements schema projection serialization for stable content hashes
+%requires json
 
 module OpcUaDataProvider {
-    version = "1.8";
+    version = "1.9";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -519,6 +521,16 @@ module OpcUaDataProvider {
     implicit history retention.  Runtime callbacks may still return explicit values for \c history-read.
 
     @section opcuadataproviderrelnotes Release Notes
+
+    @subsection opcuadataproviderv19 OpcUaDataProvider v1.9
+    - added Qorus-agnostic JSON Schema 2020-12 and OpenAPI 3.1 projections for generic OPC UA schema
+      snapshots through @ref OpcUaDataProvider::OpcUaSchemaProjection "OpcUaSchemaProjection"
+    - \c OpcUaDataProvider and \c OpcUaServerRuntime now expose \c getJsonSchemaProjection(),
+      \c getOpenApiProjection(), and \c getSchemaProjectionArtifacts() helpers so embedders can publish
+      schema contracts, API projections, and callback payload contracts from either schema-only providers
+      or materialized runtime servers
+    - projection artifacts include stable \c snapshot_hash and \c hash values for stale-contract detection
+      and carry only generic OPC UA metadata, without Qorus-specific coupling
 
     @subsection opcuadataproviderv18 OpcUaDataProvider v1.8
     - added \c OpcUaServerRuntime, a generic Qorus-agnostic OPC UA server runtime that materializes

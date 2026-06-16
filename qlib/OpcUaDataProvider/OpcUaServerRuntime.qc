@@ -77,6 +77,43 @@ public class OpcUaServerRuntime {
         return server.getSchemaSnapshot();
     }
 
+    #! Returns a stable content hash for the materialized schema snapshot
+    /** @return SHA-256 hash of the JSON serialization of @ref getSchemaSnapshot()
+    */
+    string getSchemaSnapshotHash() {
+        return OpcUaSchemaProjection::getSnapshotHash(getSchemaSnapshot());
+    }
+
+    #! Returns a JSON Schema projection of the materialized schema snapshot
+    /** @param options optional projection options such as \c title, \c schema_id, \c service_name, and
+        \c version
+
+        @return JSON Schema 2020-12 projection hash
+    */
+    hash<auto> getJsonSchemaProjection(*hash<auto> options) {
+        return OpcUaSchemaProjection::getJsonSchemaProjection(getSchemaSnapshot(), options);
+    }
+
+    #! Returns an OpenAPI projection of the materialized schema snapshot
+    /** @param options optional projection options such as \c title, \c service_name, \c version, and
+        \c base_path
+
+        @return OpenAPI 3.1 projection hash
+    */
+    hash<auto> getOpenApiProjection(*hash<auto> options) {
+        return OpcUaSchemaProjection::getOpenApiProjection(getSchemaSnapshot(), options);
+    }
+
+    #! Returns publishable schema projection artifacts for the materialized schema snapshot
+    /** @param options optional projection options; \c artifact_types can limit output to
+        \c "json-schema" and/or \c "openapi"
+
+        @return list of projection artifact hashes with content hashes and content payloads
+    */
+    list<hash<auto>> getSchemaProjectionArtifacts(*hash<auto> options) {
+        return OpcUaSchemaProjection::getSchemaProjectionArtifacts(getSchemaSnapshot(), options);
+    }
+
     #! Returns one materialized endpoint by endpoint id
     *hash<auto> getEndpoint(string endpoint_id) {
         return server.getEndpoint(endpoint_id);

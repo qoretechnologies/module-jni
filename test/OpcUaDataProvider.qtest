@@ -61,6 +61,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("subscription options", \subscriptionOptionsTest());
         addTestCase("factory info", \factoryInfoTest());
         addTestCase("API-management schema endpoints", \apiManagementSchemaEndpointsTest());
+        addTestCase("OPC UA JSON Schema projection", \jsonSchemaProjectionTest());
+        addTestCase("OPC UA OpenAPI projection", \openApiProjectionTest());
+        addTestCase("OPC UA schema projection artifacts", \schemaProjectionArtifactsTest());
         addTestCase("action registration", \actionRegistrationTest());
         addTestCase("provider info", \providerInfoTest());
         addTestCase("example event data", \exampleEventDataTest());
@@ -474,9 +477,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq(MSG_Async, pinfo.supports_messages);
     }
 
-    apiManagementSchemaEndpointsTest() {
+    private static hash<auto> getApiManagementTestSchema() {
         string ns = "urn:qore:opcua:api-management-test";
-        hash<auto> schema = {
+        return {
             "contract_version": 1,
             "source": "test",
             "namespaces": {"1": ns},
@@ -511,7 +514,10 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
                 },
             ),
         };
+    }
 
+    apiManagementSchemaEndpointsTest() {
+        hash<auto> schema = getApiManagementTestSchema();
         OpcUaDataProviderFactory factory();
         OpcUaDataProvider prov = cast<OpcUaDataProvider>(factory.create({"schema": schema}));
         list<hash<auto>> endpoints = prov.getApiManagementEndpoints();
@@ -530,6 +536,76 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
 
         assertThrows("CONSTRUCTOR-ERROR", "requires `url`", \factory.create(), ({}),
             "provider still rejects missing url unless a schema source is provided");
+    }
+
+    jsonSchemaProjectionTest() {
+        hash<auto> schema = getApiManagementTestSchema();
+        OpcUaDataProviderFactory factory();
+        OpcUaDataProvider prov = cast<OpcUaDataProvider>(factory.create({"schema": schema}));
+
+        hash<auto> projection = prov.getJsonSchemaProjection({"title": "Manufacturing OPC UA Test"});
+        assertEq("https://json-schema.org/draft/2020-12/schema", projection{"$schema"},
+            "projection uses JSON Schema 2020-12");
+        assertEq("json-schema", projection{"x-opcua"}.projection, "projection metadata type");
+        assertEq("qore-native", projection{"x-opcua"}.projection_mode, "projection mode");
+        assertEq(OpcUaSchemaProjection::getSnapshotHash(schema), projection{"x-opcua"}.snapshot_hash,
+            "snapshot hash is stable and externally reproducible");
+
+        hash<auto> defs = projection{"$defs"};
+        assertEq("number", defs.setpoint_value.type, "Double variable maps to JSON Schema number");
+        assertEq(("endpoint_id", "value"), defs.setpoint_write_request.required,
+            "write request requires endpoint and value");
+        assertTrue(defs.hasKey("setpoint_data_change_event"), "data-change payload schema is present");
+        assertTrue(defs.hasKey("setpoint_history_read_result"),
+            "historizing variable exposes history result schema");
+        assertEq("integer", defs.start_method_input.properties.speed.type,
+            "Int32 method input maps to integer");
+        assertEq("boolean", defs.start_method_output.properties.accepted.type,
+            "Boolean method output maps to boolean");
+        assertTrue(defs.hasKey("start_server_call_callback"), "method callback payload schema is present");
+    }
+
+    openApiProjectionTest() {
+        OpcUaDataProviderFactory factory();
+        OpcUaDataProvider prov = cast<OpcUaDataProvider>(factory.create({"schema": getApiManagementTestSchema()}));
+
+        hash<auto> projection = prov.getOpenApiProjection({"title": "Manufacturing OPC UA Test"});
+        assertEq("3.1.0", projection.openapi, "OpenAPI projection version");
+        assertEq("openapi", projection{"x-opcua"}.projection, "OpenAPI projection metadata type");
+        assertTrue(projection.paths.hasKey("/opcua/endpoints/setpoint/read"),
+            "read path generated for readable variable");
+        assertTrue(projection.paths.hasKey("/opcua/endpoints/setpoint/write"),
+            "write path generated for writable variable");
+        assertTrue(projection.paths.hasKey("/opcua/endpoints/setpoint/history"),
+            "history path generated for historizing variable");
+        assertTrue(projection.paths.hasKey("/opcua/endpoints/start/call"),
+            "call path generated for method endpoint");
+        assertEq("opcua_start_call", projection.paths{"/opcua/endpoints/start/call"}.post.operationId,
+            "method operation id is stable");
+        assertTrue(projection.components.schemas.hasKey("start_call_request"),
+            "OpenAPI components include method request schema");
+    }
+
+    schemaProjectionArtifactsTest() {
+        hash<auto> schema = getApiManagementTestSchema();
+        OpcUaDataProviderFactory factory();
+        OpcUaDataProvider prov = cast<OpcUaDataProvider>(factory.create({"schema": schema}));
+
+        list<hash<auto>> artifacts = prov.getSchemaProjectionArtifacts({"service_name": "Manufacturing"});
+        assertEq(2, artifacts.size(), "JSON Schema and OpenAPI artifacts are generated");
+        hash<string, hash<auto>> by_type = map {$1.type: $1}, artifacts;
+        assertTrue(by_type.hasKey("json-schema"), "JSON Schema artifact is present");
+        assertTrue(by_type.hasKey("openapi"), "OpenAPI artifact is present");
+        assertEq("application/schema+json", by_type."json-schema".content_type,
+            "JSON Schema content type");
+        assertEq("application/vnd.oai.openapi+json", by_type.openapi.content_type,
+            "OpenAPI content type");
+        assertEq(OpcUaSchemaProjection::getSnapshotHash(schema), by_type."json-schema".snapshot_hash,
+            "artifact carries snapshot hash");
+        assertEq(OpcUaSchemaProjection::getProjectionHash(by_type."json-schema".content),
+            by_type."json-schema".hash, "artifact hash matches content");
+        assertEq("Manufacturing.schema.json", by_type."json-schema".artifact_name,
+            "artifact name uses service name");
     }
 
     actionRegistrationTest() {
@@ -1185,6 +1261,14 @@ sub startSandboxedRuntime(int port) {
         hash<string, hash<auto>> by_id = map {$1.endpoint_id: $1}, materialized.endpoints;
         assertEq(ns, by_id{temp_id}.namespace_uri, "runtime endpoint namespace");
         assertTrue(by_id{add_id}.object_node_id.val(), "method endpoint exposes object_node_id");
+        list<hash<auto>> projection_artifacts = runtime.getSchemaProjectionArtifacts({
+            "service_name": "GenericRuntime",
+        });
+        hash<string, hash<auto>> projection_by_type = map {$1.type: $1}, projection_artifacts;
+        assertEq(runtime.getSchemaSnapshotHash(), projection_by_type."json-schema".snapshot_hash,
+            "runtime projection artifacts carry the materialized snapshot hash");
+        assertTrue(projection_by_type."json-schema".content{"$defs"}.hasKey("temperature_read_result"),
+            "runtime projection includes variable read result schema");
 
         OpcUaDataProvider prov({"url": runtime.getEndpointUrl(), "monitored_nodes": ()});
 

@@ -1055,6 +1055,43 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         return getSchemaSnapshot();
     }
 
+    #! Returns a stable content hash for the schema snapshot used for generic API management
+    /** @return SHA-256 hash of the JSON serialization of @ref getApiManagementSchemaSnapshot()
+    */
+    string getApiManagementSchemaSnapshotHash() {
+        return OpcUaSchemaProjection::getSnapshotHash(getApiManagementSchemaSnapshot());
+    }
+
+    #! Returns a JSON Schema projection of the schema snapshot used for generic API management
+    /** @param options optional projection options such as \c title, \c schema_id, \c service_name, and
+        \c version
+
+        @return JSON Schema 2020-12 projection hash
+    */
+    hash<auto> getJsonSchemaProjection(*hash<auto> options) {
+        return OpcUaSchemaProjection::getJsonSchemaProjection(getApiManagementSchemaSnapshot(), options);
+    }
+
+    #! Returns an OpenAPI projection of the schema snapshot used for generic API management
+    /** @param options optional projection options such as \c title, \c service_name, \c version, and
+        \c base_path
+
+        @return OpenAPI 3.1 projection hash
+    */
+    hash<auto> getOpenApiProjection(*hash<auto> options) {
+        return OpcUaSchemaProjection::getOpenApiProjection(getApiManagementSchemaSnapshot(), options);
+    }
+
+    #! Returns publishable schema projection artifacts for generic API management
+    /** @param options optional projection options; \c artifact_types can limit output to
+        \c "json-schema" and/or \c "openapi"
+
+        @return list of projection artifact hashes with content hashes and content payloads
+    */
+    list<hash<auto>> getSchemaProjectionArtifacts(*hash<auto> options) {
+        return OpcUaSchemaProjection::getSchemaProjectionArtifacts(getApiManagementSchemaSnapshot(), options);
+    }
+
     #! Returns schema-defined API-management endpoints keyed by stable \c endpoint_id
     /** Each returned endpoint includes the schema snapshot endpoint metadata plus an \c endpoint key for generic
         scanners, an \c expanded_node_id diagnostic alias, and normalized \c direction / \c directions metadata.
