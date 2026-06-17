@@ -48,19 +48,19 @@ public class OpcUaSchemaProjection {
     #! Returns a stable content hash for the given schema snapshot
     /** @param snapshot OPC UA schema snapshot hash
 
-        @return SHA-256 hash of the JSON serialization of the snapshot
+        @return SHA-256 hash of a canonical Qore-native serialization of the snapshot
     */
     static string getSnapshotHash(hash<auto> snapshot) {
-        return make_json(snapshot).toBinary().toSHA256();
+        return getCanonicalHashPayload(snapshot).toBinary().toSHA256();
     }
 
     #! Returns a stable content hash for a generated projection hash
     /** @param projection projection hash
 
-        @return SHA-256 hash of the JSON serialization of the projection
+        @return SHA-256 hash of a canonical Qore-native serialization of the projection
     */
     static string getProjectionHash(hash<auto> projection) {
-        return make_json(projection).toBinary().toSHA256();
+        return getCanonicalHashPayload(projection).toBinary().toSHA256();
     }
 
     #! Builds a JSON Schema 2020-12 projection for an OPC UA schema snapshot
@@ -249,6 +249,40 @@ public class OpcUaSchemaProjection {
             "hash": projection_hash,
             "content": projection,
         };
+    }
+
+    private static string getCanonicalHashPayload(auto value) {
+        int type_code = value.typeCode();
+        switch (type_code) {
+            case NT_HASH:
+                hash<auto> h = value;
+                list<string> parts = ();
+                foreach string key in (sort(keys h)) {
+                    parts += getCanonicalHashPayload(key)
+                        + getCanonicalHashPayload(h{key});
+                }
+                return sprintf("h%d{%s}", parts.size(), parts.join(""));
+            case NT_LIST:
+                list<auto> l = value;
+                return sprintf("l%d[%s]", l.size(),
+                    (map getCanonicalHashPayload($1), l).join(""));
+            case NT_STRING:
+                string s = value.toString();
+                return sprintf("s%d:%s", s.size(), s);
+            case NT_BOOLEAN:
+                return value ? "b1" : "b0";
+            case NT_NOTHING:
+                return "n";
+            case NT_NULL:
+                return "z";
+            case NT_INT:
+                return "i" + value.toString();
+            case NT_FLOAT:
+            case NT_NUMBER:
+                return "d" + value.toString();
+        }
+        string fallback = value.toString();
+        return sprintf("x%d:%d:%s", type_code, fallback.size(), fallback);
     }
 
     private static string getArtifactBaseName(hash<auto> options) {

@@ -101,9 +101,6 @@
 %requires(reexport) ConnectionProvider
 # implements file/resource location handling for offline NodeSet2 import
 %requires FileLocationHandler
-# implements schema projection serialization for stable content hashes
-%requires json
-
 module OpcUaDataProvider {
     version = "1.9";
     desc = "user module providing a data provider API for OPC UA servers";
