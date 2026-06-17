@@ -77,27 +77,7 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
         string security_policy_str = copts.security_policy ?? "None";
 
         # create endpoint selector function
-        auto endpoint_selector = implement_interface(
-            new QoreInvocationHandler(auto sub (Method method, *list<auto> args) {
-                if (method.getName() != "apply") {
-                    return;
-                }
-                auto endpoints = args[0];
-                SecurityPolicy sec_policy = SecurityPolicy::valueOf(security_policy_str);
-                # find endpoint matching the requested security policy
-                foreach auto ep in (endpoints) {
-                    if (ep.getSecurityPolicyUri() == sec_policy.getUri()) {
-                        return Optional::of(ep);
-                    }
-                }
-                # fall back to first endpoint
-                if (endpoints.size() > 0) {
-                    return Optional::of(endpoints[0]);
-                }
-                return Optional::empty();
-            }),
-            load_class("java/util/function/Function")
-        );
+        auto endpoint_selector = OpcUaEndpointSelector::forSecurityPolicy(security_policy_str);
 
         # create config builder consumer (Milo 1.1.x: a Consumer<OpcUaClientConfigBuilder> that mutates
         # the builder in place; it no longer returns a built config)

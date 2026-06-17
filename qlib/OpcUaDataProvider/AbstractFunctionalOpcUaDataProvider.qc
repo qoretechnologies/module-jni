@@ -668,26 +668,21 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             # leaving it at the Milo default
             item.setDiscardOldest(discard_oldest);
 
-            # bind the node id into a per-item data value listener; capturing the id avoids relying on
-            # the item to report it back and gives a stable namespace index for the event
-            string captured_node_id = node_id_str;
-            code listener_cb = sub (Method method, *list<auto> args) {
-                if (method.getName() == "onDataReceived") {
-                    handleDataChange(captured_node_id, args[1]);
-                }
-            };
-            auto listener = implement_interface(
-                new QoreInvocationHandler(listener_cb),
-                load_class(
-                    "org/eclipse/milo/opcua/sdk/client/subscriptions/OpcUaMonitoredItem$DataValueListener")
-            );
+            auto listener = new OpcUaDataChangeListener(node_id_str, \handleDataChange());
             item.setDataValueListener(listener);
             # retain the listener to prevent garbage collection while the subscription is active
             monitored_item_listeners += listener;
             subscription.addMonitoredItem(item);
         }
 
-        subscription.createMonitoredItems();
+        foreach auto result in (subscription.createMonitoredItems()) {
+            if (!result.isGood()) {
+                throw "OPCUA-SUBSCRIPTION-ERROR", sprintf(
+                    "failed to create monitored item for OPC UA subscription: service result: %s, "
+                        "operation result: %s",
+                    result.serviceResult().toString(), result.operationResult().toString());
+            }
+        }
         debug("OPC UA: Created subscription with %d monitored items", monitored_nodes.size());
     }
 

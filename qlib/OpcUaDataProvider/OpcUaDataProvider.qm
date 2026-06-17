@@ -85,6 +85,8 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue
 %module-cmd(jni) import org.qore.dataprovider.opcua.GenericServer
 %module-cmd(jni) import org.qore.dataprovider.opcua.NodeSet2Importer
+%module-cmd(jni) import org.qore.dataprovider.opcua.OpcUaEndpointSelector
+%module-cmd(jni) import org.qore.dataprovider.opcua.OpcUaDataChangeListener
 %module-cmd(jni) import org.qore.dataprovider.opcua.SchemaResolver
 %module-cmd(jni) import org.qore.dataprovider.opcua.ValueCodec
 %module-cmd(jni) import java.io.ByteArrayInputStream
@@ -92,7 +94,6 @@
 %module-cmd(jni) import java.security.KeyStore
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.List
-%module-cmd(jni) import java.util.Optional
 %module-cmd(jni) import java.util.concurrent.TimeUnit
 
 # implements a data provider for OPC UA functionality
@@ -528,6 +529,8 @@ module OpcUaDataProvider {
       or materialized runtime servers
     - projection artifacts include stable \c snapshot_hash and \c hash values for stale-contract detection
       and carry only generic OPC UA metadata, without Qorus-specific coupling
+    - OPC UA endpoint selection and data-change subscription callbacks now use compiled Java bridge classes,
+      avoiding dynamic proxy dispatch on Milo callback threads
 
     @subsection opcuadataproviderv18 OpcUaDataProvider v1.8
     - added \c OpcUaServerRuntime, a generic Qorus-agnostic OPC UA server runtime that materializes

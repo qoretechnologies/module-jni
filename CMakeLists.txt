@@ -440,6 +440,8 @@ set(OPCUA_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/ValueCodec.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/NodeSet2Importer.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/GenericServer.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/OpcUaEndpointSelector.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/OpcUaDataChangeListener.java
 )
 
 add_custom_command(
