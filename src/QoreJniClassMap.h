@@ -490,6 +490,29 @@ protected:
         return in_progress_set.find(qpath) != in_progress_set.end();
     }
 
+    // returns true if Java bytecode creation is in progress for the given class or any of its ancestors
+    /** Eagerly generating a Java class requires its entire superclass chain to be defined first
+        (a Java subclass cannot be defined before its superclass).  If any ancestor is currently
+        being generated, eagerly generating @p cls would recurse back into that in-progress
+        ancestor through parent-class resolution and fail with "<class> is already being created".
+        In that case the caller must emit a forward (name-based) type reference instead and let
+        the class be generated on demand once the ancestor's generation has completed.
+
+        @param cls the Qore class whose inheritance closure is checked
+    */
+    DLLLOCAL bool isAncestorCreateInProgress(const QoreClass& cls) const {
+        if (isCreateInProgress(cls.getNamespacePath())) {
+            return true;
+        }
+        QoreParentClassIterator ci(cls);
+        while (ci.next()) {
+            if (isAncestorCreateInProgress(ci.getParentClass())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // sets the given class as creation in progress
     /** @param qpath the full Qore classpath to the Qore class
     */

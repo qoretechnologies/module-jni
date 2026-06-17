@@ -125,19 +125,26 @@ bool native_access_option_enabled() {
 /**
     @param address the local bind address; numeric IPv4/IPv6 addresses and \c localhost are supported
     @param port the TCP port to bind
-    @param owner an optional owner object whose Program context should be used for sandbox lookup
+    @param owner deprecated and ignored; retained for backwards compatibility. The active sandbox is resolved
+    automatically across the thread's program-context (call) stack, so module/library code invoked from a
+    sandboxed program correctly inherits the caller's sandbox without passing an owner object.
 
     @throw JNI-NETWORK-BIND-ERROR the address cannot be checked safely or the port is invalid
     @throw NETWORK-ACCESS-DENIED the active sandbox network policy denies the bind
 
     This helper is for Java libraries that open sockets outside QoreSocket. It performs a DNS-free check so it does
     not introduce an uninterruptible native lookup before the Java library starts.
-    When this helper is called from a module class method, pass \c self as \c owner so the sandbox attached to the
-    caller-created object is used instead of the module Program context.
  */
 nothing check_network_bind(string address, int port, *object owner) [flags=NAMED_ARGS] {
-    QoreProgram* pgm = owner ? owner->getProgram() : qore_get_call_program_context();
-    QoreSandboxManagerHelper smh(pgm);
+    // Resolve the active sandbox across the thread's program-context (call) stack so that
+    // this check works when invoked from module/library code: a Qore-language module
+    // executes in the module's own QoreProgram (which has no sandbox manager of its own),
+    // so resolving from a single program would silently bypass the sandbox.  The default
+    // QoreSandboxManagerHelper walks the program-context stack and finds the caller's
+    // sandbox.  The \a owner parameter is retained for backwards compatibility but is no
+    // longer required for sandbox resolution.
+    (void)owner;
+    QoreSandboxManagerHelper smh;
     if (!smh) {
         return QoreValue();
     }

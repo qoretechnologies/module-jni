@@ -1103,6 +1103,25 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       \c org.eclipse.paho.mqttv5.client package and depends on the separate \c common artifact at
       runtime, so loading the module previously failed with
       \c ClassNotFoundException: org.eclipse.paho.mqttv5.common.MqttSubscription
+    - fixed dynamic Java class generation for mutually-referential %Qore class clusters (for example
+      \c DataProvider's \c AbstractDataProviderType / \c QoreDataType / \c HashDataType), which could
+      fail at generation or static-initialization time with
+      \c ClassNotFoundException: "<class> is already being created" when a base class declares a method
+      whose parameter or return type is a not-yet-generated subclass:
+      - the owning %Qore class is now marked creation-in-progress before any method-signature or
+        constant materialization, so self/cyclic type references resolve to forward type references;
+      - a referenced class whose superclass chain contains an in-progress class likewise resolves to a
+        forward reference instead of re-entering generation;
+      - the superclass handed to Byte Buddy is described from bytecode via a \c TypePool (new
+        \c org.qore.jni.QoreClassFileLocator) so that computing the method graph and the
+        super-constructor invocation does not eagerly reflect on loaded classes and recursively
+        re-enter generation of an in-progress class
+    - upgraded the bundled Byte Buddy library from 1.14.19 to 1.18.10, which natively supports newer
+      Java class file versions; this is required for the bytecode-backed superclass description above
+    - simplified \c Jni::org::qore::jni::check_network_bind() to resolve the active sandbox across the
+      thread's program-context (call) stack, so module/library code invoked from a sandboxed program
+      correctly inherits the caller's sandbox without needing an owner object (requires a %Qore release
+      that resolves the sandbox manager across the program-context stack)
 
     @subsection jni_2_6_0 jni Module Version 2.6.0
     - added Kotlin language integration support

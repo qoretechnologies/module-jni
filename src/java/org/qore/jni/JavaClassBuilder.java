@@ -24,7 +24,9 @@ import net.bytebuddy.description.modifier.MethodArguments;
 import net.bytebuddy.description.method.MethodDescription.Token;
 import net.bytebuddy.description.field.FieldDescription;
 import net.bytebuddy.dynamic.DynamicType;
+import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
+import net.bytebuddy.pool.TypePool;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.dynamic.scaffold.InstrumentedType;
 import net.bytebuddy.dynamic.scaffold.TypeValidation;
@@ -212,8 +214,24 @@ public class JavaClassBuilder {
     //! Returns a builder object for a dynamic class
     public static DynamicType.Builder<?> getClassBuilder(String className, Class<?> parentClass,
             TypeDefinition parentType, ArrayList<TypeDefinition> interfaces, ArrayList<String> typeParams,
-            boolean is_abstract, long cptr, long cls_pgm_id, String cls_path) throws NoSuchMethodException {
-        TypeDefinition superType = parentType != null ? parentType : new TypeDescription.ForLoadedType(parentClass);
+            boolean is_abstract, long cptr, long cls_pgm_id, String cls_path,
+            ClassLoader genLoader) throws NoSuchMethodException {
+        // Describe the superclass from bytecode rather than as a loaded type.  A loaded
+        // superclass description forces the JVM (via reflection in Byte Buddy's method-graph
+        // and super-constructor resolution) to eagerly resolve every type referenced in the
+        // superclass's method signatures; when one of those is a subclass currently being
+        // generated, that re-enters generation and fails with "<class> is already being
+        // created".  Reading the superclass via a TypePool avoids that forced resolution.
+        // Generic type arguments (if any) are preserved by re-wrapping the bytecode-backed
+        // raw type.
+        TypeDescription rawSuper = getTypeDescriptionFromPool(parentClass, genLoader);
+        TypeDefinition superType;
+        if (parentType != null && parentType.asGenericType().getSort().isParameterized()) {
+            superType = TypeDescription.Generic.Builder.parameterizedType(rawSuper,
+                parentType.asGenericType().getTypeArguments()).build();
+        } else {
+            superType = rawSuper;
+        }
 
         DynamicType.Builder<?> bb;
         bb = new ByteBuddy()
@@ -488,6 +506,40 @@ public class JavaClassBuilder {
      */
     public static TypeDescription getTypeDescription(Class<?> cls) {
         return new TypeDescription.ForLoadedType(cls);
+    }
+
+    /** Returns a bytecode-backed (non-loaded) TypeDescription for the given class.
+     *
+     * Unlike {@link #getTypeDescription(Class)} (which returns a {@code ForLoadedType} whose
+     * {@code getDeclaredMethods()} reflects via {@code Class.getDeclaredMethods0} and thereby
+     * forces the JVM to eagerly resolve every parameter/return type in the class's method
+     * table), this reads the class file through a {@link TypePool}.  Method param/return types
+     * are returned as name-based ({@code Latent}) descriptions and are NOT resolved.  This is
+     * used for the superclass when generating a subclass so that Byte Buddy can compute the
+     * method graph and super-constructor invocation without recursively loading types that may
+     * be mid-generation (which would fail with "<class> is already being created").
+     *
+     * @param cls the class to describe from bytecode
+     * @param genLoader the QoreURLClassLoader driving generation, used as the ClassFileLocator
+     */
+    public static TypeDescription getTypeDescriptionFromPool(Class<?> cls, ClassLoader genLoader) {
+        // Resolve the class (and its full superclass chain) from bytecode via a TypePool.  A
+        // QoreURLClassLoader is itself a ClassFileLocator (via QoreClassFileLocator) that can
+        // supply bytecode for any class the chain may reach (generated dynamic classes, internal
+        // jni-module classes such as QoreJavaClassBase, bundled Byte Buddy classes, JDK classes,
+        // and dynamic classes generated on demand).  Fall back to the parent class's loader /
+        // system loader.
+        ClassFileLocator locator;
+        if (genLoader instanceof QoreURLClassLoader) {
+            locator = new QoreClassFileLocator((QoreURLClassLoader) genLoader);
+        } else {
+            ClassLoader parentLoader = cls.getClassLoader();
+            locator = (parentLoader instanceof QoreURLClassLoader)
+                ? new QoreClassFileLocator((QoreURLClassLoader) parentLoader)
+                : ClassFileLocator.ForClassLoader.of(parentLoader != null ? parentLoader
+                    : ClassLoader.getSystemClassLoader());
+        }
+        return TypePool.Default.of(locator).describe(cls.getName()).resolve();
     }
 
     /** Returns a TypeDescription for a future type based on the binary name

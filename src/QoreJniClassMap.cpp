@@ -2836,6 +2836,20 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
         const QoreClass* qcls, jstring jname) {
     //printd(5, "JniExternalProgramData::generateByteCodeIntern() '%s'\n", qcls->getName());
 
+    // Mark this class as creation-in-progress before any method-signature or
+    // constant materialization.  Both addMethods() and addClassConstants()
+    // resolve Qore-backed Java types through getJavaRawClassTypeDefinition(),
+    // which re-enters Java class generation for any referenced class that is
+    // not already in progress.  A self/cyclic reference (e.g. a DataProvider
+    // class constant whose type is the class itself) would otherwise re-enter
+    // generation of the same class and throw "<class> is already being
+    // created".  With the marker set up front, such references resolve to a
+    // forward TypeDescription instead.  The marker is cleared on every exit
+    // path (including the early returns and exceptions below) via RAII.
+    std::string qpath = qcls->getNamespacePath();
+    setCreateInProgress(qpath);
+    ON_BLOCK_EXIT_OBJ(*this, &JniExternalProgramData::clearCreateInProgress, qpath);
+
     // get parent class
     LocalReference<jclass> parent_class;
     jclass parent_ptr = nullptr;
@@ -2935,7 +2949,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
     type_params = get_java_type_param_list(env, *qcls);
 #endif
 
-    std::vector<jvalue> jargs(9);
+    std::vector<jvalue> jargs(10);
     jargs[0].l = jname;
     jargs[1].l = parent_ptr;
     jargs[2].l = parent_type;
@@ -2945,6 +2959,10 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
     jargs[6].j = cptr;
     jargs[7].j = cls_pgm_id;
     jargs[8].l = cls_path_str;
+    // generating class loader: used to describe the superclass from bytecode via a TypePool
+    // (see JavaClassBuilder.getClassBuilder()) so the superclass's method signatures are not
+    // eagerly resolved through reflection during subclass generation
+    jargs[9].l = class_loader;
 
     LocalReference<jobject> bb = env.callStaticObjectMethod(Globals::classJavaClassBuilder,
         Globals::methodJavaClassBuilderGetClassBuilder, &jargs[0]);
@@ -2988,9 +3006,6 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
         return nullptr;
     }
 
-    std::string qpath = qcls->getNamespacePath();
-    setCreateInProgress(qpath);
-
     printd(5, "JniExternalProgramData::generateByteCodeIntern() %s methods added bb: %p; building class with " \
         "cl: %p pgm: %p\n", qcls->getPath(), (jobject)bb,
         env.callIntMethod((jobject)class_loader, jni::Globals::methodObjectHashCode, nullptr), pgm);
@@ -3019,8 +3034,6 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
     //LocalReference<jbyteArray> rv = env.callStaticObjectMethod(Globals::classJavaClassBuilder,
     //    Globals::methodJavaClassBuilderGetByteCodeFromBuilder, &jargs[0]).as<jbyteArray>();
 
-    clearCreateInProgress(qpath);
-
     // save Java bin name in Qore class if necessary
     if (has_jname) {
         // NOTE this must come last as using Env::GetStringUtfChars on a java string destroys the string
@@ -3047,7 +3060,12 @@ LocalReference<jobject> JniExternalProgramData::getJavaRawClassTypeDefinition(En
     // get internal name for Qore class
     LocalReference<jstring> jname = getJavaNameForClass(env, *cls);
 
-    if (!isCreateInProgress(cls->getNamespacePath())) {
+    // Only eagerly generate the referenced Java class when neither it nor any of its ancestors
+    // is currently being generated.  Eagerly generating a class whose superclass chain leads back
+    // to an in-progress class would re-enter that class's generation via parent-class resolution
+    // and fail with "<class> is already being created"; in that case fall through and emit a
+    // forward (name-based) type reference, deferring generation until the class is actually loaded.
+    if (!isAncestorCreateInProgress(*cls)) {
         printd(5, "JniExternalProgramData::getJavaRawClassTypeDefinition() creating Java class for '%s' (%p)\n",
             cls->getPath(), cls);
 

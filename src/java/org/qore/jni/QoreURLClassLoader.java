@@ -224,6 +224,30 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (file != null) {
                 return new ByteArrayInputStream(file.getByteCode());
             }
+            // Also serve bytecode for dynamically-generated classes that are cached in
+            // pendingClasses.  This lets a Byte Buddy TypePool / ClassFileLocator read the
+            // class file of a generated (e.g. module-owned) class without loading it via
+            // reflection, which is required to describe a superclass during subclass
+            // generation without forcing eager JVM resolution of types referenced in the
+            // superclass's method signatures (see JavaClassBuilder.getClassBuilder()).
+            byte[] byte_code = pendingClasses.get(qualifiedClassName);
+            if (byte_code != null) {
+                return new ByteArrayInputStream(byte_code);
+            }
+            // Also serve internal jni-module classes (org.qore.*) and embedded Byte Buddy
+            // classes (net.bytebuddy.*) so a TypePool can resolve the full superclass chain
+            // of a generated class from bytecode (e.g. QoreJavaClassBase, the default base).
+            if (qualifiedClassName.startsWith("org.qore.")) {
+                byte[] internal = getInternalClass0(qualifiedClassName);
+                if (internal != null) {
+                    return new ByteArrayInputStream(internal);
+                }
+            } else if (qualifiedClassName.startsWith("net.bytebuddy.")) {
+                byte[] bb = getCachedClass0(qualifiedClassName);
+                if (bb != null) {
+                    return new ByteArrayInputStream(bb);
+                }
+            }
         }
         return super.getResourceAsStream(name);
     }
@@ -380,6 +404,56 @@ public class QoreURLClassLoader extends URLClassLoader {
             return rv;
         }
         throw new ClassNotFoundException(String.format("unknown internal class '%s'", bin_name));
+    }
+
+    //! Returns the class file bytecode for the given binary name, or null if it cannot be found.
+    /** Used as a Byte Buddy {@code ClassFileLocator} (via {@link QoreClassFileLocator}) so that a
+        TypePool can describe the full superclass chain of a class under generation from bytecode
+        (rather than via reflection on loaded classes, which forces eager JVM resolution of types
+        referenced in method signatures and can re-enter generation of an in-progress class).
+        Sources, in order: injected compiler classes, already-generated dynamic classes
+        (pendingClasses), internal jni-module classes (org.qore.*), bundled Byte Buddy classes
+        (net.bytebuddy.*), classpath / JDK resources, and finally on-demand generation for dynamic
+        classes not yet cached.
+    */
+    public byte[] getClassFileBytes(String bin_name) {
+        QoreJavaFileObject file = classes.get(bin_name);
+        if (file != null) {
+            return file.getByteCode();
+        }
+        byte[] rv = pendingClasses.get(bin_name);
+        if (rv != null) {
+            return rv;
+        }
+        if (bin_name.startsWith("org.qore.")) {
+            rv = getInternalClass0(bin_name);
+            if (rv != null) {
+                return rv;
+            }
+        } else if (bin_name.startsWith("net.bytebuddy.")) {
+            rv = getCachedClass0(bin_name);
+            if (rv != null) {
+                return rv;
+            }
+        }
+        try (InputStream is = super.getResourceAsStream(bin_name.replace('.', '/') + ".class")) {
+            if (is != null) {
+                return is.readAllBytes();
+            }
+        } catch (IOException e) {
+            // ignore and fall through
+        }
+        // dynamic classes that have not yet been generated/cached: generate on demand.  These
+        // are ancestors of the class under generation (an acyclic chain), so this cannot
+        // re-enter generation of the in-progress class itself.
+        if (isDynamic(bin_name)) {
+            try {
+                return generateByteCode(bin_name);
+            } catch (Throwable e) {
+                // ignore: report as unresolvable below
+            }
+        }
+        return null;
     }
 
     //! Returns a list of internal classes in the given package

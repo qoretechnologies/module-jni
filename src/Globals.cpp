@@ -2205,6 +2205,7 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassJavaClassBuilder_1.inc"
 #include "JavaClassJavaClassBuilder_2.inc"
 #include "JavaClassStaticEntry.inc"
+#include "JavaClassQoreClassFileLocator.inc"
 #include "JavaClassQoreJavaApi.inc"
 #include "JavaClassQoreRelativeTime.inc"
 #include "JavaClassJdbcColumnarBatch.inc"
@@ -2264,6 +2265,8 @@ static ucmap_t ucmap = {
     {"org.qore.jni.JavaClassBuilder$2", {java_org_qore_jni_JavaClassBuilder_2_class_len, java_org_qore_jni_JavaClassBuilder_2_class}},
     {"org.qore.jni.JdbcColumnarBatch", {java_org_qore_jni_JdbcColumnarBatch_class_len, java_org_qore_jni_JdbcColumnarBatch_class}},
     {"org.qore.jni.StaticEntry", {java_org_qore_jni_StaticEntry_class_len, java_org_qore_jni_StaticEntry_class}},
+    {"org.qore.jni.QoreClassFileLocator", {java_org_qore_jni_QoreClassFileLocator_class_len,
+        java_org_qore_jni_QoreClassFileLocator_class}},
     {"org.qore.jni.QoreClosure", {java_org_qore_jni_QoreClosure_class_len, java_org_qore_jni_QoreClosure_class}},
     {"org.qore.jni.QoreClosureMarker", {java_org_qore_jni_QoreClosureMarker_class_len, java_org_qore_jni_QoreClosureMarker_class}},
     {"org.qore.jni.QoreClosureMarkerImpl", {java_org_qore_jni_QoreClosureMarkerImpl_class_len, java_org_qore_jni_QoreClosureMarkerImpl_class}},
@@ -3643,7 +3646,7 @@ bool Globals::init() {
 
     methodJavaClassBuilderGetClassBuilder = env.getStaticMethod(classJavaClassBuilder, "getClassBuilder",
         "(Ljava/lang/String;Ljava/lang/Class;Lnet/bytebuddy/description/type/TypeDefinition;" \
-        "Ljava/util/ArrayList;Ljava/util/ArrayList;ZJJLjava/lang/String;)" \
+        "Ljava/util/ArrayList;Ljava/util/ArrayList;ZJJLjava/lang/String;Ljava/lang/ClassLoader;)" \
         "Lnet/bytebuddy/dynamic/DynamicType$Builder;");
     methodJavaClassBuilderGetFunctionConstantClassBuilder = env.getStaticMethod(classJavaClassBuilder,
         "getFunctionConstantClassBuilder",

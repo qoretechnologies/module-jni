@@ -8,7 +8,7 @@ set (VERSION_MAJOR 2)
 set (VERSION_MINOR 7)
 set (VERSION_PATCH 0)
 
-set (BYTE_BUDDY_JAR ${CMAKE_SOURCE_DIR}/byte-buddy/byte-buddy-1.14.19.jar)
+set (BYTE_BUDDY_JAR ${CMAKE_SOURCE_DIR}/byte-buddy/byte-buddy-1.18.10.jar)
 
 set(PROJECT_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
@@ -931,6 +931,7 @@ generate_java(org/qore/jni/QoreClosureMarkerImpl.java)
 generate_java(org/qore/jni/QoreJavaDynamicApi.java)
 generate_java(org/qore/jni/Hash.java 1 2 3 4 5 6 7 8 9 10)
 generate_java(org/qore/jni/JavaClassBuilder.java 1 2 StaticEntry)
+generate_java(org/qore/jni/QoreClassFileLocator.java)
 generate_java(org/qore/jni/QoreJavaFileObject.java)
 generate_java(org/qore/jni/QoreJavaObjectPtr.java)
 add_java_source(org/qore/jni/KotlinMetadataHelper.java)
