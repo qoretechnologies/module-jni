@@ -3021,7 +3021,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
     } catch (...) {
         printd(0, "ERR START: %s (in progress: %d)\n", qcls->getPath(), (int)in_progress_set.size());
         for (auto& i : in_progress_set) {
-            printd(0, "+ %s\n", i.c_str());
+            printd(0, "+ %s (%u)\n", i.first.c_str(), i.second);
         }
         printd(0, "ERR END: %s\n", qcls->getPath());
         throw;

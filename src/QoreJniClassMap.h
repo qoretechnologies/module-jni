@@ -471,8 +471,15 @@ protected:
     typedef std::map<std::string, QoreBuiltinClass*> fake_cls_map_t;
     fake_cls_map_t fake_cls_map;
 
-    // set of Java classes currently being created
-    strset_t in_progress_set;
+    // map of Qore class paths currently being created -> nesting refcount
+    /** Refcounted (not a plain set) because the same class path can legitimately be entered
+        nested during a single generation pass (e.g. two QoreClass instances that share a
+        namespace path, reached through different generation entry points).  A plain set would
+        let the inner scope's clear remove the marker the outer scope still needs, both
+        dropping the in-progress guard early and tripping the clear assertion.
+    */
+    typedef std::map<std::string, unsigned> in_progress_map_t;
+    in_progress_map_t in_progress_set;
 
     // override compat-types
     bool override_compat_types = false;
@@ -513,20 +520,23 @@ protected:
         return false;
     }
 
-    // sets the given class as creation in progress
+    // marks the given class as creation in progress (increments the nesting refcount)
     /** @param qpath the full Qore classpath to the Qore class
     */
     DLLLOCAL void setCreateInProgress(const std::string& qpath) {
-        in_progress_set.insert(qpath);
+        ++in_progress_set[qpath];
     }
 
-    // clears the given class as creation in progress
-    /** @param qpath the full Qore classpath to the Qore class
+    // clears one nesting level of creation-in-progress for the given class
+    /** the marker remains in effect until the outermost (balancing) call
+        @param qpath the full Qore classpath to the Qore class
     */
     DLLLOCAL void clearCreateInProgress(const std::string& qpath) {
-        strset_t::iterator i = in_progress_set.find(qpath);
+        in_progress_map_t::iterator i = in_progress_set.find(qpath);
         assert(i != in_progress_set.end());
-        in_progress_set.erase(i);
+        if (!--i->second) {
+            in_progress_set.erase(i);
+        }
     }
 
     // initializes the dynamic API in the constructor
