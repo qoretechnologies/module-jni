@@ -1294,3 +1294,14 @@ if (DOXYGEN_FOUND)
     add_custom_target(QORE_MOD_DOX_FILES DEPENDS ${QORE_DOX_SRC})
     add_dependencies(docs-module QORE_MOD_DOX_FILES)
 endif()
+
+# C++ regression test for the NativeCleanup foreign-thread deref crash: a Qore
+# value deref'd on a thread with no Qore thread context (as the NativeCleanup
+# daemon thread does in native_cleanup_dispatch()) must not crash.  See
+# src/Globals.cpp (QoreForeignThreadHelper).
+enable_testing()
+find_package(Threads REQUIRED)
+add_executable(foreign_thread_deref_crash test/foreign_thread_deref_crash.cpp)
+target_include_directories(foreign_thread_deref_crash PRIVATE ${QORE_INCLUDE_DIRS})
+target_link_libraries(foreign_thread_deref_crash ${QORE_LIBRARY} Threads::Threads)
+add_test(NAME foreign_thread_deref_crash COMMAND foreign_thread_deref_crash)

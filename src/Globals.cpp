@@ -3859,6 +3859,15 @@ void native_cleanup_dispatch(jlong ptr, jint kind) {
     if (!ptr) {
         return;
     }
+    // The cleanup actions below dereference Qore values, which can run Qore-level
+    // cleanup (object destructors, closure-variable derefs, QoreProgram dependency
+    // derefs) that require a valid Qore thread context.  This dedicated cleanup
+    // thread is attached to the JVM but is not a registered Qore thread; without a
+    // Qore thread context such derefs crash (no thread-local Qore context set).
+    // Register the thread as a foreign Qore thread for the duration of the dispatch
+    // so the derefs are safe.  Registration is scoped to the dispatch only (never
+    // held across the blocking queue.remove() wait in native_cleanup_thread_main).
+    QoreForeignThreadHelper qfth;
     switch (kind) {
         case 0: {  // NativeCleanup.KIND_INVOCATION_HANDLER
             delete reinterpret_cast<Dispatcher*>(ptr);
