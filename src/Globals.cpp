@@ -3905,6 +3905,20 @@ void native_cleanup_thread_main(JavaVM* vm) {
     }
 
     while (true) {
+        // native_cleanup_dispatch() below runs Qore-level derefs inside a
+        // QoreForeignThreadHelper.  Once such a deref touches Java it sets this
+        // thread's thread-local Jvm::env, so when the foreign Qore thread is
+        // deregistered the jni module's Qore thread-cleanup hook (Jvm::threadCleanup)
+        // calls DetachCurrentThread() — detaching THIS daemon thread from the JVM and
+        // leaving our `env` (and any local refs) stale.  A subsequent JNI call would
+        // then crash dereferencing a null JavaThread.  Re-establish the daemon
+        // attachment at the top of every iteration so the JNI calls below always run
+        // on a valid env.
+        if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_21) != JNI_OK
+                && vm->AttachCurrentThreadAsDaemon(reinterpret_cast<void**>(&env), &args) != JNI_OK) {
+            break;
+        }
+
         // Block on queue.remove(); returns when a Ref has been enqueued (either by
         // GC of its referent, or by NativeCleanup.shutdown() for the sentinel).
         jobject ref = env->CallObjectMethod(static_cast<jobject>(nativeCleanupQueue),
@@ -3933,15 +3947,18 @@ void native_cleanup_thread_main(JavaVM* vm) {
             break;
         }
 
-        // Dispatch native cleanup directly in C++ — no JNI adapter on the call path.
-        native_cleanup_dispatch(ptr, kind);
-
+        // Complete ALL JNI work for this ref BEFORE the C++ dispatch: native_cleanup_dispatch()
+        // can detach this thread's JVM env (see above), which would invalidate both `env` and
+        // the local `ref` for any later JNI call on the same iteration.
         env->CallStaticVoidMethod(static_cast<jclass>(nativeCleanupClass),
             methodNativeCleanupMarkProcessed, ref);
         if (env->ExceptionCheck()) {
             env->ExceptionClear();
         }
         env->DeleteLocalRef(ref);
+
+        // Dispatch native cleanup directly in C++ — no JNI adapter on the call path.
+        native_cleanup_dispatch(ptr, kind);
     }
 
     vm->DetachCurrentThread();
