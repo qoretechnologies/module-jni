@@ -262,6 +262,7 @@ public class Main inherits QUnit::Test {
         addTestCase("static fields access test", \testStaticFields());
         addTestCase("instance fields access test", \testInstanceFields());
         addTestCase("callback test", \testCallback());
+        addTestCase("foreign-thread thread resource cleanup test", \testForeignThreadResourceCleanup());
         addTestCase("constructor test", \testConstructor());
         addTestCase("string test", \testString());
         addTestCase("array test", \testArray());
@@ -2234,6 +2235,30 @@ lorem ipsum\r
         trueIfThrows.setAccessible(True);
         h = new QoreInvocationHandler(sub(Method m, *list args) { doThrow.invoke(NOTHING); });
         assertTrue(trueIfThrows.invoke(NOTHING, implement_interface(h, runnableClass)));
+        h.destroy();
+    }
+
+    testForeignThreadResourceCleanup() {
+        Counter cleanupDone(1);
+        *string cleanupArg;
+        code cleanup = sub(auto arg) {
+            cleanupArg = arg;
+            cleanupDone.dec();
+        };
+
+        QoreInvocationHandler h(sub(Method m, *list args) {
+            set_thread_resource(cleanup, "left-by-java-thread");
+        });
+
+        lang::Class runnableClass = load_class("java/lang/Runnable");
+        Object o = implement_interface(h, runnableClass);
+        lang::Class clazz = load_class("org/qore/jni/test/Callbacks");
+        Method callInThread = clazz.getDeclaredMethod("callInThread", (runnableClass, ));
+
+        callInThread.invoke(NOTHING, o);
+        assertEq(0, cleanupDone.waitForZero(5s));
+        assertEq("left-by-java-thread", cleanupArg);
+
         h.destroy();
     }
 
