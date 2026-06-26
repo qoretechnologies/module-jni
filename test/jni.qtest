@@ -31,6 +31,8 @@
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompilerException
 %module-cmd(jni) import org.qore.jni.compiler.CompilerOutput
 
+%module-cmd(jni) import org.qore.jni.QoreClassFileLocator
+
 %module-cmd(jni) import org.qore.lang.*
 %module-cmd(jni) import org.qore.lang.sqlutil.*
 %module-cmd(jni) import org.qore.lang.mapper.*
@@ -256,6 +258,7 @@ public class Main inherits QUnit::Test {
         addTestCase("issue 2950", \issue2950());
         addTestCase("class test", \testJniClasses());
         addTestCase("generic Qore class codegen cycle test", \genericQoreClassCodegenCycleTest());
+        addTestCase("codegen cycle superclass stub test", \codegenCycleSuperclassStubTest());
         addTestCase("static method invocation test", \testStaticMethods());
         addTestCase("instance method invocation test", \testInstanceMethods());
         addTestCase("float conversion test", \testFloatConversions());
@@ -1877,6 +1880,32 @@ lorem ipsum\r
         # that JNI can create parameterized forward refs for that cycle.
         channelClass.getDeclaredMethod("iterator");
         iteratorClass.getDeclaredMethod("getValue");
+    }
+
+    #! Regression test: the forward-ref stub for a mid-generation Qore class must be usable as a
+    #! superclass, not just as a bare name token.
+    /** While a strongly-connected cluster of Qore classes is generated for Java, a member that is
+        transiently mid-generation is supplied to Byte Buddy as a stub via
+        @ref QoreClassFileLocator.  When such a stub is consumed as the SUPERCLASS of another
+        generated class, Byte Buddy resolves the inherited Qore object handle (the @c obj field
+        declared in @c QoreObjectBase) and the super constructors a generated subclass delegates to
+        from the stub's described hierarchy.  A name-only @c "extends Object" stub lacked both and
+        regressed JNI generation of cyclic clusters (e.g. the Qorus REST helper hierarchy) with
+        "Could not locate field 'obj'" and then "Cannot invoke ... as a super method".  The stub must
+        therefore extend @c QoreJavaClassBase (which is-a @c QoreObjectBase and declares the
+        @c (QoreJavaObjectPtr) and @c (long, long, long, Object...) constructors).
+    */
+    codegenCycleSuperclassStubTest() {
+        # a non-generatable dynamic ("qore.*") name yields a forward-ref stub from the locator
+        QoreClassFileLocator locator(jni::get_class_loader());
+        auto res = locator.locate("qore.jnitest.NonExistentSuperclassStub");
+        assertTrue(res.isResolved(), "locator returns a forward-ref stub for a mid-generation class");
+        binary class_file = res.resolve();
+        # the stub's superclass must be QoreJavaClassBase; its binary name appears in the class file's
+        # constant pool (a regressed "extends Object" stub would not reference it)
+        string hexcode = class_file.toHex();
+        assertTrue(hexcode.find(binary("org/qore/jni/QoreJavaClassBase").toHex()) != -1,
+            "forward-ref stub extends QoreJavaClassBase so it is usable as a superclass");
     }
 
     testStaticMethods() {
