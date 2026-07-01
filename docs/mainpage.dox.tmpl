@@ -1122,6 +1122,10 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       thread's program-context (call) stack, so module/library code invoked from a sandboxed program
       correctly inherits the caller's sandbox without needing an owner object (requires a %Qore release
       that resolves the sandbox manager across the program-context stack)
+    - fixed an ABBA deadlock between the global class-map lock and the per-Program code-generation lock
+      that could hang concurrent %Qore-to-Java byte code generation and Java-to-%Qore class import (for
+      example during parallel service startup); the global class-map lock is now acquired strictly before
+      the per-Program code-generation lock on all class-generation paths
 
     @subsection jni_2_6_0 jni Module Version 2.6.0
     - added Kotlin language integration support

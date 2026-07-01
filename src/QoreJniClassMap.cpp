@@ -2268,6 +2268,17 @@ int JniExternalProgramData::addMethods(Env& env, jobject class_loader, const Qor
 LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jobject class_loader,
         const QoreString& qpath, jstring jname, const char* module, const QoreClass* qcls) {
     printd(5, "JniExternalProgramData::generateByteCode() '%s' pgm: %p qc: %p\n", qpath.c_str(), pgm, qcls);
+
+    // Lock ordering: the global class-map lock (m) is the OUTER lock and must be acquired
+    // before the per-Program codeGenLock.  Byte code generation resolves method parameter and
+    // return types, which can create Qore classes for referenced Java types (getQoreType() ->
+    // findCreateQoreClass*() -> m) while codeGenLock is held.  The class-creation path takes the
+    // locks in the same order (m -> createClassInNamespace()/saveClass() -> codeGenLock), so
+    // acquiring m here first keeps the global order "m -> codeGenLock" and avoids the ABBA
+    // deadlock between concurrent Qore->Java generation and Java->Qore import.  m is recursive,
+    // so this is safe when the caller (e.g. the import path) already holds it.
+    AutoLocker al_map(QoreJniClassMap::m);
+
     ExceptionSink xsink;
     if (!qcls) {
         assert(!qpath.empty());
@@ -3070,8 +3081,13 @@ LocalReference<jobject> JniExternalProgramData::getJavaRawClassTypeDefinition(En
             cls->getPath(), cls);
 
         try {
-            AutoLocker al(QoreJniClassMap::m);
-
+            // NOTE: do NOT acquire QoreJniClassMap::m here.  This code is only reached from
+            // generateByteCode(), which already holds m as the outer lock (m -> codeGenLock);
+            // re-acquiring it here would be redundant.  Acquiring m *after* codeGenLock anywhere
+            // (as an earlier version did here) produces the order "codeGenLock -> m", which
+            // deadlocks against the class-import path that runs "m -> codeGenLock"
+            // (findCreateQoreClass*() holds m, then createClassInNamespace()/saveClass() take
+            // codeGenLock).  Keeping m strictly outer avoids that ABBA deadlock.
             jvalue jargs[2];
             jargs[0].l = jname;
             jargs[1].j = (jlong)cls;
@@ -3589,6 +3605,10 @@ LocalReference<jclass> JniExternalProgramData::getClassForValue(const QoreObject
 }
 
 LocalReference<jclass> JniExternalProgramData::getJavaClassForQoreClass(Env& env, const QoreClass* qc) {
+    // lock ordering: acquire the global class-map lock before codeGenLock (see generateByteCode());
+    // loadClassWithPtr() below can drive byte code generation, which resolves referenced types
+    // under m, so m must be the outer lock to avoid an ABBA deadlock with the class-import path
+    AutoLocker al_map(QoreJniClassMap::m);
     // ensure that class generation is atomic
     AutoLocker al(codeGenLock);
 

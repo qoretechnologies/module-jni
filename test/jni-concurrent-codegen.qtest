@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Regression test for the QoreJniClassMap::m <-> codeGenLock ABBA deadlock.
+#
+# Concurrent Qore->Java byte code generation (get_byte_code() -> generateByteCode(),
+# which resolves referenced types and so needs the global class-map lock while holding the
+# per-Program codeGenLock) raced against Java->Qore class import (load_class() ->
+# findCreateQoreClass(), which holds the global lock and then takes codeGenLock via
+# saveClass()) used to acquire the two locks in opposite orders and deadlock.  The fix makes
+# the global class-map lock strictly outer (m -> codeGenLock).  Before the fix this test hangs
+# (no worker completes even one iteration); after the fix it completes.
+
+%modern
+
+%requires jni
+%requires QUnit
+
+%exec-class Main
+
+# Qore classes that reference each other through object-typed method params/returns, so that
+# generating their Java byte code exercises getJavaRawClassTypeDefinition() for the *referenced*
+# classes - the code path that formerly took the global lock while holding codeGenLock.
+class RefA {
+    RefB make(RefC c) { return new RefB(); }
+    RefC other(RefA a, RefB b) { return new RefC(); }
+}
+class RefB {
+    RefA make(RefA a) { return new RefA(); }
+    RefC other(RefC c, RefB b) { return new RefC(); }
+}
+class RefC {
+    RefA make(RefB b) { return new RefA(); }
+    RefB other(RefA a, RefC c) { return new RefB(); }
+}
+
+public class Main inherits QUnit::Test {
+    private {
+        const QoreClasses = (
+            "RefA", "RefB", "RefC",
+            "::Qore::Thread::Mutex", "::Qore::Thread::Condition", "::Qore::Thread::Counter",
+        );
+
+        # a set of distinct JDK classes; importing a not-yet-seen Java class runs the
+        # findCreateQoreClass() -> saveClass() (m -> codeGenLock) path
+        const JavaClasses = (
+            "java.util.ArrayList", "java.util.LinkedList", "java.util.HashMap", "java.util.TreeMap",
+            "java.util.HashSet", "java.util.TreeSet", "java.util.Vector", "java.util.ArrayDeque",
+            "java.util.PriorityQueue", "java.util.Optional", "java.util.Random", "java.util.UUID",
+            "java.util.BitSet", "java.util.Locale", "java.util.Calendar", "java.util.Scanner",
+            "java.util.concurrent.ConcurrentHashMap", "java.util.concurrent.CountDownLatch",
+            "java.util.concurrent.Semaphore", "java.util.concurrent.CyclicBarrier",
+            "java.util.concurrent.atomic.AtomicInteger", "java.util.concurrent.atomic.AtomicLong",
+            "java.io.File", "java.io.ByteArrayInputStream", "java.io.ByteArrayOutputStream",
+            "java.io.StringReader", "java.io.StringWriter", "java.net.URL", "java.net.URI",
+            "java.net.InetAddress", "java.time.LocalDate", "java.time.LocalTime",
+            "java.time.LocalDateTime", "java.time.Instant", "java.time.Duration", "java.time.Period",
+            "java.time.ZoneId", "java.time.format.DateTimeFormatter", "java.math.BigInteger",
+            "java.math.BigDecimal", "java.math.MathContext", "java.text.DecimalFormat",
+            "java.text.SimpleDateFormat", "java.nio.ByteBuffer", "java.nio.CharBuffer",
+            "java.nio.charset.Charset", "java.lang.StringBuilder", "java.lang.reflect.Method",
+            "java.lang.reflect.Field", "java.lang.reflect.Constructor",
+        );
+
+        const NumGenThreads = 4;
+        const NumImportThreads = 4;
+        const Iters = 15;
+    }
+
+    constructor() : Test("jni concurrent codegen test", "1.0") {
+        addTestCase("concurrent codegen/import deadlock", \concurrentCodegenTest());
+
+        # execute tests and set program return value
+        set_return_value(main());
+    }
+
+    concurrentCodegenTest() {
+        Counter running();
+        # collects any worker exception so the test fails (instead of only hanging) on error
+        Mutex errlck();
+        *hash<ExceptionInfo> worker_err;
+
+        code gen_worker = sub () {
+            on_exit running.dec();
+            try {
+                for (int i = 0; i < Iters; ++i) {
+                    foreach string cn in (QoreClasses) {
+                        binary b = get_byte_code(class_name: cn);
+                        assertEq(Type::Binary, b.type());
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errlck.lock();
+                on_exit errlck.unlock();
+                if (!worker_err) {
+                    worker_err = ex;
+                }
+            }
+        };
+
+        code import_worker = sub () {
+            on_exit running.dec();
+            try {
+                for (int i = 0; i < Iters; ++i) {
+                    foreach string cn in (JavaClasses) {
+                        load_class(class_name: cn);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errlck.lock();
+                on_exit errlck.unlock();
+                if (!worker_err) {
+                    worker_err = ex;
+                }
+            }
+        };
+
+        int n = 0;
+        for (int i = 0; i < NumGenThreads; ++i) {
+            running.inc();
+            background gen_worker();
+            ++n;
+        }
+        for (int i = 0; i < NumImportThreads; ++i) {
+            running.inc();
+            background import_worker();
+            ++n;
+        }
+
+        # if the ABBA deadlock is present, this never returns and CI times out
+        running.waitForZero();
+
+        if (worker_err) {
+            fail(sprintf("worker raised %s: %s", worker_err.err, worker_err.desc));
+        }
+        assertEq(NumGenThreads + NumImportThreads, n);
+    }
+}
