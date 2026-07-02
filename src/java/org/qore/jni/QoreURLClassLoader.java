@@ -91,8 +91,8 @@ public class QoreURLClassLoader extends URLClassLoader {
     /** Using ConcurrentHashMap for thread-safe access */
     private final ConcurrentHashMap<String, QoreJavaFileObject> classes = new ConcurrentHashMap<String, QoreJavaFileObject>();
 
-    //! used to mark java class creation in progress; binary names used
-    private final ConcurrentHashMap<String, Boolean> classInProgress = new ConcurrentHashMap<String, Boolean>();
+    //! used to mark java class creation in progress in the current Java call chain; binary names used
+    private final ThreadLocal<HashSet<String>> classInProgress = ThreadLocal.withInitial(HashSet::new);
 
     //! cache of inner classes to resolve circular dependencies when injecting classes
     /** Using ConcurrentHashMap for thread-safe access */
@@ -107,6 +107,8 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! static initialization
     static {
+        registerAsParallelCapable();
+
         // check if we are using this class as the system class loader
         if ("org.qore.jni.QoreURLClassLoader".equals(System.getProperty("java.system.class.loader"))) {
             //System.out.printf("setting static_bootstrap = true\n");
@@ -304,13 +306,13 @@ public class QoreURLClassLoader extends URLClassLoader {
         - pendingClasses: byte code for classes being injected
         - classCache: cached Class objects
         - classes: QoreJavaFileObject cache for compilation
-        - classInProgress: classes currently being created
+        - classInProgress: classes currently being created in the current Java call chain
     */
     public void clearAllCaches() {
         pendingClasses.clear();
         classCache.clear();
         classes.clear();
-        classInProgress.clear();
+        classInProgress.get().clear();
     }
 
     public byte[] removePendingByteCode(String bin_name) {
@@ -472,31 +474,32 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Check if a class is currently being created
-    /** Thread-safe using ConcurrentHashMap
+    /** Tracks recursion in the current thread only.
         @param bin_name the binary name of the class
         @return true if the class is currently being created
     */
     public boolean checkInProgress(String bin_name) {
-        return classInProgress.containsKey(bin_name);
+        return classInProgress.get().contains(bin_name);
     }
 
     //! Mark a class as being created
-    /** Thread-safe using ConcurrentHashMap.putIfAbsent()
+    /** Tracks recursion in the current thread only.
         @param bin_name the binary name of the class
         @return true if the class was already being created, false if it was marked
     */
     private boolean markInProgress(String bin_name) {
-        Boolean previous = classInProgress.putIfAbsent(bin_name, Boolean.TRUE);
+        HashSet<String> inProgress = classInProgress.get();
+        boolean previous = !inProgress.add(bin_name);
         //debugLog("marked in progress " + bin_name);
-        return previous != null;
+        return previous;
     }
 
     //! Remove a class from the in-progress set
-    /** Thread-safe using ConcurrentHashMap
+    /** Tracks recursion in the current thread only.
         @param bin_name the binary name of the class
     */
     private void removeInProgress(String bin_name) {
-        classInProgress.remove(bin_name);
+        classInProgress.get().remove(bin_name);
         //debugLog("removed in progress " + bin_name);
     }
 
@@ -570,15 +573,17 @@ public class QoreURLClassLoader extends URLClassLoader {
             }
         }
 
-        rv = tryGetPendingClass(bin_name);
-        if (rv != null) {
-            //System.out.printf("loadClass() %s returning pending\n", bin_name);
-            return rv;
-        }
-        QoreJavaFileObject file = classes.get(bin_name);
-        if (file != null) {
-            byte[] bytes = file.getByteCode();
-            return defineClass(bin_name, bytes, 0, bytes.length);
+        synchronized (getClassLoadingLock(bin_name)) {
+            rv = tryGetPendingClass(bin_name);
+            if (rv != null) {
+                //System.out.printf("loadClass() %s returning pending\n", bin_name);
+                return rv;
+            }
+            QoreJavaFileObject file = classes.get(bin_name);
+            if (file != null) {
+                byte[] bytes = file.getByteCode();
+                return defineClass(bin_name, bytes, 0, bytes.length);
+            }
         }
 
         if (bin_name.startsWith("java.")
@@ -598,17 +603,19 @@ public class QoreURLClassLoader extends URLClassLoader {
             try {
                 byte[] bytes = generateByteCode(bin_name);
 
-                // have to check if the class was loaded in the meantime
-                rv = checkLoadedClass(bin_name);
-                if (rv != null) {
-                    //System.out.printf("loadClass() %s returning loaded after bytecode generation\n", bin_name);
+                synchronized (getClassLoadingLock(bin_name)) {
+                    // have to check if the class was loaded in the meantime
+                    rv = checkLoadedClass(bin_name);
+                    if (rv != null) {
+                        //System.out.printf("loadClass() %s returning loaded after bytecode generation\n", bin_name);
+                        return rv;
+                    }
+
+                    rv = defineClassIntern(bin_name, bytes, 0, bytes.length);
+                    //System.out.printf("loadClass() this: %x pgm: %x dyn %s returning generated %s\n", hashCode(),
+                    //    pgm_ptr, bin_name, rv);
                     return rv;
                 }
-
-                rv = defineClassIntern(bin_name, bytes, 0, bytes.length);
-                //System.out.printf("loadClass() this: %x pgm: %x dyn %s returning generated %s\n", hashCode(),
-                //    pgm_ptr, bin_name, rv);
-                return rv;
             } catch (ClassNotFoundException e1) {
                 //e1.printStackTrace();
                 // block left empty on purpose
@@ -662,44 +669,46 @@ public class QoreURLClassLoader extends URLClassLoader {
     public Class<?> loadClassWithPtr(String bin_name, long class_ptr) throws ClassNotFoundException {
         //debugLog(String.format("loadClassWithPtr() %s: %x", bin_name, class_ptr));
         Class<?> rv;
-        synchronized(getClassLoadingLock(bin_name)) {
+        synchronized (getClassLoadingLock(bin_name)) {
             rv = checkLoadedClass(bin_name);
             if (rv != null) {
                 //System.out.printf("loadClassWithPtr() %s returning loaded\n", bin_name);
                 return rv;
             }
+        }
 
-            // Canonical routing MUST come before tryGetPendingClass — see loadClass() above.
-            if (isSharedDynamicClassName(bin_name)) {
-                QoreURLClassLoader target = resolveSharedClassLoader(bin_name);
-                if (target != null && target != this) {
-                    Class<?> shared = target.checkLoadedClass(bin_name);
-                    if (shared != null) {
-                        return shared;
-                    }
-                    try {
-                        byte[] bytes = target.generateByteCode(bin_name, class_ptr);
-                        // Also store in our own pendingClasses for Kotlin stub generation
-                        pendingClasses.put(bin_name, bytes);
-                        synchronized (target.getClassLoadingLock(bin_name)) {
-                            shared = target.checkLoadedClass(bin_name);
-                            if (shared != null) {
-                                return shared;
-                            }
-                            return target.defineClassUnconditional(bin_name, bytes);
-                        }
-                    } catch (ClassNotFoundException e) {
-                        // canonical loader can't make this class; fall through
-                    } catch (LinkageError le) {
+        // Canonical routing MUST come before tryGetPendingClass — see loadClass() above.
+        if (isSharedDynamicClassName(bin_name)) {
+            QoreURLClassLoader target = resolveSharedClassLoader(bin_name);
+            if (target != null && target != this) {
+                Class<?> shared = target.checkLoadedClass(bin_name);
+                if (shared != null) {
+                    return shared;
+                }
+                try {
+                    byte[] bytes = target.generateByteCode(bin_name, class_ptr);
+                    // Also store in our own pendingClasses for Kotlin stub generation
+                    pendingClasses.put(bin_name, bytes);
+                    synchronized (target.getClassLoadingLock(bin_name)) {
                         shared = target.checkLoadedClass(bin_name);
                         if (shared != null) {
                             return shared;
                         }
-                        throw le;
+                        return target.defineClassUnconditional(bin_name, bytes);
                     }
+                } catch (ClassNotFoundException e) {
+                    // canonical loader can't make this class; fall through
+                } catch (LinkageError le) {
+                    shared = target.checkLoadedClass(bin_name);
+                    if (shared != null) {
+                        return shared;
+                    }
+                    throw le;
                 }
             }
+        }
 
+        synchronized (getClassLoadingLock(bin_name)) {
             rv = tryGetPendingClass(bin_name);
             if (rv != null) {
                 //System.out.printf("loadClassWithPtr() %s returning pending\n", bin_name);
@@ -714,13 +723,15 @@ public class QoreURLClassLoader extends URLClassLoader {
 
                 return defineClass(bin_name, bytes, 0, bytes.length);
             }
+        }
 
-            // only remove from set if successful
-            try {
-                //System.out.printf("loadClassWithPtr() this: %x %s about to call generateByteCode(%s, %x)\n",
-                //    hashCode(), bin_name, bin_name, class_ptr);
-                byte[] bytes = generateByteCode(bin_name, class_ptr);
+        // only remove from set if successful
+        try {
+            //System.out.printf("loadClassWithPtr() this: %x %s about to call generateByteCode(%s, %x)\n",
+            //    hashCode(), bin_name, bin_name, class_ptr);
+            byte[] bytes = generateByteCode(bin_name, class_ptr);
 
+            synchronized (getClassLoadingLock(bin_name)) {
                 // have to check if the class was loaded in the meantime
                 rv = checkLoadedClass(bin_name);
                 if (rv != null) {
@@ -731,13 +742,13 @@ public class QoreURLClassLoader extends URLClassLoader {
                 rv = defineClassIntern(bin_name, bytes, 0, bytes.length);
                 //System.out.printf("loadClassWithPtr() this: %x pgm: %x dyn %s returning generated %s\n", hashCode(),
                 //    pgm_ptr, bin_name, rv);
-            } catch (RuntimeException e1) {
-                //e1.printStackTrace();
-                throw e1;
-            } catch (Throwable e1) {
-                //e1.printStackTrace();
-                throw new RuntimeException(e1);
             }
+        } catch (RuntimeException e1) {
+            //e1.printStackTrace();
+            throw e1;
+        } catch (Throwable e1) {
+            //e1.printStackTrace();
+            throw new RuntimeException(e1);
         }
         return rv;
     }
@@ -1154,11 +1165,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
     }
 
-    public synchronized byte[] generateByteCode(String bin_name) throws ClassNotFoundException {
+    public byte[] generateByteCode(String bin_name) throws ClassNotFoundException {
         return generateByteCode(bin_name, 0);
     }
 
-    public synchronized byte[] generateByteCode(String bin_name, long class_ptr) throws ClassNotFoundException {
+    public byte[] generateByteCode(String bin_name, long class_ptr) throws ClassNotFoundException {
         byte[] rv = pendingClasses.get(bin_name);
         //System.out.printf("QoreURLClassLoader.generateByteCode() this: %x class: '%s' ptr: %x (pend: %s)\n",
         //    hashCode(), bin_name, class_ptr, rv == null ? "false" : "true");

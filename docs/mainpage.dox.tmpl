@@ -1126,6 +1126,8 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       that could hang concurrent %Qore-to-Java byte code generation and Java-to-%Qore class import (for
       example during parallel service startup); the global class-map lock is now acquired strictly before
       the per-Program code-generation lock on all class-generation paths
+    - fixed a related Java classloader monitor deadlock during concurrent dynamic bytecode generation and
+      Java class import by avoiding native bytecode generation while holding Java class-loading locks
 
     @subsection jni_2_6_0 jni Module Version 2.6.0
     - added Kotlin language integration support

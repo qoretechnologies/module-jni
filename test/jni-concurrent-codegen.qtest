@@ -10,11 +10,23 @@
 # saveClass()) used to acquire the two locks in opposite orders and deadlock.  The fix makes
 # the global class-map lock strictly outer (m -> codeGenLock).  Before the fix this test hangs
 # (no worker completes even one iteration); after the fix it completes.
+#
+# The second test covers the related Java-origin path: QoreURLClassLoader.generateByteCode()
+# must not hold a Java class-loading monitor while entering native generation that may acquire
+# QoreJniClassMap::m, because Java-to-Qore import can hold m while reflection asks the JVM to
+# resolve field types through the same classloader.
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
 %requires jni
 %requires QUnit
+
+%module-cmd(jni) add-relative-classpath ../build/qore-jni.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
 
 %exec-class Main
 
@@ -34,11 +46,29 @@ class RefC {
     RefB other(RefA a, RefC c) { return new RefB(); }
 }
 
+class JavaGenA {
+    JavaGenB make(JavaGenC c) { return new JavaGenB(); }
+    JavaGenC other(JavaGenA a, JavaGenB b) { return new JavaGenC(); }
+}
+class JavaGenB {
+    JavaGenA make(JavaGenA a) { return new JavaGenA(); }
+    JavaGenC other(JavaGenC c, JavaGenB b) { return new JavaGenC(); }
+}
+class JavaGenC {
+    JavaGenA make(JavaGenB b) { return new JavaGenA(); }
+    JavaGenB other(JavaGenA a, JavaGenC c) { return new JavaGenB(); }
+}
+
 public class Main inherits QUnit::Test {
     private {
         const QoreClasses = (
             "RefA", "RefB", "RefC",
             "::Qore::Thread::Mutex", "::Qore::Thread::Condition", "::Qore::Thread::Counter",
+        );
+
+        const JavaOriginGenClasses = (
+            "qore.JavaGenA", "qore.JavaGenB", "qore.JavaGenC",
+            "qore.Qore.Thread.Mutex", "qore.Qore.Thread.Condition", "qore.Qore.Thread.Counter",
         );
 
         # a set of distinct JDK classes; importing a not-yet-seen Java class runs the
@@ -64,14 +94,111 @@ public class Main inherits QUnit::Test {
 
         const NumGenThreads = 4;
         const NumImportThreads = 4;
+        const NumJavaOriginImportThreads = 1;
         const Iters = 15;
+        const NumProbeClasses = 24;
     }
 
     constructor() : Test("jni concurrent codegen test", "1.0") {
         addTestCase("concurrent codegen/import deadlock", \concurrentCodegenTest());
+        addTestCase("java-origin codegen/import deadlock", \javaOriginCodegenTest());
 
         # execute tests and set program return value
         set_return_value(main());
+    }
+
+    list<string> prepareJavaImportProbeClasses() {
+        hash<string, string> sources;
+        list<string> class_names;
+        for (int i = 0; i < NumProbeClasses; ++i) {
+            string class_name = sprintf("org.qore.jni.test.concurrent.JniLockProbe%d", i);
+            class_names += sprintf("org/qore/jni/test/concurrent/JniLockProbe%d", i);
+            sources{class_name} = sprintf(
+                "package org.qore.jni.test.concurrent;\n" +
+                "import qore.RefA;\n" +
+                "import qore.RefB;\n" +
+                "import qore.RefC;\n" +
+                "public class %s {\n" +
+                "    public RefA refA;\n" +
+                "    public RefB get(RefC c) { return null; }\n" +
+                "}\n",
+                sprintf("JniLockProbe%d", i));
+        }
+
+        object classloader = QoreURLClassLoader::getCurrent();
+        QoreJavaCompiler compiler(classloader);
+        hash<auto> cv = compiler.compile(sources);
+
+        # Keep only the Java probe bytecode pending. The compiler may have generated
+        # qore.Ref* bytecode while resolving the imports, but the import side should
+        # resolve those through the dynamic classloader during the race.
+        classloader.clearPendingClassesCache();
+        foreach hash<auto> class_pair in (cv.pairIterator()) {
+            binary fdata = class_pair.value.file.openInputStream().readAllBytes();
+            classloader.addPendingClass(class_pair.key, fdata);
+        }
+
+        return class_names;
+    }
+
+    javaOriginCodegenTest() {
+        list<string> probe_classes = prepareJavaImportProbeClasses();
+        object classloader = QoreURLClassLoader::getCurrent();
+
+        Counter running();
+        Mutex errlck();
+        *hash<ExceptionInfo> worker_err;
+
+        code java_gen_worker = sub () {
+            on_exit running.dec();
+            try {
+                for (int i = 0; i < Iters; ++i) {
+                    foreach string cn in (JavaOriginGenClasses) {
+                        binary b = classloader.generateByteCode(cn);
+                        assertEq(Type::Binary, b.type());
+                        classloader.removePendingByteCode(cn);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errlck.lock();
+                on_exit errlck.unlock();
+                if (!worker_err) {
+                    worker_err = ex;
+                }
+            }
+        };
+
+        code import_probe_worker = sub () {
+            on_exit running.dec();
+            try {
+                for (int i = 0; i < Iters; ++i) {
+                    foreach string cn in (probe_classes) {
+                        load_class(class_name: cn);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                errlck.lock();
+                on_exit errlck.unlock();
+                if (!worker_err) {
+                    worker_err = ex;
+                }
+            }
+        };
+
+        for (int i = 0; i < NumGenThreads; ++i) {
+            running.inc();
+            background java_gen_worker();
+        }
+        for (int i = 0; i < NumJavaOriginImportThreads; ++i) {
+            running.inc();
+            background import_probe_worker();
+        }
+
+        running.waitForZero();
+
+        if (worker_err) {
+            fail(sprintf("worker raised %s: %s", worker_err.err, worker_err.desc));
+        }
     }
 
     concurrentCodegenTest() {
