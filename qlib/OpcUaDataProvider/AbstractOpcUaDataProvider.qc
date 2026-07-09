@@ -56,13 +56,60 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
     destructor() {
         if (client) {
             try {
-                client.disconnectAsync().get();
+                # bound the disconnect so a dead server cannot hang object teardown (e.g. monitor
+                # thread stop or connection replacement); errors are ignored below
+                awaitFutureWithDeadline(client.disconnectAsync(), copts.connect_timeout ?? 10000,
+                    sprintf("OPC UA disconnect from %y", url));
                 debug("OPC UA: Disconnected from %y", url);
             } catch (hash<ExceptionInfo> ex) {
                 # ignore disconnect errors in destructor
             }
         }
         delete client;
+    }
+
+    #! Awaits a CompletableFuture with an overall deadline and cooperative cancellation
+    /** Polls the future in 500ms increments (so the wait remains interruptible by the Qore
+        runtime) up to an overall deadline of \a timeout_ms milliseconds. If the deadline
+        expires before the future completes, the future is cancelled and an exception is
+        thrown; this guarantees that blocking client operations (for example, connecting to an
+        unreachable or firewalled server that silently drops packets) cannot hang indefinitely.
+
+        @param future the CompletableFuture to await
+        @param timeout_ms the overall deadline in milliseconds
+        @param operation a description of the operation for error messages
+
+        @return the result of the future
+
+        @throw OPCUA-TIMEOUT-ERROR the overall deadline expired before the future completed
+        @throw PROGRAM-INTERRUPTED the thread was cancelled during the wait
+    */
+    static auto awaitFutureWithDeadline(auto future, int timeout_ms, string operation = "OPC UA operation") {
+        date deadline = now_us() + milliseconds(timeout_ms);
+        while (True) {
+            try {
+                return future.get(500, TimeUnit::MILLISECONDS);
+            } catch (hash<ExceptionInfo> ex) {
+                # a TimeoutException means the future has not completed yet; loop, check for
+                # cancellation, and enforce the overall deadline
+                if (ex.desc =~ /TimeoutException/) {
+                    # sleep(0) is a cancellation point in Qore; it throws PROGRAM-INTERRUPTED or
+                    # THREAD-CANCELLED if cancellation is active
+                    sleep(0);
+                    if (now_us() >= deadline) {
+                        try {
+                            future.cancel(True);
+                        } catch (hash<ExceptionInfo> ignored) {
+                            # ignore any error cancelling the abandoned future
+                        }
+                        throw "OPCUA-TIMEOUT-ERROR", sprintf("%s timed out after %d ms", operation,
+                            timeout_ms);
+                    }
+                    continue;
+                }
+                rethrow;
+            }
+        }
     }
 
     #! Returns a configured OPC UA client for the given options

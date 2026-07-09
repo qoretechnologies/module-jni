@@ -103,7 +103,7 @@
 # implements file/resource location handling for offline NodeSet2 import
 %requires FileLocationHandler
 module OpcUaDataProvider {
-    version = "1.9";
+    version = "1.9.1";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -519,6 +519,11 @@ module OpcUaDataProvider {
     implicit history retention.  Runtime callbacks may still return explicit values for \c history-read.
 
     @section opcuadataproviderrelnotes Release Notes
+
+    @subsection opcuadataproviderv191 OpcUaDataProvider v1.9.1
+    - fixed a bug where connecting to (or disconnecting from) an unreachable or unresponsive OPC UA
+      server could block indefinitely; connection and disconnection now respect the \c connect_timeout
+      option so a dead server can no longer hang connection monitoring, object teardown, or reconnection
 
     @subsection opcuadataproviderv19 OpcUaDataProvider v1.9
     - added Qorus-agnostic JSON Schema 2020-12 and OpenAPI 3.1 projections for generic OPC UA schema

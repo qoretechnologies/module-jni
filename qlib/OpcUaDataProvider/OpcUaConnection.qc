@@ -139,7 +139,11 @@ public class OpcUaConnection inherits ConnectionProvider::AbstractConnectionWith
         OpcUaClient opcua_client = AbstractOpcUaDataProvider::getClient(
             orig_opts + {"url": real_url} + rtopts, logger);
         if (connect) {
-            opcua_client.connect().get();
+            # issue #4842: bound the connect (which is also the ping) with connect_timeout so a
+            # dead or firewalled OPC UA server cannot hang the connection monitor thread forever
+            int connect_timeout = (rtopts.connect_timeout ?? orig_opts.connect_timeout) ?? 10000;
+            AbstractOpcUaDataProvider::awaitFutureWithDeadline(opcua_client.connect(),
+                connect_timeout, sprintf("OPC UA connect to %y", real_url));
         }
         return new OpcUaConnectionWrapper(opcua_client);
     }

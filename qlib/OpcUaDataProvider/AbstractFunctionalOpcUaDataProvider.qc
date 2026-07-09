@@ -613,7 +613,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     private stop() {
         if (client) {
             try {
-                client.disconnectAsync().get();
+                # bounded so a dead server cannot hang stop()/teardown
+                awaitFutureWithDeadline(client.disconnectAsync(), copts.connect_timeout ?? 10000,
+                    sprintf("OPC UA disconnect from %y", url));
                 debug("OPC UA: Disconnected from %y", url);
             } catch () {
                 # ignore all disconnect errors during stop/destructor
@@ -1784,7 +1786,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # the session is being recreated; cached node metadata may be stale, so invalidate it
         clearSchemaCache();
         try {
-            client.disconnectAsync().get();
+            # bounded so a dead server cannot hang the reconnect path
+            awaitFutureWithDeadline(client.disconnectAsync(), copts.connect_timeout ?? 10000,
+                sprintf("OPC UA disconnect from %y", url));
         } catch () {
             # ignore disconnect errors
         }
