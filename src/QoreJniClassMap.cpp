@@ -659,8 +659,9 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
     }
     assert(!ns->findLocalClass(sn));
 
-    // assert that we are not creating a Qore class for an imported class
-    assert(name.find("qore.Qore"));
+    // assert that we are not creating a Qore class for an imported class; match the
+    // Qore namespace on a segment boundary so names such as qore.QoreRagUtils.* remain valid
+    assert(name != "qore.Qore" && name.find("qore.Qore.") != 0);
     QoreString path(name);
     path.replaceAll(".", "::");
     path.insert("::Jni::", 0);

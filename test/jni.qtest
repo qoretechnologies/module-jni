@@ -1758,6 +1758,29 @@ lorem ipsum\r
             obj = p.callFunction("test");
             assertEq("Test2", obj.get());
         }
+
+        # A dynamic Qore class whose first namespace segment starts with "Qore" must not be
+        # mistaken for a class in ::Qore.  qjar uses this sequence when generating module docs;
+        # the old prefix-only assertion aborted on qore.QoreRagUtils.* classes.
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("%requires jni
+public namespace QoreJniAssertRegression {
+    public class Test {
+    }
+}
+binary sub byteCode() {
+    return jni::get_byte_code(class_name: \"::QoreJniAssertRegression::Test\");
+}
+string sub javaName() {
+    return jni::get_java_name(class_name: \"::QoreJniAssertRegression::Test\");
+}
+", "qore-prefix-boundary");
+            binary byte_code = p.callFunction("byteCode");
+            string java_name = p.callFunction("javaName");
+            assertEq("qore.QoreJniAssertRegression.Test", java_name);
+            p.issueModuleCmd("jni", "define-class " + java_name + " " + byte_code.toBase64());
+        }
     }
 
     issue2950() {
