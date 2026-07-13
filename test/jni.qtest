@@ -1231,8 +1231,8 @@ lorem ipsum\r
             # save object in object cache, so it doesn't go out of scope
             object_cache{obj.uniqueHash()} = obj;
         };
-        set_save_object_callback(callback);
-        on_exit set_save_object_callback();
+        jni::set_save_object_callback(callback);
+        on_exit jni::set_save_object_callback();
         assertEq("test-y", QoreJavaApiTest::objectLifecycleTest("test"));
         #printf("object_cache: %N\n", object_cache);
         assertEq(1, object_cache.size());
