@@ -991,6 +991,22 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - <b>Fixed a deadlock between Java class import and concurrent module loading</b>
+      - <b>Symptom.</b> A process could hang with many threads blocked while loading modules, most
+        visibly at startup when several services were initialized at once.  Any Java class import
+        racing a cold module load could trigger it; once hit, all further module loading in the
+        process stopped, so HTTP listeners stopped responding and shutdown could not complete.
+      - <b>Cause.</b> Importing a Java class takes the module's global class-map lock, and doing so
+        can load a module &mdash; directly, or indirectly when the JVM classloader calls back into
+        %Qore to generate byte code.  Meanwhile a cold module load holds libqore's module-load lock
+        while applying the module's AOT module commands, which import Java classes and so need the
+        class-map lock.  The two locks could be taken in either order, so two threads could each
+        end up holding the lock the other needed.
+      - <b>Fix.</b> The module now acquires libqore's module-load lock before the class-map lock on
+        every path that can reach module loading, giving both orders a single, consistent
+        hierarchy.  Cache-hit paths that cannot load a module or call into Java keep taking the
+        class-map lock alone, so ordinary Java class resolution is not serialized; debug builds
+        assert that this remains true.
     - <b>Breaking change: module classes are exposed only under \c qoremod.<i>mod</i>.<i>rest</i></b>
       - <b>What changed.</b> %Qore module classes are now exposed in Java under exactly one
         canonical binary name: \c qoremod.<i>mod</i>.<i>rest</i>.  Older module-jni versions

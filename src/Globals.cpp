@@ -4268,6 +4268,13 @@ void QoreJniStackLocationHelper::checkInit() const {
                 LocalReference<jstring> jfilename = env.callObjectMethod(jste, Globals::methodStackTraceElementGetFileName, nullptr).as<jstring>();
                 jni::Env::GetStringUtfChars file(env, jfilename);
                 jint line = env.callIntMethod(jste, Globals::methodStackTraceElementGetLineNumber, nullptr);
+                // StackTraceElement.getLineNumber() returns a negative value when no line number is
+                // available: -1 if it is simply unknown, and -2 if the frame is a native method.
+                // Qore program locations only accept line numbers >= -1 (-1 meaning "unknown"), so
+                // map the native-method sentinel onto "unknown" rather than passing it through
+                if (line < -1) {
+                    line = -1;
+                }
                 jboolean native = env.callBooleanMethod(jste, Globals::methodStackTraceElementIsNativeMethod, nullptr);
 
                 QoreStringMaker code("%s.%s", cname.c_str(), mname.c_str());

@@ -4,7 +4,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -120,6 +120,75 @@ public:
         jcmap_t::const_iterator i = jcmap.find(jpath);
         return i == jcmap.end() ? nullptr : i->second;
     }
+};
+
+//! Acquires the module-load lock hierarchy in the required order: libqore's module-load lock, then m.
+/** The global lock order is:
+
+        QoreModuleLoadLockHelper -> QoreJniClassMap::m -> { codeGenLock, Program parse lock }
+
+    Any path that holds \c m while it can reach libqore's module loading must use this class
+    instead of taking \c m directly.  Module loading is reachable from \c m in two ways:
+
+    - directly, e.g. findCreateQoreClassInProgram() calls MM.runTimeLoadModule("jni", ...) while
+      holding \c m; and
+    - indirectly, whenever Java is called while holding \c m: the JVM classloader can call back
+      into qore_url_classloader_generate_byte_code(), which calls ModuleManager::runTimeLoadModule().
+
+    Taking \c m first and the module-load lock second inverts the hierarchy and deadlocks against a
+    concurrent cold module load, which holds the module-load lock while applying this module's AOT
+    module commands (which import Java classes and therefore need \c m).
+
+    Both locks are recursive, so nesting this inside code that already holds either lock is safe.
+
+    Cache-hit paths that provably cannot reach module loading or Java (and therefore cannot
+    participate in the cycle) intentionally use JniClassMapLocker instead, which takes \c m alone:
+    the module-load lock is a process-global cold-path lock, and taking it on hot Java class lookups
+    would serialize the whole process.
+*/
+class JniModuleLoadLocker {
+public:
+    DLLLOCAL JniModuleLoadLocker();
+
+    JniModuleLoadLocker(const JniModuleLoadLocker&) = delete;
+    JniModuleLoadLocker& operator=(const JniModuleLoadLocker&) = delete;
+
+private:
+    // declaration order is the lock order and must not be changed: members are constructed in
+    // declaration order (module-load lock, then m) and destroyed in reverse (m, then module-load
+    // lock).  Using RAII members rather than explicit lock()/unlock() calls keeps this exception
+    // safe: if acquiring m throws, al_mod is already fully constructed and releases the
+    // module-load lock while unwinding.
+    QoreModuleLoadLockHelper al_mod;
+    AutoLocker al_map;
+    // declares m's position in the module-loading lock hierarchy; see JniClassMapLocker
+    QoreModuleInnerLockHelper inner_marker;
+};
+
+//! Acquires m alone, for paths that cannot reach Java or module loading.
+/** m is inner to libqore's module-load lock (see JniModuleLoadLocker).  This class is for the
+    cache-hit paths that only read the class map and provably never load a module or call into
+    Java, so they cannot acquire the module-load lock while holding m and therefore cannot
+    participate in the lock cycle.
+
+    Those paths deliberately do <b>not</b> take the module-load lock: it is a process-global
+    cold-path lock, and taking it on a path hit by every Java class resolution would serialize the
+    whole process.
+
+    The QoreModuleInnerLockHelper member is what makes that safety claim checkable rather than a
+    comment: it marks m as held, so if such a path ever does reach module loading, libqore asserts
+    on the lock-order inversion in debug builds instead of deadlocking in the field.
+*/
+class JniClassMapLocker {
+public:
+    DLLLOCAL JniClassMapLocker();
+
+    JniClassMapLocker(const JniClassMapLocker&) = delete;
+    JniClassMapLocker& operator=(const JniClassMapLocker&) = delete;
+
+private:
+    AutoLocker al_map;
+    QoreModuleInnerLockHelper inner_marker;
 };
 
 class QoreJniClassMap : public QoreJniClassMapBase {

@@ -97,6 +97,14 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
 
 QoreRecursiveThreadLock QoreJniClassMap::m;
 
+// see the class docs in QoreJniClassMap.h for the lock hierarchy these enforce; the acquisition
+// order is encoded in the member declaration order, so there is nothing to do here
+JniModuleLoadLocker::JniModuleLoadLocker() : al_map(QoreJniClassMap::m) {
+}
+
+JniClassMapLocker::JniClassMapLocker() : al_map(QoreJniClassMap::m) {
+}
+
 QoreJniClassMap::jtmap_t QoreJniClassMap::jtmap = {
     {"java.lang.Object", autoTypeInfo},
     // because of automatic array conversions, we do not use "or nothing" types for simple types
@@ -409,13 +417,35 @@ jclass QoreJniClassMap::findLoadClass(const QoreString& name, QoreProgram* pgm) 
 
 // takes an internal name (ex: java/lang/Class)
 jclass QoreJniClassMap::findLoadClass(const char* jpath, QoreProgram* pgm) {
-    JniQoreClass* qc;
+    // must be initialized: if there is no Java context below (jpc is nullptr), qc is never assigned
+    // before being tested, which would otherwise read an indeterminate value
+    JniQoreClass* qc = nullptr;
+
+    // fast path: the class is already in the global cache.  This path only reads jcmap; it cannot
+    // reach Java or module loading, so it deliberately takes m alone and stays off the
+    // process-global module-load lock, which would serialize all Java class lookups
+    // (see JniClassMapLocker / JniModuleLoadLocker)
     {
-        AutoLocker al(m);
+        JniClassMapLocker al;
         jcmap_t::iterator i = jcmap.find(jpath);
         if (i != jcmap.end()) {
             qc = i->second;
             //printd(LogLevel, "findLoadClass() '%s': %p (cached)\n", jpath, qc);
+        }
+    }
+
+    if (!qc) {
+        // slow path: the class may have to be loaded from Java and a Qore class created for it,
+        // which calls into Java and can drive classloading that calls back into module loading, so
+        // the module-load lock must be acquired before m here
+        JniModuleLoadLocker al;
+
+        // re-check the global cache: another thread may have created the class after the fast path
+        // released m above
+        jcmap_t::iterator i = jcmap.find(jpath);
+        if (i != jcmap.end()) {
+            qc = i->second;
+            //printd(LogLevel, "findLoadClass() '%s': %p (cached 2)\n", jpath, qc);
         } else {
             JniExternalProgramData* jpc;
             if (!pgm) {
@@ -446,12 +476,11 @@ jclass QoreJniClassMap::findLoadClass(const char* jpath, QoreProgram* pgm) {
                 qc = findCreateQoreClass(env, cpath, jpath, cls.release(), base, pgm);
                 assert(qc);
                 //printd(5, "findLoadClass() '%s': %p (created) pgm: %p\n", jpath, qc, pgm);
-            } else {
-                //printd(LogLevel, "findLoadClass() '%s': %p (cached 2)\n", jpath, qc);
             }
         }
     }
 
+    assert(qc);
     return static_cast<Class*>(qc->getManagedUserData())->toLocal();
 }
 
@@ -579,8 +608,13 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
 
     // we always grab the global JNI lock first because we might need to add base classes
     // while setting up the class loaded with the jni module's classloader, and we need to
-    // ensure that these locks are always acquired in order
-    AutoLocker al(m);
+    // ensure that these locks are always acquired in order.
+    //
+    // the module-load lock must be acquired before m here: this function calls
+    // MM.runTimeLoadModule() below while holding m, and createClassInNamespace() ->
+    // populateQoreClass() calls into Java, which can drive classloading that calls back into
+    // ModuleManager::runTimeLoadModule(); both need the module-load lock, so m must be inner
+    JniModuleLoadLocker al;
 
     ExceptionSink xsink;
 
@@ -682,8 +716,15 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClass(Env& env, const char* name, Q
 
     // first try to find class in the global cache; must hold lock to avoid
     // data race with concurrent inserts into jcmap (std::map read+write is UB)
+    //
+    // this cache-hit path intentionally takes m alone rather than JniModuleLoadLocker: neither the
+    // lookup nor addClassToProgram() calls into Java or loads a module, so it cannot acquire the
+    // module-load lock while holding m and therefore cannot participate in the module-load lock
+    // cycle.  keeping the process-global module-load lock off this path is deliberate: it is hit
+    // for every Java class resolution.  the class-creation path below runs *after* m is released
+    // here and re-acquires the locks in the correct order via findCreateQoreClass*()
     {
-        AutoLocker al(m);
+        JniClassMapLocker al;
         JniQoreClass* rv = findInternal(jpath.c_str());
         if (rv) {
             // check if the class is also in the calling Program's namespace
@@ -732,8 +773,10 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
 
     printd(LogLevel, "QoreJniClassMap::findCreateQoreClassInBase() looking up: '%s'\n", jpath);
 
-    // we need to protect access to the default namespace and class map with a lock
-    AutoLocker al(m);
+    // we need to protect access to the default namespace and class map with a lock; the
+    // module-load lock must be outer, because createClassInNamespace() -> populateQoreClass()
+    // calls into Java, which can drive classloading that calls back into module loading
+    JniModuleLoadLocker al;
 
     // if we have the QoreClass already in the global cache, ensure it's also in the calling Program's namespace
     {
@@ -2270,15 +2313,23 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
         const QoreString& qpath, jstring jname, const char* module, const QoreClass* qcls) {
     printd(5, "JniExternalProgramData::generateByteCode() '%s' pgm: %p qc: %p\n", qpath.c_str(), pgm, qcls);
 
-    // Lock ordering: the global class-map lock (m) is the OUTER lock and must be acquired
-    // before the per-Program codeGenLock.  Byte code generation resolves method parameter and
-    // return types, which can create Qore classes for referenced Java types (getQoreType() ->
-    // findCreateQoreClass*() -> m) while codeGenLock is held.  The class-creation path takes the
-    // locks in the same order (m -> createClassInNamespace()/saveClass() -> codeGenLock), so
-    // acquiring m here first keeps the global order "m -> codeGenLock" and avoids the ABBA
-    // deadlock between concurrent Qore->Java generation and Java->Qore import.  m is recursive,
-    // so this is safe when the caller (e.g. the import path) already holds it.
-    AutoLocker al_map(QoreJniClassMap::m);
+    // Lock ordering: the full order is "module-load lock -> m -> codeGenLock".
+    //
+    // m must be acquired before the per-Program codeGenLock.  Byte code generation resolves method
+    // parameter and return types, which can create Qore classes for referenced Java types
+    // (getQoreType() -> findCreateQoreClass*() -> m) while codeGenLock is held.  The class-creation
+    // path takes the locks in the same order (m -> createClassInNamespace()/saveClass() ->
+    // codeGenLock), so acquiring m here first keeps the order "m -> codeGenLock" and avoids the ABBA
+    // deadlock between concurrent Qore->Java generation and Java->Qore import.
+    //
+    // libqore's module-load lock must in turn be acquired before m: loadClassWithPtr() below calls
+    // into the JVM classloader, which calls back into qore_url_classloader_generate_byte_code() ->
+    // ModuleManager::runTimeLoadModule(), which takes the module-load lock.  Taking m first would
+    // deadlock against a concurrent cold module load applying this module's AOT module commands.
+    //
+    // both locks are recursive, so this is safe when the caller (e.g. the import path) already
+    // holds either one.
+    JniModuleLoadLocker al_map;
 
     ExceptionSink xsink;
     if (!qcls) {
@@ -3606,10 +3657,12 @@ LocalReference<jclass> JniExternalProgramData::getClassForValue(const QoreObject
 }
 
 LocalReference<jclass> JniExternalProgramData::getJavaClassForQoreClass(Env& env, const QoreClass* qc) {
-    // lock ordering: acquire the global class-map lock before codeGenLock (see generateByteCode());
+    // lock ordering: "module-load lock -> m -> codeGenLock" (see generateByteCode()).
     // loadClassWithPtr() below can drive byte code generation, which resolves referenced types
-    // under m, so m must be the outer lock to avoid an ABBA deadlock with the class-import path
-    AutoLocker al_map(QoreJniClassMap::m);
+    // under m, so m must be outer w.r.t. codeGenLock to avoid an ABBA deadlock with the
+    // class-import path; loadClassWithPtr() can also drive classloading that calls back into
+    // module loading, so the module-load lock must in turn be outer w.r.t. m
+    JniModuleLoadLocker al_map;
     // ensure that class generation is atomic
     AutoLocker al(codeGenLock);
 
