@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Regression test for the module-jni class-map lock redesign (the module-load deadlock fix).
+#
+# The global class-map lock QoreJniClassMap::m used to be held across the entire Java->Qore class
+# build (addSuperClasses() + populateQoreClass(), which call into Java and can drive module loading
+# via the JVM classloader callback).  Holding a process-global lock across a nested module load
+# reintroduced the process-wide module-load deadlock.  The fix makes m a strict leaf lock (total
+# order: Program parse lock -> codeGenLock -> m): the class build runs with m released and concurrent
+# / recursive creators of the same class coordinate through a per-class in-progress marker + condvar
+# (see createClassInNamespace()).
+#
+# This test hammers the import path from many threads:
+#   - many threads concurrently import the SAME set of deep-hierarchy / self-referential Java classes
+#     into the same Program (contending on the same global + program-local in-progress markers, so the
+#     cross-thread wait path is exercised); and
+#   - many threads each import the same classes into their OWN fresh Program (program-local markers +
+#     shared base-class markers).
+#
+# A half-built class observed cross-thread, a lost wakeup, or a lock-order inversion would either hang
+# (caught by the waitForZero() timeout) or raise, failing the test.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires jni
+%requires QUnit
+
+%module-cmd(jni) add-relative-classpath ../build/qore-jni.jar
+
+%exec-class Main
+
+public class Main inherits QUnit::Test {
+    private {
+        # a set of JDK classes with deep inheritance chains, interfaces, and self-referential
+        # generics (Comparable<T>, Enum<E extends Enum<E>>), so building them recurses through
+        # addSuperClasses()/getQoreType() and exercises the same-thread self-reference marker path
+        const Classes = (
+            "java/util/GregorianCalendar",              # extends Calendar implements Comparable<Calendar>
+            "java/util/concurrent/ConcurrentHashMap",
+            "java/util/concurrent/CopyOnWriteArrayList",
+            "java/util/TreeMap", "java/util/LinkedHashMap", "java/util/ArrayDeque",
+            "java/util/EnumMap", "java/util/BitSet",
+            "java/time/ZonedDateTime", "java/time/format/DateTimeFormatter",
+            "java/math/BigDecimal", "java/math/BigInteger",
+            "java/io/BufferedReader", "java/io/PushbackInputStream",
+            "java/util/regex/Pattern", "java/util/stream/Collectors",
+            "java/net/URI", "java/net/InetSocketAddress",
+            "java/text/SimpleDateFormat", "java/lang/ProcessBuilder",
+        );
+
+        const NThreads = 16;
+        const NProgs = 8;
+        const Iters = 6;
+        # generous ceiling: on a deadlock/lost-wakeup this is never reached and CI fails on the timeout
+        const HangTimeout = 120s;
+    }
+
+    constructor() : Test("jni concurrent import test", "1.0") {
+        addTestCase("concurrent import into shared Program", \sharedProgramTest());
+        addTestCase("concurrent import into separate Programs", \separateProgramTest());
+        set_return_value(main());
+    }
+
+    # run `body` in `n` background threads released simultaneously; fail on any worker exception or a
+    # hang (which surfaces as the waitForZero timeout)
+    private runWorkers(int n, code body) {
+        Counter start(1);
+        Counter running(n);
+        Mutex errlck();
+        *hash<ExceptionInfo> worker_err;
+
+        code worker = sub () {
+            on_exit running.dec();
+            try {
+                start.waitForZero();
+                body();
+            } catch (hash<ExceptionInfo> ex) {
+                errlck.lock();
+                on_exit errlck.unlock();
+                if (!worker_err) {
+                    worker_err = ex;
+                }
+            }
+        };
+
+        for (int i = 0; i < n; ++i) {
+            background worker();
+        }
+        start.dec();  # release all workers at once to maximize contention
+
+        # if the marker protocol deadlocks or drops a wakeup this never returns
+        int rc = running.waitForZero(HangTimeout);
+        assertEq(0, rc, "all import workers completed (no hang)");
+        if (worker_err) {
+            fail(sprintf("import worker raised %s: %s", worker_err.err, worker_err.desc));
+        }
+    }
+
+    sharedProgramTest() {
+        # all threads import the same classes into the current Program: heavy contention on the same
+        # global + program-local in-progress markers
+        runWorkers(NThreads, sub () {
+            for (int i = 0; i < Iters; ++i) {
+                foreach string cn in (Classes) {
+                    object c = load_class(class_name: cn);
+                    assertEq(True, c instanceof Object, "load_class returned a class");
+                }
+            }
+        });
+    }
+
+    separateProgramTest() {
+        # each thread imports the same classes into its own fresh Program: exercises program-local
+        # markers plus the shared base-class markers concurrently
+        runWorkers(NProgs, sub () {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("jni");
+            for (int i = 0; i < Iters; ++i) {
+                foreach string cn in (Classes) {
+                    auto c = p.callFunction("load_class", cn);
+                    assertEq(True, exists c, "child Program load_class returned a class");
+                }
+            }
+        });
+    }
+}

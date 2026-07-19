@@ -84,6 +84,27 @@ protected:
     jcmap_t jcmap;
 
 public:
+    //! Per-class "creation in progress" marker (see createClassInNamespace()).
+    /** A Qore class is built from its Java class in two Java-calling steps (addSuperClasses() +
+        populateQoreClass()) that can drive classloading and therefore module loading.  The global
+        class-map lock QoreJniClassMap::m must NOT be held across those steps (holding a global lock
+        across a module load reintroduces the module-load deadlock).  This marker replaces the old
+        "publish the half-built class into the map early, under m" approach: the builder installs a
+        marker (under m), releases m, builds the class, then re-acquires m to publish.  Concurrent
+        creators of the same class wait on QoreJniClassMap::class_create_cond and, on wake, re-resolve
+        the finished class through the namespace (so no result/exception needs to be stored on the
+        marker); if the owner failed, the marker is simply gone and the waiter retries the build
+        itself.  Same-thread recursion (a class that refers back to itself while it is being
+        populated) resolves to \a partial without waiting.
+    */
+    struct ClassCreateInProgress {
+        int tid;                            //!< the thread building the class
+        JniQoreClass* partial;              //!< the not-yet-populated class (same-thread self-reference)
+    };
+    // markers keyed by java path (ex 'java/lang/Object'); guarded by QoreJniClassMap::m
+    typedef std::map<std::string, ClassCreateInProgress*> in_progress_class_map_t;
+    in_progress_class_map_t jcmap_inprogress;
+
     DLLLOCAL void add(const char* name, JniQoreClass* qc) {
         printd(LogLevel, "QoreJniClassMapBase::add() this: %p name: %s qc: %p (%s)\n", this, name, qc, qc->getName());
 
@@ -122,62 +143,28 @@ public:
     }
 };
 
-//! Acquires the module-load lock hierarchy in the required order: libqore's module-load lock, then m.
-/** The global lock order is:
+//! Acquires the global class-map lock \c m alone, for a short critical section over the class maps.
+/** Global lock order (total order, enforced at every site):
 
-        QoreModuleLoadLockHelper -> QoreJniClassMap::m -> { codeGenLock, Program parse lock }
+        Program parse lock (parseLock) -> codeGenLock -> QoreJniClassMap::m
 
-    Any path that holds \c m while it can reach libqore's module loading must use this class
-    instead of taking \c m directly.  Module loading is reachable from \c m in two ways:
+    \c m is a strict <b>leaf</b> lock: it guards the class maps (the global \c jcmap, every
+    program-local \c jpc->jcmap, and \c default_jns) and is held only for short critical sections.
+    It is <b>never</b> held across a Java call, a module load, or the acquisition of codeGenLock or a
+    Program parse lock.  This is what keeps \c m off the module-load path: holding a global lock
+    across a nested module load (reachable whenever Java is called, via the JVM classloader callback
+    qore_url_classloader_generate_byte_code() -> ModuleManager::runTimeLoadModule()) reintroduces the
+    process-global module-load deadlock.  Class building therefore releases \c m across the
+    Java-calling population phase and coordinates concurrent/recursive builders with a per-class
+    marker (see QoreJniClassMapBase::ClassCreateInProgress and createClassInNamespace()).
 
-    - directly, e.g. findCreateQoreClassInProgram() calls MM.runTimeLoadModule("jni", ...) while
-      holding \c m; and
-    - indirectly, whenever Java is called while holding \c m: the JVM classloader can call back
-      into qore_url_classloader_generate_byte_code(), which calls ModuleManager::runTimeLoadModule().
+    The per-Program locks (parseLock, codeGenLock) may be held across a module load: they are
+    per-Program, so they cannot form the process-global module-load cycle, and the classloader
+    callback re-enters on the same thread (recursive).
 
-    Taking \c m first and the module-load lock second inverts the hierarchy and deadlocks against a
-    concurrent cold module load, which holds the module-load lock while applying this module's AOT
-    module commands (which import Java classes and therefore need \c m).
-
-    Both locks are recursive, so nesting this inside code that already holds either lock is safe.
-
-    Cache-hit paths that provably cannot reach module loading or Java (and therefore cannot
-    participate in the cycle) intentionally use JniClassMapLocker instead, which takes \c m alone:
-    the module-load lock is a process-global cold-path lock, and taking it on hot Java class lookups
-    would serialize the whole process.
-*/
-class JniModuleLoadLocker {
-public:
-    DLLLOCAL JniModuleLoadLocker();
-
-    JniModuleLoadLocker(const JniModuleLoadLocker&) = delete;
-    JniModuleLoadLocker& operator=(const JniModuleLoadLocker&) = delete;
-
-private:
-    // declaration order is the lock order and must not be changed: members are constructed in
-    // declaration order (module-load lock, then m) and destroyed in reverse (m, then module-load
-    // lock).  Using RAII members rather than explicit lock()/unlock() calls keeps this exception
-    // safe: if acquiring m throws, al_mod is already fully constructed and releases the
-    // module-load lock while unwinding.
-    QoreModuleLoadLockHelper al_mod;
-    AutoLocker al_map;
-    // declares m's position in the module-loading lock hierarchy; see JniClassMapLocker
-    QoreModuleInnerLockHelper inner_marker;
-};
-
-//! Acquires m alone, for paths that cannot reach Java or module loading.
-/** m is inner to libqore's module-load lock (see JniModuleLoadLocker).  This class is for the
-    cache-hit paths that only read the class map and provably never load a module or call into
-    Java, so they cannot acquire the module-load lock while holding m and therefore cannot
-    participate in the lock cycle.
-
-    Those paths deliberately do <b>not</b> take the module-load lock: it is a process-global
-    cold-path lock, and taking it on a path hit by every Java class resolution would serialize the
-    whole process.
-
-    The QoreModuleInnerLockHelper member is what makes that safety claim checkable rather than a
-    comment: it marks m as held, so if such a path ever does reach module loading, libqore asserts
-    on the lock-order inversion in debug builds instead of deadlocking in the field.
+    The QoreModuleInnerLockHelper member makes the leaf invariant checkable rather than a comment: it
+    marks \c m as held, so if any path ever holds \c m across a module load again, libqore asserts on
+    the lock-order inversion in debug builds instead of deadlocking in the field.
 */
 class JniClassMapLocker {
 public:
@@ -193,7 +180,14 @@ private:
 
 class QoreJniClassMap : public QoreJniClassMapBase {
 public:
+    // the global class-map lock; see JniClassMapLocker for the lock hierarchy it participates in
     static QoreRecursiveThreadLock m;
+
+    // signalled when a class-creation-in-progress marker completes (guarded by m); see
+    // createClassInNamespace() and QoreJniClassMapBase::ClassCreateInProgress.  Threads that wait on
+    // this condition must hold m exactly once (m is recursive, and QoreCondition::wait() releases a
+    // single level), which the createClassInNamespace() phase-1 critical section guarantees.
+    static QoreCondition class_create_cond;
 
     DLLLOCAL void init(QoreProgram* pgm, bool already_initialized);
 
@@ -301,6 +295,22 @@ protected:
 
     DLLLOCAL JniQoreClass* createClassInNamespace(QoreNamespace* ns, QoreNamespace& jns, const char* jpath,
         Class* jc, JniQoreClass* qc, QoreJniClassMapBase& map, QoreProgram* pgm);
+
+    //! Build-time lookup that resolves a same-thread in-progress class to its partial placeholder.
+    /** Returns the fully-created class for \a jpath in \a map, or the not-yet-populated partial if
+        \a jpath is currently being created by the calling thread (same-thread self-reference), or
+        nullptr otherwise.  Must be called with \c m NOT held (it takes \c m briefly).
+
+        Half-built classes are never published to the class map (only recorded in the in-progress
+        marker), so a plain find() never returns a partial.  This helper restores, for the build-time
+        lookups that must short-circuit a self-reference (addSuperClass(), getQoreType()), the
+        behavior the old code got by publishing the half-built class into the map under a
+        globally-held \c m: without it, a self-reference would re-enter class creation and copy a
+        partial class into a Program via addClassToProgram().  Other-thread in-progress classes
+        return nullptr here; the caller then re-enters createClassInNamespace(), which waits for the
+        concurrent build to complete.
+    */
+    DLLLOCAL JniQoreClass* findClassOrSelfPartial(QoreJniClassMapBase& map, const char* jpath);
     DLLLOCAL JniQoreClass* findCreateQoreClassInBase(Env& env, QoreString& name, const char* jpath, Class* c, QoreProgram* pgm);
     DLLLOCAL Class* loadClass(Env& env, const char* name, bool& base, JniExternalProgramData* jpc = nullptr);
 

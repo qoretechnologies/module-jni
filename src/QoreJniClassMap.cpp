@@ -96,12 +96,10 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     const QoreListNode* args, q_rt_flags_t rtflags, ExceptionSink* xsink);
 
 QoreRecursiveThreadLock QoreJniClassMap::m;
+QoreCondition QoreJniClassMap::class_create_cond;
 
 // see the class docs in QoreJniClassMap.h for the lock hierarchy these enforce; the acquisition
 // order is encoded in the member declaration order, so there is nothing to do here
-JniModuleLoadLocker::JniModuleLoadLocker() : al_map(QoreJniClassMap::m) {
-}
-
 JniClassMapLocker::JniClassMapLocker() : al_map(QoreJniClassMap::m) {
 }
 
@@ -421,10 +419,8 @@ jclass QoreJniClassMap::findLoadClass(const char* jpath, QoreProgram* pgm) {
     // before being tested, which would otherwise read an indeterminate value
     JniQoreClass* qc = nullptr;
 
-    // fast path: the class is already in the global cache.  This path only reads jcmap; it cannot
-    // reach Java or module loading, so it deliberately takes m alone and stays off the
-    // process-global module-load lock, which would serialize all Java class lookups
-    // (see JniClassMapLocker / JniModuleLoadLocker)
+    // fast path: the class is already in the global cache.  This path only reads jcmap under a brief
+    // m; it cannot reach Java or module loading (see JniClassMapLocker)
     {
         JniClassMapLocker al;
         jcmap_t::iterator i = jcmap.find(jpath);
@@ -435,48 +431,51 @@ jclass QoreJniClassMap::findLoadClass(const char* jpath, QoreProgram* pgm) {
     }
 
     if (!qc) {
-        // slow path: the class may have to be loaded from Java and a Qore class created for it,
-        // which calls into Java and can drive classloading that calls back into module loading, so
-        // the module-load lock must be acquired before m here
-        JniModuleLoadLocker al;
-
-        // re-check the global cache: another thread may have created the class after the fast path
-        // released m above
-        jcmap_t::iterator i = jcmap.find(jpath);
-        if (i != jcmap.end()) {
-            qc = i->second;
-            //printd(LogLevel, "findLoadClass() '%s': %p (cached 2)\n", jpath, qc);
+        // slow path: the class may have to be loaded from Java and a Qore class created for it.
+        // loadClass() and findCreateQoreClass() call into Java and can drive classloading that calls
+        // back into module loading, so they must run with m NOT held (m is a strict leaf that is
+        // never held across a module load; see JniClassMapLocker)
+        JniExternalProgramData* jpc;
+        if (!pgm) {
+            jpc = jni_get_context();
         } else {
-            JniExternalProgramData* jpc;
-            if (!pgm) {
-                jpc = jni_get_context();
-            } else {
-                jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
-            }
-            if (jpc) {
+            jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+        }
+
+        {
+            // re-check the caches under a brief m: another thread may have created the class after
+            // the fast path released m above
+            JniClassMapLocker al;
+            jcmap_t::iterator i = jcmap.find(jpath);
+            if (i != jcmap.end()) {
+                qc = i->second;
+                //printd(LogLevel, "findLoadClass() '%s': %p (cached 2)\n", jpath, qc);
+            } else if (jpc) {
                 assert(static_cast<QoreJniClassMapBase*>(jpc) != static_cast<QoreJniClassMapBase*>(this));
                 qc = jpc->find(jpath);
             }
+        }
 
-            //printd(5, "findLoadClass() '%s': qc: %p pgm: %p jpc: %p\n", jpath, qc, pgm, jpc);
-            if (!qc) {
-                Env env;
-                bool base;
-                SimpleRefHolder<Class> cls(loadClass(env, jpath, base, jpc));
+        //printd(5, "findLoadClass() '%s': qc: %p pgm: %p jpc: %p\n", jpath, qc, pgm, jpc);
+        if (!qc) {
+            // create the class with NO global lock held; findCreateQoreClass() coordinates
+            // concurrent/recursive creation internally
+            Env env;
+            bool base;
+            SimpleRefHolder<Class> cls(loadClass(env, jpath, base, jpc));
 
-                QoreString cpath(jpath);
-                cpath.replaceAll("/", ".");
-                //cpath.replaceAll("$", "__");
+            QoreString cpath(jpath);
+            cpath.replaceAll("/", ".");
+            //cpath.replaceAll("$", "__");
 
-                // do not create Qore classes for classes imported from Qore
-                if (cpath.startsWith("qore.") || cpath.startsWith("qoremod.")
-                    || cpath.startsWith("python.") || cpath.startsWith("pythonmod.")) {
-                    return cls->toLocal();
-                }
-                qc = findCreateQoreClass(env, cpath, jpath, cls.release(), base, pgm);
-                assert(qc);
-                //printd(5, "findLoadClass() '%s': %p (created) pgm: %p\n", jpath, qc, pgm);
+            // do not create Qore classes for classes imported from Qore
+            if (cpath.startsWith("qore.") || cpath.startsWith("qoremod.")
+                || cpath.startsWith("python.") || cpath.startsWith("pythonmod.")) {
+                return cls->toLocal();
             }
+            qc = findCreateQoreClass(env, cpath, jpath, cls.release(), base, pgm);
+            assert(qc);
+            //printd(5, "findLoadClass() '%s': %p (created) pgm: %p\n", jpath, qc, pgm);
         }
     }
 
@@ -606,16 +605,12 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClass(Env& env, LocalReference<jcla
 JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, const char* jpath, Class* c, QoreProgram* pgm) {
     SimpleRefHolder<Class> cls(c);
 
-    // we always grab the global JNI lock first because we might need to add base classes
-    // while setting up the class loaded with the jni module's classloader, and we need to
-    // ensure that these locks are always acquired in order.
-    //
-    // the module-load lock must be acquired before m here: this function calls
-    // MM.runTimeLoadModule() below while holding m, and createClassInNamespace() ->
-    // populateQoreClass() calls into Java, which can drive classloading that calls back into
-    // ModuleManager::runTimeLoadModule(); both need the module-load lock, so m must be inner
-    JniModuleLoadLocker al;
-
+    // Lock order here is: Program parse lock -> m (m is a strict leaf; see JniClassMapLocker).  This
+    // function must NOT hold the global class-map lock m across MM.runTimeLoadModule() below or
+    // across createClassInNamespace() -> populateQoreClass() (which calls into Java and can drive
+    // classloading that calls back into ModuleManager::runTimeLoadModule()): holding a global lock
+    // across a module load reintroduces the module-load deadlock.  The per-Program parse lock IS held
+    // across the build, which is safe (a per-Program lock cannot form the process-global cycle).
     ExceptionSink xsink;
 
     // check current Program's namespace
@@ -627,7 +622,8 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
         }
     } else {
         if (jni_qore_init_done) {
-            // ensure that the jni module symbols are loaded into the new Program object
+            // ensure that the jni module symbols are loaded into the new Program object; run this
+            // before taking any jni lock (it needs no class-map access)
             MM.runTimeLoadModule("jni", pgm, &xsink);
             if (xsink) {
                 throw XsinkException(xsink);
@@ -637,9 +633,12 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
         assert(jpc);
     }
 
-    JniQoreClass* qc = jpc->find(jpath);
-    if (qc) {
-        return qc;
+    {
+        // brief m for the program-local class-map lookup (never returns a half-built class)
+        JniClassMapLocker al;
+        if (JniQoreClass* qc = jpc->find(jpath)) {
+            return qc;
+        }
     }
 
     assert(pgm);
@@ -664,6 +663,7 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
     // find/create parent namespace in default / master Jni namespace first
     const char* sn;
     QoreNamespace* ns = jni_find_create_namespace(*jpc->getJniNamespace(), name.c_str(), sn);
+    JniQoreClass* qc = nullptr;
     // we need to see if a builtin native Java class has already been imported without a lookup entry
     // or there is not already a Qore class in the namespace with the same name
     {
@@ -714,28 +714,29 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClass(Env& env, const char* name, Q
     jpath.replaceAll(".", "/");
     jpath.replaceAll("__", "$");
 
-    // first try to find class in the global cache; must hold lock to avoid
-    // data race with concurrent inserts into jcmap (std::map read+write is UB)
-    //
-    // this cache-hit path intentionally takes m alone rather than JniModuleLoadLocker: neither the
-    // lookup nor addClassToProgram() calls into Java or loads a module, so it cannot acquire the
-    // module-load lock while holding m and therefore cannot participate in the module-load lock
-    // cycle.  keeping the process-global module-load lock off this path is deliberate: it is hit
-    // for every Java class resolution.  the class-creation path below runs *after* m is released
-    // here and re-acquires the locks in the correct order via findCreateQoreClass*()
+    // first try to find class in the global cache; must hold m to avoid a data race with concurrent
+    // inserts into jcmap (std::map read+write is UB).  m is a strict leaf here: the lookup takes m
+    // for a short critical section only.  addClassToProgram() must be called OUTSIDE the m scope
+    // because it takes the Program parse lock then m (parseLock -> m); calling it while holding m
+    // would invert that order.  The class-creation path below runs after m is released and
+    // re-acquires the locks in the correct order via findCreateQoreClass*().
     {
-        JniClassMapLocker al;
-        JniQoreClass* rv = findInternal(jpath.c_str());
-        if (rv) {
-            // check if the class is also in the calling Program's namespace
-            if (pgm) {
+        JniQoreClass* rv;
+        bool need_add_to_program = false;
+        {
+            JniClassMapLocker al;
+            rv = findInternal(jpath.c_str());
+            if (rv && pgm) {
                 if (!jpc) {
                     jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
                 }
-                if (jpc && !jpc->find(jpath.c_str())) {
-                    // class is in global cache but NOT in our Program - add it directly
-                    addClassToProgram(rv, jpath.c_str(), pgm);
-                }
+                // class is in global cache but NOT in our Program - add it below (outside m)
+                need_add_to_program = jpc && !jpc->find(jpath.c_str());
+            }
+        }
+        if (rv) {
+            if (need_add_to_program) {
+                addClassToProgram(rv, jpath.c_str(), pgm);
             }
             return rv;
         }
@@ -773,14 +774,18 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
 
     printd(LogLevel, "QoreJniClassMap::findCreateQoreClassInBase() looking up: '%s'\n", jpath);
 
-    // we need to protect access to the default namespace and class map with a lock; the
-    // module-load lock must be outer, because createClassInNamespace() -> populateQoreClass()
-    // calls into Java, which can drive classloading that calls back into module loading
-    JniModuleLoadLocker al;
+    // Lock order: m is a strict leaf guarding the global class map and the global default_jns
+    // template namespace; it is never held across a Java call or a module load (see JniClassMapLocker).
+    // createClassInNamespace() below releases m across the Java-calling build and re-acquires it to
+    // publish; addClassToProgram() takes the Program parse lock then m.
 
     // if we have the QoreClass already in the global cache, ensure it's also in the calling Program's namespace
     {
-        JniQoreClass* qc = find(jpath);
+        JniQoreClass* qc;
+        {
+            JniClassMapLocker al;
+            qc = find(jpath);
+        }
         if (qc) {
             addClassToProgram(qc, jpath, pgm);
             return qc;
@@ -808,62 +813,78 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
     }
 #endif
 
-    // see if we have an inner class
-    int ic_idx = name.rfind('$');
-    if (ic_idx != -1) {
-        name.replaceChar(ic_idx, '_');
-        name.insertch('_', ic_idx + 1, 1);
-    }
-
-    // find/create parent namespace in default / master Jni namespace first
+    // resolve the target namespace and handle name conflicts under a brief m (default_jns is the
+    // global template namespace, guarded by m); addClassToProgram() for an already-registered class
+    // is deferred until m is released (it takes the parse lock -> m)
     const char* sn;
-    QoreNamespace* ns = jni_find_create_namespace(*default_jns, name.c_str(), sn);
+    QoreNamespace* ns;
+    JniQoreClass* jexisting = nullptr;
+    JniQoreClass* qc = nullptr;
+    {
+        JniClassMapLocker al;
 
-    // check if the class already exists in the namespace (e.g., same Java class loaded from
-    // multiple JARs on the classpath)
-    if (QoreClass* existing = ns->findLocalClass(sn)) {
-        // reflection-created classes (JniQoreClass) report language "Java"; any other language
-        // means a hand-written builtin Qore class already occupies this name — in particular the
-        // qpp-defined Jni::org::qore::jni::QoreInvocationHandler and JavaArray system classes,
-        // which are QoreBuiltinClass, not JniQoreClass.  We must not treat those as JniQoreClass
-        // (that reads JniQoreClass-only members and crashes); they are already usable directly, so
-        // importing the underlying Java class is both impossible and unnecessary
-        if (strcmp(existing->getLanguage(), "Java")) {
-            throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in "
-                "Qore class with that name already exists in the Jni namespace", name.c_str());
+        // see if we have an inner class
+        int ic_idx = name.rfind('$');
+        if (ic_idx != -1) {
+            name.replaceChar(ic_idx, '_');
+            name.insertch('_', ic_idx + 1, 1);
         }
-        JniQoreClass* jexisting = static_cast<JniQoreClass*>(existing);
-        if (jexisting->getJavaName() == name.c_str()) {
-            // same Java class already registered; add to calling Program and return existing
-            addClassToProgram(jexisting, jpath, pgm);
-            return jexisting;
+
+        // find/create parent namespace in default / master Jni namespace first
+        ns = jni_find_create_namespace(*default_jns, name.c_str(), sn);
+
+        // check if the class already exists in the namespace (e.g., same Java class loaded from
+        // multiple JARs on the classpath)
+        if (QoreClass* existing = ns->findLocalClass(sn)) {
+            // reflection-created classes (JniQoreClass) report language "Java"; any other language
+            // means a hand-written builtin Qore class already occupies this name — in particular the
+            // qpp-defined Jni::org::qore::jni::QoreInvocationHandler and JavaArray system classes,
+            // which are QoreBuiltinClass, not JniQoreClass.  We must not treat those as JniQoreClass
+            // (that reads JniQoreClass-only members and crashes); they are already usable directly, so
+            // importing the underlying Java class is both impossible and unnecessary
+            if (strcmp(existing->getLanguage(), "Java")) {
+                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in "
+                    "Qore class with that name already exists in the Jni namespace", name.c_str());
+            }
+            JniQoreClass* je = static_cast<JniQoreClass*>(existing);
+            if (je->getJavaName() == name.c_str()) {
+                // same Java class already registered; return it (and add to the calling Program below)
+                jexisting = je;
+            }
+        }
+
+        if (!jexisting) {
+            if (ic_idx != -1) {
+                // get last '.'
+                int dot = name.rfind('.');
+
+                // check for name conflict with a different Java class
+                while (ns->findLocalClass(sn)) {
+                    // add an underscore
+                    name.insertch('_', ic_idx + 2, 1);
+                    sn = name.c_str() + (dot != -1 ? dot + 1 : 0);
+                }
+            }
+
+            assert(pgm);
+            assert(name.find("qore.Qore") == -1);
+            QoreString path(name);
+            path.replaceAll(".", "::");
+            path.insert("::Jni::", 0);
+            qc = new JniQoreClass(pgm, sn, path.c_str(), name.c_str());
+            assert(qc->isSystem());
         }
     }
 
-    if (ic_idx != -1) {
-        // get last '.'
-        int dot = name.rfind('.');
-
-        // check for name conflict with a different Java class
-        while (ns->findLocalClass(sn)) {
-            // add an underscore
-            name.insertch('_', ic_idx + 2, 1);
-            sn = name.c_str() + (dot != -1 ? dot + 1 : 0);
-        }
+    if (jexisting) {
+        addClassToProgram(jexisting, jpath, pgm);
+        return jexisting;
     }
-
-    assert(pgm);
-    assert(name.find("qore.Qore") == -1);
-    QoreString path(name);
-    path.replaceAll(".", "::");
-    path.insert("::Jni::", 0);
-    JniQoreClass* qc = new JniQoreClass(pgm, sn, path.c_str(), name.c_str());
-    assert(qc->isSystem());
 
     // createClassInNamespace() will "save" qc in the namespace; it may delete the passed-in qc and
     // return a pre-existing class on a name collision (e.g. the same Java class loaded recursively
     // via addSuperClasses()), so we must use its return value — using the freed qc here would be a
-    // use-after-free
+    // use-after-free.  It builds the class with m released and re-acquires m to publish.
     qc = createClassInNamespace(ns, *default_jns, jpath, cls.release(), qc, *this, pgm);
 
     // add to the calling Program's namespace
@@ -872,6 +893,9 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
 }
 
 void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, QoreProgram* pgm) {
+    // Lock order: Program parse lock -> m.  This method does not call into Java or load a module, so
+    // it may hold the parse lock (per-Program) across its work; the jpc class-map accesses take the
+    // strict-leaf m for a short critical section, always inside the parse lock (parseLock -> m).
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     if (!jpc) {
         return;
@@ -879,8 +903,8 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
 
     // check if the class is already in the Program's namespace
     {
-        JniQoreClass* qc0 = jpc->find(jpath);
-        if (qc0) {
+        JniClassMapLocker al;
+        if (jpc->find(jpath)) {
             return;
         }
     }
@@ -900,8 +924,8 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
 
     // re-check under parse lock
     {
-        JniQoreClass* qc0 = jpc->find(jpath);
-        if (qc0) {
+        JniClassMapLocker al;
+        if (jpc->find(jpath)) {
             return;
         }
     }
@@ -916,7 +940,10 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
     // namespace tree but not directly into the program-local Jni:: namespace)
     if (QoreClass* existing = ns->findLocalClass(sn)) {
         // class already in this namespace - just add the jpc mapping and return
-        jpc->add(jpath, static_cast<JniQoreClass*>(existing));
+        {
+            JniClassMapLocker al;
+            jpc->add(jpath, static_cast<JniQoreClass*>(existing));
+        }
         printd(LogLevel, "QoreJniClassMap::addClassToProgram() '%s' already in namespace '%s', "
             "added jpc mapping\n", jpath, ns->getName());
         return;
@@ -929,7 +956,10 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
         full_path.replaceAll(".", "::");
         ExceptionSink xsink;
         if (const QoreClass* existing = pgm->findClass(full_path.c_str(), &xsink)) {
-            jpc->add(jpath, const_cast<JniQoreClass*>(static_cast<const JniQoreClass*>(existing)));
+            {
+                JniClassMapLocker al;
+                jpc->add(jpath, const_cast<JniQoreClass*>(static_cast<const JniQoreClass*>(existing)));
+            }
             printd(LogLevel, "QoreJniClassMap::addClassToProgram() '%s' found via path '%s', "
                 "added jpc mapping\n", jpath, full_path.c_str());
             return;
@@ -948,7 +978,10 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
     assert(new_qc->getManagedUserData());
 
     // create entry for class in map
-    jpc->add(jpath, new_qc.get());
+    {
+        JniClassMapLocker al;
+        jpc->add(jpath, new_qc.get());
+    }
 
     JniQoreClass* saved_qc = new_qc.release();
     // issue #5056: resolve abstract methods for copied class
@@ -977,6 +1010,61 @@ constexpr int ACC_ANNOTATION = 0x2000; // class
 constexpr int ACC_ENUM = 0x4000; // class(?) field inner
 constexpr int ACC_MANDATED = 0x8000; // parameter
 
+namespace {
+// RAII finalizer for a class-creation-in-progress marker installed by createClassInNamespace().
+// On success the owner calls commit() (under m, from the publish critical section); on any early
+// exit or exception the destructor removes the marker, wakes waiters (which then re-resolve the
+// class through the namespace or retry the build), and frees the marker — all under m.
+class ClassCreateMarkerFinalizer {
+public:
+    DLLLOCAL ClassCreateMarkerFinalizer(QoreJniClassMapBase& map, const std::string& jpath,
+            QoreJniClassMapBase::ClassCreateInProgress* marker) : map(map), jpath(jpath), marker(marker) {
+    }
+
+    DLLLOCAL ~ClassCreateMarkerFinalizer() {
+        if (!marker) {
+            return;
+        }
+        // failure / early exit: remove the marker and wake any waiters so they can retry
+        JniClassMapLocker al;
+        finish();
+    }
+
+    // called under m from the publish critical section on success
+    DLLLOCAL void commit() {
+        assert(marker);
+        finish();
+    }
+
+private:
+    QoreJniClassMapBase& map;
+    const std::string& jpath;
+    QoreJniClassMapBase::ClassCreateInProgress* marker;
+
+    // must be called with m held; erases + broadcasts + frees the marker exactly once
+    DLLLOCAL void finish() {
+        map.jcmap_inprogress.erase(jpath);
+        QoreJniClassMap::class_create_cond.broadcast();
+        delete marker;
+        marker = nullptr;
+    }
+};
+}
+
+JniQoreClass* QoreJniClassMap::findClassOrSelfPartial(QoreJniClassMapBase& map, const char* jpath) {
+    QoreString slash(jpath);
+    slash.replaceAll(".", "/");
+    JniClassMapLocker al;
+    if (JniQoreClass* qc = map.findInternal(slash.c_str())) {
+        return qc;
+    }
+    QoreJniClassMapBase::in_progress_class_map_t::iterator i = map.jcmap_inprogress.find(std::string(slash.c_str()));
+    if (i != map.jcmap_inprogress.end() && i->second->tid == q_gettid()) {
+        return i->second->partial;
+    }
+    return nullptr;
+}
+
 JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNamespace& jns, const char* jpath,
         Class* jc, JniQoreClass* qc, QoreJniClassMapBase& map, QoreProgram* pgm) {
     QoreClassHolder qc_holder(qc);
@@ -986,18 +1074,80 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
         : jni_get_context(pgm);
     assert(jpc);
 
-    // check for duplicate before proceeding — handles the case where the same Java class is
-    // loaded from multiple JARs (e.g., jakarta.jms API classes bundled in both the API JAR
-    // and a provider's all-in-one JAR)
-    if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(qc->getName()))) {
-        printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace '%s'; "
-            "returning existing class %p\n", jpath, ns->getName(), existing);
-        // add mapping for the jpath to the existing class and return it
-        map.add(jpath, existing);
-        jpc->saveClass(*existing, jc->getJavaObjectRef());
-        // qc_holder will delete the unused new class
-        return existing;
+    const std::string jpath_key(jpath);
+    const int mytid = q_gettid();
+
+    // Phase 1 (under m): resolve duplicates and coordinate concurrent/recursive creation.  m must
+    // NOT be held across the Java-calling population phase below (addSuperClasses() +
+    // populateQoreClass()), which can drive module loading; instead of publishing a half-built class
+    // into the map under m (the old approach), we install a per-class marker and release m while
+    // building.  See JniClassMapLocker and ClassCreateInProgress.
+    JniQoreClass* existing_rv = nullptr;
+    bool same_thread_partial = false;
+    QoreJniClassMapBase::ClassCreateInProgress* marker = nullptr;
+    {
+        JniClassMapLocker al;
+        while (true) {
+            // duplicate: same Qore class name already fully present in the namespace (e.g. the same
+            // Java class loaded from multiple JARs, or committed by a concurrent creator we waited on)
+            if (JniQoreClass* dup = static_cast<JniQoreClass*>(ns->findLocalClass(qc->getName()))) {
+                existing_rv = dup;
+                break;
+            }
+            QoreJniClassMapBase::in_progress_class_map_t::iterator i = map.jcmap_inprogress.find(jpath_key);
+            if (i != map.jcmap_inprogress.end()) {
+                QoreJniClassMapBase::ClassCreateInProgress* ip = i->second;
+                if (ip->tid == mytid) {
+                    // same-thread recursion: this class refers back to itself while being populated;
+                    // return the partial placeholder (mirrors the old early-publish behavior).  The
+                    // outer frame that owns the marker will publish it into the map and saveClass()
+                    // it, so we must NOT touch the map here (a map.add() would trip the add()
+                    // assertion when the owner later publishes the same jpath)
+                    assert(ip->partial);
+                    existing_rv = ip->partial;
+                    same_thread_partial = true;
+                    break;
+                }
+                // another thread is creating this class: wait for it to finish, then re-check.  m is
+                // held exactly once here (no caller holds m across createClassInNamespace()), so
+                // cond.wait() correctly releases and reacquires the single level
+                QoreJniClassMap::class_create_cond.wait(QoreJniClassMap::m);
+                continue;
+            }
+            // we will build it: install the in-progress marker (partial = qc for self-reference)
+            marker = new QoreJniClassMapBase::ClassCreateInProgress;
+            marker->tid = mytid;
+            marker->partial = qc;
+            map.jcmap_inprogress[jpath_key] = marker;
+            break;
+        }
     }
+
+    if (same_thread_partial) {
+        // qc_holder deletes the unused new class; the owner frame handles map + saveClass
+        return existing_rv;
+    }
+
+    if (existing_rv) {
+        printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace "
+            "'%s'; returning existing class %p\n", jpath, ns->getName(), existing_rv);
+        // register the jpath mapping to the existing class (if not already present) under m, then
+        // save the Java reference OUTSIDE m: saveClass() takes codeGenLock, and m is a strict leaf
+        // that must never be held while acquiring codeGenLock
+        {
+            JniClassMapLocker al;
+            if (!map.findInternal(jpath)) {
+                map.add(jpath, existing_rv);
+            }
+        }
+        jpc->saveClass(*existing_rv, jc->getJavaObjectRef());
+        // qc_holder will delete the unused new class
+        return existing_rv;
+    }
+
+    // we own the marker: guarantee it is finalized (removed + waiters woken) on every exit path,
+    // including exceptions from the Java-calling build below
+    ClassCreateMarkerFinalizer fin(map, jpath_key, marker);
 
     // save pointer to java class info in JniQoreClass
     qc->setManagedUserData(jc);
@@ -1012,9 +1162,9 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
 
     assert(qc->getManagedUserData());
 
-    // add to class maps
-    map.add(jpath, static_cast<JniQoreClass*>(qc_holder.release()));
-
+    // build the class WITHOUT m held (only the caller's per-Program parse lock, which is safe to
+    // hold across a module load).  Same-thread recursion that reaches this jpath resolves to the
+    // partial via the marker; cross-thread creators block on class_create_cond.
     addSuperClasses(qc, jc, jpath, pgm, jpc);
 
     // initialize now that all parents are set up; this must happen before
@@ -1033,27 +1183,44 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
     // that normally happens at parse time doesn't get called
     qc->runtimeResolveAbstractMethods();
 
-    // save class in namespace; check for duplicate to handle the case where the same Java
-    // class is loaded from multiple JARs or inherited from a loaded module's namespace
-    // (the early check at the top may miss this if addSuperClasses() triggered recursive
-    // loading that added the class first)
-    if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(qc->getName()))) {
-        printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace '%s'; "
-            "using existing class %p instead of %p\n", jpath, ns->getName(), existing, qc);
-        // jpath was already added to map (line above) pointing to qc; update it to point
-        // to the existing class instead, and save the Java reference on the existing class
-        map.replace(jpath, existing);
-        jpc->saveClass(*existing, jc->getJavaObjectRef());
-        return existing;
+    // Phase 2 (publish under m): commit the finished class into the map + namespace.
+    // ns->addSystemClass() for a program-attached namespace is serialized by the caller's parse
+    // lock; for the global default_jns it is serialized by m.
+    JniQoreClass* committed;
+    {
+        JniClassMapLocker al;
+        // defensive re-check to handle the same Java class loaded from multiple JARs or inherited
+        // from a loaded module's namespace: addSuperClasses()/populateQoreClass() may have triggered
+        // recursive creation that added a class with this name under a different jpath
+        if (JniQoreClass* existing = static_cast<JniQoreClass*>(ns->findLocalClass(qc->getName()))) {
+            printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' already exists in namespace '%s'; "
+                "using existing class %p instead of %p\n", jpath, ns->getName(), existing, qc);
+            if (map.findInternal(jpath)) {
+                map.replace(jpath, existing);
+            } else {
+                map.add(jpath, existing);
+            }
+            // do NOT delete qc here: a same-thread recursion may already reference it as a base
+            // class (it was handed out as the marker's partial), so abandon it as the prior code
+            // did rather than risk a use-after-free
+            qc_holder.release();
+            committed = existing;
+        } else {
+            map.add(jpath, static_cast<JniQoreClass*>(qc_holder.release()));
+            ns->addSystemClass(qc);
+            committed = qc;
+        }
+        // remove the marker + wake waiters while still under m
+        fin.commit();
     }
-    ns->addSystemClass(qc);
 
-    jpc->saveClass(*qc, jc->getJavaObjectRef());
+    // save the Java reference OUTSIDE m (codeGenLock; see the existing_rv path above)
+    jpc->saveClass(*committed, jc->getJavaObjectRef());
 
     printd(LogLevel, "QoreJniClassMap::createClassInNamespace() '%s' returning qc: %p ns: %p -> '%s::%s'\n", jpath,
-        qc, ns, ns->getName(), qc->getName());
+        committed, ns, ns->getName(), committed->getName());
 
-    return qc;
+    return committed;
 }
 
 void QoreJniClassMap::addSuperClasses(JniQoreClass* qc, Class* jc, const char* jpath, QoreProgram* pgm,
@@ -1130,7 +1297,10 @@ void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* pare
 
     QoreString jpath(chars.c_str());
     jpath.replaceAll(".", "/");
-    JniQoreClass* pc = find(jpath.c_str());
+    // use the coordinated lookup: if this parent class is currently being created by this thread
+    // (a class referring back to itself through its inheritance/type graph), resolve it to the
+    // in-progress partial rather than re-entering creation (which would copy a half-built class)
+    JniQoreClass* pc = findClassOrSelfPartial(*this, jpath.c_str());
     if (!pc) {
         // make sure we are not trying to create a Qore class for a dynamic class that already exists in Qore
         assert(!jpath.startsWith("qore"));
@@ -1292,13 +1462,15 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
 
     printd(LogLevel, "QoreJniClassMap::getQoreType() class: '%s' jname: '%s'\n", cname.c_str(), jname.c_str());
 
-    // find or create a class for the type
-    JniQoreClass* qc = find(jname.c_str());
+    // find or create a class for the type; use the coordinated lookup so a type that refers back to
+    // the class currently being created on this thread resolves to the in-progress partial instead
+    // of re-entering creation (which would copy a half-built class)
+    JniQoreClass* qc = findClassOrSelfPartial(*this, jname.c_str());
     if (!qc) {
         // try to find mapping in Program-specific class map
         if (jpc) {
             assert(static_cast<QoreJniClassMapBase*>(jpc) != static_cast<QoreJniClassMapBase*>(this));
-            qc = jpc->find(jname.c_str());
+            qc = findClassOrSelfPartial(*jpc, jname.c_str());
         }
 
         if (!qc) {
@@ -2313,23 +2485,24 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
         const QoreString& qpath, jstring jname, const char* module, const QoreClass* qcls) {
     printd(5, "JniExternalProgramData::generateByteCode() '%s' pgm: %p qc: %p\n", qpath.c_str(), pgm, qcls);
 
-    // Lock ordering: the full order is "module-load lock -> m -> codeGenLock".
+    // Lock ordering: the total order is "Program parse lock -> codeGenLock -> m" (see JniClassMapLocker).
     //
-    // m must be acquired before the per-Program codeGenLock.  Byte code generation resolves method
-    // parameter and return types, which can create Qore classes for referenced Java types
-    // (getQoreType() -> findCreateQoreClass*() -> m) while codeGenLock is held.  The class-creation
-    // path takes the locks in the same order (m -> createClassInNamespace()/saveClass() ->
-    // codeGenLock), so acquiring m here first keeps the order "m -> codeGenLock" and avoids the ABBA
-    // deadlock between concurrent Qore->Java generation and Java->Qore import.
+    // Byte code generation resolves method parameter and return types, which can create Qore classes
+    // for referenced Java types (getQoreType() -> findCreateQoreClass*()) while codeGenLock is held;
+    // that class-creation path takes the Program parse lock.  The Java->Qore import path takes the
+    // parse lock and then codeGenLock (via saveClass()).  To keep a single consistent order and avoid
+    // a codeGenLock<->parse-lock ABBA (which the old coarse global lock m used to mask), we acquire
+    // this Program's parse lock here, BEFORE codeGenLock.  m is not held across the Java calls below
+    // (loadClassWithPtr()/generateByteCodeIntern() call back into module loading via the classloader
+    // callback); m is taken only as a leaf inside the nested type-resolution.  The parse lock is
+    // per-Program and is safe to hold across a module load; it is re-entrant, so nested generation on
+    // the same thread is fine.
     //
-    // libqore's module-load lock must in turn be acquired before m: loadClassWithPtr() below calls
-    // into the JVM classloader, which calls back into qore_url_classloader_generate_byte_code() ->
-    // ModuleManager::runTimeLoadModule(), which takes the module-load lock.  Taking m first would
-    // deadlock against a concurrent cold module load applying this module's AOT module commands.
-    //
-    // both locks are recursive, so this is safe when the caller (e.g. the import path) already
-    // holds either one.
-    JniModuleLoadLocker al_map;
+    // pgm is the current Program (the classloader callback set the program context before calling us).
+    CurrentProgramRuntimeExternalParseContextHelper parse_lock;
+    if (!parse_lock) {
+        throw BasicException("could not attach to deleted Qore Program during Java byte code generation");
+    }
 
     ExceptionSink xsink;
     if (!qcls) {
@@ -3133,13 +3306,12 @@ LocalReference<jobject> JniExternalProgramData::getJavaRawClassTypeDefinition(En
             cls->getPath(), cls);
 
         try {
-            // NOTE: do NOT acquire QoreJniClassMap::m here.  This code is only reached from
-            // generateByteCode(), which already holds m as the outer lock (m -> codeGenLock);
-            // re-acquiring it here would be redundant.  Acquiring m *after* codeGenLock anywhere
-            // (as an earlier version did here) produces the order "codeGenLock -> m", which
-            // deadlocks against the class-import path that runs "m -> codeGenLock"
-            // (findCreateQoreClass*() holds m, then createClassInNamespace()/saveClass() take
-            // codeGenLock).  Keeping m strictly outer avoids that ABBA deadlock.
+            // NOTE: do NOT acquire the global class-map lock QoreJniClassMap::m here.  This code is
+            // reached from generateByteCode(), which holds "parse lock -> codeGenLock"; m is a strict
+            // leaf in the total order "parse lock -> codeGenLock -> m" and is taken only for the short
+            // class-map critical sections in the nested type resolution below, never held across this
+            // Java call.  The class-import path takes the same order (parse lock, then codeGenLock via
+            // saveClass()), so there is no codeGenLock<->m or codeGenLock<->parse-lock inversion.
             jvalue jargs[2];
             jargs[0].l = jname;
             jargs[1].j = (jlong)cls;
@@ -3657,30 +3829,36 @@ LocalReference<jclass> JniExternalProgramData::getClassForValue(const QoreObject
 }
 
 LocalReference<jclass> JniExternalProgramData::getJavaClassForQoreClass(Env& env, const QoreClass* qc) {
-    // lock ordering: "module-load lock -> m -> codeGenLock" (see generateByteCode()).
-    // loadClassWithPtr() below can drive byte code generation, which resolves referenced types
-    // under m, so m must be outer w.r.t. codeGenLock to avoid an ABBA deadlock with the
-    // class-import path; loadClassWithPtr() can also drive classloading that calls back into
-    // module loading, so the module-load lock must in turn be outer w.r.t. m
-    JniModuleLoadLocker al_map;
-    // ensure that class generation is atomic
-    AutoLocker al(codeGenLock);
-
-    // get or create a Java class for the given Qore class
+    // Lock ordering: "Program parse lock -> codeGenLock -> m" (see generateByteCode()/JniClassMapLocker).
+    // loadClassWithPtr() below drives byte code generation, which resolves referenced types (taking
+    // the parse lock and the leaf m) and can call back into module loading via the classloader
+    // callback.  Holding codeGenLock across that Java call would create a codeGenLock->parse-lock /
+    // codeGenLock->module-load edge that the old coarse global lock m used to mask, reintroducing an
+    // ABBA.  So codeGenLock is taken only for the q2jmap read and the store; the Java call runs with
+    // NO jni lock held.  A double-checked insert handles a concurrent generation of the same class
+    // (the JVM serializes class definition per name, so both threads produce the same class).
     std::string cls_hash = get_class_hash(*qc);
+    {
+        AutoLocker al(codeGenLock);
+        q2jmap_t::iterator i = q2jmap.find(cls_hash);
+        if (i != q2jmap.end()) {
+            return i->second.toLocal();
+        }
+    }
+
+    // generate the Java class with no jni lock held
+    LocalReference<jstring> jname = getJavaNameForClass(env, *qc);
+    jvalue jargs[2];
+    jargs[0].l = jname;
+    jargs[1].j = (long)qc;
+    LocalReference<jclass> jcls = env.callObjectMethod(classLoader,
+        Globals::methodQoreURLClassLoaderLoadClassWithPtr, &jargs[0]).as<jclass>();
+    assert(jcls);
+
+    // store the generated class, double-checking for a concurrent insert
+    AutoLocker al(codeGenLock);
     q2jmap_t::iterator i = q2jmap.lower_bound(cls_hash);
     if (i == q2jmap.end() || i->first != cls_hash) {
-        // get Java name for class
-        LocalReference<jstring> jname = getJavaNameForClass(env, *qc);
-
-        jvalue jargs[2];
-        jargs[0].l = jname;
-        jargs[1].j = (long)qc;
-        LocalReference<jclass> jcls = env.callObjectMethod(classLoader,
-            Globals::methodQoreURLClassLoaderLoadClassWithPtr, &jargs[0]).as<jclass>();
-        assert(jcls);
-
-        // save generated class
         i = q2jmap.insert(i, q2jmap_t::value_type(cls_hash, jcls.makeGlobal()));
         //printd(5, "JniExternalProgramData::getJavaClassForQoreClass() generated class for '%s': %p\n",
         //  qc->getName(), (jclass)i->second);
