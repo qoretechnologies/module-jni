@@ -1144,6 +1144,8 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       the per-Program code-generation lock on all class-generation paths
     - fixed a related Java classloader monitor deadlock during concurrent dynamic bytecode generation and
       Java class import by avoiding native bytecode generation while holding Java class-loading locks
+    - fixed intermittent native crashes during recursive dynamic Java class generation by keeping Java string
+      references valid for the complete lifetime of native UTF string buffers
 
     @subsection jni_2_6_0 jni Module Version 2.6.0
     - added Kotlin language integration support

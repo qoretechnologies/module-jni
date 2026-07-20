@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -48,6 +48,12 @@ class JniExternalProgramData;
  */
 class BaseMethod : public ObjectBase {
 public:
+    //! Identifies the type of reflected executable represented by this object.
+    enum class Kind {
+        Method,
+        Constructor,
+    };
+
     /**
      * \brief Constructor.
      * \param cls the class associated with the method id
@@ -64,10 +70,12 @@ public:
 
     /**
      * \brief Constructor.
-     * \param method an instance of java.lang.reflect.Method
-     * \cls the Class object for the method
+     * \param method an instance of java.lang.reflect.Method or java.lang.reflect.Constructor
+     * \param cls the Class object for the method or constructor
+     * \param kind the reflected executable type
      */
-    DLLLOCAL BaseMethod(jobject method, Class* cls) : cls(cls) {
+    DLLLOCAL BaseMethod(jobject method, Class* cls, Kind kind = Kind::Method) :
+            cls(cls), kind(kind) {
         Env env;
         id = env.fromReflectedMethod(method);
         this->method = GlobalReference<jobject>::fromLocal(method);
@@ -77,10 +85,13 @@ public:
 
     /**
      * \brief Constructor.
-     * \param method an instance of java.lang.reflect.Method
-     * \cls the Class object for the method
+     * \param env the JNI environment
+     * \param method an instance of java.lang.reflect.Method or java.lang.reflect.Constructor
+     * \param cls the Class object for the method or constructor
+     * \param kind the reflected executable type
      */
-    DLLLOCAL BaseMethod(Env& env, jobject method, Class* cls) : cls(cls) {
+    DLLLOCAL BaseMethod(Env& env, jobject method, Class* cls, Kind kind = Kind::Method) :
+            cls(cls), kind(kind) {
         id = env.fromReflectedMethod(method);
         this->method = GlobalReference<jobject>::fromLocal(method);
         printd(LogLevel, "BaseMethod::BaseMethod() this: %p cls: %p id: %p\n", this, cls, id);
@@ -242,6 +253,8 @@ protected:
     int mods;
     // varargs flag
     bool varargs;
+    // reflected executable type
+    Kind kind = Kind::Method;
 };
 
 class Method : public BaseMethod {

@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -629,8 +629,11 @@ public:
     * \throws JavaException if the method throws an exception
     */
    DLLLOCAL LocalReference<jobject> callObjectMethod(jobject object, jmethodID id, const jvalue *args) {
-      LocalReference<jobject> ret = env->CallObjectMethodA(object, id, args);
+      jobject ret = env->CallObjectMethodA(object, id, args);
       if (env->ExceptionCheck()) {
+         if (ret) {
+            env->DeleteLocalRef(ret);
+         }
          throw JavaException();
       }
       return ret;
@@ -955,8 +958,11 @@ public:
     * \throws JavaException if the method throws an exception
     */
    DLLLOCAL LocalReference<jobject> callStaticObjectMethod(jclass cls, jmethodID id, const jvalue *args) {
-      LocalReference<jobject> ret = env->CallStaticObjectMethodA(cls, id, args);
+      jobject ret = env->CallStaticObjectMethodA(cls, id, args);
       if (env->ExceptionCheck()) {
+         if (ret) {
+            env->DeleteLocalRef(ret);
+         }
          throw JavaException();
       }
       return ret;
@@ -1333,37 +1339,51 @@ public:
 
     class GetStringUtfChars {
     public:
-        DLLLOCAL GetStringUtfChars(Env &env, const LocalReference<jstring>& strref) :
-                env(env), str(&strref),
-                chars(strref ? env.env->GetStringUTFChars(strref, nullptr) : nullptr) {
-            if (strref && chars == nullptr) {
-                throw new JavaException;
+        //! Holds an independent local reference while the UTF character buffer is active.
+        /** Native-method arguments are raw jstring values, while expressions such as
+            LocalReference::as<jstring>() return temporary owning wrappers.  Taking an independent
+            NewLocalRef here makes both cases safe: this helper never deletes the caller's reference,
+            and a temporary caller-side wrapper can expire without invalidating the reference used
+            by ReleaseStringUTFChars().
+        */
+        DLLLOCAL GetStringUtfChars(Env &env, jstring strref) : env(env), str(nullptr), chars(nullptr) {
+            if (set(strref)) {
+                throw JavaException();
             }
         }
 
-        DLLLOCAL GetStringUtfChars(Env &env) :
-                env(env), str(nullptr), chars(nullptr) {
+        DLLLOCAL GetStringUtfChars(Env &env) : env(env), str(nullptr), chars(nullptr) {
         }
+
+        GetStringUtfChars(const GetStringUtfChars&) = delete;
+        GetStringUtfChars& operator=(const GetStringUtfChars&) = delete;
 
         DLLLOCAL ~GetStringUtfChars() {
-            if (str) {
-                env.env->ReleaseStringUTFChars(*str, chars);
-            }
+            discard();
         }
 
-        DLLLOCAL int set(const LocalReference<jstring>& strref) {
+        DLLLOCAL int set(jstring strref) {
             discard();
-            chars = env.env->GetStringUTFChars(strref, nullptr);
-            if (chars) {
-                str = &strref;
+            if (!strref) {
                 return 0;
             }
-            return -1;
+            str = static_cast<jstring>(env.env->NewLocalRef(strref));
+            if (!str) {
+                return -1;
+            }
+            chars = env.env->GetStringUTFChars(str, nullptr);
+            if (!chars) {
+                env.env->DeleteLocalRef(str);
+                str = nullptr;
+                return -1;
+            }
+            return 0;
         }
 
         DLLLOCAL void discard() {
             if (str) {
-                env.env->ReleaseStringUTFChars(*str, chars);
+                env.env->ReleaseStringUTFChars(str, chars);
+                env.env->DeleteLocalRef(str);
                 str = nullptr;
                 chars = nullptr;
             }
@@ -1395,17 +1415,14 @@ public:
         }
 
         DLLLOCAL GetStringUtfChars& operator=(const char* new_chars) {
-            if (str) {
-                env.env->ReleaseStringUTFChars(*str, chars);
-                str = nullptr;
-            }
+            discard();
             chars = new_chars;
             return *this;
         }
 
     private:
         Env& env;
-        const LocalReference<jstring>* str;
+        jstring str;
         const char* chars;
     };
 

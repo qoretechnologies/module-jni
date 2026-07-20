@@ -1698,11 +1698,15 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
     Env::GetStringUtfChars mod_str(env);
     std::string mod_str_storage;
     if (module) {
-        mod_str.set(module);
+        if (mod_str.set(module)) {
+            return nullptr;
+        }
     }
     Env::GetStringUtfChars nsname(env);
     if (qname) {
-        nsname.set(qname);
+        if (nsname.set(qname)) {
+            return nullptr;
+        }
     }
 
     QoreString lang_path;
@@ -3072,7 +3076,8 @@ bool Globals::init() {
         jvalue jarg;
         LocalReference<jstring> jprop = env.newString(INIT_PROP_NAME);
         jarg.l = jprop;
-        LocalReference<jstring> val = env.callObjectMethod(classSystem, methodSystemGetProperty, &jarg).as<jstring>();
+        LocalReference<jstring> val = env.callStaticObjectMethod(classSystem, methodSystemGetProperty,
+            &jarg).as<jstring>();
         if (val) {
             Env::GetStringUtfChars strval(env, val);
             if (!strcmp(strval.c_str(), "true")) {

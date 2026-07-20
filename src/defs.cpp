@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -81,17 +81,19 @@ public:
 void JavaException::ignore() {
     // not using the Env wrapper because we don't want any C++ exceptions here
     JNIEnv* env = Jvm::getEnv();
-    LocalReference<jthrowable> throwable = env->ExceptionOccurred();
-    assert(throwable != nullptr);
+    jthrowable raw_throwable = env->ExceptionOccurred();
+    assert(raw_throwable != nullptr);
     env->ExceptionClear();
+    LocalReference<jthrowable> throwable(raw_throwable);
 }
 
 jthrowable JavaException::save() {
     // not using the Env wrapper because we don't want any C++ exceptions here
     JNIEnv* env = Jvm::getEnv();
-    LocalReference<jthrowable> throwable = env->ExceptionOccurred();
-    assert(throwable != nullptr);
+    jthrowable raw_throwable = env->ExceptionOccurred();
+    assert(raw_throwable != nullptr);
     env->ExceptionClear();
+    LocalReference<jthrowable> throwable(raw_throwable);
     return throwable.release();
 }
 
@@ -294,9 +296,10 @@ void JavaException::convert(ExceptionSink* xsink) {
 
 void JavaException::ignoreOrRethrowNoClass() {
     JNIEnv* env = Jvm::getEnv();         //not using the Env wrapper because we don't want any C++ exceptions here
-    LocalReference<jthrowable> throwable = env->ExceptionOccurred();
-    assert(throwable != nullptr);
+    jthrowable raw_throwable = env->ExceptionOccurred();
+    assert(raw_throwable != nullptr);
     env->ExceptionClear();
+    LocalReference<jthrowable> throwable(raw_throwable);
 
     // to show an unhandled exception on the console
     ExceptionSink xsink;
@@ -312,12 +315,28 @@ void JavaException::ignoreOrRethrowNoClass() {
         //not happen, but if it does, we simply report the QoreExceptionWrapper as if it was normal Java exception
     }
 
-    LocalReference<jstring> excName = static_cast<jstring>(env->CallObjectMethod(env->GetObjectClass(throwable), Globals::methodClassGetName));
+    jclass raw_throwable_class = env->GetObjectClass(throwable);
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
+        if (raw_throwable_class) {
+            env->DeleteLocalRef(raw_throwable_class);
+        }
+        xsink.raiseException("JNI-ERROR", "Unable to get exception class: another exception thrown");
+        return;
+    }
+    LocalReference<jclass> throwable_class(raw_throwable_class);
+
+    jstring raw_exc_name = static_cast<jstring>(env->CallObjectMethod(throwable_class,
+        Globals::methodClassGetName));
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        if (raw_exc_name) {
+            env->DeleteLocalRef(raw_exc_name);
+        }
         xsink.raiseException("JNI-ERROR", "Unable to get exception class name: another exception thrown");
         return;
     }
+    LocalReference<jstring> excName(raw_exc_name);
 
     const char* chars = env->GetStringUTFChars(excName, nullptr);
     if (!chars) {
@@ -327,16 +346,22 @@ void JavaException::ignoreOrRethrowNoClass() {
     }
     // return if this is the exception we should ignore
     if (!strcmp(chars, "java.lang.ClassNotFoundException")
-        || !strcmp(chars, "java.lang.NoClassDefFoundError"))
+        || !strcmp(chars, "java.lang.NoClassDefFoundError")) {
+        env->ReleaseStringUTFChars(excName, chars);
         return;
+    }
 
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(chars, QCS_UTF8));
     env->ReleaseStringUTFChars(excName, chars);
 
-    LocalReference<jstring> msg = static_cast<jstring>(env->CallObjectMethod(throwable, Globals::methodThrowableGetMessage));
+    jstring raw_msg = static_cast<jstring>(env->CallObjectMethod(throwable, Globals::methodThrowableGetMessage));
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
-    } else if (msg != nullptr) {
+        if (raw_msg) {
+            env->DeleteLocalRef(raw_msg);
+        }
+    } else if (raw_msg != nullptr) {
+        LocalReference<jstring> msg(raw_msg);
         desc->concat(": ");
         chars = env->GetStringUTFChars(msg, nullptr);
         if (!chars) {

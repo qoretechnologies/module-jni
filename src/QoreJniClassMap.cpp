@@ -1345,7 +1345,7 @@ void QoreJniClassMap::doConstructors(JniQoreClass& qc, jni::Class* jc, QoreProgr
         // get Constructor object
         LocalReference<jobject> c = env.getObjectArrayElement(conArray, i);
 
-        SimpleRefHolder<BaseMethod> meth(new BaseMethod(env, c, jc));
+        SimpleRefHolder<BaseMethod> meth(new BaseMethod(env, c, jc, BaseMethod::Kind::Constructor));
 
 #ifdef DEBUG
         LocalReference<jstring> conStr = env.callObjectMethod(c,
@@ -1580,7 +1580,7 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
         }
 
         // Skip Kotlin default parameter method variants (e.g., "methodName$default")
-        if (mname.find("$default") != std::string::npos) {
+        if (mname.find("$default") != -1) {
             printd(LogLevel, "+ skipping Kotlin default param method %s.%s()\n", qc.getName(), mname.c_str());
             continue;
         }
@@ -2598,15 +2598,10 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
     // form does not produce dual Class objects.  See getJavaNameForClass() for the
     // matching emission rule.
     //
-    // NOTE: we use the raw JNI APIs here rather than Env::GetStringUtfChars: the latter
-    // implicitly wraps a raw jstring in a LocalReference<jstring> whose destructor calls
-    // DeleteLocalRef on the jstring, invalidating the caller's `jname` for the rest of
-    // generateByteCode().
     if (qcls->getModuleName() && jname) {
-        const char* jn = (*env)->GetStringUTFChars(jname, nullptr);
-        bool is_legacy_module = jn
-            && jn[0] == 'q' && jn[1] == 'o' && jn[2] == 'r' && jn[3] == 'e' && jn[4] == '.'
-            && strchr(jn + 5, '.');
+        Env::GetStringUtfChars jn(env, jname);
+        bool is_legacy_module = jn[0] == 'q' && jn[1] == 'o' && jn[2] == 'r' && jn[3] == 'e'
+            && jn[4] == '.' && strchr(jn.c_str() + 5, '.');
         if (is_legacy_module) {
             // Determine whether the class lives inside its owning module's own namespace.
             // Only those classes are subject to the qoremod.<mod>.<rest> canonicalization;
@@ -2636,19 +2631,15 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
                 }
             }
             if (class_under_module_ns) {
-                const char* rest = strchr(jn + 5, '.') + 1;
+                const char* rest = strchr(jn.c_str() + 5, '.') + 1;
                 QoreStringMaker desc("Java class '%s' refers to module-owned class '%s' (module '%s') " \
                     "via the legacy qore.<X>.<Y> binary name; module classes are exposed only under " \
                     "the canonical qoremod.<mod>.<rest> form.  Re-emit / re-import as " \
                     "'qoremod.%s.%s'.",
-                    jn, qpath.c_str(), qcls->getModuleName(), qcls->getModuleName(), rest);
-                (*env)->ReleaseStringUTFChars(jname, jn);
+                    jn.c_str(), qpath.c_str(), qcls->getModuleName(), qcls->getModuleName(), rest);
                 env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc.c_str());
                 return nullptr;
             }
-        }
-        if (jn) {
-            (*env)->ReleaseStringUTFChars(jname, jn);
         }
     }
 
@@ -2903,7 +2894,6 @@ LocalReference<jbyteArray> JniExternalProgramData::generateFunctionClassIntern(E
         Globals::methodJavaClassBuilderGetByteCodeFromBuilder, &jargs[0]).as<jbyteArray>();
 
 #ifdef DEBUG_1
-    // NOTE this must come last as using Env::GetStringUtfChars on a java string destroys the string
     {
         Env::GetStringUtfChars jname_str(env, jname);
         printd(5, "JniExternalProgramData::generateFunctionClassIntern() %s\n", jname_str.c_str());
@@ -3010,7 +3000,6 @@ LocalReference<jbyteArray> JniExternalProgramData::generateConstantClassIntern(E
         Globals::methodJavaClassBuilderGetByteCodeFromBuilder, &jargs[0]).as<jbyteArray>();
 
 #ifdef DEBUG_1
-    // NOTE this must come last as using Env::GetStringUtfChars on a java string destroys the string
     {
         Env::GetStringUtfChars jname_str(env, jname);
         printd(5, "JniExternalProgramData::generateConstantClassIntern() %s\n", jname_str.c_str());
@@ -3272,7 +3261,6 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
 
     // save Java bin name in Qore class if necessary
     if (has_jname) {
-        // NOTE this must come last as using Env::GetStringUtfChars on a java string destroys the string
         Env::GetStringUtfChars jname_str(env, jname);
         if (!qcls->getModuleName() || !is_dynamic_qore_bin_name(jname_str.c_str())) {
             printd(5, "JniExternalProgramData::generateByteCodeIntern() saving class name %p %s: %s\n", qcls,

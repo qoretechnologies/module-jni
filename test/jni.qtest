@@ -283,6 +283,7 @@ public class Main inherits QUnit::Test {
         addTestCase("canonical loader cross-program test", \canonicalLoaderCrossProgramTest());
         addTestCase("overloaded method dispatch test", \overloadedMethodDispatchTest());
         addTestCase("exit() JVM teardown test", \exitTeardownTest());
+        addTestCase("checked JNI string reference lifetime test", \checkedJniStringReferenceLifetimeTest());
         addTestCase("import builtin-class collision test", \importBuiltinClassCollisionTest());
 
         Qore::exit(main());
@@ -293,6 +294,46 @@ public class Main inherits QUnit::Test {
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
         assertTrue(exists qore_bin, "no qore binary path available");
         return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! Verifies JNI string buffers retain a valid reference for their complete lifetime
+    /** Native callbacks receive borrowed raw \c jstring references, while conversions from
+        \c LocalReference::as<jstring>() produce temporary owning wrappers.  The UTF string helper
+        must work with both: retaining a pointer to an implicitly-created wrapper leaves it dangling
+        at the end of the constructor expression, and its destructor can then pass a stale JNI
+        reference to \c ReleaseStringUTFChars().
+
+        Checked JNI makes the otherwise intermittent stale-reference crash deterministic.  Loading
+        the module exercises raw string callback arguments through the class loader, while returning
+        a String from ArrayList.get() exercises the temporary-wrapper conversion path. */
+    checkedJniStringReferenceLifetimeTest() {
+        if (!Qore::Option::HAVE_SYSTEM) {
+            testSkip("system() is not available on this platform");
+        }
+
+        string src = "%modern
+%requires jni
+%module-cmd(jni) import java.lang.System
+%module-cmd(jni) import java.util.ArrayList
+
+ArrayList list();
+list.add(\"checked-jni\");
+@assert(list.get(0) == \"checked-jni\");
+System::gc();
+";
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(src);
+        tmp.file.close();
+
+        string cmd = sprintf("QORE_JNI_JVM_ARGS=-Xcheck:jni %s -b --enable-debug %s 2>&1; "
+            "echo QORE_JNI_EXIT=$?", shellQuote(qoreBin()), shellQuote(tmp.path));
+        string output = trim(backquote(cmd));
+        assertEq("QORE_JNI_EXIT=0", output,
+            "checked-JNI child must exit cleanly without warnings or errors");
     }
 
     #! Importing a Java class that collides with a qpp builtin Qore class must raise cleanly, not crash

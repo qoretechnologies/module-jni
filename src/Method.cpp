@@ -32,15 +32,28 @@
 namespace jni {
 
 void BaseMethod::init(Env &env) {
-    retValClass = env.callObjectMethod(method, Globals::methodMethodGetReturnType, nullptr).as<jclass>().makeGlobal();
-    retValType = Globals::getType(retValClass);
+    bool is_constructor = kind == Kind::Constructor;
+    if (is_constructor) {
+        // Constructors and Methods are sibling subclasses of Executable.  A jmethodID obtained from
+        // java.lang.reflect.Method must not be invoked on a Constructor object; checked JNI rejects
+        // this and unchecked JNI behavior is undefined.
+        retValClass = GlobalReference<jclass>::fromLocal(cls->getJavaObject());
+        retValType = Type::Reference;
+    } else {
+        retValClass = env.callObjectMethod(method,
+            Globals::methodMethodGetReturnType, nullptr).as<jclass>().makeGlobal();
+        retValType = Globals::getType(retValClass);
+    }
 
     LocalReference<jobjectArray> paramTypesArray = env.callObjectMethod(method,
-        Globals::methodMethodGetParameterTypes, nullptr).as<jobjectArray>();
+        is_constructor ? Globals::methodConstructorGetParameterTypes : Globals::methodMethodGetParameterTypes,
+        nullptr).as<jobjectArray>();
     jsize paramCount = env.getArrayLength(paramTypesArray);
 
-    mods = env.callIntMethod(method, Globals::methodMethodGetModifiers, nullptr);
-    varargs = env.callBooleanMethod(method, Globals::methodMethodIsVarArgs, nullptr);
+    mods = env.callIntMethod(method,
+        is_constructor ? Globals::methodConstructorGetModifiers : Globals::methodMethodGetModifiers, nullptr);
+    varargs = env.callBooleanMethod(method,
+        is_constructor ? Globals::methodConstructorIsVarArgs : Globals::methodMethodIsVarArgs, nullptr);
 
     paramTypes.reserve(paramCount);
     for (jsize p = 0; p < paramCount; ++p) {
@@ -52,7 +65,7 @@ void BaseMethod::init(Env &env) {
     // SAM method, even when the functional interface declares the method as varargs.  If the method
     // isn't already marked varargs and its last parameter is a non-byte array, check whether the
     // declaring class implements a functional interface whose corresponding method IS varargs.
-    if (!varargs && paramCount > 0) {
+    if (!is_constructor && !varargs && paramCount > 0) {
         LocalReference<jclass> lastParam =
             env.getObjectArrayElement(paramTypesArray, paramCount - 1).as<jclass>();
         if (env.callBooleanMethod(lastParam, Globals::methodClassIsArray, nullptr)) {
