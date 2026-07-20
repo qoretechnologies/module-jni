@@ -503,7 +503,7 @@ public class GenericServer {
                         && read.getAttributeId().intValue() == AttributeId.Value.uid().intValue()) {
                     StatusCode auth = authorize("read", endpoint);
                     if (auth.isBad()) {
-                        rv.add(new DataValue(auth));
+                        rv.add(statusDataValue(auth));
                         continue;
                     }
                     try {
@@ -511,14 +511,16 @@ public class GenericServer {
                         Hash cb = invokeCallback("read", info);
                         StatusCode status = statusFromCallback(cb, StatusCode.GOOD);
                         if (status.isBad()) {
-                            rv.add(new DataValue(status));
+                            rv.add(statusDataValue(status));
                             continue;
                         }
                         if (cb != null && cb.containsKey("value")) {
                             setEndpointValue(endpoint, cb.get("value"), false);
                         }
+                        rv.add(ensureStatus(endpoint.node.getValue()));
+                        continue;
                     } catch (Throwable t) {
-                        rv.add(new DataValue(new StatusCode(StatusCodes.Bad_InternalError)));
+                        rv.add(statusDataValue(new StatusCode(StatusCodes.Bad_InternalError)));
                         continue;
                     }
                 }
@@ -551,6 +553,14 @@ public class GenericServer {
                         rv.set(i, auth);
                         continue;
                     }
+                    if (!endpoint.writable) {
+                        rv.set(i, new StatusCode(StatusCodes.Bad_NotWritable));
+                        continue;
+                    }
+                    if (write.getIndexRange() != null && !write.getIndexRange().isEmpty()) {
+                        rv.set(i, new StatusCode(StatusCodes.Bad_WriteNotSupported));
+                        continue;
+                    }
                     try {
                         Object requested = ValueCodec.readVariant(write.getValue().getValue());
                         Hash info = endpointInfo(endpoint);
@@ -561,11 +571,12 @@ public class GenericServer {
                             rv.set(i, status);
                             continue;
                         }
-                        if (cb != null && cb.containsKey("value")) {
-                            Variant variant = variantFor(endpoint, cb.get("value"));
-                            write = new WriteValue(write.getNodeId(), write.getAttributeId(), write.getIndexRange(),
-                                new DataValue(variant));
-                        }
+                        Object value = cb != null && cb.containsKey("value") ? cb.get("value") : requested;
+                        DataValue dataValue = goodDataValue(variantFor(endpoint, value));
+                        endpoint.node.setValue(dataValue);
+                        addHistory(endpoint, dataValue);
+                        rv.set(i, StatusCode.GOOD);
+                        continue;
                     } catch (Throwable t) {
                         rv.set(i, new StatusCode(StatusCodes.Bad_InternalError));
                         continue;
@@ -765,7 +776,7 @@ public class GenericServer {
                     .setDisplayName(LocalizedText.english(displayName))
                     .build();
                 Endpoint endpoint = new Endpoint(endpointId, nodeId, localName, displayName, true,
-                    null, -1, null, false, null, endpointSnapshot);
+                    false, null, -1, null, false, null, endpointSnapshot);
                 MethodHandler handler = new MethodHandler(node, endpoint, spec);
                 node.setInputArguments(handler.getInputArguments());
                 node.setOutputArguments(handler.getOutputArguments());
@@ -839,8 +850,8 @@ public class GenericServer {
             endpointSnapshot.put("historizing", historizing);
             endpointSnapshot.put("minimum_sampling_interval", 0.0);
 
-            return new Endpoint(endpointId, nodeId, localName, displayName, false, dataType, valueRank,
-                builtinName(dataType), historizing, node, endpointSnapshot);
+            return new Endpoint(endpointId, nodeId, localName, displayName, false, writable, dataType,
+                valueRank, builtinName(dataType), historizing, node, endpointSnapshot);
         }
 
         private UaFolderNode folderFor(int idx, Map<String, UaFolderNode> folders, RootConfig rootConfig,
@@ -935,6 +946,7 @@ public class GenericServer {
         final String localName;
         final String displayName;
         final boolean method;
+        final boolean writable;
         final NodeId dataType;
         final int valueRank;
         final String dataTypeName;
@@ -943,13 +955,14 @@ public class GenericServer {
         final Hash snapshot;
 
         Endpoint(String endpointId, NodeId nodeId, String localName, String displayName, boolean method,
-                NodeId dataType, int valueRank, String dataTypeName, boolean historizing, UaVariableNode node,
-                Hash snapshot) {
+                boolean writable, NodeId dataType, int valueRank, String dataTypeName,
+                boolean historizing, UaVariableNode node, Hash snapshot) {
             this.endpointId = endpointId;
             this.nodeId = nodeId;
             this.localName = localName;
             this.displayName = displayName;
             this.method = method;
+            this.writable = writable;
             this.dataType = dataType;
             this.valueRank = valueRank;
             this.dataTypeName = dataTypeName;
@@ -1218,13 +1231,37 @@ public class GenericServer {
         return value instanceof Boolean ? (Boolean) value : defaultValue;
     }
 
+    private static DataValue goodDataValue(Variant variant) {
+        return new DataValue(variant, StatusCode.GOOD, DateTime.now());
+    }
+
+    private static DataValue statusDataValue(StatusCode status) {
+        return new DataValue(Variant.NULL_VALUE, status, DateTime.now());
+    }
+
+    private static DataValue ensureStatus(DataValue value) {
+        if (value == null) {
+            return statusDataValue(new StatusCode(StatusCodes.Bad_NoValue));
+        }
+        if (value.getStatusCode() != null) {
+            return value;
+        }
+        DateTime sourceTime = value.getSourceTime() != null ? value.getSourceTime() : DateTime.now();
+        DateTime serverTime = value.getServerTime() != null ? value.getServerTime() : sourceTime;
+        return new DataValue(value.getValue(), StatusCode.GOOD, sourceTime, serverTime);
+    }
+
     private List<DataValue> historySnapshot(NodeId nodeId) {
         Deque<DataValue> values = namespace.history.get(nodeId);
         if (values == null) {
             return Collections.emptyList();
         }
         synchronized (values) {
-            return new ArrayList<>(values);
+            List<DataValue> snapshot = new ArrayList<>(values.size());
+            for (DataValue value : values) {
+                snapshot.add(ensureStatus(value));
+            }
+            return snapshot;
         }
     }
 
@@ -1237,7 +1274,7 @@ public class GenericServer {
             while (values.size() >= maxHistoryValues) {
                 values.removeFirst();
             }
-            values.addLast(value);
+            values.addLast(ensureStatus(value));
         }
     }
 }

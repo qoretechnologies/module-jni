@@ -1329,8 +1329,8 @@ sub startSandboxedRuntime(int port) {
             "data_type": "Int32",
         });
         assertTrue((generic_server_callback_counts.write ?? 0) > 0, "write callback invoked");
-        assertEq(33, prov.doRequest({"action": "read-value", "node_id": by_id{temp_id}.node_id}).value,
-            "generic runtime write/read-back");
+        assertEq(34, prov.doRequest({"action": "read-value", "node_id": by_id{temp_id}.node_id}).value,
+            "generic runtime write callback replacement/read-back");
 
         for (int i = 1; i <= 5; ++i) {
             prov.sendMessage("write-value", {
@@ -1532,6 +1532,11 @@ sub startSandboxedRuntime(int port) {
                     return {
                         "values": (4, 5, 6),
                     };
+                }
+                break;
+            case "write":
+                if (info.endpoint_id == "temperature") {
+                    return {"value": info.value + 1};
                 }
                 break;
             case "event":

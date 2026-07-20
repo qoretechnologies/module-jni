@@ -965,7 +965,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     # create Variant from the value, honoring the optional data type hint; an invalid
                     # hint throws here, before any write is sent
                     Variant variant = OpcUaTypeConversion::getVariant(msg.value, msg.data_type);
-                    DataValue data_value(variant);
+                    DataValue data_value(variant, new StatusCode(0), DateTime::now());
 
                     # Milo 1.1.x: write a single WriteValue via the batch write service
                     ArrayList write_values();
@@ -990,7 +990,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     foreach hash<auto> item in (msg.values) {
                         NodeId node_id = NodeId::parse(item.node_id);
                         Variant variant = OpcUaTypeConversion::getVariant(item.value, item.data_type);
-                        DataValue data_value(variant);
+                        DataValue data_value(variant, new StatusCode(0), DateTime::now());
                         write_values.add(new WriteValue(
                             node_id,
                             AttributeId::Value.uid(),
