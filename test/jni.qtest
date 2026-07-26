@@ -330,7 +330,11 @@ System::gc();
         tmp.file.write(src);
         tmp.file.close();
 
-        string cmd = sprintf("QORE_JNI_JVM_ARGS=-Xcheck:jni %s -b --enable-debug %s 2>&1; "
+        # stderr is captured to catch -Xcheck:jni warnings, so the JVM launcher must not write its
+        # "Picked up ..." banner there; that requires removing the variables from the child's
+        # environment entirely, as the banner is printed for empty values as well
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "QORE_JNI_JVM_ARGS=-Xcheck:jni %s -b --enable-debug %s 2>&1; "
             "echo QORE_JNI_EXIT=$?", shellQuote(qoreBin()), shellQuote(tmp.path));
         string output = trim(backquote(cmd));
         assertEq("QORE_JNI_EXIT=0", output,
