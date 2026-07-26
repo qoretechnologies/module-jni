@@ -1205,6 +1205,11 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       Java class import by avoiding native bytecode generation while holding Java class-loading locks
     - fixed intermittent native crashes during recursive dynamic Java class generation by keeping Java string
       references valid for the complete lifetime of native UTF string buffers
+    - fixed recursive dynamic Java class generation when a consumer %Program inherits a
+      module-owned class; bytecode lookup now routes shared classes through the owning module's
+      canonical classloader, matching normal class loading
+    - fixed process-exit aborts after dynamic Java bytecode generation by preventing deferred
+      destruction of the JNI global %Program after %Qore synchronization state has been finalized
 
     @subsection jni_2_6_0 jni Module Version 2.6.0
     - added Kotlin language integration support

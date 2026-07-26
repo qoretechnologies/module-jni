@@ -531,6 +531,16 @@ public:
         }
     }
 
+    //! Abandons the global context during process exit without running Qore destructors
+    /** C atexit ordering cannot guarantee that function-local libqore synchronization
+        objects are still alive.  The operating system reclaims this process-owned
+        Program immediately after JVM teardown.
+    */
+    DLLLOCAL static void abandonGlobalContext() {
+        jni_shutting_down.store(true, std::memory_order_release);
+        qph.release();
+    }
+
     //! Returns true if the JNI module is shutting down
     /** Java background threads (e.g. ActiveMQ/JMS listeners) must check
         this before calling back into Qore — after shutdown starts, the

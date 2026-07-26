@@ -413,12 +413,28 @@ public class QoreURLClassLoader extends URLClassLoader {
         TypePool can describe the full superclass chain of a class under generation from bytecode
         (rather than via reflection on loaded classes, which forces eager JVM resolution of types
         referenced in method signatures and can re-enter generation of an in-progress class).
-        Sources, in order: injected compiler classes, already-generated dynamic classes
-        (pendingClasses), internal jni-module classes (org.qore.*), bundled Byte Buddy classes
-        (net.bytebuddy.*), classpath / JDK resources, and finally on-demand generation for dynamic
-        classes not yet cached.
+        Shared dynamic classes are first routed to their canonical owning loader.  Local sources,
+        in order: injected compiler classes, already-generated dynamic classes (pendingClasses),
+        internal jni-module classes (org.qore.*), bundled Byte Buddy classes (net.bytebuddy.*),
+        classpath / JDK resources, and finally on-demand generation for dynamic classes not yet
+        cached.
     */
     public byte[] getClassFileBytes(String bin_name) {
+        // Bytecode lookup must follow the same canonical-loader routing as loadClass().
+        // Otherwise a QoreClassFileLocator attached to a consumer Program regenerates a
+        // shared qoremod.* superclass in the consumer loader.  Besides giving Byte Buddy
+        // the wrong type identity, recursive hierarchy analysis can then re-enter the
+        // class currently under generation.
+        if (isDynamic(bin_name) && isSharedDynamicClassName(bin_name)) {
+            QoreURLClassLoader target = resolveSharedClassLoader(bin_name);
+            if (target != null && target != this) {
+                byte[] bytes = target.getClassFileBytes(bin_name);
+                if (bytes != null) {
+                    return bytes;
+                }
+            }
+        }
+
         QoreJavaFileObject file = classes.get(bin_name);
         if (file != null) {
             return file.getByteCode();

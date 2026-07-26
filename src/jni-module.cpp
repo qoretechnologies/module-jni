@@ -150,6 +150,9 @@ static bool deferred_ns_init = false;
 // (not when a host process passed in an existing JVM via the jvm-ptr option).
 static void jni_atexit_destroy_vm() {
     try {
+        // Prevent the global Program's static destructor from running after
+        // function-local libqore synchronization objects have been torn down.
+        Globals::abandonGlobalContext();
         jni::Jvm::destroyVM();
     } catch (...) {
         // an atexit handler must never propagate an exception

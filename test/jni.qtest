@@ -282,6 +282,7 @@ public class Main inherits QUnit::Test {
         addTestCase("bridge method Comparable test", \bridgeMethodComparableTest());
         addTestCase("canonical loader cross-program test", \canonicalLoaderCrossProgramTest());
         addTestCase("canonical loader caller-first test", \canonicalLoaderCallerFirstTest());
+        addTestCase("canonical loader class-file locator test", \canonicalLoaderClassFileLocatorTest());
         addTestCase("overloaded method dispatch test", \overloadedMethodDispatchTest());
         addTestCase("exit() JVM teardown test", \exitTeardownTest());
         addTestCase("class constant object lifetime test", \classConstantObjectLifetimeTest());
@@ -2958,6 +2959,22 @@ public class JniShadowProbe {
         object obj = define_class("org/qore/test/JniShadowProbe", fdata).newInstance();
         # the Java binding must see this Program's class, not the module Program's
         assertEq("main", obj.probe());
+    }
+
+    # Byte Buddy resolves the method graph for a generated Qore class through
+    # QoreClassFileLocator.  Shared module-owned parents must be described from their
+    # canonical module loader; regenerating them in the consumer Program can recurse
+    # into the class currently under generation.
+    canonicalLoaderClassFileLocatorTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse("%prepend-module-path " + get_script_dir() + "/qore-modules\n"
+            + "%requires JniShadowModule\n"
+            + "%requires jni\n"
+            + "class JniCanonicalConsumer inherits JniShadowNs::Sub::CanonicalChild {}\n"
+            + "binary sub bytes() { return get_byte_code('::JniCanonicalConsumer'); }", "locator");
+
+        binary bytes = p.callFunction("bytes");
+        assertGt(0, bytes.size());
     }
 
     overloadedMethodDispatchTest() {

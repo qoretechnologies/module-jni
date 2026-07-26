@@ -48,6 +48,12 @@ public class Target {
         return "module";
     }
 }
+
+public class CanonicalBase {
+}
+
+public class CanonicalChild inherits CanonicalBase {
+}
 }
 }
 
