@@ -1,0 +1,60 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore JniShadowModule test module definition
+
+/*  JniShadowModule.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module JniShadowModule {
+    version = "1.0";
+    desc = "test module declaring a class at the same namespace path as the loading program";
+    author = "Qore Technologies, s.r.o.";
+}
+
+/*  This module exists to cover canonical Java classloader routing when two Programs in the
+    same process hold different classes at the same namespace path.  It declares
+    JniShadowNs::Sub::Target, which jni.qtest also declares in its own Program with a
+    different implementation.
+
+    The second top-level namespace is required: a module contributing to a single root
+    namespace owns that namespace, and dynamic Java classes for its classes are then exposed
+    only under the canonical qoremod.<mod>.<rest> binary name, which makes the legacy
+    qore.<X>.<Y> form fail outright instead of resolving to the wrong class.
+*/
+
+public namespace JniShadowNs {
+public namespace Sub {
+public class Target {
+    static string who() {
+        return "module";
+    }
+}
+}
+}
+
+public namespace JniShadowOther {
+public class Filler {
+    static string tag() {
+        return "filler";
+    }
+}
+}

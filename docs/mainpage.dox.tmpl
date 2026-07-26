@@ -991,6 +991,23 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - <b>Fixed dynamic Java classes binding to another Program's class of the same name</b>
+      - <b>Symptom.</b> Java code calling a \c qore.<i>X</i>.<i>Y</i>... API could be bound to a
+        same-named class belonging to an unrelated %Program in the process, so calls dispatched to
+        the wrong implementation.  In Qorus this bound server-side Java interfaces to the
+        \c QorusClient variant of \c OMQ::UserApi::UserApi, which failed at runtime with
+        <tt>no pseudo method &lt;nothing&gt;::getClientLogger()</tt>.
+      - <b>Cause.</b> A \c qore.<i>X</i>.<i>Y</i>... binary name addresses a namespace path, and two
+        %Programs in one process can legitimately hold different classes at the same path.
+        Canonical classloader resolution scanned every loaded user-module %Program for that path
+        before consulting the calling %Program, so it bound to whichever module happened to be
+        iterated first &mdash; and cached that answer process-wide, keyed by the binary name alone,
+        for every later caller.
+      - <b>Fix.</b> The class is now resolved from the calling %Program's own view first and routed
+        to that class's source %Program, which keeps a single Java \c Class per %Qore class across
+        all %Programs that import it.  The module scan remains as a fallback for callers that
+        cannot see the class at all, and caller-dependent results are no longer written to the
+        process-wide cache.  Built-in and module-provided classes are unaffected.
     - <b>Fixed a deadlock between Java class import and concurrent module loading</b>
       - <b>Symptom.</b> A process could hang with many threads blocked while loading modules, most
         visibly at startup when several services were initialized at once.  Any Java class import

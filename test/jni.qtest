@@ -281,6 +281,7 @@ public class Main inherits QUnit::Test {
         addTestCase("auto param overload test", \autoParamOverloadTest());
         addTestCase("bridge method Comparable test", \bridgeMethodComparableTest());
         addTestCase("canonical loader cross-program test", \canonicalLoaderCrossProgramTest());
+        addTestCase("canonical loader caller-first test", \canonicalLoaderCallerFirstTest());
         addTestCase("overloaded method dispatch test", \overloadedMethodDispatchTest());
         addTestCase("exit() JVM teardown test", \exitTeardownTest());
         addTestCase("checked JNI string reference lifetime test", \checkedJniStringReferenceLifetimeTest());
@@ -2742,6 +2743,46 @@ auto sub test() {
         assertTrue(p2.callFunction("test") < 0);
     }
 
+    # Regression: a `qore.<X>.<Y>...` binary name addresses a namespace path, and two Programs
+    # in one process can hold different classes at the same path.  Canonical loader routing
+    # must resolve the class from the calling Program's own view; if it instead scans loaded
+    # module Programs first, Java code is bound to an unrelated Program's class.
+    #
+    # This is how Qorus' qorus-core bound Java interfaces to the QorusClient variant of
+    # OMQ::UserApi::UserApi (found in a connection module that merely requires the Qorus
+    # client) instead of the server-side class in the calling interface Program, which failed
+    # at runtime with "no pseudo method <nothing>::getClientLogger()".
+    canonicalLoaderCallerFirstTest() {
+        # load the module into a side Program: this Program's JniShadowNs::Sub::Target is the
+        # one the module walk would find
+        Program p(PO_NEW_STYLE);
+        p.parse("%append-module-path " + get_script_dir() + "/qore-modules\n"
+            + "%requires JniShadowModule\n"
+            + "string sub side() { return JniShadowNs::Sub::Target::who(); }", "side");
+        assertEq("module", p.callFunction("side"));
+
+        # this Program declares its own class at the same path
+        assertEq("main", JniShadowNs::Sub::Target::who());
+
+        QoreJavaCompiler compiler();
+        compiler::CompilerOutput out = compiler.compile("org.qore.test.JniShadowProbe", "
+package org.qore.test;
+
+public class JniShadowProbe {
+    public JniShadowProbe() throws Throwable {
+    }
+
+    public String probe() throws Throwable {
+        return qore.JniShadowNs.Sub.Target.who();
+    }
+}
+");
+        binary fdata = out.file.openInputStream().readAllBytes();
+        object obj = define_class("org/qore/test/JniShadowProbe", fdata).newInstance();
+        # the Java binding must see this Program's class, not the module Program's
+        assertEq("main", obj.probe());
+    }
+
     overloadedMethodDispatchTest() {
         # test that overloaded methods with array params dispatch correctly
         # and don't cause infinite recursion due to fake varargs
@@ -2761,6 +2802,20 @@ auto sub test() {
         # so callCount should be 1, not infinite
         assertEq(1, obj.getCallCount());
     }
+}
+
+# this Program's class at ::JniShadowNs::Sub::Target; JniShadowModule declares a different
+# class at the same path.  Deliberately not public: a public namespace here would be inherited
+# by the side Program that loads the module, and the module would fail to load with a
+# duplicate-class error.  See canonicalLoaderCallerFirstTest().
+namespace JniShadowNs {
+namespace Sub {
+class Target {
+    static string who() {
+        return "main";
+    }
+}
+}
 }
 
 class TestAppender inherits LoggerAppenderWithLayout {

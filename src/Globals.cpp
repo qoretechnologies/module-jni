@@ -2684,6 +2684,47 @@ private:
     GlobalReference<jobject> saved;
 };
 
+// Returns the cached canonical loader for bin_name, or nullptr if there is no usable entry.
+/** Entries whose owning Program has been destroyed (pgm_ptr cleared by the JEPD destructor) are
+    stale: classes loaded through them would call into freed program data.  Such entries are
+    evicted here so the caller re-resolves.
+*/
+static jobject lookupCanonicalLoaderCache(Env& env, const char* bin_name) {
+    AutoLocker al(canonical_loader_cache_lock);
+    auto it = canonical_loader_cache.find(bin_name);
+    if (it == canonical_loader_cache.end()) {
+        return nullptr;
+    }
+    jobject cached = it->second;
+    long pgm_ptr = 0;
+    try {
+        pgm_ptr = env.callLongMethod(cached, Globals::methodQoreURLClassLoaderGetPtr, nullptr);
+    } catch (jni::Exception& e) {
+        e.ignore();
+    }
+    if (!pgm_ptr) {
+        JNIEnv* jenv = jni::Jvm::getEnv();
+        jenv->DeleteGlobalRef(cached);
+        canonical_loader_cache.erase(it);
+        return nullptr;
+    }
+    return cached;
+}
+
+// Returns the QoreProgram owning the given QoreURLClassLoader, or nullptr.
+static QoreProgram* getClassLoaderProgram(Env& env, jobject loader) {
+    if (!loader) {
+        return nullptr;
+    }
+    try {
+        return reinterpret_cast<QoreProgram*>(env.callLongMethod(loader,
+            Globals::methodQoreURLClassLoaderGetPtr, nullptr));
+    } catch (jni::Exception& e) {
+        e.ignore();
+    }
+    return nullptr;
+}
+
 jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* bin_name) {
     if (!bin_name || !*bin_name) {
         return nullptr;
@@ -2691,35 +2732,6 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
     // Preserve the calling thread's QoreURLClassLoader across this lookup.
     // See QoreUrlClassLoaderContextSaver above for why.
     QoreUrlClassLoaderContextSaver ctx_saver(env);
-    {
-        jobject cached = nullptr;
-        {
-            AutoLocker al(canonical_loader_cache_lock);
-            auto it = canonical_loader_cache.find(bin_name);
-            if (it != canonical_loader_cache.end()) {
-                cached = it->second;
-                // Check if the cached loader's owning program has been
-                // destroyed (pgm_ptr cleared by JEPD destructor).  If so the
-                // entry is stale: classes loaded through it would call into
-                // freed program data.  Evict and re-resolve.
-                long pgm_ptr = 0;
-                try {
-                    pgm_ptr = env.callLongMethod(cached,
-                        Globals::methodQoreURLClassLoaderGetPtr, nullptr);
-                } catch (jni::Exception& e) { e.ignore(); }
-                if (pgm_ptr == 0) {
-                    JNIEnv* jenv = jni::Jvm::getEnv();
-                    jenv->DeleteGlobalRef(cached);
-                    canonical_loader_cache.erase(it);
-                    cached = nullptr;
-                }
-            }
-        }
-        if (cached) {
-            return cached;
-        }
-        // if stale, fall through to fresh resolution
-    }
 
     // Module-owned: qoremod.<mod>.<X>.  For user modules we use the module's own Program.
     // For binary modules (no user-module Program) we fall through to the qpath-search
@@ -2735,17 +2747,18 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
             return nullptr;
         }
         std::string mod(p, dot - p);
+        // the module name alone determines the answer here, so a cached entry is always valid
+        jobject cached = lookupCanonicalLoaderCache(env, bin_name);
+        if (cached) {
+            return cached;
+        }
         jobject user_loader = getModuleClassLoader(mod.c_str());
         if (user_loader) {
             cacheCanonicalLoader(bin_name, user_loader);
             return user_loader;
         }
         // binary module: build qpath = <module-root-ns>::<rest-with-dots-as-::>
-        QoreProgram* probe_pgm = nullptr;
-        if (this_loader) {
-            probe_pgm = (QoreProgram*)env.callLongMethod(this_loader,
-                Globals::methodQoreURLClassLoaderGetPtr, nullptr);
-        }
+        QoreProgram* probe_pgm = getClassLoaderProgram(env, this_loader);
         if (probe_pgm) {
             const QoreNamespace* ns = get_module_root_ns(mod.c_str(), probe_pgm);
             if (ns) {
@@ -2768,13 +2781,10 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
 
     // Legacy / shadow form: qore.X.Y.Z corresponds to QoreClass ::X::Y::Z.
     //
-    // Pick a stable canonical owner from the user-module Programs registered
-    // with ModuleManager (held alive by MM, so they outlive transient
+    // A class declared in a user Program is resolved from the calling Program's own view
+    // (see below); everything else picks a stable canonical owner from the user-module
+    // Programs registered with ModuleManager (held alive by MM, so they outlive transient
     // validator/sandbox/side Programs that often initiate these lookups).
-    // We deliberately do NOT use the calling Program (this_loader's pgm) as
-    // a canonical-owner candidate even if its findClass succeeds: the
-    // calling Program may be transient, and binding the canonical_loader_cache
-    // to it leaves cache entries pointing at a destroyed classloader.
     //
     // Cross-program class-identity used to be a concern here (validators
     // need their getClass() result to match the Java wrapper's parent).
@@ -2807,8 +2817,68 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
             }
         }
 
+        // Resolve from the calling Program's own view first.
+        //
+        // `qore.<X>.<Y>...` addresses a namespace path, and two Programs in one process can
+        // legitimately hold *different* classes at the same path.  Qorus is the canonical
+        // example: qorus-core declares the server-side ::OMQ::UserApi::UserApi in its own
+        // Program, while the QorusClientBase module Program holds the client-side variant of
+        // the same class.  The class the calling Program can see is the one its Java code
+        // means, so the caller's view is authoritative here; the module walk below is only a
+        // fallback for callers that cannot see the class at all.  Without this, the walk
+        // below picks whichever module Program happens to be iterated first (it hit an
+        // unrelated connection module that merely `%requires` the Qorus client), and every
+        // Java caller in the process is then bound to that Program's class.
+        //
+        // Routing to the class's *source* Program (preserved across importClass) rather than
+        // to the caller keeps Class identity canonical: every consumer Program that imports
+        // the same class resolves to the same owner, and so to a single Java Class object.
+        // Classes with no source Program - built-in and binary-module classes such as
+        // qore.Qore.SQL.AbstractDatasource - are left to the module walk, which is what keeps
+        // them on a single shared loader across Programs.
+        //
+        // The result is deliberately NOT stored in canonical_loader_cache: that cache is keyed
+        // by binary name alone, so caching a caller-dependent answer would hand the first
+        // caller's class to every other Program in the process - which is the bug this
+        // resolution order fixes.
+        //
+        // Only the legacy qore.<X>.<Y> form is ambiguous this way.  A qoremod.<mod>.<rest>
+        // name states its owning module outright, so the module is always the canonical
+        // owner; resolving those from the caller instead hands every consumer Program its own
+        // Java Class and the JVM then rejects cross-loader use with a LinkageError.
+        QoreProgram* caller_pgm = getClassLoaderProgram(env, this_loader);
+        const QoreClass* caller_qc = nullptr;
+        if (caller_pgm) {
+            ExceptionSink xsink;
+            caller_qc = caller_pgm->findClass(qpath.c_str(), &xsink);
+            xsink.clear();
+        }
+        if (caller_qc && !tried_qpath_via_qoremod) {
+            QoreProgram* owner_pgm = caller_qc->getSourceProgram();
+            if (!owner_pgm && !caller_qc->isSystem() && !caller_qc->getModuleName()) {
+                // A class declared natively in the calling Program itself has no source
+                // Program recorded; the calling Program is then its only owner.  This is how
+                // host applications provide their API (qorus-core, qwf, qsvc and qjob parse
+                // OMQ::UserApi::UserApi and friends into each interface Program).  Built-in
+                // classes and module-provided classes are excluded: they are shared across
+                // Programs and must stay on the single loader the module walk below picks,
+                // or the JVM rejects their use across loaders with a LinkageError.
+                owner_pgm = caller_pgm;
+            }
+            if (owner_pgm) {
+                JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(owner_pgm);
+                if (jpc) {
+                    return jpc->getClassLoader();
+                }
+            }
+        }
+
         // Walk module programs to find one with the class.  These are stable
         // (held by ModuleManager) so they're safe canonical owners.
+        jobject cached = lookupCanonicalLoaderCache(env, bin_name);
+        if (cached) {
+            return cached;
+        }
         const QoreClass* qc = nullptr;
         QoreProgram* finder_pgm = nullptr;
         ReferenceHolder<QoreHashNode> mod_hash(MM.getModuleHash(), nullptr);
@@ -2828,34 +2898,16 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
                 }
             }
         }
-        if (!qc && this_loader) {
-            // Fallback: ask the calling loader's Program.  Classes provided
-            // natively by a host application (qorus-core, qwf, qsvc, qjob —
-            // OMQ::StreamConfig and friends from COMMON_INTERFACE_CORE_SRC)
-            // are NOT in any user-module Program, so the user-module walk
-            // above misses them.  The class's source Program (preserved
-            // across `importClass` via spgm) gives us a stable canonical
-            // owner: the host main program lives as long as the process,
-            // far longer than transient validator / per-workflow / per-
-            // service programs that initiate lookups.  Without this, two
-            // loaders (e.g. qwf-main and per-workflow) each generate their
-            // own qore.OMQ.StreamConfig and the JVM rejects use across
-            // them with a LinkageError.
-            QoreProgram* caller_pgm = nullptr;
-            try {
-                caller_pgm = reinterpret_cast<QoreProgram*>(env.callLongMethod(
-                    this_loader, Globals::methodQoreURLClassLoaderGetPtr, nullptr));
-            } catch (jni::Exception& e) {
-                e.ignore();
-            }
-            if (caller_pgm) {
-                ExceptionSink xsink;
-                qc = caller_pgm->findClass(qpath.c_str(), &xsink);
-                xsink.clear();
-                if (qc) {
-                    finder_pgm = caller_pgm;
-                }
-            }
+        if (!qc && caller_qc) {
+            // Fallback: use the class the calling loader's Program sees.  Reaching here with
+            // a class the caller can see means it is a built-in or module-provided class with
+            // no source Program (the caller-first resolution above returned for everything
+            // else) that no user-module Program surfaces — so the calling Program is the only
+            // canonical owner available.  Without this, two loaders (e.g. qwf-main and
+            // per-workflow) each generate their own Java class for it and the JVM rejects use
+            // across them with a LinkageError.
+            qc = caller_qc;
+            finder_pgm = caller_pgm;
         }
         if (!qc) {
             return nullptr;
