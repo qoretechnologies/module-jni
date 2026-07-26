@@ -284,6 +284,7 @@ public class Main inherits QUnit::Test {
         addTestCase("canonical loader caller-first test", \canonicalLoaderCallerFirstTest());
         addTestCase("overloaded method dispatch test", \overloadedMethodDispatchTest());
         addTestCase("exit() JVM teardown test", \exitTeardownTest());
+        addTestCase("class constant object lifetime test", \classConstantObjectLifetimeTest());
         addTestCase("checked JNI string reference lifetime test", \checkedJniStringReferenceLifetimeTest());
         addTestCase("import builtin-class collision test", \importBuiltinClassCollisionTest());
 
@@ -402,6 +403,54 @@ exit(0);
             int rc = system(cmd);
             assertEq(0, rc, sprintf("JVM-embedding child (run %d) must exit cleanly via exit(); "
                 "rc=%d (-1 means killed by a signal = teardown crash)", i + 1, rc));
+        }
+    }
+
+    #! Java class constants holding objects must survive the Program that created them
+    /** Java \c "static final" fields are cached as Qore class constants in the shared class private
+        data owned by the module's global class map, so an object-valued constant (ex:
+        \c java.sql.DriverManager.SET_LOG_PERMISSION, a \c java.sql.SQLPermission instance) lives
+        until the module is deleted at process exit.
+
+        Such objects are created in the context of whichever Program first loads the Java class, so
+        their class pointer is that Program's wrapper for the class.  Class wrappers are reclaimed
+        when the Program's class list is destroyed, therefore the object must hold a reference to the
+        wrapper and not just to the class's private data; otherwise destroying the constants during
+        module teardown dereferences a freed class wrapper and crashes (SIGSEGV in
+        qore_class_private::execDestructor() via QoreJniClassMap::destroy()).
+
+        The child runs in a separate process because the fault occurs during library cleanup after
+        the script has finished; system() returns -1 when the child is killed by a signal. */
+    classConstantObjectLifetimeTest() {
+        if (!Qore::Option::HAVE_SYSTEM) {
+            testSkip("system() is not available on this platform");
+        }
+
+        # child: load a Java class with object-valued "static final" fields in a child Program, then
+        # destroy the Program while the module (and therefore the class constants) live on
+        string src = "%modern
+%requires jni
+
+class Main {
+    static run() {
+        Program p(PO_NEW_STYLE);
+        p.loadModule(\"jni\");
+        # java.sql.DriverManager has \"static final SQLPermission\" fields
+        p.issueModuleCmd(\"jni\", \"import java.sql.DriverManager\");
+        delete p;
+    }
+}
+Main::run();
+";
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(src);
+        tmp.file.close();
+
+        string cmd = sprintf("%s %s", qoreBin(), tmp.path);
+        for (int i = 0; i < 2; ++i) {
+            int rc = system(cmd);
+            assertEq(0, rc, sprintf("child Program teardown + module teardown (run %d) must not "
+                "crash; rc=%d (-1 means killed by a signal)", i + 1, rc));
         }
     }
 
