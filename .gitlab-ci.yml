@@ -31,6 +31,14 @@ default:
             --silent \
             --no-mqtt-acceptor \
             /home/jboss/broker
+          # disable the disk usage check; the broker shares the runner node's disk, and when it is more
+          # than <max-disk-usage> (90%) full, Artemis blocks producers and closes MQTT connections when
+          # a message is published ("AMQ834002: Error processing control packet"), which the client sees
+          # as "Connection lost (32109) - java.io.EOFException"; this broker holds only throwaway test
+          # data, so the check serves no purpose here
+          sed -i 's|<max-disk-usage>[^<]*</max-disk-usage>|<max-disk-usage>-1</max-disk-usage>|' \
+            /home/jboss/broker/etc/broker.xml
+          grep -q '<max-disk-usage>-1</max-disk-usage>' /home/jboss/broker/etc/broker.xml
           exec /home/jboss/broker/bin/artemis run
       variables:
         AMQ_USER: admin
