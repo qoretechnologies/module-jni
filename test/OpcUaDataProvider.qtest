@@ -1355,6 +1355,49 @@ sub startSandboxedRuntime(int port) {
         }), "authorization callback rejects write");
         assertTrue((generic_server_callback_counts.authorize ?? 0) > 0, "authorization callback invoked");
 
+        # a caller must be able to identify a rejected write by its OPC UA status code alone: the generic data
+        # provider API replaces the error code with its own, and the description is presentation text
+        hash<ExceptionInfo> write_ex;
+        try {
+            prov.sendMessage("write-value", {
+                "node_id": by_id{readonly_id}.node_id,
+                "value": "changed",
+                "data_type": "String",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            write_ex = ex;
+        }
+        assertEq("SEND-MESSAGE-ERROR", write_ex.err, "the generic API error code is reported to the caller");
+        assertEq("OPCUA-WRITE-ERROR", write_ex.arg.ex.err, "the OPC UA error code survives the generic API");
+        hash<auto> write_arg = write_ex.arg.ex.arg;
+        assertEq(Type::Int, write_arg.status_code.type(), "the numeric OPC UA status code is recoverable");
+        assertEq("Bad", write_arg.severity, "the status severity is recoverable");
+        assertEq(OpcUaStatusMapping::get(write_arg.status_code).symbolic_name, write_arg.symbolic_name,
+            "the symbolic status name matches the generic status mapping");
+        assertFalse(OpcUaStatusMapping::get(write_arg.status_code).is_good,
+            "the reported status code is not a good status");
+        assertEq(by_id{readonly_id}.node_id, write_arg.node_id, "the rejected node ID is recoverable");
+
+        # a batch write reports the same contract, plus the index of the item that failed
+        hash<ExceptionInfo> batch_ex;
+        try {
+            prov.sendMessage("write-values", {
+                "values": (
+                    {"node_id": by_id{temp_id}.node_id, "value": 34, "data_type": "Int32"},
+                    {"node_id": by_id{readonly_id}.node_id, "value": "changed", "data_type": "String"},
+                ),
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            batch_ex = ex;
+        }
+        assertEq("SEND-MESSAGE-ERROR", batch_ex.err, "the generic API error code is reported for batch writes");
+        assertEq("OPCUA-WRITE-ERROR", batch_ex.arg.ex.err, "the OPC UA error code survives a batch write");
+        assertEq(write_arg.status_code, batch_ex.arg.ex.arg.status_code,
+            "a batch write reports the same status code as the equivalent single write");
+        assertEq(1, batch_ex.arg.ex.arg.index, "the index of the rejected batch item is recoverable");
+        assertEq(by_id{readonly_id}.node_id, batch_ex.arg.ex.arg.node_id,
+            "the rejected node ID is recoverable from a batch write");
+
         hash<auto> call = prov.doRequest({
             "action": "call-method",
             "object_id": by_id{add_id}.object_node_id,

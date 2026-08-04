@@ -524,6 +524,11 @@ module OpcUaDataProvider {
     - fixed a bug where connecting to (or disconnecting from) an unreachable or unresponsive OPC UA
       server could block indefinitely; connection and disconnection now respect the \c connect_timeout
       option so a dead server can no longer hang connection monitoring, object teardown, or reconnection
+    - a write rejected by the server now reports the OPC UA \c StatusCode as a structured exception argument
+      (\c status_code, \c symbolic_name, \c severity, \c diagnostics, and the \c node_id, plus the \c index
+      of the failed item for batch writes) instead of formatting it into the description only; the description
+      is presentation text, and the generic data provider APIs replace the error code with their own, so a
+      caller had no reliable way to tell an expected protocol rejection from a transport failure
 
     @subsection opcuadataproviderv19 OpcUaDataProvider v1.9
     - added Qorus-agnostic JSON Schema 2020-12 and OpenAPI 3.1 projections for generic OPC UA schema

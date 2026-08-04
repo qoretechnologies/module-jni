@@ -757,6 +757,24 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         };
     }
 
+    #! Returns the structured exception argument describing a failed OPC UA write
+    /** A write that the server rejects is reported to the caller through generic data provider APIs, which
+        replace the error code with their own, so the numeric OPC UA \c StatusCode must be recoverable from the
+        exception's structured argument.  Formatting it into the description alone would leave a caller no way to
+        identify the failure other than parsing presentation text.
+
+        @param status_code_obj the Milo \c StatusCode object returned for the failed write
+        @param node_id the ID of the node that was written
+
+        @return the same status fields reported by successful operations (see @ref statusFields()) plus the node
+        ID, so that a caller matching on \c status_code or \c symbolic_name uses one representation everywhere
+
+        @since OpcUaDataProvider 1.9.1
+    */
+    private static hash<auto> getWriteErrorInfo(auto status_code_obj, string node_id) {
+        return statusFields(status_code_obj) + {"node_id": node_id};
+    }
+
     #! Returns @ref True if the given exception indicates a lost or invalid OPC UA connection/session
     /** Walks the Java exception cause chain and inspects OPC UA status codes (via
         @ref OpcUaStatusMapping) rather than matching exception text, so detection does not depend on
@@ -957,7 +975,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     auto result = response.getResults()[0];
                     if (result.isBad()) {
                         throw "OPCUA-WRITE-ERROR", sprintf("failed to write value to node %y: "
-                            "status code %d", msg.node_id, int(result.getValue()));
+                            "status code %d", msg.node_id, int(result.getValue())),
+                            getWriteErrorInfo(result, msg.node_id);
                     }
                     debug("OPC UA: Wrote value to node %y: %y", msg.node_id, msg.value);
                     break;
@@ -986,7 +1005,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                         if (results[i].isBad()) {
                             throw "OPCUA-WRITE-ERROR", sprintf("failed to write value to node %y: "
                                 "status code %d", msg.values[i].node_id,
-                                int(results[i].getValue()));
+                                int(results[i].getValue())),
+                                getWriteErrorInfo(results[i], msg.values[i].node_id) + {"index": i};
                         }
                     }
                     debug("OPC UA: Wrote %d values", msg.values.size());
