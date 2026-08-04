@@ -7,6 +7,9 @@
 
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.QoreCallback
+%module-cmd(jni) import org.qore.jni.test.Methods
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import java.util.function.Consumer
 
 %exec-class Main
 
@@ -15,8 +18,17 @@ string sub test_func() {
 }
 
 public class Main inherits QUnit::Test {
+    private {
+        #! Result of the typed assignment performed in the callback
+        *string callback_result;
+
+        #! Class of the object received by the callback
+        *string callback_class;
+    }
+
     constructor() : Test("jni callback test", "1.0") {
         addTestCase("callback test", \callbackTest());
+        addTestCase("callback argument class identity", \callbackArgumentClassIdentityTest());
 
         # execute tests and set program return value
         set_return_value(main());
@@ -24,5 +36,42 @@ public class Main inherits QUnit::Test {
 
     callbackTest() {
         assertEq("test", QoreCallback::callFunctionTest());
+    }
+
+    #! Verifies that a Java object passed to a Qore callback matches its declared Qore type
+    /** A callback is executed by Java, so the Program established for the call decides which Program's
+        JNI class map wraps the arguments.  If that is not the Program the callback's code was compiled
+        in, the class map builds a second Qore class for the same Java class, and - because the other
+        Program's classloader cannot see a dynamically added JAR - one whose dependent types degrade to
+        "auto".  Such a class does not compare equal to the declared one, so the assignment below fails
+        with a RUNTIME-TYPE-ERROR naming the same class on both sides.
+
+        "Methods" is used because its static fields are typed with other classes from the same JAR, so
+        a class built without access to the JAR has a different signature than the declared one.
+    */
+    callbackArgumentClassIdentityTest() {
+        ArrayList list();
+        Methods obj();
+        list.add(obj);
+
+        # the interface is implemented in Qore, so Java calls back into this Program
+        object consumer = cast<Consumer>(implement_interface(new QoreInvocationHandler(\onItem()),
+            load_class("java/util/function/Consumer")));
+        list.forEach(consumer);
+
+        assertEq("Methods", callback_class, "callback receives the Java object");
+        assertEq("ok", callback_result, "Java object matches its declared Qore type in the callback");
+    }
+
+    #! Consumer.accept() implementation called by Java with an object of a JAR-loaded class
+    private onItem(Method method, *list<auto> args) {
+        callback_class = args[0].className();
+        try {
+            Methods typed = args[0];
+            # use the value so that the assignment cannot be elided
+            callback_result = typed.className() == "Methods" ? "ok" : "unexpected class";
+        } catch (hash<ExceptionInfo> ex) {
+            callback_result = sprintf("%s: %s", ex.err, ex.desc);
+        }
     }
 }

@@ -642,6 +642,32 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         debug("MQTT: Connected to server %y", client.getServerURI());
     }
 
+    #! Reports an error raised in an MQTT callback
+    /** MQTT callbacks are executed by the Paho client's own thread; there is no caller that could
+        receive an exception, so errors raised in a callback are reported here instead of propagated.
+
+        The error is logged if a logger is set and written to @ref Qore::stderr "stderr" otherwise, so
+        that a callback failure can never be lost silently; a swallowed callback error is visible only
+        as messages that never arrive, which is indistinguishable from a broker or network problem.
+
+        @param fmt a @ref Qore::vsprintf() "vsprintf()" format string for the error message; remaining
+        arguments are used as format arguments
+    */
+    private reportCallbackError(string fmt) {
+        string msg = vsprintf(fmt, argv);
+        if (getLogger()) {
+            LoggerWrapper::error("%s", msg);
+            return;
+        }
+        try {
+            stderr.printf("ERROR: %s\n", msg);
+        } catch (hash<ExceptionInfo> ex) {
+            # writing to stderr raises ILLEGAL-EXPRESSION with @ref no-terminal-io; there is nowhere
+            # left to report the error in that case, and this method is called from a catch block on
+            # the client's callback thread, where an exception would be unhandled
+        }
+    }
+
     #! Qore callback for the MqttCallback interface
     private mqttCallbackHandler(Method method, *list<auto> args) {
         string method_name = method.getName();
@@ -660,7 +686,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                     return;
             }
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("MQTT: Error in %y callback: %s", method_name, get_exception_string(ex));
+            reportCallbackError("MQTT: Error in %y callback: %s", method_name, get_exception_string(ex));
             return;
         }
         try {
@@ -690,8 +716,10 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                         break;
                 }
             } catch (hash<ExceptionInfo> ex) {
-                LoggerWrapper::error("MQTT: Error decoding message payload as %y: %s", message_format,
-                    get_exception_string(ex));
+                # the message is still delivered with its undecoded payload, so that a message that
+                # does not match the configured format cannot silently disappear from the stream
+                reportCallbackError("MQTT: Error decoding message payload as %y; the message is "
+                    "delivered with an undecoded payload: %s", message_format, get_exception_string(ex));
             }
 
             # extract MQTT 5 properties
@@ -717,7 +745,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
             debug("MQTT: Message received: %y", msghash);
             notifyObservers(EVENT_MQTT_MESSAGE, msghash);
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("MQTT: Error in message callback: %s", get_exception_string(ex));
+            reportCallbackError("MQTT: Error in message callback: %s", get_exception_string(ex));
         }
     }
 

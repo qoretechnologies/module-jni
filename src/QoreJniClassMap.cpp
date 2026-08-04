@@ -1389,6 +1389,34 @@ void QoreJniClassMap::doConstructors(JniQoreClass& qc, jni::Class* jc, QoreProgr
     }
 }
 
+// guards relaxed_class_types; a strict leaf taken only around the set operation
+static QoreThreadLock relaxed_class_type_lock;
+// Java classes whose load failure has already been reported by reportClassLoadRelaxation()
+static std::set<std::string> relaxed_class_types;
+
+//! Reports a signature type relaxed to "auto" because the Java class could not be loaded
+/** Reported once per Java class for the life of the process: a missing optional JAR can be
+    referenced by many signatures, and the consequence is the same for all of them.
+
+    @param jpath the internal (slash-separated) name of the class that could not be loaded
+    @param err the error code of the Java exception
+    @param desc the description of the Java exception
+*/
+static void reportClassLoadRelaxation(const char* jpath, const char* err, const char* desc) {
+    {
+        AutoLocker al(relaxed_class_type_lock);
+        if (!relaxed_class_types.insert(jpath).second) {
+            return;
+        }
+    }
+    QoreString name(jpath);
+    name.replaceAll("/", ".");
+    printe("WARNING: jni: Java class '%s' could not be loaded (%s: %s); types referring to it are "
+        "relaxed to 'auto' in Qore classes created for Java classes that mention it.  Such classes do not "
+        "match classes created where this class does resolve; add the JAR providing it to the classpath to "
+        "avoid type errors.\n", name.c_str(), err, desc);
+}
+
 const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*& altType, QoreProgram* pgm, bool literal) {
     assert(!altType);
     Env env;
@@ -1482,12 +1510,25 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
                 qc = findCreateQoreClass(env, cname, jname.c_str(), cls.release(), base, pgm);
                 assert(qc);
             } catch (jni::Exception& e) {
-                // if the class cannot be loaded (e.g., in a callback thread where the
-                // classloader doesn't have access to all JARs), fall back to auto type
+                // A type that appears only in a signature and cannot be loaded must not make the
+                // class being built unimportable: Java itself loads and uses such a class as long as
+                // the members mentioning the missing type are not called, and optional dependencies
+                // are common.  The type is therefore relaxed to "auto" and class creation continues.
+                //
+                // This is one of the few places where an exception is deliberately not propagated, so
+                // it is always reported: relaxing the type changes the class signature, which means a
+                // class built here does not compare equal to the same Java class built where the
+                // dependency did resolve, and objects of one will not satisfy declared types of the
+                // other.  Reported once per class so a missing optional JAR cannot flood the output.
                 printd(5, "QoreJniClassMap::getQoreType() failed to load '%s'; using auto type\n",
                     jname.c_str());
                 ExceptionSink xsink;
                 e.convert(&xsink);
+                {
+                    QoreStringValueHelper err(xsink.getExceptionErr());
+                    QoreStringValueHelper desc(xsink.getExceptionDesc());
+                    reportClassLoadRelaxation(jname.c_str(), err->c_str(), desc->c_str());
+                }
                 xsink.clear();
                 return autoTypeInfo;
             }

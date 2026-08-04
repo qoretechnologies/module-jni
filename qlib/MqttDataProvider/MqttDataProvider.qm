@@ -208,6 +208,10 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
     @section MqttDataProvider_relnotes Release Notes
 
     @subsection MqttDataProvider_v3_0 MqttDataProvider v3.0
+    - errors raised in MQTT callbacks are now always reported; they are logged if a logger is set and
+      written to @ref Qore::stderr "stderr" otherwise.  MQTT callbacks run on the Paho client's own
+      thread and have no caller that could receive an exception, so an unreported error was visible
+      only as messages that never arrived, which is indistinguishable from a broker or network problem
     - upgraded to MQTT 5.0 protocol using Eclipse Paho v5 client
     - added MQTT 5.0 message properties: \c content_type, \c response_topic, \c correlation_data,
       \c message_expiry_interval, \c payload_format, \c user_properties, \c subscription_identifiers

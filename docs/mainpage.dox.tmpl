@@ -991,6 +991,33 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - <b>Fixed Java objects passed to a %Qore callback not matching their declared %Qore class</b>
+      - <b>Symptom.</b> Assigning an argument of a %Qore callback implementing a Java interface to a
+        variable declared with the argument's own Java class failed with
+        <tt>RUNTIME-TYPE-ERROR: &lt;lvalue&gt; expects type 'object&lt;<i>X</i>&gt;', but got an object
+        of class '<i>X</i>'</tt> &mdash; naming the same class on both sides.  Affected classes loaded
+        from a dynamically added JAR; where the exception was caught and logged, the only visible
+        effect was that callbacks silently stopped delivering data.
+      - <b>Cause.</b> \c QoreCodeDispatcher bound to the thread-current %Program at construction
+        instead of the %Program owning the callback.  The %Program established for the call decides
+        which %Program's JNI class map wraps the arguments, so when the two differed, the class map
+        built a second %Qore class for the same Java class; because that %Program's classloader
+        cannot see dynamically added JARs, types in its signature that referred to classes from those
+        JARs were relaxed to \c auto.  The resulting class does not compare equal to the one the
+        callback's declared types refer to.
+      - <b>Fix.</b> The dispatcher now binds to the %Program that owns the callback, taken at
+        construction while the callback is known to be alive, so the callback always executes in the
+        %Program its code was compiled in and Java arguments resolve to the classes that %Program
+        imported.
+    - <b>Java classes that cannot be loaded while building a class are now reported</b>
+      - <b>Symptom.</b> A type appearing in a Java signature could be silently relaxed to \c auto,
+        producing a %Qore class that looks identical to one built elsewhere but does not compare equal
+        to it, so objects of one did not satisfy declared types of the other.  Nothing was reported in
+        release builds.
+      - <b>Fix.</b> The relaxation is unchanged &mdash; it must not be fatal, since Java itself loads
+        classes whose unused signatures mention absent types, and optional dependencies are common
+        &mdash; but it is now reported to \c stderr once per Java class, naming the class, the
+        underlying Java exception and the consequence.
     - <b>Fixed dynamic Java classes binding to another Program's class of the same name</b>
       - <b>Symptom.</b> Java code calling a \c qore.<i>X</i>.<i>Y</i>... API could be bound to a
         same-named class belonging to an unrelated %Program in the process, so calls dispatched to

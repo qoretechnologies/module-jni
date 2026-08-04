@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -64,7 +64,9 @@ public:
     jobject dispatch(Env& env, jobject proxy, jobject method, jobjectArray args) override;
 
 private:
-    QoreProgram* pgm = getProgram();
+    // the Program that owns the callback; set in the constructor, see the comment there for why this
+    // cannot be the thread-current Program
+    QoreProgram* pgm = nullptr;
     ResolvedCallReferenceNode* callback;
 };
 

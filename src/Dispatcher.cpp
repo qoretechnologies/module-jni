@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -32,8 +32,31 @@
 namespace jni {
 
 QoreCodeDispatcher::QoreCodeDispatcher(const ResolvedCallReferenceNode *callback) : callback(callback->refRefSelf()) {
+    // Bind to the Program that owns the callback, not the thread-current Program.
+    //
+    // The callback is executed later on a Java thread, and the Program established for that call
+    // determines which Program's JNI class map is used to wrap Java objects passed as arguments.  It
+    // must therefore be the Program that imported the Java classes the callback's code was compiled
+    // against; binding to any other Program makes the class map build a second QoreClass for the same
+    // Java class - and, because that Program's classloader normally cannot see the caller's dynamically
+    // added JARs, a class whose dependent types silently degrade to "auto".  Such a class does not
+    // compare equal to the one the callback's declared types refer to, so passing an argument to a
+    // typed variable fails with a RUNTIME-TYPE-ERROR naming the same class on both sides.
+    //
+    // getProgram() is not usable here: the thread-current Program during construction is not
+    // guaranteed to be the callback's Program (it is the JNI global Java-context Program in some
+    // contexts).  The Program reference is taken here, while the callback is known to be alive;
+    // callback->getProgram() must not be called later from dispatch(), where it can dangle if the
+    // owning Program has been destroyed.
+    pgm = this->callback->getProgram();
+    if (!pgm) {
+        // call references with no owning Program (ex: builtin function references) fall back to the
+        // thread-current Program
+        pgm = getProgram();
+    }
+    assert(pgm);
     pgm->ref();
-    printd(LogLevel, "QoreCodeDispatcher::QoreCodeDispatcher(), this: %p\n", this);
+    printd(LogLevel, "QoreCodeDispatcher::QoreCodeDispatcher(), this: %p pgm: %p\n", this, pgm);
 }
 
 class QoreThreadDetacher {
