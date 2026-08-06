@@ -531,7 +531,10 @@ public class QoreURLClassLoader extends URLClassLoader {
     public Class<?> loadClass(String bin_name) throws ClassNotFoundException {
         //System.out.printf("QoreURLClassLoader.loadClass() this: %x '%s' pgm: %x (startup: %s)\n",
         //    hashCode(), bin_name, pgm_ptr, startup);
-        Class<?> rv = checkLoadedClass(bin_name);
+        // A class already defined in THIS loader always wins; defining it again here would make a
+        // duplicate Class object and a LinkageError.  The parent chain is consulted further below,
+        // after locally-injected byte code has had its say.
+        Class<?> rv = findLoadedClass(bin_name);
         if (rv != null) {
             //System.out.printf("loadClass() %s returning loaded\n", bin_name);
             return rv;
@@ -584,6 +587,26 @@ public class QoreURLClassLoader extends URLClassLoader {
                 byte[] bytes = file.getByteCode();
                 return defineClass(bin_name, bytes, 0, bytes.length);
             }
+        }
+
+        // Only now consider a class already loaded by a parent QoreURLClassLoader.
+        //
+        // Byte code injected into THIS loader is an explicit statement that this loader must own the
+        // class, so it has to outrank an inherited copy.  QoreJavaCompiler compiles into a child of the
+        // owning Program's loader, and a caller that compiles a class extending an injected dependency
+        // injects that dependency's byte code here while the same class may also be defined in the
+        // parent (Qorus does exactly this: the dependency is defined in the interface Program with the
+        // jni "define-class" command, then injected for the compile).  Letting the parent's copy win put
+        // subclass and superclass in different runtime packages - a runtime package is (package name +
+        // defining loader) - so the JVM rejected a package-private superclass with
+        // "IllegalAccessError: class X cannot access its superclass Y".
+        //
+        // Shared dynamic names are deliberately unaffected: they are routed above to a single canonical
+        // loader, which is what keeps one Class object per name across Programs.
+        rv = checkLoadedClass(bin_name);
+        if (rv != null) {
+            //System.out.printf("loadClass() %s returning loaded from a parent\n", bin_name);
+            return rv;
         }
 
         if (bin_name.startsWith("java.")

@@ -287,6 +287,7 @@ public class Main inherits QUnit::Test {
         addTestCase("class constant object lifetime test", \classConstantObjectLifetimeTest());
         addTestCase("checked JNI string reference lifetime test", \checkedJniStringReferenceLifetimeTest());
         addTestCase("import builtin-class collision test", \importBuiltinClassCollisionTest());
+        addTestCase("injected superclass loader test", \injectedSuperclassLoaderTest());
 
         Qore::exit(main());
     }
@@ -1088,6 +1089,51 @@ public class GenericIteratorProbe {
             printf("%s\n", get_exception_string(ex));
             rethrow;
         }
+    }
+
+    #! Byte code injected into a loader must outrank a copy already loaded by a parent loader
+    /** QoreJavaCompiler compiles into a child of the Program's loader.  When a class extends another
+        class that is both defined in the Program's loader and injected for the compile, the compiled
+        subclass has to link against the injected copy in its own loader: a runtime package is
+        (package name + defining loader), so a superclass reached through the parent instead puts the
+        two in different runtime packages and the JVM rejects a package-private superclass with
+        "IllegalAccessError: class X cannot access its superclass Y".
+
+        Both classes here are deliberately package-private - that is what makes the loader identity
+        observable at all; a public superclass links across loaders without complaint.
+    */
+    injectedSuperclassLoaderTest() {
+        Program p(PO_NEW_STYLE);
+        p.setScriptPath(get_script_path());
+        p.loadModule("jni");
+
+        # compile the superclass on its own and define it in the Program's loader, exactly as a
+        # consumer that needs the class visible to the Program does
+        hash<auto> base_out = getClass(p, "QoreJavaCompiler").newObject(getJavaClassLoader(p)).compile({
+            "InjectedSuperclassBase": "class InjectedSuperclassBase {\n"
+                "    protected String who() {\n"
+                "        return \"base\";\n"
+                "    }\n"
+                "}\n",
+        });
+        binary base_code = base_out."InjectedSuperclassBase".file.openInputStream().readAllBytes();
+        assertGt(0, base_code.size(), "the package-private superclass compiles");
+        p.issueModuleCmd("jni", "define-class InjectedSuperclassBase " + base_code.toBase64());
+
+        # now compile a subclass in a fresh compiler (a child loader) with the superclass injected;
+        # before the loader precedence fix this threw IllegalAccessError
+        object compiler = getClass(p, "QoreJavaCompiler").newObject(getJavaClassLoader(p));
+        compiler.injectClass("InjectedSuperclassBase", base_code);
+        hash<auto> derived_out = compiler.compile({
+            "InjectedSuperclassDerived": "class InjectedSuperclassDerived extends InjectedSuperclassBase {\n"
+                "    protected String who() {\n"
+                "        return super.who() + \"+derived\";\n"
+                "    }\n"
+                "}\n",
+        });
+        binary derived_code = derived_out."InjectedSuperclassDerived".file.openInputStream().readAllBytes();
+        assertGt(0, derived_code.size(), "a package-private subclass of an injected package-private "
+            "superclass compiles and links");
     }
 
     static Reflection::Class getClass(Program p, string name) {
