@@ -540,6 +540,32 @@ public class QoreURLClassLoader extends URLClassLoader {
             return rv;
         }
 
+        // A shared dynamic name must resolve to exactly one Class object process-wide, so a copy a
+        // parent loader has already defined outranks everything below.  This restores the ordering
+        // these names had before the injected-byte-code rule at the bottom of this method existed,
+        // and it must stay ahead of that rule: pendingClasses is not only an ownership statement,
+        // it is also a plain byte-code cache -- the canonical-routing block just below stores byte
+        // code in the *calling* loader purely so QoreKotlinCompiler.generateDynamicStubs() can read
+        // it back.  Letting tryGetPendingClass() define from that cache hands out a second Class for
+        // a name a parent already owns and splits the name's identity, which the JVM reports at the
+        // first cross-loader override as
+        //
+        //   LinkageError: loader constraint violation for class qoremod.<mod>.<X>: ... the class
+        //   loader 'QoreURLClassLoader' @a of the selected method's type ... and the class loader
+        //   'QoreURLClassLoader' @b for its super type ... have different Class objects for the type
+        //   qoremod.SqlUtil.<Y> used in the signature
+        //
+        // The canonical-routing block is not sufficient on its own: it only acts when the canonical
+        // owner is some *other* loader, so a loader that is itself the canonical owner fell straight
+        // through to the local cache.
+        if (isSharedDynamicClassName(bin_name)) {
+            rv = checkLoadedClass(bin_name);
+            if (rv != null) {
+                //System.out.printf("loadClass() %s returning shared copy from a parent\n", bin_name);
+                return rv;
+            }
+        }
+
         // Canonical routing for shared dynamic classes MUST come before tryGetPendingClass:
         // pendingClasses may contain bytecode cached during a previous canonical routing
         // (for Kotlin stub generation), and tryGetPendingClass would defineClass on THIS
@@ -601,8 +627,10 @@ public class QoreURLClassLoader extends URLClassLoader {
         // defining loader) - so the JVM rejected a package-private superclass with
         // "IllegalAccessError: class X cannot access its superclass Y".
         //
-        // Shared dynamic names are deliberately unaffected: they are routed above to a single canonical
-        // loader, which is what keeps one Class object per name across Programs.
+        // Shared dynamic names never reach this rule with a parent copy available: they are settled
+        // above, first against the parent chain and then by canonical routing.  Routing alone does not
+        // settle them - it acts only when the canonical owner is some other loader - which is why the
+        // parent check for those names sits above this rule instead of being folded into it.
         rv = checkLoadedClass(bin_name);
         if (rv != null) {
             //System.out.printf("loadClass() %s returning loaded from a parent\n", bin_name);
