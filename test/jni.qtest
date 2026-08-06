@@ -288,6 +288,7 @@ public class Main inherits QUnit::Test {
         addTestCase("checked JNI string reference lifetime test", \checkedJniStringReferenceLifetimeTest());
         addTestCase("import builtin-class collision test", \importBuiltinClassCollisionTest());
         addTestCase("injected superclass loader test", \injectedSuperclassLoaderTest());
+        addTestCase("loader precedence for cached byte code test", \cachedByteCodeLoaderPrecedenceTest());
 
         Qore::exit(main());
     }
@@ -1134,6 +1135,83 @@ public class GenericIteratorProbe {
         binary derived_code = derived_out."InjectedSuperclassDerived".file.openInputStream().readAllBytes();
         assertGt(0, derived_code.size(), "a package-private subclass of an injected package-private "
             "superclass compiles and links");
+    }
+
+    #! Byte code cached in a loader must not split a shared dynamic name into two Class objects
+    /** \c QoreURLClassLoader.pendingClasses is two things at once: an ownership statement made by the
+        \c "define-pending-class" module command, and a plain byte-code cache - canonical routing stores
+        byte code in the \a calling loader so QoreKotlinCompiler.generateDynamicStubs() can read it back.
+        loadClass() cannot tell the two apart, so which one wins has to be decided by the name:
+
+        - a shared dynamic name (\c qoremod.* or \c qore.<X>.<Y>...) must resolve to exactly one Class
+          object process-wide, so a copy a parent loader has already defined outranks cached byte code.
+          A second copy splits the name's identity, and the JVM reports it at the first cross-loader
+          override as "LinkageError: loader constraint violation";
+        - any other name must resolve to the loader's own byte code, because injecting byte code into a
+          loader is a statement that this loader owns the class.  Letting a parent's copy win puts a
+          compiled subclass and its superclass in different runtime packages - a runtime package is
+          (package name + defining loader) - and the JVM then rejects a package-private superclass with
+          "IllegalAccessError: class X cannot access its superclass Y".
+
+        Canonical routing does not settle the first case on its own: it acts only when the canonical
+        owner is some \a other loader.  Here both Programs declare a class at the same namespace path, so
+        the child Program's loader is itself the canonical owner and routing is skipped - which is how
+        the qore docs build (doxygen/qjar) ended up with two copies of qoremod.SqlUtil.AbstractIndex.
+
+        @see injectedSuperclassLoaderTest(), which covers the second rule end to end through the compiler
+    */
+    cachedByteCodeLoaderPrecedenceTest() {
+        # a Program created here gets this Program's loader as the parent of its own loader
+        Program p(PO_NEW_STYLE);
+        p.loadModule("jni");
+        p.parse("namespace JniCachedNs { class Cached { static string who() { return \"child\"; } } }\n"
+            "binary sub byteCode() { return jni::get_byte_code(\"::JniCachedNs::Cached\"); }", "child");
+
+        object parent_loader = get_class_loader();
+        object child_loader = getJavaClassLoader(p);
+        assertTrue(child_loader.getParent().equals(parent_loader),
+            "the child Program's loader is a child of this Program's loader");
+
+        # a shared dynamic name: the copy the parent already defined must win
+        string shared_name = get_java_name("::JniCachedNs::Cached");
+        assertEq("qore.JniCachedNs.Cached", shared_name, "a namespace path maps to a shared dynamic name");
+
+        object parent_class = define_class(replace(shared_name, ".", "/"),
+            get_byte_code("::JniCachedNs::Cached"));
+        assertTrue(parent_class.getClassLoader().equals(parent_loader),
+            "the shared dynamic name is defined in the parent loader");
+
+        p.issueModuleCmd("jni", "define-pending-class " + shared_name + " "
+            + p.callFunction("byteCode").toBase64());
+        assertTrue(child_loader.hasPendingClass(shared_name),
+            "the child loader holds byte code for the same shared dynamic name");
+
+        object shared_loaded = child_loader.loadClass(shared_name);
+        assertTrue(shared_loaded.getClassLoader().equals(parent_loader),
+            "a shared dynamic name resolves to the parent's copy, not to the loader's own byte code");
+        assertTrue(shared_loaded.equals(parent_class),
+            "the shared dynamic name has exactly one Class object");
+
+        # any other name: the loader's own byte code must win, even against a copy in the parent
+        string ordinary_name = "JniCachedOrdinary";
+        hash<auto> out = getClass(p, "QoreJavaCompiler").newObject(child_loader).compile({
+            ordinary_name: "class " + ordinary_name + " {\n"
+                "    static String who() {\n"
+                "        return \"cached\";\n"
+                "    }\n"
+                "}\n",
+        });
+        binary ordinary_code = out{ordinary_name}.file.openInputStream().readAllBytes();
+        assertGt(0, ordinary_code.size(), "the ordinary-named class compiles");
+
+        object ordinary_parent_class = define_class(ordinary_name, ordinary_code);
+        assertTrue(ordinary_parent_class.getClassLoader().equals(parent_loader),
+            "the ordinary name is defined in the parent loader too");
+
+        p.issueModuleCmd("jni", "define-pending-class " + ordinary_name + " " + ordinary_code.toBase64());
+        object ordinary_loaded = child_loader.loadClass(ordinary_name);
+        assertTrue(ordinary_loaded.getClassLoader().equals(child_loader),
+            "an ordinary name resolves to the loader's own byte code, not to the parent's copy");
     }
 
     static Reflection::Class getClass(Program p, string name) {
@@ -2914,6 +2992,19 @@ class Target {
         return "main";
     }
 }
+}
+}
+
+# this Program's class at ::JniCachedNs::Cached; the child Program in
+# cachedByteCodeLoaderPrecedenceTest() declares its own class at the same path, which is what makes that
+# Program's loader the canonical owner of the shared dynamic name.  Not public, for the same reason as
+# JniShadowNs above: a public namespace would be inherited by the child Program and its parse would then
+# fail with a duplicate-class error.
+namespace JniCachedNs {
+class Cached {
+    static string who() {
+        return "main";
+    }
 }
 }
 
