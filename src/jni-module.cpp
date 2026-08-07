@@ -193,6 +193,14 @@ QoreStringNode* jni_module_init_finalize(bool system) {
     return nullptr;
 }
 
+//! Drops everything the jni module caches for a Program that is being torn down
+/** Called by libqore for every Program before its namespace data is cleared - see
+    qore_register_program_cleanup_callback().
+*/
+static void jni_program_cleanup(QoreProgram* pgm) {
+    jni::purge_module_root_ns_cache(pgm);
+}
+
 static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     if (jni_init_failed) {
         xsink.raiseException("MODULE-INIT-ERROR", "jni module initialization failed");
@@ -201,6 +209,11 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     printd(5, "jni_module_init()\n");
 
     jni::jni_qore_init = true;
+
+    // get_module_root_ns() caches borrowed QoreNamespace pointers keyed by the owning Program;
+    // those namespaces die with the Program and its address is then reused, so the entries must
+    // go before the namespaces do or a later Program inherits pointers to freed memory
+    qore_register_program_cleanup_callback(jni_program_cleanup);
 
     qore_set_module_option("jni", "jni-version", JNI_VERSION_21);
 
@@ -308,6 +321,9 @@ static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exception
 }
 
 static void jni_module_delete() {
+    // stop libqore calling into this module's code once it is unloaded
+    qore_deregister_program_cleanup_callback(jni_program_cleanup);
+
     // clear all objects from stored classes before destroying the JVM (releases all global references)
     Globals::clearGlobalContext();
     {

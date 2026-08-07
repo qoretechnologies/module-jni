@@ -1589,6 +1589,25 @@ const QoreNamespace* get_module_root_ns(const char* name, QoreProgram* mod_pgm) 
     return rv;
 }
 
+// count of teardown notifications received for Programs (diagnostics only)
+static size_t qmnc_purge_count = 0;
+
+void purge_module_root_ns_cache(QoreProgram* mod_pgm) {
+    AutoLocker al(qmnc_lock);
+    ++qmnc_purge_count;
+    qmnc.erase(mod_pgm);
+}
+
+size_t get_module_root_ns_cache_purge_count() {
+    AutoLocker al(qmnc_lock);
+    return qmnc_purge_count;
+}
+
+size_t get_module_root_ns_cache_program_count() {
+    AutoLocker al(qmnc_lock);
+    return qmnc.size();
+}
+
 static void get_java_pfx(QoreString& java_pfx, jboolean python, jboolean kotlin, const char* mod_str,
         QoreString& lang_path, const char* qname) {
     assert(java_pfx.empty());

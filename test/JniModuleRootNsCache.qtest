@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  JniModuleRootNsCache.qtest Copyright 2016 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# get_module_root_ns() caches borrowed QoreNamespace pointers keyed by the Program that owns each
+# class.  Those namespaces are owned by the Program, so an entry that outlives its Program dangles
+# - and a freed Program's address is routinely handed straight to the next one, which then inherits
+# namespaces that were freed long ago.  That crashed qorus-core in CI generating Java bytecode.
+#
+# The crash itself is not deterministic (it needs the allocator to reuse an address), but the
+# mechanism that prevents it is: libqore must notify this module before each Program's namespace
+# data is cleared, so the entries can go while they are still valid.  That notification is what is
+# asserted here, via debug-build-only counters.
+#
+# Without the fix no notification is delivered and the count below never moves.
+
+%new-style
+%enable-all-warnings
+%require-types
+%strict-args
+
+%requires QUnit
+%requires jni
+
+%exec-class JniModuleRootNsCacheTest
+
+class JniModuleRootNsCacheTest inherits QUnit::Test {
+    public {
+        const ChildSrc = "%requires jni\n"
+            "%requires Util\n"
+            "string sub go() {\n"
+            "    return Jni::org::qore::jni::get_java_name(\"::Util::TerminalColor\");\n"
+            "}\n";
+    }
+
+    constructor() : Test("JniModuleRootNsCacheTest", "1.0") {
+        addTestCase("each destroyed Program is announced to the jni module", \teardownNotifiedTest());
+        addTestCase("Program churn does not grow the cache", \noGrowthTest());
+        set_return_value(main());
+    }
+
+    #! Returns a debug-build-only counter, or -1 when the diagnostics are compiled out
+    private int dbgCounter(string name) {
+        try {
+            return call_function("Jni::org::qore::jni::" + name);
+        } catch (hash<ExceptionInfo> ex) {
+            return -1;
+        }
+    }
+
+    private int teardownCount() {
+        return dbgCounter("dbg_jni_module_root_ns_cache_purge_count");
+    }
+
+    private int cacheSize() {
+        return dbgCounter("dbg_jni_module_root_ns_cache_size");
+    }
+
+    #! Resolves a Java class name inside a throwaway Program, then destroys it
+    /** get_java_name() is the entry point that crashed: it reaches getJavaNameForClass(), which
+        calls get_module_root_ns() and so exercises the cache.
+    */
+    private runAndDestroyChild() {
+        Program p(PO_NEW_STYLE);
+        p.parse(ChildSrc, "child");
+        p.callFunction("go");
+        # destroy explicitly: the assertions below are only meaningful if teardown is deterministic
+        delete p;
+    }
+
+    private teardownNotifiedTest() {
+        int before = teardownCount();
+        if (before == -1) {
+            testSkip("the jni module's debug diagnostics require a debug build");
+        }
+
+        runAndDestroyChild();
+
+        # exactly one notification for the one Program destroyed.  Without the libqore fix no
+        # notification is delivered at all and this stays at "before", leaving that Program's
+        # cache entries behind as dangling pointers for whatever is allocated at its address next
+        assertEq(before + 1, teardownCount(),
+            "destroying one Program delivered exactly one cleanup notification");
+    }
+
+    private noGrowthTest() {
+        int before = cacheSize();
+        if (before == -1) {
+            testSkip("the jni module's debug diagnostics require a debug build");
+        }
+
+        int notified = teardownCount();
+        for (int i = 0; i < 10; ++i) {
+            runAndDestroyChild();
+        }
+        assertEq(notified + 10, teardownCount(), "all 10 destroyed Programs were announced");
+
+        # entries belonging to still-live Programs (the Util module's own Program here) are kept,
+        # so this asserts the cache neither grows per destroyed Program nor discards live entries
+        assertEq(before, cacheSize(), "10 Program create/destroy cycles left the cache unchanged");
+    }
+}

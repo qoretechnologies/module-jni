@@ -644,6 +644,20 @@ private:
 // find the root namespace for the given module in the given QoreProgram
 DLLLOCAL const QoreNamespace* get_module_root_ns(const char* name, QoreProgram* mod_pgm);
 
+// drop all cached module root namespaces for the given QoreProgram
+/** get_module_root_ns() caches borrowed QoreNamespace pointers keyed by the raw QoreProgram
+    pointer, so every entry for a Program dies with that Program.  This MUST be called before the
+    Program's memory can be reused, or a later Program allocated at the same address inherits the
+    dead one's entries and get_module_root_ns() hands back a dangling namespace.
+*/
+DLLLOCAL void purge_module_root_ns_cache(QoreProgram* mod_pgm);
+
+// returns the number of Programs holding cached module root namespaces (diagnostics only)
+DLLLOCAL size_t get_module_root_ns_cache_program_count();
+
+// returns how many Programs have had cache entries purged (diagnostics only)
+DLLLOCAL size_t get_module_root_ns_cache_purge_count();
+
 // find a subnamespace with "::" delimited paths; returns nullptr if not found
 DLLLOCAL const QoreNamespace* find_ns_path(const QoreNamespace* ns, const char* ns_path);
 

@@ -1152,6 +1152,7 @@ set(CPP_SRC
     src/Dispatcher.cpp
     src/Field.cpp
     src/Globals.cpp
+    src/ql_jni_debug.cpp
     src/InvocationHandler.cpp
     src/Method.cpp
     src/JavaToQore.cpp

@@ -32,6 +32,7 @@
 #include "defs.h"
 #include "Jvm.h"
 #include "QoreJniClassMap.h"
+#include "ql_jni_debug.h"
 #include "Class.h"
 #include "Method.h"
 #include "Functions.h"
@@ -373,6 +374,10 @@ void QoreJniClassMap::initIntern(QoreProgram* pgm) {
 
         // add low-level API functions
         init_jni_functions(*jni);
+#ifdef DEBUG
+        // debug-build-only diagnostics for regression tests
+        init_jni_debug_functions(*jni);
+#endif
 
         org->addInitialNamespace(qore);
         qore->addInitialNamespace(jni);
@@ -3692,7 +3697,13 @@ JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& par
 }
 
 JniExternalProgramData::~JniExternalProgramData() {
-    // NOTE: cache invalidation is intentionally NOT performed here.  With the
+    // NOTE: the module root namespace cache is NOT purged here.  It is keyed by the Program that
+    // owns each class (qc.getProgram()), which for a module class is the module's own Program and
+    // need not have a JniExternalProgramData at all, so this destructor cannot see every entry.
+    // It is purged from the program cleanup callback registered in jni_module_init() instead,
+    // which libqore calls for every Program before its namespace data is cleared.
+
+    // NOTE: canonical loader cache invalidation is intentionally NOT performed here.  With the
     // cross-program-import strong-ref activation in qore_class_private (imported
     // classes hold a strong ref on their source Program via spgm + programRefSelf),
     // a JEPD destructor only fires once nothing references its program's classes.
