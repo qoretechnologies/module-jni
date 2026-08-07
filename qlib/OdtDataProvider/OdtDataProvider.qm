@@ -77,6 +77,7 @@ module OdtDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OdtDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ODT Documents",
             "short_desc": "Read and write ODT documents",
             "desc": "Provides data provider operations for **ODT** (OpenDocument Text) files, the "

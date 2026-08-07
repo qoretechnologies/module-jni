@@ -63,6 +63,7 @@ module ExcelDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ExcelDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Excel Spreadsheets",
             "short_desc": "Read and write Excel spreadsheets",
             "desc": "Read and write Excel spreadsheets",

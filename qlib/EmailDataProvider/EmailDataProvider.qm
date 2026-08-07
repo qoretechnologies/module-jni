@@ -75,6 +75,7 @@ module EmailDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": EmailDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Email Messages",
             "short_desc": "Read and write email messages in EML, MSG, and MBOX formats",
             "desc": "Provides data provider support for reading and writing email messages in multiple "

@@ -120,6 +120,7 @@ module OpcUaDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OpcUaDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "OPC UA",
             "short_desc": "OPC UA server for industrial communication and IoT",
             "desc": "OPC UA (Open Platform Communications Unified Architecture) server for industrial "

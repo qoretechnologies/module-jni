@@ -63,6 +63,7 @@ module WordDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": WordDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Word Documents",
             "short_desc": "Read and write Microsoft Word documents",
             "desc": "Read and write Microsoft Word documents (.docx format)",

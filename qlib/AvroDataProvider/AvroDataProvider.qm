@@ -59,6 +59,7 @@ module AvroDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AvroDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Apache Avro",
             "short_desc": "Read and write Apache Avro data files",
             "desc": "Read and write [Apache Avro](https://avro.apache.org/) data files with schema-based "

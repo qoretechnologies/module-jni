@@ -51,6 +51,7 @@ module AccessDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AccessDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Access Databases",
             "short_desc": "Read Microsoft Access databases",
             "desc": "Read Microsoft Access databases (.mdb/.accdb format) using the Jackcess library",

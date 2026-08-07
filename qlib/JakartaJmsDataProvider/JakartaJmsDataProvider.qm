@@ -50,6 +50,7 @@ module JakartaJmsDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": JakartaJmsDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Jakarta JMS",
             "short_desc": "Jakarta Messaging (JMS) 3.x compliant broker",
             "desc": "Jakarta Messaging (JMS) 3.x compliant broker for enterprise messaging with support for "

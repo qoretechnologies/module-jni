@@ -58,6 +58,7 @@ module MqttDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MqttDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "MQTT",
             "short_desc": "MQTT 5.0 server for fast and efficient messaging",
             "desc": "MQTT 5.0 server for fast and efficient messaging with support for request/response "

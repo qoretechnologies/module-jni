@@ -55,6 +55,7 @@ module VcfDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": VcfDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "VCF Contacts",
             "short_desc": "Read and write vCard (.vcf) contact files",
             "desc": "Read and write vCard (.vcf) contact files containing names, emails, phones, "

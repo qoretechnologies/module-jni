@@ -113,6 +113,7 @@ module CamelDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": CamelDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Apache Camel",
             "short_desc": "Apache Camel enterprise integration patterns",
             "desc": "Enterprise integration using [Apache Camel](https://camel.apache.org/) with "

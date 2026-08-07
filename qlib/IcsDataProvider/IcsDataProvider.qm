@@ -56,6 +56,7 @@ module IcsDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": IcsDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ICS Calendars",
             "short_desc": "Read and write iCalendar (ICS) files",
             "desc": "Read and write iCalendar (ICS) files, the standard format for calendar data "

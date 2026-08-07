@@ -77,6 +77,7 @@ module OdpDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OdpDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ODP Presentations",
             "short_desc": "Read and write ODP presentations",
             "desc": "Provides data provider actions for reading and writing **ODP** (OpenDocument "

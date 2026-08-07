@@ -61,6 +61,7 @@ module FlywayDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FlywayDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Flyway",
             "short_desc": "Flyway database schema migration",
             "desc": "Manage database schema migrations using [Flyway](https://flywaydb.org/).\n\n"

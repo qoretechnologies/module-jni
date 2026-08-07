@@ -52,6 +52,7 @@ module BusyLightDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BusyLightDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "MQTT Kuando Busylight",
             "short_desc": "MQTT Kuando Busylight devices (by Plenom)",
             "desc": "MQTT server for accessing Kuando Busylight devices (by Plenom)",

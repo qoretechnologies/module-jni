@@ -59,6 +59,7 @@ module TikaDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": TikaDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Apache Tika",
             "short_desc": "Universal content detection and extraction",
             "desc": "Detect content types and extract text from documents using "

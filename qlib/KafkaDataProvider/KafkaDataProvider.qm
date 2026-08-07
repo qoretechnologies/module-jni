@@ -65,6 +65,7 @@ module KafkaDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": KafkaDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Kafka",
             "short_desc": "Kafka messaging",
             "desc": "Kafka messaging",

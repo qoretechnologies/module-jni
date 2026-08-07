@@ -63,6 +63,7 @@ module PowerPointDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": PowerPointDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "PowerPoint Presentations",
             "short_desc": "Read and write Microsoft PowerPoint presentations",
             "desc": "Read and write Microsoft PowerPoint presentations (.pptx format)",

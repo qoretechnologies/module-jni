@@ -64,6 +64,7 @@ module JasperReportsDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": JasperReportsDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "JasperReports",
             "short_desc": "Generate reports from JasperReports templates",
             "desc": "Generate enterprise reports from [JasperReports](https://jasperreports.sourceforge.net/) "

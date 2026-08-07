@@ -77,6 +77,7 @@ module OdsDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OdsDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "ODS Spreadsheets",
             "short_desc": "Read and write ODS spreadsheets",
             "desc": "Read and write OpenDocument Spreadsheet (ODS) files, the native spreadsheet "

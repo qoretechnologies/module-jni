@@ -61,6 +61,7 @@ module VisioDataProvider {
         # register the data provider application
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": VisioDataProvider::AppName,
+            "presentation_source_locale": "en",
             "display_name": "Visio Documents",
             "short_desc": "Read Microsoft Visio documents",
             "desc": "Read Microsoft Visio documents (.vsdx format) and extract page text and shape data",
