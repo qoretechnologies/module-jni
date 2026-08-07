@@ -991,6 +991,21 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - <b>Fixed the process aborting during <tt>exit()</tt> when the jni module is loaded</b>
+      - <b>Symptom.</b> A program that loaded the jni module and then called \c exit() aborted
+        instead of exiting, losing the exit status the script had set; on macOS the process died
+        with <tt>libc++abi: terminating due to uncaught exception of type std::system_error: mutex
+        lock failed: Invalid argument</tt>.  On Linux the same defect was silent, so it appeared to
+        affect only macOS.
+      - <b>Cause.</b> The module namespace cache and the lock protecting it were objects with static
+        storage duration in the module.  Objects with static storage duration are destroyed in
+        reverse order of construction, and the module's program-cleanup callback - which purges that
+        cache - runs from the destructor of an object constructed earlier, so the cache and its lock
+        were destroyed first and then used by that later destructor.  glibc silently tolerates
+        locking a destroyed mutex; macOS returns \c EINVAL, which libc++ turns into an uncaught
+        exception.
+      - <b>Fix.</b> The cache and its lock are now allocated once and never destroyed, so they stay
+        usable for the entire life of the process.
     - <b>Fixed Java objects passed to a %Qore callback not matching their declared %Qore class</b>
       - <b>Symptom.</b> Assigning an argument of a %Qore callback implementing a Java interface to a
         variable declared with the argument's own Java class failed with

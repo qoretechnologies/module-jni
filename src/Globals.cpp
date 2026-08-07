@@ -481,10 +481,27 @@ std::string QoreJniStackLocationHelper::jni_no_call_name = "<jni_module_java_no_
 QoreExternalProgramLocationWrapper QoreJniStackLocationHelper::jni_loc_builtin("<jni_module_unknown>", -1, -1);
 
 // for the module namespace cache
-QoreThreadLock qmnc_lock;
 typedef std::map<std::string, const QoreNamespace*> qmnc_t;
 typedef std::map<QoreProgram*, qmnc_t> qmnpc_t;
-qmnpc_t qmnc;
+
+// The lock and the cache are allocated once and deliberately never destroyed.  This module's
+// program-cleanup callback calls purge_module_root_ns_cache(), and that callback runs from
+// ~QoreProgramHelper() in the destructor of Globals::qph - an object with static storage duration
+// declared at the top of this file.  Statics are destroyed in reverse order of construction, so a
+// lock and a container defined here would be destroyed first and then used by that later
+// destructor.  glibc silently tolerates locking a destroyed pthread mutex, which hid this; on
+// macOS pthread_mutex_lock() returns EINVAL, libc++ turns that into an uncaught std::system_error
+// and the process aborts during exit() - "qore -l jni -e 'exit(0);'" exited 134 on macOS while
+// succeeding on Linux.  Immortal objects keep both usable for the entire life of the process.
+static QoreThreadLock& qmnc_lock_ref() {
+    static QoreThreadLock* l = new QoreThreadLock;
+    return *l;
+}
+
+static qmnpc_t& qmnc_ref() {
+    static qmnpc_t* m = new qmnpc_t;
+    return *m;
+}
 
 static void JNICALL invocation_handler_finalize(JNIEnv *, jclass, jlong ptr) {
     delete reinterpret_cast<Dispatcher*>(ptr);
@@ -1537,11 +1554,11 @@ static const QoreNamespace* get_module_root_ns_intern(const char* name, QoreProg
 }
 
 const QoreNamespace* get_module_root_ns(const char* name, QoreProgram* mod_pgm) {
-    AutoLocker al(qmnc_lock);
-    qmnpc_t::iterator pi = qmnc.lower_bound(mod_pgm);
+    AutoLocker al(qmnc_lock_ref());
+    qmnpc_t::iterator pi = qmnc_ref().lower_bound(mod_pgm);
     qmnc_t::iterator i;
-    if (pi == qmnc.end() || pi->first != mod_pgm) {
-        pi = qmnc.insert(pi, qmnpc_t::value_type(mod_pgm, qmnc_t()));
+    if (pi == qmnc_ref().end() || pi->first != mod_pgm) {
+        pi = qmnc_ref().insert(pi, qmnpc_t::value_type(mod_pgm, qmnc_t()));
         i = pi->second.end();
     } else {
         i = pi->second.lower_bound(name);
@@ -1593,19 +1610,19 @@ const QoreNamespace* get_module_root_ns(const char* name, QoreProgram* mod_pgm) 
 static size_t qmnc_purge_count = 0;
 
 void purge_module_root_ns_cache(QoreProgram* mod_pgm) {
-    AutoLocker al(qmnc_lock);
+    AutoLocker al(qmnc_lock_ref());
     ++qmnc_purge_count;
-    qmnc.erase(mod_pgm);
+    qmnc_ref().erase(mod_pgm);
 }
 
 size_t get_module_root_ns_cache_purge_count() {
-    AutoLocker al(qmnc_lock);
+    AutoLocker al(qmnc_lock_ref());
     return qmnc_purge_count;
 }
 
 size_t get_module_root_ns_cache_program_count() {
-    AutoLocker al(qmnc_lock);
-    return qmnc.size();
+    AutoLocker al(qmnc_lock_ref());
+    return qmnc_ref().size();
 }
 
 static void get_java_pfx(QoreString& java_pfx, jboolean python, jboolean kotlin, const char* mod_str,
