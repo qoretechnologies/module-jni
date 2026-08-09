@@ -138,13 +138,18 @@ public class JmsDataProviderBase inherits DataProvider::AbstractDataProvider {
         @param copts the connection options
 
         @return the JMS Connection
+        @throw JMS-CONNECTION-ERROR if the connection factory returns no connection
     */
     static Connection createJmsConnection(ConnectionFactory factory, hash<auto> copts) {
-        Connection conn;
+        *Connection conn;
         if (copts.username.val()) {
             conn = factory.createConnection(copts.username, copts.password);
         } else {
             conn = factory.createConnection();
+        }
+        if (!conn) {
+            throw "JMS-CONNECTION-ERROR",
+                "the JMS connection factory returned no connection";
         }
         if (copts.client_id.val()) {
             conn.setClientID(copts.client_id);
