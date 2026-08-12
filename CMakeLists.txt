@@ -1312,6 +1312,21 @@ qore_external_user_module("qlib/TikaDataProvider" "")
 qore_external_user_module("qlib/JdbcDataProvider" "")
 qore_external_user_module("qlib/CamelDataProvider" "")
 
+# Reconcile the installed i18n catalog root against the fragments these modules
+# currently own.  Installing catalogs is otherwise additive: a fragment installed by
+# an earlier generation of these sources survives every later install, is still
+# discovered, and makes catalog composition fail as soon as the current generation
+# describes the same app differently.
+#
+# This must come after every call above that installs catalogs, both because those
+# calls record the fragment set and because install() rules run in declaration order,
+# which is what publishes the manifest after the fragments it describes.  Removals are
+# scoped to this project, so fragments Qore and other products install into the same
+# shared catalog root are untouched.  Guarded because the helper arrived in Qore 2.3.
+if (COMMAND qore_finalize_catalog_install)
+    qore_finalize_catalog_install()
+endif()
+
 function(add_jni_qlib_jar_dependency _module _jar_target)
     if (TARGET ${_module}-qmod)
         add_dependencies(${_module}-qmod ${_jar_target})
