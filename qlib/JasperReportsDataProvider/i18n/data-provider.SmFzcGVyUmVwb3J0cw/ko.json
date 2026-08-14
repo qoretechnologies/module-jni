@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.desc": {
+          "source": "Generate a report from a JasperReports template (`.jrxml` or `.jasper`) at a specific file location.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "특정 파일 위치의 JasperReports 템플릿(`.jrxml` 또는 `.jasper`)에서 보고서를 생성합니다.\n\n생성된 각 레코드는 보고서에 포함될 단일 데이터 행을 나타냅니다. 보고서는 공급자가 커밋되거나 파기될 때 생성됩니다.\n\n지원되는 출력 형식: `pdf`, `xlsx`, `html`, `csv`."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.display_name": {
+          "source": "Generate Report from Template File",
+          "message": "템플릿 파일에서 보고서 생성"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.desc": {
+          "source": "CSV (comma-separated values) format",
+          "message": "CSV (쉼표로 구분된 값) 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.short_desc": {
+          "source": "CSV format",
+          "message": "CSV 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.desc": {
+          "source": "HTML (HyperText Markup Language) format",
+          "message": "HTML (HyperText Markup Language) 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.short_desc": {
+          "source": "HTML format",
+          "message": "HTML 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.desc": {
+          "source": "Portable Document Format (PDF) using OpenPDF",
+          "message": "OpenPDF를 사용한 Portable Document Format (PDF)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.short_desc": {
+          "source": "PDF format",
+          "message": "PDF 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`) using Apache POI",
+          "message": "Apache POI를 사용한 Excel 2007+ 형식(`.xlsx`)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+ 형식 (.xlsx)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output format for the generated report; one of `pdf`, `xlsx`, `html`, or `csv`",
+          "message": "생성된 보고서의 출력 형식입니다. `pdf`, `xlsx`, `html` 또는 `csv` 중 하나입니다."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "출력 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The report output format",
+          "message": "보고서 출력 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.desc": {
+          "source": "The path to the JasperReports template file (.jrxml or .jasper); mutually exclusive with `template_data`; the input location is handled by a call to [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a1c17d58d4caa453b7dbe18b850ea1e6)",
+          "message": "JasperReports 템플릿 파일(.jrxml 또는 .jasper)의 경로입니다. `template_data`와(과) 상호 배제됩니다. 입력 위치는 [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a1c17d58d4caa453b7dbe18b850ea1e6) 호출을 통해 처리됩니다."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.display_name": {
+          "source": "Template Path",
+          "message": "템플릿 경로"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.short_desc": {
+          "source": "The path to the JasperReports template file",
+          "message": "JasperReports 템플릿 파일 경로"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.short_desc": {
+          "source": "Generate a report from a JasperReports template at a file location",
+          "message": "파일 위치의 JasperReports 템플릿에서 보고서를 생성합니다."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "인라인 JasperReports 템플릿 바이너리 데이터에서 보고서를 생성합니다.\n\n생성된 각 레코드는 보고서에 포함될 단일 데이터 행을 나타냅니다. 보고서는 공급자가 커밋되거나 파기될 때 생성됩니다.\n\n모든 레코드를 작성한 후 `getData()`을(를) 사용하여 바이너리 보고서 출력을 검색하십시오.\n\n지원되는 출력 형식: `pdf`, `xlsx`, `html`, `csv`."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
+          "source": "Generate Report from Inline Template",
+          "message": "인라인 템플릿에서 보고서 생성"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.desc": {
+          "source": "CSV (comma-separated values) format",
+          "message": "CSV (쉼표로 구분된 값) 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.short_desc": {
+          "source": "CSV format",
+          "message": "CSV 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.desc": {
+          "source": "HTML (HyperText Markup Language) format",
+          "message": "HTML (HyperText Markup Language) 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.short_desc": {
+          "source": "HTML format",
+          "message": "HTML 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.desc": {
+          "source": "Portable Document Format (PDF) using OpenPDF",
+          "message": "OpenPDF를 사용한 Portable Document Format (PDF)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.short_desc": {
+          "source": "PDF format",
+          "message": "PDF 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`) using Apache POI",
+          "message": "Apache POI를 사용한 Excel 2007+ 형식(`.xlsx`)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+ 형식 (.xlsx)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output format for the generated report; one of `pdf`, `xlsx`, `html`, or `csv`",
+          "message": "생성된 보고서의 출력 형식입니다. `pdf`, `xlsx`, `html` 또는 `csv` 중 하나입니다."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "출력 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The report output format",
+          "message": "보고서 출력 형식"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "Inline binary JasperReports template data (.jrxml or .jasper); mutually exclusive with `template`",
+          "message": "인라인 바이너리 JasperReports 템플릿 데이터(.jrxml 또는 .jasper)입니다. `template`와(과) 상호 배제됩니다."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "템플릿 데이터"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Inline binary template data",
+          "message": "인라인 바이너리 템플릿 데이터"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.short_desc": {
+          "source": "Generate a report from inline JasperReports template data",
+          "message": "인라인 JasperReports 템플릿 데이터에서 보고서를 생성합니다."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.desc": {
+          "source": "Generate enterprise reports from [JasperReports](https://jasperreports.sourceforge.net/) templates in multiple output formats.\n\n**Capabilities**:\n- Compile and fill `.jrxml` templates with data records\n- Export to `pdf`, `xlsx`, `html`, or `csv` format\n- Automatic type coercion for Integer, Long, Float, Double fields\n\nIdeal for generating invoices, financial statements, compliance reports, and any template-driven business documents.",
+          "message": "여러 출력 형식으로 [JasperReports](https://jasperreports.sourceforge.net/) 템플릿에서 엔터프라이즈 보고서를 생성합니다.\n\n**기능**:\n- 데이터 레코드로 `.jrxml` 템플릿 컴파일 및 채우기\n- `pdf`, `xlsx`, `html` 또는 `csv` 형식으로 내보내기\n- Integer, Long, Float, Double 필드에 대한 자동 유형 강제 변환\n\n청구서, 재무 제표, 컴플라이언스 보고서 및 모든 템플릿 기반 비즈니스 문서 생성에 적합합니다."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.display_name": {
+          "source": "JasperReports",
+          "message": "JasperReports"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.short_desc": {
+          "source": "Generate reports from JasperReports templates",
+          "message": "JasperReports 템플릿에서 보고서를 생성합니다."
+        }
+      }
+    }
+  }
+}

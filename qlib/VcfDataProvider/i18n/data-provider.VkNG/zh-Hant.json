@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.VkNG.action.cmVhZA.desc": {
+          "source": "Read contacts from a vCard (.vcf) file at a specific file location.\n\nEach record returned represents a single contact with the following fields:\n- `formatted_name`: the display name of the contact\n- `given_name`: the first/given name\n- `family_name`: the last/family name\n- `emails`: a list of email addresses with type and value\n- `phones`: a list of phone numbers with type and value\n- `addresses`: a list of postal addresses with type and address components\n- `organization`: the company or organization name\n- `title`: the job title\n- `note`: free-text notes about the contact\n- `uid`: the unique identifier of the contact\n- `birthday`: the contact's birthday\n- `url`: the contact's URL\n- `nickname`: the contact's nickname\n- `categories`: categories/tags for the contact\n- `role`: the contact's role within their organization\n\nMulti-contact VCF files are fully supported; each contact is returned as a separate record.",
+          "message": "從特定檔案位置的 vCard (.vcf) 檔案讀取聯絡人。\n\n傳回的每筆記錄代表單一聯絡人，包含以下欄位：\n- `formatted_name`：聯絡人的顯示名稱\n- `given_name`：名字 (given name)\n- `family_name`：姓氏 (family name)\n- `emails`：包含類型與值的電子郵件地址清單\n- `phones`：包含類型與值的電話號碼清單\n- `addresses`：包含類型與地址元件的郵寄地址清單\n- `organization`：公司或組織名稱\n- `title`：職稱\n- `note`：關於聯絡人的自由文字備註\n- `uid`：聯絡人的唯一識別碼\n- `birthday`：聯絡人的生日\n- `url`：聯絡人的 URL\n- `nickname`：聯絡人的暱稱\n- `categories`：聯絡人的類別/標籤\n- `role`：聯絡人在其組織內的角色\n\n完整支援包含多個聯絡人的 VCF 檔案；每個聯絡人均作為單獨記錄傳回。"
+        },
+        "app.VkNG.action.cmVhZA.display_name": {
+          "source": "Read VCF Contact File",
+          "message": "讀取 VCF 聯絡人檔案"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the VCF data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "VCF 資料的位置；與 `data` 和 `stream` 互斥；透過呼叫 [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 來解析"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "VCF Input Path",
+          "message": "VCF 輸入路徑"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the VCF data",
+          "message": "VCF 資料的位置"
+        },
+        "app.VkNG.action.cmVhZA.short_desc": {
+          "source": "Read contacts from a vCard file at a specific file location",
+          "message": "從特定檔案位置的 vCard 檔案讀取聯絡人"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.desc": {
+          "source": "Read contacts from inline vCard (.vcf) binary data.\n\nEach record returned represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nMulti-contact VCF data is fully supported.",
+          "message": "從行內 vCard (.vcf) 二進位資料讀取聯絡人。\n\n傳回的每筆記錄代表一個單一聯絡人，包含標準 vCard 欄位，例如 `formatted_name`、`emails`、`phones`、`addresses`、`organization`、`title`、`note`、`uid`、`birthday`、`url`、`nickname`、`categories` 和 `role`。\n\n完整支援多聯絡人 VCF 資料。"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read VCF Contact Inline Data",
+          "message": "讀取 VCF 聯絡人行內資料"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "VCF data to process; conflicts with `stream` and `path`",
+          "message": "要處理的 VCF 資料；與 `stream` 和 `path` 衝突"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "輸入資料"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "VCF data to process",
+          "message": "要處理的 VCF 資料"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read contacts from inline vCard data",
+          "message": "從行內 vCard 資料讀取聯絡人"
+        },
+        "app.VkNG.action.d3JpdGU.desc": {
+          "source": "Write contacts to a vCard (.vcf) file at a specified path.\n\nEach record written represents a single contact. The following fields are supported:\n- `formatted_name` (required): the display name of the contact\n- `given_name`: the first/given name\n- `family_name`: the last/family name\n- `emails`: a list of `{\"type\": \"work\", \"value\": \"user@example.com\"}` hashes\n- `phones`: a list of `{\"type\": \"cell\", \"value\": \"+1-555-0100\"}` hashes\n- `addresses`: a list of address hashes with `type`, `street`, `city`, `state`, `postal_code`, `country`\n- `organization`: the company or organization name\n- `title`: the job title\n- `note`: free-text notes\n- `uid`: the unique identifier\n- `birthday`: the contact's birthday (date)\n- `url`: the contact's URL\n- `nickname`: the contact's nickname\n- `categories`: categories/tags for the contact (list of strings)\n- `role`: the contact's role within their organization\n\nMultiple contacts can be written to a single VCF file.",
+          "message": "將聯絡人寫入指定路徑的 vCard (.vcf) 檔案。\n\n寫入的每筆記錄代表單一聯絡人。支援以下欄位：\n- `formatted_name` (必填)：聯絡人的顯示名稱\n- `given_name`：名字 (given name)\n- `family_name`：姓氏 (family name)\n- `emails`：`{\"type\": \"work\", \"value\": \"user@example.com\"}` 雜湊的清單\n- `phones`：`{\"type\": \"cell\", \"value\": \"+1-555-0100\"}` 雜湊的清單\n- `addresses`：包含 `type`、`street`、`city`、`state`、`postal_code`、`country` 的地址雜湊清單\n- `organization`：公司或組織名稱\n- `title`：職稱\n- `note`：自由文字備註\n- `uid`：唯一識別碼\n- `birthday`：聯絡人的生日（日期）\n- `url`：聯絡人的 URL\n- `nickname`：聯絡人的暱稱\n- `categories`：聯絡人的類別/標籤（字串清單）\n- `role`：聯絡人在其組織內的角色\n\n可將多個聯絡人寫入單一 VCF 檔案。"
+        },
+        "app.VkNG.action.d3JpdGU.display_name": {
+          "source": "Write VCF Contact File",
+          "message": "寫入 VCF 聯絡人檔案"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output VCF data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "輸出 VCF 資料檔案的位置；與 `stream` 互斥；輸出位置透過呼叫 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 進行處理"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "VCF Output Path",
+          "message": "VCF 輸出路徑"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the VCF file",
+          "message": "寫入 VCF 檔案的位置"
+        },
+        "app.VkNG.action.d3JpdGU.short_desc": {
+          "source": "Write contacts to a vCard file at a specified path",
+          "message": "將聯絡人寫入指定路徑的 vCard 檔案"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nAfter writing all contacts, use `getData()` to retrieve the binary VCF data.",
+          "message": "在記憶體中建立 vCard (.vcf) 聯絡人資料並作為二進位資料傳回；適用於無須寫入磁碟即可產生 VCF 檔案的情況。\n\n寫入的每筆記錄代表單一聯絡人，包含標準 vCard 欄位，例如 `formatted_name`、`emails`、`phones`、`addresses`、`organization`、`title`、`note`、`uid`、`birthday`、`url`、`nickname`、`categories` 和 `role`。\n\n寫入所有聯絡人後，使用 `getData()` 擷取二進位 VCF 資料。"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create VCF Contact Data",
+          "message": "建立 VCF 聯絡人資料"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create vCard contact data and return as binary",
+          "message": "建立 vCard 聯絡人資料並作為二進位傳回"
+        },
+        "app.VkNG.desc": {
+          "source": "Read and write vCard (.vcf) contact files containing names, emails, phones, addresses, and other contact information",
+          "message": "讀取與寫入包含姓名、電子郵件、電話、地址和其他聯絡資訊的 vCard (.vcf) 聯絡人檔案"
+        },
+        "app.VkNG.display_name": {
+          "source": "VCF Contacts",
+          "message": "VCF 聯絡人"
+        },
+        "app.VkNG.short_desc": {
+          "source": "Read and write vCard (.vcf) contact files",
+          "message": "讀取與寫入 vCard (.vcf) 聯絡人檔案"
+        }
+      }
+    }
+  }
+}

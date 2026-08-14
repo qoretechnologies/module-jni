@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.V29yZA.action.cmVhZA.desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "從特定檔案位置讀取 Word 文件"
+        },
+        "app.V29yZA.action.cmVhZA.display_name": {
+          "source": "Read Word Document File",
+          "message": "讀取 Word 文件檔案"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "讀取包含文字內容與樣式資訊 (標題、內文) 的文件段落"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "讀取文件段落"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "將表格讀取為帶有欄位標頭的結構化列資料"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "將表格讀取為列資料"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "要讀取的內容類型：`paragraphs`（預設）或 `table`"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容類型"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "要讀取的內容類型"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "若為 `True`，則表格的第一列包含欄位標題；僅適用於表格模式"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "標題列"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "第一列包含標題"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "表格模式的明確欄位標題列表；與 `header_row` 互斥"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄位標頭"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "明確欄標題清單"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Word document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Word 文件資料的位置；與 `data` 和 `stream` 互斥；透過呼叫 [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 來解析"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Word Input Path",
+          "message": "Word 輸入路徑"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Word document",
+          "message": "Word 文件的位置"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "當 `content_type` 為 `table` 時要讀取的表格索引；從 0 開始，預設為 0"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表格索引"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "要讀取的表格索引（以 0 為基底）"
+        },
+        "app.V29yZA.action.cmVhZA.short_desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "從特定檔案位置讀取 Word 文件"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Word document inline data",
+          "message": "讀取 Word 文件內聯資料"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Word Document Inline Data",
+          "message": "讀取 Word 文件內聯資料"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "讀取包含文字內容與樣式資訊 (標題、內文) 的文件段落"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "讀取文件段落"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "將表格讀取為帶有欄位標頭的結構化列資料"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "將表格讀取為列資料"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "要讀取的內容類型：`paragraphs`（預設）或 `table`"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容類型"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "要讀取的內容類型"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Word document data to process; conflicts with `stream` and `path`",
+          "message": "要處理的 Word 文件資料；與 `stream` 和 `path` 衝突"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "輸入資料"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Word document data to process",
+          "message": "要處理的 Word 文件資料"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "若為 `True`，則表格的第一列包含欄位標題；僅適用於表格模式"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "標題列"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "第一列包含標題"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "表格模式的明確欄位標題列表；與 `header_row` 互斥"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄位標頭"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "明確欄標題清單"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "當 `content_type` 為 `table` 時要讀取的表格索引；從 0 開始，預設為 0"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表格索引"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "要讀取的表格索引（以 0 為基底）"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Word document inline data",
+          "message": "讀取 Word 文件內聯資料"
+        },
+        "app.V29yZA.action.d3JpdGU.desc": {
+          "source": "Write data to a Word document file at a specified path",
+          "message": "將資料寫入指定路徑的 Word 文件檔案"
+        },
+        "app.V29yZA.action.d3JpdGU.display_name": {
+          "source": "Write Word Document File",
+          "message": "寫入 Word 文件檔案"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "寫入包含文字與標題樣式的帶樣式段落"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "寫入段落"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "寫入包含欄標題的結構化表格資料"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "寫入表格"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "要寫入的內容類型：`paragraphs`（預設）或 `table`"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容類型"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "要寫入的內容類型"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "表格模式的欄位標題列表；若未提供，將從第一筆記錄自動偵測標題"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄位標頭"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表格模式的欄標題清單"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Word document data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "輸出 Word 文件資料檔案的位置；與 `stream` 互斥；輸出位置由呼叫 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 處理"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Word Output Path",
+          "message": "Word 輸出路徑"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Word document",
+          "message": "寫入 Word 文件的位置"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "可選的標題，作為標頭新增至文件開頭"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "文件標題"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "要在開頭新增的標題"
+        },
+        "app.V29yZA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a Word document file",
+          "message": "將資料寫入 Word 文件檔案"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Word document data in memory and return it as binary data; useful for generating Word files without writing to disk",
+          "message": "在記憶體中建立 Word 文件資料並將其作為二進位資料傳回；適用於無須寫入磁碟即可產生 Word 檔案的情境"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Word Document Data",
+          "message": "建立 Word 文件資料"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "寫入包含文字與標題樣式的帶樣式段落"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "寫入段落"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "寫入包含欄標題的結構化表格資料"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "寫入表格"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "要寫入的內容類型：`paragraphs`（預設）或 `table`"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容類型"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "要寫入的內容類型"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "表格模式的欄位標題列表；若未提供，將從第一筆記錄自動偵測標題"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄位標頭"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表格模式的欄標題清單"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "可選的標題，作為標頭新增至文件開頭"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "文件標題"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "要在開頭新增的標題"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Word document data and return as binary",
+          "message": "建立 Word 文件資料並作為二進位傳回"
+        },
+        "app.V29yZA.desc": {
+          "source": "Read and write Microsoft Word documents (.docx format)",
+          "message": "讀取與寫入 Microsoft Word 文件 (.docx 格式)"
+        },
+        "app.V29yZA.display_name": {
+          "source": "Word Documents",
+          "message": "Word 文件"
+        },
+        "app.V29yZA.short_desc": {
+          "source": "Read and write Microsoft Word documents",
+          "message": "讀取與寫入 Microsoft Word 文件"
+        }
+      }
+    }
+  }
+}

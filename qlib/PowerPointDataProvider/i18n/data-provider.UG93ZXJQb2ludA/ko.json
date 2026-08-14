@@ -1,0 +1,393 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.UG93ZXJQb2ludA.action.cmVhZA.desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "특정 파일 위치에서 PowerPoint 프레젠테이션 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.display_name": {
+          "source": "Read PowerPoint Presentation File",
+          "message": "PowerPoint 프레젠테이션 파일 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "제목, 본문, 슬라이드 노트 및 레이아웃 정보가 포함된 프레젠테이션 슬라이드 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "슬라이드"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "프레젠테이션 슬라이드 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "슬라이드에 삽입된 테이블을 구조화된 행 데이터로 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "테이블을 행 데이터로 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "읽을 콘텐츠 유형: `slides` (기본값) 또는 `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "읽을 콘텐츠 유형"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "`True`인 경우 테이블의 첫 번째 행에 열 헤더가 포함되며, 테이블 모드에만 적용됩니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "첫 번째 행에 헤더 포함"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "테이블 모드의 열 헤더 명시적 목록이며, `header_row`와(과) 상호 배타적입니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "열 헤더의 명시적 목록"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type`이(가) `table`일 때 테이블을 포함하는 슬라이드의 인덱스이며, 0부터 시작하고 기본값은 0입니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "슬라이드 인덱스"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "테이블 모드용 슬라이드 인덱스 (0부터 시작)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the PowerPoint data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "PowerPoint 데이터의 위치이며, `data` 및 `stream`와(과) 상호 배타적입니다. [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출로 확인됩니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "PowerPoint Input Path",
+          "message": "PowerPoint 입력 경로"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the PowerPoint file",
+          "message": "PowerPoint 파일의 위치"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type`이(가) `table`일 때 지정된 슬라이드에서 읽을 테이블의 인덱스이며, 0부터 시작하고 기본값은 0입니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "테이블 인덱스"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "읽을 테이블의 인덱스 (0부터 시작)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.short_desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "특정 파일 위치에서 PowerPoint 프레젠테이션 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "PowerPoint 프레젠테이션 인라인 데이터 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read PowerPoint Presentation Inline Data",
+          "message": "PowerPoint 프레젠테이션 인라인 데이터 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "제목, 본문, 슬라이드 노트 및 레이아웃 정보가 포함된 프레젠테이션 슬라이드 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "슬라이드"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "프레젠테이션 슬라이드 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "슬라이드에 삽입된 테이블을 구조화된 행 데이터로 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "테이블을 행 데이터로 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "읽을 콘텐츠 유형: `slides` (기본값) 또는 `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "읽을 콘텐츠 유형"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "PowerPoint presentation data to process; conflicts with `stream` and `path`",
+          "message": "처리할 PowerPoint 프레젠테이션 데이터이며, `stream` 및 `path`와(과) 충돌합니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "입력 데이터"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "PowerPoint presentation data to process",
+          "message": "처리할 PowerPoint 프레젠테이션 데이터"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "`True`인 경우 테이블의 첫 번째 행에 열 헤더가 포함되며, 테이블 모드에만 적용됩니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "첫 번째 행에 헤더 포함"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "테이블 모드의 열 헤더 명시적 목록이며, `header_row`와(과) 상호 배타적입니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "열 헤더의 명시적 목록"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type`이(가) `table`일 때 테이블을 포함하는 슬라이드의 인덱스이며, 0부터 시작하고 기본값은 0입니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "슬라이드 인덱스"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "테이블 모드용 슬라이드 인덱스 (0부터 시작)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type`이(가) `table`일 때 지정된 슬라이드에서 읽을 테이블의 인덱스이며, 0부터 시작하고 기본값은 0입니다."
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "테이블 인덱스"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "읽을 테이블의 인덱스 (0부터 시작)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "PowerPoint 프레젠테이션 인라인 데이터 읽기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.desc": {
+          "source": "Write data to a PowerPoint presentation file at a specified path",
+          "message": "지정된 경로의 PowerPoint 프레젠테이션 파일에 데이터 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.display_name": {
+          "source": "Write PowerPoint Presentation File",
+          "message": "PowerPoint 프레젠테이션 파일 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "제목, 본문 및 선택적 노트를 포함하여 프레젠테이션 슬라이드 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "슬라이드"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "슬라이드 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "슬라이드에 구조화된 표 형식 데이터 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "테이블 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "쓸 콘텐츠 유형: `slides` (기본값) 또는 `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "작성할 콘텐츠 유형"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "테이블 모드의 열 헤더 목록이며, 제공되지 않으면 첫 번째 레코드에서 헤더가 자동 감지됩니다."
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "테이블 모드용 열 헤더 목록"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output PowerPoint data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "출력 PowerPoint 데이터 파일의 위치이며, `stream`와(과) 상호 배타적입니다. 출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 호출에 의해 처리됩니다."
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "PowerPoint Output Path",
+          "message": "PowerPoint 출력 경로"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the PowerPoint file",
+          "message": "PowerPoint 파일을 쓸 위치"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "선택적 제목. 슬라이드 모드의 경우 시작 부분에 제목 전용 슬라이드를 추가하며, 테이블 모드의 경우 테이블 슬라이드에 제목을 설정합니다."
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "프레젠테이션 제목"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "첫 번째 슬라이드 또는 테이블 슬라이드의 제목"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a PowerPoint presentation file",
+          "message": "PowerPoint 프레젠테이션 파일에 데이터 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create PowerPoint presentation data in memory and return it as binary data; useful for generating PowerPoint files without writing to disk",
+          "message": "메모리에 PowerPoint 프레젠테이션 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 PowerPoint 파일을 생성할 때 유용합니다."
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create PowerPoint Presentation Data",
+          "message": "PowerPoint 프레젠테이션 데이터 생성"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "제목, 본문 및 선택적 노트를 포함하여 프레젠테이션 슬라이드 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "슬라이드"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "슬라이드 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "슬라이드에 구조화된 표 형식 데이터 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "테이블 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "쓸 콘텐츠 유형: `slides` (기본값) 또는 `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "작성할 콘텐츠 유형"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "테이블 모드의 열 헤더 목록이며, 제공되지 않으면 첫 번째 레코드에서 헤더가 자동 감지됩니다."
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "테이블 모드용 열 헤더 목록"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "선택적 제목. 슬라이드 모드의 경우 시작 부분에 제목 전용 슬라이드를 추가하며, 테이블 모드의 경우 테이블 슬라이드에 제목을 설정합니다."
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "프레젠테이션 제목"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "첫 번째 슬라이드 또는 테이블 슬라이드의 제목"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create PowerPoint presentation data and return as binary",
+          "message": "PowerPoint 프레젠테이션 데이터를 생성하고 바이너리로 반환"
+        },
+        "app.UG93ZXJQb2ludA.desc": {
+          "source": "Read and write Microsoft PowerPoint presentations (.pptx format)",
+          "message": "Microsoft PowerPoint 프레젠테이션(.pptx 형식) 읽기 및 쓰기"
+        },
+        "app.UG93ZXJQb2ludA.display_name": {
+          "source": "PowerPoint Presentations",
+          "message": "PowerPoint 프레젠테이션"
+        },
+        "app.UG93ZXJQb2ludA.short_desc": {
+          "source": "Read and write Microsoft PowerPoint presentations",
+          "message": "Microsoft PowerPoint 프레젠테이션 읽기 및 쓰기"
+        }
+      }
+    }
+  }
+}

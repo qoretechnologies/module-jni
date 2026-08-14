@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.T3BjVUE.action.Y29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client connects or reconnects to the OPC UA server",
+          "message": "Questo evento viene generato quando il client si connette o si riconnette al server OPC UA"
+        },
+        "app.T3BjVUE.action.Y29ubmVjdGVk.display_name": {
+          "source": "OPC UA Connected",
+          "message": "OPC UA connesso"
+        },
+        "app.T3BjVUE.action.Y29ubmVjdGVk.short_desc": {
+          "source": "Client connected or reconnected to the OPC UA server",
+          "message": "Client connesso o riconnesso al server OPC UA"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.desc": {
+          "source": "Call a method on an OPC UA server object node with optional input arguments",
+          "message": "Chiama un metodo su un nodo oggetto del server OPC UA con argomenti di input opzionali"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.display_name": {
+          "source": "Call OPC UA Method",
+          "message": "Chiama metodo OPC UA"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.desc": {
+          "source": "The input arguments for the method call",
+          "message": "Gli argomenti di input per la chiamata del metodo"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.display_name": {
+          "source": "Arguments",
+          "message": "Argomenti"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.short_desc": {
+          "source": "The input arguments for the method call",
+          "message": "Gli argomenti di input per la chiamata del metodo"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.desc": {
+          "source": "The node ID of the object that owns the method",
+          "message": "L'ID nodo dell'oggetto a cui appartiene il metodo"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "ID oggetto"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The node ID of the object that owns the method",
+          "message": "L'ID nodo dell'oggetto a cui appartiene il metodo"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.desc": {
+          "source": "The node ID of the method to call",
+          "message": "L'ID nodo del metodo da chiamare"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.display_name": {
+          "source": "Method ID",
+          "message": "ID metodo"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.short_desc": {
+          "source": "The node ID of the method to call",
+          "message": "L'ID nodo del metodo da chiamare"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.short_desc": {
+          "source": "Call a method on an OPC UA server object",
+          "message": "Chiama un metodo su un oggetto del server OPC UA"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.desc": {
+          "source": "Browse the OPC UA server address space to discover available nodes",
+          "message": "Esplora lo spazio di indirizzamento del server OPC UA per scoprire i nodi disponibili"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.display_name": {
+          "source": "Browse OPC UA Address Space",
+          "message": "Esplora spazio di indirizzamento OPC UA"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkJvdGg.display_name": {
+          "source": "Both",
+          "message": "Entrambi"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkZvcndhcmQ.display_name": {
+          "source": "Forward",
+          "message": "Avanti"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkludmVyc2U.display_name": {
+          "source": "Inverse",
+          "message": "Inverso"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.desc": {
+          "source": "Browse direction: `Forward`, `Inverse`, or `Both`; defaults to `Forward`",
+          "message": "Direzione di esplorazione: `Forward`, `Inverse` o `Both`; l'impostazione predefinita è `Forward`"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Direzione"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'",
+          "message": "Direzione di esplorazione: 'Forward', 'Inverse' o 'Both'; l'impostazione predefinita è 'Forward'"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of references to return; `0` or omitted means no limit",
+          "message": "Numero massimo di riferimenti da restituire; `0` o omesso significa nessun limite"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Risultati massimi"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of references to return",
+          "message": "Numero massimo di riferimenti da restituire"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.desc": {
+          "source": "The node ID to browse from; defaults to the Root node (`ns=0;i=84`)",
+          "message": "L'ID del nodo da cui iniziare l'esplorazione; l'impostazione predefinita è il nodo Root (`ns=0;i=84`)"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID nodo"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.short_desc": {
+          "source": "The node ID to browse from",
+          "message": "L'ID del nodo da cui iniziare l'esplorazione"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.short_desc": {
+          "source": "Browse the OPC UA server address space",
+          "message": "Esplora lo spazio di indirizzamento del server OPC UA"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.desc": {
+          "source": "Get the current server status including state, start time, build info, and product information",
+          "message": "Ottieni lo stato corrente del server, inclusi stato, ora di avvio, informazioni sulla build e informazioni sul prodotto"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.display_name": {
+          "source": "Get OPC UA Server Status",
+          "message": "Ottieni stato del server OPC UA"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.desc": {
+          "source": "The server object node ID; defaults to the standard ServerStatus node (`ns=0;i=2259`)",
+          "message": "L'ID del nodo oggetto server; l'impostazione predefinita è il nodo ServerStatus standard (`ns=0;i=2259`)"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.display_name": {
+          "source": "Server Node ID",
+          "message": "ID nodo server"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.short_desc": {
+          "source": "The server object node ID",
+          "message": "L'ID del nodo oggetto server"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.short_desc": {
+          "source": "Get the current status of the OPC UA server",
+          "message": "Ottieni lo stato corrente del server OPC UA"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.desc": {
+          "source": "This event is raised when the value of a monitored OPC UA node changes, including the new value, status code, and timestamps",
+          "message": "Questo evento viene generato quando il valore di un nodo OPC UA monitorato cambia, inclusi il nuovo valore, il codice di stato e i timestamp"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.display_name": {
+          "source": "OPC UA Data Change",
+          "message": "Modifica dati OPC UA"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.short_desc": {
+          "source": "A monitored OPC UA node value has changed",
+          "message": "Il valore di un nodo OPC UA monitorato è cambiato"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.desc": {
+          "source": "Discover available endpoints on the OPC UA server including security policies and transport profiles",
+          "message": "Rileva gli endpoint disponibili sul server OPC UA, incluse le norme di sicurezza e i profili di trasporto"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.display_name": {
+          "source": "Discover OPC UA Endpoints",
+          "message": "Rileva endpoint OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.desc": {
+          "source": "The OPC UA server URL to discover endpoints on; if omitted, the connection URL is used",
+          "message": "L'URL del server OPC UA in cui rilevare gli endpoint; se omesso, viene utilizzato l'URL di connessione"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.display_name": {
+          "source": "Discovery URL",
+          "message": "URL di individuazione"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.short_desc": {
+          "source": "The OPC UA server URL to discover endpoints on",
+          "message": "L'URL del server OPC UA in cui rilevare gli endpoint"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.short_desc": {
+          "source": "Discover available endpoints on an OPC UA server",
+          "message": "Rileva gli endpoint disponibili su un server OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client is disconnected from the OPC UA server",
+          "message": "Questo evento viene generato quando il client viene disconnesso dal server OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.display_name": {
+          "source": "OPC UA Disconnected",
+          "message": "OPC UA disconnesso"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.short_desc": {
+          "source": "Client disconnected from the OPC UA server",
+          "message": "Client disconnesso dal server OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.desc": {
+          "source": "Read the current value from an OPC UA node on the server",
+          "message": "Leggi il valore corrente da un nodo OPC UA sul server"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.display_name": {
+          "source": "Read OPC UA Node Value",
+          "message": "Leggi valore nodo OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read (e.g., `ns=2;s=Temperature`)",
+          "message": "L'ID del nodo OPC UA da leggere (ad es. `ns=2;s=Temperature`)"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID nodo"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read (e",
+          "message": "L'ID del nodo OPC UA da leggere (ad es."
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.short_desc": {
+          "source": "Read a value from an OPC UA node",
+          "message": "Leggi un valore da un nodo OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.desc": {
+          "source": "Read current values from multiple OPC UA nodes in a single batch request for improved performance",
+          "message": "Leggi i valori correnti da più nodi OPC UA in un'unica richiesta batch per migliorare le prestazioni"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.display_name": {
+          "source": "Read Multiple OPC UA Node Values",
+          "message": "Leggi valori di più nodi OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.desc": {
+          "source": "List of OPC UA node IDs to read (e.g., `ns=2;s=Temperature`)",
+          "message": "Elenco degli ID dei nodi OPC UA da leggere (ad es. `ns=2;s=Temperature`)"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.display_name": {
+          "source": "Node IDs",
+          "message": "ID nodi"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.short_desc": {
+          "source": "List of OPC UA node IDs to read (e",
+          "message": "Elenco degli ID dei nodi OPC UA da leggere (ad es."
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.short_desc": {
+          "source": "Read values from multiple OPC UA nodes in a single request",
+          "message": "Leggi valori da più nodi OPC UA in un'unica richiesta"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.desc": {
+          "source": "Read node attributes including display name, description, data type, access level, and current value",
+          "message": "Leggi gli attributi del nodo inclusi nome visualizzato, descrizione, tipo di dati, livello di accesso e valore corrente"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.display_name": {
+          "source": "Read OPC UA Node Attributes",
+          "message": "Leggi attributi nodo OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read attributes from",
+          "message": "L'ID del nodo OPC UA da cui leggere gli attributi"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID nodo"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read attributes from",
+          "message": "L'ID del nodo OPC UA da cui leggere gli attributi"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.short_desc": {
+          "source": "Read attributes from an OPC UA node",
+          "message": "Leggi gli attributi da un nodo OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.desc": {
+          "source": "Read historical data values from an OPC UA node with configurable time range and maximum values",
+          "message": "Leggi i valori dei dati storici da un nodo OPC UA con intervallo di tempo e numero massimo di valori configurabili"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.display_name": {
+          "source": "Read OPC UA Historical Data",
+          "message": "Leggi dati storici OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.desc": {
+          "source": "The end time for the historical data range",
+          "message": "L'ora di fine per l'intervallo di dati storici"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Ora di fine"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.short_desc": {
+          "source": "The end time for the historical data range",
+          "message": "L'ora di fine per l'intervallo di dati storici"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.desc": {
+          "source": "Maximum number of values to return; 0 or omitted means no limit",
+          "message": "Numero massimo di valori da restituire; 0 o omesso significa nessun limite"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.display_name": {
+          "source": "Max Values",
+          "message": "Valori massimi"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.short_desc": {
+          "source": "Maximum number of values to return",
+          "message": "Numero massimo di valori da restituire"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read history from",
+          "message": "L'ID del nodo OPC UA da cui leggere la cronologia"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID nodo"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read history from",
+          "message": "L'ID del nodo OPC UA da cui leggere la cronologia"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.desc": {
+          "source": "The start time for the historical data range",
+          "message": "L'ora di inizio per l'intervallo di dati storici"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.display_name": {
+          "source": "Start Time",
+          "message": "Ora di inizio"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.short_desc": {
+          "source": "The start time for the historical data range",
+          "message": "L'ora di inizio per l'intervallo di dati storici"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.short_desc": {
+          "source": "Read historical data from an OPC UA node",
+          "message": "Leggi dati storici da un nodo OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.desc": {
+          "source": "Write a value to an OPC UA node on the server",
+          "message": "Scrivi un valore in un nodo OPC UA sul server"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.display_name": {
+          "source": "Write OPC UA Node Value",
+          "message": "Scrivi valore nodo OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJ5dGU.display_name": {
+          "source": "Byte (uint8)",
+          "message": "Byte (uint8)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJ5dGVTdHJpbmc.display_name": {
+          "source": "ByteString",
+          "message": "ByteString"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJvb2xlYW4.display_name": {
+          "source": "Boolean",
+          "message": "Boolean"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkRhdGVUaW1l.display_name": {
+          "source": "DateTime",
+          "message": "DateTime"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkRvdWJsZQ.display_name": {
+          "source": "Double (64-bit)",
+          "message": "Double (64-bit)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkZsb2F0.display_name": {
+          "source": "Float (32-bit)",
+          "message": "Float (32-bit)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDE2.display_name": {
+          "source": "Int16",
+          "message": "Int16"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDMy.display_name": {
+          "source": "Int32",
+          "message": "Int32"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDY0.display_name": {
+          "source": "Int64",
+          "message": "Int64"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlN0cmluZw.display_name": {
+          "source": "String",
+          "message": "String"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlNCeXRl.display_name": {
+          "source": "SByte (int8)",
+          "message": "SByte (int8)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQ2NA.display_name": {
+          "source": "UInt64",
+          "message": "UInt64"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQxNg.display_name": {
+          "source": "UInt16",
+          "message": "UInt16"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQzMg.display_name": {
+          "source": "UInt32",
+          "message": "UInt32"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.desc": {
+          "source": "Optional OPC UA data type hint for the value. If not provided, the type is inferred from the Qore value type",
+          "message": "Suggerimento tipo di dati OPC UA opzionale per il valore. Se non fornito, il tipo viene desunto dal tipo di valore Qore"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.display_name": {
+          "source": "Data Type",
+          "message": "Tipo di dati"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.short_desc": {
+          "source": "Optional OPC UA data type hint for the value",
+          "message": "Suggerimento tipo di dati OPC UA opzionale per il valore"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.desc": {
+          "source": "The target OPC UA node ID (e.g., `ns=2;s=SetPoint`)",
+          "message": "L'ID nodo OPC UA di destinazione (ad es. `ns=2;s=SetPoint`)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID nodo"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.short_desc": {
+          "source": "The target OPC UA node ID (e",
+          "message": "L'ID nodo OPC UA di destinazione (ad es."
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.desc": {
+          "source": "The value to write to the node",
+          "message": "Il valore da scrivere nel nodo"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Valore"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.short_desc": {
+          "source": "The value to write to the node",
+          "message": "Il valore da scrivere nel nodo"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.short_desc": {
+          "source": "Write a value to an OPC UA node",
+          "message": "Scrivi un valore in un nodo OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.desc": {
+          "source": "Write values to multiple OPC UA nodes in a single batch request",
+          "message": "Scrivi valori in più nodi OPC UA in una singola richiesta batch"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.display_name": {
+          "source": "Write Multiple OPC UA Node Values",
+          "message": "Scrivi valori di più nodi OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.desc": {
+          "source": "List of values to write, each a hash with `node_id` (string, required), `value` (auto, required), and `data_type` (string, optional)",
+          "message": "Elenco di valori da scrivere, ciascuno un hash con `node_id` (string, obbligatorio), `value` (auto, obbligatorio) e `data_type` (string, opzionale)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.display_name": {
+          "source": "Values",
+          "message": "Valori"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.short_desc": {
+          "source": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)",
+          "message": "Elenco di valori da scrivere, ciascuno un hash con 'node_id' (string, obbligatorio), 'value' (auto, obbligatorio) e 'data_type' (string, opzionale)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.short_desc": {
+          "source": "Write values to multiple OPC UA nodes",
+          "message": "Scrivi valori in più nodi OPC UA"
+        },
+        "app.T3BjVUE.desc": {
+          "source": "OPC UA (Open Platform Communications Unified Architecture) server for industrial communication, supporting node value reading/writing, address space browsing, data change subscriptions, and method calls",
+          "message": "Server OPC UA (Open Platform Communications Unified Architecture) per la comunicazione industriale, con supporto per lettura/scrittura dei valori dei nodi, esplorazione dello spazio di indirizzamento, sottoscrizioni alle modifiche dei dati e chiamate di metodo"
+        },
+        "app.T3BjVUE.display_name": {
+          "source": "OPC UA",
+          "message": "OPC UA"
+        },
+        "app.T3BjVUE.short_desc": {
+          "source": "OPC UA server for industrial communication and IoT",
+          "message": "Server OPC UA per la comunicazione industriale e IoT"
+        }
+      }
+    }
+  }
+}

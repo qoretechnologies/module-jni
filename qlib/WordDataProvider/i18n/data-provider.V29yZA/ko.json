@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.V29yZA.action.cmVhZA.desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "특정 파일 위치에서 Word 문서 읽기"
+        },
+        "app.V29yZA.action.cmVhZA.display_name": {
+          "source": "Read Word Document File",
+          "message": "Word 문서 파일 읽기"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "텍스트 콘텐츠 및 스타일 정보(제목, 일반 텍스트)가 포함된 문서 단락 읽기"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "단락"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "문서 단락 읽기"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "열 헤더가 있는 구조화된 행 데이터로 표 읽기"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "테이블을 행 데이터로 읽기"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "읽을 콘텐츠 유형: `paragraphs` (기본값) 또는 `table`"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "읽을 콘텐츠 유형"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "`True`인 경우 테이블의 첫 번째 행에 열 헤더가 포함되며, 테이블 모드에만 적용됩니다."
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "첫 번째 행에 헤더 포함"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "테이블 모드의 열 헤더 명시적 목록이며, `header_row`와(과) 상호 배타적입니다."
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "열 헤더의 명시적 목록"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Word document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Word 문서 데이터의 위치; `data` 및 `stream`과(와) 상호 배타적임; [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출을 통해 해석됨"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Word Input Path",
+          "message": "Word 입력 경로"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Word document",
+          "message": "Word 문서의 위치"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type`이(가) `table`일 때 읽을 표의 인덱스; 0부터 시작, 기본값은 0"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "테이블 인덱스"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "읽을 테이블의 인덱스 (0부터 시작)"
+        },
+        "app.V29yZA.action.cmVhZA.short_desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "특정 파일 위치에서 Word 문서 읽기"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Word document inline data",
+          "message": "Word 문서 인라인 데이터 읽기"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Word Document Inline Data",
+          "message": "Word 문서 인라인 데이터 읽기"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "텍스트 콘텐츠 및 스타일 정보(제목, 일반 텍스트)가 포함된 문서 단락 읽기"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "단락"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "문서 단락 읽기"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "열 헤더가 있는 구조화된 행 데이터로 표 읽기"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "테이블을 행 데이터로 읽기"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "읽을 콘텐츠 유형: `paragraphs` (기본값) 또는 `table`"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "읽을 콘텐츠 유형"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Word document data to process; conflicts with `stream` and `path`",
+          "message": "처리할 Word 문서 데이터; `stream` 및 `path`과(와) 충돌함"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "입력 데이터"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Word document data to process",
+          "message": "처리할 Word 문서 데이터"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "`True`인 경우 테이블의 첫 번째 행에 열 헤더가 포함되며, 테이블 모드에만 적용됩니다."
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "첫 번째 행에 헤더 포함"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "테이블 모드의 열 헤더 명시적 목록이며, `header_row`와(과) 상호 배타적입니다."
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "열 헤더의 명시적 목록"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type`이(가) `table`일 때 읽을 표의 인덱스; 0부터 시작, 기본값은 0"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "테이블 인덱스"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "읽을 테이블의 인덱스 (0부터 시작)"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Word document inline data",
+          "message": "Word 문서 인라인 데이터 읽기"
+        },
+        "app.V29yZA.action.d3JpdGU.desc": {
+          "source": "Write data to a Word document file at a specified path",
+          "message": "지정된 경로의 Word 문서 파일에 데이터 쓰기"
+        },
+        "app.V29yZA.action.d3JpdGU.display_name": {
+          "source": "Write Word Document File",
+          "message": "Word 문서 파일 작성"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "텍스트 및 제목 스타일이 적용된 단락 쓰기"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "단락"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "단락 작성"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "열 헤더가 있는 구조화된 표 형식 데이터 작성"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "테이블 쓰기"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "작성할 콘텐츠 유형: `paragraphs`(기본값) 또는 `table`"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "작성할 콘텐츠 유형"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "테이블 모드의 열 헤더 목록이며, 제공되지 않으면 첫 번째 레코드에서 헤더가 자동 감지됩니다."
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "테이블 모드용 열 헤더 목록"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Word document data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "출력 Word 문서 데이터 파일의 위치; `stream`와(과) 상호 배제됨; 출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 호출로 처리됨"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Word Output Path",
+          "message": "Word 출력 경로"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Word document",
+          "message": "Word 문서를 작성할 위치"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "문서 시작 부분에 제목 헤딩으로 추가할 선택적 제목"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "문서 제목"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "시작 부분에 추가할 제목"
+        },
+        "app.V29yZA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a Word document file",
+          "message": "Word 문서 파일에 데이터 작성"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Word document data in memory and return it as binary data; useful for generating Word files without writing to disk",
+          "message": "메모리에 Word 문서 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 Word 파일을 생성하는 데 유용합니다."
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Word Document Data",
+          "message": "Word 문서 데이터 생성"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "텍스트 및 제목 스타일이 적용된 단락 쓰기"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "단락"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "단락 작성"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "열 헤더가 있는 구조화된 표 형식 데이터 작성"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "테이블 쓰기"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "작성할 콘텐츠 유형: `paragraphs`(기본값) 또는 `table`"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "작성할 콘텐츠 유형"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "테이블 모드의 열 헤더 목록이며, 제공되지 않으면 첫 번째 레코드에서 헤더가 자동 감지됩니다."
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "테이블 모드용 열 헤더 목록"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "문서 시작 부분에 제목 헤딩으로 추가할 선택적 제목"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "문서 제목"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "시작 부분에 추가할 제목"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Word document data and return as binary",
+          "message": "Word 문서 데이터를 생성하고 바이너리로 반환"
+        },
+        "app.V29yZA.desc": {
+          "source": "Read and write Microsoft Word documents (.docx format)",
+          "message": "Microsoft Word 문서(.docx 형식) 읽기 및 쓰기"
+        },
+        "app.V29yZA.display_name": {
+          "source": "Word Documents",
+          "message": "Word 문서"
+        },
+        "app.V29yZA.short_desc": {
+          "source": "Read and write Microsoft Word documents",
+          "message": "Microsoft Word 문서 읽기 및 쓰기"
+        }
+      }
+    }
+  }
+}

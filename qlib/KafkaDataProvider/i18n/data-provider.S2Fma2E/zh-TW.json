@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "A Kafka message is received; react to an Kafka message",
+          "message": "收到 Kafka 訊息；對 Kafka 訊息作出反應"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "Kafka Message Received",
+          "message": "收到 Kafka 訊息"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate incoming Kafka message values. This option conflicts with `validator`",
+          "message": "用於驗證傳入 Kafka 訊息值的 AsyncAPI 結構描述 URL 或檔案路徑。此選項與 `validator` 衝突"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "AsyncAPI 結構描述"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "AsyncAPI 結構描述 URL 或檔案路徑"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
+          "message": "設定 `asyncapi` 或 `validator` 時要使用的 AsyncAPI 通道名稱"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "AsyncAPI 通道"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "用於驗證的 AsyncAPI 通道"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Throw exception to the consumer if no previous offset is found for the consumer's group",
+          "message": "若找不到消費者群組之前的位移，則向消費者擲出例外狀況"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "Throw exception to the consumer if no previous offset is found for the consumer's group",
+          "message": "若找不到消費者群組之前的位移，則向消費者擲出例外狀況"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.desc": {
+          "source": "Automatically reset the offset to the earliest offset",
+          "message": "自動將位移重設為最早的位移"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.display_name": {
+          "source": "earliest",
+          "message": "earliest"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.short_desc": {
+          "source": "Automatically reset the offset to the earliest offset",
+          "message": "自動將位移重設為最早的位移"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.desc": {
+          "source": "Automatically reset the offset to the latest offset",
+          "message": "自動將位移重設為最新的位移"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.display_name": {
+          "source": "latest",
+          "message": "latest"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.short_desc": {
+          "source": "Automatically reset the offset to the latest offset",
+          "message": "自動將位移重設為最新的位移"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.desc": {
+          "source": "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted).\n\nNote that altering partition numbers while setting this config to latest may cause message delivery loss since producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets",
+          "message": "當 Kafka 中沒有初始位移，或伺服器上已不存在目前的位移時 (例如因為該資料已被刪除) 所要執行的動作。\n\n請注意，將此設定設為 latest 時變更資料分割數量可能會導致訊息傳送遺失，因為在消費者重設其位移之前，生產者可能已開始傳送訊息至新新增的資料分割 (即尚不存在初始位移)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.display_name": {
+          "source": "Auto Offset Reset",
+          "message": "自動位移重設"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.short_desc": {
+          "source": "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server",
+          "message": "當 Kafka 中沒有初始位移，或伺服器上已不存在目前的位移時所要執行的動作"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.desc": {
+          "source": "A unique string that identifies the consumer group this consumer belongs to.\n\nThis property is required if the consumer uses either the group management functionality by using `subscribe(topic)` or the Kafka-based offset management strategy",
+          "message": "識別此消費者所屬消費者群組的唯一字串。\n\n若消費者使用 `subscribe(topic)` 的群組管理功能，或使用基於 Kafka 的位移管理策略，則必須提供此屬性"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.display_name": {
+          "source": "Group ID",
+          "message": "群組 ID"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.short_desc": {
+          "source": "The ID of the consumer group this consumer belongs to",
+          "message": "此消費者所屬的消費者群組 ID"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.desc": {
+          "source": "If `True` the consumer's offset will be periodically committed in the background",
+          "message": "若為 `True`，消費者的位移將會在背景定期提交"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.display_name": {
+          "source": "Enable Auto Commit",
+          "message": "啟用自動提交"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.short_desc": {
+          "source": "If True the consumer's offset will be periodically committed in the background",
+          "message": "若為 True，消費者的位移將會在背景定期提交"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.desc": {
+          "source": "The minimum amount of data the server should return for a fetch request.\n\nIf insufficient data is available, the request will wait for that much data to accumulate before answering the request.\n\nThe default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive.\n\nSetting this to something greater than `1` will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency",
+          "message": "伺服器應為擷取請求傳回的最少資料量。\n\n若可用資料不足，請求將等待累積足夠的資料後再回應。\n\n預設設定為 1 位元組，表示只要有單位元組資料可用，或擷取請求等待資料到達逾時，就會立即回應擷取請求。\n\n將此設定為大於 `1` 的值會使伺服器等待累積較大的資料量，這可以提高伺服器的傳輸量，但代價是增加一些額外的延遲"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.display_name": {
+          "source": "Fetch Min Bytes",
+          "message": "擷取最小位元組數"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.short_desc": {
+          "source": "The minimum amount of data the server should return for a fetch request",
+          "message": "伺服器應為擷取請求傳回的最少資料量"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Deserializer` interface",
+          "message": "實作 `org.apache.kafka.common.serialization.Deserializer` 介面的鍵值序列化器類別"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.display_name": {
+          "source": "Key Deserializer",
+          "message": "鍵值反序列化器"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Kafka 訊息的序列化器 / 反序列化器類別"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.desc": {
+          "source": "The expected time in milliseconds between heartbeats to the consumer coordinator when using Kafka's group management facilities.\n\nHeartbeats are used to ensure that the consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group.\n\nThe value must be set lower than `session.timeout.ms`, but typically should be set no higher than 1/3 of that value.\n\nIt can be adjusted even lower to control the expected time for normal rebalances",
+          "message": "使用 Kafka 的群組管理功能時，向消費者協調器傳送心跳的預期時間 (毫秒)。\n\n心跳用於確保消費者的工作階段維持作用中，並在有新消費者加入或離開群組時利於進行重新平衡。\n\n該值必須設定為低於 `session.timeout.ms`，但通常不應高於該值的 1/3。\n\n甚至可以將其調得更低，以控制正常重新平衡的預期時間"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.display_name": {
+          "source": "Heartbeat Interval",
+          "message": "心跳間隔"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.short_desc": {
+          "source": "The expected time between heartbeats to the consumer coordinator in milliseconds",
+          "message": "向消費者協調器傳送心跳的預期時間 (毫秒)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.desc": {
+          "source": "The maximum amount of data per-partition the server will return.\n\nRecords are fetched in batches by the consumer.\n\nIf the first record batch in the first non-empty partition of the fetch is larger than this limit, the batch will still be returned to ensure that the consumer can make progress.\n\nThe maximum record batch size accepted by the broker is defined via `message.max.bytes` (broker config) or `max.message.bytes` (topic config).\n\nSee `fetch.max.bytes` for limiting the consumer request size",
+          "message": "伺服器將傳回每個資料分割的最大資料量。\n\n記錄由消費者分批擷取。\n\n如果擷取的第一個非空資料分割中的第一個記錄批次大於此限制，仍會傳回該批次以確保消費者可以繼續推進。\n\n代理程式接受的最大記錄批次大小是透過 `message.max.bytes` (代理程式設定) 或 `max.message.bytes` (主題設定) 所定義。\n\n請參閱 `fetch.max.bytes` 以限制消費者請求大小"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.display_name": {
+          "source": "Max Partition Fetch Bytes",
+          "message": "最大資料分割擷取位元組數"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.short_desc": {
+          "source": "The maximum amount of data per-partition the server will return",
+          "message": "伺服器將傳回每個資料分割的最大資料量"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.desc": {
+          "source": "The maximum delay between invocations of `poll()` when using consumer group management. This places an upper bound on the amount of time that the consumer can be idle before fetching more records. If `poll()` is not called before expiration of this timeout, then the consumer is considered failed and the group will rebalance in order to reassign the partitions to another member. For consumers using a non-null `group.instance.id` which reach this timeout, partitions will not be immediately reassigned. Instead, the consumer will stop sending heartbeats and partitions will be reassigned after expiration of `session.timeout.ms`. This mirrors the behavior of a static consumer which has shutdown",
+          "message": "使用消費者群組管理時，呼叫 `poll()` 之間的最大延遲。這會限制消費者在擷取更多記錄前可以處於閒置狀態的時間上限。如果在此逾時過期前未呼叫 `poll()`，則會判定該消費者失敗，且群組將進行重新平衡以將資料分割重新指派給另一個成員。對於使用非 null 的 `group.instance.id` 且達到此逾時的消費者，資料分割不會立即重新指派。取而代之的是，消費者將停止傳送心跳，且資料分割將在 `session.timeout.ms` 過期後重新指派。這反映了已關閉的靜態消費者的行為"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.display_name": {
+          "source": "Max Poll Interval",
+          "message": "最大輪詢間隔"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.short_desc": {
+          "source": "The maximum delay in milliseconds between invocations of poll()",
+          "message": "呼叫 poll() 之間的最大延遲 (毫秒)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.desc": {
+          "source": "The timeout used to detect client failures when using Kafka's group management facility.\n\nThe client sends periodic heartbeats to indicate its liveness to the broker.\n\nIf no heartbeats are received by the broker before the expiration of this session timeout, then the broker will remove this client from the group and initiate a rebalance.\n\nNote that the value must be in the allowable range as configured in the broker configuration by `group.min.session.timeout.ms` and `group.max.session.timeout.ms`",
+          "message": "使用 Kafka 的群組管理功能時，用於偵測用戶端失敗的逾時時間。\n\n用戶端會定期傳送心跳以向代理程式指示其存活狀態。\n\n如果代理程式在此工作階段逾時過期之前未收到任何心跳，則代理程式會將此用戶端從群組中移除並啟動重新平衡。\n\n請注意，該值必須在代理程式設定中透過 `group.min.session.timeout.ms` 和 `group.max.session.timeout.ms` 所設定的允許範圍內"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.display_name": {
+          "source": "Session Timeout",
+          "message": "工作階段逾時"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.short_desc": {
+          "source": "The timeout in milliseconds used to detect client failures",
+          "message": "用於偵測用戶端失敗的逾時時間 (毫秒)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.desc": {
+          "source": "One or more topics to subscribe to; must be a list of strings",
+          "message": "要訂閱的一個或多個主題；必須是字串清單"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.display_name": {
+          "source": "Topics",
+          "message": "主題"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.short_desc": {
+          "source": "One or more topics to subscribe to; must be a list of strings",
+          "message": "要訂閱的一個或多個主題；必須是字串清單"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.desc": {
+          "source": "An AsyncAPI schema location or schema file data used to validate incoming Kafka message values. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
+          "message": "用於驗證傳入 Kafka 訊息值的 AsyncAPI 結構描述位置或結構描述檔案資料。此選項與 `asyncapi` 衝突且需要 `asyncapi_channel`"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.display_name": {
+          "source": "AsyncAPI Validator",
+          "message": "AsyncAPI 驗證器"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.short_desc": {
+          "source": "AsyncAPI schema location or file data",
+          "message": "AsyncAPI 結構描述位置或檔案資料"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Deserializer` interface",
+          "message": "實作 `org.apache.kafka.common.serialization.Deserializer` 介面的鍵值序列化器類別"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.display_name": {
+          "source": "Value Deserializer",
+          "message": "值反序列化器"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Kafka 訊息的序列化器 / 反序列化器類別"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A Kafka message is received",
+          "message": "收到 Kafka 訊息"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.desc": {
+          "source": "Send a Kafka message",
+          "message": "傳送 Kafka 訊息"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.display_name": {
+          "source": "Send Kafka Message",
+          "message": "傳送 Kafka 訊息"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.desc": {
+          "source": "The compression type for all data generated by the producer. The default is `none` (i.e. no compression). Compression is of full batches of data, so the efficacy of batching will also impact the compression ratio (more batching means better compression)",
+          "message": "生產者產生的所有資料的壓縮類型。預設值為 `none` (即不壓縮)。壓縮是對整批資料進行的，因此批次處理的效率也會影響壓縮比 (批次處理越多代表壓縮效果越好)"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.display_name": {
+          "source": "Compression",
+          "message": "壓縮"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.short_desc": {
+          "source": "The compression type for all data generated by the producer",
+          "message": "生產者產生的所有資料的壓縮類型"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.desc": {
+          "source": "Determines how the client handles acknowledgements from the server:\n\n- `0`: The producer will not wait for any acknowledgment from the server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be made that the server has received the record in this case, and the `retries` configuration will not take effect (as the client won't generally know of any failures). The offset given back for each record will always be set to `-1`\n\n- `1`: The leader will write the record to its local log but will respond without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after acknowledging the record but before the followers have replicated it then the record will be lost\n\n- `all`: This means the leader will wait for the full set of in-sync replicas to acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica remains alive. This is the strongest available guarantee. This is equivalent to the `acks=-1` setting.",
+          "message": "決定用戶端如何處理來自伺服器的確認：\n\n- `0`：生產者完全不會等待來自伺服器的任何確認。記錄將立即新增至通訊端緩衝區並視為已傳送。在這種情況下無法保證伺服器已收到記錄，且 `retries` 設定不會生效 (因為用戶端通常不會知道任何失敗)。為每筆記錄傳回的位移將始終設定為 `-1`\n\n- `1`：主要節點會將記錄寫入其本機記錄檔，但會直接回應而不等待所有追隨者的完整確認。在這種情況下，若主要節點在確認記錄後但追隨者複製之前立即失敗，則記錄將會遺失\n\n- `all`：這意味著主要節點將等待完整的同步副本集確認記錄。這可保證只要至少有一個同步副本保持存活，記錄就不會遺失。這是可用的最強保證。這等同於 `acks=-1` 設定。"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.display_name": {
+          "source": "Acknowledgement Handling",
+          "message": "確認處理"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.short_desc": {
+          "source": "Determines how the client handles acknowledgements from the server",
+          "message": "決定用戶端如何處理來自伺服器的確認"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate outgoing Kafka message values. This option conflicts with `validator`",
+          "message": "用於驗證傳出 Kafka 訊息值的 AsyncAPI 結構描述 URL 或檔案路徑。此選項與 `validator` 衝突"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "AsyncAPI 結構描述"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "AsyncAPI 結構描述 URL 或檔案路徑"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
+          "message": "設定 `asyncapi` 或 `validator` 時要使用的 AsyncAPI 通道名稱"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "AsyncAPI 通道"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "用於驗證的 AsyncAPI 通道"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.desc": {
+          "source": "The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are sent faster than they can be delivered to the server the producer will block for `max.block.ms` after which it will throw an exception.\n\nThis setting should correspond roughly to the total memory the producer will use, but is not a hard bound since not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if compression is enabled) as well as for maintaining in-flight requests",
+          "message": "生產者可以用於快取等待傳送至伺服器之記錄的記憶體總位元組數。如果傳送記錄的速度快於交付至伺服器的速度，生產者將阻塞 `max.block.ms`，之後將擲出例外狀況。\n\n此設定應大致對應於生產者將使用的總記憶體，但並非硬性界限，因為生產者使用的記憶體並非全部用於快取。一些額外的記憶體將用於壓縮 (如果已啟用壓縮) 以及維護傳輸中的請求"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.display_name": {
+          "source": "Buffer Memory",
+          "message": "緩衝記憶體"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.short_desc": {
+          "source": "The total bytes of memory the producer can use to buffer records waiting to be sent",
+          "message": "生產者用來緩衝等待傳送記錄的記憶體總位元組數"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
+          "source": "The message key",
+          "message": "訊息金鑰"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
+          "source": "Message Key",
+          "message": "訊息金鑰"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.short_desc": {
+          "source": "The message key",
+          "message": "訊息金鑰"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Serializer` interface",
+          "message": "實作 `org.apache.kafka.common.serialization.Serializer` 介面之金鑰的序列化程式類別"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.display_name": {
+          "source": "Key Serializer",
+          "message": "金鑰序列化程式"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Kafka 訊息的序列化器 / 反序列化器類別"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.desc": {
+          "source": "The partition for the message",
+          "message": "訊息的分區"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.display_name": {
+          "source": "Partition",
+          "message": "分區"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.short_desc": {
+          "source": "The partition for the message",
+          "message": "訊息的分區"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.desc": {
+          "source": "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error. Note that this retry is no different than if the client resent the record upon receiving the error.\n\nAllowing retries without setting `max.in.flight.requests.per.connection` to `1` will potentially change the ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second succeeds, then the records in the second batch may appear first.\n\nNote additionally that produce requests will be failed before the number of retries has been exhausted if the timeout configured by `delivery.timeout.ms` expires first before successful acknowledgement. Users should generally prefer to leave this config unset and instead use `delivery.timeout.ms` to control retry behavior",
+          "message": "設定大於零的值會使用戶端重新傳送因潛在暫時性錯誤而傳送失敗的任何記錄。請注意，此重試與用戶端在收到錯誤後重新傳送記錄並無不同。\n\n如果在未將 `max.in.flight.requests.per.connection` 設定為 `1` 的情況下允許重試，可能會改變記錄的順序，因為如果將兩個批次傳送到單一分區，而第一個批次失敗並進行重試，但第二個批次成功，則第二個批次中的記錄可能會先出現。\n\n另外請注意，如果在成功確認之前，由 `delivery.timeout.ms` 設定的逾時先過期，則生產請求將會在重試次數用盡之前宣告失敗。使用者通常應保持此設定未設定，並改用 `delivery.timeout.ms` 來控制重試行為"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.display_name": {
+          "source": "Retries",
+          "message": "重試次數"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.short_desc": {
+          "source": "The number of retry attempts for failed sends",
+          "message": "失敗傳送的重試嘗試次數"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.desc": {
+          "source": "The topic for the message",
+          "message": "訊息的主題"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "主題"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.short_desc": {
+          "source": "The topic for the message",
+          "message": "訊息的主題"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.desc": {
+          "source": "An AsyncAPI schema location or schema file data used to validate outgoing Kafka message values. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
+          "message": "用於驗證傳出 Kafka 訊息值的 AsyncAPI 結構描述位置或結構描述檔案資料。此選項與 `asyncapi` 衝突且需要 `asyncapi_channel`"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.display_name": {
+          "source": "AsyncAPI Validator",
+          "message": "AsyncAPI 驗證器"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.short_desc": {
+          "source": "AsyncAPI schema location or file data",
+          "message": "AsyncAPI 結構描述位置或檔案資料"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.desc": {
+          "source": "The message value",
+          "message": "訊息值"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.display_name": {
+          "source": "Message Value",
+          "message": "訊息值"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.short_desc": {
+          "source": "The message value",
+          "message": "訊息值"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Serializer` interface",
+          "message": "實作 `org.apache.kafka.common.serialization.Serializer` 介面之金鑰的序列化程式類別"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.display_name": {
+          "source": "Value Serializer",
+          "message": "值序列化程式"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Kafka 訊息的序列化器 / 反序列化器類別"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.short_desc": {
+          "source": "Send a Kafka message",
+          "message": "傳送 Kafka 訊息"
+        },
+        "app.S2Fma2E.desc": {
+          "source": "Kafka messaging",
+          "message": "Kafka 訊息傳送"
+        },
+        "app.S2Fma2E.display_name": {
+          "source": "Kafka",
+          "message": "Kafka"
+        },
+        "app.S2Fma2E.short_desc": {
+          "source": "Kafka messaging",
+          "message": "Kafka 訊息傳送"
+        }
+      }
+    }
+  }
+}

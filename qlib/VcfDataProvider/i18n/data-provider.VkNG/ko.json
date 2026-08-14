@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.VkNG.action.cmVhZA.desc": {
+          "source": "Read contacts from a vCard (.vcf) file at a specific file location.\n\nEach record returned represents a single contact with the following fields:\n- `formatted_name`: the display name of the contact\n- `given_name`: the first/given name\n- `family_name`: the last/family name\n- `emails`: a list of email addresses with type and value\n- `phones`: a list of phone numbers with type and value\n- `addresses`: a list of postal addresses with type and address components\n- `organization`: the company or organization name\n- `title`: the job title\n- `note`: free-text notes about the contact\n- `uid`: the unique identifier of the contact\n- `birthday`: the contact's birthday\n- `url`: the contact's URL\n- `nickname`: the contact's nickname\n- `categories`: categories/tags for the contact\n- `role`: the contact's role within their organization\n\nMulti-contact VCF files are fully supported; each contact is returned as a separate record.",
+          "message": "특정 파일 위치의 vCard(.vcf) 파일에서 연락처를 읽습니다.\n\n반환되는 각 레코드는 다음 필드를 포함하는 단일 연락처를 나타냅니다:\n- `formatted_name`: 연락처의 표시 이름\n- `given_name`: 이름(first/given name)\n- `family_name`: 성(last/family name)\n- `emails`: 유형 및 값이 포함된 이메일 주소 목록\n- `phones`: 유형 및 값이 포함된 전화번호 목록\n- `addresses`: 유형 및 주소 구성 요소가 포함된 우편 주소 목록\n- `organization`: 회사 또는 조직 이름\n- `title`: 직책\n- `note`: 연락처에 대한 자유 형식 메모\n- `uid`: 연락처의 고유 식별자\n- `birthday`: 연락처의 생일\n- `url`: 연락처의 URL\n- `nickname`: 연락처의 닉네임\n- `categories`: 연락처의 범주/태그\n- `role`: 조직 내 연락처의 역할\n\n다중 연락처 VCF 파일이 완전히 지원되며, 각 연락처는 별도의 레코드로 반환됩니다."
+        },
+        "app.VkNG.action.cmVhZA.display_name": {
+          "source": "Read VCF Contact File",
+          "message": "VCF 연락처 파일 읽기"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the VCF data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "VCF 데이터의 위치; `data` 및 `stream`과(와) 상호 배타적임; [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출을 통해 해석됨"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "VCF Input Path",
+          "message": "VCF 입력 경로"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the VCF data",
+          "message": "VCF 데이터의 위치"
+        },
+        "app.VkNG.action.cmVhZA.short_desc": {
+          "source": "Read contacts from a vCard file at a specific file location",
+          "message": "특정 파일 위치의 vCard 파일에서 연락처 읽기"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.desc": {
+          "source": "Read contacts from inline vCard (.vcf) binary data.\n\nEach record returned represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nMulti-contact VCF data is fully supported.",
+          "message": "인라인 vCard(.vcf) 바이너리 데이터에서 연락처를 읽습니다.\n\n반환되는 각 레코드는 `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories` 및 `role`을(를) 포함한 표준 vCard 필드가 있는 단일 연락처를 나타냅니다.\n\n다중 연락처 VCF 데이터가 완전히 지원됩니다."
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read VCF Contact Inline Data",
+          "message": "VCF 연락처 인라인 데이터 읽기"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "VCF data to process; conflicts with `stream` and `path`",
+          "message": "처리할 VCF 데이터; `stream` 및 `path`과(와) 충돌함"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "입력 데이터"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "VCF data to process",
+          "message": "처리할 VCF 데이터"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read contacts from inline vCard data",
+          "message": "인라인 vCard 데이터에서 연락처 읽기"
+        },
+        "app.VkNG.action.d3JpdGU.desc": {
+          "source": "Write contacts to a vCard (.vcf) file at a specified path.\n\nEach record written represents a single contact. The following fields are supported:\n- `formatted_name` (required): the display name of the contact\n- `given_name`: the first/given name\n- `family_name`: the last/family name\n- `emails`: a list of `{\"type\": \"work\", \"value\": \"user@example.com\"}` hashes\n- `phones`: a list of `{\"type\": \"cell\", \"value\": \"+1-555-0100\"}` hashes\n- `addresses`: a list of address hashes with `type`, `street`, `city`, `state`, `postal_code`, `country`\n- `organization`: the company or organization name\n- `title`: the job title\n- `note`: free-text notes\n- `uid`: the unique identifier\n- `birthday`: the contact's birthday (date)\n- `url`: the contact's URL\n- `nickname`: the contact's nickname\n- `categories`: categories/tags for the contact (list of strings)\n- `role`: the contact's role within their organization\n\nMultiple contacts can be written to a single VCF file.",
+          "message": "지정된 경로의 vCard(.vcf) 파일에 연락처를 씁니다.\n\n기록되는 각 레코드는 단일 연락처를 나타냅니다. 다음 필드가 지원됩니다:\n- `formatted_name` (필수): 연락처의 표시 이름\n- `given_name`: 이름(first/given name)\n- `family_name`: 성(last/family name)\n- `emails`: `{\"type\": \"work\", \"value\": \"user@example.com\"}` 해시 목록\n- `phones`: `{\"type\": \"cell\", \"value\": \"+1-555-0100\"}` 해시 목록\n- `addresses`: `type`, `street`, `city`, `state`, `postal_code`, `country` 항목이 포함된 주소 해시 목록\n- `organization`: 회사 또는 조직 이름\n- `title`: 직책\n- `note`: 자유 형식 메모\n- `uid`: 고유 식별자\n- `birthday`: 연락처의 생일(날짜)\n- `url`: 연락처의 URL\n- `nickname`: 연락처의 닉네임\n- `categories`: 연락처의 범주/태그(문자열 목록)\n- `role`: 조직 내 연락처의 역할\n\n단일 VCF 파일에 여러 연락처를 쓸 수 있습니다."
+        },
+        "app.VkNG.action.d3JpdGU.display_name": {
+          "source": "Write VCF Contact File",
+          "message": "VCF 연락처 파일 쓰기"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output VCF data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "출력 VCF 데이터 파일의 위치; `stream`과(와) 상호 배타적임; 출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 호출에 의해 처리됨"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "VCF Output Path",
+          "message": "VCF 출력 경로"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the VCF file",
+          "message": "VCF 파일을 쓸 위치"
+        },
+        "app.VkNG.action.d3JpdGU.short_desc": {
+          "source": "Write contacts to a vCard file at a specified path",
+          "message": "지정된 경로의 vCard 파일에 연락처 쓰기"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nAfter writing all contacts, use `getData()` to retrieve the binary VCF data.",
+          "message": "메모리에 vCard(.vcf) 연락처 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 VCF 파일을 생성하는 데 유용합니다.\n\n기록되는 각 레코드는 `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories` 및 `role`을(를) 포함한 표준 vCard 필드가 있는 단일 연락처를 나타냅니다.\n\n모든 연락처를 작성한 후 `getData()`을(를) 사용하여 바이너리 VCF 데이터를 가져옵니다."
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create VCF Contact Data",
+          "message": "VCF 연락처 데이터 생성"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create vCard contact data and return as binary",
+          "message": "vCard 연락처 데이터를 생성하고 바이너리로 반환"
+        },
+        "app.VkNG.desc": {
+          "source": "Read and write vCard (.vcf) contact files containing names, emails, phones, addresses, and other contact information",
+          "message": "이름, 이메일, 전화번호, 주소 및 기타 연락처 정보가 포함된 vCard(.vcf) 연락처 파일 읽기 및 쓰기"
+        },
+        "app.VkNG.display_name": {
+          "source": "VCF Contacts",
+          "message": "VCF 연락처"
+        },
+        "app.VkNG.short_desc": {
+          "source": "Read and write vCard (.vcf) contact files",
+          "message": "vCard(.vcf) 연락처 파일 읽기 및 쓰기"
+        }
+      }
+    }
+  }
+}

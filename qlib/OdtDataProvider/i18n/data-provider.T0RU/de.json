@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.T0RU.action.cmVhZA.desc": {
+          "source": "Reads and parses an ODT document from a file location specified by the `path` option.\n\nUse this action to extract structured content from `.odt` files stored on disk or accessible via a URL.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to extract tabular data\n- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n- `header_row` — set to `True` if the first table row contains column headers\n- `headers` — provide explicit column header names for table mode",
+          "message": "Liest und parst ein ODT-Dokument von einem Dateispeicherort, der durch die Option `path` angegeben ist.\n\nVerwenden Sie diese Aktion, um strukturierten Inhalt aus `.odt`-Dateien zu extrahieren, die auf der Festplatte gespeichert oder über eine URL zugänglich sind.\n\n**Wichtige Optionen**:\n- `content_type` — auf `\"paragraphs\"` festlegen für Text mit Stilen oder `\"table\"`, um tabellarische Daten zu extrahieren\n- `table_index` — auswählen, welche Tabelle gelesen werden soll (0-basiert), wenn der Modus `\"table\"` verwendet wird\n- `header_row` — auf `True` festlegen, wenn die erste Tabellenzeile Spaltenköpfe enthält\n- `headers` — explizite Spaltenkopfnamen für den Tabellenmodus angeben"
+        },
+        "app.T0RU.action.cmVhZA.display_name": {
+          "source": "Read ODT Document File",
+          "message": "ODT-Dokumentdatei lesen"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "Dokumentabsätze mit Textinhalt und Stilinformationen lesen (Überschriften, normaler Text)"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Absätze"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs with text and style information",
+          "message": "Dokumentabsätze mit Text- und Stilinformationen lesen"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "Eine Tabelle als strukturierte Zeilendaten mit Spaltenköpfen lesen"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Eine Tabelle als Zeilendaten lesen"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to extract from the ODT document.\n\n- `\"paragraphs\"` — reads document paragraphs with text and style information\n- `\"table\"` — reads a specific table as row data, using `table_index` to select the table",
+          "message": "Der Typ des Inhalts, der aus dem ODT-Dokument extrahiert werden soll.\n\n- `\"paragraphs\"` — liest Dokumentabsätze mit Text- und Stilinformationen\n- `\"table\"` — liest eine bestimmte Tabelle als Zeilendaten, wobei `table_index` zur Auswahl der Tabelle verwendet wird"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Art des zu lesenden Inhalts"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table is used as column headers. Only applies when `content_type` is `\"table\"`; mutually exclusive with `headers`",
+          "message": "Wenn `True`, wird die erste Zeile der Tabelle als Spaltenköpfe verwendet. Gilt nur, wenn `content_type` den Wert `\"table\"` hat; schließt sich mit `headers` gegenseitig aus"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Kopfzeile"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "Erste Zeile enthält Überschriften"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column header names to use for table columns. Only applies when `content_type` is `\"table\"`; mutually exclusive with `header_row`",
+          "message": "Explizite Liste von Spaltenkopfnamen, die für Tabellenspalten verwendet werden sollen. Gilt nur, wenn `content_type` den Wert `\"table\"` hat; schließt sich mit `header_row` gegenseitig aus"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Spalten-Header"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Explizite Liste von Spaltenüberschriften"
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODT document data; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Der Speicherort der ODT-Dokumentdaten; schließt sich mit `data` und `stream` gegenseitig aus.\n\nWird durch einen Aufruf von [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) aufgelöst"
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODT Input Path",
+          "message": "ODT-Eingabepfad"
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODT document",
+          "message": "Der Speicherort des ODT-Dokuments"
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "The 0-based index of the table to read when `content_type` is `\"table\"`. Default is `0` (the first table in the document)",
+          "message": "Der 0-basierte Index der zu lesenden Tabelle, wenn `content_type` den Wert `\"table\"` hat. Standardwert ist `0` (die erste Tabelle im Dokument)"
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Tabellen-Index"
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Index der zu lesenden Tabelle (0-basiert)"
+        },
+        "app.T0RU.action.cmVhZA.short_desc": {
+          "source": "Read ODT document from a specific file location",
+          "message": "ODT-Dokument von einem bestimmten Dateispeicherort lesen"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.desc": {
+          "source": "Reads and parses an ODT document from inline binary data provided via the `data` option.\n\nUse this action when the ODT document content is already available in memory as binary data rather than stored in a file.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to extract tabular data\n- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n- `header_row` — set to `True` if the first table row contains column headers\n- `headers` — provide explicit column header names for table mode",
+          "message": "Liest und parst ein ODT-Dokument aus Inline-Binärdaten, die über die Option `data` bereitgestellt werden.\n\nVerwenden Sie diese Aktion, wenn der Inhalt des ODT-Dokuments bereits als Binärdaten im Speicher verfügbar ist und nicht in einer Datei gespeichert ist.\n\n**Wichtige Optionen**:\n- `content_type` — auf `\"paragraphs\"` festlegen für Text mit Stilen oder `\"table\"`, um tabellarische Daten zu extrahieren\n- `table_index` — auswählen, welche Tabelle gelesen werden soll (0-basiert), wenn der Modus `\"table\"` verwendet wird\n- `header_row` — auf `True` festlegen, wenn die erste Tabellenzeile Spaltenköpfe enthält\n- `headers` — explizite Spaltenkopfnamen für den Tabellenmodus angeben"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODT Document Inline Data",
+          "message": "Inline-Daten eines ODT-Dokuments lesen"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "Dokumentabsätze mit Textinhalt und Stilinformationen lesen (Überschriften, normaler Text)"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Absätze"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs with text and style information",
+          "message": "Dokumentabsätze mit Text- und Stilinformationen lesen"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "Eine Tabelle als strukturierte Zeilendaten mit Spaltenköpfen lesen"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Eine Tabelle als Zeilendaten lesen"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to extract from the ODT document.\n\n- `\"paragraphs\"` — reads document paragraphs with text and style information\n- `\"table\"` — reads a specific table as row data, using `table_index` to select the table",
+          "message": "Der Typ des Inhalts, der aus dem ODT-Dokument extrahiert werden soll.\n\n- `\"paragraphs\"` — liest Dokumentabsätze mit Text- und Stilinformationen\n- `\"table\"` — liest eine bestimmte Tabelle als Zeilendaten, wobei `table_index` zur Auswahl der Tabelle verwendet wird"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Art des zu lesenden Inhalts"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODT document binary data to process; mutually exclusive with `stream` and `path`",
+          "message": "Zu verarbeitende Binärdaten des ODT-Dokuments; schließt sich mit `stream` und `path` gegenseitig aus"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Eingabedaten"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODT document data to process",
+          "message": "Zu verarbeitende ODT-Dokumentdaten"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table is used as column headers. Only applies when `content_type` is `\"table\"`; mutually exclusive with `headers`",
+          "message": "Wenn `True`, wird die erste Zeile der Tabelle als Spaltenköpfe verwendet. Gilt nur, wenn `content_type` den Wert `\"table\"` hat; schließt sich mit `headers` gegenseitig aus"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Kopfzeile"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "Erste Zeile enthält Überschriften"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column header names to use for table columns. Only applies when `content_type` is `\"table\"`; mutually exclusive with `header_row`",
+          "message": "Explizite Liste von Spaltenkopfnamen, die für Tabellenspalten verwendet werden sollen. Gilt nur, wenn `content_type` den Wert `\"table\"` hat; schließt sich mit `header_row` gegenseitig aus"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Spalten-Header"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Explizite Liste von Spaltenüberschriften"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "The 0-based index of the table to read when `content_type` is `\"table\"`. Default is `0` (the first table in the document)",
+          "message": "Der 0-basierte Index der zu lesenden Tabelle, wenn `content_type` den Wert `\"table\"` hat. Standardwert ist `0` (die erste Tabelle im Dokument)"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Tabellen-Index"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Index der zu lesenden Tabelle (0-basiert)"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODT document inline data",
+          "message": "Inline-Daten eines ODT-Dokuments lesen"
+        },
+        "app.T0RU.action.d3JpdGU.desc": {
+          "source": "Creates an ODT document and writes it to the file location specified by the `path` option.\n\nUse this action to generate `.odt` files with paragraphs or tabular data for reports, documents, or data exports.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` to write styled text, or `\"table\"` to write structured tabular data\n- `headers` — provide column headers for `\"table\"` mode\n- `title` — optional document title added as a `Heading1` at the top",
+          "message": "Erstellt ein ODT-Dokument und schreibt es an den durch die Option `path` angegebenen Dateispeicherort.\n\nVerwenden Sie diese Aktion, um `.odt`-Dateien mit Absätzen oder tabellarischen Daten für Berichte, Dokumente oder Datenexporte zu generieren.\n\n**Wichtige Optionen**:\n- `content_type` — auf `\"paragraphs\"` festlegen, um formatierten Text zu schreiben, oder `\"table\"`, um strukturierte tabellarische Daten zu schreiben\n- `headers` — Spaltenköpfe für den Modus `\"table\"` bereitstellen\n- `title` — optionaler Dokumenttitel, der oben als `Heading1` hinzugefügt wird"
+        },
+        "app.T0RU.action.d3JpdGU.display_name": {
+          "source": "Write ODT Document File",
+          "message": "ODT-Dokumentdatei schreiben"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "Formatierte Absätze mit Text- und Überschriftstilen schreiben"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Absätze"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "Formatierte Absätze mit Text- und Überschriftstilen schreiben"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data",
+          "message": "Strukturierte tabellarische Daten schreiben"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write structured tabular data",
+          "message": "Strukturierte tabellarische Daten schreiben"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to write to the ODT document.\n\n- `\"paragraphs\"` — writes styled paragraphs with text and heading styles\n- `\"table\"` — writes structured tabular data with column headers",
+          "message": "Der Typ des Inhalts, der in das ODT-Dokument geschrieben werden soll.\n\n- `\"paragraphs\"` — schreibt formatierte Absätze mit Text- und Überschriftstilen\n- `\"table\"` — schreibt strukturierte tabellarische Daten mit Spaltenköpfen"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Art des zu schreibenden Inhalts"
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column header names for `\"table\"` mode. If not provided, headers will be auto-detected from the keys of the first record",
+          "message": "Liste von Spaltenkopfnamen für den Modus `\"table\"`. Falls nicht angegeben, werden die Köpfe automatisch aus den Schlüsseln des ersten Datensatzes erkannt"
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Spalten-Header"
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Liste der Spaltenüberschriften für den Tabellenmodus"
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODT document data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Der Speicherort für die Ausgabe-ODT-Dokumentdatendatei; schließt sich mit `stream` gegenseitig aus.\n\nDer Ausgabespeicherort wird durch einen Aufruf von [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) verarbeitet"
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODT Output Path",
+          "message": "ODT-Ausgabepfad"
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODT document",
+          "message": "Der Speicherort zum Schreiben des ODT-Dokuments"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a `Heading1` at the beginning of the document",
+          "message": "Optionaler Titel, der am Anfang des Dokuments als `Heading1` hinzugefügt werden soll"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "Dokumenttitel"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "Titel, der am Anfang hinzugefügt werden soll"
+        },
+        "app.T0RU.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODT document file",
+          "message": "Daten in eine ODT-Dokumentdatei schreiben"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Creates an ODT document in memory and returns it as binary data, without writing to disk.\n\nUse this action when you need to generate an ODT document for further processing, email attachment, or API response without creating a file on the filesystem.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` to write styled text, or `\"table\"` to write structured tabular data\n- `headers` — provide column headers for `\"table\"` mode\n- `title` — optional document title added as a `Heading1` at the top",
+          "message": "Erstellt ein ODT-Dokument im Speicher und gibt es als Binärdaten zurück, ohne auf die Festplatte zu schreiben.\n\nVerwenden Sie diese Aktion, wenn Sie ein ODT-Dokument für die weitere Verarbeitung, einen E-Mail-Anhang oder eine API-Antwort generieren müssen, ohne eine Datei auf dem Dateisystem zu erstellen.\n\n**Wichtige Optionen**:\n- `content_type` — auf `\"paragraphs\"` festlegen, um formatierten Text zu schreiben, oder `\"table\"`, um strukturierte tabellarische Daten zu schreiben\n- `headers` — Spaltenköpfe für den Modus `\"table\"` bereitstellen\n- `title` — optionaler Dokumenttitel, der oben als `Heading1` hinzugefügt wird"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODT Document Data",
+          "message": "ODT-Dokumentdaten erstellen"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "Formatierte Absätze mit Text- und Überschriftstilen schreiben"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Absätze"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "Formatierte Absätze mit Text- und Überschriftstilen schreiben"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data",
+          "message": "Strukturierte tabellarische Daten schreiben"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write structured tabular data",
+          "message": "Strukturierte tabellarische Daten schreiben"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to write to the ODT document.\n\n- `\"paragraphs\"` — writes styled paragraphs with text and heading styles\n- `\"table\"` — writes structured tabular data with column headers",
+          "message": "Der Typ des Inhalts, der in das ODT-Dokument geschrieben werden soll.\n\n- `\"paragraphs\"` — schreibt formatierte Absätze mit Text- und Überschriftstilen\n- `\"table\"` — schreibt strukturierte tabellarische Daten mit Spaltenköpfen"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Art des zu schreibenden Inhalts"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column header names for `\"table\"` mode. If not provided, headers will be auto-detected from the keys of the first record",
+          "message": "Liste von Spaltenkopfnamen für den Modus `\"table\"`. Falls nicht angegeben, werden die Köpfe automatisch aus den Schlüsseln des ersten Datensatzes erkannt"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Spalten-Header"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Liste der Spaltenüberschriften für den Tabellenmodus"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a `Heading1` at the beginning of the document",
+          "message": "Optionaler Titel, der am Anfang des Dokuments als `Heading1` hinzugefügt werden soll"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "Dokumenttitel"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "Titel, der am Anfang hinzugefügt werden soll"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODT document data and return as binary",
+          "message": "ODT-Dokumentdaten erstellen und als Binärdaten zurückgeben"
+        },
+        "app.T0RU.desc": {
+          "source": "Provides data provider operations for **ODT** (OpenDocument Text) files, the native document format for LibreOffice Writer and part of the [OpenDocument](https://en.wikipedia.org/wiki/OpenDocument) standard.\n\n**Supported Operations**:\n- **Read paragraphs** — extract text with heading hierarchy and style information\n- **Read tables** — extract table data with automatic or explicit header detection\n- **Write paragraphs** — create documents with styled text and headings\n- **Write tables** — create documents with structured tabular data\n\n**Key Features**:\n- Heading style detection (`Heading1`, `Heading2`, `Heading3`)\n- Table extraction with `header_row` auto-detection or explicit `headers`\n- `paragraphs` and `table` content modes for both reading and writing\n- File path, stream, and in-memory binary data support\n\n**Business Use Cases**:\n- Processing LibreOffice Writer documents in automated workflows\n- Extracting structured text and tables from `.odt` files\n- Generating ODT reports and documents programmatically",
+          "message": "Bietet Datenanbieter-Operationen für **ODT**-Dateien (OpenDocument Text), das native Dokumentformat für LibreOffice Writer und Teil des [OpenDocument](https://en.wikipedia.org/wiki/OpenDocument)-Standards.\n\n**Unterstützte Operationen**:\n- **Absätze lesen** — Text mit Überschriftenhierarchie und Stilinformationen extrahieren\n- **Tabellen lesen** — Tabellendaten mit automatischer oder expliziter Spaltenkopferkennung extrahieren\n- **Absätze schreiben** — Dokumente mit formatiertem Text und Überschriften erstellen\n- **Tabellen schreiben** — Dokumente mit strukturierten tabellarischen Daten erstellen\n\n**Wichtige Funktionen**:\n- Erkennung von Überschriftenstilen (`Heading1`, `Heading2`, `Heading3`)\n- Tabellenextraktion mit automatischer Erkennung durch `header_row` oder explizite `headers`\n- `paragraphs`- und `table`-Inhaltsmodi sowohl zum Lesen als auch zum Schreiben\n- Unterstützung für Dateipfad, Stream und Binärdaten im Speicher\n\n**Geschäftliche Anwendungsfälle**:\n- Verarbeiten von LibreOffice Writer-Dokumenten in automatisierten Workflows\n- Extrahieren von strukturiertem Text und Tabellen aus `.odt`-Dateien\n- Programmatisches Generieren von ODT-Berichten und -Dokumenten"
+        },
+        "app.T0RU.display_name": {
+          "source": "ODT Documents",
+          "message": "ODT-Dokumente"
+        },
+        "app.T0RU.short_desc": {
+          "source": "Read and write ODT documents",
+          "message": "ODT-Dokumente lesen und schreiben"
+        }
+      }
+    }
+  }
+}

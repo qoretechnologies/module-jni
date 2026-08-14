@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QWNjZXNz.action.cmVhZA.desc": {
+          "source": "Read Access database from a specific file location and iterate table rows",
+          "message": "Читання бази даних Access із указаного файлу та ітерація рядків таблиці"
+        },
+        "app.QWNjZXNz.action.cmVhZA.display_name": {
+          "source": "Read Access Database File",
+          "message": "Прочитати файл бази даних Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the Access database file; mutually exclusive with `data`; resolved with a call to [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Шлях до файлу бази даних Access; взаємовиключно з `data`; вирішується за допомогою виклику [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Access Input Path",
+          "message": "Вхідний шлях Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The path to the Access database file",
+          "message": "Шлях до файлу бази даних Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "Назва таблиці для читання; якщо не вказано, використовуйте дочірні провайдери для доступу до таблиць"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "Назва таблиці"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "Назва таблиці для читання"
+        },
+        "app.QWNjZXNz.action.cmVhZA.short_desc": {
+          "source": "Read Access database from a specific file location",
+          "message": "Прочитати базу даних Access із указаного файлу"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Access database inline data and iterate table rows",
+          "message": "Прочитати вбудовані дані бази даних Access та виконати ітерацію рядків таблиці"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Access Database Inline Data",
+          "message": "Прочитати вбудовані дані бази даних Access"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Access database data to process; conflicts with `path`",
+          "message": "Дані бази даних Access для обробки; конфліктує з `path`"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Access database data to process",
+          "message": "Дані бази даних Access для обробки"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "Назва таблиці для читання; якщо не вказано, використовуйте дочірні провайдери для доступу до таблиць"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "Назва таблиці"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "Назва таблиці для читання"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Access database inline data",
+          "message": "Прочитати вбудовані дані бази даних Access"
+        },
+        "app.QWNjZXNz.desc": {
+          "source": "Read Microsoft Access databases (.mdb/.accdb format) using the Jackcess library",
+          "message": "Читання баз даних Microsoft Access (формат .mdb/.accdb) за допомогою бібліотеки Jackcess"
+        },
+        "app.QWNjZXNz.display_name": {
+          "source": "Access Databases",
+          "message": "Бази даних Access"
+        },
+        "app.QWNjZXNz.short_desc": {
+          "source": "Read Microsoft Access databases",
+          "message": "Прочитати бази даних Microsoft Access"
+        }
+      }
+    }
+  }
+}

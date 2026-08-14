@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.RW1haWw.action.ZW1sLXJlYWQ.desc": {
+          "source": "Reads an EML (RFC 822 / MIME) email message from a file path and returns the message content as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nEML is the standard email format supported by most email clients. Each file contains a single email message.",
+          "message": "從檔案路徑讀取 EML (RFC 822 / MIME) 電子郵件訊息，並將訊息內容作為結構化記錄傳回，其中包含寄件者、收件者、主旨、日期、內文文字、HTML 內容、附件元資料和訊息標頭。\n\nEML 是大多數電子郵件用戶端支援的標準電子郵件格式。每個檔案包含單一電子郵件訊息。"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.display_name": {
+          "source": "Read EML Email File",
+          "message": "讀取 EML 電子郵件檔案"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.desc": {
+          "source": "The location of the EML email file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "EML 電子郵件檔案的位置；與 `data` 和 `stream` 互斥；透過呼叫 [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 來解析"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.display_name": {
+          "source": "EML Input Path",
+          "message": "EML 輸入路徑"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.short_desc": {
+          "source": "The location of the EML email file",
+          "message": "EML 電子郵件檔案的位置"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.short_desc": {
+          "source": "Read an EML email message from a file location",
+          "message": "從檔案位置讀取 EML 電子郵件訊息"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.desc": {
+          "source": "Reads an EML (RFC 822 / MIME) email message from inline binary data and returns the message content as a structured record.\n\nUse this action when the EML data is already available in memory rather than on disk.",
+          "message": "從行內二進位資料讀取 EML (RFC 822 / MIME) 電子郵件訊息，並將訊息內容作為結構化記錄傳回。\n\n當 EML 資料已存在於記憶體中而非磁碟上時，請使用此動作。"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.display_name": {
+          "source": "Read EML Email Inline Data",
+          "message": "讀取 EML 電子郵件行內資料"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "EML email data to process; conflicts with `stream` and `path`",
+          "message": "要處理的 EML 電子郵件資料；與 `stream` 和 `path` 衝突"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "輸入資料"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "EML email data to process",
+          "message": "要處理的 EML 電子郵件資料"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.short_desc": {
+          "source": "Read an EML email message from inline binary data",
+          "message": "從行內二進位資料讀取 EML 電子郵件訊息"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.desc": {
+          "source": "Writes an EML (RFC 822 / MIME) email message to a file path.\n\nEach record written represents a single email message with the following fields:\n- `from`: the sender's email address\n- `to`: list of To recipients\n- `cc`: list of CC recipients (optional)\n- `bcc`: list of BCC recipients (optional)\n- `subject`: the email subject line\n- `date`: the sent date (optional, defaults to current time)\n- `body_text`: plain text body content (optional)\n- `body_html`: HTML body content (optional)\n- `attachments`: list of attachment hashes with `name`, `content_type`, and `data` (optional)\n- `message_id`: the Message-ID header (optional)\n- `in_reply_to`: the In-Reply-To header (optional)\n- `reply_to`: the Reply-To header (optional)\n- `references`: the References header (optional)",
+          "message": "將 EML (RFC 822 / MIME) 電子郵件訊息寫入檔案路徑。\n\n寫入的每筆記錄代表單一電子郵件訊息，具有以下欄位：\n- `from`：寄件者的電子郵件地址\n- `to`：收件者 (To) 清單\n- `cc`：副本收件者 (CC) 清單（選填）\n- `bcc`：密件副本收件者 (BCC) 清單（選填）\n- `subject`：電子郵件主旨行\n- `date`：傳送日期（選填，預設為當前時間）\n- `body_text`：純文字內文內容（選填）\n- `body_html`：HTML 內文內容（選填）\n- `attachments`：帶有 `name`、`content_type` 和 `data` 的附件雜湊值清單（選填）\n- `message_id`：Message-ID 標頭（選填）\n- `in_reply_to`：In-Reply-To 標頭（選填）\n- `reply_to`：Reply-To 標頭（選填）\n- `references`：References 標頭（選填）"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.display_name": {
+          "source": "Write EML Email File",
+          "message": "寫入 EML 電子郵件檔案"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.desc": {
+          "source": "The location for the output EML data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "輸出 EML 資料檔案的位置；與 `stream` 互斥；輸出位置由對 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 的呼叫處理"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.display_name": {
+          "source": "EML Output Path",
+          "message": "EML 輸出路徑"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.short_desc": {
+          "source": "The location to write the EML file",
+          "message": "寫入 EML 檔案的位置"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.short_desc": {
+          "source": "Write an EML email message to a file location",
+          "message": "將 EML 電子郵件訊息寫入檔案位置"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.desc": {
+          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data.",
+          "message": "在記憶體中建立 EML (RFC 822 / MIME) 電子郵件資料並將其作為二進位資料傳回；適用於在不寫入磁碟的情況下生成 EML 檔案。\n\n寫入的每筆記錄代表單一電子郵件訊息，具有標準電子郵件欄位，包括 `from`、`to`、`cc`、`bcc`、`subject`、`date`、`body_text`、`body_html`、`attachments`、`message_id`、`in_reply_to`、`reply_to` 和 `references`。\n\n寫入所有訊息後，使用 `getData()` 取回二進位 EML 資料。"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.display_name": {
+          "source": "Create EML Email Data",
+          "message": "建立 EML 電子郵件資料"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.short_desc": {
+          "source": "Create EML email data and return as binary",
+          "message": "建立 EML 電子郵件資料並作為二進位傳回"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.desc": {
+          "source": "Reads email messages from an MBOX (Unix Mailbox) file and returns each message as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nMBOX files contain multiple email messages concatenated in a single file, each delimited by a `From ` separator line. This format is used by Thunderbird, Evolution, and many Unix mail systems.\n\nThe `max_messages` option can be used to limit the number of messages read from the file.",
+          "message": "從 MBOX (Unix Mailbox) 檔案讀取電子郵件訊息，並將每筆訊息作為結構化記錄傳回，其中包含寄件者、收件者、主旨、日期、內文文字、HTML 內容、附件元資料和訊息標頭。\n\nMBOX 檔案包含串接在單一檔案中的多筆電子郵件訊息，每筆訊息由 `From ` 分隔線分隔。Thunderbird、Evolution 以及許多 Unix 郵件系統皆使用此格式。\n\n`max_messages` 選項可用於限制從檔案讀取的訊息數量。"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.display_name": {
+          "source": "Read MBOX Mailbox File",
+          "message": "讀取 MBOX 郵箱檔案"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.desc": {
+          "source": "Maximum number of messages to read from the MBOX file; 0 (the default) means read all messages; use this to limit processing of very large MBOX files",
+          "message": "從 MBOX 檔案讀取的最大訊息數；0（預設值）表示讀取所有訊息；使用此選項限制對大型 MBOX 檔案的處理"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.display_name": {
+          "source": "Maximum Messages",
+          "message": "最大訊息數"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.short_desc": {
+          "source": "Maximum number of messages to read from the MBOX file",
+          "message": "從 MBOX 檔案讀取的最大訊息數"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.desc": {
+          "source": "The location of the MBOX mailbox file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "MBOX 郵箱檔案的位置；與 `data` 和 `stream` 互斥；透過呼叫 [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 來解析"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.display_name": {
+          "source": "MBOX Input Path",
+          "message": "MBOX 輸入路徑"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.short_desc": {
+          "source": "The location of the MBOX mailbox file",
+          "message": "MBOX 郵箱檔案的位置"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.short_desc": {
+          "source": "Read email messages from an MBOX mailbox file",
+          "message": "從 MBOX 信箱檔案讀取電子郵件訊息"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.desc": {
+          "source": "Reads email messages from inline MBOX (Unix Mailbox) binary data and returns each message as a structured record.\n\nUse this action when the MBOX data is already available in memory rather than on disk.\n\nThe `max_messages` option can be used to limit the number of messages read from the data.",
+          "message": "從內嵌 MBOX (Unix Mailbox) 二進位資料讀取電子郵件訊息，並將每則訊息作為結構化記錄傳回。\n\n當 MBOX 資料已存在於記憶體中而非磁碟上時，請使用此動作。\n\n`max_messages` 選項可用於限制從資料中讀取的訊息數量。"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.display_name": {
+          "source": "Read MBOX Mailbox Inline Data",
+          "message": "讀取 MBOX 信箱內嵌資料"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.desc": {
+          "source": "MBOX mailbox data to process; conflicts with `stream` and `path`",
+          "message": "要處理的 MBOX 信箱資料；與 `stream` 及 `path` 衝突"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "輸入資料"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.short_desc": {
+          "source": "MBOX mailbox data to process",
+          "message": "要處理的 MBOX 信箱資料"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.desc": {
+          "source": "Maximum number of messages to read from the MBOX file; 0 (the default) means read all messages; use this to limit processing of very large MBOX files",
+          "message": "從 MBOX 檔案讀取的最大訊息數；0（預設值）表示讀取所有訊息；使用此選項限制對大型 MBOX 檔案的處理"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.display_name": {
+          "source": "Maximum Messages",
+          "message": "最大訊息數"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.short_desc": {
+          "source": "Maximum number of messages to read from the MBOX file",
+          "message": "從 MBOX 檔案讀取的最大訊息數"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.short_desc": {
+          "source": "Read email messages from inline MBOX data",
+          "message": "從內嵌 MBOX 資料讀取電子郵件訊息"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.desc": {
+          "source": "Reads a Microsoft Outlook MSG email message from a file path and returns the message content as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nMSG is the proprietary binary format used by Microsoft Outlook, stored as an OLE2 Compound Document with MAPI properties.",
+          "message": "從檔案路徑讀取 Microsoft Outlook MSG 電子郵件訊息，並將訊息內容作為包含寄件者、收件者、主旨、日期、內文文字、HTML 內容、附件元資料及訊息標頭的結構化記錄傳回。\n\nMSG 是 Microsoft Outlook 使用的專有二進位格式，儲存為具有 MAPI 屬性的 OLE2 複合文件。"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.display_name": {
+          "source": "Read MSG Email File",
+          "message": "讀取 MSG 電子郵件檔案"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.desc": {
+          "source": "The location of the MSG email file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "MSG 電子郵件檔案的位置；與 `data` 及 `stream` 互斥；透過呼叫 [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 來解析"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.display_name": {
+          "source": "MSG Input Path",
+          "message": "MSG 輸入路徑"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.short_desc": {
+          "source": "The location of the MSG email file",
+          "message": "MSG 電子郵件檔案的位置"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.short_desc": {
+          "source": "Read a Microsoft Outlook MSG email from a file location",
+          "message": "從檔案位置讀取 Microsoft Outlook MSG 電子郵件"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.desc": {
+          "source": "Reads a Microsoft Outlook MSG email message from inline binary data and returns the message content as a structured record.\n\nUse this action when the MSG data is already available in memory rather than on disk.",
+          "message": "從內嵌二進位資料讀取 Microsoft Outlook MSG 電子郵件訊息，並將訊息內容作為結構化記錄傳回。\n\n當 MSG 資料已存在於記憶體中而非磁碟上時，請使用此動作。"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.display_name": {
+          "source": "Read MSG Email Inline Data",
+          "message": "讀取 MSG 電子郵件內嵌資料"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "MSG email data to process; conflicts with `stream` and `path`",
+          "message": "要處理的 MSG 電子郵件資料；與 `stream` 及 `path` 衝突"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "輸入資料"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "MSG email data to process",
+          "message": "要處理的 MSG 電子郵件資料"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.short_desc": {
+          "source": "Read a Microsoft Outlook MSG email from inline binary data",
+          "message": "從內嵌二進位資料讀取 Microsoft Outlook MSG 電子郵件"
+        },
+        "app.RW1haWw.desc": {
+          "source": "Provides data provider support for reading and writing email messages in multiple formats:\n\n- **EML** (RFC 822 / MIME): Standard email format used by many email clients including Thunderbird, Apple Mail, and others. Each `.eml` file contains a single email message with headers, body text, HTML content, and attachments. Supports both reading and writing.\n\n- **MSG** (Microsoft Outlook): Proprietary binary format used by Microsoft Outlook. Each `.msg` file contains a single email message stored as an OLE2 Compound Document with MAPI properties. Read-only support.\n\n- **MBOX** (Unix Mailbox): Standard mailbox format where multiple email messages are concatenated in a single file, each delimited by a `From ` separator line. Used by Thunderbird, Evolution, and many Unix mail systems. Read-only support.\n\nAll formats produce records with a unified schema including sender, recipients (To, CC, BCC), subject, date, plain text body, HTML body, attachments metadata, Message-ID, and In-Reply-To headers.",
+          "message": "提供資料提供者支援，以多種格式讀取和寫入電子郵件訊息：\n\n- **EML** (RFC 822 / MIME)：許多電子郵件用戶端 (包括 Thunderbird、Apple Mail 等) 使用的標準電子郵件格式。每個 `.eml` 檔案包含單一電子郵件訊息，附帶標頭、內文文字、HTML 內容和附件。支援讀取與寫入。\n\n- **MSG** (Microsoft Outlook)：Microsoft Outlook 使用的專有二進位格式。每個 `.msg` 檔案包含單一電子郵件訊息，儲存為具有 MAPI 屬性的 OLE2 複合文件。僅支援讀取。\n\n- **MBOX** (Unix Mailbox)：標準信箱格式，其中多個電子郵件訊息串接於單一檔案中，每個訊息由 `From ` 分隔線隔開。由 Thunderbird、Evolution 和許多 Unix 郵件系統使用。僅支援讀取。\n\n所有格式都會產生具有統一結構綱要的記錄，包含寄件者、收件者 (To、CC、BCC)、主旨、日期、純文字內文、HTML 內文、附件元資料、Message-ID 和 In-Reply-To 標頭。"
+        },
+        "app.RW1haWw.display_name": {
+          "source": "Email Messages",
+          "message": "電子郵件訊息"
+        },
+        "app.RW1haWw.short_desc": {
+          "source": "Read and write email messages in EML, MSG, and MBOX formats",
+          "message": "以 EML、MSG 和 MBOX 格式讀取和寫入電子郵件訊息"
+        }
+      }
+    }
+  }
+}

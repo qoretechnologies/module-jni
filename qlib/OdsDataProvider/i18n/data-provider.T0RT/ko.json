@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.T0RT.action.cmVhZA.desc": {
+          "source": "Read an ODS spreadsheet from a file location and return the data as records.\n\nUse this action to import data from ODS files stored on disk or accessible via a URL. The file location is resolved using the `FileLocationHandler` module, supporting local file paths and remote URLs.\n\n**Key Options**:\n- `path` (required) — the file location to read from\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "파일 위치에서 ODS 스프레드시트를 읽고 데이터를 레코드로 반환합니다.\n\n이 액션을 사용하여 디스크에 저장되어 있거나 URL을 통해 액세스할 수 있는 ODS 파일에서 데이터를 가져옵니다. 파일 위치는 `FileLocationHandler` 모듈을 사용하여 확인되며, 로컬 파일 경로 및 원격 URL을 지원합니다.\n\n**주요 옵션**:\n- `path` (필수) — 읽을 파일 위치\n- `worksheet` — 이름으로 특정 워크시트 선택 (기본값: 첫 번째 시트)\n- `header_names` — 첫 번째 행을 열 헤더로 사용하려면 `True`로 설정\n- `header_cells` / `data_cells` — 헤더 및 데이터에 대한 셀 범위 지정\n- `headers` — 명시적 열 헤더 이름 제공"
+        },
+        "app.T0RT.action.cmVhZA.display_name": {
+          "source": "Read ODS Spreadsheet File",
+          "message": "ODS 스프레드시트 파일 읽기"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "처리할 데이터의 셀 범위"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "데이터 셀"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "처리할 데이터의 셀 범위"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "`True`인 경우 개체가 첫 번째 헤더 행에서 헤더 이름을 구문 분석합니다. 이 경우 `header_cells`이 명시적으로 설정되지 않은 경우 첫 번째 행으로 간주됩니다."
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "헤더 이름?"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "헤더 행을 출력 필드 이름으로 사용하시겠습니까?"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "헤더의 셀 범위 또는 행 번호"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "헤더 셀"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "헤더의 셀 범위 또는 행 번호"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "반복되는 데이터의 헤더/열 이름 목록입니다. 이 항목이 있는 경우 `header_names`은 `False`이어야 합니다."
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "출력 헤더"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "반복되는 데이터의 헤더/열 이름 목록"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODS data; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "ODS 데이터의 위치. `data` 및 `stream`과 상호 배타적입니다.\n\n[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출로 확인됩니다."
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODS Input Path",
+          "message": "ODS 입력 경로"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODS data",
+          "message": "ODS 데이터의 위치"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "순회할 워크시트의 이름. 제공되지 않는 경우 첫 번째 워크시트가 처리됩니다."
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "워크시트 이름"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "반복할 워크시트의 이름"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "`True`인 경우 (기본값 `False`), 자동으로 감지된 모든 헤더 이름이 소문자로 변환됩니다."
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "헤더를 소문자로 변환"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "모든 헤더 이름을 소문자로 변환"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "시간대 지역"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
+        },
+        "app.T0RT.action.cmVhZA.short_desc": {
+          "source": "Read ODS spreadsheet from a specific file location",
+          "message": "특정 파일 위치에서 ODS 스프레드시트 읽기"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.desc": {
+          "source": "Read an ODS spreadsheet from inline binary data and return the data as records.\n\nUse this action when the ODS data is already available in memory (e.g., received from an API response, uploaded by a user, or read from a database BLOB column) rather than stored as a file.\n\n**Key Options**:\n- `data` (required) — the ODS binary data to parse\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "인라인 바이너리 데이터에서 ODS 스프레드시트를 읽고 데이터를 레코드로 반환합니다.\n\n파일로 저장되지 않고 메모리에 이미 ODS 데이터가 있는 경우(예: API 응답으로 수신, 사용자가 업로드, 또는 데이터베이스 BLOB 열에서 읽음) 이 액션을 사용합니다.\n\n**주요 옵션**:\n- `data` (필수) — 파싱할 ODS 바이너리 데이터\n- `worksheet` — 이름으로 특정 워크시트 선택 (기본값: 첫 번째 시트)\n- `header_names` — 첫 번째 행을 열 헤더로 사용하려면 `True`으로 설정\n- `header_cells` / `data_cells` — 헤더 및 데이터에 대한 셀 범위 지정\n- `headers` — 명시적 열 헤더 이름 제공"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODS Spreadsheet Inline Data",
+          "message": "ODS 스프레드시트 인라인 데이터 읽기"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODS data to process; conflicts with `stream` and `path`",
+          "message": "처리할 ODS 데이터. `stream` 및 `path`과 충돌합니다."
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "입력 데이터"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODS data to process",
+          "message": "처리할 ODS 데이터"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "처리할 데이터의 셀 범위"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "데이터 셀"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "처리할 데이터의 셀 범위"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "`True`인 경우 개체가 첫 번째 헤더 행에서 헤더 이름을 구문 분석합니다. 이 경우 `header_cells`이 명시적으로 설정되지 않은 경우 첫 번째 행으로 간주됩니다."
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "헤더 이름?"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "헤더 행을 출력 필드 이름으로 사용하시겠습니까?"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "헤더의 셀 범위 또는 행 번호"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "헤더 셀"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "헤더의 셀 범위 또는 행 번호"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "반복되는 데이터의 헤더/열 이름 목록입니다. 이 항목이 있는 경우 `header_names`은 `False`이어야 합니다."
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "출력 헤더"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "반복되는 데이터의 헤더/열 이름 목록"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "순회할 워크시트의 이름. 제공되지 않는 경우 첫 번째 워크시트가 처리됩니다."
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "워크시트 이름"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "반복할 워크시트의 이름"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "`True`인 경우 (기본값 `False`), 자동으로 감지된 모든 헤더 이름이 소문자로 변환됩니다."
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "헤더를 소문자로 변환"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "모든 헤더 이름을 소문자로 변환"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "시간대 지역"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODS spreadsheet inline data",
+          "message": "ODS 스프레드시트 인라인 데이터 읽기"
+        },
+        "app.T0RT.action.d3JpdGU.desc": {
+          "source": "Write data to an ODS spreadsheet file at a specified path.\n\nUse this action to generate ODS files from structured data for reporting, data export, or integration with LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Key Options**:\n- `path` (required) — the output file location\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "지정된 경로의 ODS 스프레드시트 파일에 데이터를 씁니다.\n\n이 작업을 사용하여 보고, 데이터 내보내기 또는 LibreOffice Calc 및 기타 OpenDocument 호환 애플리케이션과의 통합을 위해 구조화된 데이터에서 ODS 파일을 생성합니다.\n\n**주요 옵션**:\n- `path` (필수) — 출력 파일 위치\n- `worksheet` — 워크시트 이름(기본값: `Sheet1`)\n- `headers` — 명시적 열 헤더 이름. 제공되지 않으면 첫 번째 레코드에서 헤더가 자동 감지됩니다."
+        },
+        "app.T0RT.action.d3JpdGU.display_name": {
+          "source": "Write ODS Spreadsheet File",
+          "message": "ODS 스프레드시트 파일 쓰기"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "데이터의 헤더/열 이름 목록입니다. 제공되지 않는 경우 첫 번째 레코드에서 헤더가 자동으로 감지됩니다."
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "데이터의 헤더/열 이름 목록"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODS data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "출력 ODS 데이터 파일의 위치입니다. `stream`과 상호 배제됩니다.\n\n출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 호출로 처리됩니다."
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODS Output Path",
+          "message": "ODS 출력 경로"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODS file",
+          "message": "ODS 파일을 쓸 위치"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "생성할 워크시트의 이름입니다. 제공되지 않는 경우 기본값은 `Sheet1`입니다."
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "워크시트 이름"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "생성할 워크시트의 이름"
+        },
+        "app.T0RT.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODS spreadsheet file",
+          "message": "ODS 스프레드시트 파일에 데이터 쓰기"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "메모리에 ODS 스프레드시트 데이터를 생성하고 바이너리 데이터로 반환합니다.\n\n디스크에 쓰지 않고 ODS 파일을 생성해야 하는 경우(예: 스프레드시트를 API 응답으로 반환하거나, 데이터베이스에 저장하거나, 다른 처리 단계로 전달) 이 작업을 사용하세요. 모든 레코드를 생성한 후 공급자에서 `getData()`을 호출하여 결과를 가져옵니다.\n\n**주요 옵션**:\n- `worksheet` — 워크시트 이름(기본값: `Sheet1`)\n- `headers` — 명시적 열 헤더 이름. 제공되지 않으면 첫 번째 레코드에서 헤더가 자동 감지됩니다."
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODS Spreadsheet Data",
+          "message": "ODS 스프레드시트 데이터 생성"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "데이터의 헤더/열 이름 목록입니다. 제공되지 않는 경우 첫 번째 레코드에서 헤더가 자동으로 감지됩니다."
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "데이터의 헤더/열 이름 목록"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "생성할 워크시트의 이름입니다. 제공되지 않는 경우 기본값은 `Sheet1`입니다."
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "워크시트 이름"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "생성할 워크시트의 이름"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODS spreadsheet data and return as binary",
+          "message": "ODS 스프레드시트 데이터를 생성하고 바이너리로 반환"
+        },
+        "app.T0RT.desc": {
+          "source": "Read and write OpenDocument Spreadsheet (ODS) files, the native spreadsheet format for LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Supported Operations**:\n- **Read**: Parse ODS spreadsheets into structured records with automatic header detection, cell range selection, and multi-sheet access\n- **Write**: Create ODS spreadsheet files from structured data with configurable worksheets and column headers\n\n**Key Features**:\n- Multi-sheet support: browse and read individual worksheets\n- Flexible header handling: auto-detect from first row, specify cell ranges, or provide explicit header names\n- Cell range selection: read specific regions of a spreadsheet\n- Data type preservation: handles strings, numbers, booleans, and dates with timezone support\n- In-memory operation: read from or write to binary data without file I/O\n\n**Business Use Cases**:\n- Importing LibreOffice Calc spreadsheets into data pipelines\n- Converting ODS data to other formats in ETL workflows\n- Generating ODS reports from application data\n- Processing spreadsheet uploads in web applications",
+          "message": "LibreOffice Calc 및 기타 OpenDocument 호환 애플리케이션의 기본 스프레드시트 형식인 OpenDocument Spreadsheet (ODS) 파일을 읽고 씁니다.\n\n**지원되는 작업**:\n- **읽기**: 자동 헤더 감지, 셀 범위 선택 및 다중 시트 액세스를 통해 ODS 스프레드시트를 구조화된 레코드로 구문 분석\n- **쓰기**: 구성 가능한 워크시트 및 열 헤더를 사용하여 구조화된 데이터에서 ODS 스프레드시트 파일 생성\n\n**주요 기능**:\n- 다중 시트 지원: 개별 워크시트 탐색 및 읽기\n- 유연한 헤더 처리: 첫 번째 행에서 자동 감지, 셀 범위 지정 또는 명시적 헤더 이름 제공\n- 셀 범위 선택: 스프레드시트의 특정 영역 읽기\n- 데이터 유형 보존: 시간대 지원을 통해 문자열, 숫자, 부울 및 날짜 처리\n- 메모리 내 작업: 파일 I/O 없이 바이너리 데이터 읽기 또는 쓰기\n\n**비즈니스 사용 사례**:\n- LibreOffice Calc 스프레드시트를 데이터 파이프라인으로 가져오기\n- ETL 워크플로에서 ODS 데이터를 다른 형식으로 변환\n- 애플리케이션 데이터에서 ODS 보고서 생성\n- 웹 애플리케이션에서 스프레드시트 업로드 처리"
+        },
+        "app.T0RT.display_name": {
+          "source": "ODS Spreadsheets",
+          "message": "ODS 스프레드시트"
+        },
+        "app.T0RT.short_desc": {
+          "source": "Read and write ODS spreadsheets",
+          "message": "ODS 스프레드시트 읽기 및 쓰기"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,529 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.desc": {
+          "source": "Non-destructively inspect messages currently in a JMS queue without consuming them.\n\nMessages remain in the queue after browsing. An optional selector can be used to filter the browsed messages by their properties",
+          "message": "JMS 큐에 현재 있는 메시지를 소비하지 않고 비파괴적으로 검사합니다.\n\n조회 후에도 메시지는 큐에 남아 있습니다. 선택적 셀렉터를 사용하여 조회된 메시지를 해당 속성별로 필터링할 수 있습니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.display_name": {
+          "source": "Browse JMS Queue",
+          "message": "JMS 큐 조회"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The queue to browse, in format `queue://name`; if not provided, the default destination from the connection options is used",
+          "message": "조회할 큐이며 `queue://name` 형식입니다. 제공되지 않는 경우 연결 옵션의 기본 대상이 사용됩니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "대상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The queue to browse, in format 'queue://name'",
+          "message": "조회할 큐이며 'queue://name' 형식입니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.desc": {
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e.g., `{\"color\": \"red\"}` becomes `color = 'red'`)",
+          "message": "JMS SQL-92 메시지 셀렉터로 적용할 속성 필터의 해시입니다(예: `{\"color\": \"red\"}`은(는) `color = 'red'`(이)가 됨)."
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.display_name": {
+          "source": "Selector",
+          "message": "셀렉터"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.short_desc": {
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e",
+          "message": "JMS SQL-92 메시지 셀렉터로 적용할 속성 필터 해시(e"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.short_desc": {
+          "source": "Non-destructively browse messages in a JMS queue",
+          "message": "JMS 큐의 메시지를 비파괴적으로 조회"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.desc": {
+          "source": "A JMS message is received from a queue or topic; event includes JMS headers and user-defined string properties.\n\nConfigure the destination to listen on (`queue://name` or `topic://name`), an optional message selector for filtering, and a client ID for durable topic subscriptions",
+          "message": "큐 또는 토픽에서 JMS 메시지를 수신합니다. 이벤트에는 JMS 헤더 및 사용자 정의 문자열 속성이 포함됩니다.\n\n수신 대기할 대상(`queue://name` 또는 `topic://name`), 필터링을 위한 선택적 메시지 셀렉터 및 내구성 있는 토픽 구독을 위한 클라이언트 ID를 구성합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.display_name": {
+          "source": "JMS Message Received",
+          "message": "JMS 메시지 수신됨"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.desc": {
+          "source": "The JMS client ID; required for durable topic subscriptions",
+          "message": "JMS 클라이언트 ID이며, 내구성 있는 토픽 구독에 필수입니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.display_name": {
+          "source": "Client ID",
+          "message": "클라이언트 ID"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.short_desc": {
+          "source": "The JMS client ID for durable subscriptions",
+          "message": "내구성 있는 구독을 위한 JMS 클라이언트 ID"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "Default destination in format `queue://name` or `topic://name`; used by the polling provider for event subscription",
+          "message": "`queue://name` 또는 `topic://name` 형식의 기본 대상이며, 이벤트 구독을 위해 폴링 공급자에 의해 사용됩니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "대상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Default destination for messaging operations",
+          "message": "메시징 작업을 위한 기본 대상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.desc": {
+          "source": "A JMS SQL-92 message selector expression for filtering incoming messages (e.g. `priority > 5 AND color = 'red'`)",
+          "message": "수신 메시지를 필터링하기 위한 JMS SQL-92 메시지 셀렉터 표현식(예: `priority > 5 AND color = 'red'`)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.display_name": {
+          "source": "Message Selector",
+          "message": "메시지 셀렉터"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.short_desc": {
+          "source": "JMS message selector for filtering messages",
+          "message": "메시지 필터링을 위한 JMS 메시지 셀렉터"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
+          "source": "A JMS message is received from a queue or topic",
+          "message": "큐 또는 토픽에서 JMS 메시지가 수신됨"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.desc": {
+          "source": "Send a JMS message to a destination and wait for a synchronous reply using a temporary queue.\n\nThe request message's `JMSReplyTo` header is automatically set to a temporary queue. The responder should send the reply to that destination and copy the `JMSMessageID` to the reply's `JMSCorrelationID`",
+          "message": "대상에 JMS 메시지를 전송하고 임시 큐를 사용하여 동기 응답을 기다립니다.\n\n요청 메시지의 `JMSReplyTo` 헤더는 임시 큐로 자동 설정됩니다. 응답자는 해당 대상으로 응답을 보내고 `JMSMessageID`을(를) 응답의 `JMSCorrelationID`(으)로 복사해야 합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.display_name": {
+          "source": "JMS Request-Reply",
+          "message": "JMS 요청-응답"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "The correlation ID to set on the message; used to link related messages",
+          "message": "메시지에 설정할 상관 관계 ID로, 관련 메시지를 연결하는 데 사용됩니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "상관관계 ID"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "The correlation ID to set on the message",
+          "message": "메시지에 설정할 상관 관계 ID"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.desc": {
+          "source": "The message body / payload; the type determines the JMS message type:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- other → `BytesMessage` with JSON serialization",
+          "message": "메시지 본문 / 페이로드입니다. 유형에 따라 JMS 메시지 유형이 결정됩니다:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- 기타 → JSON 직렬화를 사용하는 `BytesMessage`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "메시지 본문"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload",
+          "message": "메시지 본문 / 페이로드"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.desc": {
+          "source": "The message is not persisted and may be lost in transit",
+          "message": "메시지가 영구 저장되지 않으며 전송 중 손실될 수 있습니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.display_name": {
+          "source": "Non-Persistent",
+          "message": "비영구적"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.short_desc": {
+          "source": "Message is not persisted",
+          "message": "메시지가 영구 저장되지 않음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.desc": {
+          "source": "The JMS provider persists the message to stable storage",
+          "message": "JMS 공급자가 메시지를 안정적인 저장소에 영구 저장합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.display_name": {
+          "source": "Persistent",
+          "message": "영구적"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.short_desc": {
+          "source": "Message is persisted to stable storage",
+          "message": "메시지가 안정적인 저장소에 영구 저장됨"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.desc": {
+          "source": "The delivery mode for the message",
+          "message": "메시지의 전달 모드"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.display_name": {
+          "source": "Delivery Mode",
+          "message": "전달 모드"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.short_desc": {
+          "source": "The delivery mode for the message",
+          "message": "메시지의 전달 모드"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
+          "message": "메시지를 보낼 대상이며 `queue://name` 또는 `topic://name` 형식입니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "대상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "message": "메시지를 보낼 대상이며 'queue://name' 또는 'topic://name' 형식입니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.desc": {
+          "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
+          "message": "메시지에 설정할 사용자 정의 문자열 속성입니다.\n\n문자열 키-값 쌍의 해시를 제공하십시오.\n\n**예시**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "헤더"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.short_desc": {
+          "source": "User-defined string properties to set on the message",
+          "message": "메시지에 설정할 사용자 정의 문자열 속성"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "0 - Lowest",
+          "message": "0 - 가장 낮음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjA.short_desc": {
+          "source": "Lowest priority",
+          "message": "가장 낮은 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "1 - Low",
+          "message": "1 - 낮음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjE.short_desc": {
+          "source": "Low priority",
+          "message": "낮은 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "2 - Below Normal",
+          "message": "2 - 보통 미만"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjI.short_desc": {
+          "source": "Below normal priority",
+          "message": "보통 미만 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "3 - Normal Low",
+          "message": "3 - 보통 낮음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjM.short_desc": {
+          "source": "Normal low priority",
+          "message": "보통 낮음 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "4 - Normal (Default)",
+          "message": "4 - 보통 (기본값)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjQ.short_desc": {
+          "source": "Default JMS priority",
+          "message": "기본 JMS 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjU.display_name": {
+          "source": "5 - Above Normal",
+          "message": "5 - 보통 이상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjU.short_desc": {
+          "source": "Above normal (expedited)",
+          "message": "보통 이상 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjY.display_name": {
+          "source": "6 - High",
+          "message": "6 - 높음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjY.short_desc": {
+          "source": "High priority (expedited)",
+          "message": "높은 우선순위 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojc.display_name": {
+          "source": "7 - Very High",
+          "message": "7 - 매우 높음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojc.short_desc": {
+          "source": "Very high priority (expedited)",
+          "message": "매우 높은 우선순위 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojg.display_name": {
+          "source": "8 - Critical",
+          "message": "8 - 치명적"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojg.short_desc": {
+          "source": "Critical priority (expedited)",
+          "message": "치명적 우선순위 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojk.display_name": {
+          "source": "9 - Highest",
+          "message": "9 - 최고"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojk.short_desc": {
+          "source": "Highest priority (expedited)",
+          "message": "최고 우선순위 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.desc": {
+          "source": "The JMS message priority; levels `0`–`4` are normal, levels `5`–`9` are expedited",
+          "message": "JMS 메시지 우선순위입니다. `0`~`4` 레벨은 일반이며, `5`~`9` 레벨은 신속 처리입니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.short_desc": {
+          "source": "The JMS message priority",
+          "message": "JMS 메시지 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.desc": {
+          "source": "The message time-to-live in milliseconds; 0 means the message does not expire",
+          "message": "밀리초 단위의 메시지 유효 기간입니다. 0은 메시지가 만료되지 않음을 의미합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.display_name": {
+          "source": "Time to Live",
+          "message": "유효 기간"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.short_desc": {
+          "source": "The message time-to-live in milliseconds",
+          "message": "밀리초 단위의 메시지 유효 기간"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "애플리케이션에서 정의하는 선택적 메시지 유형 식별자"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.short_desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "애플리케이션에서 정의하는 선택적 메시지 유형 식별자"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.short_desc": {
+          "source": "Send a JMS request and wait for a reply",
+          "message": "JMS 요청을 전송하고 응답을 대기합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.desc": {
+          "source": "Send a JMS message to a queue or topic with optional JMS headers and user-defined string properties",
+          "message": "선택적 JMS 헤더 및 사용자 정의 문자열 속성을 사용하여 큐 또는 토픽으로 JMS 메시지를 전송합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.display_name": {
+          "source": "Send JMS Message",
+          "message": "JMS 메시지 전송"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "The correlation ID to set on the message; used to link related messages",
+          "message": "메시지에 설정할 상관 관계 ID로, 관련 메시지를 연결하는 데 사용됩니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "상관관계 ID"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "The correlation ID to set on the message",
+          "message": "메시지에 설정할 상관 관계 ID"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.desc": {
+          "source": "The message body / payload; the type determines the JMS message type:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- other → `BytesMessage` with JSON serialization",
+          "message": "메시지 본문 / 페이로드입니다. 유형에 따라 JMS 메시지 유형이 결정됩니다:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- 기타 → JSON 직렬화를 사용하는 `BytesMessage`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "메시지 본문"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload",
+          "message": "메시지 본문 / 페이로드"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.desc": {
+          "source": "The message is not persisted and may be lost in transit",
+          "message": "메시지가 영구 저장되지 않으며 전송 중 손실될 수 있습니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.display_name": {
+          "source": "Non-Persistent",
+          "message": "비영구적"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.short_desc": {
+          "source": "Message is not persisted",
+          "message": "메시지가 영구 저장되지 않음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.desc": {
+          "source": "The JMS provider persists the message to stable storage",
+          "message": "JMS 공급자가 메시지를 안정적인 저장소에 영구 저장합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.display_name": {
+          "source": "Persistent",
+          "message": "영구적"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.short_desc": {
+          "source": "Message is persisted to stable storage",
+          "message": "메시지가 안정적인 저장소에 영구 저장됨"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.desc": {
+          "source": "The delivery mode for the message",
+          "message": "메시지의 전달 모드"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.display_name": {
+          "source": "Delivery Mode",
+          "message": "전달 모드"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.short_desc": {
+          "source": "The delivery mode for the message",
+          "message": "메시지의 전달 모드"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
+          "message": "메시지를 보낼 대상이며 `queue://name` 또는 `topic://name` 형식입니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "대상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "message": "메시지를 보낼 대상이며 'queue://name' 또는 'topic://name' 형식입니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.desc": {
+          "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
+          "message": "메시지에 설정할 사용자 정의 문자열 속성입니다.\n\n문자열 키-값 쌍의 해시를 제공하십시오.\n\n**예시**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "헤더"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.short_desc": {
+          "source": "User-defined string properties to set on the message",
+          "message": "메시지에 설정할 사용자 정의 문자열 속성"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "0 - Lowest",
+          "message": "0 - 가장 낮음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjA.short_desc": {
+          "source": "Lowest priority",
+          "message": "가장 낮은 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "1 - Low",
+          "message": "1 - 낮음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjE.short_desc": {
+          "source": "Low priority",
+          "message": "낮은 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "2 - Below Normal",
+          "message": "2 - 보통 미만"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjI.short_desc": {
+          "source": "Below normal priority",
+          "message": "보통 미만 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "3 - Normal Low",
+          "message": "3 - 보통 낮음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjM.short_desc": {
+          "source": "Normal low priority",
+          "message": "보통 낮음 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "4 - Normal (Default)",
+          "message": "4 - 보통 (기본값)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjQ.short_desc": {
+          "source": "Default JMS priority",
+          "message": "기본 JMS 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjU.display_name": {
+          "source": "5 - Above Normal",
+          "message": "5 - 보통 이상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjU.short_desc": {
+          "source": "Above normal (expedited)",
+          "message": "보통 이상 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjY.display_name": {
+          "source": "6 - High",
+          "message": "6 - 높음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjY.short_desc": {
+          "source": "High priority (expedited)",
+          "message": "높은 우선순위 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojc.display_name": {
+          "source": "7 - Very High",
+          "message": "7 - 매우 높음"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojc.short_desc": {
+          "source": "Very high priority (expedited)",
+          "message": "매우 높은 우선순위 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojg.display_name": {
+          "source": "8 - Critical",
+          "message": "8 - 치명적"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojg.short_desc": {
+          "source": "Critical priority (expedited)",
+          "message": "치명적 우선순위 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojk.display_name": {
+          "source": "9 - Highest",
+          "message": "9 - 최고"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojk.short_desc": {
+          "source": "Highest priority (expedited)",
+          "message": "최고 우선순위 (신속 처리)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.desc": {
+          "source": "The JMS message priority; levels `0`–`4` are normal, levels `5`–`9` are expedited",
+          "message": "JMS 메시지 우선순위입니다. `0`~`4` 레벨은 일반이며, `5`~`9` 레벨은 신속 처리입니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.short_desc": {
+          "source": "The JMS message priority",
+          "message": "JMS 메시지 우선순위"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.desc": {
+          "source": "The message time-to-live in milliseconds; 0 means the message does not expire",
+          "message": "밀리초 단위의 메시지 유효 기간입니다. 0은 메시지가 만료되지 않음을 의미합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.display_name": {
+          "source": "Time to Live",
+          "message": "유효 기간"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.short_desc": {
+          "source": "The message time-to-live in milliseconds",
+          "message": "밀리초 단위의 메시지 유효 기간"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "애플리케이션에서 정의하는 선택적 메시지 유형 식별자"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.short_desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "애플리케이션에서 정의하는 선택적 메시지 유형 식별자"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.short_desc": {
+          "source": "Send a JMS message to a queue or topic",
+          "message": "큐 또는 토픽으로 JMS 메시지를 전송합니다."
+        },
+        "app.SmFrYXJ0YUpNUw.desc": {
+          "source": "Jakarta Messaging (JMS) 3.x compliant broker for enterprise messaging with support for queues, topics, durable subscriptions, message selectors, and request-reply patterns",
+          "message": "큐, 토픽, 내구성 있는 구독, 메시지 셀렉터 및 요청-응답 패턴을 지원하는 엔터프라이즈 메시징용 Jakarta Messaging (JMS) 3.x 준수 브로커"
+        },
+        "app.SmFrYXJ0YUpNUw.display_name": {
+          "source": "Jakarta JMS",
+          "message": "Jakarta JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.short_desc": {
+          "source": "Jakarta Messaging (JMS) 3.x compliant broker",
+          "message": "Jakarta Messaging (JMS) 3.x 준수 브로커"
+        }
+      }
+    }
+  }
+}

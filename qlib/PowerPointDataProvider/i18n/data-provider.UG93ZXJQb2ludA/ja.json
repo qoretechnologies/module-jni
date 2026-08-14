@@ -1,0 +1,393 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.UG93ZXJQb2ludA.action.cmVhZA.desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "特定のファイル場所から PowerPoint プレゼンテーションを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.display_name": {
+          "source": "Read PowerPoint Presentation File",
+          "message": "PowerPoint プレゼンテーションファイルを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "タイトル、本文、ノート、レイアウト情報を含むプレゼンテーションスライドを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "スライド"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "プレゼンテーションスライドを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "スライドに埋め込まれた表を構造化された行データとして読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "表を行データとして読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "読み取るコンテンツのタイプ: `slides`（デフォルト）または `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "読み取るコンテンツのタイプ"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "`True` の場合、表の最初の行に列ヘッダーが含まれます。テーブルモードにのみ適用されます"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "ヘッダー行"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "最初の行にヘッダーが含まれる"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "テーブルモードの列ヘッダーの明示的なリスト。`header_row` とは排他的です"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "列ヘッダーの明示的なリスト"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type` が `table` の場合に表を含むスライドのインデックス。0 ベース、デフォルトは 0 です"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "スライドインデックス"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "表モードのスライドのインデックス (0 起算)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the PowerPoint data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "PowerPoint データの場所。`data` および `stream` とは排他的です。[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "PowerPoint Input Path",
+          "message": "PowerPoint 入力パス"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the PowerPoint file",
+          "message": "PowerPoint ファイルの場所"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type` が `table` の場合に指定されたスライドで読み取る表のインデックス。0 ベース、デフォルトは 0 です"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表インデックス"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "読み取る表のインデックス (0 起算)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.short_desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "特定のファイル場所から PowerPoint プレゼンテーションを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "PowerPoint プレゼンテーションのインラインデータを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read PowerPoint Presentation Inline Data",
+          "message": "PowerPoint プレゼンテーション インライン データを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "タイトル、本文、ノート、レイアウト情報を含むプレゼンテーションスライドを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "スライド"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "プレゼンテーションスライドを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "スライドに埋め込まれた表を構造化された行データとして読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "表を行データとして読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "読み取るコンテンツのタイプ: `slides`（デフォルト）または `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "読み取るコンテンツのタイプ"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "PowerPoint presentation data to process; conflicts with `stream` and `path`",
+          "message": "処理する PowerPoint プレゼンテーションデータ。`stream` および `path` と競合します"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "入力データ"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "PowerPoint presentation data to process",
+          "message": "処理する PowerPoint プレゼンテーションデータ"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "`True` の場合、表の最初の行に列ヘッダーが含まれます。テーブルモードにのみ適用されます"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "ヘッダー行"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "最初の行にヘッダーが含まれる"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "テーブルモードの列ヘッダーの明示的なリスト。`header_row` とは排他的です"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "列ヘッダーの明示的なリスト"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type` が `table` の場合に表を含むスライドのインデックス。0 ベース、デフォルトは 0 です"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "スライドインデックス"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "表モードのスライドのインデックス (0 起算)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type` が `table` の場合に指定されたスライドで読み取る表のインデックス。0 ベース、デフォルトは 0 です"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表インデックス"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "読み取る表のインデックス (0 起算)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "PowerPoint プレゼンテーションのインラインデータを読み取る"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.desc": {
+          "source": "Write data to a PowerPoint presentation file at a specified path",
+          "message": "指定されたパスの PowerPoint プレゼンテーションファイルにデータを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.display_name": {
+          "source": "Write PowerPoint Presentation File",
+          "message": "PowerPoint プレゼンテーションファイルを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "タイトル、本文、オプションのノートを含むプレゼンテーションスライドを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "スライド"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "スライドを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "スライドに構造化された表形式データを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "表を書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "書き込むコンテンツのタイプ: `slides`（デフォルト）または `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "書き込むコンテンツのタイプ"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "テーブルモードの列ヘッダーのリスト。指定しない場合、最初のレコードからヘッダーが自動検出されます"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表モードの列ヘッダーのリスト"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output PowerPoint data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "出力 PowerPoint データファイルの場所。`stream` とは排他的です。出力場所は [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) の呼び出しによって処理されます"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "PowerPoint Output Path",
+          "message": "PowerPoint 出力パス"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the PowerPoint file",
+          "message": "PowerPoint ファイルを書き込む場所"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "オプションのタイトル。スライドモードでは先頭にタイトルのみのスライドを追加し、テーブルモードでは表スライドにタイトルを設定します"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "プレゼンテーションタイトル"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "最初のスライドまたは表スライドのタイトル"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a PowerPoint presentation file",
+          "message": "PowerPoint プレゼンテーションファイルにデータを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create PowerPoint presentation data in memory and return it as binary data; useful for generating PowerPoint files without writing to disk",
+          "message": "メモリ内に PowerPoint プレゼンテーションデータを作成し、バイナリデータとして返します。ディスクに書き込まずに PowerPoint ファイルを生成するのに便利です"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create PowerPoint Presentation Data",
+          "message": "PowerPoint プレゼンテーションデータを作成"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "タイトル、本文、オプションのノートを含むプレゼンテーションスライドを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "スライド"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "スライドを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "スライドに構造化された表形式データを書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "表を書き込む"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "書き込むコンテンツのタイプ: `slides`（デフォルト）または `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "書き込むコンテンツのタイプ"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "テーブルモードの列ヘッダーのリスト。指定しない場合、最初のレコードからヘッダーが自動検出されます"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表モードの列ヘッダーのリスト"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "オプションのタイトル。スライドモードでは先頭にタイトルのみのスライドを追加し、テーブルモードでは表スライドにタイトルを設定します"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "プレゼンテーションタイトル"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "最初のスライドまたは表スライドのタイトル"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create PowerPoint presentation data and return as binary",
+          "message": "PowerPoint プレゼンテーションデータを作成し、バイナリとして返す"
+        },
+        "app.UG93ZXJQb2ludA.desc": {
+          "source": "Read and write Microsoft PowerPoint presentations (.pptx format)",
+          "message": "Microsoft PowerPoint プレゼンテーション（.pptx 形式）の読み取りと書き込み"
+        },
+        "app.UG93ZXJQb2ludA.display_name": {
+          "source": "PowerPoint Presentations",
+          "message": "PowerPoint プレゼンテーション"
+        },
+        "app.UG93ZXJQb2ludA.short_desc": {
+          "source": "Read and write Microsoft PowerPoint presentations",
+          "message": "Microsoft PowerPoint プレゼンテーションを読み書きする"
+        }
+      }
+    }
+  }
+}

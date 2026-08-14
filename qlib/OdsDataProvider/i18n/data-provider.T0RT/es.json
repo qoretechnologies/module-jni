@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.T0RT.action.cmVhZA.desc": {
+          "source": "Read an ODS spreadsheet from a file location and return the data as records.\n\nUse this action to import data from ODS files stored on disk or accessible via a URL. The file location is resolved using the `FileLocationHandler` module, supporting local file paths and remote URLs.\n\n**Key Options**:\n- `path` (required) — the file location to read from\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "Lee una hoja de cálculo ODS desde una ubicación de archivo y devuelve los datos como registros.\n\nUtilice esta acción para importar datos desde archivos ODS almacenados en disco o accesibles a través de una URL. La ubicación del archivo se resuelve mediante el módulo `FileLocationHandler`, que admite rutas de archivos locales y URL remotas.\n\n**Opciones principales**:\n- `path` (requerido) — la ubicación del archivo desde la que se leerá\n- `worksheet` — selecciona una hoja de trabajo específica por nombre (por defecto la primera hoja)\n- `header_names` — establece en `True` para usar la primera fila como encabezados de columna\n- `header_cells` / `data_cells` — especifica rangos de celdas para encabezados y datos\n- `headers` — proporciona nombres explícitos de encabezados de columna"
+        },
+        "app.T0RT.action.cmVhZA.display_name": {
+          "source": "Read ODS Spreadsheet File",
+          "message": "Leer archivo de hoja de cálculo ODS"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "El rango de celdas para los datos a procesar"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Celdas de datos"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "El rango de celdas para los datos a procesar"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Si `True`, el objeto analizará los nombres de encabezado de la primera fila de encabezado; en este caso, si `header_cells` no se establece explícitamente, se asumirá que es la primera fila"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "¿Nombres de encabezado?"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "¿Se deben usar las filas de encabezado como nombres de campos de salida?"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "El rango de celdas para los encabezados o un número de fila"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Celdas de encabezado"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "El rango de celdas para los encabezados o un número de fila"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Lista de nombres de encabezado / columna para los datos iterados; si está presente, `header_names` debe ser `False`"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Encabezados de salida"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Lista de nombres de encabezado / columna para los datos iterados"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODS data; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "La ubicación de los datos ODS; mutuamente excluyente con `data` y `stream`.\n\nSe resuelve con una llamada a [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODS Input Path",
+          "message": "Ruta de entrada ODS"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODS data",
+          "message": "La ubicación de los datos ODS"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "El nombre de la hoja de trabajo a iterar; si no se proporciona, se procesa la primera hoja de trabajo"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Nombre de hoja de trabajo"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "El nombre de la hoja de trabajo a iterar"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Si `True` (por defecto `False`), todos los nombres de encabezado detectados automáticamente se convertirán a minúsculas"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Convertir encabezados a minúsculas"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Convertir todos los nombres de encabezado a minúsculas"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "La región de zona horaria que se utilizará al analizar fechas"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Región de zona horaria"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "La región de zona horaria que se utilizará al analizar fechas"
+        },
+        "app.T0RT.action.cmVhZA.short_desc": {
+          "source": "Read ODS spreadsheet from a specific file location",
+          "message": "Leer hoja de cálculo ODS desde una ubicación de archivo específica"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.desc": {
+          "source": "Read an ODS spreadsheet from inline binary data and return the data as records.\n\nUse this action when the ODS data is already available in memory (e.g., received from an API response, uploaded by a user, or read from a database BLOB column) rather than stored as a file.\n\n**Key Options**:\n- `data` (required) — the ODS binary data to parse\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "Lee una hoja de cálculo ODS desde datos binarios en línea y devuelve los datos como registros.\n\nUtilice esta acción cuando los datos ODS ya estén disponibles en memoria (por ejemplo, recibidos de una respuesta de API, cargados por un usuario o leídos desde una columna BLOB de base de datos) en lugar de estar almacenados como archivo.\n\n**Opciones principales**:\n- `data` (requerido) — los datos binarios ODS a analizar\n- `worksheet` — selecciona una hoja de trabajo específica por nombre (por defecto la primera hoja)\n- `header_names` — establece en `True` para usar la primera fila como encabezados de columna\n- `header_cells` / `data_cells` — especifica rangos de celdas para encabezados y datos\n- `headers` — proporciona nombres explícitos de encabezados de columna"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODS Spreadsheet Inline Data",
+          "message": "Leer datos en línea de hoja de cálculo ODS"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODS data to process; conflicts with `stream` and `path`",
+          "message": "Datos ODS a procesar; entra en conflicto con `stream` y `path`"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Datos de entrada"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODS data to process",
+          "message": "Datos ODS a procesar"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "El rango de celdas para los datos a procesar"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Celdas de datos"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "El rango de celdas para los datos a procesar"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Si `True`, el objeto analizará los nombres de encabezado de la primera fila de encabezado; en este caso, si `header_cells` no se establece explícitamente, se asumirá que es la primera fila"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "¿Nombres de encabezado?"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "¿Se deben usar las filas de encabezado como nombres de campos de salida?"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "El rango de celdas para los encabezados o un número de fila"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Celdas de encabezado"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "El rango de celdas para los encabezados o un número de fila"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Lista de nombres de encabezado / columna para los datos iterados; si está presente, `header_names` debe ser `False`"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Encabezados de salida"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Lista de nombres de encabezado / columna para los datos iterados"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "El nombre de la hoja de trabajo a iterar; si no se proporciona, se procesa la primera hoja de trabajo"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Nombre de hoja de trabajo"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "El nombre de la hoja de trabajo a iterar"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Si `True` (por defecto `False`), todos los nombres de encabezado detectados automáticamente se convertirán a minúsculas"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Convertir encabezados a minúsculas"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Convertir todos los nombres de encabezado a minúsculas"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "La región de zona horaria que se utilizará al analizar fechas"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Región de zona horaria"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "La región de zona horaria que se utilizará al analizar fechas"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODS spreadsheet inline data",
+          "message": "Leer datos integrados de la hoja de cálculo ODS"
+        },
+        "app.T0RT.action.d3JpdGU.desc": {
+          "source": "Write data to an ODS spreadsheet file at a specified path.\n\nUse this action to generate ODS files from structured data for reporting, data export, or integration with LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Key Options**:\n- `path` (required) — the output file location\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "Escribir datos en un archivo de hoja de cálculo ODS en una ruta especificada.\n\nUtilice esta acción para generar archivos ODS a partir de datos estructurados para informes, exportación de datos o integración con LibreOffice Calc y otras aplicaciones compatibles con OpenDocument.\n\n**Opciones principales**:\n- `path` (obligatorio) — la ubicación del archivo de salida\n- `worksheet` — el nombre de la hoja de trabajo (por defecto `Sheet1`)\n- `headers` — nombres explícitos de encabezados de columna; si no se proporcionan, los encabezados se detectan automáticamente a partir del primer registro"
+        },
+        "app.T0RT.action.d3JpdGU.display_name": {
+          "source": "Write ODS Spreadsheet File",
+          "message": "Escribir archivo de hoja de cálculo ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Lista de nombres de encabezado / columna para los datos; si no se proporciona, los encabezados se detectarán automáticamente a partir del primer registro"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Encabezados de columna"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Lista de nombres de encabezado / columna para los datos"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODS data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "La ubicación del archivo de datos ODS de salida; mutuamente excluyente con `stream`.\n\nLa ubicación de salida se gestiona mediante una llamada a [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODS Output Path",
+          "message": "Ruta de salida ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODS file",
+          "message": "La ubicación donde se escribirá el archivo ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "El nombre de la hoja de trabajo que se va a crear; si no se proporciona, por defecto es `Sheet1`"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Nombre de hoja de trabajo"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "El nombre de la hoja de trabajo a crear"
+        },
+        "app.T0RT.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODS spreadsheet file",
+          "message": "Escribir datos en un archivo de hoja de cálculo ODS"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "Crear datos de hoja de cálculo ODS en memoria y devolverlos como datos binarios.\n\nUtilice esta acción cuando necesite generar un archivo ODS sin escribir en el disco; por ejemplo, para devolver la hoja de cálculo como respuesta de API, almacenarla en una base de datos o pasarla a otro paso de procesamiento. Recupere el resultado llamando a `getData()` en el proveedor después de crear todos los registros.\n\n**Opciones principales**:\n- `worksheet` — el nombre de la hoja de trabajo (por defecto `Sheet1`)\n- `headers` — nombres explícitos de encabezados de columna; si no se proporcionan, los encabezados se detectan automáticamente a partir del primer registro"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODS Spreadsheet Data",
+          "message": "Crear datos de hoja de cálculo ODS"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Lista de nombres de encabezado / columna para los datos; si no se proporciona, los encabezados se detectarán automáticamente a partir del primer registro"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Encabezados de columna"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Lista de nombres de encabezado / columna para los datos"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "El nombre de la hoja de trabajo que se va a crear; si no se proporciona, por defecto es `Sheet1`"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Nombre de hoja de trabajo"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "El nombre de la hoja de trabajo a crear"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODS spreadsheet data and return as binary",
+          "message": "Crear datos de hoja de cálculo ODS y devolverlos como binario"
+        },
+        "app.T0RT.desc": {
+          "source": "Read and write OpenDocument Spreadsheet (ODS) files, the native spreadsheet format for LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Supported Operations**:\n- **Read**: Parse ODS spreadsheets into structured records with automatic header detection, cell range selection, and multi-sheet access\n- **Write**: Create ODS spreadsheet files from structured data with configurable worksheets and column headers\n\n**Key Features**:\n- Multi-sheet support: browse and read individual worksheets\n- Flexible header handling: auto-detect from first row, specify cell ranges, or provide explicit header names\n- Cell range selection: read specific regions of a spreadsheet\n- Data type preservation: handles strings, numbers, booleans, and dates with timezone support\n- In-memory operation: read from or write to binary data without file I/O\n\n**Business Use Cases**:\n- Importing LibreOffice Calc spreadsheets into data pipelines\n- Converting ODS data to other formats in ETL workflows\n- Generating ODS reports from application data\n- Processing spreadsheet uploads in web applications",
+          "message": "Lea y escriba archivos OpenDocument Spreadsheet (ODS), el formato nativo de hoja de cálculo para LibreOffice Calc y otras aplicaciones compatibles con OpenDocument.\n\n**Operaciones admitidas**:\n- **Lectura**: analice hojas de cálculo ODS en registros estructurados con detección automática de encabezados, selección de rangos de celdas y acceso a múltiples hojas\n- **Escritura**: cree archivos de hojas de cálculo ODS a partir de datos estructurados con hojas de trabajo y encabezados de columna configurables\n\n**Características principales**:\n- Soporte para múltiples hojas: explore y lea hojas de trabajo individuales\n- Manejo flexible de encabezados: detección automática desde la primera fila, especificación de rangos de celdas o suministro de nombres de encabezado explícitos\n- Selección de rangos de celdas: lea regiones específicas de una hoja de cálculo\n- Preservación de tipos de datos: maneja cadenas, números, booleanos y fechas con soporte para zona horaria\n- Operación en memoria: lea o escriba en datos binarios sin E/S de archivos\n\n**Casos de uso empresarial**:\n- Importación de hojas de cálculo de LibreOffice Calc en canalizaciones de datos\n- Conversión de datos ODS a otros formatos en flujos de trabajo ETL\n- Generación de informes ODS a partir de datos de aplicaciones\n- Procesamiento de cargas de hojas de cálculo en aplicaciones web"
+        },
+        "app.T0RT.display_name": {
+          "source": "ODS Spreadsheets",
+          "message": "Hojas de cálculo ODS"
+        },
+        "app.T0RT.short_desc": {
+          "source": "Read and write ODS spreadsheets",
+          "message": "Leer y escribir hojas de cálculo ODS"
+        }
+      }
+    }
+  }
+}

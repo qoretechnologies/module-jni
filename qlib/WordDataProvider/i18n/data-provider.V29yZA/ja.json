@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.V29yZA.action.cmVhZA.desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "特定ファイル位置にある Word ドキュメントを読み込み"
+        },
+        "app.V29yZA.action.cmVhZA.display_name": {
+          "source": "Read Word Document File",
+          "message": "Word ドキュメントファイルを読み込み"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "テキスト コンテンツとスタイル情報 (見出し、標準テキスト) を含むドキュメントの段落を読み取る"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "ドキュメントの段落を読み込み"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "列ヘッダー付きの構造化行データとして表を読み取る"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "表を行データとして読み取る"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "読み込むコンテンツのタイプ: `paragraphs` (デフォルト) または `table`"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "読み取るコンテンツのタイプ"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "`True` の場合、表の最初の行に列ヘッダーが含まれます。テーブルモードにのみ適用されます"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "ヘッダー行"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "最初の行にヘッダーが含まれる"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "テーブルモードの列ヘッダーの明示的なリスト。`header_row` とは排他的です"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "列ヘッダーの明示的なリスト"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Word document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Word ドキュメントデータの場所。`data` および `stream` と相互排他的です。[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Word Input Path",
+          "message": "Word 入力パス"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Word document",
+          "message": "Word ドキュメントの場所"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type` が `table` の場合に読み込むテーブルのインデックス。0 ベース、デフォルトは 0"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表インデックス"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "読み取る表のインデックス (0 起算)"
+        },
+        "app.V29yZA.action.cmVhZA.short_desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "特定ファイル位置にある Word ドキュメントを読み込み"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Word document inline data",
+          "message": "Word ドキュメントのインラインデータを読み込み"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Word Document Inline Data",
+          "message": "Word ドキュメントのインラインデータを読み込み"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "テキスト コンテンツとスタイル情報 (見出し、標準テキスト) を含むドキュメントの段落を読み取る"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "ドキュメントの段落を読み込み"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "列ヘッダー付きの構造化行データとして表を読み取る"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "表を行データとして読み取る"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "読み込むコンテンツのタイプ: `paragraphs` (デフォルト) または `table`"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "読み取るコンテンツのタイプ"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Word document data to process; conflicts with `stream` and `path`",
+          "message": "処理する Word ドキュメントデータ。`stream` および `path` と競合します"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "入力データ"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Word document data to process",
+          "message": "処理する Word ドキュメントデータ"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "`True` の場合、表の最初の行に列ヘッダーが含まれます。テーブルモードにのみ適用されます"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "ヘッダー行"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "最初の行にヘッダーが含まれる"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "テーブルモードの列ヘッダーの明示的なリスト。`header_row` とは排他的です"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "列ヘッダーの明示的なリスト"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "`content_type` が `table` の場合に読み込むテーブルのインデックス。0 ベース、デフォルトは 0"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表インデックス"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "読み取る表のインデックス (0 起算)"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Word document inline data",
+          "message": "Word ドキュメントのインラインデータを読み込み"
+        },
+        "app.V29yZA.action.d3JpdGU.desc": {
+          "source": "Write data to a Word document file at a specified path",
+          "message": "指定されたパスにある Word ドキュメントファイルにデータを書き込み"
+        },
+        "app.V29yZA.action.d3JpdGU.display_name": {
+          "source": "Write Word Document File",
+          "message": "Word ドキュメントファイルの書き込み"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "テキストおよび見出しスタイルが適用された段落を書き込む"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "段落の書き込み"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "列ヘッダー付き構造化表形式データの書き込み"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "表を書き込む"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "書き込むコンテンツのタイプ: `paragraphs` (デフォルト) または `table`"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "書き込むコンテンツのタイプ"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "テーブルモードの列ヘッダーのリスト。指定しない場合、最初のレコードからヘッダーが自動検出されます"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表モードの列ヘッダーのリスト"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Word document data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "出力 Word ドキュメントデータファイルの場所。`stream` とは相互排他的です。出力場所は [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) の呼び出しによって処理されます"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Word Output Path",
+          "message": "Word 出力パス"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Word document",
+          "message": "Word ドキュメントを書き込む場所"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "ドキュメントの先頭に見出しとして追加するオプションのタイトル"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "ドキュメント タイトル"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "先頭に追加するタイトル"
+        },
+        "app.V29yZA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a Word document file",
+          "message": "Word ドキュメントファイルへのデータの書き込み"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Word document data in memory and return it as binary data; useful for generating Word files without writing to disk",
+          "message": "メモリ上に Word ドキュメントデータを生成してバイナリデータとして返します。ディスクに書き込まずに Word ファイルを生成する場合に便利です"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Word Document Data",
+          "message": "Word ドキュメントデータの作成"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "テキストおよび見出しスタイルが適用された段落を書き込む"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "段落の書き込み"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "列ヘッダー付き構造化表形式データの書き込み"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "表を書き込む"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "書き込むコンテンツのタイプ: `paragraphs` (デフォルト) または `table`"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "書き込むコンテンツのタイプ"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "テーブルモードの列ヘッダーのリスト。指定しない場合、最初のレコードからヘッダーが自動検出されます"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表モードの列ヘッダーのリスト"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "ドキュメントの先頭に見出しとして追加するオプションのタイトル"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "ドキュメント タイトル"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "先頭に追加するタイトル"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Word document data and return as binary",
+          "message": "Word ドキュメントデータを生成し、バイナリとして返します"
+        },
+        "app.V29yZA.desc": {
+          "source": "Read and write Microsoft Word documents (.docx format)",
+          "message": "Microsoft Word ドキュメント (.docx 形式) の読み取りと書き込み"
+        },
+        "app.V29yZA.display_name": {
+          "source": "Word Documents",
+          "message": "Word ドキュメント"
+        },
+        "app.V29yZA.short_desc": {
+          "source": "Read and write Microsoft Word documents",
+          "message": "Microsoft Word ドキュメントの読み取りと書き込み"
+        }
+      }
+    }
+  }
+}

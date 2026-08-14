@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RW1haWw.action.ZW1sLXJlYWQ.desc": {
+          "source": "Reads an EML (RFC 822 / MIME) email message from a file path and returns the message content as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nEML is the standard email format supported by most email clients. Each file contains a single email message.",
+          "message": "Číta e-mailovú správu EML (RFC 822 / MIME) zo cesty k súboru a vracia obsah správy ako štruktúrovaný záznam s odosielateľom, príjemcami, predmetom, dátumom, textom tela, obsahom HTML, metadátami príloh a hlavičkami správy.\n\nEML je štandardný e-mailový formát podporovaný väčšinou e-mailových klientov. Každý súbor obsahuje jednu e-mailovú správu."
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.display_name": {
+          "source": "Read EML Email File",
+          "message": "Prečítať e-mailový súbor EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.desc": {
+          "source": "The location of the EML email file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umiestnenie e-mailového súboru EML; vzájomne sa vylučuje s `data` a `stream`; vyriešené volaním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.display_name": {
+          "source": "EML Input Path",
+          "message": "Vstupná cesta EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.short_desc": {
+          "source": "The location of the EML email file",
+          "message": "Umiestnenie e-mailového súboru EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.short_desc": {
+          "source": "Read an EML email message from a file location",
+          "message": "Prečítať e-mailovú správu EML z umiestnenia súboru"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.desc": {
+          "source": "Reads an EML (RFC 822 / MIME) email message from inline binary data and returns the message content as a structured record.\n\nUse this action when the EML data is already available in memory rather than on disk.",
+          "message": "Číta e-mailovú správu EML (RFC 822 / MIME) z priamych binárnych dát a vracia obsah správy ako štruktúrovaný záznam.\n\nTúto akciu použite, keď sú dáta EML už dostupné v pamäti namiesto na disku."
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.display_name": {
+          "source": "Read EML Email Inline Data",
+          "message": "Prečítať priame dáta e-mailu EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "EML email data to process; conflicts with `stream` and `path`",
+          "message": "E-mailové dáta EML na spracovanie; v konflikte s `stream` a `path`"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupné dáta"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "EML email data to process",
+          "message": "E-mailové dáta EML na spracovanie"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.short_desc": {
+          "source": "Read an EML email message from inline binary data",
+          "message": "Prečítať e-mailovú správu EML z priamych binárnych dát"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.desc": {
+          "source": "Writes an EML (RFC 822 / MIME) email message to a file path.\n\nEach record written represents a single email message with the following fields:\n- `from`: the sender's email address\n- `to`: list of To recipients\n- `cc`: list of CC recipients (optional)\n- `bcc`: list of BCC recipients (optional)\n- `subject`: the email subject line\n- `date`: the sent date (optional, defaults to current time)\n- `body_text`: plain text body content (optional)\n- `body_html`: HTML body content (optional)\n- `attachments`: list of attachment hashes with `name`, `content_type`, and `data` (optional)\n- `message_id`: the Message-ID header (optional)\n- `in_reply_to`: the In-Reply-To header (optional)\n- `reply_to`: the Reply-To header (optional)\n- `references`: the References header (optional)",
+          "message": "Zapíše e-mailovú správu EML (RFC 822 / MIME) do cesty k súboru.\n\nKaždý zapísaný záznam predstavuje jednu e-mailovú správu s nasledujúcimi poľami:\n- `from`: e-mailová adresa odosielateľa\n- `to`: zoznam príjemcov Pre (To)\n- `cc`: zoznam príjemcov v kópii (CC) (voliteľné)\n- `bcc`: zoznam príjemcov v skrytej kópii (BCC) (voliteľné)\n- `subject`: riadok predmetu e-mailu\n- `date`: dátum odoslania (voliteľné, predvolene aktuálny čas)\n- `body_text`: prostý text tela správy (voliteľné)\n- `body_html`: HTML obsah tela správy (voliteľné)\n- `attachments`: zoznam hashov príloh s `name`, `content_type` a `data` (voliteľné)\n- `message_id`: hlavička Message-ID (voliteľné)\n- `in_reply_to`: hlavička In-Reply-To (voliteľné)\n- `reply_to`: hlavička Reply-To (voliteľné)\n- `references`: hlavička References (voliteľné)"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.display_name": {
+          "source": "Write EML Email File",
+          "message": "Zapísať e-mailový súbor EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.desc": {
+          "source": "The location for the output EML data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Umiestnenie výstupného dátového súboru EML; vzájomne sa vylučuje s `stream`; výstupné umiestnenie sa spracúva volaním [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.display_name": {
+          "source": "EML Output Path",
+          "message": "Výstupná cesta EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.short_desc": {
+          "source": "The location to write the EML file",
+          "message": "Umiestnenie na zápis súboru EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.short_desc": {
+          "source": "Write an EML email message to a file location",
+          "message": "Zapísať e-mailovú správu EML do umiestnenia súboru"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.desc": {
+          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data.",
+          "message": "Vytvorí e-mailové dáta EML (RFC 822 / MIME) v pamäti a vráti ich ako binárne dáta; užitočné na generovanie súborov EML bez zápisu na disk.\n\nKaždý zapísaný záznam predstavuje jednu e-mailovú správu so štandardnými e-mailovými poľami vrátane `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to` a `references`.\n\nPo zápise všetkých správ použite `getData()` na získanie binárnych dát EML."
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.display_name": {
+          "source": "Create EML Email Data",
+          "message": "Vytvoriť e-mailové dáta EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.short_desc": {
+          "source": "Create EML email data and return as binary",
+          "message": "Vytvoriť e-mailové dáta EML a vrátiť ich ako binárne dáta"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.desc": {
+          "source": "Reads email messages from an MBOX (Unix Mailbox) file and returns each message as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nMBOX files contain multiple email messages concatenated in a single file, each delimited by a `From ` separator line. This format is used by Thunderbird, Evolution, and many Unix mail systems.\n\nThe `max_messages` option can be used to limit the number of messages read from the file.",
+          "message": "Číta e-mailové správy zo súboru MBOX (Unix Mailbox) a vracia každú správu ako štruktúrovaný záznam s odosielateľom, príjemcami, predmetom, dátumom, textom tela, obsahom HTML, metadátami príloh a hlavičkami správy.\n\nSúbory MBOX obsahujú viaceré e-mailové správy spojené v jednom súbore, pričom každá je oddelená deliacim riadkom `From `. Tento formát používajú klienti Thunderbird, Evolution a mnohé poštové systémy Unix.\n\nMožnosť `max_messages` možno použiť na obmedzenie počtu prečítaných správ zo súboru."
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.display_name": {
+          "source": "Read MBOX Mailbox File",
+          "message": "Prečítať poštový súbor MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.desc": {
+          "source": "Maximum number of messages to read from the MBOX file; 0 (the default) means read all messages; use this to limit processing of very large MBOX files",
+          "message": "Maximálny počet správ na prečítanie zo súboru MBOX; 0 (predvolené) znamená prečítať všetky správy; použite to na obmedzenie spracovania veľmi veľkých súborov MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.display_name": {
+          "source": "Maximum Messages",
+          "message": "Maximálny počet správ"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.short_desc": {
+          "source": "Maximum number of messages to read from the MBOX file",
+          "message": "Maximálny počet správ na prečítanie zo súboru MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.desc": {
+          "source": "The location of the MBOX mailbox file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umiestnenie poštového súboru MBOX; vzájomne sa vylučuje s `data` a `stream`; vyriešené volaním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.display_name": {
+          "source": "MBOX Input Path",
+          "message": "Vstupná cesta MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.short_desc": {
+          "source": "The location of the MBOX mailbox file",
+          "message": "Umiestnenie poštového súboru MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.short_desc": {
+          "source": "Read email messages from an MBOX mailbox file",
+          "message": "Čítať e-mailové správy zo súboru poštovej schránky MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.desc": {
+          "source": "Reads email messages from inline MBOX (Unix Mailbox) binary data and returns each message as a structured record.\n\nUse this action when the MBOX data is already available in memory rather than on disk.\n\nThe `max_messages` option can be used to limit the number of messages read from the data.",
+          "message": "Číta e-mailové správy z priamych (inline) binárnych dát MBOX (Unix Mailbox) a vracia každú správu ako štruktúrovaný záznam.\n\nTúto akciu použite, keď sú dáta MBOX už dostupné v pamäti a nie na disku.\n\nMožnosť `max_messages` možno použiť na obmedzenie počtu správ prečítaných z dát."
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.display_name": {
+          "source": "Read MBOX Mailbox Inline Data",
+          "message": "Čítať priame dáta poštovej schránky MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.desc": {
+          "source": "MBOX mailbox data to process; conflicts with `stream` and `path`",
+          "message": "Dáta poštovej schránky MBOX na spracovanie; je v konflikte s `stream` a `path`"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupné dáta"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.short_desc": {
+          "source": "MBOX mailbox data to process",
+          "message": "Dáta poštovej schránky MBOX na spracovanie"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.desc": {
+          "source": "Maximum number of messages to read from the MBOX file; 0 (the default) means read all messages; use this to limit processing of very large MBOX files",
+          "message": "Maximálny počet správ na prečítanie zo súboru MBOX; 0 (predvolené) znamená prečítať všetky správy; použite to na obmedzenie spracovania veľmi veľkých súborov MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.display_name": {
+          "source": "Maximum Messages",
+          "message": "Maximálny počet správ"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.short_desc": {
+          "source": "Maximum number of messages to read from the MBOX file",
+          "message": "Maximálny počet správ na prečítanie zo súboru MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.short_desc": {
+          "source": "Read email messages from inline MBOX data",
+          "message": "Čítať e-mailové správy z priamych dát MBOX"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.desc": {
+          "source": "Reads a Microsoft Outlook MSG email message from a file path and returns the message content as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nMSG is the proprietary binary format used by Microsoft Outlook, stored as an OLE2 Compound Document with MAPI properties.",
+          "message": "Číta e-mailovú správu Microsoft Outlook MSG zo cesty k súboru a vracia obsah správy ako štruktúrovaný záznam s odosielateľom, príjemcami, predmetom, dátumom, textom tela, HTML obsahom, metadátami príloh a hlavičkami správy.\n\nMSG je proprietárny binárny formát používaný aplikáciou Microsoft Outlook, uložený ako OLE2 Compound Document s vlastnosťami MAPI."
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.display_name": {
+          "source": "Read MSG Email File",
+          "message": "Čítať súbor e-mailu MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.desc": {
+          "source": "The location of the MSG email file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umiestnenie súboru e-mailu MSG; navzájom sa vylučuje s `data` a `stream`; rieši sa volaním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.display_name": {
+          "source": "MSG Input Path",
+          "message": "Vstupná cesta MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.short_desc": {
+          "source": "The location of the MSG email file",
+          "message": "Umiestnenie súboru e-mailu MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.short_desc": {
+          "source": "Read a Microsoft Outlook MSG email from a file location",
+          "message": "Čítať e-mail Microsoft Outlook MSG z umiestnenia súboru"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.desc": {
+          "source": "Reads a Microsoft Outlook MSG email message from inline binary data and returns the message content as a structured record.\n\nUse this action when the MSG data is already available in memory rather than on disk.",
+          "message": "Číta e-mailovú správu Microsoft Outlook MSG z priamych binárnych dát a vracia obsah správy ako štruktúrovaný záznam.\n\nTúto akciu použite, keď sú dáta MSG už dostupné v pamäti a nie na disku."
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.display_name": {
+          "source": "Read MSG Email Inline Data",
+          "message": "Čítať priame dáta e-mailu MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "MSG email data to process; conflicts with `stream` and `path`",
+          "message": "Dáta e-mailu MSG na spracovanie; je v konflikte s `stream` a `path`"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupné dáta"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "MSG email data to process",
+          "message": "Dáta e-mailu MSG na spracovanie"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.short_desc": {
+          "source": "Read a Microsoft Outlook MSG email from inline binary data",
+          "message": "Čítať e-mail Microsoft Outlook MSG z priamych binárnych dát"
+        },
+        "app.RW1haWw.desc": {
+          "source": "Provides data provider support for reading and writing email messages in multiple formats:\n\n- **EML** (RFC 822 / MIME): Standard email format used by many email clients including Thunderbird, Apple Mail, and others. Each `.eml` file contains a single email message with headers, body text, HTML content, and attachments. Supports both reading and writing.\n\n- **MSG** (Microsoft Outlook): Proprietary binary format used by Microsoft Outlook. Each `.msg` file contains a single email message stored as an OLE2 Compound Document with MAPI properties. Read-only support.\n\n- **MBOX** (Unix Mailbox): Standard mailbox format where multiple email messages are concatenated in a single file, each delimited by a `From ` separator line. Used by Thunderbird, Evolution, and many Unix mail systems. Read-only support.\n\nAll formats produce records with a unified schema including sender, recipients (To, CC, BCC), subject, date, plain text body, HTML body, attachments metadata, Message-ID, and In-Reply-To headers.",
+          "message": "Poskytuje podporu dátového poskytovateľa na čítanie a zápis e-mailových správ vo viacerých formátoch:\n\n- **EML** (RFC 822 / MIME): Štandardný e-mailový formát používaný mnohými e-mailovými klientmi vrátane aplikácií Thunderbird, Apple Mail a ďalších. Každý súbor `.eml` obsahuje jednu e-mailovú správu s hlavičkami, textom tela, HTML obsahom a prílohami. Podporuje čítanie aj zápis.\n\n- **MSG** (Microsoft Outlook): Proprietárny binárny formát používaný aplikáciou Microsoft Outlook. Každý súbor `.msg` obsahuje jednu e-mailovú správu uloženú ako OLE2 Compound Document s vlastnosťami MAPI. Podpora iba na čítanie.\n\n- **MBOX** (Unix Mailbox): Štandardný formát poštovej schránky, v ktorom je viacero e-mailových správ spojených do jedného súboru, pričom každá je oddelená oddeľovacím riadkom `From `. Používajú ho systémy Thunderbird, Evolution a mnohé poštové systémy Unix. Podpora iba na čítanie.\n\nVšetky formáty vytvárajú záznamy so zjednotenou schémou vrátane odosielateľa, príjemcov (To, CC, BCC), predmetu, dátumu, čistého textu tela, HTML tela, metadát príloh a hlavičiek Message-ID a In-Reply-To."
+        },
+        "app.RW1haWw.display_name": {
+          "source": "Email Messages",
+          "message": "E-mailové správy"
+        },
+        "app.RW1haWw.short_desc": {
+          "source": "Read and write email messages in EML, MSG, and MBOX formats",
+          "message": "Čítať a zapisovať e-mailové správy vo formátoch EML, MSG a MBOX"
+        }
+      }
+    }
+  }
+}

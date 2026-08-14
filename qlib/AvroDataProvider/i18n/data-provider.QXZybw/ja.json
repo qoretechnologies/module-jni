@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.QXZybw.action.cmVhZA.desc": {
+          "source": "Read records from an Apache Avro (`.avro`) container file at a specific file location.\n\nAvro files are self-describing — the schema is stored in the file header and used to deserialize records automatically.\n\nEach record is returned as a hash with field names and types determined by the embedded schema.",
+          "message": "指定されたファイル位置の Apache Avro（`.avro`）コンテナファイルからレコードを読み込みます。\n\nAvro ファイルは自己記述的です。スキーマはファイルヘッダーに保存され、レコードの自動デシリアライズに使用されます。\n\n各レコードは、埋め込まれたスキーマによって決定されたフィールド名と型を持つハッシュとして返されます。"
+        },
+        "app.QXZybw.action.cmVhZA.display_name": {
+          "source": "Read Avro File",
+          "message": "Avro ファイルの読み込み"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Avro data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Avro データの位置。`data` および `stream` と相互排他。[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Avro Input Path",
+          "message": "Avro 入力パス"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Avro data",
+          "message": "Avro データの位置"
+        },
+        "app.QXZybw.action.cmVhZA.short_desc": {
+          "source": "Read records from an Avro file at a specific file location",
+          "message": "指定されたファイル位置の Avro ファイルからレコードを読み込みます"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.desc": {
+          "source": "Read records from inline Apache Avro binary data.\n\nAvro data is self-describing — the schema is stored in the header and used to deserialize records automatically.\n\nEach record is returned as a hash with field names and types determined by the embedded schema.",
+          "message": "インライン Apache Avro バイナリデータからレコードを読み込みます。\n\nAvro データは自己記述的です。スキーマはヘッダーに保存され、レコードの自動デシリアライズに使用されます。\n\n各レコードは、埋め込まれたスキーマによって決定されたフィールド名と型を持つハッシュとして返されます。"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Avro Inline Data",
+          "message": "Avro インラインデータの読み込み"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Avro data to process; conflicts with `stream` and `path`",
+          "message": "処理する Avro データ。`stream` および `path` と競合します"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "入力データ"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Avro data to process",
+          "message": "処理する Avro データ"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read records from inline Avro data",
+          "message": "インライン Avro データからレコードを読み込みます"
+        },
+        "app.QXZybw.action.d3JpdGU.desc": {
+          "source": "Write records to an Apache Avro (`.avro`) container file at a specified path.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\n**Tip**: use `write-data` to generate Avro data in memory without writing to disk.",
+          "message": "指定されたパスの Apache Avro（`.avro`）コンテナファイルにレコードを書き込みます。\n\n`schema` オプションは**必須**であり、レコード構造を定義する有効な Avro JSON スキーマ文字列である必要があります。\n\n**ヒント**: ディスクに書き込まずにメモリ内で Avro データを生成するには、`write-data` を使用します。"
+        },
+        "app.QXZybw.action.d3JpdGU.display_name": {
+          "source": "Write Avro File",
+          "message": "Avro ファイルの書き込み"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.desc": {
+          "source": "The Avro JSON schema string that defines the record structure; this option is required for writing Avro data",
+          "message": "レコード構造を定義する Avro JSON スキーマ文字列。このオプションは Avro データの書き込みに必須です"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.display_name": {
+          "source": "Avro Schema",
+          "message": "Avro スキーマ"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.short_desc": {
+          "source": "The Avro JSON schema for the records",
+          "message": "レコードの Avro JSON スキーマ"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Avro data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "出力 Avro データファイルの場所。`stream` と相互排他。出力場所は [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) の呼び出しによって処理されます"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Avro Output Path",
+          "message": "Avro 出力パス"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Avro file",
+          "message": "Avro ファイルを書き込む場所"
+        },
+        "app.QXZybw.action.d3JpdGU.short_desc": {
+          "source": "Write records to an Avro file at a specified path",
+          "message": "指定されたパスの Avro ファイルにレコードを書き込みます"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nAfter writing all records, use `getData()` to retrieve the binary Avro data.",
+          "message": "メモリ内で Apache Avro データを生成し、バイナリデータとして返します。ディスクに書き込まずに Avro データを生成する場合に便利です。\n\n`schema` オプションは**必須**であり、レコード構造を定義する有効な Avro JSON スキーマ文字列である必要があります。\n\nすべてのレコードを書き込んだ後、`getData()` を使用してバイナリ Avro データを取得します。"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Avro Data",
+          "message": "Avro データの作成"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.desc": {
+          "source": "The Avro JSON schema string that defines the record structure; this option is required for writing Avro data",
+          "message": "レコード構造を定義する Avro JSON スキーマ文字列。このオプションは Avro データの書き込みに必須です"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.display_name": {
+          "source": "Avro Schema",
+          "message": "Avro スキーマ"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.short_desc": {
+          "source": "The Avro JSON schema for the records",
+          "message": "レコードの Avro JSON スキーマ"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Avro data and return as binary",
+          "message": "Avro データを作成し、バイナリとして返します"
+        },
+        "app.QXZybw.desc": {
+          "source": "Read and write [Apache Avro](https://avro.apache.org/) data files with schema-based serialization.\n\n**Capabilities**:\n- Read Avro container files with automatic schema detection\n- Write records using a JSON schema definition\n- Support for all Avro types: primitives, records, arrays, maps, unions, enums\n- Binary and stream-based I/O for integration pipelines\n\nCommonly used with Apache Kafka for enterprise event streaming.",
+          "message": "スキーマベースのシリアライゼーションを使用して [Apache Avro](https://avro.apache.org/) データファイルを読み書きします。\n\n**機能**:\n- 自動スキーマ検出による Avro コンテナファイルの読み込み\n- JSON スキーマ定義を使用したレコードの書き込み\n- すべての Avro 型（プリミティブ、レコード、配列、マップ、ユニオン、列挙型）に対応\n- 統合パイプライン向けのバイナリおよびストリームベースの I/O\n\nエンタープライズイベントストリーミングのために Apache Kafka と組み合わせてよく使用されます。"
+        },
+        "app.QXZybw.display_name": {
+          "source": "Apache Avro",
+          "message": "Apache Avro"
+        },
+        "app.QXZybw.short_desc": {
+          "source": "Read and write Apache Avro data files",
+          "message": "Apache Avro データファイルを読み書き"
+        }
+      }
+    }
+  }
+}

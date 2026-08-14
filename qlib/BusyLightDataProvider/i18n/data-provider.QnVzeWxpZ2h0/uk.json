@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.desc": {
+          "source": "Update Busylight configuration",
+          "message": "Оновлення конфігурації Busylight"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.display_name": {
+          "source": "Update Busylight",
+          "message": "Оновити Busylight"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.desc": {
+          "source": "The color of the light",
+          "message": "Колір індикатора"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "Колір"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.short_desc": {
+          "source": "The color of the light (note that the `Alpha` value is ignored)",
+          "message": "Колір індикатора (зверніть увагу, що значення `Alpha` ігнорується)"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.desc": {
+          "source": "The length of time ON from `0` - `255`",
+          "message": "Тривалість стану УВІМК від `0` до `255`"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.display_name": {
+          "source": "On",
+          "message": "Увімк"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.short_desc": {
+          "source": "The length of time ON from 0 - 255",
+          "message": "Тривалість стану УВІМК від 0 до 255"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.desc": {
+          "source": "The length of time OFF from `0` - `255`",
+          "message": "Тривалість стану ВИМК від `0` до `255`"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.display_name": {
+          "source": "Off",
+          "message": "Вимк"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.short_desc": {
+          "source": "The length of time OFF from 0 - 255",
+          "message": "Тривалість стану ВИМК від 0 до 255"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.desc": {
+          "source": "The topic to publish the message on",
+          "message": "Тема для публікації повідомлення"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "Тема"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.short_desc": {
+          "source": "The topic to publish the message on",
+          "message": "Тема для публікації повідомлення"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.short_desc": {
+          "source": "Update Busylight configuration",
+          "message": "Оновлення конфігурації Busylight"
+        },
+        "app.QnVzeWxpZ2h0.desc": {
+          "source": "MQTT server for accessing Kuando Busylight devices (by Plenom)",
+          "message": "Сервер MQTT для доступу до пристроїв Kuando Busylight (від Plenom)"
+        },
+        "app.QnVzeWxpZ2h0.display_name": {
+          "source": "MQTT Kuando Busylight",
+          "message": "MQTT Kuando Busylight"
+        },
+        "app.QnVzeWxpZ2h0.short_desc": {
+          "source": "MQTT Kuando Busylight devices (by Plenom)",
+          "message": "Пристрої MQTT Kuando Busylight (від Plenom)"
+        }
+      }
+    }
+  }
+}

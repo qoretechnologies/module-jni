@@ -1,0 +1,529 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.desc": {
+          "source": "Non-destructively inspect messages currently in a JMS queue without consuming them.\n\nMessages remain in the queue after browsing. An optional selector can be used to filter the browsed messages by their properties",
+          "message": "Przeglądaj w sposób niedestrukcyjny wiadomości znajdujące się obecnie w kolejce JMS bez ich konsumowania.\n\nWiadomości pozostają w kolejce po przejrzeniu. Opcjonalny selektor może być użyty do filtrowania przeglądanych wiadomości według ich właściwości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.display_name": {
+          "source": "Browse JMS Queue",
+          "message": "Przeglądaj kolejkę JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The queue to browse, in format `queue://name`; if not provided, the default destination from the connection options is used",
+          "message": "Kolejka do przejrzenia w formacie `queue://name`; jeśli nie podano, używana jest domyślna docelowa lokalizacja z opcji połączenia"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Miejsce docelowe"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The queue to browse, in format 'queue://name'",
+          "message": "Kolejka do przejrzenia w formacie 'queue://name'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.desc": {
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e.g., `{\"color\": \"red\"}` becomes `color = 'red'`)",
+          "message": "Hash filtrów właściwości do zastosowania jako selektor wiadomości JMS SQL-92 (np. `{\"color\": \"red\"}` staje się `color = 'red'`)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.display_name": {
+          "source": "Selector",
+          "message": "Selektor"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.short_desc": {
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e",
+          "message": "Hash filtrów właściwości do zastosowania jako selektor wiadomości JMS SQL-92 (np"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.short_desc": {
+          "source": "Non-destructively browse messages in a JMS queue",
+          "message": "Przeglądaj w sposób niedestrukcyjny wiadomości w kolejce JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.desc": {
+          "source": "A JMS message is received from a queue or topic; event includes JMS headers and user-defined string properties.\n\nConfigure the destination to listen on (`queue://name` or `topic://name`), an optional message selector for filtering, and a client ID for durable topic subscriptions",
+          "message": "Otrzymano wiadomość JMS z kolejki lub tematu; zdarzenie zawiera nagłówki JMS oraz zdefiniowane przez użytkownika właściwości tekstowe.\n\nSkonfiguruj miejsce docelowe do nasłuchiwania (`queue://name` lub `topic://name`), opcjonalny selektor wiadomości do filtrowania oraz identyfikator klienta dla trwałych subskrypcji tematów"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.display_name": {
+          "source": "JMS Message Received",
+          "message": "Odebrano wiadomość JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.desc": {
+          "source": "The JMS client ID; required for durable topic subscriptions",
+          "message": "Identyfikator klienta JMS; wymagany dla trwałych subskrypcji tematów"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.display_name": {
+          "source": "Client ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.short_desc": {
+          "source": "The JMS client ID for durable subscriptions",
+          "message": "Identyfikator klienta JMS dla trwałych subskrypcji"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "Default destination in format `queue://name` or `topic://name`; used by the polling provider for event subscription",
+          "message": "Domyślne miejsce docelowe w formacie `queue://name` lub `topic://name`; używane przez dostawcę odpytywania do subskrypcji zdarzeń"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Miejsce docelowe"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Default destination for messaging operations",
+          "message": "Domyślne miejsce docelowe dla operacji przesyłania wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.desc": {
+          "source": "A JMS SQL-92 message selector expression for filtering incoming messages (e.g. `priority > 5 AND color = 'red'`)",
+          "message": "Wyrażenie selektora wiadomości JMS SQL-92 do filtrowania wiadomości przychodzących (np. `priority > 5 AND color = 'red'`)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.display_name": {
+          "source": "Message Selector",
+          "message": "Selektor wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.short_desc": {
+          "source": "JMS message selector for filtering messages",
+          "message": "Selektor wiadomości JMS do filtrowania wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
+          "source": "A JMS message is received from a queue or topic",
+          "message": "Wiadomość JMS została odebrana z kolejki lub tematu"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.desc": {
+          "source": "Send a JMS message to a destination and wait for a synchronous reply using a temporary queue.\n\nThe request message's `JMSReplyTo` header is automatically set to a temporary queue. The responder should send the reply to that destination and copy the `JMSMessageID` to the reply's `JMSCorrelationID`",
+          "message": "Wyślij wiadomość JMS do miejsca docelowego i czekaj na synchroniczną odpowiedź przy użyciu kolejki tymczasowej.\n\nNagłówek `JMSReplyTo` wiadomości żądania jest automatycznie ustawiany na kolejkę tymczasową. Odpowiadający powinien wysłać odpowiedź do tego miejsca docelowego i skopiować `JMSMessageID` do `JMSCorrelationID` odpowiedzi"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.display_name": {
+          "source": "JMS Request-Reply",
+          "message": "JMS Żądanie-Odpowiedź"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "The correlation ID to set on the message; used to link related messages",
+          "message": "Identyfikator korelacji do ustawienia w wiadomości; używany do łączenia powiązanych wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "Identyfikator korelacji"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "The correlation ID to set on the message",
+          "message": "Identyfikator korelacji do ustawienia w wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.desc": {
+          "source": "The message body / payload; the type determines the JMS message type:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- other → `BytesMessage` with JSON serialization",
+          "message": "Treść / ładunek wiadomości; typ określa typ wiadomości JMS:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- inny → `BytesMessage` z serializacją JSON"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Treść wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload",
+          "message": "Treść / ładunek wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.desc": {
+          "source": "The message is not persisted and may be lost in transit",
+          "message": "Wiadomość nie jest utwalana i może zostać utracona podczas przesyłania"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.display_name": {
+          "source": "Non-Persistent",
+          "message": "Nietrwała"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.short_desc": {
+          "source": "Message is not persisted",
+          "message": "Wiadomość nie jest utwalana"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.desc": {
+          "source": "The JMS provider persists the message to stable storage",
+          "message": "Dostawca JMS utwala wiadomość w trwałej pamięci masowej"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.display_name": {
+          "source": "Persistent",
+          "message": "Trwała"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.short_desc": {
+          "source": "Message is persisted to stable storage",
+          "message": "Wiadomość jest utwalana w trwałej pamięci masowej"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.desc": {
+          "source": "The delivery mode for the message",
+          "message": "Tryb dostarczania dla wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.display_name": {
+          "source": "Delivery Mode",
+          "message": "Tryb dostarczania"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.short_desc": {
+          "source": "The delivery mode for the message",
+          "message": "Tryb dostarczania dla wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
+          "message": "Miejsce docelowe, do którego ma zostać wysłana wiadomość, w formacie `queue://name` lub `topic://name`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Miejsce docelowe"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "message": "Miejsce docelowe, do którego ma zostać wysłana wiadomość, w formacie 'queue://name' lub 'topic://name'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.desc": {
+          "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
+          "message": "Właściwości tekstowe zdefiniowane przez użytkownika do ustawienia w wiadomości.\n\nPodaj hash par klucz-wartość typu string.\n\n**Przykład**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Nagłówki"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.short_desc": {
+          "source": "User-defined string properties to set on the message",
+          "message": "Właściwości tekstowe zdefiniowane przez użytkownika do ustawienia w wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "0 - Lowest",
+          "message": "0 - Najniższy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjA.short_desc": {
+          "source": "Lowest priority",
+          "message": "Najniższy priorytet"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "1 - Low",
+          "message": "1 - Niski"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjE.short_desc": {
+          "source": "Low priority",
+          "message": "Niski priorytet"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "2 - Below Normal",
+          "message": "2 - Poniżej normalnego"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjI.short_desc": {
+          "source": "Below normal priority",
+          "message": "Priorytet poniżej normalnego"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "3 - Normal Low",
+          "message": "3 - Niski normalny"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjM.short_desc": {
+          "source": "Normal low priority",
+          "message": "Normalny niski priorytet"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "4 - Normal (Default)",
+          "message": "4 - Normalny (domyślny)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjQ.short_desc": {
+          "source": "Default JMS priority",
+          "message": "Domyślny priorytet JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjU.display_name": {
+          "source": "5 - Above Normal",
+          "message": "5 - Powyżej normalnego"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjU.short_desc": {
+          "source": "Above normal (expedited)",
+          "message": "Powyżej normalnego (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjY.display_name": {
+          "source": "6 - High",
+          "message": "6 - Wysoki"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjY.short_desc": {
+          "source": "High priority (expedited)",
+          "message": "Wysoki priorytet (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojc.display_name": {
+          "source": "7 - Very High",
+          "message": "7 - Bardzo wysoki"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojc.short_desc": {
+          "source": "Very high priority (expedited)",
+          "message": "Bardzo wysoki priorytet (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojg.display_name": {
+          "source": "8 - Critical",
+          "message": "8 - Krytyczny"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojg.short_desc": {
+          "source": "Critical priority (expedited)",
+          "message": "Krytyczny priorytet (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojk.display_name": {
+          "source": "9 - Highest",
+          "message": "9 - Najwyższy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojk.short_desc": {
+          "source": "Highest priority (expedited)",
+          "message": "Najwyższy priorytet (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.desc": {
+          "source": "The JMS message priority; levels `0`–`4` are normal, levels `5`–`9` are expedited",
+          "message": "Priorytet wiadomości JMS; poziomy `0`–`4` są normalne, poziomy `5`–`9` są przyspieszone"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorytet"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.short_desc": {
+          "source": "The JMS message priority",
+          "message": "Priorytet wiadomości JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.desc": {
+          "source": "The message time-to-live in milliseconds; 0 means the message does not expire",
+          "message": "Czas życia wiadomości w milisekundach; 0 oznacza, że wiadomość nie wygasa"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.display_name": {
+          "source": "Time to Live",
+          "message": "Czas życia"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.short_desc": {
+          "source": "The message time-to-live in milliseconds",
+          "message": "Czas życia wiadomości w milisekundach"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Opcjonalny identyfikator typu wiadomości zdefiniowany przez aplikację"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.short_desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Opcjonalny identyfikator typu wiadomości zdefiniowany przez aplikację"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.short_desc": {
+          "source": "Send a JMS request and wait for a reply",
+          "message": "Wyślij żądanie JMS i czekaj na odpowiedź"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.desc": {
+          "source": "Send a JMS message to a queue or topic with optional JMS headers and user-defined string properties",
+          "message": "Wyślij wiadomość JMS do kolejki lub tematu z opcjonalnymi nagłówkami JMS i właściwościami tekstowymi zdefiniowanymi przez użytkownika"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.display_name": {
+          "source": "Send JMS Message",
+          "message": "Wyślij wiadomość JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "The correlation ID to set on the message; used to link related messages",
+          "message": "Identyfikator korelacji do ustawienia w wiadomości; używany do łączenia powiązanych wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "Identyfikator korelacji"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "The correlation ID to set on the message",
+          "message": "Identyfikator korelacji do ustawienia w wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.desc": {
+          "source": "The message body / payload; the type determines the JMS message type:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- other → `BytesMessage` with JSON serialization",
+          "message": "Treść / ładunek wiadomości; typ określa typ wiadomości JMS:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- inny → `BytesMessage` z serializacją JSON"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Treść wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload",
+          "message": "Treść / ładunek wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.desc": {
+          "source": "The message is not persisted and may be lost in transit",
+          "message": "Wiadomość nie jest utwalana i może zostać utracona podczas przesyłania"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.display_name": {
+          "source": "Non-Persistent",
+          "message": "Nietrwała"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.short_desc": {
+          "source": "Message is not persisted",
+          "message": "Wiadomość nie jest utwalana"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.desc": {
+          "source": "The JMS provider persists the message to stable storage",
+          "message": "Dostawca JMS utwala wiadomość w trwałej pamięci masowej"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.display_name": {
+          "source": "Persistent",
+          "message": "Trwała"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.short_desc": {
+          "source": "Message is persisted to stable storage",
+          "message": "Wiadomość jest utwalana w trwałej pamięci masowej"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.desc": {
+          "source": "The delivery mode for the message",
+          "message": "Tryb dostarczania dla wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.display_name": {
+          "source": "Delivery Mode",
+          "message": "Tryb dostarczania"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.short_desc": {
+          "source": "The delivery mode for the message",
+          "message": "Tryb dostarczania dla wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
+          "message": "Miejsce docelowe, do którego ma zostać wysłana wiadomość, w formacie `queue://name` lub `topic://name`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Miejsce docelowe"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "message": "Miejsce docelowe, do którego ma zostać wysłana wiadomość, w formacie 'queue://name' lub 'topic://name'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.desc": {
+          "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
+          "message": "Właściwości tekstowe zdefiniowane przez użytkownika do ustawienia w wiadomości.\n\nPodaj hash par klucz-wartość typu string.\n\n**Przykład**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Nagłówki"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.short_desc": {
+          "source": "User-defined string properties to set on the message",
+          "message": "Właściwości tekstowe zdefiniowane przez użytkownika do ustawienia w wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "0 - Lowest",
+          "message": "0 - Najniższy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjA.short_desc": {
+          "source": "Lowest priority",
+          "message": "Najniższy priorytet"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "1 - Low",
+          "message": "1 - Niski"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjE.short_desc": {
+          "source": "Low priority",
+          "message": "Niski priorytet"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "2 - Below Normal",
+          "message": "2 - Poniżej normalnego"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjI.short_desc": {
+          "source": "Below normal priority",
+          "message": "Priorytet poniżej normalnego"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "3 - Normal Low",
+          "message": "3 - Niski normalny"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjM.short_desc": {
+          "source": "Normal low priority",
+          "message": "Normalny niski priorytet"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "4 - Normal (Default)",
+          "message": "4 - Normalny (domyślny)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjQ.short_desc": {
+          "source": "Default JMS priority",
+          "message": "Domyślny priorytet JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjU.display_name": {
+          "source": "5 - Above Normal",
+          "message": "5 - Powyżej normalnego"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjU.short_desc": {
+          "source": "Above normal (expedited)",
+          "message": "Powyżej normalnego (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjY.display_name": {
+          "source": "6 - High",
+          "message": "6 - Wysoki"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjY.short_desc": {
+          "source": "High priority (expedited)",
+          "message": "Wysoki priorytet (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojc.display_name": {
+          "source": "7 - Very High",
+          "message": "7 - Bardzo wysoki"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojc.short_desc": {
+          "source": "Very high priority (expedited)",
+          "message": "Bardzo wysoki priorytet (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojg.display_name": {
+          "source": "8 - Critical",
+          "message": "8 - Krytyczny"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojg.short_desc": {
+          "source": "Critical priority (expedited)",
+          "message": "Krytyczny priorytet (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojk.display_name": {
+          "source": "9 - Highest",
+          "message": "9 - Najwyższy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojk.short_desc": {
+          "source": "Highest priority (expedited)",
+          "message": "Najwyższy priorytet (przyspieszony)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.desc": {
+          "source": "The JMS message priority; levels `0`–`4` are normal, levels `5`–`9` are expedited",
+          "message": "Priorytet wiadomości JMS; poziomy `0`–`4` są normalne, poziomy `5`–`9` są przyspieszone"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorytet"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.short_desc": {
+          "source": "The JMS message priority",
+          "message": "Priorytet wiadomości JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.desc": {
+          "source": "The message time-to-live in milliseconds; 0 means the message does not expire",
+          "message": "Czas życia wiadomości w milisekundach; 0 oznacza, że wiadomość nie wygasa"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.display_name": {
+          "source": "Time to Live",
+          "message": "Czas życia"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.short_desc": {
+          "source": "The message time-to-live in milliseconds",
+          "message": "Czas życia wiadomości w milisekundach"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Opcjonalny identyfikator typu wiadomości zdefiniowany przez aplikację"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.short_desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Opcjonalny identyfikator typu wiadomości zdefiniowany przez aplikację"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.short_desc": {
+          "source": "Send a JMS message to a queue or topic",
+          "message": "Wyślij wiadomość JMS do kolejki lub tematu"
+        },
+        "app.SmFrYXJ0YUpNUw.desc": {
+          "source": "Jakarta Messaging (JMS) 3.x compliant broker for enterprise messaging with support for queues, topics, durable subscriptions, message selectors, and request-reply patterns",
+          "message": "Broker zgodny z Jakarta Messaging (JMS) 3.x dla komunikatów korporacyjnych z obsługą kolejek, tematów, trwałych subskrypcji, selektorów wiadomości oraz wzorców żądanie-odpowiedź"
+        },
+        "app.SmFrYXJ0YUpNUw.display_name": {
+          "source": "Jakarta JMS",
+          "message": "Jakarta JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.short_desc": {
+          "source": "Jakarta Messaging (JMS) 3.x compliant broker",
+          "message": "Broker zgodny z Jakarta Messaging (JMS) 3.x"
+        }
+      }
+    }
+  }
+}

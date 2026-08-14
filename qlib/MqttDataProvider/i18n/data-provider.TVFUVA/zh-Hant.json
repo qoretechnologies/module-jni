@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.TVFUVA.action.Y29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client connects or reconnects to the MQTT broker",
+          "message": "當用戶端連線或重新連線至 MQTT Broker 時引發此事件"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.display_name": {
+          "source": "MQTT Connected",
+          "message": "MQTT 已連線"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.short_desc": {
+          "source": "Client connected or reconnected to the MQTT broker",
+          "message": "用戶端已連線或重新連線至 MQTT Broker"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client is disconnected from the MQTT broker, including the MQTT 5 disconnect reason code and description",
+          "message": "當用戶端與 MQTT Broker 中斷連線時引發此事件，包含 MQTT 5 中斷連線原因代碼與描述"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.display_name": {
+          "source": "MQTT Disconnected",
+          "message": "MQTT 已中斷連線"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.short_desc": {
+          "source": "Client disconnected from the MQTT broker",
+          "message": "用戶端已與 MQTT Broker 中斷連線"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "An MQTT message is received; event includes MQTT 5.0 properties such as content type, response topic, correlation data, and user properties",
+          "message": "收到 MQTT 訊息；事件包含 MQTT 5.0 屬性，例如內容類型、回應主題、關聯資料和使用者屬性"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "MQTT Message Received",
+          "message": "收到 MQTT 訊息"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "An MQTT message is received with MQTT 5 properties",
+          "message": "收到帶有 MQTT 5 屬性的 MQTT 訊息"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.desc": {
+          "source": "Send an MQTT message to a topic with optional MQTT 5.0 properties including content type, request/response correlation, message expiry, and user-defined metadata",
+          "message": "將 MQTT 訊息傳送到主題，並附帶選填的 MQTT 5.0 屬性，包含內容類型、請求/回應關聯、訊息到期時間和使用者定義的中繼資料"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.display_name": {
+          "source": "Send MQTT Message",
+          "message": "傳送 MQTT 訊息"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME content type of the message payload (e.g., `application/json`, `text/plain`)",
+          "message": "訊息承載的 MIME 內容類型（例如：`application/json`、`text/plain`）"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容型別"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME content type of the message payload (e",
+          "message": "訊息承載的 MIME 內容類型（例如"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
+          "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
+          "message": "用於將回應與請求配對的關聯資料；由回應者原樣傳回（MQTT 5 請求/回應模式）"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.display_name": {
+          "source": "Correlation Data",
+          "message": "關聯資料"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.short_desc": {
+          "source": "Correlation data for matching responses to requests",
+          "message": "用於將回應與請求配對的關聯資料"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.desc": {
+          "source": "Message lifetime in seconds; the broker will discard the message after this interval if it has not been delivered",
+          "message": "訊息生命週期（以秒為單位）；若訊息尚未傳遞，Broker 將在此時間間隔後捨棄該訊息"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.display_name": {
+          "source": "Message Expiry Interval",
+          "message": "訊息到期時間間隔"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.short_desc": {
+          "source": "Message lifetime in seconds",
+          "message": "訊息生命週期（以秒為單位）"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.desc": {
+          "source": "The payload / message body; a string or binary type is sent as-is, all others are serialized with JSON and sent as a JSON string",
+          "message": "承載 / 訊息內文；字串或二進位類型按原樣傳送，其餘所有類型均以 JSON 序列化並作為 JSON 字串傳送"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.display_name": {
+          "source": "Message Body",
+          "message": "訊息內文"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.short_desc": {
+          "source": "The payload / message body",
+          "message": "承載 / 訊息內文"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.desc": {
+          "source": "Payload format indicator: `True` = UTF-8 encoded text, `False` or omitted = unspecified binary data",
+          "message": "承載格式指示器：`True` = UTF-8 編碼文字，`False` 或省略 = 未指定的二進位資料"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.display_name": {
+          "source": "Payload Format Indicator",
+          "message": "承載格式指示器"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
+          "message": "承載格式指示器：'True' = UTF-8 編碼文字，'False' 或省略 = 未指定的二進位資料"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
+          "source": "QoS 0: message is delivered at most once with no acknowledgment",
+          "message": "QoS 0：訊息最多傳遞一次，無需確認"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.display_name": {
+          "source": "At Most Once",
+          "message": "最多一次"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.short_desc": {
+          "source": "QoS 0: fire and forget",
+          "message": "QoS 0：即傳即忘"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.desc": {
+          "source": "QoS 1: message is delivered at least once with acknowledgment",
+          "message": "QoS 1：訊息至少傳遞一次且附帶確認"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.display_name": {
+          "source": "At Least Once",
+          "message": "至少一次"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.short_desc": {
+          "source": "QoS 1: acknowledged delivery",
+          "message": "QoS 1：已確認傳遞"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.desc": {
+          "source": "QoS 2: message is delivered exactly once using a four-step handshake",
+          "message": "QoS 2：使用四步驟握手恰好傳遞訊息一次"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.display_name": {
+          "source": "Exactly Once",
+          "message": "恰好一次"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.short_desc": {
+          "source": "QoS 2: assured delivery",
+          "message": "QoS 2：保證傳遞"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.desc": {
+          "source": "The quality of service value for this message",
+          "message": "此訊息的服務品質值"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.display_name": {
+          "source": "Quality of Service",
+          "message": "服務品質"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.short_desc": {
+          "source": "The quality of service value for this message",
+          "message": "此訊息的服務品質值"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.desc": {
+          "source": "If this message should be retained by the server",
+          "message": "是否應由伺服器保留此訊息"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.display_name": {
+          "source": "Retained?",
+          "message": "保留？"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.short_desc": {
+          "source": "If this message should be retained by the server",
+          "message": "是否應由伺服器保留此訊息"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "接收者應發布回應的主題（MQTT 5 請求/回應模式）"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.display_name": {
+          "source": "Response Topic",
+          "message": "回應主題"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "接收者應發布回應的主題（MQTT 5 請求/回應模式）"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {
+          "source": "The message topic",
+          "message": "訊息主題"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.display_name": {
+          "source": "Message Topic",
+          "message": "訊息主題"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.short_desc": {
+          "source": "The message topic",
+          "message": "訊息主題"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.desc": {
+          "source": "Application-level key-value string metadata to attach to the message.\n\nProvide a hash of string key-value pairs (e.g., `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)",
+          "message": "要附加到訊息的應用程式層級金鑰-值字串中繼資料。\n\n請提供字串金鑰-值對的雜湊（例如：`{\"source\": \"sensor-1\", \"region\": \"us-east\"}`）"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.display_name": {
+          "source": "User Properties",
+          "message": "使用者屬性"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.short_desc": {
+          "source": "Application-level key-value string metadata to attach to the message",
+          "message": "要附加到訊息的應用程式層級金鑰-值字串中繼資料"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.short_desc": {
+          "source": "Send an MQTT message with optional MQTT 5 properties",
+          "message": "傳送附帶選填 MQTT 5 屬性的 MQTT 訊息"
+        },
+        "app.TVFUVA.desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging with support for request/response patterns, message expiry, content type metadata, and user-defined properties",
+          "message": "MQTT 5.0 伺服器，用於快速且高效率的訊息傳送，支援請求/回應模式、訊息到期、內容類型中繼資料以及使用者定義的屬性"
+        },
+        "app.TVFUVA.display_name": {
+          "source": "MQTT",
+          "message": "MQTT"
+        },
+        "app.TVFUVA.short_desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging",
+          "message": "用於快速且高效訊息傳遞的 MQTT 5.0 伺服器"
+        }
+      }
+    }
+  }
+}

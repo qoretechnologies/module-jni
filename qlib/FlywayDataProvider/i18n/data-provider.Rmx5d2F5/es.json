@@ -1,0 +1,441 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.Rmx5d2F5.action.Y2xlYW4.desc": {
+          "source": "Drop all objects in the configured schemas; this is a destructive operation",
+          "message": "Eliminar todos los objetos en los esquemas configurados; esta es una operación destructiva"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.display_name": {
+          "source": "Clean Flyway Schema",
+          "message": "Limpiar esquema de Flyway"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Una lista de rutas del sistema de archivos a directorios que contienen archivos de migración SQL.\n\nLas rutas se anteponen automáticamente con `filesystem:` si no se proporciona ningún prefijo.\n\nEjemplo: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Ubicaciones de migración"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Rutas del sistema de archivos a directorios de migración SQL"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Una lista opcional de nombres de esquemas de base de datos para gestionar con Flyway"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Esquemas"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Esquemas de base de datos a gestionar"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "La contraseña para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Contraseña"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "La contraseña de la base de datos"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway; el valor predeterminado es `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabla de historial"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "La URL de conexión JDBC para la base de datos (p. ej., `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "URL JDBC"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "La URL JDBC para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "El nombre de usuario para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Nombre de usuario"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "El nombre de usuario de la base de datos"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.short_desc": {
+          "source": "Drop all objects in the configured schemas",
+          "message": "Eliminar todos los objetos en los esquemas configurados"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.desc": {
+          "source": "Get information about all applied and pending database migrations.\n\nReturns a list of migration records showing version, description, type, state, and execution details. Useful for monitoring migration status in CI/CD pipelines.",
+          "message": "Obtener información sobre todas las migraciones de base de datos aplicadas y pendientes.\n\nDevuelve una lista de registros de migración que muestran versión, descripción, tipo, estado y detalles de ejecución. Útil para supervisar el estado de migración en pipelines de CI/CD."
+        },
+        "app.Rmx5d2F5.action.aW5mbw.display_name": {
+          "source": "Get Flyway Migration Info",
+          "message": "Obtener información de migración de Flyway"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Una lista de rutas del sistema de archivos a directorios que contienen archivos de migración SQL.\n\nLas rutas se anteponen automáticamente con `filesystem:` si no se proporciona ningún prefijo.\n\nEjemplo: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Ubicaciones de migración"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Rutas del sistema de archivos a directorios de migración SQL"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Una lista opcional de nombres de esquemas de base de datos para gestionar con Flyway"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Esquemas"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Esquemas de base de datos a gestionar"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "La contraseña para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Contraseña"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "La contraseña de la base de datos"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway; el valor predeterminado es `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabla de historial"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "La URL de conexión JDBC para la base de datos (p. ej., `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "URL JDBC"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "La URL JDBC para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "El nombre de usuario para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Nombre de usuario"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "El nombre de usuario de la base de datos"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.short_desc": {
+          "source": "Get information about all migrations",
+          "message": "Obtener información sobre todas las migraciones"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.desc": {
+          "source": "Run all pending database schema migrations.\n\nExecutes migration scripts in version order. Each migration is applied within a transaction and recorded in the Flyway schema history table.\n\n**Note**: migrations are one-way — once applied, they cannot be undone without using `clean`.",
+          "message": "Ejecutar todas las migraciones de esquema de base de datos pendientes.\n\nEjecuta scripts de migración en orden de versión. Cada migración se aplica dentro de una transacción y se registra en la tabla de historial de esquemas de Flyway.\n\n**Nota**: las migraciones son unidireccionales: una vez aplicadas, no se pueden deshacer sin utilizar `clean`."
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.display_name": {
+          "source": "Run Flyway Migrations",
+          "message": "Ejecutar migraciones de Flyway"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Una lista de rutas del sistema de archivos a directorios que contienen archivos de migración SQL.\n\nLas rutas se anteponen automáticamente con `filesystem:` si no se proporciona ningún prefijo.\n\nEjemplo: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Ubicaciones de migración"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Rutas del sistema de archivos a directorios de migración SQL"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Una lista opcional de nombres de esquemas de base de datos para gestionar con Flyway"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Esquemas"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Esquemas de base de datos a gestionar"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "La contraseña para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Contraseña"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "La contraseña de la base de datos"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway; el valor predeterminado es `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabla de historial"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "La URL de conexión JDBC para la base de datos (p. ej., `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "URL JDBC"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "La URL JDBC para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "El nombre de usuario para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Nombre de usuario"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "El nombre de usuario de la base de datos"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.short_desc": {
+          "source": "Run pending database migrations",
+          "message": "Ejecutar migraciones de base de datos pendientes"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.desc": {
+          "source": "Repair the Flyway schema history table by removing failed migration entries and aligning checksums",
+          "message": "Reparar la tabla de historial de esquemas de Flyway eliminando entradas de migración fallidas y alineando sumas de comprobación"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.display_name": {
+          "source": "Repair Flyway Schema History",
+          "message": "Reparar historial de esquemas de Flyway"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Una lista de rutas del sistema de archivos a directorios que contienen archivos de migración SQL.\n\nLas rutas se anteponen automáticamente con `filesystem:` si no se proporciona ningún prefijo.\n\nEjemplo: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Ubicaciones de migración"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Rutas del sistema de archivos a directorios de migración SQL"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Una lista opcional de nombres de esquemas de base de datos para gestionar con Flyway"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Esquemas"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Esquemas de base de datos a gestionar"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "La contraseña para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Contraseña"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "La contraseña de la base de datos"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway; el valor predeterminado es `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabla de historial"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "La URL de conexión JDBC para la base de datos (p. ej., `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "URL JDBC"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "La URL JDBC para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "El nombre de usuario para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Nombre de usuario"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "El nombre de usuario de la base de datos"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.short_desc": {
+          "source": "Repair the Flyway schema history table",
+          "message": "Reparar la tabla de historial de esquemas de Flyway"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.desc": {
+          "source": "Validate applied Flyway migrations against available migration scripts",
+          "message": "Validar las migraciones de Flyway aplicadas con respecto a los scripts de migración disponibles"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.display_name": {
+          "source": "Validate Flyway Migrations",
+          "message": "Validar migraciones de Flyway"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Una lista de rutas del sistema de archivos a directorios que contienen archivos de migración SQL.\n\nLas rutas se anteponen automáticamente con `filesystem:` si no se proporciona ningún prefijo.\n\nEjemplo: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Ubicaciones de migración"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Rutas del sistema de archivos a directorios de migración SQL"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Una lista opcional de nombres de esquemas de base de datos para gestionar con Flyway"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Esquemas"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Esquemas de base de datos a gestionar"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "La contraseña para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Contraseña"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "La contraseña de la base de datos"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway; el valor predeterminado es `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabla de historial"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "El nombre de la tabla de historial de esquemas de Flyway"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "La URL de conexión JDBC para la base de datos (p. ej., `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "URL JDBC"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "La URL JDBC para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "El nombre de usuario para la conexión a la base de datos"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Nombre de usuario"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "El nombre de usuario de la base de datos"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.short_desc": {
+          "source": "Validate applied migrations against available ones",
+          "message": "Validar las migraciones aplicadas con respecto a las disponibles"
+        },
+        "app.Rmx5d2F5.desc": {
+          "source": "Manage database schema migrations using [Flyway](https://flywaydb.org/).\n\n**Capabilities**:\n- Run pending SQL migrations against a database\n- View migration history and status\n- Validate applied migrations against available scripts\n- Clean and repair the schema history table\n\nSupports PostgreSQL and other JDBC-accessible databases for DevOps and CI/CD pipelines.",
+          "message": "Gestionar migraciones de esquemas de bases de datos utilizando [Flyway](https://flywaydb.org/).\n\n**Capacidades**:\n- Ejecutar migraciones SQL pendientes en una base de datos\n- Ver el historial y el estado de las migraciones\n- Validar las migraciones aplicadas con respecto a los scripts disponibles\n- Limpiar y reparar la tabla de historial de esquemas\n\nAdmite PostgreSQL y otras bases de datos accesibles mediante JDBC para pipelines de DevOps y CI/CD."
+        },
+        "app.Rmx5d2F5.display_name": {
+          "source": "Flyway",
+          "message": "Flyway"
+        },
+        "app.Rmx5d2F5.short_desc": {
+          "source": "Flyway database schema migration",
+          "message": "Migración de esquemas de base de datos con Flyway"
+        }
+      }
+    }
+  }
+}

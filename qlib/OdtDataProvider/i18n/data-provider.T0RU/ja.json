@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.T0RU.action.cmVhZA.desc": {
+          "source": "Reads and parses an ODT document from a file location specified by the `path` option.\n\nUse this action to extract structured content from `.odt` files stored on disk or accessible via a URL.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to extract tabular data\n- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n- `header_row` — set to `True` if the first table row contains column headers\n- `headers` — provide explicit column header names for table mode",
+          "message": "`path` オプションで指定されたファイル場所から ODT ドキュメントを読み込んで解析します。\n\nディスクに保存されているか URL 経由でアクセス可能な `.odt` ファイルから構造化コンテンツを抽出するには、このアクションを使用します。\n\n**主なオプション**:\n- `content_type` — スタイル付きテキストの場合は `\"paragraphs\"` に設定し、表形式データを抽出する場合は `\"table\"` に設定します\n- `table_index` — `\"table\"` モードを使用する場合、読み取る表をインデックス (0 起算) で選択します\n- `header_row` — 表の最初の行に列ヘッダーが含まれている場合は `True` に設定します\n- `headers` — 表モードの明示的な列ヘッダー名を指定します"
+        },
+        "app.T0RU.action.cmVhZA.display_name": {
+          "source": "Read ODT Document File",
+          "message": "ODT ドキュメント ファイルの読み取り"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "テキスト コンテンツとスタイル情報 (見出し、標準テキスト) を含むドキュメントの段落を読み取る"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs with text and style information",
+          "message": "テキストとスタイル情報を含むドキュメントの段落を読み取る"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "列ヘッダー付きの構造化行データとして表を読み取る"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "表を行データとして読み取る"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to extract from the ODT document.\n\n- `\"paragraphs\"` — reads document paragraphs with text and style information\n- `\"table\"` — reads a specific table as row data, using `table_index` to select the table",
+          "message": "ODT ドキュメントから抽出するコンテンツのタイプ。\n\n- `\"paragraphs\"` — テキストとスタイル情報を含むドキュメントの段落を読み取ります\n- `\"table\"` — `table_index` を使用して表を選択し、特定の表を行データとして読み取ります"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "読み取るコンテンツのタイプ"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table is used as column headers. Only applies when `content_type` is `\"table\"`; mutually exclusive with `headers`",
+          "message": "`True` の場合、表の最初の行が列ヘッダーとして使用されます。`content_type` が `\"table\"` の場合にのみ適用されます。`headers` とは相互排他的です"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "ヘッダー行"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "最初の行にヘッダーが含まれる"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column header names to use for table columns. Only applies when `content_type` is `\"table\"`; mutually exclusive with `header_row`",
+          "message": "表の列に使用する列ヘッダー名の明示的なリスト。`content_type` が `\"table\"` の場合にのみ適用されます。`header_row` とは相互排他的です"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "列ヘッダーの明示的なリスト"
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODT document data; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "ODT ドキュメント データの場所。`data` および `stream` とは相互排他的です。\n\n[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しで解決されます"
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODT Input Path",
+          "message": "ODT 入力パス"
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODT document",
+          "message": "ODT ドキュメントの場所"
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "The 0-based index of the table to read when `content_type` is `\"table\"`. Default is `0` (the first table in the document)",
+          "message": "`content_type` が `\"table\"` の場合に読み取る表の 0 起算のインデックス。デフォルトは `0` (ドキュメント内の最初の表) です"
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表インデックス"
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "読み取る表のインデックス (0 起算)"
+        },
+        "app.T0RU.action.cmVhZA.short_desc": {
+          "source": "Read ODT document from a specific file location",
+          "message": "指定されたファイルの場所から ODT ドキュメントを読み取る"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.desc": {
+          "source": "Reads and parses an ODT document from inline binary data provided via the `data` option.\n\nUse this action when the ODT document content is already available in memory as binary data rather than stored in a file.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to extract tabular data\n- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n- `header_row` — set to `True` if the first table row contains column headers\n- `headers` — provide explicit column header names for table mode",
+          "message": "`data` オプション経由で提供されたインライン バイナリ データから ODT ドキュメントを読み込んで解析します。\n\nODT ドキュメント コンテンツがファイルに保存されておらず、すでにバイナリ データとしてメモリ上で利用可能な場合にこのアクションを使用します。\n\n**主なオプション**:\n- `content_type` — スタイル付きテキストの場合は `\"paragraphs\"` に設定し、表形式データを抽出する場合は `\"table\"` に設定します\n- `table_index` — `\"table\"` モードを使用する場合、読み取る表をインデックス (0 起算) で選択します\n- `header_row` — 表の最初の行に列ヘッダーが含まれている場合は `True` に設定します\n- `headers` — 表モードの明示的な列ヘッダー名を指定します"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODT Document Inline Data",
+          "message": "ODT ドキュメントのインライン データの読み取り"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "テキスト コンテンツとスタイル情報 (見出し、標準テキスト) を含むドキュメントの段落を読み取る"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs with text and style information",
+          "message": "テキストとスタイル情報を含むドキュメントの段落を読み取る"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "列ヘッダー付きの構造化行データとして表を読み取る"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "表を行データとして読み取る"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to extract from the ODT document.\n\n- `\"paragraphs\"` — reads document paragraphs with text and style information\n- `\"table\"` — reads a specific table as row data, using `table_index` to select the table",
+          "message": "ODT ドキュメントから抽出するコンテンツのタイプ。\n\n- `\"paragraphs\"` — テキストとスタイル情報を含むドキュメントの段落を読み取ります\n- `\"table\"` — `table_index` を使用して表を選択し、特定の表を行データとして読み取ります"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "読み取るコンテンツのタイプ"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODT document binary data to process; mutually exclusive with `stream` and `path`",
+          "message": "処理する ODT ドキュメント バイナリ データ。`stream` および `path` とは相互排他的です"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "入力データ"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODT document data to process",
+          "message": "処理する ODT ドキュメント データ"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table is used as column headers. Only applies when `content_type` is `\"table\"`; mutually exclusive with `headers`",
+          "message": "`True` の場合、表の最初の行が列ヘッダーとして使用されます。`content_type` が `\"table\"` の場合にのみ適用されます。`headers` とは相互排他的です"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "ヘッダー行"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "最初の行にヘッダーが含まれる"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column header names to use for table columns. Only applies when `content_type` is `\"table\"`; mutually exclusive with `header_row`",
+          "message": "表の列に使用する列ヘッダー名の明示的なリスト。`content_type` が `\"table\"` の場合にのみ適用されます。`header_row` とは相互排他的です"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "列ヘッダーの明示的なリスト"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "The 0-based index of the table to read when `content_type` is `\"table\"`. Default is `0` (the first table in the document)",
+          "message": "`content_type` が `\"table\"` の場合に読み取る表の 0 起算のインデックス。デフォルトは `0` (ドキュメント内の最初の表) です"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表インデックス"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "読み取る表のインデックス (0 起算)"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODT document inline data",
+          "message": "ODT ドキュメントのインライン データを読み取る"
+        },
+        "app.T0RU.action.d3JpdGU.desc": {
+          "source": "Creates an ODT document and writes it to the file location specified by the `path` option.\n\nUse this action to generate `.odt` files with paragraphs or tabular data for reports, documents, or data exports.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` to write styled text, or `\"table\"` to write structured tabular data\n- `headers` — provide column headers for `\"table\"` mode\n- `title` — optional document title added as a `Heading1` at the top",
+          "message": "ODT ドキュメントを作成し、`path` オプションで指定されたファイル場所に書き込みます。\n\nレポート、ドキュメント、またはデータ エクスポート用に段落や表形式データを含む `.odt` ファイルを生成するには、このアクションを使用します。\n\n**主なオプション**:\n- `content_type` — スタイル付きテキストを書き込む場合は `\"paragraphs\"` に設定し、構造化表形式データを書き込む場合は `\"table\"` に設定します\n- `headers` — `\"table\"` モードの列ヘッダーを指定します\n- `title` — 先頭に `Heading1` として追加されるオプションのドキュメント タイトル"
+        },
+        "app.T0RU.action.d3JpdGU.display_name": {
+          "source": "Write ODT Document File",
+          "message": "ODT ドキュメント ファイルの書き込み"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "テキストおよび見出しスタイルが適用された段落を書き込む"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "テキストおよび見出しスタイルが適用された段落を書き込む"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data",
+          "message": "構造化された表形式データを書き込む"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write structured tabular data",
+          "message": "構造化された表形式データを書き込む"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to write to the ODT document.\n\n- `\"paragraphs\"` — writes styled paragraphs with text and heading styles\n- `\"table\"` — writes structured tabular data with column headers",
+          "message": "ODT ドキュメントに書き込むコンテンツのタイプ。\n\n- `\"paragraphs\"` — テキストおよび見出しスタイルが適用された段落を書き込みます\n- `\"table\"` — 列ヘッダー付きの構造化表形式データを書き込みます"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "書き込むコンテンツのタイプ"
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column header names for `\"table\"` mode. If not provided, headers will be auto-detected from the keys of the first record",
+          "message": "`\"table\"` モードの列ヘッダー名のリスト。指定されない場合、ヘッダーは最初のレコードのキーから自動検出されます"
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表モードの列ヘッダーのリスト"
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODT document data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "出力 ODT ドキュメント データ ファイルの場所。`stream` とは相互排他的です。\n\n出力場所は [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) の呼び出しによって処理されます"
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODT Output Path",
+          "message": "ODT 出力パス"
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODT document",
+          "message": "ODT ドキュメントの書き込み先の場所"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a `Heading1` at the beginning of the document",
+          "message": "ドキュメントの先頭に `Heading1` として追加するオプションのタイトル"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "ドキュメント タイトル"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "先頭に追加するタイトル"
+        },
+        "app.T0RU.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODT document file",
+          "message": "ODT ドキュメント ファイルにデータを書き込む"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Creates an ODT document in memory and returns it as binary data, without writing to disk.\n\nUse this action when you need to generate an ODT document for further processing, email attachment, or API response without creating a file on the filesystem.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` to write styled text, or `\"table\"` to write structured tabular data\n- `headers` — provide column headers for `\"table\"` mode\n- `title` — optional document title added as a `Heading1` at the top",
+          "message": "メモリ内に ODT ドキュメントを作成し、ディスクに書き込まずにバイナリ データとして返します。\n\nファイルシステムにファイルを作成することなく、後続の処理、メール添付、または API レスポンス用に ODT ドキュメントを生成する必要がある場合は、このアクションを使用します。\n\n**主なオプション**:\n- `content_type` — スタイル付きテキストを書き込む場合は `\"paragraphs\"` に設定し、構造化表形式データを書き込む場合は `\"table\"` に設定します\n- `headers` — `\"table\"` モードの列ヘッダーを指定します\n- `title` — 先頭に `Heading1` として追加されるオプションのドキュメント タイトル"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODT Document Data",
+          "message": "ODT ドキュメント データの作成"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "テキストおよび見出しスタイルが適用された段落を書き込む"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "段落"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "テキストおよび見出しスタイルが適用された段落を書き込む"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data",
+          "message": "構造化された表形式データを書き込む"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write structured tabular data",
+          "message": "構造化された表形式データを書き込む"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to write to the ODT document.\n\n- `\"paragraphs\"` — writes styled paragraphs with text and heading styles\n- `\"table\"` — writes structured tabular data with column headers",
+          "message": "ODT ドキュメントに書き込むコンテンツのタイプ。\n\n- `\"paragraphs\"` — テキストおよび見出しスタイルが適用された段落を書き込みます\n- `\"table\"` — 列ヘッダー付きの構造化表形式データを書き込みます"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "コンテンツタイプ"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "書き込むコンテンツのタイプ"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column header names for `\"table\"` mode. If not provided, headers will be auto-detected from the keys of the first record",
+          "message": "`\"table\"` モードの列ヘッダー名のリスト。指定されない場合、ヘッダーは最初のレコードのキーから自動検出されます"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表モードの列ヘッダーのリスト"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a `Heading1` at the beginning of the document",
+          "message": "ドキュメントの先頭に `Heading1` として追加するオプションのタイトル"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "ドキュメント タイトル"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "先頭に追加するタイトル"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODT document data and return as binary",
+          "message": "ODT ドキュメント データを生成しバイナリとして返す"
+        },
+        "app.T0RU.desc": {
+          "source": "Provides data provider operations for **ODT** (OpenDocument Text) files, the native document format for LibreOffice Writer and part of the [OpenDocument](https://en.wikipedia.org/wiki/OpenDocument) standard.\n\n**Supported Operations**:\n- **Read paragraphs** — extract text with heading hierarchy and style information\n- **Read tables** — extract table data with automatic or explicit header detection\n- **Write paragraphs** — create documents with styled text and headings\n- **Write tables** — create documents with structured tabular data\n\n**Key Features**:\n- Heading style detection (`Heading1`, `Heading2`, `Heading3`)\n- Table extraction with `header_row` auto-detection or explicit `headers`\n- `paragraphs` and `table` content modes for both reading and writing\n- File path, stream, and in-memory binary data support\n\n**Business Use Cases**:\n- Processing LibreOffice Writer documents in automated workflows\n- Extracting structured text and tables from `.odt` files\n- Generating ODT reports and documents programmatically",
+          "message": "LibreOffice Writer のネイティブ ドキュメント フォーマットであり [OpenDocument](https://en.wikipedia.org/wiki/OpenDocument) 標準の一部である **ODT** (OpenDocument Text) ファイルのデータ プロバイダー操作を提供します。\n\n**サポートされている操作**:\n- **Read paragraphs** — 見出し階層とスタイル情報を含むテキストを抽出します\n- **Read tables** — 自動または明示的なヘッダー検出で表データを抽出します\n- **Write paragraphs** — スタイル付きテキストと見出しを含むドキュメントを作成します\n- **Write tables** — 構造化表形式データを含むドキュメントを作成します\n\n**主な機能**:\n- 見出しスタイルの検出 (`Heading1`, `Heading2`, `Heading3`)\n- `header_row` 自動検出または明示的な `headers` による表抽出\n- 読み取りと書き込みの両方に対応した `paragraphs` および `table` コンテンツ モード\n- ファイル パス、ストリーム、およびメモリ内バイナリ データのサポート\n\n**ビジネス ユースケース**:\n- 自動化ワークフローでの LibreOffice Writer ドキュメントの処理\n- `.odt` ファイルからの構造化テキストおよび表の抽出\n- プログラムによる ODT レポートおよびドキュメントの生成"
+        },
+        "app.T0RU.display_name": {
+          "source": "ODT Documents",
+          "message": "ODT ドキュメント"
+        },
+        "app.T0RU.short_desc": {
+          "source": "Read and write ODT documents",
+          "message": "ODT ドキュメントの読み書き"
+        }
+      }
+    }
+  }
+}

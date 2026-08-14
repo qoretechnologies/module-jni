@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.V29yZA.action.cmVhZA.desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "Word-Dokument von einem bestimmten Dateipfad lesen"
+        },
+        "app.V29yZA.action.cmVhZA.display_name": {
+          "source": "Read Word Document File",
+          "message": "Word-Dokumentdatei lesen"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "Dokumentabsätze mit Textinhalt und Stilinformationen lesen (Überschriften, normaler Text)"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Absätze"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "Dokumentabsätze lesen"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "Eine Tabelle als strukturierte Zeilendaten mit Spaltenköpfen lesen"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Eine Tabelle als Zeilendaten lesen"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "Typ des zu lesenden Inhalts: `paragraphs` (Standard) oder `table`"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Art des zu lesenden Inhalts"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "Wenn `True`, enthält die erste Zeile der Tabelle Spaltenüberschriften; gilt nur für den Tabellenmodus"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Kopfzeile"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "Erste Zeile enthält Überschriften"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "Explizite Liste von Spaltenüberschriften für den Tabellenmodus; schließt sich mit `header_row` gegenseitig aus"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Spalten-Header"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Explizite Liste von Spaltenüberschriften"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Word document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Der Speicherort der Word-Dokumentdaten; schließt sich mit `data` und `stream` gegenseitig aus; wird mit einem Aufruf von [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) aufgelöst"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Word Input Path",
+          "message": "Word-Eingabepfad"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Word document",
+          "message": "Der Speicherort des Word-Dokuments"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "Index der zu lesenden Tabelle, wenn `content_type` `table` ist; 0-basiert, Standard ist 0"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Tabellen-Index"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Index der zu lesenden Tabelle (0-basiert)"
+        },
+        "app.V29yZA.action.cmVhZA.short_desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "Word-Dokument von einem bestimmten Dateipfad lesen"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Word document inline data",
+          "message": "Word-Dokument-Inline-Daten lesen"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Word Document Inline Data",
+          "message": "Word-Dokument-Inline-Daten lesen"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "Dokumentabsätze mit Textinhalt und Stilinformationen lesen (Überschriften, normaler Text)"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Absätze"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "Dokumentabsätze lesen"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "Eine Tabelle als strukturierte Zeilendaten mit Spaltenköpfen lesen"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Eine Tabelle als Zeilendaten lesen"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "Typ des zu lesenden Inhalts: `paragraphs` (Standard) oder `table`"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Art des zu lesenden Inhalts"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Word document data to process; conflicts with `stream` and `path`",
+          "message": "Zu verarbeitende Word-Dokumentdaten; steht im Konflikt mit `stream` und `path`"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Eingabedaten"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Word document data to process",
+          "message": "Zu verarbeitende Word-Dokumentdaten"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "Wenn `True`, enthält die erste Zeile der Tabelle Spaltenüberschriften; gilt nur für den Tabellenmodus"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Kopfzeile"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "Erste Zeile enthält Überschriften"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "Explizite Liste von Spaltenüberschriften für den Tabellenmodus; schließt sich mit `header_row` gegenseitig aus"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Spalten-Header"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Explizite Liste von Spaltenüberschriften"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "Index der zu lesenden Tabelle, wenn `content_type` `table` ist; 0-basiert, Standard ist 0"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Tabellen-Index"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Index der zu lesenden Tabelle (0-basiert)"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Word document inline data",
+          "message": "Word-Dokument-Inline-Daten lesen"
+        },
+        "app.V29yZA.action.d3JpdGU.desc": {
+          "source": "Write data to a Word document file at a specified path",
+          "message": "Daten in eine Word-Dokumentdatei an einem angegebenen Pfad schreiben"
+        },
+        "app.V29yZA.action.d3JpdGU.display_name": {
+          "source": "Write Word Document File",
+          "message": "Word-Dokumentdatei schreiben"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "Formatierte Absätze mit Text- und Überschriftstilen schreiben"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Absätze"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "Absätze schreiben"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "Strukturierte tabellarische Daten mit Spaltenüberschriften schreiben"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "Eine Tabelle schreiben"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "Art des zu schreibenden Inhalts: `paragraphs` (Standard) oder `table`"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Art des zu schreibenden Inhalts"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "Liste der Spaltenüberschriften für den Tabellenmodus; wenn nicht angegeben, werden die Überschriften automatisch aus dem ersten Datensatz erkannt"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Spalten-Header"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Liste der Spaltenüberschriften für den Tabellenmodus"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Word document data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Der Ort für die ausgegebene Word-Dokumentdatei; schließt sich mit `stream` gegenseitig aus; der Ausgabeort wird durch einen Aufruf von [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) verarbeitet"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Word Output Path",
+          "message": "Word-Ausgabepfad"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Word document",
+          "message": "Der Ort, an den das Word-Dokument geschrieben werden soll"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "Optionaler Titel, der als Überschrift am Anfang des Dokuments hinzugefügt werden soll"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "Dokumenttitel"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "Titel, der am Anfang hinzugefügt werden soll"
+        },
+        "app.V29yZA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a Word document file",
+          "message": "Daten in eine Word-Dokumentdatei schreiben"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Word document data in memory and return it as binary data; useful for generating Word files without writing to disk",
+          "message": "Word-Dokumentdaten im Speicher erstellen und als Binärdaten zurückgeben; nützlich zum Generieren von Word-Dateien ohne Schreiben auf die Festplatte"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Word Document Data",
+          "message": "Word-Dokumentdaten erstellen"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "Formatierte Absätze mit Text- und Überschriftstilen schreiben"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Absätze"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "Absätze schreiben"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "Strukturierte tabellarische Daten mit Spaltenüberschriften schreiben"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "Eine Tabelle schreiben"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "Art des zu schreibenden Inhalts: `paragraphs` (Standard) oder `table`"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Art des zu schreibenden Inhalts"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "Liste der Spaltenüberschriften für den Tabellenmodus; wenn nicht angegeben, werden die Überschriften automatisch aus dem ersten Datensatz erkannt"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Spalten-Header"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Liste der Spaltenüberschriften für den Tabellenmodus"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "Optionaler Titel, der als Überschrift am Anfang des Dokuments hinzugefügt werden soll"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "Dokumenttitel"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "Titel, der am Anfang hinzugefügt werden soll"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Word document data and return as binary",
+          "message": "Word-Dokumentdaten erstellen und als Binärdaten zurückgeben"
+        },
+        "app.V29yZA.desc": {
+          "source": "Read and write Microsoft Word documents (.docx format)",
+          "message": "Microsoft Word-Dokumente (.docx-Format) lesen und schreiben"
+        },
+        "app.V29yZA.display_name": {
+          "source": "Word Documents",
+          "message": "Word-Dokumente"
+        },
+        "app.V29yZA.short_desc": {
+          "source": "Read and write Microsoft Word documents",
+          "message": "Microsoft Word-Dokumente lesen und schreiben"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,529 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.desc": {
+          "source": "Non-destructively inspect messages currently in a JMS queue without consuming them.\n\nMessages remain in the queue after browsing. An optional selector can be used to filter the browsed messages by their properties",
+          "message": "Переглядати повідомлення в черзі JMS без їх видалення та споживання.\n\nПовідомлення залишаються в черзі після перегляду. Необов'язковий селектор можна використовувати для фільтрації переглянутих повідомлень за їхніми властивостями"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.display_name": {
+          "source": "Browse JMS Queue",
+          "message": "Переглянути чергу JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The queue to browse, in format `queue://name`; if not provided, the default destination from the connection options is used",
+          "message": "Черга для перегляду у форматі `queue://name`; якщо не вказано, використовується призначення за замовчуванням з параметрів з'єднання"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Призначення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The queue to browse, in format 'queue://name'",
+          "message": "Черга для перегляду у форматі 'queue://name'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.desc": {
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e.g., `{\"color\": \"red\"}` becomes `color = 'red'`)",
+          "message": "Хеш фільтрів властивостей для застосування як селектора повідомлень JMS SQL-92 (наприклад, `{\"color\": \"red\"}` стає `color = 'red'`)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.display_name": {
+          "source": "Selector",
+          "message": "Селектор"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.short_desc": {
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e",
+          "message": "Хеш фільтрів властивостей для застосування як селектора повідомлень JMS SQL-92 (напр."
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.short_desc": {
+          "source": "Non-destructively browse messages in a JMS queue",
+          "message": "Переглядати повідомлення в черзі JMS без їх видалення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.desc": {
+          "source": "A JMS message is received from a queue or topic; event includes JMS headers and user-defined string properties.\n\nConfigure the destination to listen on (`queue://name` or `topic://name`), an optional message selector for filtering, and a client ID for durable topic subscriptions",
+          "message": "Повідомлення JMS отримано з черги або теми; подія включає заголовки JMS та визначені користувачем рядкові властивості.\n\nНалаштуйте призначення для прослуховування (`queue://name` або `topic://name`), необов'язковий селектор повідомлень для фільтрації та ідентифікатор клієнта для довговічних підписок на теми"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.display_name": {
+          "source": "JMS Message Received",
+          "message": "Отримано повідомлення JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.desc": {
+          "source": "The JMS client ID; required for durable topic subscriptions",
+          "message": "Ідентифікатор клієнта JMS; необхідний для довговічних підписок на теми"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.display_name": {
+          "source": "Client ID",
+          "message": "Ідентифікатор клієнта"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.short_desc": {
+          "source": "The JMS client ID for durable subscriptions",
+          "message": "Ідентифікатор клієнта JMS для довговічних підписок"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "Default destination in format `queue://name` or `topic://name`; used by the polling provider for event subscription",
+          "message": "Призначення за замовчуванням у форматі `queue://name` або `topic://name`; використовується провайдером опитування для підписки на події"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Призначення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Default destination for messaging operations",
+          "message": "Призначення за замовчуванням для операцій обміну повідомленнями"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.desc": {
+          "source": "A JMS SQL-92 message selector expression for filtering incoming messages (e.g. `priority > 5 AND color = 'red'`)",
+          "message": "Вираз селектора повідомлень JMS SQL-92 для фільтрації вхідних повідомлень (наприклад, `priority > 5 AND color = 'red'`)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.display_name": {
+          "source": "Message Selector",
+          "message": "Селектор повідомлень"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.short_desc": {
+          "source": "JMS message selector for filtering messages",
+          "message": "Селектор повідомлень JMS для фільтрації повідомлень"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
+          "source": "A JMS message is received from a queue or topic",
+          "message": "Повідомлення JMS отримано з черги або теми"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.desc": {
+          "source": "Send a JMS message to a destination and wait for a synchronous reply using a temporary queue.\n\nThe request message's `JMSReplyTo` header is automatically set to a temporary queue. The responder should send the reply to that destination and copy the `JMSMessageID` to the reply's `JMSCorrelationID`",
+          "message": "Надіслати повідомлення JMS до призначення та зачекати синхронної відповіді за допомогою тимчасової черги.\n\nЗаголовок `JMSReplyTo` запиту автоматично встановлюється на тимчасову чергу. Відповідач повинен надіслати відповідь до цього призначення та скопіювати `JMSMessageID` у `JMSCorrelationID` відповіді"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.display_name": {
+          "source": "JMS Request-Reply",
+          "message": "Запит-відповідь JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "The correlation ID to set on the message; used to link related messages",
+          "message": "Ідентифікатор кореляції для встановлення у повідомленні; використовується для зв'язування пов'язаних повідомлень"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "Ідентифікатор кореляції"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "The correlation ID to set on the message",
+          "message": "Ідентифікатор кореляції для встановлення у повідомленні"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.desc": {
+          "source": "The message body / payload; the type determines the JMS message type:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- other → `BytesMessage` with JSON serialization",
+          "message": "Тіло повідомлення / корисне навантаження; тип визначає тип повідомлення JMS:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- інше → `BytesMessage` із серіалізацією JSON"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Тіло повідомлення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload",
+          "message": "Тіло повідомлення / корисне навантаження"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.desc": {
+          "source": "The message is not persisted and may be lost in transit",
+          "message": "Повідомлення не зберігається і може бути втрачено під час передачі"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.display_name": {
+          "source": "Non-Persistent",
+          "message": "Непостійне"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.short_desc": {
+          "source": "Message is not persisted",
+          "message": "Повідомлення не зберігається"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.desc": {
+          "source": "The JMS provider persists the message to stable storage",
+          "message": "Провайдер JMS зберігає повідомлення у надійне сховище"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.display_name": {
+          "source": "Persistent",
+          "message": "Постійне"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.short_desc": {
+          "source": "Message is persisted to stable storage",
+          "message": "Повідомлення зберігається у надійне сховище"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.desc": {
+          "source": "The delivery mode for the message",
+          "message": "Режим доставки для повідомлення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.display_name": {
+          "source": "Delivery Mode",
+          "message": "Режим доставки"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.short_desc": {
+          "source": "The delivery mode for the message",
+          "message": "Режим доставки для повідомлення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
+          "message": "Призначення для надсилання повідомлення у форматі `queue://name` або `topic://name`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Призначення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "message": "Призначення для надсилання повідомлення у форматі 'queue://name' або 'topic://name'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.desc": {
+          "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
+          "message": "Визначені користувачем рядкові властивості для встановлення у повідомленні.\n\nВкажіть хеш рядкових пар ключ-значення.\n\n**Приклад**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Заголовки"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.short_desc": {
+          "source": "User-defined string properties to set on the message",
+          "message": "Визначені користувачем рядкові властивості для встановлення у повідомленні"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "0 - Lowest",
+          "message": "0 — Найнижчий"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjA.short_desc": {
+          "source": "Lowest priority",
+          "message": "Найнижчий пріоритет"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "1 - Low",
+          "message": "1 — Низький"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjE.short_desc": {
+          "source": "Low priority",
+          "message": "Низький пріоритет"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "2 - Below Normal",
+          "message": "2 — Нижче нормального"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjI.short_desc": {
+          "source": "Below normal priority",
+          "message": "Пріоритет нижче нормального"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "3 - Normal Low",
+          "message": "3 - Звичайний низький"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjM.short_desc": {
+          "source": "Normal low priority",
+          "message": "Звичайний низький пріоритет"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "4 - Normal (Default)",
+          "message": "4 - Звичайний (за замовчуванням)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjQ.short_desc": {
+          "source": "Default JMS priority",
+          "message": "Пріоритет JMS за замовчуванням"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjU.display_name": {
+          "source": "5 - Above Normal",
+          "message": "5 - Вище звичайного"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjU.short_desc": {
+          "source": "Above normal (expedited)",
+          "message": "Вище звичайного (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjY.display_name": {
+          "source": "6 - High",
+          "message": "6 - Високий"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjY.short_desc": {
+          "source": "High priority (expedited)",
+          "message": "Високий пріоритет (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojc.display_name": {
+          "source": "7 - Very High",
+          "message": "7 - Дуже високий"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojc.short_desc": {
+          "source": "Very high priority (expedited)",
+          "message": "Дуже високий пріоритет (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojg.display_name": {
+          "source": "8 - Critical",
+          "message": "8 - Критичний"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojg.short_desc": {
+          "source": "Critical priority (expedited)",
+          "message": "Критичний пріоритет (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojk.display_name": {
+          "source": "9 - Highest",
+          "message": "9 - Найвищий"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojk.short_desc": {
+          "source": "Highest priority (expedited)",
+          "message": "Найвищий пріоритет (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.desc": {
+          "source": "The JMS message priority; levels `0`–`4` are normal, levels `5`–`9` are expedited",
+          "message": "Пріоритет повідомлення JMS; рівні `0`–`4` є звичайними, рівні `5`–`9` — прискореними"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.short_desc": {
+          "source": "The JMS message priority",
+          "message": "Пріоритет повідомлення JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.desc": {
+          "source": "The message time-to-live in milliseconds; 0 means the message does not expire",
+          "message": "Час життя повідомлення в мілісекундах; 0 означає, що термін дії повідомлення не закінчується"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.display_name": {
+          "source": "Time to Live",
+          "message": "Час життя"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.short_desc": {
+          "source": "The message time-to-live in milliseconds",
+          "message": "Час життя повідомлення в мілісекундах"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Необов'язковий ідентифікатор типу повідомлення, визначений прикладною програмою"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Тип"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.short_desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Необов'язковий ідентифікатор типу повідомлення, визначений прикладною програмою"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.short_desc": {
+          "source": "Send a JMS request and wait for a reply",
+          "message": "Надіслати запит JMS і очікувати на відповідь"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.desc": {
+          "source": "Send a JMS message to a queue or topic with optional JMS headers and user-defined string properties",
+          "message": "Надіслати повідомлення JMS у чергу або тему з необов'язковими заголовками JMS та властивостями користувача"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.display_name": {
+          "source": "Send JMS Message",
+          "message": "Надіслати повідомлення JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "The correlation ID to set on the message; used to link related messages",
+          "message": "Ідентифікатор кореляції для встановлення у повідомленні; використовується для зв'язування пов'язаних повідомлень"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "Ідентифікатор кореляції"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "The correlation ID to set on the message",
+          "message": "Ідентифікатор кореляції для встановлення у повідомленні"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.desc": {
+          "source": "The message body / payload; the type determines the JMS message type:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- other → `BytesMessage` with JSON serialization",
+          "message": "Тіло повідомлення / корисне навантаження; тип визначає тип повідомлення JMS:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- інше → `BytesMessage` із серіалізацією JSON"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Тіло повідомлення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload",
+          "message": "Тіло повідомлення / корисне навантаження"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.desc": {
+          "source": "The message is not persisted and may be lost in transit",
+          "message": "Повідомлення не зберігається і може бути втрачено під час передачі"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.display_name": {
+          "source": "Non-Persistent",
+          "message": "Непостійне"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.short_desc": {
+          "source": "Message is not persisted",
+          "message": "Повідомлення не зберігається"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.desc": {
+          "source": "The JMS provider persists the message to stable storage",
+          "message": "Провайдер JMS зберігає повідомлення у надійне сховище"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.display_name": {
+          "source": "Persistent",
+          "message": "Постійне"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.short_desc": {
+          "source": "Message is persisted to stable storage",
+          "message": "Повідомлення зберігається у надійне сховище"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.desc": {
+          "source": "The delivery mode for the message",
+          "message": "Режим доставки для повідомлення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.display_name": {
+          "source": "Delivery Mode",
+          "message": "Режим доставки"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.short_desc": {
+          "source": "The delivery mode for the message",
+          "message": "Режим доставки для повідомлення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
+          "message": "Призначення для надсилання повідомлення у форматі `queue://name` або `topic://name`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Призначення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "message": "Призначення для надсилання повідомлення у форматі 'queue://name' або 'topic://name'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.desc": {
+          "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
+          "message": "Визначені користувачем рядкові властивості для встановлення у повідомленні.\n\nВкажіть хеш рядкових пар ключ-значення.\n\n**Приклад**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Заголовки"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.short_desc": {
+          "source": "User-defined string properties to set on the message",
+          "message": "Визначені користувачем рядкові властивості для встановлення у повідомленні"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "0 - Lowest",
+          "message": "0 — Найнижчий"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjA.short_desc": {
+          "source": "Lowest priority",
+          "message": "Найнижчий пріоритет"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "1 - Low",
+          "message": "1 — Низький"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjE.short_desc": {
+          "source": "Low priority",
+          "message": "Низький пріоритет"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "2 - Below Normal",
+          "message": "2 — Нижче нормального"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjI.short_desc": {
+          "source": "Below normal priority",
+          "message": "Пріоритет нижче нормального"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "3 - Normal Low",
+          "message": "3 - Звичайний низький"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjM.short_desc": {
+          "source": "Normal low priority",
+          "message": "Звичайний низький пріоритет"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "4 - Normal (Default)",
+          "message": "4 - Звичайний (за замовчуванням)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjQ.short_desc": {
+          "source": "Default JMS priority",
+          "message": "Пріоритет JMS за замовчуванням"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjU.display_name": {
+          "source": "5 - Above Normal",
+          "message": "5 - Вище звичайного"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjU.short_desc": {
+          "source": "Above normal (expedited)",
+          "message": "Вище звичайного (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjY.display_name": {
+          "source": "6 - High",
+          "message": "6 - Високий"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjY.short_desc": {
+          "source": "High priority (expedited)",
+          "message": "Високий пріоритет (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojc.display_name": {
+          "source": "7 - Very High",
+          "message": "7 - Дуже високий"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojc.short_desc": {
+          "source": "Very high priority (expedited)",
+          "message": "Дуже високий пріоритет (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojg.display_name": {
+          "source": "8 - Critical",
+          "message": "8 - Критичний"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojg.short_desc": {
+          "source": "Critical priority (expedited)",
+          "message": "Критичний пріоритет (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojk.display_name": {
+          "source": "9 - Highest",
+          "message": "9 - Найвищий"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojk.short_desc": {
+          "source": "Highest priority (expedited)",
+          "message": "Найвищий пріоритет (прискорений)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.desc": {
+          "source": "The JMS message priority; levels `0`–`4` are normal, levels `5`–`9` are expedited",
+          "message": "Пріоритет повідомлення JMS; рівні `0`–`4` є звичайними, рівні `5`–`9` — прискореними"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.short_desc": {
+          "source": "The JMS message priority",
+          "message": "Пріоритет повідомлення JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.desc": {
+          "source": "The message time-to-live in milliseconds; 0 means the message does not expire",
+          "message": "Час життя повідомлення в мілісекундах; 0 означає, що термін дії повідомлення не закінчується"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.display_name": {
+          "source": "Time to Live",
+          "message": "Час життя"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.short_desc": {
+          "source": "The message time-to-live in milliseconds",
+          "message": "Час життя повідомлення в мілісекундах"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Необов'язковий ідентифікатор типу повідомлення, визначений прикладною програмою"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Тип"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.short_desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Необов'язковий ідентифікатор типу повідомлення, визначений прикладною програмою"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.short_desc": {
+          "source": "Send a JMS message to a queue or topic",
+          "message": "Надіслати повідомлення JMS у чергу або тему"
+        },
+        "app.SmFrYXJ0YUpNUw.desc": {
+          "source": "Jakarta Messaging (JMS) 3.x compliant broker for enterprise messaging with support for queues, topics, durable subscriptions, message selectors, and request-reply patterns",
+          "message": "Брокер, сумісний із Jakarta Messaging (JMS) 3.x, для корпоративного обміну повідомленнями із підтримкою черг, тем, довговічних підписок, селекторів повідомлень та шаблонів «запит-відповідь»"
+        },
+        "app.SmFrYXJ0YUpNUw.display_name": {
+          "source": "Jakarta JMS",
+          "message": "Jakarta JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.short_desc": {
+          "source": "Jakarta Messaging (JMS) 3.x compliant broker",
+          "message": "Брокер, сумісний із Jakarta Messaging (JMS) 3.x"
+        }
+      }
+    }
+  }
+}

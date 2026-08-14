@@ -1,0 +1,393 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.T0RQ.action.cmVhZA.desc": {
+          "source": "Reads an ODP presentation from a file at the given `path` and returns structured data for each slide or table row.\n\n## Key Options\n\n- `path`: the file location of the ODP presentation to read (required)\n- `content_type`: set to `slides` (default) to iterate slides, or `table` to read tabular data from a slide\n- `slide_index`: 0-based slide index when reading a table\n- `table_index`: 0-based table index on the target slide\n- `header_row`: if `true`, the first table row is treated as column headers\n\nEach slide record includes `title`, `body`, `notes`, `layout`, and `slide_number` fields.",
+          "message": "지정된 `path` 위치의 파일에서 ODP 프레젠테이션을 읽고 각 슬라이드 또는 테이블 행에 대한 구조화된 데이터를 반환합니다.\n\n## 주요 옵션\n\n- `path`: 읽을 ODP 프레젠테이션의 파일 위치 (필수)\n- `content_type`: 슬라이드를 순회하려면 `slides`(기본값)으로 설정하고, 슬라이드에서 테이블 데이터를 읽으려면 `table`로 설정\n- `slide_index`: 테이블을 읽을 때 0부터 시작하는 슬라이드 인덱스\n- `table_index`: 대상 슬라이드의 0부터 시작하는 테이블 인덱스\n- `header_row`: `true`인 경우 첫 번째 테이블 행을 열 헤더로 처리함\n\n각 슬라이드 레코드에는 `title`, `body`, `notes`, `layout`, `slide_number` 필드가 포함됩니다."
+        },
+        "app.T0RQ.action.cmVhZA.display_name": {
+          "source": "Read ODP Presentation File",
+          "message": "ODP 프레젠테이션 파일 읽기"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "제목, 본문, 슬라이드 노트 및 레이아웃 정보가 포함된 프레젠테이션 슬라이드 읽기"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "슬라이드"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "프레젠테이션 슬라이드 읽기"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "슬라이드에 삽입된 테이블을 구조화된 행 데이터로 읽기"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "테이블을 행 데이터로 읽기"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) to iterate over presentation slides, or `table` to read tabular data from a specific slide",
+          "message": "읽을 콘텐츠 유형: 프레젠테이션 슬라이드를 순회하려면 `slides`(기본값), 특정 슬라이드에서 테이블 데이터를 읽으려면 `table`"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.T0RQ.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "읽을 콘텐츠 유형"
+        },
+        "app.T0RQ.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `true`, the first row of the table contains column headers; only applies when `content_type` is `table`; mutually exclusive with `headers`",
+          "message": "`true`인 경우 테이블의 첫 번째 행에 열 헤더가 포함됩니다. `content_type`이 `table`일 때만 적용되며, `headers`과 상호 배타적입니다."
+        },
+        "app.T0RQ.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.T0RQ.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "첫 번째 행에 헤더 포함"
+        },
+        "app.T0RQ.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; only applies when `content_type` is `table`; mutually exclusive with `header_row`",
+          "message": "테이블 모드용 열 헤더의 명시적 목록. `content_type`이 `table`일 때만 적용되며, `header_row`와 상호 배타적입니다."
+        },
+        "app.T0RQ.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RQ.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "열 헤더의 명시적 목록"
+        },
+        "app.T0RQ.action.cmVhZA.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is `0`",
+          "message": "`content_type`이 `table`일 때 테이블을 포함하는 슬라이드의 인덱스(0부터 시작, 기본값: `0`)"
+        },
+        "app.T0RQ.action.cmVhZA.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "슬라이드 인덱스"
+        },
+        "app.T0RQ.action.cmVhZA.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "테이블 모드용 슬라이드 인덱스 (0부터 시작)"
+        },
+        "app.T0RQ.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODP data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "ODP 데이터의 위치. `data` 및 `stream`과 상호 배타적입니다. [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출로 확인됩니다."
+        },
+        "app.T0RQ.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODP Input Path",
+          "message": "ODP 입력 경로"
+        },
+        "app.T0RQ.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODP file",
+          "message": "ODP 파일의 위치"
+        },
+        "app.T0RQ.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is `0`",
+          "message": "`content_type`이 `table`일 때 지정된 슬라이드에서 읽을 테이블의 인덱스(0부터 시작, 기본값: `0`)"
+        },
+        "app.T0RQ.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "테이블 인덱스"
+        },
+        "app.T0RQ.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "읽을 테이블의 인덱스 (0부터 시작)"
+        },
+        "app.T0RQ.action.cmVhZA.short_desc": {
+          "source": "Read ODP presentation from a specific file location",
+          "message": "특정 파일 위치에서 ODP 프레젠테이션 읽기"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.desc": {
+          "source": "Reads an ODP presentation from inline binary `data` and returns structured data for each slide or table row.\n\n## Key Options\n\n- `data`: the ODP presentation binary data to process (required)\n- `content_type`: set to `slides` (default) to iterate slides, or `table` to read tabular data from a slide\n- `slide_index`: 0-based slide index when reading a table\n- `table_index`: 0-based table index on the target slide\n- `header_row`: if `true`, the first table row is treated as column headers\n\nUseful for processing ODP presentations already loaded in memory without writing to disk first.",
+          "message": "인라인 바이너리 `data`에서 ODP 프레젠테이션을 읽고 각 슬라이드 또는 테이블 행에 대한 구조화된 데이터를 반환합니다.\n\n## 주요 옵션\n\n- `data`: 처리할 ODP 프레젠테이션 바이너리 데이터 (필수)\n- `content_type`: 슬라이드를 순회하려면 `slides`(기본값)으로 설정하고, 슬라이드에서 테이블 데이터를 읽으려면 `table`로 설정\n- `slide_index`: 테이블을 읽을 때 0부터 시작하는 슬라이드 인덱스\n- `table_index`: 대상 슬라이드의 0부터 시작하는 테이블 인덱스\n- `header_row`: `true`인 경우 첫 번째 테이블 행을 열 헤더로 처리함\n\n디스크에 먼저 쓰지 않고 메모리에 이미 로드된 ODP 프레젠테이션을 처리하는 데 유용합니다."
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODP Presentation Inline Data",
+          "message": "ODP 프레젠테이션 인라인 데이터 읽기"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "제목, 본문, 슬라이드 노트 및 레이아웃 정보가 포함된 프레젠테이션 슬라이드 읽기"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "슬라이드"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "프레젠테이션 슬라이드 읽기"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "슬라이드에 삽입된 테이블을 구조화된 행 데이터로 읽기"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "테이블을 행 데이터로 읽기"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) to iterate over presentation slides, or `table` to read tabular data from a specific slide",
+          "message": "읽을 콘텐츠 유형: 프레젠테이션 슬라이드를 순회하려면 `slides`(기본값), 특정 슬라이드에서 테이블 데이터를 읽으려면 `table`"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "읽을 콘텐츠 유형"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODP presentation binary data to process; mutually exclusive with `stream` and `path`",
+          "message": "처리할 ODP 프레젠테이션 바이너리 데이터. `stream` 및 `path`과 상호 배타적입니다."
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "입력 데이터"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODP presentation data to process",
+          "message": "처리할 ODP 프레젠테이션 데이터"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `true`, the first row of the table contains column headers; only applies when `content_type` is `table`; mutually exclusive with `headers`",
+          "message": "`true`인 경우 테이블의 첫 번째 행에 열 헤더가 포함됩니다. `content_type`이 `table`일 때만 적용되며, `headers`과 상호 배타적입니다."
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "첫 번째 행에 헤더 포함"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; only applies when `content_type` is `table`; mutually exclusive with `header_row`",
+          "message": "테이블 모드용 열 헤더의 명시적 목록. `content_type`이 `table`일 때만 적용되며, `header_row`와 상호 배타적입니다."
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "열 헤더의 명시적 목록"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is `0`",
+          "message": "`content_type`이 `table`일 때 테이블을 포함하는 슬라이드의 인덱스(0부터 시작, 기본값: `0`)"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "슬라이드 인덱스"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "테이블 모드용 슬라이드 인덱스 (0부터 시작)"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is `0`",
+          "message": "`content_type`이 `table`일 때 지정된 슬라이드에서 읽을 테이블의 인덱스(0부터 시작, 기본값: `0`)"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "테이블 인덱스"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "읽을 테이블의 인덱스 (0부터 시작)"
+        },
+        "app.T0RQ.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODP presentation inline data",
+          "message": "ODP 프레젠테이션 인라인 데이터 읽기"
+        },
+        "app.T0RQ.action.d3JpdGU.desc": {
+          "source": "Creates an ODP presentation file at the given `path` from records written via the data provider API.\n\n## Key Options\n\n- `path`: the output file location for the ODP presentation (required)\n- `content_type`: set to `slides` (default) to write slide records, or `table` to write tabular data\n- `headers`: explicit list of column headers for table mode\n- `title`: optional presentation title; adds a title-only first slide in `slides` mode or sets the table slide title in `table` mode\n\nFor slides, each record should contain `title`, `body`, and optionally `notes` and `layout` fields.",
+          "message": "데이터 제공자 API를 통해 기록된 레코드로부터 지정된 `path`에 ODP 프레젠테이션 파일을 생성합니다.\n\n## 주요 옵션\n\n- `path`: ODP 프레젠테이션의 출력 파일 위치 (필수)\n- `content_type`: 슬라이드 레코드를 쓰려면 `slides`(기본값)으로 설정하고, 테이블 데이터를 쓰려면 `table`로 설정\n- `headers`: 테이블 모드용 열 헤더의 명시적 목록\n- `title`: 선택적 프레젠테이션 제목. `slides` 모드에서는 제목 전용 첫 번째 슬라이드를 추가하고 `table` 모드에서는 테이블 슬라이드 제목을 설정함\n\n슬라이드의 경우 각 레코드에 `title`, `body` 및 선택적으로 `notes` 및 `layout` 필드가 포함되어야 합니다."
+        },
+        "app.T0RQ.action.d3JpdGU.display_name": {
+          "source": "Write ODP Presentation File",
+          "message": "ODP 프레젠테이션 파일 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write slides",
+          "message": "슬라이드 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "슬라이드"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "슬라이드 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write a table",
+          "message": "테이블 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "테이블 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) to write slide records with `title`, `body`, and `notes` fields, or `table` to write tabular data rows",
+          "message": "작성할 콘텐츠 유형: `title`, `body`, `notes` 필드가 있는 슬라이드 레코드를 쓰려면 `slides`(기본값), 테이블 데이터 행을 쓰려면 `table`"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.T0RQ.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "작성할 콘텐츠 유형"
+        },
+        "app.T0RQ.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers when `content_type` is `table`; if not provided, headers will be auto-detected from the keys of the first record",
+          "message": "`content_type`이 `table`일 때의 열 헤더 목록. 제공되지 않는 경우 첫 번째 레코드의 키에서 헤더가 자동 감지됩니다."
+        },
+        "app.T0RQ.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RQ.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "테이블 모드용 열 헤더 목록"
+        },
+        "app.T0RQ.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODP data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "출력 ODP 데이터 파일의 위치. `stream`과 상호 배타적입니다. 출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 호출로 처리됩니다."
+        },
+        "app.T0RQ.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODP Output Path",
+          "message": "ODP 출력 경로"
+        },
+        "app.T0RQ.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODP file",
+          "message": "ODP 파일을 쓸 위치"
+        },
+        "app.T0RQ.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title for the presentation; when `content_type` is `slides`, adds a title-only slide at the beginning; when `content_type` is `table`, sets the title on the table slide",
+          "message": "프레젠테이션의 선택적 제목. `content_type`이 `slides`일 때 시작 부분에 제목 전용 슬라이드를 추가하고, `content_type`이 `table`일 때 테이블 슬라이드에 제목을 설정합니다."
+        },
+        "app.T0RQ.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "프레젠테이션 제목"
+        },
+        "app.T0RQ.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "첫 번째 슬라이드 또는 테이블 슬라이드의 제목"
+        },
+        "app.T0RQ.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODP presentation file",
+          "message": "ODP 프레젠테이션 파일에 데이터 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Creates an ODP presentation in memory and returns it as binary data, without writing to disk.\n\n## Key Options\n\n- `content_type`: set to `slides` (default) to write slide records, or `table` to write tabular data\n- `headers`: explicit list of column headers for table mode\n- `title`: optional presentation title\n\nUseful for generating ODP presentations dynamically in workflows where the output is sent to a downstream system or returned as a response rather than saved to a file.",
+          "message": "디스크에 쓰지 않고 메모리에 ODP 프레젠테이션을 생성하고 바이너리 데이터로 반환합니다.\n\n## 주요 옵션\n\n- `content_type`: 슬라이드 레코드를 쓰려면 `slides`(기본값)으로 설정하고, 테이블 데이터를 쓰려면 `table`로 설정\n- `headers`: 테이블 모드용 열 헤더의 명시적 목록\n- `title`: 선택적 프레젠테이션 제목\n\n출력 결과를 파일로 저장하지 않고 하위 시스템으로 보내거나 응답으로 반환하는 워크플로에서 동적으로 ODP 프레젠테이션을 생성하는 데 유용합니다."
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODP Presentation Data",
+          "message": "ODP 프레젠테이션 데이터 생성"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write slides",
+          "message": "슬라이드 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "슬라이드"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "슬라이드 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write a table",
+          "message": "테이블 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "테이블 쓰기"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) to write slide records with `title`, `body`, and `notes` fields, or `table` to write tabular data rows",
+          "message": "작성할 콘텐츠 유형: `title`, `body`, `notes` 필드가 있는 슬라이드 레코드를 쓰려면 `slides`(기본값), 테이블 데이터 행을 쓰려면 `table`"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "작성할 콘텐츠 유형"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers when `content_type` is `table`; if not provided, headers will be auto-detected from the keys of the first record",
+          "message": "`content_type`이 `table`일 때의 열 헤더 목록. 제공되지 않는 경우 첫 번째 레코드의 키에서 헤더가 자동 감지됩니다."
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "테이블 모드용 열 헤더 목록"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title for the presentation; when `content_type` is `slides`, adds a title-only slide at the beginning; when `content_type` is `table`, sets the title on the table slide",
+          "message": "프레젠테이션의 선택적 제목. `content_type`이 `slides`일 때 시작 부분에 제목 전용 슬라이드를 추가하고, `content_type`이 `table`일 때 테이블 슬라이드에 제목을 설정합니다."
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "프레젠테이션 제목"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "첫 번째 슬라이드 또는 테이블 슬라이드의 제목"
+        },
+        "app.T0RQ.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODP presentation data and return as binary",
+          "message": "ODP 프레젠테이션 데이터를 생성하고 바이너리로 반환"
+        },
+        "app.T0RQ.desc": {
+          "source": "Provides data provider actions for reading and writing **ODP** (OpenDocument Presentation) files, the native presentation format for LibreOffice Impress and part of the OASIS OpenDocument standard.\n\n## Supported Operations\n\n- **Read slides**: iterate over slides extracting title, body text, speaker notes, and layout information\n- **Read tables**: extract tabular data from tables embedded in slides with automatic or explicit header detection\n- **Write slides**: generate presentations with title, body, and speaker notes per slide\n- **Write tables**: create presentations containing tabular data with column headers\n\n## Key Features\n\n- Slide-by-slide iteration with structured field extraction\n- Title, body text, and speaker notes parsing\n- Table support for reading and writing structured data on slides\n- Binary data input/output for in-memory processing\n- File path and stream-based I/O\n\n## Business Use Cases\n\n- Extracting presentation content for indexing or analysis\n- Processing slide decks in automated workflows\n- Generating ODP presentations from structured data\n- Converting presentation content to other formats",
+          "message": "LibreOffice Impress의 기본 프레젠테이션 형식이자 OASIS OpenDocument 표준의 일부인 **ODP**(OpenDocument Presentation) 파일을 읽고 쓰기 위한 데이터 제공자 액션을 제공합니다.\n\n## 지원되는 작업\n\n- **슬라이드 읽기**: 슬라이드를 순회하며 제목, 본문 텍스트, 슬라이드 노트 및 레이아웃 정보를 추출\n- **테이블 읽기**: 자동 또는 명시적 헤더 감지를 통해 슬라이드에 삽입된 테이블에서 테이블 데이터를 추출\n- **슬라이드 쓰기**: 슬라이드별 제목, 본문 및 슬라이드 노트를 포함하는 프레젠테이션 생성\n- **테이블 쓰기**: 열 헤더가 포함된 테이블 데이터를 포함하는 프레젠테이션 생성\n\n## 주요 기능\n\n- 구조화된 필드 추출을 통한 슬라이드별 순회\n- 제목, 본문 텍스트 및 슬라이드 노트 파싱\n- 슬라이드상의 구조화된 데이터 읽기 및 쓰기를 위한 테이블 지원\n- 메모리 내 처리를 위한 바이너리 데이터 입출력\n- 파일 경로 및 스트림 기반 I/O\n\n## 비즈니스 사용 사례\n\n- 색인 생성 또는 분석을 위한 프레젠테이션 콘텐츠 추출\n- 자동화된 워크플로에서 슬라이드 덱 처리\n- 구조화된 데이터로부터 ODP 프레젠테이션 생성\n- 프레젠테이션 콘텐츠를 다른 형식으로 변환"
+        },
+        "app.T0RQ.display_name": {
+          "source": "ODP Presentations",
+          "message": "ODP 프레젠테이션"
+        },
+        "app.T0RQ.short_desc": {
+          "source": "Read and write ODP presentations",
+          "message": "ODP 프레젠테이션 읽기 및 쓰기"
+        }
+      }
+    }
+  }
+}

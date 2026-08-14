@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.SmRiY0RQ.action.ZXhlYw.desc": {
+          "source": "Execute a SQL statement (DDL or DML) and return the number of affected rows.\n\nUse for `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, and other non-query statements.\n\n**Example**: `INSERT INTO users (name, email) VALUES (?, ?)` with `args` = `(\"Alice\", \"alice@example.com\")`",
+          "message": "SQLステートメント（DDLまたはDML）を実行し、影響を受けた行数を返します。\n\n`INSERT`、`UPDATE`、`DELETE`、`CREATE TABLE`、およびその他の非クエリステートメントに使用します。\n\n**例**: `INSERT INTO users (name, email) VALUES (?, ?)`（`args` = `(\"Alice\", \"alice@example.com\")`）"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.display_name": {
+          "source": "Execute SQL Statement",
+          "message": "SQLステートメントの実行"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.YXJncw.desc": {
+          "source": "Optional list of arguments for parameterized queries.\n\nArguments are bound to `?` placeholders in the SQL query in order.\n\n**Example**: for `WHERE status = ? AND id > ?`, pass `(\"active\", 100)`",
+          "message": "パラメーター化クエリ用のオプションの引数リスト。\n\n引数は、SQLクエリ内の`?`プレースホルダーに順番にバインドされます。\n\n**例**: `WHERE status = ? AND id > ?`の場合、`(\"active\", 100)`を渡します"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.YXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.YXJncw.short_desc": {
+          "source": "Optional list of arguments for parameterized queries",
+          "message": "パラメーター化クエリ用のオプションの引数リスト"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.c3Fs.desc": {
+          "source": "The SQL query to execute.\n\nUse `?` placeholders for parameterized queries with the `args` field.\n\n**Example**: `SELECT * FROM users WHERE status = ? AND created_at > ?`",
+          "message": "実行するSQLクエリ。\n\n`args`フィールドを使用したパラメーター化クエリには`?`プレースホルダーを使用します。\n\n**例**: `SELECT * FROM users WHERE status = ? AND created_at > ?`"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.c3Fs.display_name": {
+          "source": "SQL Query",
+          "message": "SQLクエリ"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.c3Fs.short_desc": {
+          "source": "The SQL query to execute",
+          "message": "実行するSQLクエリ"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.short_desc": {
+          "source": "Execute a SQL statement",
+          "message": "SQLステートメントを実行します"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.desc": {
+          "source": "Execute a SQL query and return the result rows.\n\nUse `?` placeholders in the SQL string and provide arguments in the `args` list for parameterized queries.\n\n**Example**: `SELECT * FROM orders WHERE status = ? AND total > ?` with `args` = `(\"shipped\", 100.0)`",
+          "message": "SQL クエリを実行し、結果行を返します。\n\nパラメータ化クエリの場合は、SQL 文字列で `?` プレースホルダーを使用し、`args` リストで引数を指定します。\n\n**例**: `args` = `(\"shipped\", 100.0)` の `SELECT * FROM orders WHERE status = ? AND total > ?`"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.display_name": {
+          "source": "Execute SQL Query",
+          "message": "SQL クエリの実行"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.YXJncw.desc": {
+          "source": "Optional list of arguments for parameterized queries.\n\nArguments are bound to `?` placeholders in the SQL query in order.\n\n**Example**: for `WHERE status = ? AND id > ?`, pass `(\"active\", 100)`",
+          "message": "パラメーター化クエリ用のオプションの引数リスト。\n\n引数は、SQLクエリ内の`?`プレースホルダーに順番にバインドされます。\n\n**例**: `WHERE status = ? AND id > ?`の場合、`(\"active\", 100)`を渡します"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.YXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.YXJncw.short_desc": {
+          "source": "Optional list of arguments for parameterized queries",
+          "message": "パラメーター化クエリ用のオプションの引数リスト"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.c3Fs.desc": {
+          "source": "The SQL query to execute.\n\nUse `?` placeholders for parameterized queries with the `args` field.\n\n**Example**: `SELECT * FROM users WHERE status = ? AND created_at > ?`",
+          "message": "実行するSQLクエリ。\n\n`args`フィールドを使用したパラメーター化クエリには`?`プレースホルダーを使用します。\n\n**例**: `SELECT * FROM users WHERE status = ? AND created_at > ?`"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.c3Fs.display_name": {
+          "source": "SQL Query",
+          "message": "SQLクエリ"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.c3Fs.short_desc": {
+          "source": "The SQL query to execute",
+          "message": "実行するSQLクエリ"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.short_desc": {
+          "source": "Execute a SQL query and return results",
+          "message": "SQL クエリを実行して結果を返す"
+        },
+        "app.SmRiY0RQ.desc": {
+          "source": "Access any JDBC-compatible database with schema introspection and SQL execution.\n\n**Capabilities**:\n- Execute SQL queries with parameterized arguments\n- Execute DDL and DML statements (CREATE, INSERT, UPDATE, DELETE)\n- Browse database tables and introspect column metadata\n- Dynamic column type mapping from SQL types to Qore types\n\nDatabase-specific JDBC drivers can be loaded with the `classpath` and `driver_class` connection options, or made available with JNI classpath configuration before the provider is created.\n\n**Supported databases**: PostgreSQL, Oracle, MySQL, SQL Server, and any database with a JDBC driver.",
+          "message": "スキーマのイントロスペクションおよび SQL 実行を備えた、任意の JDBC 互換データベースにアクセスします。\n\n**機能**:\n- パラメータ化された引数を使用した SQL クエリの実行\n- DDL および DML ステートメント（CREATE、INSERT、UPDATE、DELETE）の実行\n- データベーステーブルの参照およびカラムメタデータのイントロスペクション\n- SQL 型から Qore 型への動的カラム型マッピング\n\nデータベース固有の JDBC ドライバーは、`classpath` および `driver_class` 接続オプションでロードするか、プロバイダー作成前に JNI クラスパス設定で利用可能にすることができます。\n\n**サポートされているデータベース**: PostgreSQL、Oracle、MySQL、SQL Server、および JDBC ドライバーを持つ任意のデータベース。"
+        },
+        "app.SmRiY0RQ.display_name": {
+          "source": "JDBC Database",
+          "message": "JDBC データベース"
+        },
+        "app.SmRiY0RQ.short_desc": {
+          "source": "JDBC database access",
+          "message": "JDBC データベースアクセス"
+        }
+      }
+    }
+  }
+}

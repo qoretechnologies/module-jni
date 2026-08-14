@@ -1,0 +1,441 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Rmx5d2F5.action.Y2xlYW4.desc": {
+          "source": "Drop all objects in the configured schemas; this is a destructive operation",
+          "message": "刪除已設定結構描述中的所有物件；這是一項破壞性操作"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.display_name": {
+          "source": "Clean Flyway Schema",
+          "message": "清除 Flyway 結構描述"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "包含 SQL 遷移檔案的目錄檔案系統路徑清單。\n\n若未提供字首，路徑將自動加上字首 `filesystem:`。\n\n範例：`(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "遷移位置"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "SQL 遷移目錄的檔案系統路徑"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "要使用 Flyway 管理的資料庫結構描述名稱選填清單"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "結構描述"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "要管理的資料庫結構描述"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "資料庫連線的密碼"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "資料庫密碼"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱；預設為 `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "歷史記錄表"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "資料庫的 JDBC 連線 URL（例如 `jdbc:postgresql://localhost:5432/mydb`）"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "用於資料庫連線的 JDBC URL"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "資料庫連線的使用者名稱"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "資料庫使用者名稱"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.short_desc": {
+          "source": "Drop all objects in the configured schemas",
+          "message": "刪除已設定結構描述中的所有物件"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.desc": {
+          "source": "Get information about all applied and pending database migrations.\n\nReturns a list of migration records showing version, description, type, state, and execution details. Useful for monitoring migration status in CI/CD pipelines.",
+          "message": "取得所有已套用及待處理資料庫遷移的資訊。\n\n傳回包含版本、說明、類型、狀態與執行詳細資料的遷移記錄清單。適用於在 CI/CD 管道中監控遷移狀態。"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.display_name": {
+          "source": "Get Flyway Migration Info",
+          "message": "取得 Flyway 遷移資訊"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "包含 SQL 遷移檔案的目錄檔案系統路徑清單。\n\n若未提供字首，路徑將自動加上字首 `filesystem:`。\n\n範例：`(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "遷移位置"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "SQL 遷移目錄的檔案系統路徑"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "要使用 Flyway 管理的資料庫結構描述名稱選填清單"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "結構描述"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "要管理的資料庫結構描述"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "資料庫連線的密碼"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "資料庫密碼"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱；預設為 `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "歷史記錄表"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "資料庫的 JDBC 連線 URL（例如 `jdbc:postgresql://localhost:5432/mydb`）"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "用於資料庫連線的 JDBC URL"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "資料庫連線的使用者名稱"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "資料庫使用者名稱"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.short_desc": {
+          "source": "Get information about all migrations",
+          "message": "取得所有遷移的資訊"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.desc": {
+          "source": "Run all pending database schema migrations.\n\nExecutes migration scripts in version order. Each migration is applied within a transaction and recorded in the Flyway schema history table.\n\n**Note**: migrations are one-way — once applied, they cannot be undone without using `clean`.",
+          "message": "執行所有待處理的資料庫結構描述遷移。\n\n按版本順序執行遷移指令稿。每次遷移均在交易內套用，並記錄在 Flyway 結構描述歷史記錄資料表中。\n\n**注意**：遷移是單向的 — 一旦套用，若不使用 `clean` 即無法復原。"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.display_name": {
+          "source": "Run Flyway Migrations",
+          "message": "執行 Flyway 遷移"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "包含 SQL 遷移檔案的目錄檔案系統路徑清單。\n\n若未提供字首，路徑將自動加上字首 `filesystem:`。\n\n範例：`(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "遷移位置"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "SQL 遷移目錄的檔案系統路徑"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "要使用 Flyway 管理的資料庫結構描述名稱選填清單"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "結構描述"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "要管理的資料庫結構描述"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "資料庫連線的密碼"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "資料庫密碼"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱；預設為 `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "歷史記錄表"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "資料庫的 JDBC 連線 URL（例如 `jdbc:postgresql://localhost:5432/mydb`）"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "用於資料庫連線的 JDBC URL"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "資料庫連線的使用者名稱"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "資料庫使用者名稱"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.short_desc": {
+          "source": "Run pending database migrations",
+          "message": "執行待處理的資料庫遷移"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.desc": {
+          "source": "Repair the Flyway schema history table by removing failed migration entries and aligning checksums",
+          "message": "透過移除失敗的遷移條目並對齊檢查碼來修復 Flyway 結構描述歷史記錄資料表"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.display_name": {
+          "source": "Repair Flyway Schema History",
+          "message": "修復 Flyway 結構描述歷史記錄"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "包含 SQL 遷移檔案的目錄檔案系統路徑清單。\n\n若未提供字首，路徑將自動加上字首 `filesystem:`。\n\n範例：`(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "遷移位置"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "SQL 遷移目錄的檔案系統路徑"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "要使用 Flyway 管理的資料庫結構描述名稱選填清單"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "結構描述"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "要管理的資料庫結構描述"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "資料庫連線的密碼"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "資料庫密碼"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱；預設為 `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "歷史記錄表"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "資料庫的 JDBC 連線 URL（例如 `jdbc:postgresql://localhost:5432/mydb`）"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "用於資料庫連線的 JDBC URL"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "資料庫連線的使用者名稱"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "資料庫使用者名稱"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.short_desc": {
+          "source": "Repair the Flyway schema history table",
+          "message": "修復 Flyway 結構描述歷史記錄資料表"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.desc": {
+          "source": "Validate applied Flyway migrations against available migration scripts",
+          "message": "根據可用的遷移指令稿驗證已套用的 Flyway 遷移"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.display_name": {
+          "source": "Validate Flyway Migrations",
+          "message": "驗證 Flyway 遷移"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "包含 SQL 遷移檔案的目錄檔案系統路徑清單。\n\n若未提供字首，路徑將自動加上字首 `filesystem:`。\n\n範例：`(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "遷移位置"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "SQL 遷移目錄的檔案系統路徑"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "要使用 Flyway 管理的資料庫結構描述名稱選填清單"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "結構描述"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "要管理的資料庫結構描述"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "資料庫連線的密碼"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "資料庫密碼"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱；預設為 `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "歷史記錄表"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Flyway 結構描述歷史記錄資料表的名稱"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "資料庫的 JDBC 連線 URL（例如 `jdbc:postgresql://localhost:5432/mydb`）"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "用於資料庫連線的 JDBC URL"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "資料庫連線的使用者名稱"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "資料庫使用者名稱"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.short_desc": {
+          "source": "Validate applied migrations against available ones",
+          "message": "根據可用遷移驗證已套用的遷移"
+        },
+        "app.Rmx5d2F5.desc": {
+          "source": "Manage database schema migrations using [Flyway](https://flywaydb.org/).\n\n**Capabilities**:\n- Run pending SQL migrations against a database\n- View migration history and status\n- Validate applied migrations against available scripts\n- Clean and repair the schema history table\n\nSupports PostgreSQL and other JDBC-accessible databases for DevOps and CI/CD pipelines.",
+          "message": "使用 [Flyway](https://flywaydb.org/) 管理資料庫結構描述遷移。\n\n**功能**：\n- 對資料庫執行待處理的 SQL 遷移\n- 檢視遷移歷史記錄與狀態\n- 根據可用的指令稿驗證已套用的遷移\n- 清除與修復結構描述歷史記錄資料表\n\n支援 PostgreSQL 及其他可透過 JDBC 存取的資料庫，適用於 DevOps 與 CI/CD 管道。"
+        },
+        "app.Rmx5d2F5.display_name": {
+          "source": "Flyway",
+          "message": "Flyway"
+        },
+        "app.Rmx5d2F5.short_desc": {
+          "source": "Flyway database schema migration",
+          "message": "Flyway 資料庫結構描述遷移"
+        }
+      }
+    }
+  }
+}

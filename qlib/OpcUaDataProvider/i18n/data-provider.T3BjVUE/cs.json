@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.T3BjVUE.action.Y29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client connects or reconnects to the OPC UA server",
+          "message": "Tato událost se vyvolá, když se klient připojí nebo znovu připojí k serveru OPC UA"
+        },
+        "app.T3BjVUE.action.Y29ubmVjdGVk.display_name": {
+          "source": "OPC UA Connected",
+          "message": "OPC UA Připojeno"
+        },
+        "app.T3BjVUE.action.Y29ubmVjdGVk.short_desc": {
+          "source": "Client connected or reconnected to the OPC UA server",
+          "message": "Klient se připojil nebo znovu připojil k serveru OPC UA"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.desc": {
+          "source": "Call a method on an OPC UA server object node with optional input arguments",
+          "message": "Zavolat metodu v uzlu objektu serveru OPC UA s volitelnými vstupními argumenty"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.display_name": {
+          "source": "Call OPC UA Method",
+          "message": "Zavolat metodu OPC UA"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.desc": {
+          "source": "The input arguments for the method call",
+          "message": "Vstupní argumenty pro volání metody"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.display_name": {
+          "source": "Arguments",
+          "message": "Argumenty"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.short_desc": {
+          "source": "The input arguments for the method call",
+          "message": "Vstupní argumenty pro volání metody"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.desc": {
+          "source": "The node ID of the object that owns the method",
+          "message": "ID uzlu objektu, který vlastní metodu"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "ID objektu"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The node ID of the object that owns the method",
+          "message": "ID uzlu objektu, který vlastní metodu"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.desc": {
+          "source": "The node ID of the method to call",
+          "message": "ID uzlu metody, která se má zavolat"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.display_name": {
+          "source": "Method ID",
+          "message": "ID metody"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.short_desc": {
+          "source": "The node ID of the method to call",
+          "message": "ID uzlu metody, která se má zavolat"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.short_desc": {
+          "source": "Call a method on an OPC UA server object",
+          "message": "Zavolat metodu na objektu serveru OPC UA"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.desc": {
+          "source": "Browse the OPC UA server address space to discover available nodes",
+          "message": "Procházet adresní prostor serveru OPC UA pro zjištění dostupných uzlů"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.display_name": {
+          "source": "Browse OPC UA Address Space",
+          "message": "Procházet adresní prostor OPC UA"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkJvdGg.display_name": {
+          "source": "Both",
+          "message": "Obojí"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkZvcndhcmQ.display_name": {
+          "source": "Forward",
+          "message": "Dopředu"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkludmVyc2U.display_name": {
+          "source": "Inverse",
+          "message": "Inverzní"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.desc": {
+          "source": "Browse direction: `Forward`, `Inverse`, or `Both`; defaults to `Forward`",
+          "message": "Směr procházení: `Forward`, `Inverse` nebo `Both`; výchozí hodnota je `Forward`"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Směr"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'",
+          "message": "Směr procházení: 'Forward', 'Inverse' nebo 'Both'; výchozí hodnota je 'Forward'"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of references to return; `0` or omitted means no limit",
+          "message": "Maximální počet odkazů k vrácení; `0` nebo vynechání znamená bez omezení"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of references to return",
+          "message": "Maximální počet odkazů k vrácení"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.desc": {
+          "source": "The node ID to browse from; defaults to the Root node (`ns=0;i=84`)",
+          "message": "ID uzlu, od kterého se má procházet; výchozí je uzel Root (`ns=0;i=84`)"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID uzlu"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.short_desc": {
+          "source": "The node ID to browse from",
+          "message": "ID uzlu, od kterého se má procházet"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.short_desc": {
+          "source": "Browse the OPC UA server address space",
+          "message": "Procházet adresní prostor serveru OPC UA"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.desc": {
+          "source": "Get the current server status including state, start time, build info, and product information",
+          "message": "Získat aktuální stav serveru včetně stavu, času spuštění, informací o sestavení a informací o produktu"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.display_name": {
+          "source": "Get OPC UA Server Status",
+          "message": "Získat stav serveru OPC UA"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.desc": {
+          "source": "The server object node ID; defaults to the standard ServerStatus node (`ns=0;i=2259`)",
+          "message": "ID uzlu objektu serveru; výchozí je standardní uzel ServerStatus (`ns=0;i=2259`)"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.display_name": {
+          "source": "Server Node ID",
+          "message": "ID uzlu serveru"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.short_desc": {
+          "source": "The server object node ID",
+          "message": "ID uzlu objektu serveru"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.short_desc": {
+          "source": "Get the current status of the OPC UA server",
+          "message": "Získat aktuální stav serveru OPC UA"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.desc": {
+          "source": "This event is raised when the value of a monitored OPC UA node changes, including the new value, status code, and timestamps",
+          "message": "Tato událost se vyvolá při změně hodnoty sledovaného uzlu OPC UA, včetně nové hodnoty, stavového kódu a časových razítek"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.display_name": {
+          "source": "OPC UA Data Change",
+          "message": "Změna dat OPC UA"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.short_desc": {
+          "source": "A monitored OPC UA node value has changed",
+          "message": "Hodnota sledovaného uzlu OPC UA se změnila"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.desc": {
+          "source": "Discover available endpoints on the OPC UA server including security policies and transport profiles",
+          "message": "Zjistit dostupné koncové body na serveru OPC UA včetně bezpečnostních zásad a přepravních profilů"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.display_name": {
+          "source": "Discover OPC UA Endpoints",
+          "message": "Zjistit koncové body OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.desc": {
+          "source": "The OPC UA server URL to discover endpoints on; if omitted, the connection URL is used",
+          "message": "URL serveru OPC UA pro zjištění koncových bodů; pokud je vynechána, použije se URL připojení"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.display_name": {
+          "source": "Discovery URL",
+          "message": "URL pro zjišťování"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.short_desc": {
+          "source": "The OPC UA server URL to discover endpoints on",
+          "message": "URL serveru OPC UA pro zjištění koncových bodů"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.short_desc": {
+          "source": "Discover available endpoints on an OPC UA server",
+          "message": "Zjistit dostupné koncové body na serveru OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client is disconnected from the OPC UA server",
+          "message": "Tato událost se vyvolá při odpojení klienta od serveru OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.display_name": {
+          "source": "OPC UA Disconnected",
+          "message": "OPC UA odpojeno"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.short_desc": {
+          "source": "Client disconnected from the OPC UA server",
+          "message": "Klient se odpojil od serveru OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.desc": {
+          "source": "Read the current value from an OPC UA node on the server",
+          "message": "Přečíst aktuální hodnotu z uzlu OPC UA na serveru"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.display_name": {
+          "source": "Read OPC UA Node Value",
+          "message": "Přečíst hodnotu uzlu OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read (e.g., `ns=2;s=Temperature`)",
+          "message": "ID uzlu OPC UA ke čtení (např. `ns=2;s=Temperature`)"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID uzlu"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read (e",
+          "message": "ID uzlu OPC UA ke čtení (např."
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.short_desc": {
+          "source": "Read a value from an OPC UA node",
+          "message": "Přečíst hodnotu z uzlu OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.desc": {
+          "source": "Read current values from multiple OPC UA nodes in a single batch request for improved performance",
+          "message": "Přečíst aktuální hodnoty z více uzlů OPC UA v jediném dávkovém požadavku pro vyšší výkon"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.display_name": {
+          "source": "Read Multiple OPC UA Node Values",
+          "message": "Přečíst hodnoty více uzlů OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.desc": {
+          "source": "List of OPC UA node IDs to read (e.g., `ns=2;s=Temperature`)",
+          "message": "Seznam ID uzlů OPC UA ke čtení (např. `ns=2;s=Temperature`)"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.display_name": {
+          "source": "Node IDs",
+          "message": "ID uzlů"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.short_desc": {
+          "source": "List of OPC UA node IDs to read (e",
+          "message": "Seznam ID uzlů OPC UA ke čtení (např."
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.short_desc": {
+          "source": "Read values from multiple OPC UA nodes in a single request",
+          "message": "Přečíst hodnoty z více uzlů OPC UA v jediném požadavku"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.desc": {
+          "source": "Read node attributes including display name, description, data type, access level, and current value",
+          "message": "Přečíst atributy uzlu včetně zobrazovaného názvu, popisu, datového typu, úrovně přístupu a aktuální hodnoty"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.display_name": {
+          "source": "Read OPC UA Node Attributes",
+          "message": "Přečíst atributy uzlu OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read attributes from",
+          "message": "ID uzlu OPC UA, ze kterého se mají přečíst atributy"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID uzlu"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read attributes from",
+          "message": "ID uzlu OPC UA, ze kterého se mají přečíst atributy"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.short_desc": {
+          "source": "Read attributes from an OPC UA node",
+          "message": "Přečíst atributy z uzlu OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.desc": {
+          "source": "Read historical data values from an OPC UA node with configurable time range and maximum values",
+          "message": "Přečíst historická data z uzlu OPC UA s nastavitelným časovým rozsahem a maximálním počtem hodnot"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.display_name": {
+          "source": "Read OPC UA Historical Data",
+          "message": "Přečíst historická data OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.desc": {
+          "source": "The end time for the historical data range",
+          "message": "Čas konce pro rozsah historických dat"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Čas ukončení"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.short_desc": {
+          "source": "The end time for the historical data range",
+          "message": "Čas konce pro rozsah historických dat"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.desc": {
+          "source": "Maximum number of values to return; 0 or omitted means no limit",
+          "message": "Maximální počet hodnot k vrácení; 0 nebo vynechání znamená bez omezení"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.display_name": {
+          "source": "Max Values",
+          "message": "Maximální počet hodnot"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.short_desc": {
+          "source": "Maximum number of values to return",
+          "message": "Maximální počet hodnot k vrácení"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read history from",
+          "message": "ID uzlu OPC UA, ze kterého se má přečíst historie"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID uzlu"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read history from",
+          "message": "ID uzlu OPC UA, ze kterého se má přečíst historie"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.desc": {
+          "source": "The start time for the historical data range",
+          "message": "Čas začátku pro rozsah historických dat"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.display_name": {
+          "source": "Start Time",
+          "message": "Čas zahájení"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.short_desc": {
+          "source": "The start time for the historical data range",
+          "message": "Čas začátku pro rozsah historických dat"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.short_desc": {
+          "source": "Read historical data from an OPC UA node",
+          "message": "Přečíst historická data z uzlu OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.desc": {
+          "source": "Write a value to an OPC UA node on the server",
+          "message": "Zapsat hodnotu do uzlu OPC UA na serveru"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.display_name": {
+          "source": "Write OPC UA Node Value",
+          "message": "Zapsat hodnotu uzlu OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJ5dGU.display_name": {
+          "source": "Byte (uint8)",
+          "message": "Byte (uint8)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJ5dGVTdHJpbmc.display_name": {
+          "source": "ByteString",
+          "message": "ByteString"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJvb2xlYW4.display_name": {
+          "source": "Boolean",
+          "message": "Boolean"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkRhdGVUaW1l.display_name": {
+          "source": "DateTime",
+          "message": "DateTime"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkRvdWJsZQ.display_name": {
+          "source": "Double (64-bit)",
+          "message": "Double (64-bit)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkZsb2F0.display_name": {
+          "source": "Float (32-bit)",
+          "message": "Float (32-bit)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDE2.display_name": {
+          "source": "Int16",
+          "message": "Int16"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDMy.display_name": {
+          "source": "Int32",
+          "message": "Int32"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDY0.display_name": {
+          "source": "Int64",
+          "message": "Int64"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlN0cmluZw.display_name": {
+          "source": "String",
+          "message": "String"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlNCeXRl.display_name": {
+          "source": "SByte (int8)",
+          "message": "SByte (int8)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQ2NA.display_name": {
+          "source": "UInt64",
+          "message": "UInt64"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQxNg.display_name": {
+          "source": "UInt16",
+          "message": "UInt16"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQzMg.display_name": {
+          "source": "UInt32",
+          "message": "UInt32"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.desc": {
+          "source": "Optional OPC UA data type hint for the value. If not provided, the type is inferred from the Qore value type",
+          "message": "Volitelná nápověda datového typu OPC UA pro hodnotu. Pokud není zadána, typ je odvozen z typu hodnoty Qore"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.display_name": {
+          "source": "Data Type",
+          "message": "Datový typ"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.short_desc": {
+          "source": "Optional OPC UA data type hint for the value",
+          "message": "Volitelná nápověda datového typu OPC UA pro hodnotu"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.desc": {
+          "source": "The target OPC UA node ID (e.g., `ns=2;s=SetPoint`)",
+          "message": "Cílové ID uzlu OPC UA (např. `ns=2;s=SetPoint`)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "ID uzlu"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.short_desc": {
+          "source": "The target OPC UA node ID (e",
+          "message": "Cílové ID uzlu OPC UA (např."
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.desc": {
+          "source": "The value to write to the node",
+          "message": "Hodnota k zápisu do uzlu"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Hodnota"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.short_desc": {
+          "source": "The value to write to the node",
+          "message": "Hodnota k zápisu do uzlu"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.short_desc": {
+          "source": "Write a value to an OPC UA node",
+          "message": "Zapsat hodnotu do uzlu OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.desc": {
+          "source": "Write values to multiple OPC UA nodes in a single batch request",
+          "message": "Zapsat hodnoty do více uzlů OPC UA v jednom hromadném požadavku"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.display_name": {
+          "source": "Write Multiple OPC UA Node Values",
+          "message": "Zapsat hodnoty více uzlů OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.desc": {
+          "source": "List of values to write, each a hash with `node_id` (string, required), `value` (auto, required), and `data_type` (string, optional)",
+          "message": "Seznam hodnot k zápisu, každá jako hash s `node_id` (řetězec, povinný), `value` (auto, povinný) a `data_type` (řetězec, volitelný)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.display_name": {
+          "source": "Values",
+          "message": "Hodnoty"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.short_desc": {
+          "source": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)",
+          "message": "Seznam hodnot k zápisu, každá jako hash s 'node_id' (řetězec, povinný), 'value' (auto, povinný) a 'data_type' (řetězec, volitelný)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.short_desc": {
+          "source": "Write values to multiple OPC UA nodes",
+          "message": "Zapsat hodnoty do více uzlů OPC UA"
+        },
+        "app.T3BjVUE.desc": {
+          "source": "OPC UA (Open Platform Communications Unified Architecture) server for industrial communication, supporting node value reading/writing, address space browsing, data change subscriptions, and method calls",
+          "message": "Server OPC UA (Open Platform Communications Unified Architecture) pro průmyslovou komunikaci, podporující čtení/zápis hodnot uzlů, procházení adresního prostoru, odběr změn dat a volání metod"
+        },
+        "app.T3BjVUE.display_name": {
+          "source": "OPC UA",
+          "message": "OPC UA"
+        },
+        "app.T3BjVUE.short_desc": {
+          "source": "OPC UA server for industrial communication and IoT",
+          "message": "Server OPC UA pro průmyslovou komunikaci a IoT"
+        }
+      }
+    }
+  }
+}

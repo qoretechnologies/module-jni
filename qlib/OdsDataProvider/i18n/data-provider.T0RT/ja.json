@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.T0RT.action.cmVhZA.desc": {
+          "source": "Read an ODS spreadsheet from a file location and return the data as records.\n\nUse this action to import data from ODS files stored on disk or accessible via a URL. The file location is resolved using the `FileLocationHandler` module, supporting local file paths and remote URLs.\n\n**Key Options**:\n- `path` (required) — the file location to read from\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "ファイル位置から ODS スプレッドシートを読み取り、データをレコードとして返します。\n\nこのアクションを使用して、ディスクに保存されているか URL 経由でアクセス可能な ODS ファイルからデータをインポートします。ファイル位置は `FileLocationHandler` モジュールを使用して解決され、ローカルファイルパスとリモート URL がサポートされます。\n\n**主なオプション**:\n- `path` (必須) — 読み取り元のファイル位置\n- `worksheet` — 名前で特定のワークシートを選択 (デフォルトは最初のシート)\n- `header_names` — 最初の行を列ヘッダーとして使用するには `True` に設定\n- `header_cells` / `data_cells` — ヘッダーとデータのセル範囲を指定\n- `headers` — 明示的な列ヘッダー名を指定"
+        },
+        "app.T0RT.action.cmVhZA.display_name": {
+          "source": "Read ODS Spreadsheet File",
+          "message": "ODS スプレッドシートファイルの読み取り"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "処理するデータのセル範囲"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "データセル"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "処理するデータのセル範囲"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "`True` の場合、オブジェクトは最初のヘッダー行からヘッダー名を解析します。この場合、`header_cells` が明示的に設定されていないと、最初の行であるとみなされます"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "ヘッダー名を使用しますか？"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "ヘッダー行を出力フィールド名として使用するかどうか"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "ヘッダーのセル範囲または行番号"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "ヘッダーセル"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "ヘッダーのセル範囲または行番号"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "反復処理されるデータのヘッダー/列名のリスト。これが存在する場合、`header_names` は `False` である必要があります"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "出力ヘッダー"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "反復処理されるデータのヘッダー/列名のリスト"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODS data; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "ODS データの位置。`data` および `stream` と相互排他的です。\n\n[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しで解決されます"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODS Input Path",
+          "message": "ODS 入力パス"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODS data",
+          "message": "ODS データの位置"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "反復処理するワークシートの名前。指定しない場合、最初のワークシートが処理されます"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "ワークシート名"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "反復処理するワークシートの名前"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "`True` の場合 (デフォルト: `False`)、自動検出されたすべてのヘッダー名が小文字に変換されます"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "ヘッダーを小文字に変換"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "すべてのヘッダー名を小文字に変換します"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "日付の解析時に使用するタイムゾーン地域"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "タイムゾーン地域"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "日付の解析時に使用するタイムゾーン地域"
+        },
+        "app.T0RT.action.cmVhZA.short_desc": {
+          "source": "Read ODS spreadsheet from a specific file location",
+          "message": "特定のファイル位置から ODS スプレッドシートを読み取る"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.desc": {
+          "source": "Read an ODS spreadsheet from inline binary data and return the data as records.\n\nUse this action when the ODS data is already available in memory (e.g., received from an API response, uploaded by a user, or read from a database BLOB column) rather than stored as a file.\n\n**Key Options**:\n- `data` (required) — the ODS binary data to parse\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "インラインバイナリデータから ODS スプレッドシートを読み取り、データをレコードとして返します。\n\nファイルとして保存されているのではなく、ODS データがすでにメモリで利用可能な場合 (API レスポンスから受信、ユーザーによるアップロード、データベースの BLOB 列からの読み取りなど) にこのアクションを使用します。\n\n**主なオプション**:\n- `data` (必須) — 解析する ODS バイナリデータ\n- `worksheet` — 名前で特定のワークシートを選択 (デフォルトは最初のシート)\n- `header_names` — 最初の行を列ヘッダーとして使用するには `True` に設定\n- `header_cells` / `data_cells` — ヘッダーとデータのセル範囲を指定\n- `headers` — 明示的な列ヘッダー名を指定"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODS Spreadsheet Inline Data",
+          "message": "ODS スプレッドシートインラインデータの読み取り"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODS data to process; conflicts with `stream` and `path`",
+          "message": "処理する ODS データ。`stream` および `path` と競合します"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "入力データ"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODS data to process",
+          "message": "処理する ODS データ"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "処理するデータのセル範囲"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "データセル"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "処理するデータのセル範囲"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "`True` の場合、オブジェクトは最初のヘッダー行からヘッダー名を解析します。この場合、`header_cells` が明示的に設定されていないと、最初の行であるとみなされます"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "ヘッダー名を使用しますか？"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "ヘッダー行を出力フィールド名として使用するかどうか"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "ヘッダーのセル範囲または行番号"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "ヘッダーセル"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "ヘッダーのセル範囲または行番号"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "反復処理されるデータのヘッダー/列名のリスト。これが存在する場合、`header_names` は `False` である必要があります"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "出力ヘッダー"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "反復処理されるデータのヘッダー/列名のリスト"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "反復処理するワークシートの名前。指定しない場合、最初のワークシートが処理されます"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "ワークシート名"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "反復処理するワークシートの名前"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "`True` の場合 (デフォルト: `False`)、自動検出されたすべてのヘッダー名が小文字に変換されます"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "ヘッダーを小文字に変換"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "すべてのヘッダー名を小文字に変換します"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "日付の解析時に使用するタイムゾーン地域"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "タイムゾーン地域"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "日付の解析時に使用するタイムゾーン地域"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODS spreadsheet inline data",
+          "message": "ODS スプレッドシートのインライン データを読み取る"
+        },
+        "app.T0RT.action.d3JpdGU.desc": {
+          "source": "Write data to an ODS spreadsheet file at a specified path.\n\nUse this action to generate ODS files from structured data for reporting, data export, or integration with LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Key Options**:\n- `path` (required) — the output file location\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "指定されたパスにある ODS スプレッドシート ファイルにデータを書き込みます。\n\nこのアクションを使用して、構造化データから ODS ファイルを生成し、レポート作成、データ エクスポート、あるいは LibreOffice Calc やその他の OpenDocument 互換アプリケーションとの連携に使用します。\n\n**主なオプション**:\n- `path` (必須) — 出力ファイルの位置\n- `worksheet` — ワークシート名 (デフォルトは `Sheet1`)\n- `headers` — 明示的な列ヘッダー名。指定されない場合、ヘッダーは最初のレコードから自動検出されます"
+        },
+        "app.T0RT.action.d3JpdGU.display_name": {
+          "source": "Write ODS Spreadsheet File",
+          "message": "ODS スプレッドシート ファイルの書き込み"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "データのヘッダー/列名のリスト。指定されない場合、ヘッダーは最初のレコードから自動検出されます"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "データのヘッダー/列名のリスト"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODS data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "出力 ODS データ ファイルの場所。`stream` とは相互排他的です。\n\n出力場所は [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) の呼び出しによって処理されます"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODS Output Path",
+          "message": "ODS 出力パス"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODS file",
+          "message": "ODS ファイルの書き込み先の場所"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "作成するワークシートの名前。指定されない場合のデフォルトは `Sheet1` です"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "ワークシート名"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "作成するワークシートの名前"
+        },
+        "app.T0RT.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODS spreadsheet file",
+          "message": "ODS スプレッドシート ファイルにデータを書き込む"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "メモリ内に ODS スプレッドシート データを生成し、バイナリ データとして返します。\n\nディスクに書き込まずに ODS ファイルを生成する必要がある場合 (例: スプレッドシートを API レスポンスとして返したり、データベースに保存したり、別の処理ステップに渡したりする場合) にこのアクションを使用します。すべてのレコードを作成した後、プロバイダーで `getData()` を呼び出して結果を取得します。\n\n**主なオプション**:\n- `worksheet` — ワークシート名 (デフォルトは `Sheet1`)\n- `headers` — 明示的な列ヘッダー名。指定されない場合、ヘッダーは最初のレコードから自動検出されます"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODS Spreadsheet Data",
+          "message": "ODS スプレッドシート データの作成"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "データのヘッダー/列名のリスト。指定されない場合、ヘッダーは最初のレコードから自動検出されます"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "列ヘッダー"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "データのヘッダー/列名のリスト"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "作成するワークシートの名前。指定されない場合のデフォルトは `Sheet1` です"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "ワークシート名"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "作成するワークシートの名前"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODS spreadsheet data and return as binary",
+          "message": "ODS スプレッドシート データを生成しバイナリとして返す"
+        },
+        "app.T0RT.desc": {
+          "source": "Read and write OpenDocument Spreadsheet (ODS) files, the native spreadsheet format for LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Supported Operations**:\n- **Read**: Parse ODS spreadsheets into structured records with automatic header detection, cell range selection, and multi-sheet access\n- **Write**: Create ODS spreadsheet files from structured data with configurable worksheets and column headers\n\n**Key Features**:\n- Multi-sheet support: browse and read individual worksheets\n- Flexible header handling: auto-detect from first row, specify cell ranges, or provide explicit header names\n- Cell range selection: read specific regions of a spreadsheet\n- Data type preservation: handles strings, numbers, booleans, and dates with timezone support\n- In-memory operation: read from or write to binary data without file I/O\n\n**Business Use Cases**:\n- Importing LibreOffice Calc spreadsheets into data pipelines\n- Converting ODS data to other formats in ETL workflows\n- Generating ODS reports from application data\n- Processing spreadsheet uploads in web applications",
+          "message": "OpenDocument Spreadsheet (ODS) ファイルを読み書きします。これは LibreOffice Calc やその他の OpenDocument 互換アプリケーションのネイティブ スプレッドシート フォーマットです。\n\n**サポートされている操作**:\n- **Read**: ヘッダーの自動検出、セル範囲選択、マルチシート アクセスを使用して ODS スプレッドシートを構造化レコードに解析します\n- **Write**: 設定可能なワークシートおよび列ヘッダーを使用して構造化データから ODS スプレッドシート ファイルを作成します\n\n**主な機能**:\n- マルチシート サポート: 個々のワークシートをブラウズして読み取ります\n- 柔軟なヘッダー処理: 最初の行からの自動検出、セル範囲の指定、または明示的なヘッダー名の指定\n- セル範囲選択: スプレッドシートの特定の領域を読み取ります\n- データ型の保持: 文字列、数値、ブール値、タイムゾーン サポート付きの日付を処理します\n- メモリ内操作: ファイル I/O なしでバイナリ データを読み書きします\n\n**ビジネス ユースケース**:\n- LibreOffice Calc スプレッドシートのデータ パイプラインへのインポート\n- ETL ワークフローでの ODS データの他フォーマットへの変換\n- アプリケーション データからの ODS レポートの生成\n- Web アプリケーションでのスプレッドシート アップロードの処理"
+        },
+        "app.T0RT.display_name": {
+          "source": "ODS Spreadsheets",
+          "message": "ODS スプレッドシート"
+        },
+        "app.T0RT.short_desc": {
+          "source": "Read and write ODS spreadsheets",
+          "message": "ODS スプレッドシートの読み書き"
+        }
+      }
+    }
+  }
+}

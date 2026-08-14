@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.QWNjZXNz.action.cmVhZA.desc": {
+          "source": "Read Access database from a specific file location and iterate table rows",
+          "message": "Lire une base de données Access à partir d'un emplacement de fichier spécifique et itérer sur les lignes de la table"
+        },
+        "app.QWNjZXNz.action.cmVhZA.display_name": {
+          "source": "Read Access Database File",
+          "message": "Lire le fichier de base de données Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the Access database file; mutually exclusive with `data`; resolved with a call to [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Le chemin d'accès au fichier de base de données Access ; mutuellement exclusif avec `data` ; résolu avec un appel à [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Access Input Path",
+          "message": "Chemin d'entrée Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The path to the Access database file",
+          "message": "Le chemin d'accès au fichier de base de données Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "Le nom de la table à lire ; s'il n'est pas fourni, utiliser les fournisseurs enfants pour accéder aux tables"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "Nom de la table"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "Le nom de la table à lire"
+        },
+        "app.QWNjZXNz.action.cmVhZA.short_desc": {
+          "source": "Read Access database from a specific file location",
+          "message": "Lire une base de données Access à partir d'un emplacement de fichier spécifique"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Access database inline data and iterate table rows",
+          "message": "Lire les données intégrées d'une base de données Access et itérer sur les lignes de la table"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Access Database Inline Data",
+          "message": "Lire les données intégrées de la base de données Access"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Access database data to process; conflicts with `path`",
+          "message": "Données de la base de données Access à traiter ; entre en conflit avec `path`"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Données d'entrée"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Access database data to process",
+          "message": "Données de la base de données Access à traiter"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "Le nom de la table à lire ; s'il n'est pas fourni, utiliser les fournisseurs enfants pour accéder aux tables"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "Nom de la table"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "Le nom de la table à lire"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Access database inline data",
+          "message": "Lire les données intégrées de la base de données Access"
+        },
+        "app.QWNjZXNz.desc": {
+          "source": "Read Microsoft Access databases (.mdb/.accdb format) using the Jackcess library",
+          "message": "Lire des bases de données Microsoft Access (format .mdb/.accdb) à l'aide de la bibliothèque Jackcess"
+        },
+        "app.QWNjZXNz.display_name": {
+          "source": "Access Databases",
+          "message": "Bases de données Access"
+        },
+        "app.QWNjZXNz.short_desc": {
+          "source": "Read Microsoft Access databases",
+          "message": "Lire des bases de données Microsoft Access"
+        }
+      }
+    }
+  }
+}

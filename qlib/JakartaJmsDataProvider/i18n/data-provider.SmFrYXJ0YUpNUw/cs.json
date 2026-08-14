@@ -1,0 +1,529 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.desc": {
+          "source": "Non-destructively inspect messages currently in a JMS queue without consuming them.\n\nMessages remain in the queue after browsing. An optional selector can be used to filter the browsed messages by their properties",
+          "message": "Nedestruktivně prohlížet zprávy, které jsou aktuálně ve frontě JMS, bez jejich konzumace.\n\nZprávy zůstávají ve frontě i po prohlédnutí. K filtrování prohlížených zpráv podle jejich vlastností lze použít volitelný selektor"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.display_name": {
+          "source": "Browse JMS Queue",
+          "message": "Prohlížet frontu JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The queue to browse, in format `queue://name`; if not provided, the default destination from the connection options is used",
+          "message": "Fronta k prohlížení ve formátu `queue://name`; pokud není zadána, použije se výchozí cíl z možností připojení"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Cíl"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The queue to browse, in format 'queue://name'",
+          "message": "Fronta k prohlížení ve formátu 'queue://název'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.desc": {
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e.g., `{\"color\": \"red\"}` becomes `color = 'red'`)",
+          "message": "Haš filtrů vlastností, které se mají použít jako selektor zpráv JMS SQL-92 (např. `{\"color\": \"red\"}` se změní na `color = 'red'`)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.display_name": {
+          "source": "Selector",
+          "message": "Selektor"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.short_desc": {
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e",
+          "message": "Haš filtrů vlastností, které se mají použít jako selektor zpráv JMS SQL-92 (např"
+        },
+        "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.short_desc": {
+          "source": "Non-destructively browse messages in a JMS queue",
+          "message": "Nedestruktivně prohlížet zprávy ve frontě JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.desc": {
+          "source": "A JMS message is received from a queue or topic; event includes JMS headers and user-defined string properties.\n\nConfigure the destination to listen on (`queue://name` or `topic://name`), an optional message selector for filtering, and a client ID for durable topic subscriptions",
+          "message": "Byla přijata zpráva JMS z fronty nebo tématu; událost obsahuje hlavičky JMS a uživatelsky definované řetězcové vlastnosti.\n\nNakonfigurujte cíl pro naslouchání (`queue://name` nebo `topic://name`), volitelný selektor zpráv pro filtrování a ID klienta pro trvalé odběry témat"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.display_name": {
+          "source": "JMS Message Received",
+          "message": "Zpráva JMS přijata"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.desc": {
+          "source": "The JMS client ID; required for durable topic subscriptions",
+          "message": "ID klienta JMS; vyžadováno pro trvalé odběry témat"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.display_name": {
+          "source": "Client ID",
+          "message": "ID klienta"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.Y2xpZW50X2lk.short_desc": {
+          "source": "The JMS client ID for durable subscriptions",
+          "message": "ID klienta JMS pro trvalé odběry"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "Default destination in format `queue://name` or `topic://name`; used by the polling provider for event subscription",
+          "message": "Výchozí cíl ve formátu `queue://name` nebo `topic://name`; používá ho poskytovatel dotazování pro odběr událostí"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Cíl"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Default destination for messaging operations",
+          "message": "Výchozí cíl pro operace zasílání zpráv"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.desc": {
+          "source": "A JMS SQL-92 message selector expression for filtering incoming messages (e.g. `priority > 5 AND color = 'red'`)",
+          "message": "Výraz selektoru zpráv JMS SQL-92 pro filtrování příchozích zpráv (např. `priority > 5 AND color = 'red'`)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.display_name": {
+          "source": "Message Selector",
+          "message": "Selektor zpráv"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWVzc2FnZV9zZWxlY3Rvcg.short_desc": {
+          "source": "JMS message selector for filtering messages",
+          "message": "Selektor zpráv JMS pro filtrování zpráv"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
+          "source": "A JMS message is received from a queue or topic",
+          "message": "Zpráva JMS je přijata z fronty nebo tématu"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.desc": {
+          "source": "Send a JMS message to a destination and wait for a synchronous reply using a temporary queue.\n\nThe request message's `JMSReplyTo` header is automatically set to a temporary queue. The responder should send the reply to that destination and copy the `JMSMessageID` to the reply's `JMSCorrelationID`",
+          "message": "Odeslat zprávu JMS do cíle a počkat na synchronní odpověď pomocí dočasné fronty.\n\nHlavička `JMSReplyTo` zprávy požadavku je automaticky nastavena na dočasnou frontu. Odpovídající strana by měla poslat odpověď do tohoto cíle a zkopírovat `JMSMessageID` do `JMSCorrelationID` odpovědi"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.display_name": {
+          "source": "JMS Request-Reply",
+          "message": "JMS Požadavek-Odpověď"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "The correlation ID to set on the message; used to link related messages",
+          "message": "ID korelace, které se má nastavit ve zprávě; používá se k propojení souvisejících zpráv"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "Korelační ID"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "The correlation ID to set on the message",
+          "message": "ID korelace, které se má nastavit ve zprávě"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.desc": {
+          "source": "The message body / payload; the type determines the JMS message type:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- other → `BytesMessage` with JSON serialization",
+          "message": "Tělo / užitečné zatížení zprávy; typ určuje typ zprávy JMS:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- ostatní → `BytesMessage` se serializací JSON"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Tělo zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload",
+          "message": "Tělo / užitečné zatížení zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.desc": {
+          "source": "The message is not persisted and may be lost in transit",
+          "message": "Zpráva se neukládá trvale a může být během přenosu ztracena"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.display_name": {
+          "source": "Non-Persistent",
+          "message": "Netrvalá"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.short_desc": {
+          "source": "Message is not persisted",
+          "message": "Zpráva se neukládá trvale"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.desc": {
+          "source": "The JMS provider persists the message to stable storage",
+          "message": "Poskytovatel JMS ukládá zprávu trvale do stabilního úložiště"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.display_name": {
+          "source": "Persistent",
+          "message": "Trvalá"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.short_desc": {
+          "source": "Message is persisted to stable storage",
+          "message": "Zpráva je trvale uložena do stabilního úložiště"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.desc": {
+          "source": "The delivery mode for the message",
+          "message": "Režim doručení zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.display_name": {
+          "source": "Delivery Mode",
+          "message": "Režim doručení"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVsaXZlcnlfbW9kZQ.short_desc": {
+          "source": "The delivery mode for the message",
+          "message": "Režim doručení zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
+          "message": "Cíl pro odeslání zprávy ve formátu `queue://name` nebo `topic://name`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Cíl"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "message": "Cíl pro odeslání zprávy ve formátu 'queue://název' nebo 'topic://název'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.desc": {
+          "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
+          "message": "Uživatelsky definované řetězcové vlastnosti, které se mají nastavit ve zprávě.\n\nZadejte haš dvojic klíč-hodnota řetězce.\n\n**Příklad**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Hlavičky"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.short_desc": {
+          "source": "User-defined string properties to set on the message",
+          "message": "Uživatelsky definované řetězcové vlastnosti, které se mají nastavit ve zprávě"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "0 - Lowest",
+          "message": "0 - Nejnižší"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjA.short_desc": {
+          "source": "Lowest priority",
+          "message": "Nejnižší priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "1 - Low",
+          "message": "1 - Nízká"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjE.short_desc": {
+          "source": "Low priority",
+          "message": "Nízká priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "2 - Below Normal",
+          "message": "2 - Pod normální"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjI.short_desc": {
+          "source": "Below normal priority",
+          "message": "Podnormální priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "3 - Normal Low",
+          "message": "3 - Běžná nízká"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjM.short_desc": {
+          "source": "Normal low priority",
+          "message": "Běžná nízká priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "4 - Normal (Default)",
+          "message": "4 - Běžná (výchozí)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjQ.short_desc": {
+          "source": "Default JMS priority",
+          "message": "Výchozí priorita JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjU.display_name": {
+          "source": "5 - Above Normal",
+          "message": "5 - Nadběžná"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjU.short_desc": {
+          "source": "Above normal (expedited)",
+          "message": "Nadběžná (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjY.display_name": {
+          "source": "6 - High",
+          "message": "6 - Vysoká"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50OjY.short_desc": {
+          "source": "High priority (expedited)",
+          "message": "Vysoká priorita (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojc.display_name": {
+          "source": "7 - Very High",
+          "message": "7 - Velmi vysoká"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojc.short_desc": {
+          "source": "Very high priority (expedited)",
+          "message": "Velmi vysoká priorita (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojg.display_name": {
+          "source": "8 - Critical",
+          "message": "8 - Kritická"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojg.short_desc": {
+          "source": "Critical priority (expedited)",
+          "message": "Kritická priorita (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojk.display_name": {
+          "source": "9 - Highest",
+          "message": "9 - Nejvyšší"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.allowed-value.aW50Ojk.short_desc": {
+          "source": "Highest priority (expedited)",
+          "message": "Nejvyšší priorita (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.desc": {
+          "source": "The JMS message priority; levels `0`–`4` are normal, levels `5`–`9` are expedited",
+          "message": "Priorita zprávy JMS; úrovně `0`–`4` jsou běžné, úrovně `5`–`9` jsou zrychlené"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.cHJpb3JpdHk.short_desc": {
+          "source": "The JMS message priority",
+          "message": "Priorita zprávy JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.desc": {
+          "source": "The message time-to-live in milliseconds; 0 means the message does not expire",
+          "message": "Doba životnosti zprávy v milisekundách; 0 znamená, že platnost zprávy nevyprší"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.display_name": {
+          "source": "Time to Live",
+          "message": "Doba životnosti"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dGltZV90b19saXZl.short_desc": {
+          "source": "The message time-to-live in milliseconds",
+          "message": "Doba životnosti zprávy v milisekundách"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Volitelný aplikací definovaný identifikátor typu zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.dHlwZQ.short_desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Volitelný aplikací definovaný identifikátor typu zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.short_desc": {
+          "source": "Send a JMS request and wait for a reply",
+          "message": "Odeslat požadavek JMS a počkat na odpověď"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.desc": {
+          "source": "Send a JMS message to a queue or topic with optional JMS headers and user-defined string properties",
+          "message": "Odeslat zprávu JMS do fronty nebo tématu s volitelnými hlavičkami JMS a uživatelsky definovanými řetězcovými vlastnostmi"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.display_name": {
+          "source": "Send JMS Message",
+          "message": "Odeslat zprávu JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.desc": {
+          "source": "The correlation ID to set on the message; used to link related messages",
+          "message": "ID korelace, které se má nastavit ve zprávě; používá se k propojení souvisejících zpráv"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.display_name": {
+          "source": "Correlation ID",
+          "message": "Korelační ID"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Y29ycmVsYXRpb25faWQ.short_desc": {
+          "source": "The correlation ID to set on the message",
+          "message": "ID korelace, které se má nastavit ve zprávě"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.desc": {
+          "source": "The message body / payload; the type determines the JMS message type:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- other → `BytesMessage` with JSON serialization",
+          "message": "Tělo / užitečné zatížení zprávy; typ určuje typ zprávy JMS:\n- `string` → `TextMessage`\n- `hash` → `MapMessage`\n- `binary` → `BytesMessage`\n- ostatní → `BytesMessage` se serializací JSON"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Tělo zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload",
+          "message": "Tělo / užitečné zatížení zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.desc": {
+          "source": "The message is not persisted and may be lost in transit",
+          "message": "Zpráva se neukládá trvale a může být během přenosu ztracena"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.display_name": {
+          "source": "Non-Persistent",
+          "message": "Netrvalá"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOk5PTl9QRVJTSVNURU5U.short_desc": {
+          "source": "Message is not persisted",
+          "message": "Zpráva se neukládá trvale"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.desc": {
+          "source": "The JMS provider persists the message to stable storage",
+          "message": "Poskytovatel JMS ukládá zprávu trvale do stabilního úložiště"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.display_name": {
+          "source": "Persistent",
+          "message": "Trvalá"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.allowed-value.c3RyaW5nOlBFUlNJU1RFTlQ.short_desc": {
+          "source": "Message is persisted to stable storage",
+          "message": "Zpráva je trvale uložena do stabilního úložiště"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.desc": {
+          "source": "The delivery mode for the message",
+          "message": "Režim doručení zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.display_name": {
+          "source": "Delivery Mode",
+          "message": "Režim doručení"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVsaXZlcnlfbW9kZQ.short_desc": {
+          "source": "The delivery mode for the message",
+          "message": "Režim doručení zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
+          "message": "Cíl pro odeslání zprávy ve formátu `queue://name` nebo `topic://name`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Cíl"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "message": "Cíl pro odeslání zprávy ve formátu 'queue://název' nebo 'topic://název'"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.desc": {
+          "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
+          "message": "Uživatelsky definované řetězcové vlastnosti, které se mají nastavit ve zprávě.\n\nZadejte haš dvojic klíč-hodnota řetězce.\n\n**Příklad**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Hlavičky"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.short_desc": {
+          "source": "User-defined string properties to set on the message",
+          "message": "Uživatelsky definované řetězcové vlastnosti, které se mají nastavit ve zprávě"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "0 - Lowest",
+          "message": "0 - Nejnižší"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjA.short_desc": {
+          "source": "Lowest priority",
+          "message": "Nejnižší priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "1 - Low",
+          "message": "1 - Nízká"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjE.short_desc": {
+          "source": "Low priority",
+          "message": "Nízká priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "2 - Below Normal",
+          "message": "2 - Pod normální"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjI.short_desc": {
+          "source": "Below normal priority",
+          "message": "Podnormální priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "3 - Normal Low",
+          "message": "3 - Běžná nízká"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjM.short_desc": {
+          "source": "Normal low priority",
+          "message": "Běžná nízká priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "4 - Normal (Default)",
+          "message": "4 - Běžná (výchozí)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjQ.short_desc": {
+          "source": "Default JMS priority",
+          "message": "Výchozí priorita JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjU.display_name": {
+          "source": "5 - Above Normal",
+          "message": "5 - Nadběžná"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjU.short_desc": {
+          "source": "Above normal (expedited)",
+          "message": "Nadběžná (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjY.display_name": {
+          "source": "6 - High",
+          "message": "6 - Vysoká"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50OjY.short_desc": {
+          "source": "High priority (expedited)",
+          "message": "Vysoká priorita (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojc.display_name": {
+          "source": "7 - Very High",
+          "message": "7 - Velmi vysoká"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojc.short_desc": {
+          "source": "Very high priority (expedited)",
+          "message": "Velmi vysoká priorita (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojg.display_name": {
+          "source": "8 - Critical",
+          "message": "8 - Kritická"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojg.short_desc": {
+          "source": "Critical priority (expedited)",
+          "message": "Kritická priorita (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojk.display_name": {
+          "source": "9 - Highest",
+          "message": "9 - Nejvyšší"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.allowed-value.aW50Ojk.short_desc": {
+          "source": "Highest priority (expedited)",
+          "message": "Nejvyšší priorita (zrychlená)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.desc": {
+          "source": "The JMS message priority; levels `0`–`4` are normal, levels `5`–`9` are expedited",
+          "message": "Priorita zprávy JMS; úrovně `0`–`4` jsou běžné, úrovně `5`–`9` jsou zrychlené"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorita"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.cHJpb3JpdHk.short_desc": {
+          "source": "The JMS message priority",
+          "message": "Priorita zprávy JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.desc": {
+          "source": "The message time-to-live in milliseconds; 0 means the message does not expire",
+          "message": "Doba životnosti zprávy v milisekundách; 0 znamená, že platnost zprávy nevyprší"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.display_name": {
+          "source": "Time to Live",
+          "message": "Doba životnosti"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dGltZV90b19saXZl.short_desc": {
+          "source": "The message time-to-live in milliseconds",
+          "message": "Doba životnosti zprávy v milisekundách"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Volitelný aplikací definovaný identifikátor typu zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.dHlwZQ.short_desc": {
+          "source": "An optional application-defined message type identifier",
+          "message": "Volitelný aplikací definovaný identifikátor typu zprávy"
+        },
+        "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.short_desc": {
+          "source": "Send a JMS message to a queue or topic",
+          "message": "Odeslat zprávu JMS do fronty nebo tématu"
+        },
+        "app.SmFrYXJ0YUpNUw.desc": {
+          "source": "Jakarta Messaging (JMS) 3.x compliant broker for enterprise messaging with support for queues, topics, durable subscriptions, message selectors, and request-reply patterns",
+          "message": "Broker kompatibilní s Jakarta Messaging (JMS) 3.x pro podnikové zasílání zpráv s podporou front, témat, trvalých odběrů, selektorů zpráv a vzorů požadavek-odpověď"
+        },
+        "app.SmFrYXJ0YUpNUw.display_name": {
+          "source": "Jakarta JMS",
+          "message": "Jakarta JMS"
+        },
+        "app.SmFrYXJ0YUpNUw.short_desc": {
+          "source": "Jakarta Messaging (JMS) 3.x compliant broker",
+          "message": "Broker kompatibilní s Jakarta Messaging (JMS) 3.x"
+        }
+      }
+    }
+  }
+}

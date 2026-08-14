@@ -1,0 +1,393 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.UG93ZXJQb2ludA.action.cmVhZA.desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "Прочитати презентацію PowerPoint з вказаного місця розташування файлу"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.display_name": {
+          "source": "Read PowerPoint Presentation File",
+          "message": "Прочитати файл презентації PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "Читати слайди презентації з заголовком, текстом, примітками та інформацією про макет"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "Слайди"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "Читати слайди презентації"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "Читати таблицю, вбудовану в слайд, як структуровані дані рядків"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Читати таблицю як дані рядків"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "Тип вмісту для читання: `slides` (за замовчуванням) або `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Тип вмісту для читання"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "Якщо `True`, перший рядок таблиці містить заголовки стовпців; застосовується лише до режиму таблиці"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Рядок заголовків"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "Перший рядок містить заголовки"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "Явний список заголовків стовпців для режиму таблиці; взаємовиключне з `header_row`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Заголовки стовпців"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Явний список заголовків колонок"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "Індекс слайда, що містить таблицю, коли `content_type` дорівнює `table`; відлік з 0, за замовчуванням 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "Індекс слайда"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "Індекс слайда для режиму таблиці (з 0)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the PowerPoint data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Розташування даних PowerPoint; взаємовиключне з `data` та `stream`; обробляється викликом [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "PowerPoint Input Path",
+          "message": "Вхідний шлях PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the PowerPoint file",
+          "message": "Розташування файлу PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "Індекс таблиці для читання на вказаному слайді, коли `content_type` дорівнює `table`; відлік з 0, за замовчуванням 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Індекс таблиці"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Індекс таблиці для читання (з 0)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.short_desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "Прочитати презентацію PowerPoint з вказаного місця розташування файлу"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "Прочитати вбудовані дані презентації PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read PowerPoint Presentation Inline Data",
+          "message": "Прочитати вбудовані дані презентації PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "Читати слайди презентації з заголовком, текстом, примітками та інформацією про макет"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "Слайди"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "Читати слайди презентації"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "Читати таблицю, вбудовану в слайд, як структуровані дані рядків"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Читати таблицю як дані рядків"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "Тип вмісту для читання: `slides` (за замовчуванням) або `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Тип вмісту для читання"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "PowerPoint presentation data to process; conflicts with `stream` and `path`",
+          "message": "Дані презентації PowerPoint для обробки; конфліктує з `stream` та `path`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "PowerPoint presentation data to process",
+          "message": "Дані презентації PowerPoint для обробки"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "Якщо `True`, перший рядок таблиці містить заголовки стовпців; застосовується лише до режиму таблиці"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Рядок заголовків"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "Перший рядок містить заголовки"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "Явний список заголовків стовпців для режиму таблиці; взаємовиключне з `header_row`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Заголовки стовпців"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Явний список заголовків колонок"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "Індекс слайда, що містить таблицю, коли `content_type` дорівнює `table`; відлік з 0, за замовчуванням 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "Індекс слайда"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "Індекс слайда для режиму таблиці (з 0)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "Індекс таблиці для читання на вказаному слайді, коли `content_type` дорівнює `table`; відлік з 0, за замовчуванням 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Індекс таблиці"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Індекс таблиці для читання (з 0)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "Прочитати вбудовані дані презентації PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.desc": {
+          "source": "Write data to a PowerPoint presentation file at a specified path",
+          "message": "Записати дані у файл презентації PowerPoint за вказаним шляхом"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.display_name": {
+          "source": "Write PowerPoint Presentation File",
+          "message": "Записати файл презентації PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "Записати слайди презентації із заголовком, текстом і необов'язковими примітками"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "Слайди"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "Записати слайди"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "Записати структуровані табличні дані на слайді"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "Записати таблицю"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "Тип вмісту для запису: `slides` (за замовчуванням) або `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Тип вмісту для запису"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "Список заголовків стовпців для режиму таблиці; якщо не вказано, заголовки будуть визначені автоматично з першого запису"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Заголовки стовпців"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Список заголовків колонок для режиму таблиці"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output PowerPoint data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Розташування для вихідного файлу даних PowerPoint; взаємовиключне з `stream`; вихідне розташування обробляється викликом [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "PowerPoint Output Path",
+          "message": "Вихідний шлях PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the PowerPoint file",
+          "message": "Розташування для запису файлу PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "Необов'язковий заголовок; для режиму слайдів додає слайд лише із заголовком на початку; для режиму таблиці встановлює заголовок на слайді з таблицею"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "Заголовок презентації"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "Заголовок для першого слайда або слайда таблиці"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a PowerPoint presentation file",
+          "message": "Записати дані у файл презентації PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create PowerPoint presentation data in memory and return it as binary data; useful for generating PowerPoint files without writing to disk",
+          "message": "Створити дані презентації PowerPoint у пам'яті та повернути їх як бінарні дані; корисно для створення файлів PowerPoint без запису на диск"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create PowerPoint Presentation Data",
+          "message": "Створити дані презентації PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "Записати слайди презентації із заголовком, текстом і необов'язковими примітками"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "Слайди"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "Записати слайди"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "Записати структуровані табличні дані на слайді"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "Записати таблицю"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "Тип вмісту для запису: `slides` (за замовчуванням) або `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Тип вмісту для запису"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "Список заголовків стовпців для режиму таблиці; якщо не вказано, заголовки будуть визначені автоматично з першого запису"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Заголовки стовпців"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Список заголовків колонок для режиму таблиці"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "Необов'язковий заголовок; для режиму слайдів додає слайд лише із заголовком на початку; для режиму таблиці встановлює заголовок на слайді з таблицею"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "Заголовок презентації"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "Заголовок для першого слайда або слайда таблиці"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create PowerPoint presentation data and return as binary",
+          "message": "Створити дані презентації PowerPoint і повернути як бінарні"
+        },
+        "app.UG93ZXJQb2ludA.desc": {
+          "source": "Read and write Microsoft PowerPoint presentations (.pptx format)",
+          "message": "Читання та запис презентацій Microsoft PowerPoint (формат .pptx)"
+        },
+        "app.UG93ZXJQb2ludA.display_name": {
+          "source": "PowerPoint Presentations",
+          "message": "Презентації PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.short_desc": {
+          "source": "Read and write Microsoft PowerPoint presentations",
+          "message": "Читання та запис презентацій Microsoft PowerPoint"
+        }
+      }
+    }
+  }
+}

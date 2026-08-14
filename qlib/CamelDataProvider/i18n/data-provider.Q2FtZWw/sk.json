@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.Q2FtZWw.action.c2VuZA.desc": {
+          "source": "Send a message to a Camel endpoint.\n\nSpecify the endpoint URI (e.g., `seda:orders`, `file:output`, `direct:process`) and provide the message body and optional headers.\n\n**Note**: the endpoint must have an active consumer route or be a built-in component that accepts messages directly.",
+          "message": "Odoslanie správy na koncový bod Camel.\n\nUveďte URI koncového bodu (napr. `seda:orders`, `file:output`, `direct:process`) a zadajte telo správy a voliteľné hlavičky.\n\n**Poznámka**: koncový bod musí mať aktívnu trasu spotrebiteľa alebo musí byť vstavaným komponentom, ktorý prijíma správy priamo."
+        },
+        "app.Q2FtZWw.action.c2VuZA.display_name": {
+          "source": "Send Camel Message",
+          "message": "Odoslať správu Camel"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body / payload to send.\n\nThe body type depends on the target endpoint — most endpoints accept `string` or `binary` data.",
+          "message": "Telo správy / užitočné zaťaženie (payload) na odoslanie.\n\nTyp tela závisí od cieľového koncového bodu — väčšina koncových bodov prijíma dáta `string` alebo `binary`."
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Telo správy"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload to send",
+          "message": "Telo správy / užitočné zaťaženie na odoslanie"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.desc": {
+          "source": "The Camel endpoint URI to send the message to.\n\nBuilt-in components include:\n- `direct:name` — synchronous in-memory messaging\n- `seda:name` — asynchronous in-memory queue\n- `file:directory` — file system integration\n- `log:category` — logging\n- `timer:name` — periodic timer events\n\nAdditional components can be loaded by adding their JARs to the Java classpath.",
+          "message": "URI koncového bodu Camel, na ktorý sa má správa odoslať.\n\nVstavané komponenty zahŕňajú:\n- `direct:name` — synchrónne posielanie správ v pamäti\n- `seda:name` — asynchrónny rad v pamäti\n- `file:directory` — integrácia so súborovým systémom\n- `log:category` — protokolovanie\n- `timer:name` — periodické udalosti časovača\n\nĎalšie komponenty možno načítať pridaním ich súborov JAR do Java classpath."
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.display_name": {
+          "source": "Endpoint URI",
+          "message": "URI koncového bodu"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.short_desc": {
+          "source": "The Camel endpoint URI to send the message to",
+          "message": "URI koncového bodu Camel, na ktorý sa má správa odoslať"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.desc": {
+          "source": "Optional message headers as a hash of key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"priority\": \"high\"}`",
+          "message": "Voliteľné hlavičky správy ako hash párov kľúč-hodnota.\n\n**Príklad**: `{\"source\": \"order-system\", \"priority\": \"high\"}`"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Hlavičky správy"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.short_desc": {
+          "source": "Optional message headers as a hash of key-value pairs",
+          "message": "Voliteľné hlavičky správy ako hash párov kľúč-hodnota"
+        },
+        "app.Q2FtZWw.action.c2VuZA.short_desc": {
+          "source": "Send a message to a Camel endpoint",
+          "message": "Odoslať správu na koncový bod Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.desc": {
+          "source": "List all active routes in the Camel context",
+          "message": "Zobraziť zoznam všetkých aktívnych trás v kontexte Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.display_name": {
+          "source": "List Camel Routes",
+          "message": "Zoznam trás Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.short_desc": {
+          "source": "List active Camel routes",
+          "message": "Zobraziť zoznam aktívnych trás Camel"
+        },
+        "app.Q2FtZWw.desc": {
+          "source": "Enterprise integration using [Apache Camel](https://camel.apache.org/) with support for 300+ connectors.\n\n**Built-in components**:\n- `direct` — synchronous in-memory messaging\n- `seda` — asynchronous in-memory queues\n- `file` — file system integration\n- `timer` — periodic timer events\n- `log` — message logging\n\nAdditional components (HTTP, JMS, Kafka, AWS, etc.) can be loaded by adding their JARs to the Java classpath.",
+          "message": "Podniková integrácia pomocou nástroja [Apache Camel](https://camel.apache.org/) s podporou pre 300+ konektorov.\n\n**Vstavané komponenty**:\n- `direct` — synchrónne posielanie správ v pamäti\n- `seda` — asynchrónne rady v pamäti\n- `file` — integrácia so súborovým systémom\n- `timer` — periodické udalosti časovača\n- `log` — protokolovanie správ\n\nĎalšie komponenty (HTTP, JMS, Kafka, AWS atď.) možno načítať pridaním ich súborov JAR do Java classpath."
+        },
+        "app.Q2FtZWw.display_name": {
+          "source": "Apache Camel",
+          "message": "Apache Camel"
+        },
+        "app.Q2FtZWw.short_desc": {
+          "source": "Apache Camel enterprise integration patterns",
+          "message": "Vzory podnikovej integrácie Apache Camel"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.TVFUVA.action.Y29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client connects or reconnects to the MQTT broker",
+          "message": "Tato událost je vyvolána, když se klient připojí nebo znovu připojí k brokeru MQTT"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.display_name": {
+          "source": "MQTT Connected",
+          "message": "MQTT připojeno"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.short_desc": {
+          "source": "Client connected or reconnected to the MQTT broker",
+          "message": "Klient se připojil nebo znovu připojil k brokeru MQTT"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client is disconnected from the MQTT broker, including the MQTT 5 disconnect reason code and description",
+          "message": "Tato událost je vyvolána, když je klient odpojen od brokera MQTT, včetně kódu důvodu odpojení a popisu podle MQTT 5"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.display_name": {
+          "source": "MQTT Disconnected",
+          "message": "MQTT odpojeno"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.short_desc": {
+          "source": "Client disconnected from the MQTT broker",
+          "message": "Klient byl odpojen od brokera MQTT"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "An MQTT message is received; event includes MQTT 5.0 properties such as content type, response topic, correlation data, and user properties",
+          "message": "Byla přijata zpráva MQTT; událost obsahuje vlastnosti MQTT 5.0, jako je typ obsahu, téma odpovědi, korelační data a uživatelské vlastnosti"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "MQTT Message Received",
+          "message": "Přijata zpráva MQTT"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "An MQTT message is received with MQTT 5 properties",
+          "message": "Byla přijata zpráva MQTT s vlastnostmi MQTT 5"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.desc": {
+          "source": "Send an MQTT message to a topic with optional MQTT 5.0 properties including content type, request/response correlation, message expiry, and user-defined metadata",
+          "message": "Odeslat zprávu MQTT do tématu s volitelnými vlastnostmi MQTT 5.0 včetně typu obsahu, korelací požadavek/odpověď, vypršení platnosti zprávy a uživatelsky definovaných metadat"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.display_name": {
+          "source": "Send MQTT Message",
+          "message": "Odeslat zprávu MQTT"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME content type of the message payload (e.g., `application/json`, `text/plain`)",
+          "message": "Typ obsahu MIME užitečného zatížení zprávy (např. `application/json`, `text/plain`)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME content type of the message payload (e",
+          "message": "Typ obsahu MIME užitečného zatížení zprávy (např."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
+          "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
+          "message": "Korelační data pro párování odpovědí s požadavky; vrací odpovídající strana (vzor požadavek/odpověď v MQTT 5)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.display_name": {
+          "source": "Correlation Data",
+          "message": "Korelační data"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.short_desc": {
+          "source": "Correlation data for matching responses to requests",
+          "message": "Korelační data pro párování odpovědí s požadavky"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.desc": {
+          "source": "Message lifetime in seconds; the broker will discard the message after this interval if it has not been delivered",
+          "message": "Životnost zprávy v sekundách; broker zprávu po uplynutí tohoto intervalu zahodí, pokud nebyla doručena"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.display_name": {
+          "source": "Message Expiry Interval",
+          "message": "Interval vypršení platnosti zprávy"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.short_desc": {
+          "source": "Message lifetime in seconds",
+          "message": "Životnost zprávy v sekundách"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.desc": {
+          "source": "The payload / message body; a string or binary type is sent as-is, all others are serialized with JSON and sent as a JSON string",
+          "message": "Užitečné zatížení / tělo zprávy; řetězec nebo binární typ se odesílá tak, jak je, všechny ostatní se serializují pomocí JSON a odesílají jako řetězec JSON"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.display_name": {
+          "source": "Message Body",
+          "message": "Tělo zprávy"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.short_desc": {
+          "source": "The payload / message body",
+          "message": "Užitečné zatížení / tělo zprávy"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.desc": {
+          "source": "Payload format indicator: `True` = UTF-8 encoded text, `False` or omitted = unspecified binary data",
+          "message": "Indikátor formátu užitečného zatížení: `True` = text v kódování UTF-8, `False` nebo vynecháno = nespecifikovaná binární data"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.display_name": {
+          "source": "Payload Format Indicator",
+          "message": "Indikátor formátu užitečného zatížení"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
+          "message": "Indikátor formátu užitečného zatížení: 'True' = text v kódování UTF-8, 'False' nebo vynecháno = nespecifikovaná binární data"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
+          "source": "QoS 0: message is delivered at most once with no acknowledgment",
+          "message": "QoS 0: zpráva je doručena maximálně jednou bez potvrzení"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.display_name": {
+          "source": "At Most Once",
+          "message": "Maximálně jednou"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.short_desc": {
+          "source": "QoS 0: fire and forget",
+          "message": "QoS 0: odešli a zapomeň"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.desc": {
+          "source": "QoS 1: message is delivered at least once with acknowledgment",
+          "message": "QoS 1: zpráva je doručena nejméně jednou s potvrzením"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.display_name": {
+          "source": "At Least Once",
+          "message": "Nejméně jednou"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.short_desc": {
+          "source": "QoS 1: acknowledged delivery",
+          "message": "QoS 1: doručení s potvrzením"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.desc": {
+          "source": "QoS 2: message is delivered exactly once using a four-step handshake",
+          "message": "QoS 2: zpráva je doručena přesně jednou pomocí čtyřkrokového navázání spojení"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.display_name": {
+          "source": "Exactly Once",
+          "message": "Přesně jednou"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.short_desc": {
+          "source": "QoS 2: assured delivery",
+          "message": "QoS 2: zaručené doručení"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.desc": {
+          "source": "The quality of service value for this message",
+          "message": "Hodnota kvality služeb (QoS) pro tuto zprávu"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.display_name": {
+          "source": "Quality of Service",
+          "message": "Kvalita služeb (QoS)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.short_desc": {
+          "source": "The quality of service value for this message",
+          "message": "Hodnota kvality služeb (QoS) pro tuto zprávu"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.desc": {
+          "source": "If this message should be retained by the server",
+          "message": "Zda má být tato zpráva zachována na serveru"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.display_name": {
+          "source": "Retained?",
+          "message": "Zachovat?"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.short_desc": {
+          "source": "If this message should be retained by the server",
+          "message": "Zda má být tato zpráva zachována na serveru"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "Téma, do kterého by měl příjemce publikovat odpověď (vzor požadavek/odpověď MQTT 5)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.display_name": {
+          "source": "Response Topic",
+          "message": "Téma odpovědi"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "Téma, do kterého by měl příjemce publikovat odpověď (vzor požadavek/odpověď MQTT 5)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {
+          "source": "The message topic",
+          "message": "Téma zprávy"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.display_name": {
+          "source": "Message Topic",
+          "message": "Téma zprávy"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.short_desc": {
+          "source": "The message topic",
+          "message": "Téma zprávy"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.desc": {
+          "source": "Application-level key-value string metadata to attach to the message.\n\nProvide a hash of string key-value pairs (e.g., `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)",
+          "message": "Aplikační řetězcová metadata ve formě klíč-hodnota k připojení ke zprávě.\n\nZadejte hash řetězcových dvojic klíč-hodnota (např. `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.display_name": {
+          "source": "User Properties",
+          "message": "Uživatelské vlastnosti"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.short_desc": {
+          "source": "Application-level key-value string metadata to attach to the message",
+          "message": "Aplikační řetězcová metadata ve formě klíč-hodnota k připojení ke zprávě"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.short_desc": {
+          "source": "Send an MQTT message with optional MQTT 5 properties",
+          "message": "Odeslat zprávu MQTT s volitelnými vlastnostmi MQTT 5"
+        },
+        "app.TVFUVA.desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging with support for request/response patterns, message expiry, content type metadata, and user-defined properties",
+          "message": "Server MQTT 5.0 pro rychlé a efektivní zasílání zpráv s podporou vzorů požadavek/odpověď, vypršení platnosti zpráv, metadat typu obsahu a uživatelsky definovaných vlastností"
+        },
+        "app.TVFUVA.display_name": {
+          "source": "MQTT",
+          "message": "MQTT"
+        },
+        "app.TVFUVA.short_desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging",
+          "message": "MQTT 5.0 server pro rychlé a efektivní zasílání zpráv"
+        }
+      }
+    }
+  }
+}

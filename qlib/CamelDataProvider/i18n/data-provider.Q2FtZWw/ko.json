@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Q2FtZWw.action.c2VuZA.desc": {
+          "source": "Send a message to a Camel endpoint.\n\nSpecify the endpoint URI (e.g., `seda:orders`, `file:output`, `direct:process`) and provide the message body and optional headers.\n\n**Note**: the endpoint must have an active consumer route or be a built-in component that accepts messages directly.",
+          "message": "Camel 엔드포인트로 메시지를 보냅니다.\n\n엔드포인트 URI(예: `seda:orders`, `file:output`, `direct:process`)를 지정하고 메시지 본문 및 선택적 헤더를 제공합니다.\n\n**참고**: 엔드포인트에 활성 소비자 라우트가 있거나 메시지를 직접 수용하는 내장 구성 요소여야 합니다."
+        },
+        "app.Q2FtZWw.action.c2VuZA.display_name": {
+          "source": "Send Camel Message",
+          "message": "Camel 메시지 전송"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body / payload to send.\n\nThe body type depends on the target endpoint — most endpoints accept `string` or `binary` data.",
+          "message": "전송할 메시지 본문 / 페이로드입니다.\n\n본문 유형은 대상 엔드포인트에 따라 달라집니다. 대부분의 엔드포인트는 `string` 또는 `binary` 데이터를 허용합니다."
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "메시지 본문"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload to send",
+          "message": "전송할 메시지 본문 / 페이로드"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.desc": {
+          "source": "The Camel endpoint URI to send the message to.\n\nBuilt-in components include:\n- `direct:name` — synchronous in-memory messaging\n- `seda:name` — asynchronous in-memory queue\n- `file:directory` — file system integration\n- `log:category` — logging\n- `timer:name` — periodic timer events\n\nAdditional components can be loaded by adding their JARs to the Java classpath.",
+          "message": "메시지를 보낼 Camel 엔드포인트 URI입니다.\n\n내장 구성 요소에는 다음이 포함됩니다:\n- `direct:name` — 동기식 인메모리 메시징\n- `seda:name` — 비동기식 인메모리 큐\n- `file:directory` — 파일 시스템 통합\n- `log:category` — 로깅\n- `timer:name` — 주기적 타이머 이벤트\n\nJava 클래스패스에 JAR을 추가하여 추가 구성 요소를 로드할 수 있습니다."
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.display_name": {
+          "source": "Endpoint URI",
+          "message": "엔드포인트 URI"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.short_desc": {
+          "source": "The Camel endpoint URI to send the message to",
+          "message": "메시지를 보낼 Camel 엔드포인트 URI"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.desc": {
+          "source": "Optional message headers as a hash of key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"priority\": \"high\"}`",
+          "message": "키-값 쌍의 해시 형식인 선택적 메시지 헤더입니다.\n\n**예시**: `{\"source\": \"order-system\", \"priority\": \"high\"}`"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "메시지 헤더"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.short_desc": {
+          "source": "Optional message headers as a hash of key-value pairs",
+          "message": "키-값 쌍의 해시 형식인 선택적 메시지 헤더"
+        },
+        "app.Q2FtZWw.action.c2VuZA.short_desc": {
+          "source": "Send a message to a Camel endpoint",
+          "message": "Camel 엔드포인트로 메시지 보내기"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.desc": {
+          "source": "List all active routes in the Camel context",
+          "message": "Camel 컨텍스트의 모든 활성 라우트 목록 조회"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.display_name": {
+          "source": "List Camel Routes",
+          "message": "Camel 라우트 목록 조회"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.short_desc": {
+          "source": "List active Camel routes",
+          "message": "활성 Camel 라우트 목록 조회"
+        },
+        "app.Q2FtZWw.desc": {
+          "source": "Enterprise integration using [Apache Camel](https://camel.apache.org/) with support for 300+ connectors.\n\n**Built-in components**:\n- `direct` — synchronous in-memory messaging\n- `seda` — asynchronous in-memory queues\n- `file` — file system integration\n- `timer` — periodic timer events\n- `log` — message logging\n\nAdditional components (HTTP, JMS, Kafka, AWS, etc.) can be loaded by adding their JARs to the Java classpath.",
+          "message": "300개 이상의 커넥터를 지원하는 [Apache Camel](https://camel.apache.org/)을 사용한 엔터프라이즈 통합입니다.\n\n**내장 구성 요소**:\n- `direct` — 동기식 인메모리 메시징\n- `seda` — 비동기식 인메모리 큐\n- `file` — 파일 시스템 통합\n- `timer` — 주기적 타이머 이벤트\n- `log` — 메시지 로깅\n\nJava 클래스패스에 JAR을 추가하여 추가 구성 요소(HTTP, JMS, Kafka, AWS 등)를 로드할 수 있습니다."
+        },
+        "app.Q2FtZWw.display_name": {
+          "source": "Apache Camel",
+          "message": "Apache Camel"
+        },
+        "app.Q2FtZWw.short_desc": {
+          "source": "Apache Camel enterprise integration patterns",
+          "message": "Apache Camel 엔터프라이즈 통합 패턴"
+        }
+      }
+    }
+  }
+}

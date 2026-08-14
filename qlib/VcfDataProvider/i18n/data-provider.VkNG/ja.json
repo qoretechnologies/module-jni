@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.VkNG.action.cmVhZA.desc": {
+          "source": "Read contacts from a vCard (.vcf) file at a specific file location.\n\nEach record returned represents a single contact with the following fields:\n- `formatted_name`: the display name of the contact\n- `given_name`: the first/given name\n- `family_name`: the last/family name\n- `emails`: a list of email addresses with type and value\n- `phones`: a list of phone numbers with type and value\n- `addresses`: a list of postal addresses with type and address components\n- `organization`: the company or organization name\n- `title`: the job title\n- `note`: free-text notes about the contact\n- `uid`: the unique identifier of the contact\n- `birthday`: the contact's birthday\n- `url`: the contact's URL\n- `nickname`: the contact's nickname\n- `categories`: categories/tags for the contact\n- `role`: the contact's role within their organization\n\nMulti-contact VCF files are fully supported; each contact is returned as a separate record.",
+          "message": "特定のファイル位置にある vCard (.vcf) ファイルから連絡先を読み込みます。\n\n返される各レコードは、以下のフィールドを持つ 1 つの連絡先を表します:\n- `formatted_name`: 連絡先の表示名\n- `given_name`: 名 (ファーストネーム)\n- `family_name`: 姓 (ファミリーネーム)\n- `emails`: タイプと値を持つメールアドレスのリスト\n- `phones`: タイプと値を持つ電話番号のリスト\n- `addresses`: タイプと住所コンポーネントを持つ郵便番号・住所のリスト\n- `organization`: 会社名または組織名\n- `title`: 役職名\n- `note`: 連絡先に関するフリーテキストのメモ\n- `uid`: 連絡先の一意の識別子\n- `birthday`: 連絡先の誕生日\n- `url`: 連絡先の URL\n- `nickname`: 連絡先のニックネーム\n- `categories`: 連絡先のカテゴリ/タグ\n- `role`: 組織内での連絡先の役割\n\n複数の連絡先が含まれる VCF ファイルも完全にサポートされています。各連絡先は個別のレコードとして返されます。"
+        },
+        "app.VkNG.action.cmVhZA.display_name": {
+          "source": "Read VCF Contact File",
+          "message": "VCF 連絡先ファイルを読み込み"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the VCF data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "VCF データの場所。`data` および `stream` と相互排他的です。[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "VCF Input Path",
+          "message": "VCF 入力パス"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the VCF data",
+          "message": "VCF データの場所"
+        },
+        "app.VkNG.action.cmVhZA.short_desc": {
+          "source": "Read contacts from a vCard file at a specific file location",
+          "message": "特定ファイル位置にある vCard ファイルから連絡先を読み込み"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.desc": {
+          "source": "Read contacts from inline vCard (.vcf) binary data.\n\nEach record returned represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nMulti-contact VCF data is fully supported.",
+          "message": "インライン vCard (.vcf) バイナリデータから連絡先を読み込みます。\n\n返される各レコードは、`formatted_name`、`emails`、`phones`、`addresses`、`organization`、`title`、`note`、`uid`、`birthday`、`url`、`nickname`、`categories`、および `role` を含む標準の vCard フィールドを持つ 1 つの連絡先を表します。\n\n複数の連絡先が含まれる VCF データも完全にサポートされています。"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read VCF Contact Inline Data",
+          "message": "VCF 連絡先インラインデータを読み込み"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "VCF data to process; conflicts with `stream` and `path`",
+          "message": "処理する VCF データ。`stream` および `path` と競合します"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "入力データ"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "VCF data to process",
+          "message": "処理する VCF データ"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read contacts from inline vCard data",
+          "message": "インライン vCard データから連絡先を読み込み"
+        },
+        "app.VkNG.action.d3JpdGU.desc": {
+          "source": "Write contacts to a vCard (.vcf) file at a specified path.\n\nEach record written represents a single contact. The following fields are supported:\n- `formatted_name` (required): the display name of the contact\n- `given_name`: the first/given name\n- `family_name`: the last/family name\n- `emails`: a list of `{\"type\": \"work\", \"value\": \"user@example.com\"}` hashes\n- `phones`: a list of `{\"type\": \"cell\", \"value\": \"+1-555-0100\"}` hashes\n- `addresses`: a list of address hashes with `type`, `street`, `city`, `state`, `postal_code`, `country`\n- `organization`: the company or organization name\n- `title`: the job title\n- `note`: free-text notes\n- `uid`: the unique identifier\n- `birthday`: the contact's birthday (date)\n- `url`: the contact's URL\n- `nickname`: the contact's nickname\n- `categories`: categories/tags for the contact (list of strings)\n- `role`: the contact's role within their organization\n\nMultiple contacts can be written to a single VCF file.",
+          "message": "指定されたパスにある vCard (.vcf) ファイルに連絡先を書き込みます。\n\n書き込まれる各レコードは 1 つの連絡先を表します。以下のフィールドがサポートされています:\n- `formatted_name` (必須): 連絡先の表示名\n- `given_name`: 名 (ファーストネーム)\n- `family_name`: 姓 (ファミリーネーム)\n- `emails`: `{\"type\": \"work\", \"value\": \"user@example.com\"}` ハッシュのリスト\n- `phones`: `{\"type\": \"cell\", \"value\": \"+1-555-0100\"}` ハッシュのリスト\n- `addresses`: `type`、`street`、`city`、`state`、`postal_code`、`country` を持つ住所ハッシュのリスト\n- `organization`: 会社名または組織名\n- `title`: 役職名\n- `note`: フリーテキストのメモ\n- `uid`: 一意の識別子\n- `birthday`: 連絡先の誕生日 (日付)\n- `url`: 連絡先の URL\n- `nickname`: 連絡先のニックネーム\n- `categories`: 連絡先のカテゴリ/タグ (文字列のリスト)\n- `role`: 組織内での連絡先の役割\n\n複数の連絡先を単一の VCF ファイルに書き込むことができます。"
+        },
+        "app.VkNG.action.d3JpdGU.display_name": {
+          "source": "Write VCF Contact File",
+          "message": "VCF 連絡先ファイルを書き込み"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output VCF data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "出力 VCF データファイルの場所。`stream` と相互排他的です。出力場所は [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) の呼び出しによって処理されます"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "VCF Output Path",
+          "message": "VCF 出力パス"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the VCF file",
+          "message": "VCF ファイルを書き込む場所"
+        },
+        "app.VkNG.action.d3JpdGU.short_desc": {
+          "source": "Write contacts to a vCard file at a specified path",
+          "message": "指定されたパスにある vCard ファイルに連絡先を書き込み"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nAfter writing all contacts, use `getData()` to retrieve the binary VCF data.",
+          "message": "メモリ上に vCard (.vcf) 連絡先データを作成し、バイナリデータとして返します。ディスクに書き込まずに VCF ファイルを生成するのに便利です。\n\n書き込まれる各レコードは、`formatted_name`、`emails`、`phones`、`addresses`、`organization`、`title`、`note`、`uid`、`birthday`、`url`、`nickname`、`categories`、および `role` を含む標準の vCard フィールドを持つ 1 つの連絡先を表します。\n\nすべての連絡先を書き込んだ後、バイナリ VCF データを取得するには `getData()` を使用します。"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create VCF Contact Data",
+          "message": "VCF 連絡先データを作成"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create vCard contact data and return as binary",
+          "message": "vCard 連絡先データを作成してバイナリとして返します"
+        },
+        "app.VkNG.desc": {
+          "source": "Read and write vCard (.vcf) contact files containing names, emails, phones, addresses, and other contact information",
+          "message": "名前、メール、電話番号、住所、その他の連絡先情報を含む vCard (.vcf) 連絡先ファイルを読み書きします"
+        },
+        "app.VkNG.display_name": {
+          "source": "VCF Contacts",
+          "message": "VCF 連絡先"
+        },
+        "app.VkNG.short_desc": {
+          "source": "Read and write vCard (.vcf) contact files",
+          "message": "vCard (.vcf) 連絡先ファイルを読み書き"
+        }
+      }
+    }
+  }
+}

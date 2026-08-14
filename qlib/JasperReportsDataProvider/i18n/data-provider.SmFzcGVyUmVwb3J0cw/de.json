@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.desc": {
+          "source": "Generate a report from a JasperReports template (`.jrxml` or `.jasper`) at a specific file location.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Generieren Sie einen Bericht aus einer JasperReports-Vorlage (`.jrxml` oder `.jasper`) an einem bestimmten Dateipfad.\n\nJeder erstellte Datensatz stellt eine einzelne Datenzeile dar, die in den Bericht aufgenommen wird. Der Bericht wird generiert, wenn der Provider committet oder zerstört wird.\n\nUnterstützte Ausgabeformate: `pdf`, `xlsx`, `html`, `csv`."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.display_name": {
+          "source": "Generate Report from Template File",
+          "message": "Bericht aus Vorlagendatei generieren"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.desc": {
+          "source": "CSV (comma-separated values) format",
+          "message": "CSV-Format (kommagetrennte Werte)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.short_desc": {
+          "source": "CSV format",
+          "message": "CSV-Format"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.desc": {
+          "source": "HTML (HyperText Markup Language) format",
+          "message": "HTML-Format (HyperText Markup Language)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.short_desc": {
+          "source": "HTML format",
+          "message": "HTML-Format"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.desc": {
+          "source": "Portable Document Format (PDF) using OpenPDF",
+          "message": "Portable Document Format (PDF) unter Verwendung von OpenPDF"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.short_desc": {
+          "source": "PDF format",
+          "message": "PDF-Format"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`) using Apache POI",
+          "message": "Excel 2007+-Format (`.xlsx`) unter Verwendung von Apache POI"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+-Format (.xlsx)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output format for the generated report; one of `pdf`, `xlsx`, `html`, or `csv`",
+          "message": "Das Ausgabeformat für den generierten Bericht; eines von `pdf`, `xlsx`, `html` oder `csv`"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Ausgabeformat"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The report output format",
+          "message": "Das Berichtsausgabeformat"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.desc": {
+          "source": "The path to the JasperReports template file (.jrxml or .jasper); mutually exclusive with `template_data`; the input location is handled by a call to [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a1c17d58d4caa453b7dbe18b850ea1e6)",
+          "message": "Der Pfad zur JasperReports-Vorlagendatei (.jrxml oder .jasper); schließt `template_data` aus; der Eingabeort wird durch einen Aufruf von [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a1c17d58d4caa453b7dbe18b850ea1e6) verarbeitet"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.display_name": {
+          "source": "Template Path",
+          "message": "Vorlagenpfad"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.short_desc": {
+          "source": "The path to the JasperReports template file",
+          "message": "Der Pfad zur JasperReports-Vorlagendatei"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.short_desc": {
+          "source": "Generate a report from a JasperReports template at a file location",
+          "message": "Einen Bericht aus einer JasperReports-Vorlage an einem Dateipfad generieren"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Generieren Sie einen Bericht aus binären Inline-JasperReports-Vorlagendaten.\n\nJeder erstellte Datensatz stellt eine einzelne Datenzeile dar, die in den Bericht aufgenommen wird. Der Bericht wird generiert, wenn der Provider committet oder zerstört wird.\n\nVerwenden Sie nach dem Schreiben aller Datensätze `getData()`, um die binäre Berichtsausgabe abzurufen.\n\nUnterstützte Ausgabeformate: `pdf`, `xlsx`, `html`, `csv`."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
+          "source": "Generate Report from Inline Template",
+          "message": "Bericht aus Inline-Vorlage generieren"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.desc": {
+          "source": "CSV (comma-separated values) format",
+          "message": "CSV-Format (kommagetrennte Werte)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.short_desc": {
+          "source": "CSV format",
+          "message": "CSV-Format"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.desc": {
+          "source": "HTML (HyperText Markup Language) format",
+          "message": "HTML-Format (HyperText Markup Language)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.short_desc": {
+          "source": "HTML format",
+          "message": "HTML-Format"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.desc": {
+          "source": "Portable Document Format (PDF) using OpenPDF",
+          "message": "Portable Document Format (PDF) unter Verwendung von OpenPDF"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.short_desc": {
+          "source": "PDF format",
+          "message": "PDF-Format"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`) using Apache POI",
+          "message": "Excel 2007+-Format (`.xlsx`) unter Verwendung von Apache POI"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+-Format (.xlsx)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output format for the generated report; one of `pdf`, `xlsx`, `html`, or `csv`",
+          "message": "Das Ausgabeformat für den generierten Bericht; eines von `pdf`, `xlsx`, `html` oder `csv`"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Ausgabeformat"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The report output format",
+          "message": "Das Berichtsausgabeformat"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "Inline binary JasperReports template data (.jrxml or .jasper); mutually exclusive with `template`",
+          "message": "Binäre Inline-JasperReports-Vorlagendaten (.jrxml oder .jasper); schließt `template` aus"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "Vorlagendaten"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Inline binary template data",
+          "message": "Binäre Inline-Vorlagendaten"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.short_desc": {
+          "source": "Generate a report from inline JasperReports template data",
+          "message": "Einen Bericht aus Inline-JasperReports-Vorlagendaten generieren"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.desc": {
+          "source": "Generate enterprise reports from [JasperReports](https://jasperreports.sourceforge.net/) templates in multiple output formats.\n\n**Capabilities**:\n- Compile and fill `.jrxml` templates with data records\n- Export to `pdf`, `xlsx`, `html`, or `csv` format\n- Automatic type coercion for Integer, Long, Float, Double fields\n\nIdeal for generating invoices, financial statements, compliance reports, and any template-driven business documents.",
+          "message": "Generieren Sie Enterprise-Berichte aus [JasperReports](https://jasperreports.sourceforge.net/)-Vorlagen in mehreren Ausgabeformaten.\n\n**Funktionen**:\n- Kompilieren und Befüllen von `.jrxml`-Vorlagen mit Datensätzen\n- Export in die Formate `pdf`, `xlsx`, `html` oder `csv`\n- Automatische Typumwandlung für Integer-, Long-, Float- und Double-Felder\n\nIdeal zum Generieren von Rechnungen, Finanzberichten, Compliance-Berichten und allen vorlagenbasierten Geschäftsdokumenten."
+        },
+        "app.SmFzcGVyUmVwb3J0cw.display_name": {
+          "source": "JasperReports",
+          "message": "JasperReports"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.short_desc": {
+          "source": "Generate reports from JasperReports templates",
+          "message": "Berichte aus JasperReports-Vorlagen generieren"
+        }
+      }
+    }
+  }
+}

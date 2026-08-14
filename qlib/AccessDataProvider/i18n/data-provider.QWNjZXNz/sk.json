@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.QWNjZXNz.action.cmVhZA.desc": {
+          "source": "Read Access database from a specific file location and iterate table rows",
+          "message": "Čítať databázu Access zo špecifického umiestnenia súboru a prechádzať riadky tabuľky"
+        },
+        "app.QWNjZXNz.action.cmVhZA.display_name": {
+          "source": "Read Access Database File",
+          "message": "Čítať súbor databázy Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the Access database file; mutually exclusive with `data`; resolved with a call to [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Cesta k súboru databázy Access; vzájomne sa vylučuje s `data`; vyriešená volaním [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Access Input Path",
+          "message": "Vstupná cesta Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The path to the Access database file",
+          "message": "Cesta k súboru databázy Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "Názov tabuľky na čítanie; ak nie je zadaný, použijú sa podradení poskytovatelia na prístup k tabuľkám"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "Názov tabuľky"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "Názov tabuľky na čítanie"
+        },
+        "app.QWNjZXNz.action.cmVhZA.short_desc": {
+          "source": "Read Access database from a specific file location",
+          "message": "Čítať databázu Access zo špecifického umiestnenia súboru"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Access database inline data and iterate table rows",
+          "message": "Čítať priame dáta databázy Access a prechádzať riadky tabuľky"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Access Database Inline Data",
+          "message": "Čítať priame dáta databázy Access"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Access database data to process; conflicts with `path`",
+          "message": "Dáta databázy Access na spracovanie; v konflikte s `path`"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupné dáta"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Access database data to process",
+          "message": "Dáta databázy Access na spracovanie"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "Názov tabuľky na čítanie; ak nie je zadaný, použijú sa podradení poskytovatelia na prístup k tabuľkám"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "Názov tabuľky"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "Názov tabuľky na čítanie"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Access database inline data",
+          "message": "Čítať priame dáta databázy Access"
+        },
+        "app.QWNjZXNz.desc": {
+          "source": "Read Microsoft Access databases (.mdb/.accdb format) using the Jackcess library",
+          "message": "Čítať databázy Microsoft Access (formát .mdb/.accdb) pomocou knižnice Jackcess"
+        },
+        "app.QWNjZXNz.display_name": {
+          "source": "Access Databases",
+          "message": "Databázy Access"
+        },
+        "app.QWNjZXNz.short_desc": {
+          "source": "Read Microsoft Access databases",
+          "message": "Čítať databázy Microsoft Access"
+        }
+      }
+    }
+  }
+}

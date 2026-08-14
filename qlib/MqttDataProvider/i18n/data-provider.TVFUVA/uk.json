@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.TVFUVA.action.Y29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client connects or reconnects to the MQTT broker",
+          "message": "Ця подія виникає, коли клієнт підключається або повторно підключається до брокера MQTT"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.display_name": {
+          "source": "MQTT Connected",
+          "message": "MQTT підключено"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.short_desc": {
+          "source": "Client connected or reconnected to the MQTT broker",
+          "message": "Клієнт підключився або повторно підключився до брокера MQTT"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client is disconnected from the MQTT broker, including the MQTT 5 disconnect reason code and description",
+          "message": "Ця подія виникає, коли клієнт відключається від брокера MQTT, включаючи код причини відключення та опис MQTT 5"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.display_name": {
+          "source": "MQTT Disconnected",
+          "message": "MQTT відключено"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.short_desc": {
+          "source": "Client disconnected from the MQTT broker",
+          "message": "Клієнт відключився від брокера MQTT"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "An MQTT message is received; event includes MQTT 5.0 properties such as content type, response topic, correlation data, and user properties",
+          "message": "Отримано повідомлення MQTT; подія містить властивості MQTT 5.0, такі як тип вмісту, топік відповіді, дані кореляції та користувацькі властивості"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "MQTT Message Received",
+          "message": "Отримано повідомлення MQTT"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "An MQTT message is received with MQTT 5 properties",
+          "message": "Отримано повідомлення MQTT із властивостями MQTT 5"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.desc": {
+          "source": "Send an MQTT message to a topic with optional MQTT 5.0 properties including content type, request/response correlation, message expiry, and user-defined metadata",
+          "message": "Надіслати повідомлення MQTT у топік із необов'язковими властивостями MQTT 5.0, включаючи тип вмісту, кореляцію запиту/відповіді, термін придатності повідомлення та користувацькі метадані"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.display_name": {
+          "source": "Send MQTT Message",
+          "message": "Надіслати повідомлення MQTT"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME content type of the message payload (e.g., `application/json`, `text/plain`)",
+          "message": "Тип вмісту MIME корисного навантаження повідомлення (наприклад, `application/json`, `text/plain`)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME content type of the message payload (e",
+          "message": "Тип вмісту MIME корисного навантаження повідомлення (напр."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
+          "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
+          "message": "Дані кореляції для зіставлення відповідей із запитами; повертаються відповідачем (шаблон запит/відповідь MQTT 5)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.display_name": {
+          "source": "Correlation Data",
+          "message": "Дані кореляції"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.short_desc": {
+          "source": "Correlation data for matching responses to requests",
+          "message": "Дані кореляції для зіставлення відповідей із запитами"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.desc": {
+          "source": "Message lifetime in seconds; the broker will discard the message after this interval if it has not been delivered",
+          "message": "Термін життя повідомлення у секундах; брокер відхилить повідомлення після цього інтервалу, якщо воно не було доставлене"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.display_name": {
+          "source": "Message Expiry Interval",
+          "message": "Інтервал закінчення терміну дії повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.short_desc": {
+          "source": "Message lifetime in seconds",
+          "message": "Термін життя повідомлення у секундах"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.desc": {
+          "source": "The payload / message body; a string or binary type is sent as-is, all others are serialized with JSON and sent as a JSON string",
+          "message": "Корисне навантаження / тіло повідомлення; тип string або binary надсилається як є, усі інші серіалізуються за допомогою JSON і надсилаються як рядок JSON"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.display_name": {
+          "source": "Message Body",
+          "message": "Тіло повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.short_desc": {
+          "source": "The payload / message body",
+          "message": "Корисне навантаження / тіло повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.desc": {
+          "source": "Payload format indicator: `True` = UTF-8 encoded text, `False` or omitted = unspecified binary data",
+          "message": "Індикатор формату корисного навантаження: `True` = текст у кодуванні UTF-8, `False` або опущено = неуточнені двійкові дані"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.display_name": {
+          "source": "Payload Format Indicator",
+          "message": "Індикатор формату корисного навантаження"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
+          "message": "Індикатор формату корисного навантаження: 'True' = текст у кодуванні UTF-8, 'False' або опущено = неуточнені двійкові дані"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
+          "source": "QoS 0: message is delivered at most once with no acknowledgment",
+          "message": "QoS 0: повідомлення доставляється якнайбільше один раз без підтвердження"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.display_name": {
+          "source": "At Most Once",
+          "message": "Щонайбільше один раз"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.short_desc": {
+          "source": "QoS 0: fire and forget",
+          "message": "QoS 0: надіслав і забув"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.desc": {
+          "source": "QoS 1: message is delivered at least once with acknowledgment",
+          "message": "QoS 1: повідомлення доставляється щонайменше один раз із підтвердженням"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.display_name": {
+          "source": "At Least Once",
+          "message": "Щонайменше один раз"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.short_desc": {
+          "source": "QoS 1: acknowledged delivery",
+          "message": "QoS 1: доставка з підтвердженням"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.desc": {
+          "source": "QoS 2: message is delivered exactly once using a four-step handshake",
+          "message": "QoS 2: повідомлення доставляється рівно один раз із використанням чотириетапного узгодження"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.display_name": {
+          "source": "Exactly Once",
+          "message": "Рівно один раз"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.short_desc": {
+          "source": "QoS 2: assured delivery",
+          "message": "QoS 2: гарантована доставка"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.desc": {
+          "source": "The quality of service value for this message",
+          "message": "Значення якості обслуговування для цього повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.display_name": {
+          "source": "Quality of Service",
+          "message": "Якість обслуговування"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.short_desc": {
+          "source": "The quality of service value for this message",
+          "message": "Значення якості обслуговування для цього повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.desc": {
+          "source": "If this message should be retained by the server",
+          "message": "Чи повинно це повідомлення зберігатися сервером"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.display_name": {
+          "source": "Retained?",
+          "message": "Зберігати?"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.short_desc": {
+          "source": "If this message should be retained by the server",
+          "message": "Чи повинно це повідомлення зберігатися сервером"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "Топік, у який одержувач повинен опублікувати відповідь (шаблон запит/відповідь MQTT 5)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.display_name": {
+          "source": "Response Topic",
+          "message": "Топік відповіді"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "Топік, у який одержувач повинен опублікувати відповідь (шаблон запит/відповідь MQTT 5)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {
+          "source": "The message topic",
+          "message": "Топік повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.display_name": {
+          "source": "Message Topic",
+          "message": "Топік повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.short_desc": {
+          "source": "The message topic",
+          "message": "Топік повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.desc": {
+          "source": "Application-level key-value string metadata to attach to the message.\n\nProvide a hash of string key-value pairs (e.g., `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)",
+          "message": "Рядкові метадані рівня прикладної програми у форматі ключ-значення для прикріплення до повідомлення.\n\nУкажіть хеш рядкових пар ключ-значення (наприклад, `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.display_name": {
+          "source": "User Properties",
+          "message": "Властивості користувача"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.short_desc": {
+          "source": "Application-level key-value string metadata to attach to the message",
+          "message": "Рядкові метадані рівня прикладної програми у форматі ключ-значення для прикріплення до повідомлення"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.short_desc": {
+          "source": "Send an MQTT message with optional MQTT 5 properties",
+          "message": "Надіслати повідомлення MQTT із необов'язковими властивостями MQTT 5"
+        },
+        "app.TVFUVA.desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging with support for request/response patterns, message expiry, content type metadata, and user-defined properties",
+          "message": "Сервер MQTT 5.0 для швидкого та ефективного обміну повідомленнями з підтримкою шаблонів запит/відповідь, закінчення терміну дії повідомлень, метаданих типу вмісту та користувацьких властивостей"
+        },
+        "app.TVFUVA.display_name": {
+          "source": "MQTT",
+          "message": "MQTT"
+        },
+        "app.TVFUVA.short_desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging",
+          "message": "Сервер MQTT 5.0 для швидкого та ефективного обміну повідомленнями"
+        }
+      }
+    }
+  }
+}

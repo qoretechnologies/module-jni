@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q2FtZWw.action.c2VuZA.desc": {
+          "source": "Send a message to a Camel endpoint.\n\nSpecify the endpoint URI (e.g., `seda:orders`, `file:output`, `direct:process`) and provide the message body and optional headers.\n\n**Note**: the endpoint must have an active consumer route or be a built-in component that accepts messages directly.",
+          "message": "Camel エンドポイントにメッセージを送信します。\n\nエンドポイント URI（例: `seda:orders`、`file:output`、`direct:process`）を指定し、メッセージ本文とオプションのヘッダーを提供します。\n\n**注**: エンドポイントにはアクティブなコンシューマールートがあるか、メッセージを直接受け入れる組み込みコンポーネントである必要があります。"
+        },
+        "app.Q2FtZWw.action.c2VuZA.display_name": {
+          "source": "Send Camel Message",
+          "message": "Camel メッセージを送信"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body / payload to send.\n\nThe body type depends on the target endpoint — most endpoints accept `string` or `binary` data.",
+          "message": "送信するメッセージ本文 / ペイロード。\n\n本文の型はターゲットエンドポイントによって異なります。ほとんどのエンドポイントは `string` または `binary` データを受け入れます。"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "メッセージボディ"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload to send",
+          "message": "送信するメッセージ本文 / ペイロード"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.desc": {
+          "source": "The Camel endpoint URI to send the message to.\n\nBuilt-in components include:\n- `direct:name` — synchronous in-memory messaging\n- `seda:name` — asynchronous in-memory queue\n- `file:directory` — file system integration\n- `log:category` — logging\n- `timer:name` — periodic timer events\n\nAdditional components can be loaded by adding their JARs to the Java classpath.",
+          "message": "メッセージの送信先となる Camel エンドポイント URI。\n\n組み込みコンポーネントには以下が含まれます:\n- `direct:name` — 同期インメモリメッセージング\n- `seda:name` — 非同期インメモリキュー\n- `file:directory` — ファイルシステム統合\n- `log:category` — ログ出力\n- `timer:name` — 定期タイマーイベント\n\nJava のクラスパスに JAR ファイルを追加することで、追加のコンポーネントをロードできます。"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.display_name": {
+          "source": "Endpoint URI",
+          "message": "エンドポイント URI"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.short_desc": {
+          "source": "The Camel endpoint URI to send the message to",
+          "message": "メッセージの送信先となる Camel エンドポイント URI"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.desc": {
+          "source": "Optional message headers as a hash of key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"priority\": \"high\"}`",
+          "message": "キーと値のペアのハッシュとしてのオプションのメッセージヘッダー。\n\n**例**: `{\"source\": \"order-system\", \"priority\": \"high\"}`"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "メッセージヘッダー"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.short_desc": {
+          "source": "Optional message headers as a hash of key-value pairs",
+          "message": "キーと値のペアのハッシュとしてのオプションのメッセージヘッダー"
+        },
+        "app.Q2FtZWw.action.c2VuZA.short_desc": {
+          "source": "Send a message to a Camel endpoint",
+          "message": "Camel エンドポイントにメッセージを送信"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.desc": {
+          "source": "List all active routes in the Camel context",
+          "message": "Camel コンテキスト内のすべてのアクティブなルートを一覧表示"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.display_name": {
+          "source": "List Camel Routes",
+          "message": "Camel ルートを一覧表示"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.short_desc": {
+          "source": "List active Camel routes",
+          "message": "アクティブな Camel ルートを一覧表示"
+        },
+        "app.Q2FtZWw.desc": {
+          "source": "Enterprise integration using [Apache Camel](https://camel.apache.org/) with support for 300+ connectors.\n\n**Built-in components**:\n- `direct` — synchronous in-memory messaging\n- `seda` — asynchronous in-memory queues\n- `file` — file system integration\n- `timer` — periodic timer events\n- `log` — message logging\n\nAdditional components (HTTP, JMS, Kafka, AWS, etc.) can be loaded by adding their JARs to the Java classpath.",
+          "message": "300 以上のコネクタをサポートする [Apache Camel](https://camel.apache.org/) を使用したエンタープライズ統合。\n\n**組み込みコンポーネント**:\n- `direct` — 同期インメモリメッセージング\n- `seda` — 非同期インメモリキュー\n- `file` — ファイルシステム統合\n- `timer` — 定期タイマーイベント\n- `log` — メッセージログ出力\n\nJava のクラスパスに JAR ファイルを追加することで、追加のコンポーネント（HTTP、JMS、Kafka、AWS など）をロードできます。"
+        },
+        "app.Q2FtZWw.display_name": {
+          "source": "Apache Camel",
+          "message": "Apache Camel"
+        },
+        "app.Q2FtZWw.short_desc": {
+          "source": "Apache Camel enterprise integration patterns",
+          "message": "Apache Camel エンタープライズ統合パターン"
+        }
+      }
+    }
+  }
+}

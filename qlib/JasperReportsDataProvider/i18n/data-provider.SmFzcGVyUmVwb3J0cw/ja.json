@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.desc": {
+          "source": "Generate a report from a JasperReports template (`.jrxml` or `.jasper`) at a specific file location.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "特定のファイル位置にあるJasperReportsテンプレート（`.jrxml`または`.jasper`）からレポートを生成します。\n\n作成される各レコードは、レポートに含まれる単一のデータ行を表します。レポートは、プロバイダーがコミットまたは破棄されたときに生成されます。\n\nサポートされている出力形式: `pdf`、`xlsx`、`html`、`csv`。"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.display_name": {
+          "source": "Generate Report from Template File",
+          "message": "テンプレートファイルからレポートを生成"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.desc": {
+          "source": "CSV (comma-separated values) format",
+          "message": "CSV（カンマ区切り値）形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.short_desc": {
+          "source": "CSV format",
+          "message": "CSV形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.desc": {
+          "source": "HTML (HyperText Markup Language) format",
+          "message": "HTML（HyperText Markup Language）形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.short_desc": {
+          "source": "HTML format",
+          "message": "HTML形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.desc": {
+          "source": "Portable Document Format (PDF) using OpenPDF",
+          "message": "OpenPDFを使用するPortable Document Format (PDF)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.short_desc": {
+          "source": "PDF format",
+          "message": "PDF形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`) using Apache POI",
+          "message": "Apache POIを使用するExcel 2007+形式（`.xlsx`）"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+ 形式 (.xlsx)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output format for the generated report; one of `pdf`, `xlsx`, `html`, or `csv`",
+          "message": "生成されるレポートの出力形式。`pdf`、`xlsx`、`html`、`csv`のいずれか"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "出力フォーマット"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The report output format",
+          "message": "レポートの出力形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.desc": {
+          "source": "The path to the JasperReports template file (.jrxml or .jasper); mutually exclusive with `template_data`; the input location is handled by a call to [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a1c17d58d4caa453b7dbe18b850ea1e6)",
+          "message": "JasperReportsテンプレートファイル（.jrxmlまたは.jasper）へのパス。`template_data`と相互排他的です。入力場所は[FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a1c17d58d4caa453b7dbe18b850ea1e6)への呼び出しによって処理されます"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.display_name": {
+          "source": "Template Path",
+          "message": "テンプレートのパス"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.option.dGVtcGxhdGU.short_desc": {
+          "source": "The path to the JasperReports template file",
+          "message": "JasperReportsテンプレートファイルへのパス"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0.short_desc": {
+          "source": "Generate a report from a JasperReports template at a file location",
+          "message": "ファイル位置にあるJasperReportsテンプレートからレポートを生成します"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "インラインのJasperReportsテンプレートバイナリデータからレポートを生成します。\n\n作成される各レコードは、レポートに含まれる単一のデータ行を表します。レポートは、プロバイダーがコミットまたは破棄されたときに生成されます。\n\nすべてのレコードを書き込んだ後、`getData()`を使用してバイナリレポート出力を取得します。\n\nサポートされている出力形式: `pdf`、`xlsx`、`html`、`csv`。"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
+          "source": "Generate Report from Inline Template",
+          "message": "インラインテンプレートからレポートを生成"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.desc": {
+          "source": "CSV (comma-separated values) format",
+          "message": "CSV（カンマ区切り値）形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmNzdg.short_desc": {
+          "source": "CSV format",
+          "message": "CSV形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.desc": {
+          "source": "HTML (HyperText Markup Language) format",
+          "message": "HTML（HyperText Markup Language）形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmh0bWw.short_desc": {
+          "source": "HTML format",
+          "message": "HTML形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.desc": {
+          "source": "Portable Document Format (PDF) using OpenPDF",
+          "message": "OpenPDFを使用するPortable Document Format (PDF)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBkZg.short_desc": {
+          "source": "PDF format",
+          "message": "PDF形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`) using Apache POI",
+          "message": "Apache POIを使用するExcel 2007+形式（`.xlsx`）"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+ 形式 (.xlsx)"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output format for the generated report; one of `pdf`, `xlsx`, `html`, or `csv`",
+          "message": "生成されるレポートの出力形式。`pdf`、`xlsx`、`html`、`csv`のいずれか"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "出力フォーマット"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The report output format",
+          "message": "レポートの出力形式"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "Inline binary JasperReports template data (.jrxml or .jasper); mutually exclusive with `template`",
+          "message": "インラインバイナリJasperReportsテンプレートデータ（.jrxmlまたは.jasper）。`template`と相互排他的です"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "テンプレートデータ"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Inline binary template data",
+          "message": "インラインバイナリテンプレートデータ"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.short_desc": {
+          "source": "Generate a report from inline JasperReports template data",
+          "message": "インラインのJasperReportsテンプレートデータからレポートを生成します"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.desc": {
+          "source": "Generate enterprise reports from [JasperReports](https://jasperreports.sourceforge.net/) templates in multiple output formats.\n\n**Capabilities**:\n- Compile and fill `.jrxml` templates with data records\n- Export to `pdf`, `xlsx`, `html`, or `csv` format\n- Automatic type coercion for Integer, Long, Float, Double fields\n\nIdeal for generating invoices, financial statements, compliance reports, and any template-driven business documents.",
+          "message": "[JasperReports](https://jasperreports.sourceforge.net/)テンプレートから複数の出力形式でエンタープライズレポートを生成します。\n\n**機能**:\n- `.jrxml`テンプレートをコンパイルし、データレコードを入力\n- `pdf`、`xlsx`、`html`、または`csv`形式へエクスポート\n- Integer、Long、Float、Doubleフィールドの自動型強制変換\n\n請求書、財務諸表、コンプライアンスレポート、およびテンプレート駆動型のビジネスドキュメントの生成に最適です。"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.display_name": {
+          "source": "JasperReports",
+          "message": "JasperReports"
+        },
+        "app.SmFzcGVyUmVwb3J0cw.short_desc": {
+          "source": "Generate reports from JasperReports templates",
+          "message": "JasperReportsテンプレートからレポートを生成します"
+        }
+      }
+    }
+  }
+}

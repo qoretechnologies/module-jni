@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.T3BjVUE.action.Y29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client connects or reconnects to the OPC UA server",
+          "message": "Ця подія виникає, коли клієнт підключається або повторно підключається до сервера OPC UA"
+        },
+        "app.T3BjVUE.action.Y29ubmVjdGVk.display_name": {
+          "source": "OPC UA Connected",
+          "message": "OPC UA підключено"
+        },
+        "app.T3BjVUE.action.Y29ubmVjdGVk.short_desc": {
+          "source": "Client connected or reconnected to the OPC UA server",
+          "message": "Клієнт підключився або повторно підключився до сервера OPC UA"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.desc": {
+          "source": "Call a method on an OPC UA server object node with optional input arguments",
+          "message": "Викликати метод на вузлі об'єкта сервера OPC UA з необов'язковими вхідними аргументами"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.display_name": {
+          "source": "Call OPC UA Method",
+          "message": "Викликати метод OPC UA"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.desc": {
+          "source": "The input arguments for the method call",
+          "message": "Вхідні аргументи для виклику методу"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.display_name": {
+          "source": "Arguments",
+          "message": "Аргументи"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.YXJndW1lbnRz.short_desc": {
+          "source": "The input arguments for the method call",
+          "message": "Вхідні аргументи для виклику методу"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.desc": {
+          "source": "The node ID of the object that owns the method",
+          "message": "ID вузла об'єкта, якому належить метод"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "ID об'єкта"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The node ID of the object that owns the method",
+          "message": "ID вузла об'єкта, якому належить метод"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.desc": {
+          "source": "The node ID of the method to call",
+          "message": "ID вузла методу для виклику"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.display_name": {
+          "source": "Method ID",
+          "message": "ID методу"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.option.bWV0aG9kX2lk.short_desc": {
+          "source": "The node ID of the method to call",
+          "message": "ID вузла методу для виклику"
+        },
+        "app.T3BjVUE.action.Y2FsbC1tZXRob2Q.short_desc": {
+          "source": "Call a method on an OPC UA server object",
+          "message": "Викликати метод на об'єкті сервера OPC UA"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.desc": {
+          "source": "Browse the OPC UA server address space to discover available nodes",
+          "message": "Огляд адресного простору сервера OPC UA для виявлення доступних вузлів"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.display_name": {
+          "source": "Browse OPC UA Address Space",
+          "message": "Огляд адресного простору OPC UA"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkJvdGg.display_name": {
+          "source": "Both",
+          "message": "Обидва"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkZvcndhcmQ.display_name": {
+          "source": "Forward",
+          "message": "Прямий"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOkludmVyc2U.display_name": {
+          "source": "Inverse",
+          "message": "Зворотний"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.desc": {
+          "source": "Browse direction: `Forward`, `Inverse`, or `Both`; defaults to `Forward`",
+          "message": "Напрямок огляду: `Forward`, `Inverse` або `Both`; за замовчуванням — `Forward`"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Напрямок"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'",
+          "message": "Напрямок огляду: 'Forward', 'Inverse' або 'Both'; за замовчуванням — 'Forward'"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of references to return; `0` or omitted means no limit",
+          "message": "Максимальна кількість посилань для повернення; `0` або пропуск означає відсутність обмежень"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of references to return",
+          "message": "Максимальна кількість посилань для повернення"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.desc": {
+          "source": "The node ID to browse from; defaults to the Root node (`ns=0;i=84`)",
+          "message": "Ідентифікатор вузла для початку огляду; за замовчуванням — кореневий вузол (`ns=0;i=84`)"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "Ідентифікатор вузла"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bm9kZV9pZA.short_desc": {
+          "source": "The node ID to browse from",
+          "message": "Ідентифікатор вузла для початку огляду"
+        },
+        "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.short_desc": {
+          "source": "Browse the OPC UA server address space",
+          "message": "Огляд адресного простору сервера OPC UA"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.desc": {
+          "source": "Get the current server status including state, start time, build info, and product information",
+          "message": "Отримати поточний статус сервера, включаючи стан, час запуску, інформацію про збірку та інформацію про продукт"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.display_name": {
+          "source": "Get OPC UA Server Status",
+          "message": "Отримати статус сервера OPC UA"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.desc": {
+          "source": "The server object node ID; defaults to the standard ServerStatus node (`ns=0;i=2259`)",
+          "message": "Ідентифікатор вузла об'єкта сервера; за замовчуванням — стандартний вузол ServerStatus (`ns=0;i=2259`)"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.display_name": {
+          "source": "Server Node ID",
+          "message": "Ідентифікатор вузла сервера"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.option.bm9kZV9pZA.short_desc": {
+          "source": "The server object node ID",
+          "message": "Ідентифікатор вузла об'єкта сервера"
+        },
+        "app.T3BjVUE.action.Z2V0LXNlcnZlci1zdGF0dXM.short_desc": {
+          "source": "Get the current status of the OPC UA server",
+          "message": "Отримати поточний статус сервера OPC UA"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.desc": {
+          "source": "This event is raised when the value of a monitored OPC UA node changes, including the new value, status code, and timestamps",
+          "message": "Ця подія виникає під час зміни значення відстежуваного вузла OPC UA, включаючи нове значення, код статусу та часові мітки"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.display_name": {
+          "source": "OPC UA Data Change",
+          "message": "Зміна даних OPC UA"
+        },
+        "app.T3BjVUE.action.ZGF0YS1jaGFuZ2U.short_desc": {
+          "source": "A monitored OPC UA node value has changed",
+          "message": "Значення відстежуваного вузла OPC UA змінилося"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.desc": {
+          "source": "Discover available endpoints on the OPC UA server including security policies and transport profiles",
+          "message": "Пошук доступних кінцевих точок на сервері OPC UA, включаючи політики безпеки та профілі транспорту"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.display_name": {
+          "source": "Discover OPC UA Endpoints",
+          "message": "Пошук кінцевих точок OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.desc": {
+          "source": "The OPC UA server URL to discover endpoints on; if omitted, the connection URL is used",
+          "message": "URL-адреса сервера OPC UA для пошуку кінцевих точок; якщо пропущено, використовується URL-адреса з'єднання"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.display_name": {
+          "source": "Discovery URL",
+          "message": "URL-адреса пошуку"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.option.dXJs.short_desc": {
+          "source": "The OPC UA server URL to discover endpoints on",
+          "message": "URL-адреса сервера OPC UA для пошуку кінцевих точок"
+        },
+        "app.T3BjVUE.action.ZGlzY292ZXItZW5kcG9pbnRz.short_desc": {
+          "source": "Discover available endpoints on an OPC UA server",
+          "message": "Пошук доступних кінцевих точок на сервері OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client is disconnected from the OPC UA server",
+          "message": "Ця подія виникає під час відключення клієнта від сервера OPC UA"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.display_name": {
+          "source": "OPC UA Disconnected",
+          "message": "OPC UA відключено"
+        },
+        "app.T3BjVUE.action.ZGlzY29ubmVjdGVk.short_desc": {
+          "source": "Client disconnected from the OPC UA server",
+          "message": "Клієнт відключився від сервера OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.desc": {
+          "source": "Read the current value from an OPC UA node on the server",
+          "message": "Зчитати поточне значення з вузла OPC UA на сервері"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.display_name": {
+          "source": "Read OPC UA Node Value",
+          "message": "Зчитати значення вузла OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read (e.g., `ns=2;s=Temperature`)",
+          "message": "Ідентифікатор вузла OPC UA для зчитування (наприклад, `ns=2;s=Temperature`)"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "Ідентифікатор вузла"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read (e",
+          "message": "Ідентифікатор вузла OPC UA для зчитування (н"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZQ.short_desc": {
+          "source": "Read a value from an OPC UA node",
+          "message": "Зчитати значення з вузла OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.desc": {
+          "source": "Read current values from multiple OPC UA nodes in a single batch request for improved performance",
+          "message": "Зчитування поточних значений із кількох вузлів OPC UA в одному пакетному запиті для підвищення продуктивності"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.display_name": {
+          "source": "Read Multiple OPC UA Node Values",
+          "message": "Зчитати значення кількох вузлів OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.desc": {
+          "source": "List of OPC UA node IDs to read (e.g., `ns=2;s=Temperature`)",
+          "message": "Список ідентифікаторів вузлів OPC UA для зчитування (наприклад, `ns=2;s=Temperature`)"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.display_name": {
+          "source": "Node IDs",
+          "message": "Ідентифікатори вузлів"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.short_desc": {
+          "source": "List of OPC UA node IDs to read (e",
+          "message": "Список ідентифікаторів вузлів OPC UA для зчитування (н"
+        },
+        "app.T3BjVUE.action.cmVhZC12YWx1ZXM.short_desc": {
+          "source": "Read values from multiple OPC UA nodes in a single request",
+          "message": "Зчитування значень із кількох вузлів OPC UA в одному запиті"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.desc": {
+          "source": "Read node attributes including display name, description, data type, access level, and current value",
+          "message": "Зчитування атрибутів вузла, включаючи відображуване ім'я, опис, тип даних, рівень доступу та поточне значення"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.display_name": {
+          "source": "Read OPC UA Node Attributes",
+          "message": "Зчитати атрибути вузла OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read attributes from",
+          "message": "Ідентифікатор вузла OPC UA для зчитування атрибутів"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "Ідентифікатор вузла"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read attributes from",
+          "message": "Ідентифікатор вузла OPC UA для зчитування атрибутів"
+        },
+        "app.T3BjVUE.action.cmVhZC1hdHRyaWJ1dGVz.short_desc": {
+          "source": "Read attributes from an OPC UA node",
+          "message": "Зчитати атрибути з вузла OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.desc": {
+          "source": "Read historical data values from an OPC UA node with configurable time range and maximum values",
+          "message": "Зчитування історичних значень даних із вузла OPC UA з можливістю налаштування часового діапазону та максимальної кількості значень"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.display_name": {
+          "source": "Read OPC UA Historical Data",
+          "message": "Зчитати історичні дані OPC UA"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.desc": {
+          "source": "The end time for the historical data range",
+          "message": "Кінцевий час для діапазону історичних даних"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Час завершення"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.ZW5kX3RpbWU.short_desc": {
+          "source": "The end time for the historical data range",
+          "message": "Кінцевий час для діапазону історичних даних"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.desc": {
+          "source": "Maximum number of values to return; 0 or omitted means no limit",
+          "message": "Максимальна кількість значень для повернення; 0 або пропуск означає відсутність обмежень"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.display_name": {
+          "source": "Max Values",
+          "message": "Макс. значень"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bWF4X3ZhbHVlcw.short_desc": {
+          "source": "Maximum number of values to return",
+          "message": "Максимальна кількість значень для повернення"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.desc": {
+          "source": "The OPC UA node ID to read history from",
+          "message": "Ідентифікатор вузла OPC UA для зчитування історії"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "Ідентифікатор вузла"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.bm9kZV9pZA.short_desc": {
+          "source": "The OPC UA node ID to read history from",
+          "message": "Ідентифікатор вузла OPC UA для зчитування історії"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.desc": {
+          "source": "The start time for the historical data range",
+          "message": "Початковий час для діапазону історичних даних"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.display_name": {
+          "source": "Start Time",
+          "message": "Час початку"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.option.c3RhcnRfdGltZQ.short_desc": {
+          "source": "The start time for the historical data range",
+          "message": "Початковий час для діапазону історичних даних"
+        },
+        "app.T3BjVUE.action.cmVhZC1oaXN0b3J5.short_desc": {
+          "source": "Read historical data from an OPC UA node",
+          "message": "Зчитати історичні дані з вузла OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.desc": {
+          "source": "Write a value to an OPC UA node on the server",
+          "message": "Записати значення у вузол OPC UA на сервері"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.display_name": {
+          "source": "Write OPC UA Node Value",
+          "message": "Записати значення вузла OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJ5dGU.display_name": {
+          "source": "Byte (uint8)",
+          "message": "Byte (uint8)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJ5dGVTdHJpbmc.display_name": {
+          "source": "ByteString",
+          "message": "ByteString"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkJvb2xlYW4.display_name": {
+          "source": "Boolean",
+          "message": "Boolean"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkRhdGVUaW1l.display_name": {
+          "source": "DateTime",
+          "message": "DateTime"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkRvdWJsZQ.display_name": {
+          "source": "Double (64-bit)",
+          "message": "Double (64-біт)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkZsb2F0.display_name": {
+          "source": "Float (32-bit)",
+          "message": "Float (32-біт)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDE2.display_name": {
+          "source": "Int16",
+          "message": "Int16"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDMy.display_name": {
+          "source": "Int32",
+          "message": "Int32"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOkludDY0.display_name": {
+          "source": "Int64",
+          "message": "Int64"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlN0cmluZw.display_name": {
+          "source": "String",
+          "message": "String"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlNCeXRl.display_name": {
+          "source": "SByte (int8)",
+          "message": "SByte (int8)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQ2NA.display_name": {
+          "source": "UInt64",
+          "message": "UInt64"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQxNg.display_name": {
+          "source": "UInt16",
+          "message": "UInt16"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.allowed-value.c3RyaW5nOlVJbnQzMg.display_name": {
+          "source": "UInt32",
+          "message": "UInt32"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.desc": {
+          "source": "Optional OPC UA data type hint for the value. If not provided, the type is inferred from the Qore value type",
+          "message": "Необов'язкова підказка типу даних OPC UA для значення. Якщо не вказано, тип визначається з типу значення Qore"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.display_name": {
+          "source": "Data Type",
+          "message": "Тип даних"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.ZGF0YV90eXBl.short_desc": {
+          "source": "Optional OPC UA data type hint for the value",
+          "message": "Необов'язкова підказка типу даних OPC UA для значення"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.desc": {
+          "source": "The target OPC UA node ID (e.g., `ns=2;s=SetPoint`)",
+          "message": "Ідентифікатор цільового вузла OPC UA (наприклад, `ns=2;s=SetPoint`)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.display_name": {
+          "source": "Node ID",
+          "message": "Ідентифікатор вузла"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.short_desc": {
+          "source": "The target OPC UA node ID (e",
+          "message": "Ідентифікатор цільового вузла OPC UA (напр"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.desc": {
+          "source": "The value to write to the node",
+          "message": "Значення для запису у вузол"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Значення"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.short_desc": {
+          "source": "The value to write to the node",
+          "message": "Значення для запису у вузол"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWU.short_desc": {
+          "source": "Write a value to an OPC UA node",
+          "message": "Записати значення у вузол OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.desc": {
+          "source": "Write values to multiple OPC UA nodes in a single batch request",
+          "message": "Записати значення в кілька вузлів OPC UA в одному пакетному запиті"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.display_name": {
+          "source": "Write Multiple OPC UA Node Values",
+          "message": "Записати значення кількох вузлів OPC UA"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.desc": {
+          "source": "List of values to write, each a hash with `node_id` (string, required), `value` (auto, required), and `data_type` (string, optional)",
+          "message": "Список значень для запису, кожне з яких є хешем із `node_id` (string, обов'язкове), `value` (auto, обов'язкове) та `data_type` (string, необов'язкове)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.display_name": {
+          "source": "Values",
+          "message": "Значення"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.short_desc": {
+          "source": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)",
+          "message": "Список значень для запису, кожне з яких є хешем із 'node_id' (string, обов'язкове), 'value' (auto, обов'язкове) та 'data_type' (string, необов'язкове)"
+        },
+        "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.short_desc": {
+          "source": "Write values to multiple OPC UA nodes",
+          "message": "Записати значення в кілька вузлів OPC UA"
+        },
+        "app.T3BjVUE.desc": {
+          "source": "OPC UA (Open Platform Communications Unified Architecture) server for industrial communication, supporting node value reading/writing, address space browsing, data change subscriptions, and method calls",
+          "message": "Сервер OPC UA (Open Platform Communications Unified Architecture) для промислового зв'язку, що підтримує читання/запис значень вузлів, перегляд адресного простору, підписку на зміни даних та виклики методів"
+        },
+        "app.T3BjVUE.display_name": {
+          "source": "OPC UA",
+          "message": "OPC UA"
+        },
+        "app.T3BjVUE.short_desc": {
+          "source": "OPC UA server for industrial communication and IoT",
+          "message": "Сервер OPC UA для промислового зв'язку та IoT"
+        }
+      }
+    }
+  }
+}

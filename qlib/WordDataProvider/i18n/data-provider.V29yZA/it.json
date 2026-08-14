@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.V29yZA.action.cmVhZA.desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "Leggi il documento Word da una posizione di file specifica"
+        },
+        "app.V29yZA.action.cmVhZA.display_name": {
+          "source": "Read Word Document File",
+          "message": "Leggi file di documento Word"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "Legge i paragrafi del documento con contenuto di testo e informazioni sullo stile (intestazioni, testo normale)"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Paragrafi"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "Leggi i paragrafi del documento"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "Legge una tabella come dati di riga strutturati con intestazioni di colonna"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Leggi una tabella come dati di riga"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "Tipo di contenuto da leggere: `paragraphs` (predefinito) o `table`"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Tipo di contenuto"
+        },
+        "app.V29yZA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Tipo di contenuto da leggere"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "Se `True`, la prima riga della tabella contiene le intestazioni di colonna; si applica solo alla modalità tabella"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Riga di intestazione"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "La prima riga contiene le intestazioni"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "Elenco esplicito di intestazioni di colonna per la modalità tabella; mutualmente esclusivo con `header_row`"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Intestazioni di colonna"
+        },
+        "app.V29yZA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Elenco esplicito delle intestazioni di colonna"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Word document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "La posizione dei dati del documento Word; mutuamente esclusivo con `data` e `stream`; risolto con una chiamata a [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Word Input Path",
+          "message": "Percorso di input Word"
+        },
+        "app.V29yZA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Word document",
+          "message": "La posizione del documento Word"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "Indice della tabella da leggere quando `content_type` è `table`; basato su 0, il valore predefinito è 0"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Indice tabella"
+        },
+        "app.V29yZA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Indice della tabella da leggere (basato su 0)"
+        },
+        "app.V29yZA.action.cmVhZA.short_desc": {
+          "source": "Read Word document from a specific file location",
+          "message": "Leggi il documento Word da una posizione di file specifica"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Word document inline data",
+          "message": "Leggi dati inline del documento Word"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Word Document Inline Data",
+          "message": "Leggi dati inline del documento Word"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "Legge i paragrafi del documento con contenuto di testo e informazioni sullo stile (intestazioni, testo normale)"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Paragrafi"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs",
+          "message": "Leggi i paragrafi del documento"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "Legge una tabella come dati di riga strutturati con intestazioni di colonna"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Leggi una tabella come dati di riga"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `paragraphs` (default) or `table`",
+          "message": "Tipo di contenuto da leggere: `paragraphs` (predefinito) o `table`"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Tipo di contenuto"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Tipo di contenuto da leggere"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Word document data to process; conflicts with `stream` and `path`",
+          "message": "Dati del documento Word da elaborare; è in conflitto con `stream` e `path`"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dati di input"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Word document data to process",
+          "message": "Dati del documento Word da elaborare"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "Se `True`, la prima riga della tabella contiene le intestazioni di colonna; si applica solo alla modalità tabella"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Riga di intestazione"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "La prima riga contiene le intestazioni"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "Elenco esplicito di intestazioni di colonna per la modalità tabella; mutualmente esclusivo con `header_row`"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Intestazioni di colonna"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Elenco esplicito delle intestazioni di colonna"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read when `content_type` is `table`; 0-based, default is 0",
+          "message": "Indice della tabella da leggere quando `content_type` è `table`; basato su 0, il valore predefinito è 0"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Indice tabella"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Indice della tabella da leggere (basato su 0)"
+        },
+        "app.V29yZA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Word document inline data",
+          "message": "Leggi dati inline del documento Word"
+        },
+        "app.V29yZA.action.d3JpdGU.desc": {
+          "source": "Write data to a Word document file at a specified path",
+          "message": "Scrivi i dati in un file di documento Word in un percorso specificato"
+        },
+        "app.V29yZA.action.d3JpdGU.display_name": {
+          "source": "Write Word Document File",
+          "message": "Scrivi file documento Word"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "Scrives paragrafi con stili di testo e di intestazione"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Paragrafi"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "Scrivi paragrafi"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "Scrivi dati tabellari strutturati con intestazioni di colonna"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "Scrivi una tabella"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "Tipo di contenuto da scrivere: `paragraphs` (predefinito) o `table`"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Tipo di contenuto"
+        },
+        "app.V29yZA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Tipo di contenuto da scrivere"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "Elenco delle intestazioni di colonna per la modalità tabella; se non fornite, le intestazioni verranno rilevate automaticamente dal primo record"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Intestazioni di colonna"
+        },
+        "app.V29yZA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Elenco delle intestazioni di colonna per la modalità tabella"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Word document data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "La posizione del file di dati del documento Word di output; mutuamente esclusivo con `stream`; la posizione di output viene gestita da una chiamata a [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Word Output Path",
+          "message": "Percorso di output Word"
+        },
+        "app.V29yZA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Word document",
+          "message": "La posizione in cui scrivere il documento Word"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "Titolo opzionale da aggiungere come intestazione all'inizio del documento"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "Titolo del documento"
+        },
+        "app.V29yZA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "Titolo da aggiungere all'inizio"
+        },
+        "app.V29yZA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a Word document file",
+          "message": "Scrivi dati in un file di documento Word"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Word document data in memory and return it as binary data; useful for generating Word files without writing to disk",
+          "message": "Crea i dati del documento Word in memoria e li restituisce come dati binari; utile per generare file Word senza scrivere su disco"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Word Document Data",
+          "message": "Crea dati documento Word"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "Scrives paragrafi con stili di testo e di intestazione"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "Paragrafi"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write paragraphs",
+          "message": "Scrivi paragrafi"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data with column headers",
+          "message": "Scrivi dati tabellari strutturati con intestazioni di colonna"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "Scrivi una tabella"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `paragraphs` (default) or `table`",
+          "message": "Tipo di contenuto da scrivere: `paragraphs` (predefinito) o `table`"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Tipo di contenuto"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Tipo di contenuto da scrivere"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "Elenco delle intestazioni di colonna per la modalità tabella; se non fornite, le intestazioni verranno rilevate automaticamente dal primo record"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Intestazioni di colonna"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Elenco delle intestazioni di colonna per la modalità tabella"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a heading at the beginning of the document",
+          "message": "Titolo opzionale da aggiungere come intestazione all'inizio del documento"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "Titolo del documento"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "Titolo da aggiungere all'inizio"
+        },
+        "app.V29yZA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Word document data and return as binary",
+          "message": "Crea dati del documento Word e restituisci come dati binari"
+        },
+        "app.V29yZA.desc": {
+          "source": "Read and write Microsoft Word documents (.docx format)",
+          "message": "Legge e scrive documenti Microsoft Word (formato .docx)"
+        },
+        "app.V29yZA.display_name": {
+          "source": "Word Documents",
+          "message": "Documenti Word"
+        },
+        "app.V29yZA.short_desc": {
+          "source": "Read and write Microsoft Word documents",
+          "message": "Legge e scrive documenti Microsoft Word"
+        }
+      }
+    }
+  }
+}

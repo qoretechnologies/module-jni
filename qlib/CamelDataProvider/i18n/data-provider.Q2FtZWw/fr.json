@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.Q2FtZWw.action.c2VuZA.desc": {
+          "source": "Send a message to a Camel endpoint.\n\nSpecify the endpoint URI (e.g., `seda:orders`, `file:output`, `direct:process`) and provide the message body and optional headers.\n\n**Note**: the endpoint must have an active consumer route or be a built-in component that accepts messages directly.",
+          "message": "Envoyer un message à un endpoint Camel.\n\nSpécifiez l'URI de l'endpoint (par exemple `seda:orders`, `file:output`, `direct:process`) et fournissez le corps du message ainsi que des en-têtes facultatifs.\n\n**Remarque** : l'endpoint doit disposer d'une route consommatrice active ou être un composant intégré qui accepte directement les messages."
+        },
+        "app.Q2FtZWw.action.c2VuZA.display_name": {
+          "source": "Send Camel Message",
+          "message": "Envoyer un message Camel"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body / payload to send.\n\nThe body type depends on the target endpoint — most endpoints accept `string` or `binary` data.",
+          "message": "Le corps / la charge utile du message à envoyer.\n\nLe type de corps dépend de l'endpoint cible — la plupart des endpoints acceptent des données `string` ou `binary`."
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Corps du message"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload to send",
+          "message": "Le corps / la charge utile du message à envoyer"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.desc": {
+          "source": "The Camel endpoint URI to send the message to.\n\nBuilt-in components include:\n- `direct:name` — synchronous in-memory messaging\n- `seda:name` — asynchronous in-memory queue\n- `file:directory` — file system integration\n- `log:category` — logging\n- `timer:name` — periodic timer events\n\nAdditional components can be loaded by adding their JARs to the Java classpath.",
+          "message": "L'URI de l'endpoint Camel auquel envoyer le message.\n\nLes composants intégrés incluent :\n- `direct:name` — messagerie synchrone en mémoire\n- `seda:name` — file d'attente asynchrone en mémoire\n- `file:directory` — intégration du système de fichiers\n- `log:category` — journalisation\n- `timer:name` — événements de minuteur périodiques\n\nDes composants supplémentaires peuvent être chargés en ajoutant leurs fichiers JAR au classpath Java."
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.display_name": {
+          "source": "Endpoint URI",
+          "message": "URI de l'endpoint"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.short_desc": {
+          "source": "The Camel endpoint URI to send the message to",
+          "message": "L'URI de l'endpoint Camel auquel envoyer le message"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.desc": {
+          "source": "Optional message headers as a hash of key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"priority\": \"high\"}`",
+          "message": "En-têtes de message facultatifs sous forme de table de hachage de paires clé-valeur.\n\n**Exemple** : `{\"source\": \"order-system\", \"priority\": \"high\"}`"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "En-têtes du message"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.short_desc": {
+          "source": "Optional message headers as a hash of key-value pairs",
+          "message": "En-têtes de message facultatifs sous forme de table de hachage de paires clé-valeur"
+        },
+        "app.Q2FtZWw.action.c2VuZA.short_desc": {
+          "source": "Send a message to a Camel endpoint",
+          "message": "Envoyer un message à un endpoint Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.desc": {
+          "source": "List all active routes in the Camel context",
+          "message": "Lister toutes les routes actives dans le contexte Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.display_name": {
+          "source": "List Camel Routes",
+          "message": "Lister les routes Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.short_desc": {
+          "source": "List active Camel routes",
+          "message": "Lister les routes Camel actives"
+        },
+        "app.Q2FtZWw.desc": {
+          "source": "Enterprise integration using [Apache Camel](https://camel.apache.org/) with support for 300+ connectors.\n\n**Built-in components**:\n- `direct` — synchronous in-memory messaging\n- `seda` — asynchronous in-memory queues\n- `file` — file system integration\n- `timer` — periodic timer events\n- `log` — message logging\n\nAdditional components (HTTP, JMS, Kafka, AWS, etc.) can be loaded by adding their JARs to the Java classpath.",
+          "message": "Intégration d'entreprise utilisant [Apache Camel](https://camel.apache.org/) avec prise en charge de plus de 300 connecteurs.\n\n**Composants intégrés** :\n- `direct` — messagerie synchrone en mémoire\n- `seda` — files d'attente asynchrones en mémoire\n- `file` — intégration du système de fichiers\n- `timer` — événements de minuteur périodiques\n- `log` — journalisation des messages\n\nDes composants supplémentaires (HTTP, JMS, Kafka, AWS, etc.) peuvent être chargés en ajoutant leurs fichiers JAR au classpath Java."
+        },
+        "app.Q2FtZWw.display_name": {
+          "source": "Apache Camel",
+          "message": "Apache Camel"
+        },
+        "app.Q2FtZWw.short_desc": {
+          "source": "Apache Camel enterprise integration patterns",
+          "message": "Patrons d'intégration d'entreprise Apache Camel"
+        }
+      }
+    }
+  }
+}

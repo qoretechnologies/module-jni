@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.T0RT.action.cmVhZA.desc": {
+          "source": "Read an ODS spreadsheet from a file location and return the data as records.\n\nUse this action to import data from ODS files stored on disk or accessible via a URL. The file location is resolved using the `FileLocationHandler` module, supporting local file paths and remote URLs.\n\n**Key Options**:\n- `path` (required) — the file location to read from\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "Načíta ODS tabuľkový archív z umiestnenia súboru a vráti dáta ako záznamy.\n\nPoužite túto akciu na import dát zo súborov ODS uložených na disku alebo dostupných cez URL. Umiestnenie súboru sa rieši pomocou modulu `FileLocationHandler`, pričom sú podporované lokálne cesty k súborom aj vzdialené URL adresy.\n\n**Hlavné možnosti**:\n- `path` (povinné) — umiestnenie súboru, z ktorého sa má čítať\n- `worksheet` — vyberte konkrétny pracovný list podľa názvu (predvolený je prvý list)\n- `header_names` — nastavte na `True` na použitie prvého riadku ako hlavičiek stĺpcov\n- `header_cells` / `data_cells` — špecifikujte rozsahy buniek pre hlavičky a dáta\n- `headers` — poskytnite explicitné názvy hlavičiek stĺpcov"
+        },
+        "app.T0RT.action.cmVhZA.display_name": {
+          "source": "Read ODS Spreadsheet File",
+          "message": "Načítať súbor ODS tabuľky"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "Rozsah buniek pre dáta na spracovanie"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Dátové bunky"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "Rozsah buniek pre dáta na spracovanie"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Ak `True`, objekt spracuje názvy hlavičiek z prvého riadku hlavičky; v tomto prípade, ak `header_cells` nie je nastavené explicitne, predpokladá sa, že ide o prvý riadok"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "Názvy hlavičiek?"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "Mali by sa riadky hlavičky použiť ako výstupné názvy polí?"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Rozsah buniek pre hlavičky alebo číslo riadku"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Bunky hlavičky"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Rozsah buniek pre hlavičky alebo číslo riadku"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Zoznam názvov hlavičiek / stĺpcov pre iterované dáta; ak je prítomný, potom `header_names` musí byť `False`"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Výstupné hlavičky"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Zoznam názvov hlavičiek / stĺpcov pre iterované dáta"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODS data; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umiestnenie ODS dát; navzájom sa vylučuje s `data` a `stream`.\n\nRiešené volaním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODS Input Path",
+          "message": "Vstupná cesta ODS"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODS data",
+          "message": "Umiestnenie ODS dát"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "Názov pracovného hárka na prechádzanie; ak nie je poskytnutý, spracuje sa prvý pracovný hárok"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Názov pracovného hárka"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "Názov pracovného hárka, ktorý sa má iterovať"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Ak `True` (predvolené `False`), všetky automaticky zistené názvy hlavičiek sa skonvertujú na malé písmená"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Konvertovať hlavičky na malé písmená"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Konvertovať všetky názvy hlavičiek na malé písmená"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Región časového pásma, ktorý sa má použiť pri spracovaní dátumov"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Región časového pásma"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Región časového pásma, ktorý sa má použiť pri spracovaní dátumov"
+        },
+        "app.T0RT.action.cmVhZA.short_desc": {
+          "source": "Read ODS spreadsheet from a specific file location",
+          "message": "Načítať ODS tabuľkový hárok zo špecifického umiestnenia súboru"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.desc": {
+          "source": "Read an ODS spreadsheet from inline binary data and return the data as records.\n\nUse this action when the ODS data is already available in memory (e.g., received from an API response, uploaded by a user, or read from a database BLOB column) rather than stored as a file.\n\n**Key Options**:\n- `data` (required) — the ODS binary data to parse\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "Načíta ODS tabuľkový hárok z priamych binárnych dát a vráti dáta ako záznamy.\n\nPoužite túto akciu, keď sú ODS dáta už dostupné v pamäti (napr. prijate z odpovede API, nahrané používateľom alebo načítané zo stĺpca BLOB v databáze), a nie uložené ako súbor.\n\n**Hlavné možnosti**:\n- `data` (povinné) — binárne dáta ODS na parsovanie\n- `worksheet` — vyberte konkrétny pracovný hárok podľa názvu (predvolený je prvý hárok)\n- `header_names` — nastavte na `True` na použitie prvého riadku ako hlavičiek stĺpcov\n- `header_cells` / `data_cells` — špecifikujte rozsahy buniek pre hlavičky a dáta\n- `headers` — poskytnite explicitné názvy hlavičiek stĺpcov"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODS Spreadsheet Inline Data",
+          "message": "Načítať priame dáta ODS tabuľkového hárka"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODS data to process; conflicts with `stream` and `path`",
+          "message": "Dáta ODS na spracovanie; je v konflikte s `stream` a `path`"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupné dáta"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODS data to process",
+          "message": "Dáta ODS na spracovanie"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "Rozsah buniek pre dáta na spracovanie"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Dátové bunky"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "Rozsah buniek pre dáta na spracovanie"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Ak `True`, objekt spracuje názvy hlavičiek z prvého riadku hlavičky; v tomto prípade, ak `header_cells` nie je nastavené explicitne, predpokladá sa, že ide o prvý riadok"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "Názvy hlavičiek?"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "Mali by sa riadky hlavičky použiť ako výstupné názvy polí?"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Rozsah buniek pre hlavičky alebo číslo riadku"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Bunky hlavičky"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Rozsah buniek pre hlavičky alebo číslo riadku"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Zoznam názvov hlavičiek / stĺpcov pre iterované dáta; ak je prítomný, potom `header_names` musí byť `False`"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Výstupné hlavičky"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Zoznam názvov hlavičiek / stĺpcov pre iterované dáta"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "Názov pracovného hárka na prechádzanie; ak nie je poskytnutý, spracuje sa prvý pracovný hárok"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Názov pracovného hárka"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "Názov pracovného hárka, ktorý sa má iterovať"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Ak `True` (predvolené `False`), všetky automaticky zistené názvy hlavičiek sa skonvertujú na malé písmená"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Konvertovať hlavičky na malé písmená"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Konvertovať všetky názvy hlavičiek na malé písmená"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Región časového pásma, ktorý sa má použiť pri spracovaní dátumov"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Región časového pásma"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Región časového pásma, ktorý sa má použiť pri spracovaní dátumov"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODS spreadsheet inline data",
+          "message": "Čítať vložené dáta tabuľkového hárka ODS"
+        },
+        "app.T0RT.action.d3JpdGU.desc": {
+          "source": "Write data to an ODS spreadsheet file at a specified path.\n\nUse this action to generate ODS files from structured data for reporting, data export, or integration with LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Key Options**:\n- `path` (required) — the output file location\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "Zápis dát do súboru tabuľkového hárka ODS na zadanú cestu.\n\nTúto akciu použite na generovanie súborov ODS zo štruktúrovaných dát na účely výkazníctva, exportu dát alebo integrácie s LibreOffice Calc a inými aplikáciami kompatibilnými s OpenDocument.\n\n**Kľúčové možnosti**:\n- `path` (vyžadované) — umiestnenie výstupného súboru\n- `worksheet` — názov pracovného hárka (predvolené na `Sheet1`)\n- `headers` — explicitné názvy hlavičiek stĺpcov; ak nie sú poskytnuté, hlavičky sa automaticky zistia z prvého záznamu"
+        },
+        "app.T0RT.action.d3JpdGU.display_name": {
+          "source": "Write ODS Spreadsheet File",
+          "message": "Zapísať súbor tabuľkového hárka ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Zoznam názvov hlavičiek / stĺpcov pre dáta; ak nie je k dispozícii, hlavičky sa automaticky zistia z prvého záznamu"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Hlavičky stĺpcov"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Zoznam názvov hlavičiek / stĺpcov pre dáta"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODS data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Umiestnenie výstupného dátového súboru ODS; vzájomne sa vylučuje s `stream`.\n\nVýstupné umiestnenie sa spracováva volaním [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODS Output Path",
+          "message": "Výstupná cesta ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODS file",
+          "message": "Umiestnenie na zápis súboru ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "Názov pracovného hárka, ktorý sa má vytvoriť; ak nie je poskytnutý, použije sa predvolená hodnota `Sheet1`"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Názov pracovného hárka"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "Názov hárka, ktorý sa má vytvoriť"
+        },
+        "app.T0RT.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODS spreadsheet file",
+          "message": "Zapísať dáta do súboru tabuľkového hárka ODS"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "Vytvorenie dát tabuľkového hárka ODS v pamäti a ich vrátenie ako binárne dáta.\n\nTúto akciu použite, keď potrebujete vygenerovať súbor ODS bez zápisu na disk — napríklad na vrátenie tabuľky ako odpovede API, jej uloženie do databázy alebo odovzdanie do ďalšieho kroku spracovania. Výsledok získate volaním `getData()` na poskytovateľovi po vytvorení všetkých záznamov.\n\n**Kľúčové možnosti**:\n- `worksheet` — názov pracovného hárka (predvolené na `Sheet1`)\n- `headers` — explicitné názvy hlavičiek stĺpcov; ak nie sú poskytnuté, hlavičky sa automaticky zistia z prvého záznamu"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODS Spreadsheet Data",
+          "message": "Vytvoriť dáta tabuľkového hárka ODS"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Zoznam názvov hlavičiek / stĺpcov pre dáta; ak nie je k dispozícii, hlavičky sa automaticky zistia z prvého záznamu"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Hlavičky stĺpcov"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Zoznam názvov hlavičiek / stĺpcov pre dáta"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "Názov pracovného hárka, ktorý sa má vytvoriť; ak nie je poskytnutý, použije sa predvolená hodnota `Sheet1`"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Názov pracovného hárka"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "Názov hárka, ktorý sa má vytvoriť"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODS spreadsheet data and return as binary",
+          "message": "Vytvoriť dáta tabuľkového hárka ODS a vrátiť ako binárne dáta"
+        },
+        "app.T0RT.desc": {
+          "source": "Read and write OpenDocument Spreadsheet (ODS) files, the native spreadsheet format for LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Supported Operations**:\n- **Read**: Parse ODS spreadsheets into structured records with automatic header detection, cell range selection, and multi-sheet access\n- **Write**: Create ODS spreadsheet files from structured data with configurable worksheets and column headers\n\n**Key Features**:\n- Multi-sheet support: browse and read individual worksheets\n- Flexible header handling: auto-detect from first row, specify cell ranges, or provide explicit header names\n- Cell range selection: read specific regions of a spreadsheet\n- Data type preservation: handles strings, numbers, booleans, and dates with timezone support\n- In-memory operation: read from or write to binary data without file I/O\n\n**Business Use Cases**:\n- Importing LibreOffice Calc spreadsheets into data pipelines\n- Converting ODS data to other formats in ETL workflows\n- Generating ODS reports from application data\n- Processing spreadsheet uploads in web applications",
+          "message": "Čítanie a zápis súborov OpenDocument Spreadsheet (ODS), čo je natívny formát tabuľkových hárkov pre LibreOffice Calc a ďalšie aplikácie kompatibilné s OpenDocument.\n\n**Podporované operácie**:\n- **Čítanie**: Analýza tabuľkových hárkov ODS na štruktúrované záznamy s automatickým zistením hlavičky, výberom rozsahu buniek a prístupom k viacerým hárkom\n- **Zápis**: Vytváranie súborov tabuľkových hárkov ODS zo štruktúrovaných dát s konfigurovateľnými pracovnými hárkami a hlavičkami stĺpcov\n\n**Kľúčové funkcie**:\n- Podpora viacerých hárkov: prehliadanie a čítanie jednotlivých pracovných hárkov\n- Flexibilné spracovanie hlavičiek: automatické zistenie z prvého riadka, určenie rozsahov buniek alebo poskytnutie explicitných názvov hlavičiek\n- Výber rozsahu buniek: čítanie špecifických oblastí tabuľkového hárka\n- Zachovanie dátových typov: spracováva reťazce, čísla, boolovské hodnoty a dátumy s podporou časových pásiem\n- Operácie v pamäti: čítanie z binárnych dát alebo zápis do nich bez vstupno-výstupných operácií so súbormi (file I/O)\n\n**Prípady použitia v biznise**:\n- Import tabuliek LibreOffice Calc do dátových reťazcov (data pipelines)\n- Konverzia dát ODS do iných formátov v pracovných postupoch ETL\n- Generovanie správ ODS z dát aplikácie\n- Spracovanie nahraných tabuliek vo webových aplikáciách"
+        },
+        "app.T0RT.display_name": {
+          "source": "ODS Spreadsheets",
+          "message": "Tabuľkové hárky ODS"
+        },
+        "app.T0RT.short_desc": {
+          "source": "Read and write ODS spreadsheets",
+          "message": "Čítať a zapisovať tabuľkové hárky ODS"
+        }
+      }
+    }
+  }
+}

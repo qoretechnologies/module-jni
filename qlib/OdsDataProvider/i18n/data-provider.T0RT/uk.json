@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.T0RT.action.cmVhZA.desc": {
+          "source": "Read an ODS spreadsheet from a file location and return the data as records.\n\nUse this action to import data from ODS files stored on disk or accessible via a URL. The file location is resolved using the `FileLocationHandler` module, supporting local file paths and remote URLs.\n\n**Key Options**:\n- `path` (required) — the file location to read from\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "Прочитати електронну таблицю ODS із розташування файлу та повернути дані у вигляді записів.\n\nВикористовуйте цю дію для імпорту даних із файлів ODS, збережених на диску або доступних за URL-адресою. Розташування файлу визначається за допомогою модуля `FileLocationHandler`, що підтримує локальні шляхи до файлів та віддалені URL-адреси.\n\n**Основні параметри**:\n- `path` (обов’язково) — розташування файлу для читання\n- `worksheet` — вибрати конкретний робочий аркуш за назвою (за замовчуванням перший аркуш)\n- `header_names` — встановіть `True`, щоб використовувати перший рядок як заголовки колонок\n- `header_cells` / `data_cells` — вказати діапазони комірок для заголовків і даних\n- `headers` — вказати явні назви заголовків колонок"
+        },
+        "app.T0RT.action.cmVhZA.display_name": {
+          "source": "Read ODS Spreadsheet File",
+          "message": "Прочитати файл електронної таблиці ODS"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "Діапазон клітинок для обробки даних"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Клітинки даних"
+        },
+        "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "Діапазон клітинок для обробки даних"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Якщо `True`, то об'єкт проаналізує назви заголовків із першого рядка заголовка; у цьому випадку, якщо `header_cells` не вказано явно, вважатиметься, що це перший рядок"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "Назви заголовків?"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "Чи слід використовувати рядки заголовків як назви вихідних полів?"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Діапазон клітинок для заголовків або номер рядка"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Клітинки заголовка"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Діапазон клітинок для заголовків або номер рядка"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Список назв заголовків / стовпців для ітерованих даних; якщо це вказано, то `header_names` має бути `False`"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Вихідні заголовки"
+        },
+        "app.T0RT.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Список назв заголовків / стовпців для ітерованих даних"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODS data; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Розташування даних ODS; взаємовиключно з `data` та `stream`.\n\nВизначається за допомогою виклику [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODS Input Path",
+          "message": "Вхідний шлях ODS"
+        },
+        "app.T0RT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODS data",
+          "message": "Розташування даних ODS"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "Назва робочого аркуша для перебору; якщо не вказано, обробляється перший робочий аркуш"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Назва робочого аркуша"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "Назва робочого аркуша для ітерації"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Якщо `True` (за замовчуванням `False`), усі автоматично виявлені назви заголовків будуть перетворені на нижній регістр"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Перетворити заголовки на нижній регістр"
+        },
+        "app.T0RT.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Перетворити всі назви заголовків на нижній регістр"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Регіон часового поясу"
+        },
+        "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.T0RT.action.cmVhZA.short_desc": {
+          "source": "Read ODS spreadsheet from a specific file location",
+          "message": "Прочитати електронну таблицю ODS із вказаного розташування файлу"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.desc": {
+          "source": "Read an ODS spreadsheet from inline binary data and return the data as records.\n\nUse this action when the ODS data is already available in memory (e.g., received from an API response, uploaded by a user, or read from a database BLOB column) rather than stored as a file.\n\n**Key Options**:\n- `data` (required) — the ODS binary data to parse\n- `worksheet` — select a specific worksheet by name (defaults to the first sheet)\n- `header_names` — set to `True` to use the first row as column headers\n- `header_cells` / `data_cells` — specify cell ranges for headers and data\n- `headers` — provide explicit column header names",
+          "message": "Прочитати електронну таблицю ODS із вбудованих бінарних даних і повернути дані у вигляді записів.\n\nВикористовуйте цю дію, коли дані ODS уже доступні в пам'яті (наприклад, отримані з відповіді API, завантажені користувачем або прочитані з колонки BLOB бази даних), а не збережені у файлі.\n\n**Основні параметри**:\n- `data` (обов’язково) — бінарні дані ODS для парсингу\n- `worksheet` — вибрати конкретний робочий аркуш за назвою (за замовчуванням перший аркуш)\n- `header_names` — встановіть `True`, щоб використовувати перший рядок як заголовки колонок\n- `header_cells` / `data_cells` — вказати діапазони комірок для заголовків і даних\n- `headers` — вказати явні назви заголовків колонок"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODS Spreadsheet Inline Data",
+          "message": "Читати вбудовані дані електронної таблиці ODS"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODS data to process; conflicts with `stream` and `path`",
+          "message": "Дані ODS для обробки; конфліктує з `stream` та `path`"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODS data to process",
+          "message": "Дані ODS для обробки"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "Діапазон клітинок для обробки даних"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Клітинки даних"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "Діапазон клітинок для обробки даних"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Якщо `True`, то об'єкт проаналізує назви заголовків із першого рядка заголовка; у цьому випадку, якщо `header_cells` не вказано явно, вважатиметься, що це перший рядок"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "Назви заголовків?"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "Чи слід використовувати рядки заголовків як назви вихідних полів?"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Діапазон клітинок для заголовків або номер рядка"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Клітинки заголовка"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Діапазон клітинок для заголовків або номер рядка"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Список назв заголовків / стовпців для ітерованих даних; якщо це вказано, то `header_names` має бути `False`"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Вихідні заголовки"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Список назв заголовків / стовпців для ітерованих даних"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
+          "message": "Назва робочого аркуша для перебору; якщо не вказано, обробляється перший робочий аркуш"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Назва робочого аркуша"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "Назва робочого аркуша для ітерації"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Якщо `True` (за замовчуванням `False`), усі автоматично виявлені назви заголовків будуть перетворені на нижній регістр"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Перетворити заголовки на нижній регістр"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Перетворити всі назви заголовків на нижній регістр"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Регіон часового поясу"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODS spreadsheet inline data",
+          "message": "Зчитати вбудовані дані електронної таблиці ODS"
+        },
+        "app.T0RT.action.d3JpdGU.desc": {
+          "source": "Write data to an ODS spreadsheet file at a specified path.\n\nUse this action to generate ODS files from structured data for reporting, data export, or integration with LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Key Options**:\n- `path` (required) — the output file location\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "Записати дані у файл електронної таблиці ODS за вказаним шляхом.\n\nВикористовуйте цю дію для створення файлів ODS із структурованих даних для звітності, експорту даних або інтеграції з LibreOffice Calc та іншими програмами, сумісними з OpenDocument.\n\n**Основні параметри**:\n- `path` (обов’язково) — розташування вихідного файлу\n- `worksheet` — назва робочого аркуша (за замовчуванням `Sheet1`)\n- `headers` — явні назви заголовків стовпців; якщо не вказано, заголовки виявляються автоматично з першого запису"
+        },
+        "app.T0RT.action.d3JpdGU.display_name": {
+          "source": "Write ODS Spreadsheet File",
+          "message": "Записати файл електронної таблиці ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Список назв заголовків / стовпців для даних; якщо не вказано, заголовки будуть визначені автоматично з першого запису"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Заголовки стовпців"
+        },
+        "app.T0RT.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Список назв заголовків / стовпців для даних"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODS data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Розташування вихідного файлу даних ODS; взаємовиключно з `stream`.\n\nРозташування виводу обробляється викликом [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODS Output Path",
+          "message": "Шлях виводу ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODS file",
+          "message": "Розташування для запису файлу ODS"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "Назва робочого аркуша для створення; якщо не вказано, за замовчуванням використовується `Sheet1`"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Назва робочого аркуша"
+        },
+        "app.T0RT.action.d3JpdGU.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "Назва робочого аркуша для створення"
+        },
+        "app.T0RT.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODS spreadsheet file",
+          "message": "Записати дані у файл електронної таблиці ODS"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "Створити дані електронної таблиці ODS у пам'яті та повернути їх у вигляді бінарних даних.\n\nВикористовуйте цю дію, коли потрібно створити файл ODS без запису на диск — наприклад, щоб повернути електронну таблицю у відповіді API, зберегти її у базі даних або передати на інший крок обробки. Отримайте результат шляхом виклику `getData()` у провайдера після створення всіх записів.\n\n**Основні параметри**:\n- `worksheet` — назва робочого аркуша (за замовчуванням `Sheet1`)\n- `headers` — явні назви заголовків стовпців; якщо не вказано, заголовки виявляються автоматично з першого запису"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODS Spreadsheet Data",
+          "message": "Створити дані електронної таблиці ODS"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Список назв заголовків / стовпців для даних; якщо не вказано, заголовки будуть визначені автоматично з першого запису"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Заголовки стовпців"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Список назв заголовків / стовпців для даних"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; if not provided, defaults to `Sheet1`",
+          "message": "Назва робочого аркуша для створення; якщо не вказано, за замовчуванням використовується `Sheet1`"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Назва робочого аркуша"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "Назва робочого аркуша для створення"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODS spreadsheet data and return as binary",
+          "message": "Створити дані електронної таблиці ODS та повернути у вигляді бінарних даних"
+        },
+        "app.T0RT.desc": {
+          "source": "Read and write OpenDocument Spreadsheet (ODS) files, the native spreadsheet format for LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Supported Operations**:\n- **Read**: Parse ODS spreadsheets into structured records with automatic header detection, cell range selection, and multi-sheet access\n- **Write**: Create ODS spreadsheet files from structured data with configurable worksheets and column headers\n\n**Key Features**:\n- Multi-sheet support: browse and read individual worksheets\n- Flexible header handling: auto-detect from first row, specify cell ranges, or provide explicit header names\n- Cell range selection: read specific regions of a spreadsheet\n- Data type preservation: handles strings, numbers, booleans, and dates with timezone support\n- In-memory operation: read from or write to binary data without file I/O\n\n**Business Use Cases**:\n- Importing LibreOffice Calc spreadsheets into data pipelines\n- Converting ODS data to other formats in ETL workflows\n- Generating ODS reports from application data\n- Processing spreadsheet uploads in web applications",
+          "message": "Читання та запис файлів OpenDocument Spreadsheet (ODS) — рідного формату електронних таблиць для LibreOffice Calc та інших додатків, сумісних із OpenDocument.\n\n**Підтримувані операції**:\n- **Read**: Аналіз електронних таблиць ODS у структуровані записи з автоматичним виявленням заголовків, вибором діапазону комірок та доступом до кількох аркушів\n- **Write**: Створення файлів електронних таблиць ODS зі структурованих даних з налаштовуваними робочими аркушами та заголовками стовпців\n\n**Основні можливості**:\n- Підтримка кількох аркушів: перегляд та читання окремих робочих аркушів\n- Гнучка обробка заголовків: автовиявлення з першого рядка, вказівка діапазонів комірок або надання явних назв заголовків\n- Вибір діапазону комірок: читання певних областей електронної таблиці\n- Збереження типів даних: обробка рядків, чисел, булевих значень та дат із підтримкою часових поясів\n- Операції в пам'яті: читання або запис бінарних даних без файлового вводу/виводу\n\n**Сценарії використання**:\n- Імпорт електронних таблиць LibreOffice Calc у конвеєри даних\n- Перетворення даних ODS на інші формати у робочих процесах ETL\n- Генерація звітів ODS із даних програм\n- Обробка завантажень електронних таблиць у вебдодатках"
+        },
+        "app.T0RT.display_name": {
+          "source": "ODS Spreadsheets",
+          "message": "Електронні таблиці ODS"
+        },
+        "app.T0RT.short_desc": {
+          "source": "Read and write ODS spreadsheets",
+          "message": "Читати та записувати електронні таблиці ODS"
+        }
+      }
+    }
+  }
+}

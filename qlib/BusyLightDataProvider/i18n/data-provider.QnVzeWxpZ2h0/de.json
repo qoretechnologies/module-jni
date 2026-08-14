@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.desc": {
+          "source": "Update Busylight configuration",
+          "message": "Busylight-Konfiguration aktualisieren"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.display_name": {
+          "source": "Update Busylight",
+          "message": "Busylight aktualisieren"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.desc": {
+          "source": "The color of the light",
+          "message": "Die Farbe des Lichts"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "Farbe"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.short_desc": {
+          "source": "The color of the light (note that the `Alpha` value is ignored)",
+          "message": "Die Farbe des Lichts (beachten Sie, dass der Wert `Alpha` ignoriert wird)"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.desc": {
+          "source": "The length of time ON from `0` - `255`",
+          "message": "Die Dauer für AN von `0` - `255`"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.display_name": {
+          "source": "On",
+          "message": "An"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.short_desc": {
+          "source": "The length of time ON from 0 - 255",
+          "message": "Die Dauer für AN von 0 - 255"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.desc": {
+          "source": "The length of time OFF from `0` - `255`",
+          "message": "Die Dauer für AUS von `0` - `255`"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.display_name": {
+          "source": "Off",
+          "message": "Aus"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.short_desc": {
+          "source": "The length of time OFF from 0 - 255",
+          "message": "Die Dauer für AUS von 0 - 255"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.desc": {
+          "source": "The topic to publish the message on",
+          "message": "Das Topic, auf dem die Nachricht veröffentlicht werden soll"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "Topic"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.short_desc": {
+          "source": "The topic to publish the message on",
+          "message": "Das Topic, auf dem die Nachricht veröffentlicht werden soll"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.short_desc": {
+          "source": "Update Busylight configuration",
+          "message": "Busylight-Konfiguration aktualisieren"
+        },
+        "app.QnVzeWxpZ2h0.desc": {
+          "source": "MQTT server for accessing Kuando Busylight devices (by Plenom)",
+          "message": "MQTT-Server für den Zugriff auf Kuando Busylight-Geräte (von Plenom)"
+        },
+        "app.QnVzeWxpZ2h0.display_name": {
+          "source": "MQTT Kuando Busylight",
+          "message": "MQTT Kuando Busylight"
+        },
+        "app.QnVzeWxpZ2h0.short_desc": {
+          "source": "MQTT Kuando Busylight devices (by Plenom)",
+          "message": "MQTT Kuando Busylight-Geräte (von Plenom)"
+        }
+      }
+    }
+  }
+}

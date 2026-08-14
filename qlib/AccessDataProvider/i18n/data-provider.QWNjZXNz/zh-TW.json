@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.QWNjZXNz.action.cmVhZA.desc": {
+          "source": "Read Access database from a specific file location and iterate table rows",
+          "message": "從特定的檔案位置讀取 Access 資料庫並迭代資料表資料列"
+        },
+        "app.QWNjZXNz.action.cmVhZA.display_name": {
+          "source": "Read Access Database File",
+          "message": "讀取 Access 資料庫檔案"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the Access database file; mutually exclusive with `data`; resolved with a call to [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Access 資料庫檔案的路徑；與 `data` 互斥；透過呼叫 [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 解析"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Access Input Path",
+          "message": "Access 輸入路徑"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The path to the Access database file",
+          "message": "Access 資料庫檔案的路徑"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "要讀取的資料表名稱；若未提供，則使用子提供者存取資料表"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "資料表名稱"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "要讀取的資料表名稱"
+        },
+        "app.QWNjZXNz.action.cmVhZA.short_desc": {
+          "source": "Read Access database from a specific file location",
+          "message": "從特定的檔案位置讀取 Access 資料庫"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Access database inline data and iterate table rows",
+          "message": "讀取 Access 資料庫內嵌資料並迭代資料表資料列"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Access Database Inline Data",
+          "message": "讀取 Access 資料庫內嵌資料"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Access database data to process; conflicts with `path`",
+          "message": "要處理的 Access 資料庫資料；與 `path` 衝突"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "輸入資料"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Access database data to process",
+          "message": "要處理的 Access 資料庫資料"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "要讀取的資料表名稱；若未提供，則使用子提供者存取資料表"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "資料表名稱"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "要讀取的資料表名稱"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Access database inline data",
+          "message": "讀取 Access 資料庫內嵌資料"
+        },
+        "app.QWNjZXNz.desc": {
+          "source": "Read Microsoft Access databases (.mdb/.accdb format) using the Jackcess library",
+          "message": "使用 Jackcess 函式庫讀取 Microsoft Access 資料庫 (.mdb/.accdb 格式)"
+        },
+        "app.QWNjZXNz.display_name": {
+          "source": "Access Databases",
+          "message": "Access 資料庫"
+        },
+        "app.QWNjZXNz.short_desc": {
+          "source": "Read Microsoft Access databases",
+          "message": "讀取 Microsoft Access 資料庫"
+        }
+      }
+    }
+  }
+}

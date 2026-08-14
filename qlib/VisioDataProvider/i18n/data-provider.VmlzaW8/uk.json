@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.VmlzaW8.action.cmVhZA.desc": {
+          "source": "Read Visio document from a specific file location and extract text from each page",
+          "message": "Прочитати документ Visio із вказаного розташування файлу та вилучити текст із кожної сторінки"
+        },
+        "app.VmlzaW8.action.cmVhZA.display_name": {
+          "source": "Read Visio Document File",
+          "message": "Прочитати файл документа Visio"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Visio document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Розташування даних документа Visio; взаємовиключне з `data` та `stream`; розв'язується викликом [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Visio Input Path",
+          "message": "Вхідний шлях Visio"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Visio document",
+          "message": "Розташування документа Visio"
+        },
+        "app.VmlzaW8.action.cmVhZA.short_desc": {
+          "source": "Read Visio document from a specific file location",
+          "message": "Прочитати документ Visio із вказаного розташування файлу"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Visio document inline data and extract text from each page",
+          "message": "Прочитати вбудовані дані документа Visio та вилучити текст із кожної сторінки"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Visio Document Inline Data",
+          "message": "Прочитати вбудовані дані документа Visio"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Visio document data to process; conflicts with `stream` and `path`",
+          "message": "Дані документа Visio для обробки; конфліктує з `stream` та `path`"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Visio document data to process",
+          "message": "Дані документа Visio для обробки"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Visio document inline data",
+          "message": "Прочитати вбудовані дані документа Visio"
+        },
+        "app.VmlzaW8.desc": {
+          "source": "Read Microsoft Visio documents (.vsdx format) and extract page text and shape data",
+          "message": "Читання документів Microsoft Visio (формат .vsdx) та вилучення тексту сторінок і даних фігур"
+        },
+        "app.VmlzaW8.display_name": {
+          "source": "Visio Documents",
+          "message": "Документи Visio"
+        },
+        "app.VmlzaW8.short_desc": {
+          "source": "Read Microsoft Visio documents",
+          "message": "Прочитати документи Microsoft Visio"
+        }
+      }
+    }
+  }
+}

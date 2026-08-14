@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.SmRiY0RQ.action.ZXhlYw.desc": {
+          "source": "Execute a SQL statement (DDL or DML) and return the number of affected rows.\n\nUse for `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, and other non-query statements.\n\n**Example**: `INSERT INTO users (name, email) VALUES (?, ?)` with `args` = `(\"Alice\", \"alice@example.com\")`",
+          "message": "Vykonať príkaz SQL (DDL alebo DML) a vrátiť počet ovplyvnených riadkov.\n\nPoužite pre `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE` a iné príkazy, ktoré nie sú dopytmi.\n\n**Príklad**: `INSERT INTO users (name, email) VALUES (?, ?)` s `args` = `(\"Alice\", \"alice@example.com\")`"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.display_name": {
+          "source": "Execute SQL Statement",
+          "message": "Vykonať príkaz SQL"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.YXJncw.desc": {
+          "source": "Optional list of arguments for parameterized queries.\n\nArguments are bound to `?` placeholders in the SQL query in order.\n\n**Example**: for `WHERE status = ? AND id > ?`, pass `(\"active\", 100)`",
+          "message": "Voliteľný zoznam argumentov pre parametrizované dopyty.\n\nArgumenty sú naviazané na zastupujúce symboly `?` v dopyte SQL v príslušnom poradí.\n\n**Príklad**: pre `WHERE status = ? AND id > ?` odovzdajte `(\"active\", 100)`"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.YXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.YXJncw.short_desc": {
+          "source": "Optional list of arguments for parameterized queries",
+          "message": "Voliteľný zoznam argumentov pre parametrizované dopyty"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.c3Fs.desc": {
+          "source": "The SQL query to execute.\n\nUse `?` placeholders for parameterized queries with the `args` field.\n\n**Example**: `SELECT * FROM users WHERE status = ? AND created_at > ?`",
+          "message": "Dopyt SQL na vykonanie.\n\nPoužite zastupujúce symboly `?` pre parametrizované dopyty s poľom `args`.\n\n**Príklad**: `SELECT * FROM users WHERE status = ? AND created_at > ?`"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.c3Fs.display_name": {
+          "source": "SQL Query",
+          "message": "Dopyt SQL"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.option.c3Fs.short_desc": {
+          "source": "The SQL query to execute",
+          "message": "Dopyt SQL na vykonanie"
+        },
+        "app.SmRiY0RQ.action.ZXhlYw.short_desc": {
+          "source": "Execute a SQL statement",
+          "message": "Vykonať príkaz SQL"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.desc": {
+          "source": "Execute a SQL query and return the result rows.\n\nUse `?` placeholders in the SQL string and provide arguments in the `args` list for parameterized queries.\n\n**Example**: `SELECT * FROM orders WHERE status = ? AND total > ?` with `args` = `(\"shipped\", 100.0)`",
+          "message": "Vykoná dotaz SQL a vráti riadky výsledkov.\n\nPoužite zástupné symboly `?` v reťazci SQL a poskytnite argumenty v zozname `args` pre parametrizované dotazy.\n\n**Príklad**: `SELECT * FROM orders WHERE status = ? AND total > ?` s `args` = `(\"shipped\", 100.0)`"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.display_name": {
+          "source": "Execute SQL Query",
+          "message": "Vykonať dotaz SQL"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.YXJncw.desc": {
+          "source": "Optional list of arguments for parameterized queries.\n\nArguments are bound to `?` placeholders in the SQL query in order.\n\n**Example**: for `WHERE status = ? AND id > ?`, pass `(\"active\", 100)`",
+          "message": "Voliteľný zoznam argumentov pre parametrizované dopyty.\n\nArgumenty sú naviazané na zastupujúce symboly `?` v dopyte SQL v príslušnom poradí.\n\n**Príklad**: pre `WHERE status = ? AND id > ?` odovzdajte `(\"active\", 100)`"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.YXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.YXJncw.short_desc": {
+          "source": "Optional list of arguments for parameterized queries",
+          "message": "Voliteľný zoznam argumentov pre parametrizované dopyty"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.c3Fs.desc": {
+          "source": "The SQL query to execute.\n\nUse `?` placeholders for parameterized queries with the `args` field.\n\n**Example**: `SELECT * FROM users WHERE status = ? AND created_at > ?`",
+          "message": "Dopyt SQL na vykonanie.\n\nPoužite zastupujúce symboly `?` pre parametrizované dopyty s poľom `args`.\n\n**Príklad**: `SELECT * FROM users WHERE status = ? AND created_at > ?`"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.c3Fs.display_name": {
+          "source": "SQL Query",
+          "message": "Dopyt SQL"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.option.c3Fs.short_desc": {
+          "source": "The SQL query to execute",
+          "message": "Dopyt SQL na vykonanie"
+        },
+        "app.SmRiY0RQ.action.cXVlcnk.short_desc": {
+          "source": "Execute a SQL query and return results",
+          "message": "Vykonať dotaz SQL a vrátiť výsledky"
+        },
+        "app.SmRiY0RQ.desc": {
+          "source": "Access any JDBC-compatible database with schema introspection and SQL execution.\n\n**Capabilities**:\n- Execute SQL queries with parameterized arguments\n- Execute DDL and DML statements (CREATE, INSERT, UPDATE, DELETE)\n- Browse database tables and introspect column metadata\n- Dynamic column type mapping from SQL types to Qore types\n\nDatabase-specific JDBC drivers can be loaded with the `classpath` and `driver_class` connection options, or made available with JNI classpath configuration before the provider is created.\n\n**Supported databases**: PostgreSQL, Oracle, MySQL, SQL Server, and any database with a JDBC driver.",
+          "message": "Prístup k akejkoľvek databáze kompatibilnej s JDBC s introspekciou schémy a vykonávaním SQL.\n\n**Schopnosti**:\n- Vykonávanie SQL dotazov s parametrizovanými argumentmi\n- Vykonávanie príkazov DDL a DML (CREATE, INSERT, UPDATE, DELETE)\n- Prehliadanie databázových tabuliek a introspekcia metadát stĺpcov\n- Dynamické mapovanie typov stĺpcov z typov SQL na typy Qore\n\nJDBC ovládače špecifické pre databázu je možné načítať pomocou možností pripojenia `classpath` a `driver_class`, alebo ich sprístupniť pomocou konfigurácie JNI classpath pred vytvorením poskytovateľa.\n\n**Podporované databázy**: PostgreSQL, Oracle, MySQL, SQL Server a akákoľvek databáza s ovládačom JDBC."
+        },
+        "app.SmRiY0RQ.display_name": {
+          "source": "JDBC Database",
+          "message": "Databáza JDBC"
+        },
+        "app.SmRiY0RQ.short_desc": {
+          "source": "JDBC database access",
+          "message": "Prístup k databáze JDBC"
+        }
+      }
+    }
+  }
+}

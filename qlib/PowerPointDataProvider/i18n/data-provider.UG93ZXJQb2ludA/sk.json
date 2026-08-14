@@ -1,0 +1,393 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.UG93ZXJQb2ludA.action.cmVhZA.desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "Čítanie prezentácie PowerPoint zo špecifického umiestnenia súboru"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.display_name": {
+          "source": "Read PowerPoint Presentation File",
+          "message": "Prečítať súbor prezentácie PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "Načítať snímky prezentácie s názvom, telom, poznámkami a informáciami o rozložení"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "Snímky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "Načítať snímky prezentácie"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "Načítať tabuľku vloženú do snímky ako štruktúrované dáta riadkov"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Načítať tabuľku ako dáta riadkov"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "Typ obsahu na čítanie: `slides` (predvolené) alebo `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Typ obsahu na načítanie"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "Ak je `True`, prvý riadok tabuľky obsahuje hlavičky stĺpcov; vzťahuje sa len na režim tabuľky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Riadok s hlavičkou"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "Prvý riadok obsahuje hlavičky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "Explicitný zoznam hlavičiek stĺpcov pre režim tabuľky; vzájomne sa vylučuje s `header_row`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Hlavičky stĺpcov"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Explicitný zoznam hlavičiek stĺpcov"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "Index snímky obsahujúcej tabuľku, keď `content_type` je `table`; indexované od 0, predvolená hodnota je 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "Index snímky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "Index snímky pre režim tabuľky (od 0)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the PowerPoint data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umiestnenie dát PowerPoint; vzájomne sa vylučuje s `data` a `stream`; vyriešené volaním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "PowerPoint Input Path",
+          "message": "Cesta vstupu PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the PowerPoint file",
+          "message": "Umiestnenie súboru PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "Index tabuľky na čítanie na špecifikovanej snímke, keď `content_type` je `table`; indexované od 0, predvolená hodnota je 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Index tabuľky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Index tabuľky na načítanie (od 0)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.short_desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "Čítanie prezentácie PowerPoint zo špecifického umiestnenia súboru"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "Čítanie priamych (inline) dát prezentácie PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read PowerPoint Presentation Inline Data",
+          "message": "Prečítať priame dáta prezentácie PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "Načítať snímky prezentácie s názvom, telom, poznámkami a informáciami o rozložení"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "Snímky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "Načítať snímky prezentácie"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "Načítať tabuľku vloženú do snímky ako štruktúrované dáta riadkov"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "Načítať tabuľku ako dáta riadkov"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "Typ obsahu na čítanie: `slides` (predvolené) alebo `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "Typ obsahu na načítanie"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "PowerPoint presentation data to process; conflicts with `stream` and `path`",
+          "message": "Dáta prezentácie PowerPoint na spracovanie; v konflikte s `stream` a `path`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupné dáta"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "PowerPoint presentation data to process",
+          "message": "Dáta prezentácie PowerPoint na spracovanie"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "Ak je `True`, prvý riadok tabuľky obsahuje hlavičky stĺpcov; vzťahuje sa len na režim tabuľky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Riadok s hlavičkou"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "Prvý riadok obsahuje hlavičky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "Explicitný zoznam hlavičiek stĺpcov pre režim tabuľky; vzájomne sa vylučuje s `header_row`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Hlavičky stĺpcov"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "Explicitný zoznam hlavičiek stĺpcov"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "Index snímky obsahujúcej tabuľku, keď `content_type` je `table`; indexované od 0, predvolená hodnota je 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "Index snímky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "Index snímky pre režim tabuľky (od 0)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "Index tabuľky na čítanie na špecifikovanej snímke, keď `content_type` je `table`; indexované od 0, predvolená hodnota je 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "Index tabuľky"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "Index tabuľky na načítanie (od 0)"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "Čítanie priamych (inline) dát prezentácie PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.desc": {
+          "source": "Write data to a PowerPoint presentation file at a specified path",
+          "message": "Zápis dát do súboru prezentácie PowerPoint na špecifikovanej ceste"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.display_name": {
+          "source": "Write PowerPoint Presentation File",
+          "message": "Zapísať súbor prezentácie PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "Zápis snímok prezentácie s názvom, telom a voliteľnými poznámkami"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "Snímky"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "Zapísať snímky"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "Zápis štruktúrovaných tabuľkových dát na snímku"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "Zapísať tabuľku"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "Typ obsahu na zápis: `slides` (predvolené) alebo `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Typ obsahu na zápis"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "Zoznam hlavičiek stĺpcov pre režim tabuľky; ak nie je poskytnutý, hlavičky sa automaticky zistia z prvého záznamu"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Hlavičky stĺpcov"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Zoznam hlavičiek stĺpcov pre režim tabuľky"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output PowerPoint data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Umiestnenie výstupného dátového súboru PowerPoint; vzájomne sa vylučuje s `stream`; výstupné umiestnenie sa spracováva volaním [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "PowerPoint Output Path",
+          "message": "Cesta výstupu PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the PowerPoint file",
+          "message": "Umiestnenie na zápis súboru PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "Voliteľný názov; pre režim snímok pridá na začiatok snímku iba s názvom; pre režim tabuľky nastaví názov na snímke s tabuľkou"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "Názov prezentácie"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "Názov pre prvú snímku alebo snímku s tabuľkou"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a PowerPoint presentation file",
+          "message": "Zápis dát do súboru prezentácie PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create PowerPoint presentation data in memory and return it as binary data; useful for generating PowerPoint files without writing to disk",
+          "message": "Vytvorenie dát prezentácie PowerPoint v pamäti a ich vrátenie ako binárne dáta; užitočné pre generovanie súborov PowerPoint bez zápisu na disk"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create PowerPoint Presentation Data",
+          "message": "Vytvoriť dáta prezentácie PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "Zápis snímok prezentácie s názvom, telom a voliteľnými poznámkami"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "Snímky"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "Zapísať snímky"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "Zápis štruktúrovaných tabuľkových dát na snímku"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "Zapísať tabuľku"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "Typ obsahu na zápis: `slides` (predvolené) alebo `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "Typ obsahu na zápis"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "Zoznam hlavičiek stĺpcov pre režim tabuľky; ak nie je poskytnutý, hlavičky sa automaticky zistia z prvého záznamu"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Hlavičky stĺpcov"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "Zoznam hlavičiek stĺpcov pre režim tabuľky"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "Voliteľný názov; pre režim snímok pridá na začiatok snímku iba s názvom; pre režim tabuľky nastaví názov na snímke s tabuľkou"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "Názov prezentácie"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "Názov pre prvú snímku alebo snímku s tabuľkou"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create PowerPoint presentation data and return as binary",
+          "message": "Vytvoriť dáta prezentácie PowerPoint a vrátiť ako binárne dáta"
+        },
+        "app.UG93ZXJQb2ludA.desc": {
+          "source": "Read and write Microsoft PowerPoint presentations (.pptx format)",
+          "message": "Čítanie a zápis prezentácií Microsoft PowerPoint (formát .pptx)"
+        },
+        "app.UG93ZXJQb2ludA.display_name": {
+          "source": "PowerPoint Presentations",
+          "message": "Prezentácie PowerPoint"
+        },
+        "app.UG93ZXJQb2ludA.short_desc": {
+          "source": "Read and write Microsoft PowerPoint presentations",
+          "message": "Čítanie a zápis prezentácií Microsoft PowerPoint"
+        }
+      }
+    }
+  }
+}

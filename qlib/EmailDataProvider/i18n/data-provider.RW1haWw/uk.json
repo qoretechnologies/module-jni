@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.RW1haWw.action.ZW1sLXJlYWQ.desc": {
+          "source": "Reads an EML (RFC 822 / MIME) email message from a file path and returns the message content as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nEML is the standard email format supported by most email clients. Each file contains a single email message.",
+          "message": "Зчитує повідомлення електронної пошти EML (RFC 822 / MIME) із шляху до файлу та повертає вміст повідомлення як структурований запис із відправником, отримувачами, темою, датою, текстом тіла, вмістом HTML, метаданими вкладень та заголовками повідомлення.\n\nEML — це стандартний формат електронної пошти, який підтримується більшістю поштових клієнтів. Кожен файл містить одне повідомлення електронної пошти."
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.display_name": {
+          "source": "Read EML Email File",
+          "message": "Прочитати файл електронної пошти EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.desc": {
+          "source": "The location of the EML email file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Розташування файлу електронної пошти EML; взаємовиключне з `data` та `stream`; розв'язується викликом [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.display_name": {
+          "source": "EML Input Path",
+          "message": "Вхідний шлях EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.short_desc": {
+          "source": "The location of the EML email file",
+          "message": "Розташування файлу електронної пошти EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.short_desc": {
+          "source": "Read an EML email message from a file location",
+          "message": "Прочитати повідомлення електронної пошти EML з розташування файлу"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.desc": {
+          "source": "Reads an EML (RFC 822 / MIME) email message from inline binary data and returns the message content as a structured record.\n\nUse this action when the EML data is already available in memory rather than on disk.",
+          "message": "Зчитує повідомлення електронної пошти EML (RFC 822 / MIME) з вбудованих двійкових даних і повертає вміст повідомлення як структурований запис.\n\nВикористовуйте цю дію, коли дані EML вже доступні в пам'яті, а не на диску."
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.display_name": {
+          "source": "Read EML Email Inline Data",
+          "message": "Прочитати вбудовані дані електронної пошти EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "EML email data to process; conflicts with `stream` and `path`",
+          "message": "Дані електронної пошти EML для обробки; конфліктує з `stream` та `path`"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "EML email data to process",
+          "message": "Дані електронної пошти EML для обробки"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.short_desc": {
+          "source": "Read an EML email message from inline binary data",
+          "message": "Прочитати повідомлення електронної пошти EML із вбудованих двійкових даних"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.desc": {
+          "source": "Writes an EML (RFC 822 / MIME) email message to a file path.\n\nEach record written represents a single email message with the following fields:\n- `from`: the sender's email address\n- `to`: list of To recipients\n- `cc`: list of CC recipients (optional)\n- `bcc`: list of BCC recipients (optional)\n- `subject`: the email subject line\n- `date`: the sent date (optional, defaults to current time)\n- `body_text`: plain text body content (optional)\n- `body_html`: HTML body content (optional)\n- `attachments`: list of attachment hashes with `name`, `content_type`, and `data` (optional)\n- `message_id`: the Message-ID header (optional)\n- `in_reply_to`: the In-Reply-To header (optional)\n- `reply_to`: the Reply-To header (optional)\n- `references`: the References header (optional)",
+          "message": "Записує повідомлення електронної пошти EML (RFC 822 / MIME) у шлях до файлу.\n\nКожен записаний запис представляє одне повідомлення електронної пошти з такими полями:\n- `from`: адреса електронної пошти відправника\n- `to`: список отримувачів Кому\n- `cc`: список отримувачів Копія (необов'язково)\n- `bcc`: список отримувачів Прихована копія (необов'язково)\n- `subject`: тема електронного листа\n- `date`: дата відправлення (необов'язково, за замовчуванням поточний час)\n- `body_text`: вміст тіла у вигляді звичайного тексту (необов'язково)\n- `body_html`: вміст тіла в форматі HTML (необов'язково)\n- `attachments`: список хешів вкладень з `name`, `content_type` та `data` (необов'язково)\n- `message_id`: заголовок Message-ID (необов'язково)\n- `in_reply_to`: заголовок In-Reply-To (необов'язково)\n- `reply_to`: заголовок Reply-To (необов'язково)\n- `references`: заголовок References (необов'язково)"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.display_name": {
+          "source": "Write EML Email File",
+          "message": "Записати файл електронної пошти EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.desc": {
+          "source": "The location for the output EML data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Розташування вихідного файлу даних EML; взаємовиключне з `stream`; вихідне розташування обробляється викликом [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.display_name": {
+          "source": "EML Output Path",
+          "message": "Вихідний шлях EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.short_desc": {
+          "source": "The location to write the EML file",
+          "message": "Розташування для запису файлу EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.short_desc": {
+          "source": "Write an EML email message to a file location",
+          "message": "Записати повідомлення електронної пошти EML у розташування файлу"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.desc": {
+          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data.",
+          "message": "Створити дані електронної пошти EML (RFC 822 / MIME) у пам'яті та повернути їх як двійкові дані; корисно для створення файлів EML без запису на диск.\n\nКожен записаний запис представляє одне повідомлення електронної пошти зі стандартними полями електронної пошти, включаючи `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to` та `references`.\n\nПісля запису всіх повідомлень використайте `getData()` для отримання двійкових даних EML."
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.display_name": {
+          "source": "Create EML Email Data",
+          "message": "Створити дані електронної пошти EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.short_desc": {
+          "source": "Create EML email data and return as binary",
+          "message": "Створити дані електронної пошти EML і повернути як двійкові дані"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.desc": {
+          "source": "Reads email messages from an MBOX (Unix Mailbox) file and returns each message as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nMBOX files contain multiple email messages concatenated in a single file, each delimited by a `From ` separator line. This format is used by Thunderbird, Evolution, and many Unix mail systems.\n\nThe `max_messages` option can be used to limit the number of messages read from the file.",
+          "message": "Зчитує повідомлення електронної пошти з файлу MBOX (Unix Mailbox) і повертає кожне повідомлення як структурований запис із відправником, отримувачами, темою, датою, текстом тіла, вмістом HTML, метаданими вкладень та заголовками повідомлення.\n\nФайли MBOX містять декілька повідомлень електронної пошти, об'єднаних в одному файлі, кожне з яких відокремлено лінією-розділювачем `From `. Цей формат використовується Thunderbird, Evolution та багатьма поштовими системами Unix.\n\nПараметр `max_messages` можна використовувати для обмеження кількості повідомлень, зчитаних із файлу."
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.display_name": {
+          "source": "Read MBOX Mailbox File",
+          "message": "Прочитати файл поштової скриньки MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.desc": {
+          "source": "Maximum number of messages to read from the MBOX file; 0 (the default) means read all messages; use this to limit processing of very large MBOX files",
+          "message": "Максимальна кількість повідомлень для зчитування з файлу MBOX; 0 (за замовчуванням) означає прочитати всі повідомлення; використовуйте це для обмеження обробки дуже великих файлів MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.display_name": {
+          "source": "Maximum Messages",
+          "message": "Максимальна кількість повідомлень"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.short_desc": {
+          "source": "Maximum number of messages to read from the MBOX file",
+          "message": "Максимальна кількість повідомлень для зчитування з файлу MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.desc": {
+          "source": "The location of the MBOX mailbox file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Розташування файлу поштової скриньки MBOX; взаємовиключне з `data` та `stream`; розв'язується викликом [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.display_name": {
+          "source": "MBOX Input Path",
+          "message": "Вхідний шлях MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.short_desc": {
+          "source": "The location of the MBOX mailbox file",
+          "message": "Розташування файлу поштової скриньки MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.short_desc": {
+          "source": "Read email messages from an MBOX mailbox file",
+          "message": "Читати електронні листи з файлу поштової скриньки MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.desc": {
+          "source": "Reads email messages from inline MBOX (Unix Mailbox) binary data and returns each message as a structured record.\n\nUse this action when the MBOX data is already available in memory rather than on disk.\n\nThe `max_messages` option can be used to limit the number of messages read from the data.",
+          "message": "Зчитує електронні листи з вбудованих бінарних даних MBOX (Unix Mailbox) і повертає кожен лист як структурований запис.\n\nВикористовуйте цю дію, коли дані MBOX уже доступні в пам'яті, а не на диску.\n\nПараметр `max_messages` можна використовувати для обмеження кількості листів, прочитаних із даних."
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.display_name": {
+          "source": "Read MBOX Mailbox Inline Data",
+          "message": "Читати вбудовані дані поштової скриньки MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.desc": {
+          "source": "MBOX mailbox data to process; conflicts with `stream` and `path`",
+          "message": "Дані поштової скриньки MBOX для обробки; конфліктує з `stream` та `path`"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.short_desc": {
+          "source": "MBOX mailbox data to process",
+          "message": "Дані поштової скриньки MBOX для обробки"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.desc": {
+          "source": "Maximum number of messages to read from the MBOX file; 0 (the default) means read all messages; use this to limit processing of very large MBOX files",
+          "message": "Максимальна кількість повідомлень для зчитування з файлу MBOX; 0 (за замовчуванням) означає прочитати всі повідомлення; використовуйте це для обмеження обробки дуже великих файлів MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.display_name": {
+          "source": "Maximum Messages",
+          "message": "Максимальна кількість повідомлень"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.short_desc": {
+          "source": "Maximum number of messages to read from the MBOX file",
+          "message": "Максимальна кількість повідомлень для зчитування з файлу MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.short_desc": {
+          "source": "Read email messages from inline MBOX data",
+          "message": "Читати електронні листи з вбудованих даних MBOX"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.desc": {
+          "source": "Reads a Microsoft Outlook MSG email message from a file path and returns the message content as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nMSG is the proprietary binary format used by Microsoft Outlook, stored as an OLE2 Compound Document with MAPI properties.",
+          "message": "Зчитує електронний лист Microsoft Outlook MSG із шляху до файлу та повертає вміст листа як структурований запис із відправником, отримувачами, темою, датою, текстом повідомлення, вмістом HTML, метаданими вкладень та заголовками листа.\n\nMSG — це пропрієтарний бінарний формат, який використовується в Microsoft Outlook і зберігається як складений документ OLE2 із властивостями MAPI."
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.display_name": {
+          "source": "Read MSG Email File",
+          "message": "Читати файл електронного листа MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.desc": {
+          "source": "The location of the MSG email file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Розташування файлу електронного листа MSG; взаємовиключне з `data` та `stream`; розділяється за допомогою виклику [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.display_name": {
+          "source": "MSG Input Path",
+          "message": "Вхідний шлях MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.short_desc": {
+          "source": "The location of the MSG email file",
+          "message": "Розташування файлу електронного листа MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.short_desc": {
+          "source": "Read a Microsoft Outlook MSG email from a file location",
+          "message": "Читати електронний лист Microsoft Outlook MSG із розташування файлу"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.desc": {
+          "source": "Reads a Microsoft Outlook MSG email message from inline binary data and returns the message content as a structured record.\n\nUse this action when the MSG data is already available in memory rather than on disk.",
+          "message": "Зчитує електронний лист Microsoft Outlook MSG із вбудованих бінарних даних і повертає вміст листа як структурований запис.\n\nВикористовуйте цю дію, коли дані MSG уже доступні в пам'яті, а не на диску."
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.display_name": {
+          "source": "Read MSG Email Inline Data",
+          "message": "Читати вбудовані дані електронного листа MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "MSG email data to process; conflicts with `stream` and `path`",
+          "message": "Дані електронного листа MSG для обробки; конфліктує з `stream` та `path`"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "MSG email data to process",
+          "message": "Дані електронного листа MSG для обробки"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.short_desc": {
+          "source": "Read a Microsoft Outlook MSG email from inline binary data",
+          "message": "Читати електронний лист Microsoft Outlook MSG із вбудованих бінарних даних"
+        },
+        "app.RW1haWw.desc": {
+          "source": "Provides data provider support for reading and writing email messages in multiple formats:\n\n- **EML** (RFC 822 / MIME): Standard email format used by many email clients including Thunderbird, Apple Mail, and others. Each `.eml` file contains a single email message with headers, body text, HTML content, and attachments. Supports both reading and writing.\n\n- **MSG** (Microsoft Outlook): Proprietary binary format used by Microsoft Outlook. Each `.msg` file contains a single email message stored as an OLE2 Compound Document with MAPI properties. Read-only support.\n\n- **MBOX** (Unix Mailbox): Standard mailbox format where multiple email messages are concatenated in a single file, each delimited by a `From ` separator line. Used by Thunderbird, Evolution, and many Unix mail systems. Read-only support.\n\nAll formats produce records with a unified schema including sender, recipients (To, CC, BCC), subject, date, plain text body, HTML body, attachments metadata, Message-ID, and In-Reply-To headers.",
+          "message": "Забезпечує підтримку провайдера даних для читання та запису електронних листів у кількох форматах:\n\n- **EML** (RFC 822 / MIME): стандартний формат електронної пошти, який використовується багатьма поштовими клієнтами, включаючи Thunderbird, Apple Mail та інші. Кожен файл `.eml` містить один електронний лист із заголовками, текстом повідомлення, вмістом HTML та вкладеннями. Підтримує як читання, так і запис.\n\n- **MSG** (Microsoft Outlook): пропрієтарний бінарний формат, який використовується в Microsoft Outlook. Кожен файл `.msg` містить один електронний лист, збережений як складений документ OLE2 із властивостями MAPI. Підтримка лише для читання.\n\n- **MBOX** (Unix Mailbox): стандартний формат поштової скриньки, у якому кілька електронних листів об'єднано в один файл, кожен з яких відокремлено рядком-розділювачем `From `. Використовується в Thunderbird, Evolution та багатьох поштових системах Unix. Підтримка лише для читання.\n\nУсі формати створюють записи за єдиною схемою, що включає відправника, отримувачів (To, CC, BCC), тему, дату, звичайний текст, вміст HTML, метадані вкладень, а також заголовки Message-ID та In-Reply-To."
+        },
+        "app.RW1haWw.display_name": {
+          "source": "Email Messages",
+          "message": "Електронні листи"
+        },
+        "app.RW1haWw.short_desc": {
+          "source": "Read and write email messages in EML, MSG, and MBOX formats",
+          "message": "Читати та записувати електронні листи у форматах EML, MSG та MBOX"
+        }
+      }
+    }
+  }
+}

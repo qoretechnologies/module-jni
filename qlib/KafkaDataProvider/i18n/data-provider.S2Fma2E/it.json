@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "A Kafka message is received; react to an Kafka message",
+          "message": "Viene ricevuto un messaggio Kafka; reagisce a un messaggio Kafka"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "Kafka Message Received",
+          "message": "Messaggio Kafka ricevuto"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate incoming Kafka message values. This option conflicts with `validator`",
+          "message": "URL dello schema AsyncAPI o percorso del file utilizzato per convalidare i valori dei messaggi Kafka in entrata. Questa opzione è in conflitto con `validator`"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "Schema AsyncAPI"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "URL dello schema AsyncAPI o percorso del file"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
+          "message": "Nome del canale AsyncAPI da utilizzare quando è configurato `asyncapi` o `validator`"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "Canale AsyncAPI"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "Canale AsyncAPI per la convalida"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Throw exception to the consumer if no previous offset is found for the consumer's group",
+          "message": "Lancia un'eccezione al consumer se non viene trovato alcun offset precedente per il gruppo del consumer"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "Throw exception to the consumer if no previous offset is found for the consumer's group",
+          "message": "Lancia un'eccezione al consumer se non viene trovato alcun offset precedente per il gruppo del consumer"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.desc": {
+          "source": "Automatically reset the offset to the earliest offset",
+          "message": "Ripristina automaticamente l'offset all'offset più vecchio"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.display_name": {
+          "source": "earliest",
+          "message": "earliest"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.short_desc": {
+          "source": "Automatically reset the offset to the earliest offset",
+          "message": "Ripristina automaticamente l'offset all'offset più vecchio"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.desc": {
+          "source": "Automatically reset the offset to the latest offset",
+          "message": "Ripristina automaticamente l'offset all'offset più recente"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.display_name": {
+          "source": "latest",
+          "message": "latest"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.short_desc": {
+          "source": "Automatically reset the offset to the latest offset",
+          "message": "Ripristina automaticamente l'offset all'offset più recente"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.desc": {
+          "source": "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted).\n\nNote that altering partition numbers while setting this config to latest may cause message delivery loss since producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets",
+          "message": "Cosa fare quando non c'è un offset iniziale in Kafka o se l'offset corrente non esiste più sul server (ad es. perché i dati sono stati eliminati).\n\nNota che la modifica dei numeri di partizione mentre questa configurazione è impostata su latest potrebbe causare la perdita di consegna dei messaggi, poiché i producer potrebbero iniziare a inviare messaggi a partizioni appena aggiunte (cioè non esistono ancora offset iniziali) prima che i consumer reimpostino i propri offset"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.display_name": {
+          "source": "Auto Offset Reset",
+          "message": "Ripristino automatico offset"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.short_desc": {
+          "source": "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server",
+          "message": "Cosa fare quando non c'è un offset iniziale in Kafka o se l'offset corrente non esiste più sul server"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.desc": {
+          "source": "A unique string that identifies the consumer group this consumer belongs to.\n\nThis property is required if the consumer uses either the group management functionality by using `subscribe(topic)` or the Kafka-based offset management strategy",
+          "message": "Una stringa univoca che identifica il gruppo di consumer a cui appartiene questo consumer.\n\nQuesta proprietà è obbligatoria se il consumer utilizza la funzionalità di gestione del gruppo tramite `subscribe(topic)` o la strategia di gestione dell'offset basata su Kafka"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.display_name": {
+          "source": "Group ID",
+          "message": "ID gruppo"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.short_desc": {
+          "source": "The ID of the consumer group this consumer belongs to",
+          "message": "L'ID del gruppo di consumer a cui appartiene questo consumer"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.desc": {
+          "source": "If `True` the consumer's offset will be periodically committed in the background",
+          "message": "Se `True` l'offset del consumer verrà periodicamente confermato in background"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.display_name": {
+          "source": "Enable Auto Commit",
+          "message": "Abilita commit automatico"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.short_desc": {
+          "source": "If True the consumer's offset will be periodically committed in the background",
+          "message": "Se True l'offset del consumer verrà periodicamente confermato in background"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.desc": {
+          "source": "The minimum amount of data the server should return for a fetch request.\n\nIf insufficient data is available, the request will wait for that much data to accumulate before answering the request.\n\nThe default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive.\n\nSetting this to something greater than `1` will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency",
+          "message": "La quantità minima di dati che il server deve restituire per una richiesta di fetch.\n\nSe i dati disponibili non sono sufficienti, la richiesta attenderà l'accumulo di tale quantità di dati prima di rispondere alla richiesta.\n\nL'impostazione predefinita di 1 byte indica che viene risposto alle richieste di fetch non appena è disponibile un singolo byte di dati o quando la richiesta di fetch va in timeout in attesa dell'arrivo dei dati.\n\nImpostare questo valore su un valore superiore a `1` farà sì che il server attenda l'accumulo di quantità di dati maggiori, il che può migliorare leggermente il throughput del server a costo di una latenza aggiuntiva"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.display_name": {
+          "source": "Fetch Min Bytes",
+          "message": "Byte minimi fetch"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.short_desc": {
+          "source": "The minimum amount of data the server should return for a fetch request",
+          "message": "La quantità minima di dati che il server deve restituire per una richiesta di fetch"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Deserializer` interface",
+          "message": "Classe di serializzatore per la chiave che implementa l'interfaccia `org.apache.kafka.common.serialization.Deserializer`"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.display_name": {
+          "source": "Key Deserializer",
+          "message": "Deserializzatore chiave"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Classe serializzatore / deserializzatore per messaggi Kafka"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.desc": {
+          "source": "The expected time in milliseconds between heartbeats to the consumer coordinator when using Kafka's group management facilities.\n\nHeartbeats are used to ensure that the consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group.\n\nThe value must be set lower than `session.timeout.ms`, but typically should be set no higher than 1/3 of that value.\n\nIt can be adjusted even lower to control the expected time for normal rebalances",
+          "message": "Il tempo previsto in millisecondi tra gli heartbeat inviati al coordinatore dei consumer quando si utilizzano le funzionalità di gestione del gruppo di Kafka.\n\nGli heartbeat vengono utilizzati per garantire che la sessione del consumer rimanga attiva e per facilitare il ribilanciamento quando nuovi consumer si uniscono al gruppo o lo lasciano.\n\nIl valore deve essere impostato a un livello inferiore a `session.timeout.ms`, ma in genere non deve essere superiore a 1/3 di tale valore.\n\nPuò essere regolato su un valore ancora inferiore per controllare il tempo previsto per i normali ribilanciamenti"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.display_name": {
+          "source": "Heartbeat Interval",
+          "message": "Intervallo heartbeat"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.short_desc": {
+          "source": "The expected time between heartbeats to the consumer coordinator in milliseconds",
+          "message": "Il tempo previsto tra gli heartbeat inviati al coordinatore dei consumer in millisecondi"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.desc": {
+          "source": "The maximum amount of data per-partition the server will return.\n\nRecords are fetched in batches by the consumer.\n\nIf the first record batch in the first non-empty partition of the fetch is larger than this limit, the batch will still be returned to ensure that the consumer can make progress.\n\nThe maximum record batch size accepted by the broker is defined via `message.max.bytes` (broker config) or `max.message.bytes` (topic config).\n\nSee `fetch.max.bytes` for limiting the consumer request size",
+          "message": "La quantità massima di dati per partizione restituiti dal server.\n\nI record vengono recuperati a lotti dal consumer.\n\nSe il primo lotto di record nella prima partizione non vuota del fetch supera questo limite, il lotto verrà comunque restituito per garantire che il consumer possa proseguire.\n\nLa dimensione massima del lotto di record accettata dal broker è definita tramite `message.max.bytes` (configurazione del broker) o `max.message.bytes` (configurazione del topic).\n\nVedere `fetch.max.bytes` per limitare la dimensione delle richieste del consumer"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.display_name": {
+          "source": "Max Partition Fetch Bytes",
+          "message": "Byte massimi fetch partizione"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.short_desc": {
+          "source": "The maximum amount of data per-partition the server will return",
+          "message": "La quantità massima di dati per partizione restituiti dal server"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.desc": {
+          "source": "The maximum delay between invocations of `poll()` when using consumer group management. This places an upper bound on the amount of time that the consumer can be idle before fetching more records. If `poll()` is not called before expiration of this timeout, then the consumer is considered failed and the group will rebalance in order to reassign the partitions to another member. For consumers using a non-null `group.instance.id` which reach this timeout, partitions will not be immediately reassigned. Instead, the consumer will stop sending heartbeats and partitions will be reassigned after expiration of `session.timeout.ms`. This mirrors the behavior of a static consumer which has shutdown",
+          "message": "Il ritardo massimo tra le invocazioni di `poll()` quando si utilizza la gestione dei gruppi di consumer. Questo pone un limite massimo al tempo in cui il consumer può rimanere inattivo prima di recuperare altri record. Se `poll()` non viene chiamato prima della scadenza di questo timeout, il consumer viene considerato non riuscito e il gruppo si ribilancerà per riassegnare le partizioni a un altro membro. Per i consumer che utilizzano un `group.instance.id` non nullo che raggiungono questo timeout, le partizioni non verranno riassegnate immediatamente. Invece, il consumer smetterà di inviare heartbeat e le partizioni verranno riassegnate dopo la scadenza di `session.timeout.ms`. Questo riflette il comportamento di un consumer statico che è stato arrestato"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.display_name": {
+          "source": "Max Poll Interval",
+          "message": "Intervallo massimo di poll"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.short_desc": {
+          "source": "The maximum delay in milliseconds between invocations of poll()",
+          "message": "Il ritardo massimo in millisecondi tra le invocazioni di poll()"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.desc": {
+          "source": "The timeout used to detect client failures when using Kafka's group management facility.\n\nThe client sends periodic heartbeats to indicate its liveness to the broker.\n\nIf no heartbeats are received by the broker before the expiration of this session timeout, then the broker will remove this client from the group and initiate a rebalance.\n\nNote that the value must be in the allowable range as configured in the broker configuration by `group.min.session.timeout.ms` and `group.max.session.timeout.ms`",
+          "message": "Il timeout utilizzato per rilevare i guasti del client quando si utilizza la funzionalità di gestione del gruppo di Kafka.\n\nIl client invia heartbeat periodici per indicare che è attivo al broker.\n\nSe il broker non riceve heartbeat prima della scadenza di questo timeout di sessione, il broker rimuoverà questo client dal gruppo e avvierà un ribilanciamento.\n\nNota che il valore deve rientrare nell'intervallo consentito configurato nella configurazione del broker da `group.min.session.timeout.ms` e `group.max.session.timeout.ms`"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.display_name": {
+          "source": "Session Timeout",
+          "message": "Timeout di sessione"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.short_desc": {
+          "source": "The timeout in milliseconds used to detect client failures",
+          "message": "Il timeout in millisecondi utilizzato per rilevare i guasti del client"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.desc": {
+          "source": "One or more topics to subscribe to; must be a list of strings",
+          "message": "Uno o più topic a cui iscriversi; deve essere un elenco di stringhe"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.display_name": {
+          "source": "Topics",
+          "message": "Topic"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.short_desc": {
+          "source": "One or more topics to subscribe to; must be a list of strings",
+          "message": "Uno o più topic a cui iscriversi; deve essere un elenco di stringhe"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.desc": {
+          "source": "An AsyncAPI schema location or schema file data used to validate incoming Kafka message values. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
+          "message": "Una posizione dello schema AsyncAPI o dati di un file di schema utilizzati per convalidare i valori dei messaggi Kafka in entrata. Questa opzione è in conflitto con `asyncapi` e richiede `asyncapi_channel`"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.display_name": {
+          "source": "AsyncAPI Validator",
+          "message": "Validatore AsyncAPI"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.short_desc": {
+          "source": "AsyncAPI schema location or file data",
+          "message": "Posizione dello schema AsyncAPI o dati del file"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Deserializer` interface",
+          "message": "Classe di serializzatore per la chiave che implementa l'interfaccia `org.apache.kafka.common.serialization.Deserializer`"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.display_name": {
+          "source": "Value Deserializer",
+          "message": "Deserializzatore valore"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Classe serializzatore / deserializzatore per messaggi Kafka"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A Kafka message is received",
+          "message": "Viene ricevuto un messaggio Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.desc": {
+          "source": "Send a Kafka message",
+          "message": "Invia un messaggio Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.display_name": {
+          "source": "Send Kafka Message",
+          "message": "Invia messaggio Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.desc": {
+          "source": "The compression type for all data generated by the producer. The default is `none` (i.e. no compression). Compression is of full batches of data, so the efficacy of batching will also impact the compression ratio (more batching means better compression)",
+          "message": "Il tipo di compressione per tutti i dati generati dal producer. Il valore predefinito è `none` (ossia nessuna compressione). La compressione riguarda lotti di dati completi, pertanto l'efficacia del raggruppamento in lotti influirà anche sul rapporto di compressione (un maggior raggruppamento in lotti significa una migliore compressione)"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.display_name": {
+          "source": "Compression",
+          "message": "Compressione"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.short_desc": {
+          "source": "The compression type for all data generated by the producer",
+          "message": "Il tipo di compressione per tutti i dati generati dal producer"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.desc": {
+          "source": "Determines how the client handles acknowledgements from the server:\n\n- `0`: The producer will not wait for any acknowledgment from the server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be made that the server has received the record in this case, and the `retries` configuration will not take effect (as the client won't generally know of any failures). The offset given back for each record will always be set to `-1`\n\n- `1`: The leader will write the record to its local log but will respond without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after acknowledging the record but before the followers have replicated it then the record will be lost\n\n- `all`: This means the leader will wait for the full set of in-sync replicas to acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica remains alive. This is the strongest available guarantee. This is equivalent to the `acks=-1` setting.",
+          "message": "Determina come il client gestisce le conferme dal server:\n\n- `0`: il producer non attenderà alcuna conferma dal server. Il record verrà immediatamente aggiunto al buffer del socket e considerato inviato. Non è possibile garantire che il server abbia ricevuto il record in questo caso e la configurazione `retries` non avrà effetto (poiché il client in genere non sarà a conoscenza di eventuali guasti). L'offset restituito per ciascun record sarà sempre impostato su `-1`\n\n- `1`: il leader scriverà il record nel suo registro locale ma risponderà senza attendere la conferma completa da parte di tutti i follower. In questo caso, se il leader dovesse riscontrare un errore immediatamente dopo aver confermato il record ma prima che i follower lo abbiano replicato, il record andrà perso\n\n- `all`: ciò significa che il leader attenderà che l'intero set di repliche in sync confermi il record. Ciò garantisce che il record non andrà perso purché rimanga attiva almeno una replica in sync. Questa è la garanzia più forte disponibile. È equivalente all'impostazione `acks=-1`."
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.display_name": {
+          "source": "Acknowledgement Handling",
+          "message": "Gestione delle conferme"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.short_desc": {
+          "source": "Determines how the client handles acknowledgements from the server",
+          "message": "Determina come il client gestisce le conferme dal server"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate outgoing Kafka message values. This option conflicts with `validator`",
+          "message": "URL dello schema AsyncAPI o percorso del file utilizzato per convalidare i valori dei messaggi Kafka in uscita. Questa opzione è in conflitto con `validator`"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "Schema AsyncAPI"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "URL dello schema AsyncAPI o percorso del file"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
+          "message": "Nome del canale AsyncAPI da utilizzare quando è configurato `asyncapi` o `validator`"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "Canale AsyncAPI"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "Canale AsyncAPI per la convalida"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.desc": {
+          "source": "The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are sent faster than they can be delivered to the server the producer will block for `max.block.ms` after which it will throw an exception.\n\nThis setting should correspond roughly to the total memory the producer will use, but is not a hard bound since not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if compression is enabled) as well as for maintaining in-flight requests",
+          "message": "I byte totali di memoria che il producer può utilizzare per memorizzare nel buffer i record in attesa di essere inviati al server. Se i record vengono inviati più velocemente di quanto possano essere consegnati al server, il producer si bloccherà per `max.block.ms` dopodiché lancerà un'eccezione.\n\nQuesta impostazione dovrebbe corrispondere approssimativamente alla memoria totale che il producer utilizzerà, ma non è un limite rigido poiché non tutta la memoria utilizzata dal producer viene impiegata per il buffering. Verrà utilizzata dell'ulteriore memoria per la compressione (se abilitata) nonché per il mantenimento delle richieste in corso"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.display_name": {
+          "source": "Buffer Memory",
+          "message": "Memoria buffer"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.short_desc": {
+          "source": "The total bytes of memory the producer can use to buffer records waiting to be sent",
+          "message": "I byte totali di memoria che il producer può utilizzare per memorizzare nel buffer i record in attesa di essere inviati"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
+          "source": "The message key",
+          "message": "La chiave del messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
+          "source": "Message Key",
+          "message": "Chiave messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.short_desc": {
+          "source": "The message key",
+          "message": "La chiave del messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Serializer` interface",
+          "message": "Classe del serializzatore per la chiave che implementa l'interfaccia `org.apache.kafka.common.serialization.Serializer`"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.display_name": {
+          "source": "Key Serializer",
+          "message": "Serializzatore chiave"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Classe serializzatore / deserializzatore per messaggi Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.desc": {
+          "source": "The partition for the message",
+          "message": "La partizione per il messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.display_name": {
+          "source": "Partition",
+          "message": "Partizione"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.short_desc": {
+          "source": "The partition for the message",
+          "message": "La partizione per il messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.desc": {
+          "source": "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error. Note that this retry is no different than if the client resent the record upon receiving the error.\n\nAllowing retries without setting `max.in.flight.requests.per.connection` to `1` will potentially change the ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second succeeds, then the records in the second batch may appear first.\n\nNote additionally that produce requests will be failed before the number of retries has been exhausted if the timeout configured by `delivery.timeout.ms` expires first before successful acknowledgement. Users should generally prefer to leave this config unset and instead use `delivery.timeout.ms` to control retry behavior",
+          "message": "Impostare un valore maggiore di zero farà sì che il client reinvii qualsiasi record il cui invio fallisce con un errore potenzialmente temporaneo. Nota che questo tentativo non è diverso da come se il client reinviasse il record dopo aver ricevuto l'errore.\n\nConsentire i tentativi senza impostare `max.in.flight.requests.per.connection` su `1` modificherà potenzialmente l'ordine dei record perché se due batch vengono inviati a una singola partizione e il primo fallisce e viene riprovato ma il secondo ha successo, i record nel secondo batch potrebbero apparire per primi.\n\nNota inoltre che le richieste di produzione falliranno prima che il numero di tentativi sia stato esaurito se il timeout configurato da `delivery.timeout.ms` scade prima del confermato successo. Gli utenti dovrebbero generalmente preferire di lasciare questa configurazione non impostata e utilizzare invece `delivery.timeout.ms` per controllare il comportamento dei tentativi"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.display_name": {
+          "source": "Retries",
+          "message": "Tentativi"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.short_desc": {
+          "source": "The number of retry attempts for failed sends",
+          "message": "Il numero di tentativi di reinvio per gli invii falliti"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.desc": {
+          "source": "The topic for the message",
+          "message": "Il topic per il messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "Topic"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.short_desc": {
+          "source": "The topic for the message",
+          "message": "Il topic per il messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.desc": {
+          "source": "An AsyncAPI schema location or schema file data used to validate outgoing Kafka message values. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
+          "message": "Una posizione dello schema AsyncAPI o dati di un file di schema usati per convalidare i valori dei messaggi Kafka in uscita. Questa opzione è in conflitto con `asyncapi` e richiede `asyncapi_channel`"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.display_name": {
+          "source": "AsyncAPI Validator",
+          "message": "Validatore AsyncAPI"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.short_desc": {
+          "source": "AsyncAPI schema location or file data",
+          "message": "Posizione dello schema AsyncAPI o dati del file"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.desc": {
+          "source": "The message value",
+          "message": "Il valore del messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.display_name": {
+          "source": "Message Value",
+          "message": "Valore messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.short_desc": {
+          "source": "The message value",
+          "message": "Il valore del messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Serializer` interface",
+          "message": "Classe del serializzatore per la chiave che implementa l'interfaccia `org.apache.kafka.common.serialization.Serializer`"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.display_name": {
+          "source": "Value Serializer",
+          "message": "Serializzatore valore"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Classe serializzatore / deserializzatore per messaggi Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.short_desc": {
+          "source": "Send a Kafka message",
+          "message": "Invia un messaggio Kafka"
+        },
+        "app.S2Fma2E.desc": {
+          "source": "Kafka messaging",
+          "message": "Messaggistica Kafka"
+        },
+        "app.S2Fma2E.display_name": {
+          "source": "Kafka",
+          "message": "Kafka"
+        },
+        "app.S2Fma2E.short_desc": {
+          "source": "Kafka messaging",
+          "message": "Messaggistica Kafka"
+        }
+      }
+    }
+  }
+}

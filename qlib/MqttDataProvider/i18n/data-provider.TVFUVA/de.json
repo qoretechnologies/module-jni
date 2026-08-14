@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.TVFUVA.action.Y29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client connects or reconnects to the MQTT broker",
+          "message": "Dieses Ereignis wird ausgelöst, wenn der Client eine Verbindung zum MQTT-Broker herstellt oder wiederherstellt"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.display_name": {
+          "source": "MQTT Connected",
+          "message": "MQTT verbunden"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.short_desc": {
+          "source": "Client connected or reconnected to the MQTT broker",
+          "message": "Client mit dem MQTT-Broker verbunden oder erneut verbunden"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client is disconnected from the MQTT broker, including the MQTT 5 disconnect reason code and description",
+          "message": "Dieses Ereignis wird ausgelöst, wenn die Verbindung des Clients zum MQTT-Broker getrennt wird, einschließlich des MQTT 5-Trennungsursachencodes und der Beschreibung"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.display_name": {
+          "source": "MQTT Disconnected",
+          "message": "MQTT getrennt"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.short_desc": {
+          "source": "Client disconnected from the MQTT broker",
+          "message": "Verbindung des Clients zum MQTT-Broker getrennt"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "An MQTT message is received; event includes MQTT 5.0 properties such as content type, response topic, correlation data, and user properties",
+          "message": "Eine MQTT-Nachricht wurde empfangen; das Ereignis enthält MQTT 5.0-Eigenschaften wie Inhaltstyp, Antwort-Topic, Korrelationsdaten und Benutzereigenschaften"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "MQTT Message Received",
+          "message": "MQTT-Nachricht empfangen"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "An MQTT message is received with MQTT 5 properties",
+          "message": "Eine MQTT-Nachricht mit MQTT 5-Eigenschaften wurde empfangen"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.desc": {
+          "source": "Send an MQTT message to a topic with optional MQTT 5.0 properties including content type, request/response correlation, message expiry, and user-defined metadata",
+          "message": "Senden Sie eine MQTT-Nachricht an ein Topic mit optionalen MQTT 5.0-Eigenschaften einschließlich Inhaltstyp, Anforderung/Antwort-Korrelation, Nachrichtenablauf und benutzerdefinierten Metadaten"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.display_name": {
+          "source": "Send MQTT Message",
+          "message": "MQTT-Nachricht senden"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME content type of the message payload (e.g., `application/json`, `text/plain`)",
+          "message": "Der MIME-Inhaltstyp der Nachrichtennutzlast (z. B. `application/json`, `text/plain`)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME content type of the message payload (e",
+          "message": "Der MIME-Inhaltstyp der Nachrichtennutzlast (z."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
+          "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
+          "message": "Korrelationsdaten für die Zuordnung von Antworten zu Anfragen; werden vom Antwortenden zurückgesendet (MQTT 5-Anfrage/Antwort-Muster)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.display_name": {
+          "source": "Correlation Data",
+          "message": "Korrelationsdaten"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.short_desc": {
+          "source": "Correlation data for matching responses to requests",
+          "message": "Korrelationsdaten für die Zuordnung von Antworten zu Anfragen"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.desc": {
+          "source": "Message lifetime in seconds; the broker will discard the message after this interval if it has not been delivered",
+          "message": "Lebensdauer der Nachricht in Sekunden; der Broker verwirft die Nachricht nach diesem Intervall, wenn sie nicht zugestellt wurde"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.display_name": {
+          "source": "Message Expiry Interval",
+          "message": "Nachrichten-Ablaufintervall"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.short_desc": {
+          "source": "Message lifetime in seconds",
+          "message": "Lebensdauer der Nachricht in Sekunden"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.desc": {
+          "source": "The payload / message body; a string or binary type is sent as-is, all others are serialized with JSON and sent as a JSON string",
+          "message": "Die Nutzlast / der Nachrichtentext; ein String- oder Binärtyp wird unverändert gesendet, alle anderen werden mit JSON serialisiert und als JSON-String gesendet"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.display_name": {
+          "source": "Message Body",
+          "message": "Nachrichtentext"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.short_desc": {
+          "source": "The payload / message body",
+          "message": "Die Nutzlast / der Nachrichtentext"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.desc": {
+          "source": "Payload format indicator: `True` = UTF-8 encoded text, `False` or omitted = unspecified binary data",
+          "message": "Nutzlastformat-Indikator: `True` = UTF-8-kodierter Text, `False` oder weggelassen = unbestimmte Binärdaten"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.display_name": {
+          "source": "Payload Format Indicator",
+          "message": "Nutzlastformat-Indikator"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
+          "message": "Nutzlastformat-Indikator: 'True' = UTF-8-kodierter Text, 'False' oder weggelassen = unbestimmte Binärdaten"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
+          "source": "QoS 0: message is delivered at most once with no acknowledgment",
+          "message": "QoS 0: Nachricht wird höchstens einmal ohne Bestätigung zugestellt"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.display_name": {
+          "source": "At Most Once",
+          "message": "Höchstens einmal"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.short_desc": {
+          "source": "QoS 0: fire and forget",
+          "message": "QoS 0: Fire and Forget"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.desc": {
+          "source": "QoS 1: message is delivered at least once with acknowledgment",
+          "message": "QoS 1: Nachricht wird mindestens einmal mit Bestätigung zugestellt"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.display_name": {
+          "source": "At Least Once",
+          "message": "Mindestens einmal"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.short_desc": {
+          "source": "QoS 1: acknowledged delivery",
+          "message": "QoS 1: bestätigte Zustellung"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.desc": {
+          "source": "QoS 2: message is delivered exactly once using a four-step handshake",
+          "message": "QoS 2: Nachricht wird genau einmal über einen vierstufigen Handshake zugestellt"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.display_name": {
+          "source": "Exactly Once",
+          "message": "Genau einmal"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.short_desc": {
+          "source": "QoS 2: assured delivery",
+          "message": "QoS 2: zugesicherte Zustellung"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.desc": {
+          "source": "The quality of service value for this message",
+          "message": "Der Servicequalität-Wert für diese Nachricht"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.display_name": {
+          "source": "Quality of Service",
+          "message": "Servicequalität"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.short_desc": {
+          "source": "The quality of service value for this message",
+          "message": "Der Servicequalität-Wert für diese Nachricht"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.desc": {
+          "source": "If this message should be retained by the server",
+          "message": "Ob diese Nachricht vom Server gespeichert werden soll"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.display_name": {
+          "source": "Retained?",
+          "message": "Gespeichert?"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.short_desc": {
+          "source": "If this message should be retained by the server",
+          "message": "Ob diese Nachricht vom Server gespeichert werden soll"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "Das Topic, an das der Empfänger eine Antwort veröffentlichen sollte (MQTT 5-Anfrage/Antwort-Muster)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.display_name": {
+          "source": "Response Topic",
+          "message": "Antwort-Topic"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "Das Topic, an das der Empfänger eine Antwort veröffentlichen sollte (MQTT 5-Anfrage/Antwort-Muster)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {
+          "source": "The message topic",
+          "message": "Das Nachrichtentopic"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.display_name": {
+          "source": "Message Topic",
+          "message": "Nachrichtentopic"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.short_desc": {
+          "source": "The message topic",
+          "message": "Das Nachrichtentopic"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.desc": {
+          "source": "Application-level key-value string metadata to attach to the message.\n\nProvide a hash of string key-value pairs (e.g., `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)",
+          "message": "String-Metadaten in Form von Schlüssel-Wert-Paaren auf Anwendungsebene, die an die Nachricht angehängt werden sollen.\n\nGeben Sie einen Hash von String-Schlüssel-Wert-Paaren an (z. B. `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.display_name": {
+          "source": "User Properties",
+          "message": "Benutzereigenschaften"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.short_desc": {
+          "source": "Application-level key-value string metadata to attach to the message",
+          "message": "String-Metadaten in Form von Schlüssel-Wert-Paaren auf Anwendungsebene, die an die Nachricht angehängt werden sollen"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.short_desc": {
+          "source": "Send an MQTT message with optional MQTT 5 properties",
+          "message": "Senden Sie eine MQTT-Nachricht mit optionalen MQTT 5-Eigenschaften"
+        },
+        "app.TVFUVA.desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging with support for request/response patterns, message expiry, content type metadata, and user-defined properties",
+          "message": "MQTT 5.0-Server für schnelles und effizientes Messaging mit Unterstützung für Anfrage/Antwort-Muster, Nachrichtenablauf, Inhaltstyp-Metadaten und benutzerdefinierte Eigenschaften"
+        },
+        "app.TVFUVA.display_name": {
+          "source": "MQTT",
+          "message": "MQTT"
+        },
+        "app.TVFUVA.short_desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging",
+          "message": "MQTT 5.0-Server für schnelles und effizientes Messaging"
+        }
+      }
+    }
+  }
+}

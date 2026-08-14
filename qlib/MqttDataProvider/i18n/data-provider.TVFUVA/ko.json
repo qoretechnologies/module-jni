@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.TVFUVA.action.Y29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client connects or reconnects to the MQTT broker",
+          "message": "클라이언트가 MQTT 브로커에 연결되거나 다시 연결될 때 이 이벤트가 발생합니다."
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.display_name": {
+          "source": "MQTT Connected",
+          "message": "MQTT 연결됨"
+        },
+        "app.TVFUVA.action.Y29ubmVjdGVk.short_desc": {
+          "source": "Client connected or reconnected to the MQTT broker",
+          "message": "클라이언트가 MQTT 브로커에 연결되었거나 다시 연결되었습니다."
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.desc": {
+          "source": "This event is raised when the client is disconnected from the MQTT broker, including the MQTT 5 disconnect reason code and description",
+          "message": "클라이언트가 MQTT 브로커에서 연결 해제될 때 이 이벤트가 발생하며, MQTT 5 연결 해제 이유 코드 및 설명이 포함됩니다."
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.display_name": {
+          "source": "MQTT Disconnected",
+          "message": "MQTT 연결 해제됨"
+        },
+        "app.TVFUVA.action.ZGlzY29ubmVjdGVk.short_desc": {
+          "source": "Client disconnected from the MQTT broker",
+          "message": "클라이언트가 MQTT 브로커에서 연결 해제되었습니다."
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "An MQTT message is received; event includes MQTT 5.0 properties such as content type, response topic, correlation data, and user properties",
+          "message": "MQTT 메시지를 수신했습니다. 이벤트에는 콘텐츠 유형, 응답 토픽, 연관 데이터 및 사용자 속성과 같은 MQTT 5.0 속성이 포함됩니다."
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "MQTT Message Received",
+          "message": "MQTT 메시지 수신됨"
+        },
+        "app.TVFUVA.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "An MQTT message is received with MQTT 5 properties",
+          "message": "MQTT 5 속성이 포함된 MQTT 메시지를 수신했습니다."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.desc": {
+          "source": "Send an MQTT message to a topic with optional MQTT 5.0 properties including content type, request/response correlation, message expiry, and user-defined metadata",
+          "message": "콘텐츠 유형, 요청/응답 연관, 메시지 만료 및 사용자 정의 메타데이터를 포함한 선택적 MQTT 5.0 속성과 함께 토픽으로 MQTT 메시지를 전송합니다."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.display_name": {
+          "source": "Send MQTT Message",
+          "message": "MQTT 메시지 전송"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME content type of the message payload (e.g., `application/json`, `text/plain`)",
+          "message": "메시지 페이로드의 MIME 콘텐츠 유형(예: `application/json`, `text/plain`)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME content type of the message payload (e",
+          "message": "메시지 페이로드의 MIME 콘텐츠 유형(예:"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
+          "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
+          "message": "요청에 대한 응답을 매칭하기 위한 연관 데이터이며 응답자에 의해 되돌려 보내집니다(MQTT 5 요청/응답 패턴)."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.display_name": {
+          "source": "Correlation Data",
+          "message": "연관 데이터"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.short_desc": {
+          "source": "Correlation data for matching responses to requests",
+          "message": "요청과 응답을 매칭하기 위한 연관 데이터"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.desc": {
+          "source": "Message lifetime in seconds; the broker will discard the message after this interval if it has not been delivered",
+          "message": "초 단위의 메시지 수명입니다. 이 간격 동안 전달되지 않은 경우 브로커가 메시지를 폐기합니다."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.display_name": {
+          "source": "Message Expiry Interval",
+          "message": "메시지 만료 간격"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.bWVzc2FnZV9leHBpcnlfaW50ZXJ2YWw.short_desc": {
+          "source": "Message lifetime in seconds",
+          "message": "초 단위의 메시지 수명"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.desc": {
+          "source": "The payload / message body; a string or binary type is sent as-is, all others are serialized with JSON and sent as a JSON string",
+          "message": "페이로드 / 메시지 본문입니다. 문자열 또는 바이너리 유형은 있는 그대로 전송되며, 기타 모든 항목은 JSON으로 직렬화되어 JSON 문자열로 전송됩니다."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.display_name": {
+          "source": "Message Body",
+          "message": "메시지 본문"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZA.short_desc": {
+          "source": "The payload / message body",
+          "message": "페이로드 / 메시지 본문"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.desc": {
+          "source": "Payload format indicator: `True` = UTF-8 encoded text, `False` or omitted = unspecified binary data",
+          "message": "페이로드 형식 표시기: `True` = UTF-8 인코딩된 텍스트, `False` 또는 생략됨 = 지정되지 않은 바이너리 데이터"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.display_name": {
+          "source": "Payload Format Indicator",
+          "message": "페이로드 형식 표시기"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
+          "message": "페이로드 형식 표시기: 'True' = UTF-8 인코딩된 텍스트, 'False' 또는 생략됨 = 지정되지 않은 바이너리 데이터"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
+          "source": "QoS 0: message is delivered at most once with no acknowledgment",
+          "message": "QoS 0: 확인 응답 없이 메시지가 최대 한 번 전달됩니다."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.display_name": {
+          "source": "At Most Once",
+          "message": "최대 한 번"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.short_desc": {
+          "source": "QoS 0: fire and forget",
+          "message": "QoS 0: 보내고 잊기(fire and forget)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.desc": {
+          "source": "QoS 1: message is delivered at least once with acknowledgment",
+          "message": "QoS 1: 확인 응답과 함께 메시지가 적어도 한 번 전달됩니다."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.display_name": {
+          "source": "At Least Once",
+          "message": "적어도 한 번"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjE.short_desc": {
+          "source": "QoS 1: acknowledged delivery",
+          "message": "QoS 1: 확인 응답이 포함된 전달"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.desc": {
+          "source": "QoS 2: message is delivered exactly once using a four-step handshake",
+          "message": "QoS 2: 4단계 핸드셰이크를 사용하여 메시지가 정확히 한 번 전달됩니다."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.display_name": {
+          "source": "Exactly Once",
+          "message": "정확히 한 번"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjI.short_desc": {
+          "source": "QoS 2: assured delivery",
+          "message": "QoS 2: 보장된 전달"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.desc": {
+          "source": "The quality of service value for this message",
+          "message": "이 메시지의 서비스 품질(QoS) 값"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.display_name": {
+          "source": "Quality of Service",
+          "message": "서비스 품질(QoS)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.short_desc": {
+          "source": "The quality of service value for this message",
+          "message": "이 메시지의 서비스 품질(QoS) 값"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.desc": {
+          "source": "If this message should be retained by the server",
+          "message": "서버가 이 메시지를 보관해야 하는지 여부"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.display_name": {
+          "source": "Retained?",
+          "message": "보관 여부?"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmV0YWluZWQ.short_desc": {
+          "source": "If this message should be retained by the server",
+          "message": "서버가 이 메시지를 보관해야 하는지 여부"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "수신자가 응답을 게시해야 하는 토픽(MQTT 5 요청/응답 패턴)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.display_name": {
+          "source": "Response Topic",
+          "message": "응답 토픽"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
+          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "message": "수신자가 응답을 게시해야 하는 토픽(MQTT 5 요청/응답 패턴)"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {
+          "source": "The message topic",
+          "message": "메시지 토픽"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.display_name": {
+          "source": "Message Topic",
+          "message": "메시지 토픽"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.short_desc": {
+          "source": "The message topic",
+          "message": "메시지 토픽"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.desc": {
+          "source": "Application-level key-value string metadata to attach to the message.\n\nProvide a hash of string key-value pairs (e.g., `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)",
+          "message": "메시지에 첨부할 애플리케이션 수준의 키-값 문자열 메타데이터입니다.\n\n문자열 키-값 쌍의 해시를 제공합니다(예: `{\"source\": \"sensor-1\", \"region\": \"us-east\"}`)."
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.display_name": {
+          "source": "User Properties",
+          "message": "사용자 속성"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.option.dXNlcl9wcm9wZXJ0aWVz.short_desc": {
+          "source": "Application-level key-value string metadata to attach to the message",
+          "message": "메시지에 첨부할 애플리케이션 수준의 키-값 문자열 메타데이터"
+        },
+        "app.TVFUVA.action.c2VuZC1tc2c.short_desc": {
+          "source": "Send an MQTT message with optional MQTT 5 properties",
+          "message": "선택적 MQTT 5 속성을 사용하여 MQTT 메시지 전송"
+        },
+        "app.TVFUVA.desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging with support for request/response patterns, message expiry, content type metadata, and user-defined properties",
+          "message": "요청/응답 패턴, 메시지 만료, 콘텐츠 유형 메타데이터 및 사용자 정의 속성을 지원하는 빠르고 효율적인 메시징을 위한 MQTT 5.0 서버"
+        },
+        "app.TVFUVA.display_name": {
+          "source": "MQTT",
+          "message": "MQTT"
+        },
+        "app.TVFUVA.short_desc": {
+          "source": "MQTT 5.0 server for fast and efficient messaging",
+          "message": "빠르고 효율적인 메시징을 위한 MQTT 5.0 서버"
+        }
+      }
+    }
+  }
+}

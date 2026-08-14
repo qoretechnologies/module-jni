@@ -1,0 +1,417 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.RXhjZWw.action.cmVhZA.desc": {
+          "source": "Read Excel spreadsheet from a specific file location",
+          "message": "Читати електронну таблицю Excel із конкретного розташування файлу"
+        },
+        "app.RXhjZWw.action.cmVhZA.display_name": {
+          "source": "Read Excel Spreadsheet File",
+          "message": "Читати файл електронної таблиці Excel"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "Діапазон клітинок для обробки даних"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Клітинки даних"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "Діапазон клітинок для обробки даних"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Якщо `True`, то об'єкт проаналізує назви заголовків із першого рядка заголовка; у цьому випадку, якщо `header_cells` не вказано явно, вважатиметься, що це перший рядок"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "Назви заголовків?"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "Чи слід використовувати рядки заголовків як назви вихідних полів?"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Діапазон клітинок для заголовків або номер рядка"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Клітинки заголовка"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Діапазон клітинок для заголовків або номер рядка"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Список назв заголовків / стовпців для ітерованих даних; якщо це вказано, то `header_names` має бути `False`"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Вихідні заголовки"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Список назв заголовків / стовпців для ітерованих даних"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Розташування даних Excel; взаємовиключне з `data` та `stream`; розділяється за допомогою виклику [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Excel Input Path",
+          "message": "Вхідний шлях Excel"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Excel data",
+          "message": "Розташування даних Excel"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
+          "message": "Назва робочого аркуша для ітерації; якщо не вказано, обробляється перший робочий аркуш"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Назва робочого аркуша"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "Назва робочого аркуша для ітерації"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Якщо `True` (за замовчуванням `False`), усі автоматично виявлені назви заголовків будуть перетворені на нижній регістр"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Перетворити заголовки на нижній регістр"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Перетворити всі назви заголовків на нижній регістр"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Регіон часового поясу"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.RXhjZWw.action.cmVhZA.short_desc": {
+          "source": "Read Excel spreadsheet from a specific file location",
+          "message": "Читати електронну таблицю Excel із конкретного розташування файлу"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Excel spreadsheet inline data",
+          "message": "Читати вбудовані дані електронної таблиці Excel"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Excel Spreadsheet Inline Data",
+          "message": "Читати вбудовані дані електронної таблиці Excel"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Excel data to process; conflicts with `stream` and `path`",
+          "message": "Дані Excel для обробки; конфліктує з `stream` та `path`"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Excel data to process",
+          "message": "Дані Excel для обробки"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "Діапазон клітинок для обробки даних"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Клітинки даних"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "Діапазон клітинок для обробки даних"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Якщо `True`, то об'єкт проаналізує назви заголовків із першого рядка заголовка; у цьому випадку, якщо `header_cells` не вказано явно, вважатиметься, що це перший рядок"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "Назви заголовків?"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "Чи слід використовувати рядки заголовків як назви вихідних полів?"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Діапазон клітинок для заголовків або номер рядка"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Клітинки заголовка"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Діапазон клітинок для заголовків або номер рядка"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Список назв заголовків / стовпців для ітерованих даних; якщо це вказано, то `header_names` має бути `False`"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Вихідні заголовки"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Список назв заголовків / стовпців для ітерованих даних"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
+          "message": "Назва робочого аркуша для ітерації; якщо не вказано, обробляється перший робочий аркуш"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Назва робочого аркуша"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "Назва робочого аркуша для ітерації"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Якщо `True` (за замовчуванням `False`), усі автоматично виявлені назви заголовків будуть перетворені на нижній регістр"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Перетворити заголовки на нижній регістр"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Перетворити всі назви заголовків на нижній регістр"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Регіон часового поясу"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Excel spreadsheet inline data",
+          "message": "Читати вбудовані дані електронної таблиці Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGU.desc": {
+          "source": "Write data to an Excel spreadsheet file at a specified path",
+          "message": "Записати дані у файл електронної таблиці Excel за вказаним шляхом"
+        },
+        "app.RXhjZWw.action.d3JpdGU.display_name": {
+          "source": "Write Excel Spreadsheet File",
+          "message": "Записати файл електронної таблиці Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
+          "message": "Формат Excel 2007+ (`.xlsx`); підтримує режим потокового передавання для великих файлів"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Формат Excel 2007+ (.xlsx)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
+          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
+          "message": "Застарілий бінарний формат Excel 97-2003 (`.xls`); обмежено 65 536 рядками та 256 стовпцями на аркуш"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
+          "source": "XLS",
+          "message": "XLS"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
+          "source": "Excel 97-2003 format (.xls)",
+          "message": "Формат Excel 97-2003 (.xls)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.desc": {
+          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
+          "message": "Формат Excel для використання: `xlsx` (за замовчуванням, Excel 2007+) або `xls` (Excel 97-2003)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.display_name": {
+          "source": "Output Format",
+          "message": "Вихідний формат"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.short_desc": {
+          "source": "Excel format to use",
+          "message": "Формат Excel для використання"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Список назв заголовків / стовпців для даних; якщо не вказано, заголовки будуть визначені автоматично з першого запису"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Заголовки стовпців"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Список назв заголовків / стовпців для даних"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.desc": {
+          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
+          "message": "Якщо `True`, використовувати режим потокового передавання SXSSF для запису великих файлів зі зменшеним використанням пам'яті; застосовується лише до формату `xlsx`"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.display_name": {
+          "source": "Streaming Mode",
+          "message": "Режим потокового передавання"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.short_desc": {
+          "source": "Use streaming mode for large files",
+          "message": "Використовувати режим потокового передавання для великих файлів"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Excel data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Розташування для вихідного файлу даних Excel; взаємовиключне з `stream`; вихідне розташування обробляється за допомогою виклику [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Excel Output Path",
+          "message": "Шлях виводу Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Excel file",
+          "message": "Розташування для запису файлу Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; default is `Sheet1`",
+          "message": "Назва робочого аркуша для створення; за замовчуванням: `Sheet1`"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Назва робочого аркуша"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "Назва робочого аркуша для створення"
+        },
+        "app.RXhjZWw.action.d3JpdGU.short_desc": {
+          "source": "Write data to an Excel spreadsheet file",
+          "message": "Записати дані у файл електронної таблиці Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Excel spreadsheet data in memory and return it as binary data; useful for generating Excel files without writing to disk",
+          "message": "Створити дані електронної таблиці Excel у пам'яті та повернути їх як бінарні дані; корисно для генерації файлів Excel без запису на диск"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Excel Spreadsheet Data",
+          "message": "Створити дані електронної таблиці Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
+          "message": "Формат Excel 2007+ (`.xlsx`); підтримує режим потокового передавання для великих файлів"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Формат Excel 2007+ (.xlsx)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
+          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
+          "message": "Застарілий бінарний формат Excel 97-2003 (`.xls`); обмежено 65 536 рядками та 256 стовпцями на аркуш"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
+          "source": "XLS",
+          "message": "XLS"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
+          "source": "Excel 97-2003 format (.xls)",
+          "message": "Формат Excel 97-2003 (.xls)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.desc": {
+          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
+          "message": "Формат Excel для використання: `xlsx` (за замовчуванням, Excel 2007+) або `xls` (Excel 97-2003)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.display_name": {
+          "source": "Output Format",
+          "message": "Вихідний формат"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.short_desc": {
+          "source": "Excel format to use",
+          "message": "Формат Excel для використання"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Список назв заголовків / стовпців для даних; якщо не вказано, заголовки будуть визначені автоматично з першого запису"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Заголовки стовпців"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Список назв заголовків / стовпців для даних"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.desc": {
+          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
+          "message": "Якщо `True`, використовувати режим потокового передавання SXSSF для запису великих файлів зі зменшеним використанням пам'яті; застосовується лише до формату `xlsx`"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.display_name": {
+          "source": "Streaming Mode",
+          "message": "Режим потокового передавання"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.short_desc": {
+          "source": "Use streaming mode for large files",
+          "message": "Використовувати режим потокового передавання для великих файлів"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; default is `Sheet1`",
+          "message": "Назва робочого аркуша для створення; за замовчуванням: `Sheet1`"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Назва робочого аркуша"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "Назва робочого аркуша для створення"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Excel spreadsheet data and return as binary",
+          "message": "Створити дані електронної таблиці Excel і повернути як бінарні дані"
+        },
+        "app.RXhjZWw.desc": {
+          "source": "Read and write Excel spreadsheets",
+          "message": "Читання та запис електронних таблиць Excel"
+        },
+        "app.RXhjZWw.display_name": {
+          "source": "Excel Spreadsheets",
+          "message": "Електронні таблиці Excel"
+        },
+        "app.RXhjZWw.short_desc": {
+          "source": "Read and write Excel spreadsheets",
+          "message": "Читання та запис електронних таблиць Excel"
+        }
+      }
+    }
+  }
+}

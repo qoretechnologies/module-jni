@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.QWNjZXNz.action.cmVhZA.desc": {
+          "source": "Read Access database from a specific file location and iterate table rows",
+          "message": "Odczytaj bazę danych Access z określonej lokalizacji pliku i iteruj po wierszach tabeli"
+        },
+        "app.QWNjZXNz.action.cmVhZA.display_name": {
+          "source": "Read Access Database File",
+          "message": "Odczytaj plik bazy danych Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the Access database file; mutually exclusive with `data`; resolved with a call to [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Ścieżka do pliku bazy danych Access; wyklucza się z `data`; rozwiązywana za pomocą wywołania [FileLocationHandler::getBinaryFileFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Access Input Path",
+          "message": "Ścieżka wejściowa Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The path to the Access database file",
+          "message": "Ścieżka do pliku bazy danych Access"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "Nazwa tabeli do odczytu; jeśli nie podano, użyj dostawców potomnych, aby uzyskać dostęp do tabel"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "Nazwa tabeli"
+        },
+        "app.QWNjZXNz.action.cmVhZA.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "Nazwa tabeli do odczytu"
+        },
+        "app.QWNjZXNz.action.cmVhZA.short_desc": {
+          "source": "Read Access database from a specific file location",
+          "message": "Odczytaj bazę danych Access z określonej lokalizacji pliku"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Access database inline data and iterate table rows",
+          "message": "Odczytaj dane wstawiane bazy danych Access i iteruj po wierszach tabeli"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Access Database Inline Data",
+          "message": "Odczytaj dane wstawiane bazy danych Access"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Access database data to process; conflicts with `path`",
+          "message": "Dane bazy danych Access do przetworzenia; konflikt z `path`"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dane wejściowe"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Access database data to process",
+          "message": "Dane bazy danych Access do przetworzenia"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.desc": {
+          "source": "The name of the table to read; if not provided, use child providers to access tables",
+          "message": "Nazwa tabeli do odczytu; jeśli nie podano, użyj dostawców potomnych, aby uzyskać dostęp do tabel"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.display_name": {
+          "source": "Table Name",
+          "message": "Nazwa tabeli"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.option.dGFibGVfbmFtZQ.short_desc": {
+          "source": "The name of the table to read",
+          "message": "Nazwa tabeli do odczytu"
+        },
+        "app.QWNjZXNz.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Access database inline data",
+          "message": "Odczytaj dane wstawiane bazy danych Access"
+        },
+        "app.QWNjZXNz.desc": {
+          "source": "Read Microsoft Access databases (.mdb/.accdb format) using the Jackcess library",
+          "message": "Odczytuj bazy danych Microsoft Access (format .mdb/.accdb) za pomocą biblioteki Jackcess"
+        },
+        "app.QWNjZXNz.display_name": {
+          "source": "Access Databases",
+          "message": "Bazy danych Access"
+        },
+        "app.QWNjZXNz.short_desc": {
+          "source": "Read Microsoft Access databases",
+          "message": "Odczytuj bazy danych Microsoft Access"
+        }
+      }
+    }
+  }
+}

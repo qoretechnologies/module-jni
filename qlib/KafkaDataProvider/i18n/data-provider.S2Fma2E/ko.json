@@ -1,0 +1,405 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "A Kafka message is received; react to an Kafka message",
+          "message": "Kafka 메시지가 수신되면 해당 Kafka 메시지에 반응합니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "Kafka Message Received",
+          "message": "Kafka 메시지 수신됨"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate incoming Kafka message values. This option conflicts with `validator`",
+          "message": "수신 Kafka 메시지 값을 검증하는 데 사용되는 AsyncAPI 스키마 URL 또는 파일 경로입니다. 이 옵션은 `validator`와(과) 충돌합니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "AsyncAPI 스키마"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "AsyncAPI 스키마 URL 또는 파일 경로"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
+          "message": "`asyncapi` 또는 `validator`이(가) 구성된 경우 사용할 AsyncAPI 채널 이름"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "AsyncAPI 채널"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "검증용 AsyncAPI 채널"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Throw exception to the consumer if no previous offset is found for the consumer's group",
+          "message": "컨슈머 그룹에 대해 이전 오프셋이 발견되지 않으면 컨슈머에 예외를 발생시킵니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "none",
+          "message": "none"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "Throw exception to the consumer if no previous offset is found for the consumer's group",
+          "message": "컨슈머 그룹에 대해 이전 오프셋이 발견되지 않으면 컨슈머에 예외를 발생시킵니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.desc": {
+          "source": "Automatically reset the offset to the earliest offset",
+          "message": "오프셋을 가장 빠른 오프셋으로 자동 재설정합니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.display_name": {
+          "source": "earliest",
+          "message": "earliest"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmVhcmxpZXN0.short_desc": {
+          "source": "Automatically reset the offset to the earliest offset",
+          "message": "오프셋을 가장 빠른 오프셋으로 자동 재설정합니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.desc": {
+          "source": "Automatically reset the offset to the latest offset",
+          "message": "오프셋을 가장 최근 오프셋으로 자동 재설정합니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.display_name": {
+          "source": "latest",
+          "message": "latest"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.allowed-value.c3RyaW5nOmxhdGVzdA.short_desc": {
+          "source": "Automatically reset the offset to the latest offset",
+          "message": "오프셋을 가장 최근 오프셋으로 자동 재설정합니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.desc": {
+          "source": "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted).\n\nNote that altering partition numbers while setting this config to latest may cause message delivery loss since producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets",
+          "message": "Kafka에 초기 오프셋이 없거나 현재 오프셋이 서버에 더 이상 존재하지 않는 경우(예: 해당 데이터가 삭제되었기 때문에) 수행할 작업입니다.\n\n이 구성을 latest로 설정한 상태에서 파티션 수를 변경하면, 컨슈머가 오프셋을 재설정하기 전에 프로듀서가 새로 추가된 파티션(즉, 아직 초기 오프셋이 존재하지 않음)으로 메시지를 전송하기 시작하여 메시지 전달 손실이 발생할 수 있습니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.display_name": {
+          "source": "Auto Offset Reset",
+          "message": "자동 오프셋 재설정"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.short_desc": {
+          "source": "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server",
+          "message": "Kafka에 초기 오프셋이 없거나 서버에 현재 오프셋이 더 이상 존재하지 않는 경우 수행할 작업"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.desc": {
+          "source": "A unique string that identifies the consumer group this consumer belongs to.\n\nThis property is required if the consumer uses either the group management functionality by using `subscribe(topic)` or the Kafka-based offset management strategy",
+          "message": "이 컨슈머가 속한 컨슈머 그룹을 식별하는 고유한 문자열입니다.\n\n컨슈머가 `subscribe(topic)`을 사용하여 그룹 관리 기능을 사용하거나 Kafka 기반 오프셋 관리 전략을 사용하는 경우 이 속성이 필요합니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.display_name": {
+          "source": "Group ID",
+          "message": "그룹 ID"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.Z3JvdXAuaWQ.short_desc": {
+          "source": "The ID of the consumer group this consumer belongs to",
+          "message": "이 컨슈머가 속한 컨슈머 그룹의 ID"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.desc": {
+          "source": "If `True` the consumer's offset will be periodically committed in the background",
+          "message": "`True`인 경우 컨슈머의 오프셋이 백그라운드에서 주기적으로 커밋됩니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.display_name": {
+          "source": "Enable Auto Commit",
+          "message": "자동 커밋 활성화"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.short_desc": {
+          "source": "If True the consumer's offset will be periodically committed in the background",
+          "message": "True인 경우 컨슈머의 오프셋이 백그라운드에서 주기적으로 커밋됩니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.desc": {
+          "source": "The minimum amount of data the server should return for a fetch request.\n\nIf insufficient data is available, the request will wait for that much data to accumulate before answering the request.\n\nThe default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive.\n\nSetting this to something greater than `1` will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency",
+          "message": "가져오기 요청에 대해 서버가 반환해야 하는 최소 데이터 양입니다.\n\n충분한 데이터를 사용할 수 없는 경우 요청은 해당 양의 데이터가 누적될 때까지 기다렸다가 응답합니다.\n\n기본 설정인 1바이트는 1바이트의 데이터를 사용할 수 있게 되거나 데이터 도착을 기다리는 가져오기 요청이 타임아웃되는 즉시 가져오기 요청에 응답함을 의미합니다.\n\n이 값을 `1`보다 크게 설정하면 서버가 더 많은 양의 데이터가 누적될 때까지 기다리므로 약간의 추가 지연 시간이 발생하는 대신 서버 처리량이 향상될 수 있습니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.display_name": {
+          "source": "Fetch Min Bytes",
+          "message": "가져오기 최소 바이트"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.short_desc": {
+          "source": "The minimum amount of data the server should return for a fetch request",
+          "message": "가져오기 요청에 대해 서버가 반환해야 하는 최소 데이터 양"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Deserializer` interface",
+          "message": "`org.apache.kafka.common.serialization.Deserializer` 인터페이스를 구현하는 키용 직렬화기 클래스"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.display_name": {
+          "source": "Key Deserializer",
+          "message": "키 역직렬화기"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.a2V5LmRlc2VyaWFsaXplcg.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Kafka 메시지용 직렬화기 / 역직렬화기 클래스"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.desc": {
+          "source": "The expected time in milliseconds between heartbeats to the consumer coordinator when using Kafka's group management facilities.\n\nHeartbeats are used to ensure that the consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group.\n\nThe value must be set lower than `session.timeout.ms`, but typically should be set no higher than 1/3 of that value.\n\nIt can be adjusted even lower to control the expected time for normal rebalances",
+          "message": "Kafka의 그룹 관리 기능을 사용할 때 컨슈머 코디네이터로 전송되는 하트비트 간의 예상 시간(밀리초 단위)입니다.\n\n하트비트는 컨슈머 세션이 활성 상태로 유지되도록 하고 새로운 컨슈머가 그룹에 참여하거나 이탈할 때 리밸런싱을 용이하게 하는 데 사용됩니다.\n\n이 값은 `session.timeout.ms`보다 낮게 설정해야 하지만 보통 해당 값의 1/3 이하로 설정해야 합니다.\n\n정상적인 리밸런싱에 소요되는 예상 시간을 제어하기 위해 더 낮게 조정할 수 있습니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.display_name": {
+          "source": "Heartbeat Interval",
+          "message": "하트비트 간격"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.aGVhcnRiZWF0LmludGVydmFsLm1z.short_desc": {
+          "source": "The expected time between heartbeats to the consumer coordinator in milliseconds",
+          "message": "컨슈머 코디네이터로 전송되는 하트비트 간의 예상 시간(밀리초 단위)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.desc": {
+          "source": "The maximum amount of data per-partition the server will return.\n\nRecords are fetched in batches by the consumer.\n\nIf the first record batch in the first non-empty partition of the fetch is larger than this limit, the batch will still be returned to ensure that the consumer can make progress.\n\nThe maximum record batch size accepted by the broker is defined via `message.max.bytes` (broker config) or `max.message.bytes` (topic config).\n\nSee `fetch.max.bytes` for limiting the consumer request size",
+          "message": "서버가 반환할 파티션별 최대 데이터 양입니다.\n\n레코드는 컨슈머에 의해 배치 단위로 가져옵니다.\n\n가져오기의 비어 있지 않은 첫 번째 파티션에 있는 첫 번째 레코드 배치가 이 제한보다 큰 경우에도 컨슈머가 계속 진행할 수 있도록 배치가 반환됩니다.\n\n브로커가 허용하는 최대 레코드 배치 크기는 `message.max.bytes`(브로커 구성) 또는 `max.message.bytes`(토픽 구성)을 통해 정의됩니다.\n\n컨슈머 요청 크기 제한에 대한 내용은 `fetch.max.bytes`을(를) 참조하세요."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.display_name": {
+          "source": "Max Partition Fetch Bytes",
+          "message": "파티션별 최대 가져오기 바이트"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBhcnRpdGlvbi5mZXRjaC5ieXRlcw.short_desc": {
+          "source": "The maximum amount of data per-partition the server will return",
+          "message": "서버가 반환할 파티션별 최대 데이터 양"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.desc": {
+          "source": "The maximum delay between invocations of `poll()` when using consumer group management. This places an upper bound on the amount of time that the consumer can be idle before fetching more records. If `poll()` is not called before expiration of this timeout, then the consumer is considered failed and the group will rebalance in order to reassign the partitions to another member. For consumers using a non-null `group.instance.id` which reach this timeout, partitions will not be immediately reassigned. Instead, the consumer will stop sending heartbeats and partitions will be reassigned after expiration of `session.timeout.ms`. This mirrors the behavior of a static consumer which has shutdown",
+          "message": "컨슈머 그룹 관리를 사용할 때 `poll()` 호출 사이의 최대 지연 시간입니다. 이는 더 많은 레코드를 가져오기 전에 컨슈머가 유휴 상태로 있을 수 있는 시간의 상한을 설정합니다. 이 타임아웃이 만료되기 전에 `poll()`이(가) 호출되지 않으면 컨슈머가 실패한 것으로 간주되고 다른 멤버에게 파티션을 재할당하기 위해 그룹이 리밸런싱됩니다. 이 타임아웃에 도달한 null이 아닌 `group.instance.id`을(를) 사용하는 컨슈머의 경우 파티션이 즉시 재할당되지 않습니다. 대신 컨슈머는 하트비트 전송을 중단하고 `session.timeout.ms`이(가) 만료된 후 파티션이 재할당됩니다. 이는 종료된 정적 컨슈머의 동작을 반영합니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.display_name": {
+          "source": "Max Poll Interval",
+          "message": "최대 폴링 간격"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4LnBvbGwuaW50ZXJ2YWwubXM.short_desc": {
+          "source": "The maximum delay in milliseconds between invocations of poll()",
+          "message": "poll() 호출 사이의 최대 지연 시간(밀리초 단위)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.desc": {
+          "source": "The timeout used to detect client failures when using Kafka's group management facility.\n\nThe client sends periodic heartbeats to indicate its liveness to the broker.\n\nIf no heartbeats are received by the broker before the expiration of this session timeout, then the broker will remove this client from the group and initiate a rebalance.\n\nNote that the value must be in the allowable range as configured in the broker configuration by `group.min.session.timeout.ms` and `group.max.session.timeout.ms`",
+          "message": "Kafka의 그룹 관리 기능을 사용할 때 클라이언트 오류를 감지하는 데 사용되는 타임아웃입니다.\n\n클라이언트는 브로커에 활성 상태임을 알리기 위해 주기적으로 하트비트를 전송합니다.\n\n이 세션 타임아웃이 만료되기 전에 브로커가 하트비트를 수신하지 못하면 브로커는 그룹에서 이 클라이언트를 제거하고 리밸런싱을 시작합니다.\n\n이 값은 `group.min.session.timeout.ms` 및 `group.max.session.timeout.ms`의 브로커 구성에 설정된 허용 범위 내에 있어야 합니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.display_name": {
+          "source": "Session Timeout",
+          "message": "세션 타임아웃"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.c2Vzc2lvbi50aW1lb3V0Lm1z.short_desc": {
+          "source": "The timeout in milliseconds used to detect client failures",
+          "message": "클라이언트 오류를 감지하는 데 사용되는 타임아웃(밀리초 단위)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.desc": {
+          "source": "One or more topics to subscribe to; must be a list of strings",
+          "message": "구독할 하나 이상의 토픽이며 문자열 목록이어야 합니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.display_name": {
+          "source": "Topics",
+          "message": "토픽"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dG9waWNz.short_desc": {
+          "source": "One or more topics to subscribe to; must be a list of strings",
+          "message": "구독할 하나 이상의 토픽이며 문자열 목록이어야 합니다"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.desc": {
+          "source": "An AsyncAPI schema location or schema file data used to validate incoming Kafka message values. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
+          "message": "수신 Kafka 메시지 값을 검증하는 데 사용되는 AsyncAPI 스키마 위치 또는 스키마 파일 데이터입니다. 이 옵션은 `asyncapi`와(과) 충돌하며 `asyncapi_channel`이(가) 필요합니다."
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.display_name": {
+          "source": "AsyncAPI Validator",
+          "message": "AsyncAPI 검증기"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsaWRhdG9y.short_desc": {
+          "source": "AsyncAPI schema location or file data",
+          "message": "AsyncAPI 스키마 위치 또는 파일 데이터"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Deserializer` interface",
+          "message": "`org.apache.kafka.common.serialization.Deserializer` 인터페이스를 구현하는 키용 직렬화기 클래스"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.display_name": {
+          "source": "Value Deserializer",
+          "message": "값 역직렬화기"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.dmFsdWUuZGVzZXJpYWxpemVy.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Kafka 메시지용 직렬화기 / 역직렬화기 클래스"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A Kafka message is received",
+          "message": "Kafka 메시지가 수신됨"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.desc": {
+          "source": "Send a Kafka message",
+          "message": "Kafka 메시지 전송"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.display_name": {
+          "source": "Send Kafka Message",
+          "message": "Kafka 메시지 전송"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.desc": {
+          "source": "The compression type for all data generated by the producer. The default is `none` (i.e. no compression). Compression is of full batches of data, so the efficacy of batching will also impact the compression ratio (more batching means better compression)",
+          "message": "프로듀서가 생성한 모든 데이터의 압축 유형입니다. 기본값은 `none`(즉, 압축 없음)입니다. 압축은 전체 데이터 배치 단위로 수행되므로 배치 처리의 효율성도 압축률에 영향을 미칩니다(배치 처리가 많을수록 압축률이 높아짐)."
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.display_name": {
+          "source": "Compression",
+          "message": "압축"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.Y29tcHJlc3Npb24udHlwZQ.short_desc": {
+          "source": "The compression type for all data generated by the producer",
+          "message": "프로듀서가 생성한 모든 데이터의 압축 유형"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.desc": {
+          "source": "Determines how the client handles acknowledgements from the server:\n\n- `0`: The producer will not wait for any acknowledgment from the server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be made that the server has received the record in this case, and the `retries` configuration will not take effect (as the client won't generally know of any failures). The offset given back for each record will always be set to `-1`\n\n- `1`: The leader will write the record to its local log but will respond without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after acknowledging the record but before the followers have replicated it then the record will be lost\n\n- `all`: This means the leader will wait for the full set of in-sync replicas to acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica remains alive. This is the strongest available guarantee. This is equivalent to the `acks=-1` setting.",
+          "message": "클라이언트가 서버의 확인 응답(ack)을 처리하는 방식을 결정합니다:\n\n- `0`: 프로듀서는 서버로부터 어떠한 확인 응답도 기다리지 않습니다. 레코드는 소켓 버퍼에 즉시 추가되며 전송된 것으로 간주됩니다. 이 경우 서버가 레코드를 수신했는지 보장할 수 없으며, `retries` 구성이 적용되지 않습니다(클라이언트가 일반적으로 오류를 알지 못하기 때문임). 각 레코드에 대해 반환되는 오프셋은 항상 `-1`(으)로 설정됩니다.\n\n- `1`: 리더는 로컬 로그에 레코드를 기록하지만 모든 팔로워의 전체 확인 응답을 기다리지 않고 응답합니다. 이 경우 리더가 레코드를 확인한 직후 팔로워가 복제하기 전에 실패하면 레코드가 손실됩니다.\n\n- `all`: 이는 리더가 인싱크 리플리카(in-sync replica) 전체 세트가 레코드를 확인응답할 때까지 기다림을 의미합니다. 이는 최소 하나의 인싱크 리플리카가 살아있는 한 레코드가 손실되지 않음을 보장합니다. 이는 제공되는 가장 강력한 보장 수준입니다. 이는 `acks=-1` 설정과 동일합니다."
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.display_name": {
+          "source": "Acknowledgement Handling",
+          "message": "확인 응답 처리"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YWNrcw.short_desc": {
+          "source": "Determines how the client handles acknowledgements from the server",
+          "message": "클라이언트가 서버의 확인 응답을 처리하는 방식을 결정합니다"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate outgoing Kafka message values. This option conflicts with `validator`",
+          "message": "발신 Kafka 메시지 값을 검증하는 데 사용되는 AsyncAPI 스키마 URL 또는 파일 경로입니다. 이 옵션은 `validator`와(과) 충돌합니다."
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "AsyncAPI 스키마"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "AsyncAPI 스키마 URL 또는 파일 경로"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` or `validator` is configured",
+          "message": "`asyncapi` 또는 `validator`이(가) 구성된 경우 사용할 AsyncAPI 채널 이름"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "AsyncAPI 채널"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "검증용 AsyncAPI 채널"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.desc": {
+          "source": "The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are sent faster than they can be delivered to the server the producer will block for `max.block.ms` after which it will throw an exception.\n\nThis setting should correspond roughly to the total memory the producer will use, but is not a hard bound since not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if compression is enabled) as well as for maintaining in-flight requests",
+          "message": "프로듀서가 서버로 전송 대기 중인 레코드를 버퍼링하는 데 사용할 수 있는 총 메모리 바이트 수입니다. 레코드가 서버로 전달되는 속도보다 더 빠르게 전송되면 프로듀서는 `max.block.ms` 동안 차단된 후 예외를 발생시킵니다.\n\n이 설정은 프로듀서가 사용할 총 메모리에 대략 대응해야 하지만, 프로듀서가 사용하는 모든 메모리가 버퍼링에 사용되는 것은 아니므로 엄격한 제한은 아닙니다. (압축이 활성화된 경우) 압축 및 진행 중인(in-flight) 요청을 유지 관리하는 데 일부 추가 메모리가 사용됩니다."
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.display_name": {
+          "source": "Buffer Memory",
+          "message": "버퍼 메모리"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.YnVmZmVyLm1lbW9yeQ.short_desc": {
+          "source": "The total bytes of memory the producer can use to buffer records waiting to be sent",
+          "message": "프로듀서가 전송 대기 중인 레코드를 버퍼링하기 위해 사용할 수 있는 전체 메모리 바이트 수"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
+          "source": "The message key",
+          "message": "메시지 키"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
+          "source": "Message Key",
+          "message": "메시지 키"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.short_desc": {
+          "source": "The message key",
+          "message": "메시지 키"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Serializer` interface",
+          "message": "`org.apache.kafka.common.serialization.Serializer` 인터페이스를 구현하는 키 직렬화기 클래스"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.display_name": {
+          "source": "Key Serializer",
+          "message": "키 직렬화기"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5LnNlcmlhbGl6ZXI.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Kafka 메시지용 직렬화기 / 역직렬화기 클래스"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.desc": {
+          "source": "The partition for the message",
+          "message": "메시지의 파티션"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.display_name": {
+          "source": "Partition",
+          "message": "파티션"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cGFydGl0aW9u.short_desc": {
+          "source": "The partition for the message",
+          "message": "메시지의 파티션"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.desc": {
+          "source": "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error. Note that this retry is no different than if the client resent the record upon receiving the error.\n\nAllowing retries without setting `max.in.flight.requests.per.connection` to `1` will potentially change the ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second succeeds, then the records in the second batch may appear first.\n\nNote additionally that produce requests will be failed before the number of retries has been exhausted if the timeout configured by `delivery.timeout.ms` expires first before successful acknowledgement. Users should generally prefer to leave this config unset and instead use `delivery.timeout.ms` to control retry behavior",
+          "message": "0보다 큰 값을 설정하면 클라이언트가 일시적인 오류로 인해 전송 실패한 레코드를 재전송합니다. 이 재시도는 오류 수신 시 클라이언트가 레코드를 재전송하는 것과 다르지 않다는 점에 유의하세요.\n\n`max.in.flight.requests.per.connection`을(를) `1`(으)로 설정하지 않고 재시도를 허용하면 레코드 순서가 변경될 수 있습니다. 단일 파티션으로 두 배치가 전송될 때 첫 번째 배치가 실패하여 재시도되고 두 번째 배치가 성공하면 두 번째 배치의 레코드가 먼저 나타날 수 있기 때문입니다.\n\n또한 성공적인 승인 전에 `delivery.timeout.ms`에 의해 구성된 제한 시간이 먼저 만료되는 경우 재시도 횟수를 모두 소모하기 전에 프로듀스 요청이 실패합니다. 사용자는 일반적으로 이 설정을 지정하지 않고 대신 `delivery.timeout.ms`을(를) 사용하여 재시도 동작을 제어하는 것이 좋습니다."
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.display_name": {
+          "source": "Retries",
+          "message": "재시도 횟수"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.cmV0cmllcw.short_desc": {
+          "source": "The number of retry attempts for failed sends",
+          "message": "실패한 전송에 대한 재시도 시도 횟수"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.desc": {
+          "source": "The topic for the message",
+          "message": "메시지의 토픽"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "토픽"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dG9waWM.short_desc": {
+          "source": "The topic for the message",
+          "message": "메시지의 토픽"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.desc": {
+          "source": "An AsyncAPI schema location or schema file data used to validate outgoing Kafka message values. This option conflicts with `asyncapi` and requires `asyncapi_channel`",
+          "message": "나가는 Kafka 메시지 값을 검증하는 데 사용되는 AsyncAPI 스키마 위치 또는 스키마 파일 데이터입니다. 이 옵션은 `asyncapi`와(과) 충돌하며 `asyncapi_channel`이(가) 필요합니다."
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.display_name": {
+          "source": "AsyncAPI Validator",
+          "message": "AsyncAPI 검증기"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsaWRhdG9y.short_desc": {
+          "source": "AsyncAPI schema location or file data",
+          "message": "AsyncAPI 스키마 위치 또는 파일 데이터"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.desc": {
+          "source": "The message value",
+          "message": "메시지 값"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.display_name": {
+          "source": "Message Value",
+          "message": "메시지 값"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.short_desc": {
+          "source": "The message value",
+          "message": "메시지 값"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.desc": {
+          "source": "Serializer class for key that implements the `org.apache.kafka.common.serialization.Serializer` interface",
+          "message": "`org.apache.kafka.common.serialization.Serializer` 인터페이스를 구현하는 키 직렬화기 클래스"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.display_name": {
+          "source": "Value Serializer",
+          "message": "값 직렬화기"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWUuc2VyaWFsaXplcg.short_desc": {
+          "source": "Serializer / deserializer class for Kafka messages",
+          "message": "Kafka 메시지용 직렬화기 / 역직렬화기 클래스"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.short_desc": {
+          "source": "Send a Kafka message",
+          "message": "Kafka 메시지 전송"
+        },
+        "app.S2Fma2E.desc": {
+          "source": "Kafka messaging",
+          "message": "Kafka 메시징"
+        },
+        "app.S2Fma2E.display_name": {
+          "source": "Kafka",
+          "message": "Kafka"
+        },
+        "app.S2Fma2E.short_desc": {
+          "source": "Kafka messaging",
+          "message": "Kafka 메시징"
+        }
+      }
+    }
+  }
+}

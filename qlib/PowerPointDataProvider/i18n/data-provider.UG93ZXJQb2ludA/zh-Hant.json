@@ -1,0 +1,393 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.UG93ZXJQb2ludA.action.cmVhZA.desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "從特定檔案位置讀取 PowerPoint 簡報"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.display_name": {
+          "source": "Read PowerPoint Presentation File",
+          "message": "讀取 PowerPoint 簡報檔案"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "讀取包含標題、內文、備忘稿和版面配置資訊的簡報投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "讀取簡報投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "將內嵌於投影片中的表格讀取為結構化列資料"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "將表格讀取為列資料"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "要讀取的內容類型：`slides` (預設) 或 `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容型別"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "要讀取的內容類型"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "若為 `True`，則表格的第一列包含欄標題；僅適用於表格模式"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "標題列"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "第一列包含標題"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "表格模式的明確欄標題清單；與 `header_row` 互斥"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄標頭"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "明確的欄標題清單"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "當 `content_type` 為 `table` 時，包含表格的簡報投影片索引；從 0 開始，預設為 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "投影片索引"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "表格模式的投影片索引（基於 0）"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the PowerPoint data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "PowerPoint 資料的位置；與 `data` 及 `stream` 互斥；透過呼叫 [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 解析"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "PowerPoint Input Path",
+          "message": "PowerPoint 輸入路徑"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the PowerPoint file",
+          "message": "PowerPoint 檔案的位置"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "當 `content_type` 為 `table` 時，指定簡報投影片上要讀取的表格索引；從 0 開始，預設為 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表格索引"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "要讀取的表格索引（基於 0）"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZA.short_desc": {
+          "source": "Read PowerPoint presentation from a specific file location",
+          "message": "從特定檔案位置讀取 PowerPoint 簡報"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "讀取 PowerPoint 簡報內嵌資料"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read PowerPoint Presentation Inline Data",
+          "message": "讀取 PowerPoint 簡報內嵌資料"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Read presentation slides with title, body, notes, and layout information",
+          "message": "讀取包含標題、內文、備忘稿和版面配置資訊的簡報投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Read presentation slides",
+          "message": "讀取簡報投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table embedded in a slide as structured row data",
+          "message": "將內嵌於投影片中的表格讀取為結構化列資料"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "將表格讀取為列資料"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to read: `slides` (default) or `table`",
+          "message": "要讀取的內容類型：`slides` (預設) 或 `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容型別"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "要讀取的內容類型"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "PowerPoint presentation data to process; conflicts with `stream` and `path`",
+          "message": "要處理的 PowerPoint 簡報資料；與 `stream` 及 `path` 衝突"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "輸入資料"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "PowerPoint presentation data to process",
+          "message": "要處理的 PowerPoint 簡報資料"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table contains column headers; only applies to table mode",
+          "message": "若為 `True`，則表格的第一列包含欄標題；僅適用於表格模式"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "標題列"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "第一列包含標題"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column headers for table mode; mutually exclusive with `header_row`",
+          "message": "表格模式的明確欄標題清單；與 `header_row` 互斥"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄標頭"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "明確的欄標題清單"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.desc": {
+          "source": "Index of the slide containing the table when `content_type` is `table`; 0-based, default is 0",
+          "message": "當 `content_type` 為 `table` 時，包含表格的簡報投影片索引；從 0 開始，預設為 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.display_name": {
+          "source": "Slide Index",
+          "message": "投影片索引"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.c2xpZGVfaW5kZXg.short_desc": {
+          "source": "Index of slide for table mode (0-based)",
+          "message": "表格模式的投影片索引（基於 0）"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "Index of the table to read on the specified slide when `content_type` is `table`; 0-based, default is 0",
+          "message": "當 `content_type` 為 `table` 時，指定簡報投影片上要讀取的表格索引；從 0 開始，預設為 0"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "表格索引"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "要讀取的表格索引（基於 0）"
+        },
+        "app.UG93ZXJQb2ludA.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read PowerPoint presentation inline data",
+          "message": "讀取 PowerPoint 簡報內嵌資料"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.desc": {
+          "source": "Write data to a PowerPoint presentation file at a specified path",
+          "message": "將資料寫入指定路徑的 PowerPoint 簡報檔案"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.display_name": {
+          "source": "Write PowerPoint Presentation File",
+          "message": "寫入 PowerPoint 簡報檔案"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "寫入包含標題、內文和選填備忘稿的簡報投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "寫入投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "在投影片上寫入結構化表格資料"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "寫入表格"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "要寫入的內容類型：`slides` (預設) 或 `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容型別"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "要寫入的內容類型"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "表格模式的欄標題清單；若未提供，標題將從第一筆記錄自動偵測"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄標頭"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表格模式的欄標題清單"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output PowerPoint data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "輸出 PowerPoint 資料檔案的位置；與 `stream` 互斥；輸出位置由呼叫 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 處理"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "PowerPoint Output Path",
+          "message": "PowerPoint 輸出路徑"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the PowerPoint file",
+          "message": "寫入 PowerPoint 檔案的位置"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "選填標題；對投影片模式而言，會在開頭新增僅含標題的投影片；對表格模式而言，會設定表格投影片上的標題"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "簡報標題"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "第一張投影片或表格投影片的標題"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGU.short_desc": {
+          "source": "Write data to a PowerPoint presentation file",
+          "message": "將資料寫入 PowerPoint 簡報檔案"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create PowerPoint presentation data in memory and return it as binary data; useful for generating PowerPoint files without writing to disk",
+          "message": "在記憶體中建立 PowerPoint 簡報資料並將其作為二進位資料傳回；適用於無需寫入磁碟即可產生 PowerPoint 檔案的情況"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create PowerPoint Presentation Data",
+          "message": "建立 PowerPoint 簡報資料"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.desc": {
+          "source": "Write presentation slides with title, body, and optional notes",
+          "message": "寫入包含標題、內文和選填備忘稿的簡報投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.display_name": {
+          "source": "Slides",
+          "message": "投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnNsaWRlcw.short_desc": {
+          "source": "Write slides",
+          "message": "寫入投影片"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data on a slide",
+          "message": "在投影片上寫入結構化表格資料"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write a table",
+          "message": "寫入表格"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "Type of content to write: `slides` (default) or `table`",
+          "message": "要寫入的內容類型：`slides` (預設) 或 `table`"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容型別"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "要寫入的內容類型"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column headers for table mode; if not provided, headers will be auto-detected from the first record",
+          "message": "表格模式的欄標題清單；若未提供，標題將從第一筆記錄自動偵測"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄標頭"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "表格模式的欄標題清單"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title; for slides mode adds a title-only slide at the beginning; for table mode sets the title on the table slide",
+          "message": "選填標題；對投影片模式而言，會在開頭新增僅含標題的投影片；對表格模式而言，會設定表格投影片上的標題"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Presentation Title",
+          "message": "簡報標題"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title for the first slide or table slide",
+          "message": "第一張投影片或表格投影片的標題"
+        },
+        "app.UG93ZXJQb2ludA.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create PowerPoint presentation data and return as binary",
+          "message": "建立 PowerPoint 簡報資料並作為二進位傳回"
+        },
+        "app.UG93ZXJQb2ludA.desc": {
+          "source": "Read and write Microsoft PowerPoint presentations (.pptx format)",
+          "message": "讀取和寫入 Microsoft PowerPoint 簡報 (.pptx 格式)"
+        },
+        "app.UG93ZXJQb2ludA.display_name": {
+          "source": "PowerPoint Presentations",
+          "message": "PowerPoint 簡報"
+        },
+        "app.UG93ZXJQb2ludA.short_desc": {
+          "source": "Read and write Microsoft PowerPoint presentations",
+          "message": "讀取與寫入 Microsoft PowerPoint 簡報"
+        }
+      }
+    }
+  }
+}

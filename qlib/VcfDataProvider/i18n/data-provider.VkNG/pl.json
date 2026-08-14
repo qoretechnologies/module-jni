@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.VkNG.action.cmVhZA.desc": {
+          "source": "Read contacts from a vCard (.vcf) file at a specific file location.\n\nEach record returned represents a single contact with the following fields:\n- `formatted_name`: the display name of the contact\n- `given_name`: the first/given name\n- `family_name`: the last/family name\n- `emails`: a list of email addresses with type and value\n- `phones`: a list of phone numbers with type and value\n- `addresses`: a list of postal addresses with type and address components\n- `organization`: the company or organization name\n- `title`: the job title\n- `note`: free-text notes about the contact\n- `uid`: the unique identifier of the contact\n- `birthday`: the contact's birthday\n- `url`: the contact's URL\n- `nickname`: the contact's nickname\n- `categories`: categories/tags for the contact\n- `role`: the contact's role within their organization\n\nMulti-contact VCF files are fully supported; each contact is returned as a separate record.",
+          "message": "Odczytaj kontakty z pliku vCard (.vcf) w określonej lokalizacji pliku.\n\nKażdy zwrócony rekord reprezentuje pojedynczy kontakt z następującymi polami:\n- `formatted_name`: nazwa wyświetlana kontaktu\n- `given_name`: imię\n- `family_name`: nazwisko\n- `emails`: lista adresów e-mail z typem i wartością\n- `phones`: lista numerów telefonów z typem i wartością\n- `addresses`: lista adresów pocztowych z typem i składnikami adresu\n- `organization`: nazwa firmy lub organizacji\n- `title`: stanowisko\n- `note`: notatki tekstowe o kontakcie\n- `uid`: unikalny identyfikator kontaktu\n- `birthday`: data urodzenia kontaktu\n- `url`: adres URL kontaktu\n- `nickname`: pseudonim kontaktu\n- `categories`: kategorie/tagi dla kontaktu\n- `role`: rola kontaktu w organizacji\n\nPliki VCF zawierające wiele kontaktów są w pełni obsługiwane; każdy kontakt jest zwracany jako osobny rekord."
+        },
+        "app.VkNG.action.cmVhZA.display_name": {
+          "source": "Read VCF Contact File",
+          "message": "Odczytaj plik kontaktów VCF"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the VCF data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Lokalizacja danych VCF; wyklucza się wzajemnie z `data` i `stream`; rozwiązywana za pomocą wywołania [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "VCF Input Path",
+          "message": "Ścieżka wejściowa VCF"
+        },
+        "app.VkNG.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the VCF data",
+          "message": "Lokalizacja danych VCF"
+        },
+        "app.VkNG.action.cmVhZA.short_desc": {
+          "source": "Read contacts from a vCard file at a specific file location",
+          "message": "Odczytaj kontakty z pliku vCard w określonej lokalizacji pliku"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.desc": {
+          "source": "Read contacts from inline vCard (.vcf) binary data.\n\nEach record returned represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nMulti-contact VCF data is fully supported.",
+          "message": "Odczytaj kontakty z bezpośrednich danych binarnych vCard (.vcf).\n\nKażdy zwrócony rekord reprezentuje pojedynczy kontakt ze standardowymi polami vCard, w tym `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories` i `role`.\n\nDane VCF z wieloma kontaktami są w pełni obsługiwane."
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read VCF Contact Inline Data",
+          "message": "Odczytaj bezpośrednie dane kontaktów VCF"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "VCF data to process; conflicts with `stream` and `path`",
+          "message": "Dane VCF do przetworzenia; jest w konflikcie z `stream` i `path`"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dane wejściowe"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "VCF data to process",
+          "message": "Dane VCF do przetworzenia"
+        },
+        "app.VkNG.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read contacts from inline vCard data",
+          "message": "Odczytaj kontakty z bezpośrednich danych vCard"
+        },
+        "app.VkNG.action.d3JpdGU.desc": {
+          "source": "Write contacts to a vCard (.vcf) file at a specified path.\n\nEach record written represents a single contact. The following fields are supported:\n- `formatted_name` (required): the display name of the contact\n- `given_name`: the first/given name\n- `family_name`: the last/family name\n- `emails`: a list of `{\"type\": \"work\", \"value\": \"user@example.com\"}` hashes\n- `phones`: a list of `{\"type\": \"cell\", \"value\": \"+1-555-0100\"}` hashes\n- `addresses`: a list of address hashes with `type`, `street`, `city`, `state`, `postal_code`, `country`\n- `organization`: the company or organization name\n- `title`: the job title\n- `note`: free-text notes\n- `uid`: the unique identifier\n- `birthday`: the contact's birthday (date)\n- `url`: the contact's URL\n- `nickname`: the contact's nickname\n- `categories`: categories/tags for the contact (list of strings)\n- `role`: the contact's role within their organization\n\nMultiple contacts can be written to a single VCF file.",
+          "message": "Zapisz kontakty do pliku vCard (.vcf) w określonej ścieżce.\n\nKażdy zapisany rekord reprezentuje pojedynczy kontakt. Obsługiwane są następujące pola:\n- `formatted_name` (wymagane): nazwa wyświetlana kontaktu\n- `given_name`: imię\n- `family_name`: nazwisko\n- `emails`: lista hashy `{\"type\": \"work\", \"value\": \"user@example.com\"}`\n- `phones`: lista hashy `{\"type\": \"cell\", \"value\": \"+1-555-0100\"}`\n- `addresses`: lista hashy adresów z `type`, `street`, `city`, `state`, `postal_code`, `country`\n- `organization`: nazwa firmy lub organizacji\n- `title`: stanowisko\n- `note`: notatki tekstowe\n- `uid`: unikalny identyfikator\n- `birthday`: data urodzenia kontaktu (data)\n- `url`: adres URL kontaktu\n- `nickname`: pseudonim kontaktu\n- `categories`: kategorie/tagi dla kontaktu (lista ciągów znaków)\n- `role`: rola kontaktu w organizacji\n\nDo jednego pliku VCF można zapisać wiele kontaktów."
+        },
+        "app.VkNG.action.d3JpdGU.display_name": {
+          "source": "Write VCF Contact File",
+          "message": "Zapisz plik kontaktów VCF"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output VCF data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Lokalizacja wyjściowego pliku danych VCF; wyklucza się wzajemnie z `stream`; lokalizacja wyjściowa jest obsługiwana przez wywołanie [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "VCF Output Path",
+          "message": "Ścieżka wyjściowa VCF"
+        },
+        "app.VkNG.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the VCF file",
+          "message": "Lokalizacja do zapisu pliku VCF"
+        },
+        "app.VkNG.action.d3JpdGU.short_desc": {
+          "source": "Write contacts to a vCard file at a specified path",
+          "message": "Zapisz kontakty do pliku vCard w określonej ścieżce"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nAfter writing all contacts, use `getData()` to retrieve the binary VCF data.",
+          "message": "Utwórz dane kontaktowe vCard (.vcf) w pamięci i zwróć je jako dane binarne; przydatne do generowania plików VCF bez zapisywania na dysku.\n\nKażdy zapisany rekord reprezentuje pojedynczy kontakt ze standardowymi polami vCard, w tym `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories` i `role`.\n\nPo zapisaniu wszystkich kontaktów użyj `getData()`, aby pobrać binarne dane VCF."
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create VCF Contact Data",
+          "message": "Utwórz dane kontaktów VCF"
+        },
+        "app.VkNG.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create vCard contact data and return as binary",
+          "message": "Utwórz dane kontaktów vCard i zwróć jako dane binarne"
+        },
+        "app.VkNG.desc": {
+          "source": "Read and write vCard (.vcf) contact files containing names, emails, phones, addresses, and other contact information",
+          "message": "Odczytuj i zapisuj pliki kontaktów vCard (.vcf) zawierające nazwiska, e-maile, telefony, adresy i inne informacje kontaktowe"
+        },
+        "app.VkNG.display_name": {
+          "source": "VCF Contacts",
+          "message": "Kontakty VCF"
+        },
+        "app.VkNG.short_desc": {
+          "source": "Read and write vCard (.vcf) contact files",
+          "message": "Odczytuj i zapisuj pliki kontaktów vCard (.vcf)"
+        }
+      }
+    }
+  }
+}

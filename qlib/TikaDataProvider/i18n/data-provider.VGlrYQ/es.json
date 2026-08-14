@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.VGlrYQ.action.ZGV0ZWN0.desc": {
+          "source": "Detects the MIME type of a file at a specific file location using Apache Tika without performing full content extraction.\n\nReturns a single record containing:\n- `content_type` — the detected MIME type\n- `metadata` — a hash of extracted metadata\n\nThis is faster than full extraction when only the MIME type is needed.",
+          "message": "Detecta el tipo MIME de un archivo en una ubicación de archivo específica utilizando Apache Tika sin realizar una extracción completa del contenido.\n\nDevuelve un único registro que contiene:\n- `content_type` — el tipo MIME detectado\n- `metadata` — un hash de los metadatos extraídos\n\nEsto es más rápido que la extracción completa cuando solo se necesita el tipo MIME."
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.display_name": {
+          "source": "Detect MIME Type from File",
+          "message": "Detectar tipo MIME desde archivo"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.bWV0YWRhdGFfb25seQ.desc": {
+          "source": "If `True`, only detect the MIME type and extract metadata without performing full content extraction. The `content` field will be empty and `content_length` will be `0`",
+          "message": "Si es `True`, solo detecta el tipo MIME y extrae metadatos sin realizar una extracción completa del contenido. El campo `content` estará vacío y `content_length` será `0`"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.bWV0YWRhdGFfb25seQ.display_name": {
+          "source": "Metadata Only",
+          "message": "Solo metadatos"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.bWV0YWRhdGFfb25seQ.short_desc": {
+          "source": "Detect MIME type and metadata without extracting content",
+          "message": "Detectar tipo MIME y metadatos sin extraer el contenido"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.cGF0aA.desc": {
+          "source": "The location of the file to process with Tika; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "La ubicación del archivo que se va a procesar con Tika; mutuamente excluyente con `data` y `stream`.\n\nSe resuelve con una llamada a [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.cGF0aA.display_name": {
+          "source": "Input Path",
+          "message": "Ruta de entrada"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.cGF0aA.short_desc": {
+          "source": "The location of the file to process",
+          "message": "La ubicación del archivo a procesar"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.short_desc": {
+          "source": "Detect the MIME type of a file without full content extraction",
+          "message": "Detectar el tipo MIME de un archivo sin extracción completa de contenido"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.desc": {
+          "source": "Extracts text content, metadata, and MIME type from a file at a specific file location using Apache Tika.\n\nReturns a single record containing:\n- `content` — the extracted text content\n- `content_type` — the detected MIME type\n- `metadata` — a hash of extracted metadata (author, title, dates, etc.)\n- `content_length` — the length of the extracted text content\n\nTika automatically detects the file format and applies the appropriate parser.",
+          "message": "Extrae contenido de texto, metadatos y tipo MIME de un archivo en una ubicación de archivo específica usando Apache Tika.\n\nDevuelve un único registro que contiene:\n- `content` — el contenido de texto extraído\n- `content_type` — el tipo MIME detectado\n- `metadata` — un hash de los metadatos extraídos (autor, título, fechas, etc.)\n- `content_length` — la longitud del contenido de texto extraído\n\nTika detecta automáticamente el formato del archivo y aplica el analizador adecuado."
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.display_name": {
+          "source": "Extract Content from File",
+          "message": "Extraer contenido de archivo"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.option.cGF0aA.desc": {
+          "source": "The location of the file to process with Tika; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "La ubicación del archivo que se va a procesar con Tika; mutuamente excluyente con `data` y `stream`.\n\nSe resuelve con una llamada a [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.option.cGF0aA.display_name": {
+          "source": "Input Path",
+          "message": "Ruta de entrada"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.option.cGF0aA.short_desc": {
+          "source": "The location of the file to process",
+          "message": "La ubicación del archivo a procesar"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.short_desc": {
+          "source": "Extract text content and metadata from a file",
+          "message": "Extraer contenido de texto y metadatos de un archivo"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.desc": {
+          "source": "Extracts text content, metadata, and MIME type from inline binary data using Apache Tika.\n\nReturns a single record containing:\n- `content` — the extracted text content\n- `content_type` — the detected MIME type\n- `metadata` — a hash of extracted metadata (author, title, dates, etc.)\n- `content_length` — the length of the extracted text content\n\nUse this action when the file content is already available in memory as binary data.",
+          "message": "Extrae contenido de texto, metadatos y tipo MIME de datos binarios insertados usando Apache Tika.\n\nDevuelve un único registro que contiene:\n- `content` — el contenido de texto extraído\n- `content_type` — el tipo MIME detectado\n- `metadata` — un hash de los metadatos extraídos (autor, título, fechas, etc.)\n- `content_length` — la longitud del contenido de texto extraído\n\nUtilice esta acción cuando el contenido del archivo ya esté disponible en memoria como datos binarios."
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.display_name": {
+          "source": "Extract Content from Inline Data",
+          "message": "Extraer contenido de datos insertados"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Binary data to process with Tika; mutually exclusive with `stream` and `path`",
+          "message": "Datos binarios para procesar con Tika; mutuamente excluyente con `stream` y `path`"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Datos de entrada"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Binary data to process with Tika",
+          "message": "Datos binarios para procesar con Tika"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.short_desc": {
+          "source": "Extract text content and metadata from inline binary data",
+          "message": "Extraer contenido de texto y metadatos de datos binarios insertados"
+        },
+        "app.VGlrYQ.desc": {
+          "source": "Detect content types and extract text from documents using [Apache Tika](https://tika.apache.org/).\n\n**Capabilities**:\n- Extract text content from HTML, XML, plain text, and other formats\n- Detect MIME content types automatically\n- Extract document metadata (author, title, creation date, etc.)\n\nAdditional format support (PDF, Office, images) can be enabled by adding Tika parser module JARs to the Java classpath.",
+          "message": "Detectar tipos de contenido y extraer texto de documentos usando [Apache Tika](https://tika.apache.org/).\n\n**Capacidades**:\n- Extraer contenido de texto de HTML, XML, texto sin formato y otros formatos\n- Detectar tipos de contenido MIME automáticamente\n- Extraer metadatos del documento (autor, título, fecha de creación, etc.)\n\nEl soporte para formatos adicionales (PDF, Office, imágenes) se puede habilitar agregando JARs de módulos de analizador Tika al classpath de Java."
+        },
+        "app.VGlrYQ.display_name": {
+          "source": "Apache Tika",
+          "message": "Apache Tika"
+        },
+        "app.VGlrYQ.short_desc": {
+          "source": "Universal content detection and extraction",
+          "message": "Detección y extracción universal de contenido"
+        }
+      }
+    }
+  }
+}

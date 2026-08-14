@@ -1,0 +1,441 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.Rmx5d2F5.action.Y2xlYW4.desc": {
+          "source": "Drop all objects in the configured schemas; this is a destructive operation",
+          "message": "Odstranit všechny objekty v konfigurovaných schématech; toto je destruktivní operace"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.display_name": {
+          "source": "Clean Flyway Schema",
+          "message": "Vyčistit schéma Flyway"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Seznam cest v souborovém systému k adresářům obsahujícím soubory migrací SQL.\n\nPokud není zadána předpona, cesty automaticky získají předponu `filesystem:`.\n\nPříklad: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Umístění migrací"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Cesty v souborovém systému k adresářům migrací SQL"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Volitelný seznam názvů databázových schémat spravovaných pomocí Flyway"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Schémata"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Spravovaná databázová schémata"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "Heslo pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "Heslo k databázi"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Název tabulky historie schématu Flyway; výchozí hodnota je `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabulka historie"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Název tabulky historie schématu Flyway"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "Připojovací URL JDBC pro databázi (např. `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "JDBC URL pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "Uživatelské jméno pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Uživatelské jméno"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "Uživatelské jméno k databázi"
+        },
+        "app.Rmx5d2F5.action.Y2xlYW4.short_desc": {
+          "source": "Drop all objects in the configured schemas",
+          "message": "Odstranit všechny objekty v konfigurovaných schématech"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.desc": {
+          "source": "Get information about all applied and pending database migrations.\n\nReturns a list of migration records showing version, description, type, state, and execution details. Useful for monitoring migration status in CI/CD pipelines.",
+          "message": "Získat informace o všech aplikovaných a čekajících migracích databáze.\n\nVrací seznam záznamů migrací zobrazující verzi, popis, typ, stav a podrobnosti o provedení. Užitečné pro sledování stavu migrace v CI/CD kanálech."
+        },
+        "app.Rmx5d2F5.action.aW5mbw.display_name": {
+          "source": "Get Flyway Migration Info",
+          "message": "Získat informace o migraci Flyway"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Seznam cest v souborovém systému k adresářům obsahujícím soubory migrací SQL.\n\nPokud není zadána předpona, cesty automaticky získají předponu `filesystem:`.\n\nPříklad: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Umístění migrací"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Cesty v souborovém systému k adresářům migrací SQL"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Volitelný seznam názvů databázových schémat spravovaných pomocí Flyway"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Schémata"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Spravovaná databázová schémata"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "Heslo pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "Heslo k databázi"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Název tabulky historie schématu Flyway; výchozí hodnota je `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabulka historie"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Název tabulky historie schématu Flyway"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "Připojovací URL JDBC pro databázi (např. `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "JDBC URL pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "Uživatelské jméno pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Uživatelské jméno"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "Uživatelské jméno k databázi"
+        },
+        "app.Rmx5d2F5.action.aW5mbw.short_desc": {
+          "source": "Get information about all migrations",
+          "message": "Získat informace o všech migracích"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.desc": {
+          "source": "Run all pending database schema migrations.\n\nExecutes migration scripts in version order. Each migration is applied within a transaction and recorded in the Flyway schema history table.\n\n**Note**: migrations are one-way — once applied, they cannot be undone without using `clean`.",
+          "message": "Spustit všechny čekající migrace databázového schématu.\n\nProvede skripty migrace v pořadí verzí. Každá migrace je aplikována v rámci transakce a zaznamenána v tabulce historie schématu Flyway.\n\n**Poznámka**: migrace jsou jednosměrné — jakmile jsou aplikovány, nelze je vrátit zpět bez použití `clean`."
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.display_name": {
+          "source": "Run Flyway Migrations",
+          "message": "Spustit migrace Flyway"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Seznam cest v souborovém systému k adresářům obsahujícím soubory migrací SQL.\n\nPokud není zadána předpona, cesty automaticky získají předponu `filesystem:`.\n\nPříklad: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Umístění migrací"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Cesty v souborovém systému k adresářům migrací SQL"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Volitelný seznam názvů databázových schémat spravovaných pomocí Flyway"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Schémata"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Spravovaná databázová schémata"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "Heslo pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "Heslo k databázi"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Název tabulky historie schématu Flyway; výchozí hodnota je `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabulka historie"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Název tabulky historie schématu Flyway"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "Připojovací URL JDBC pro databázi (např. `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "JDBC URL pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "Uživatelské jméno pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Uživatelské jméno"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "Uživatelské jméno k databázi"
+        },
+        "app.Rmx5d2F5.action.bWlncmF0ZQ.short_desc": {
+          "source": "Run pending database migrations",
+          "message": "Spustit čekající databázové migrace"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.desc": {
+          "source": "Repair the Flyway schema history table by removing failed migration entries and aligning checksums",
+          "message": "Opravit tabulku historie schématu Flyway odstraněním neúspěšných záznamů migrace a zarovnáním kontrolních součtů"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.display_name": {
+          "source": "Repair Flyway Schema History",
+          "message": "Opravit historii schématu Flyway"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Seznam cest v souborovém systému k adresářům obsahujícím soubory migrací SQL.\n\nPokud není zadána předpona, cesty automaticky získají předponu `filesystem:`.\n\nPříklad: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Umístění migrací"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Cesty v souborovém systému k adresářům migrací SQL"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Volitelný seznam názvů databázových schémat spravovaných pomocí Flyway"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Schémata"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Spravovaná databázová schémata"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "Heslo pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "Heslo k databázi"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Název tabulky historie schématu Flyway; výchozí hodnota je `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabulka historie"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Název tabulky historie schématu Flyway"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "Připojovací URL JDBC pro databázi (např. `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "JDBC URL pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "Uživatelské jméno pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Uživatelské jméno"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "Uživatelské jméno k databázi"
+        },
+        "app.Rmx5d2F5.action.cmVwYWly.short_desc": {
+          "source": "Repair the Flyway schema history table",
+          "message": "Opravit tabulku historie schématu Flyway"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.desc": {
+          "source": "Validate applied Flyway migrations against available migration scripts",
+          "message": "Ověřit aplikované migrace Flyway oproti dostupným skriptům migrace"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.display_name": {
+          "source": "Validate Flyway Migrations",
+          "message": "Ověřit migrace Flyway"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.desc": {
+          "source": "A list of filesystem paths to directories containing SQL migration files.\n\nPaths are automatically prefixed with `filesystem:` if no prefix is given.\n\nExample: `(\"/path/to/sql/migrations\",)`",
+          "message": "Seznam cest v souborovém systému k adresářům obsahujícím soubory migrací SQL.\n\nPokud není zadána předpona, cesty automaticky získají předponu `filesystem:`.\n\nPříklad: `(\"/path/to/sql/migrations\",)`"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.display_name": {
+          "source": "Migration Locations",
+          "message": "Umístění migrací"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.bG9jYXRpb25z.short_desc": {
+          "source": "Filesystem paths to SQL migration directories",
+          "message": "Cesty v souborovém systému k adresářům migrací SQL"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.desc": {
+          "source": "An optional list of database schema names to manage with Flyway",
+          "message": "Volitelný seznam názvů databázových schémat spravovaných pomocí Flyway"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.display_name": {
+          "source": "Schemas",
+          "message": "Schémata"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.c2NoZW1hcw.short_desc": {
+          "source": "Database schemas to manage",
+          "message": "Spravovaná databázová schémata"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the database connection",
+          "message": "Heslo pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The database password",
+          "message": "Heslo k databázi"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.desc": {
+          "source": "The name of the Flyway schema history table; default is `flyway_schema_history`",
+          "message": "Název tabulky historie schématu Flyway; výchozí hodnota je `flyway_schema_history`"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.display_name": {
+          "source": "History Table",
+          "message": "Tabulka historie"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dGFibGU.short_desc": {
+          "source": "The name of the Flyway schema history table",
+          "message": "Název tabulky historie schématu Flyway"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.desc": {
+          "source": "The JDBC connection URL for the database (e.g. `jdbc:postgresql://localhost:5432/mydb`)",
+          "message": "Připojovací URL JDBC pro databázi (např. `jdbc:postgresql://localhost:5432/mydb`)"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.display_name": {
+          "source": "JDBC URL",
+          "message": "JDBC URL"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXJs.short_desc": {
+          "source": "The JDBC URL for the database connection",
+          "message": "JDBC URL pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.desc": {
+          "source": "The username for the database connection",
+          "message": "Uživatelské jméno pro připojení k databázi"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.display_name": {
+          "source": "Username",
+          "message": "Uživatelské jméno"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.option.dXNlcg.short_desc": {
+          "source": "The database username",
+          "message": "Uživatelské jméno k databázi"
+        },
+        "app.Rmx5d2F5.action.dmFsaWRhdGU.short_desc": {
+          "source": "Validate applied migrations against available ones",
+          "message": "Ověřit aplikované migrace oproti dostupným"
+        },
+        "app.Rmx5d2F5.desc": {
+          "source": "Manage database schema migrations using [Flyway](https://flywaydb.org/).\n\n**Capabilities**:\n- Run pending SQL migrations against a database\n- View migration history and status\n- Validate applied migrations against available scripts\n- Clean and repair the schema history table\n\nSupports PostgreSQL and other JDBC-accessible databases for DevOps and CI/CD pipelines.",
+          "message": "Spravovat migrace databázového schématu pomocí nástroje [Flyway](https://flywaydb.org/).\n\n**Schopnosti**:\n- Spouštět čekající migrace SQL proti databázi\n- Zobrazovat historii a stav migrací\n- Ověřovat aplikované migrace oproti dostupným skriptům\n- Čistit a opravovat tabulku historie schématu\n\nPodporuje PostgreSQL a další databáze přístupné přes JDBC pro kanály DevOps a CI/CD."
+        },
+        "app.Rmx5d2F5.display_name": {
+          "source": "Flyway",
+          "message": "Flyway"
+        },
+        "app.Rmx5d2F5.short_desc": {
+          "source": "Flyway database schema migration",
+          "message": "Migrace databázového schématu Flyway"
+        }
+      }
+    }
+  }
+}

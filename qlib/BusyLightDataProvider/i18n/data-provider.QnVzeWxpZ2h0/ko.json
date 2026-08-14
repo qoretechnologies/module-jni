@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.desc": {
+          "source": "Update Busylight configuration",
+          "message": "Busylight 구성 업데이트"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.display_name": {
+          "source": "Update Busylight",
+          "message": "Busylight 업데이트"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.desc": {
+          "source": "The color of the light",
+          "message": "조명의 색상"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "색상"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.Y29sb3I.short_desc": {
+          "source": "The color of the light (note that the `Alpha` value is ignored)",
+          "message": "조명의 색상(`Alpha` 값은 무시됨)"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.desc": {
+          "source": "The length of time ON from `0` - `255`",
+          "message": "`0` - `255` 사이의 켜짐(ON) 시간 길이"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.display_name": {
+          "source": "On",
+          "message": "켜짐"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b24.short_desc": {
+          "source": "The length of time ON from 0 - 255",
+          "message": "0 - 255 사이의 켜짐(ON) 시간 길이"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.desc": {
+          "source": "The length of time OFF from `0` - `255`",
+          "message": "`0` - `255` 사이의 꺼짐(OFF) 시간 길이"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.display_name": {
+          "source": "Off",
+          "message": "꺼짐"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.b2Zm.short_desc": {
+          "source": "The length of time OFF from 0 - 255",
+          "message": "0 - 255 사이의 꺼짐(OFF) 시간 길이"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.desc": {
+          "source": "The topic to publish the message on",
+          "message": "메시지를 게시할 토픽"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "토픽"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.option.dG9waWM.short_desc": {
+          "source": "The topic to publish the message on",
+          "message": "메시지를 게시할 토픽"
+        },
+        "app.QnVzeWxpZ2h0.action.dXBkYXRl.short_desc": {
+          "source": "Update Busylight configuration",
+          "message": "Busylight 구성 업데이트"
+        },
+        "app.QnVzeWxpZ2h0.desc": {
+          "source": "MQTT server for accessing Kuando Busylight devices (by Plenom)",
+          "message": "Kuando Busylight 장치(Plenom제)에 액세스하기 위한 MQTT 서버"
+        },
+        "app.QnVzeWxpZ2h0.display_name": {
+          "source": "MQTT Kuando Busylight",
+          "message": "MQTT Kuando Busylight"
+        },
+        "app.QnVzeWxpZ2h0.short_desc": {
+          "source": "MQTT Kuando Busylight devices (by Plenom)",
+          "message": "MQTT Kuando Busylight 장치(Plenom제)"
+        }
+      }
+    }
+  }
+}

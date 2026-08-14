@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Q2FtZWw.action.c2VuZA.desc": {
+          "source": "Send a message to a Camel endpoint.\n\nSpecify the endpoint URI (e.g., `seda:orders`, `file:output`, `direct:process`) and provide the message body and optional headers.\n\n**Note**: the endpoint must have an active consumer route or be a built-in component that accepts messages directly.",
+          "message": "傳送訊息至 Camel 端點。\n\n指定端點 URI（例如 `seda:orders`、`file:output`、`direct:process`），並提供訊息主體和選填標頭。\n\n**注意**：端點必須具備有效的取用者路由，或是直接接受訊息的內建元件。"
+        },
+        "app.Q2FtZWw.action.c2VuZA.display_name": {
+          "source": "Send Camel Message",
+          "message": "傳送 Camel 訊息"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body / payload to send.\n\nThe body type depends on the target endpoint — most endpoints accept `string` or `binary` data.",
+          "message": "要傳送的訊息主體 / 負載。\n\n主體類型取決於目標端點 — 大多數端點接受 `string` 或 `binary` 資料。"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "訊息內文"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload to send",
+          "message": "要傳送的訊息主體 / 負載"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.desc": {
+          "source": "The Camel endpoint URI to send the message to.\n\nBuilt-in components include:\n- `direct:name` — synchronous in-memory messaging\n- `seda:name` — asynchronous in-memory queue\n- `file:directory` — file system integration\n- `log:category` — logging\n- `timer:name` — periodic timer events\n\nAdditional components can be loaded by adding their JARs to the Java classpath.",
+          "message": "要傳送訊息的 Camel 端點 URI。\n\n內建元件包括：\n- `direct:name` — 同步記憶體內訊息傳遞\n- `seda:name` — 非同步記憶體內佇列\n- `file:directory` — 檔案系統整合\n- `log:category` — 日誌記錄\n- `timer:name` — 定期計時器事件\n\n可以透過將其他元件的 JAR 新增至 Java 類別路徑來載入它們。"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.display_name": {
+          "source": "Endpoint URI",
+          "message": "端點 URI"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.short_desc": {
+          "source": "The Camel endpoint URI to send the message to",
+          "message": "要傳送訊息的 Camel 端點 URI"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.desc": {
+          "source": "Optional message headers as a hash of key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"priority\": \"high\"}`",
+          "message": "選填訊息標頭，作為鍵值對散列。\n\n**範例**：`{\"source\": \"order-system\", \"priority\": \"high\"}`"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "訊息標頭"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.short_desc": {
+          "source": "Optional message headers as a hash of key-value pairs",
+          "message": "選填訊息標頭，作為鍵值對散列"
+        },
+        "app.Q2FtZWw.action.c2VuZA.short_desc": {
+          "source": "Send a message to a Camel endpoint",
+          "message": "傳送訊息至 Camel 端點"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.desc": {
+          "source": "List all active routes in the Camel context",
+          "message": "列出 Camel 上下文中所有有效的路由"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.display_name": {
+          "source": "List Camel Routes",
+          "message": "列出 Camel 路由"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.short_desc": {
+          "source": "List active Camel routes",
+          "message": "列出有效的 Camel 路由"
+        },
+        "app.Q2FtZWw.desc": {
+          "source": "Enterprise integration using [Apache Camel](https://camel.apache.org/) with support for 300+ connectors.\n\n**Built-in components**:\n- `direct` — synchronous in-memory messaging\n- `seda` — asynchronous in-memory queues\n- `file` — file system integration\n- `timer` — periodic timer events\n- `log` — message logging\n\nAdditional components (HTTP, JMS, Kafka, AWS, etc.) can be loaded by adding their JARs to the Java classpath.",
+          "message": "使用 [Apache Camel](https://camel.apache.org/) 的企業整合，支援 300+ 個連接器。\n\n**內建元件**：\n- `direct` — 同步記憶體內訊息傳遞\n- `seda` — 非同步記憶體內佇列\n- `file` — 檔案系統整合\n- `timer` — 定期計時器事件\n- `log` — 訊息日誌記錄\n\n可以透過將其他元件（HTTP、JMS、Kafka、AWS 等）的 JAR 新增至 Java 類別路徑來載入它們。"
+        },
+        "app.Q2FtZWw.display_name": {
+          "source": "Apache Camel",
+          "message": "Apache Camel"
+        },
+        "app.Q2FtZWw.short_desc": {
+          "source": "Apache Camel enterprise integration patterns",
+          "message": "Apache Camel 企業整合模式"
+        }
+      }
+    }
+  }
+}

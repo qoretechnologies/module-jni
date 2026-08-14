@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.RW1haWw.action.ZW1sLXJlYWQ.desc": {
+          "source": "Reads an EML (RFC 822 / MIME) email message from a file path and returns the message content as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nEML is the standard email format supported by most email clients. Each file contains a single email message.",
+          "message": "Odczytuje wiadomość e-mail EML (RFC 822 / MIME) ze ścieżki pliku i zwraca zawartość wiadomości jako ustrukturyzowany rekord z nadawcą, odbiorcami, tematem, datą, treścią tekstową, zawartością HTML, metadanymi załączników i nagłówkami wiadomości.\n\nEML to standardowy format wiadomości e-mail obsługiwany przez większość klientów pocztowych. Każdy plik zawiera jedną wiadomość e-mail."
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.display_name": {
+          "source": "Read EML Email File",
+          "message": "Odczytaj plik wiadomości e-mail EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.desc": {
+          "source": "The location of the EML email file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Lokalizacja pliku wiadomości e-mail EML; wyklucza się wzajemnie z `data` i `stream`; rozstrzygana poprzez wywołanie [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.display_name": {
+          "source": "EML Input Path",
+          "message": "Ścieżka wejściowa EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.option.cGF0aA.short_desc": {
+          "source": "The location of the EML email file",
+          "message": "Lokalizacja pliku wiadomości e-mail EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQ.short_desc": {
+          "source": "Read an EML email message from a file location",
+          "message": "Odczytaj wiadomość e-mail EML z lokalizacji pliku"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.desc": {
+          "source": "Reads an EML (RFC 822 / MIME) email message from inline binary data and returns the message content as a structured record.\n\nUse this action when the EML data is already available in memory rather than on disk.",
+          "message": "Odczytuje wiadomość e-mail EML (RFC 822 / MIME) z bezpośrednich danych binarnych i zwraca zawartość wiadomości jako ustrukturyzowany rekord.\n\nUżyj tej akcji, gdy dane EML są już dostępne w pamięci, a nie na dysku."
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.display_name": {
+          "source": "Read EML Email Inline Data",
+          "message": "Odczytaj bezpośrednie dane e-mail EML"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "EML email data to process; conflicts with `stream` and `path`",
+          "message": "Dane e-mail EML do przetworzenia; wyklucza się z `stream` i `path`"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dane wejściowe"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "EML email data to process",
+          "message": "Dane e-mail EML do przetworzenia"
+        },
+        "app.RW1haWw.action.ZW1sLXJlYWQtZGF0YQ.short_desc": {
+          "source": "Read an EML email message from inline binary data",
+          "message": "Odczytaj wiadomość e-mail EML z bezpośrednich danych binarnych"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.desc": {
+          "source": "Writes an EML (RFC 822 / MIME) email message to a file path.\n\nEach record written represents a single email message with the following fields:\n- `from`: the sender's email address\n- `to`: list of To recipients\n- `cc`: list of CC recipients (optional)\n- `bcc`: list of BCC recipients (optional)\n- `subject`: the email subject line\n- `date`: the sent date (optional, defaults to current time)\n- `body_text`: plain text body content (optional)\n- `body_html`: HTML body content (optional)\n- `attachments`: list of attachment hashes with `name`, `content_type`, and `data` (optional)\n- `message_id`: the Message-ID header (optional)\n- `in_reply_to`: the In-Reply-To header (optional)\n- `reply_to`: the Reply-To header (optional)\n- `references`: the References header (optional)",
+          "message": "Zapisuje wiadomość e-mail EML (RFC 822 / MIME) do ścieżki pliku.\n\nKażdy zapisany rekord reprezentuje pojedynczą wiadomość e-mail z następującymi polami:\n- `from`: adres e-mail nadawcy\n- `to`: lista odbiorców To\n- `cc`: lista odbiorców CC (opcjonalnie)\n- `bcc`: lista odbiorców BCC (opcjonalnie)\n- `subject`: temat wiadomości e-mail\n- `date`: data wysłania (opcjonalnie, domyślnie aktualny czas)\n- `body_text`: treść wiadomości jako czysty tekst (opcjonalnie)\n- `body_html`: treść wiadomości jako HTML (opcjonalnie)\n- `attachments`: lista załączników z `name`, `content_type` oraz `data` (opcjonalnie)\n- `message_id`: nagłówek Message-ID (opcjonalnie)\n- `in_reply_to`: nagłówek In-Reply-To (opcjonalnie)\n- `reply_to`: nagłówek Reply-To (opcjonalnie)\n- `references`: nagłówek References (opcjonalnie)"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.display_name": {
+          "source": "Write EML Email File",
+          "message": "Zapisz plik wiadomości e-mail EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.desc": {
+          "source": "The location for the output EML data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Lokalizacja dla wyjściowego pliku danych EML; wyklucza się wzajemnie z `stream`; lokalizacja wyjściowa jest obsługiwana przez wywołanie [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.display_name": {
+          "source": "EML Output Path",
+          "message": "Ścieżka wyjściowa EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.option.cGF0aA.short_desc": {
+          "source": "The location to write the EML file",
+          "message": "Lokalizacja do zapisu pliku EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRl.short_desc": {
+          "source": "Write an EML email message to a file location",
+          "message": "Zapisz wiadomość e-mail EML do lokalizacji pliku"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.desc": {
+          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data.",
+          "message": "Utwórz dane e-mail EML (RFC 822 / MIME) w pamięci i zwróć je jako dane binarne; przydatne do generowania plików EML bez zapisywania na dysku.\n\nKażdy zapisany rekord reprezentuje pojedynczą wiadomość e-mail ze standardowymi polami e-mail, w tym `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to` oraz `references`.\n\nPo zapisaniu wszystkich wiadomości użyj `getData()`, aby pobrać binarne dane EML."
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.display_name": {
+          "source": "Create EML Email Data",
+          "message": "Utwórz dane wiadomości e-mail EML"
+        },
+        "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.short_desc": {
+          "source": "Create EML email data and return as binary",
+          "message": "Utwórz dane wiadomości e-mail EML i zwróć jako dane binarne"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.desc": {
+          "source": "Reads email messages from an MBOX (Unix Mailbox) file and returns each message as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nMBOX files contain multiple email messages concatenated in a single file, each delimited by a `From ` separator line. This format is used by Thunderbird, Evolution, and many Unix mail systems.\n\nThe `max_messages` option can be used to limit the number of messages read from the file.",
+          "message": "Odczytuje wiadomości e-mail z pliku MBOX (Unix Mailbox) i zwraca każdą wiadomość jako ustrukturyzowany rekord z nadawcą, odbiorcami, tematem, datą, treścią tekstową, zawartością HTML, metadanymi załączników i nagłówkami wiadomości.\n\nPliki MBOX zawierają wiele wiadomości e-mail połączonych w jednym pliku, z których każda jest rozdzielona linią separatora `From `. Format ten jest używany przez programy Thunderbird, Evolution oraz wiele systemów pocztowych Unix.\n\nOpcja `max_messages` może być użyta do ograniczenia liczby wiadomości odczytywanych z pliku."
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.display_name": {
+          "source": "Read MBOX Mailbox File",
+          "message": "Odczytaj plik skrzynki pocztowej MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.desc": {
+          "source": "Maximum number of messages to read from the MBOX file; 0 (the default) means read all messages; use this to limit processing of very large MBOX files",
+          "message": "Maksymalna liczba wiadomości do odczytania z pliku MBOX; 0 (domyślnie) oznacza odczytanie wszystkich wiadomości; użyj tego, aby ograniczyć przetwarzanie bardzo dużych plików MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.display_name": {
+          "source": "Maximum Messages",
+          "message": "Maksymalna liczba wiadomości"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.bWF4X21lc3NhZ2Vz.short_desc": {
+          "source": "Maximum number of messages to read from the MBOX file",
+          "message": "Maksymalna liczba wiadomości do odczytania z pliku MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.desc": {
+          "source": "The location of the MBOX mailbox file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Lokalizacja pliku skrzynki pocztowej MBOX; wyklucza się wzajemnie z `data` i `stream`; rozstrzygana poprzez wywołanie [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.display_name": {
+          "source": "MBOX Input Path",
+          "message": "Ścieżka wejściowa MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.option.cGF0aA.short_desc": {
+          "source": "The location of the MBOX mailbox file",
+          "message": "Lokalizacja pliku skrzynki pocztowej MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFk.short_desc": {
+          "source": "Read email messages from an MBOX mailbox file",
+          "message": "Odczytaj wiadomości e-mail z pliku skrzynki pocztowej MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.desc": {
+          "source": "Reads email messages from inline MBOX (Unix Mailbox) binary data and returns each message as a structured record.\n\nUse this action when the MBOX data is already available in memory rather than on disk.\n\nThe `max_messages` option can be used to limit the number of messages read from the data.",
+          "message": "Odczytuje wiadomości e-mail z bezpośrednich danych binarnych MBOX (Unix Mailbox) i zwraca każdą wiadomość jako rekord ustrukturyzowany.\n\nUżyj tej akcji, gdy dane MBOX są już dostępne w pamięci, a nie na dysku.\n\nOpcja `max_messages` może być użyta do ograniczenia liczby wiadomości odczytywanych z danych."
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.display_name": {
+          "source": "Read MBOX Mailbox Inline Data",
+          "message": "Odczytaj bezpośrednie dane skrzynki pocztowej MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.desc": {
+          "source": "MBOX mailbox data to process; conflicts with `stream` and `path`",
+          "message": "Dane skrzynki pocztowej MBOX do przetworzenia; występuje konflikt z `stream` i `path`"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dane wejściowe"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.ZGF0YQ.short_desc": {
+          "source": "MBOX mailbox data to process",
+          "message": "Dane skrzynki pocztowej MBOX do przetworzenia"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.desc": {
+          "source": "Maximum number of messages to read from the MBOX file; 0 (the default) means read all messages; use this to limit processing of very large MBOX files",
+          "message": "Maksymalna liczba wiadomości do odczytania z pliku MBOX; 0 (domyślnie) oznacza odczytanie wszystkich wiadomości; użyj tego, aby ograniczyć przetwarzanie bardzo dużych plików MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.display_name": {
+          "source": "Maximum Messages",
+          "message": "Maksymalna liczba wiadomości"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.option.bWF4X21lc3NhZ2Vz.short_desc": {
+          "source": "Maximum number of messages to read from the MBOX file",
+          "message": "Maksymalna liczba wiadomości do odczytania z pliku MBOX"
+        },
+        "app.RW1haWw.action.bWJveC1yZWFkLWRhdGE.short_desc": {
+          "source": "Read email messages from inline MBOX data",
+          "message": "Odczytaj wiadomości e-mail z bezpośrednich danych MBOX"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.desc": {
+          "source": "Reads a Microsoft Outlook MSG email message from a file path and returns the message content as a structured record with sender, recipients, subject, date, body text, HTML content, attachments metadata, and message headers.\n\nMSG is the proprietary binary format used by Microsoft Outlook, stored as an OLE2 Compound Document with MAPI properties.",
+          "message": "Odczytuje wiadomość e-mail MSG programu Microsoft Outlook ze ścieżki pliku i zwraca treść wiadomości jako rekord ustrukturyzowany z nadawcą, odbiorcami, tematem, datą, tekstem treści, zawartością HTML, metadanymi załączników i nagłówkami wiadomości.\n\nMSG to zastrzeżony format binarny używany przez program Microsoft Outlook, przechowywany jako dokument złożony OLE2 z właściwościami MAPI."
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.display_name": {
+          "source": "Read MSG Email File",
+          "message": "Odczytaj plik e-mail MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.desc": {
+          "source": "The location of the MSG email file; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Lokalizacja pliku e-mail MSG; wyklucza się wzajemnie z `data` i `stream`; rozwiązywana za pomocą wywołania [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.display_name": {
+          "source": "MSG Input Path",
+          "message": "Ścieżka wejściowa MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.option.cGF0aA.short_desc": {
+          "source": "The location of the MSG email file",
+          "message": "Lokalizacja pliku e-mail MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQ.short_desc": {
+          "source": "Read a Microsoft Outlook MSG email from a file location",
+          "message": "Odczytaj wiadomość e-mail MSG programu Microsoft Outlook z lokalizacji pliku"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.desc": {
+          "source": "Reads a Microsoft Outlook MSG email message from inline binary data and returns the message content as a structured record.\n\nUse this action when the MSG data is already available in memory rather than on disk.",
+          "message": "Odczytuje wiadomość e-mail MSG programu Microsoft Outlook z bezpośrednich danych binarnych i zwraca treść wiadomości jako rekord ustrukturyzowany.\n\nUżyj tej akcji, gdy dane MSG są już dostępne w pamięci, a nie na dysku."
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.display_name": {
+          "source": "Read MSG Email Inline Data",
+          "message": "Odczytaj bezpośrednie dane e-mail MSG"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "MSG email data to process; conflicts with `stream` and `path`",
+          "message": "Dane e-mail MSG do przetworzenia; występuje konflikt z `stream` i `path`"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dane wejściowe"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "MSG email data to process",
+          "message": "Dane e-mail MSG do przetworzenia"
+        },
+        "app.RW1haWw.action.bXNnLXJlYWQtZGF0YQ.short_desc": {
+          "source": "Read a Microsoft Outlook MSG email from inline binary data",
+          "message": "Odczytaj wiadomość e-mail MSG programu Microsoft Outlook z bezpośrednich danych binarnych"
+        },
+        "app.RW1haWw.desc": {
+          "source": "Provides data provider support for reading and writing email messages in multiple formats:\n\n- **EML** (RFC 822 / MIME): Standard email format used by many email clients including Thunderbird, Apple Mail, and others. Each `.eml` file contains a single email message with headers, body text, HTML content, and attachments. Supports both reading and writing.\n\n- **MSG** (Microsoft Outlook): Proprietary binary format used by Microsoft Outlook. Each `.msg` file contains a single email message stored as an OLE2 Compound Document with MAPI properties. Read-only support.\n\n- **MBOX** (Unix Mailbox): Standard mailbox format where multiple email messages are concatenated in a single file, each delimited by a `From ` separator line. Used by Thunderbird, Evolution, and many Unix mail systems. Read-only support.\n\nAll formats produce records with a unified schema including sender, recipients (To, CC, BCC), subject, date, plain text body, HTML body, attachments metadata, Message-ID, and In-Reply-To headers.",
+          "message": "Zapewnia obsługę dostawcy danych do odczytu i zapisu wiadomości e-mail w wielu formatach:\n\n- **EML** (RFC 822 / MIME): Standardowy format wiadomości e-mail używany przez wiele programów pocztowych, w tym Thunderbird, Apple Mail i inne. Każdy plik `.eml` zawiera pojedynczą wiadomość e-mail z nagłówkami, tekstem treści, zawartością HTML i załącznikami. Obsługuje zarówno odczyt, jak i zapis.\n\n- **MSG** (Microsoft Outlook): Zastrzeżony format binarny używany przez program Microsoft Outlook. Każdy plik `.msg` zawiera pojedynczą wiadomość e-mail zapisaną jako dokument złożony OLE2 z właściwościami MAPI. Obsługa wyłącznie w trybie do odczytu.\n\n- **MBOX** (Unix Mailbox): Standardowy format skrzynki pocztowej, w którym wiele wiadomości e-mail jest połączonych w jednym pliku, z których każda jest rozdzielona wierszem separatora `From `. Używany przez programy Thunderbird, Evolution i wiele systemów pocztowych Unix. Obsługa wyłącznie w trybie do odczytu.\n\nWszystkie formaty generują rekordy z jednolitym schematem, w tym nadawcą, odbiorcami (Do, DW, UDW), tematem, datą, treścią tekstową, treścią HTML, metadanymi załączników oraz nagłówkami Message-ID i In-Reply-To."
+        },
+        "app.RW1haWw.display_name": {
+          "source": "Email Messages",
+          "message": "Wiadomości e-mail"
+        },
+        "app.RW1haWw.short_desc": {
+          "source": "Read and write email messages in EML, MSG, and MBOX formats",
+          "message": "Odczytuj i zapisuj wiadomości e-mail w formatach EML, MSG i MBOX"
+        }
+      }
+    }
+  }
+}

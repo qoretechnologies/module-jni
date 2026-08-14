@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.VGlrYQ.action.ZGV0ZWN0.desc": {
+          "source": "Detects the MIME type of a file at a specific file location using Apache Tika without performing full content extraction.\n\nReturns a single record containing:\n- `content_type` — the detected MIME type\n- `metadata` — a hash of extracted metadata\n\nThis is faster than full extraction when only the MIME type is needed.",
+          "message": "完全なコンテンツ抽出を実行せずに Apache Tika を使用して、特定のファイル場所にあるファイルの MIME タイプを検出します。\n\n以下を含む単一のレコードを返します:\n- `content_type` — 検出された MIME タイプ\n- `metadata` — 抽出されたメタデータのハッシュ\n\nMIME タイプのみが必要な場合、これは完全な抽出よりも高速です。"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.display_name": {
+          "source": "Detect MIME Type from File",
+          "message": "ファイルから MIME タイプを検出"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.bWV0YWRhdGFfb25seQ.desc": {
+          "source": "If `True`, only detect the MIME type and extract metadata without performing full content extraction. The `content` field will be empty and `content_length` will be `0`",
+          "message": "`True` の場合、完全なコンテンツ抽出を実行せずに MIME タイプの検出とメタデータの抽出のみを行います。`content` フィールドは空になり、`content_length` は `0` になります"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.bWV0YWRhdGFfb25seQ.display_name": {
+          "source": "Metadata Only",
+          "message": "メタデータのみ"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.bWV0YWRhdGFfb25seQ.short_desc": {
+          "source": "Detect MIME type and metadata without extracting content",
+          "message": "コンテンツを抽出せずに MIME タイプとメタデータを検出"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.cGF0aA.desc": {
+          "source": "The location of the file to process with Tika; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Tika で処理するファイルの場所。`data` および `stream` とは排他的です。\n\n[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.cGF0aA.display_name": {
+          "source": "Input Path",
+          "message": "入力パス"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.option.cGF0aA.short_desc": {
+          "source": "The location of the file to process",
+          "message": "処理するファイルの場所"
+        },
+        "app.VGlrYQ.action.ZGV0ZWN0.short_desc": {
+          "source": "Detect the MIME type of a file without full content extraction",
+          "message": "フルコンテンツを抽出せずにファイルの MIME タイプを検出"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.desc": {
+          "source": "Extracts text content, metadata, and MIME type from a file at a specific file location using Apache Tika.\n\nReturns a single record containing:\n- `content` — the extracted text content\n- `content_type` — the detected MIME type\n- `metadata` — a hash of extracted metadata (author, title, dates, etc.)\n- `content_length` — the length of the extracted text content\n\nTika automatically detects the file format and applies the appropriate parser.",
+          "message": "Apache Tika を使用して特定ファイル位置にあるファイルからテキストコンテンツ、メタデータ、MIME タイプを抽出します。\n\n以下を含む単一レコードを返します:\n- `content` — 抽出されたテキストコンテンツ\n- `content_type` — 検出された MIME タイプ\n- `metadata` — 抽出されたメタデータのハッシュ (作成者、タイトル、日付など)\n- `content_length` — 抽出されたテキストコンテンツの長さ\n\nTika はファイルフォーマットを自動的に検出し、適切なパーサーを適用します。"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.display_name": {
+          "source": "Extract Content from File",
+          "message": "ファイルからコンテンツを抽出"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.option.cGF0aA.desc": {
+          "source": "The location of the file to process with Tika; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Tika で処理するファイルの場所。`data` および `stream` とは排他的です。\n\n[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.option.cGF0aA.display_name": {
+          "source": "Input Path",
+          "message": "入力パス"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.option.cGF0aA.short_desc": {
+          "source": "The location of the file to process",
+          "message": "処理するファイルの場所"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdA.short_desc": {
+          "source": "Extract text content and metadata from a file",
+          "message": "ファイルからテキストコンテンツとメタデータを抽出"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.desc": {
+          "source": "Extracts text content, metadata, and MIME type from inline binary data using Apache Tika.\n\nReturns a single record containing:\n- `content` — the extracted text content\n- `content_type` — the detected MIME type\n- `metadata` — a hash of extracted metadata (author, title, dates, etc.)\n- `content_length` — the length of the extracted text content\n\nUse this action when the file content is already available in memory as binary data.",
+          "message": "Apache Tika を使用してインラインバイナリデータからテキストコンテンツ、メタデータ、MIME タイプを抽出します。\n\n以下を含む単一レコードを返します:\n- `content` — 抽出されたテキストコンテンツ\n- `content_type` — 検出された MIME タイプ\n- `metadata` — 抽出されたメタデータのハッシュ (作成者、タイトル、日付など)\n- `content_length` — 抽出されたテキストコンテンツの長さ\n\nファイルコンテンツがすでにバイナリデータとしてメモリ上にある場合は、このアクションを使用します。"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.display_name": {
+          "source": "Extract Content from Inline Data",
+          "message": "インラインデータからコンテンツを抽出"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Binary data to process with Tika; mutually exclusive with `stream` and `path`",
+          "message": "Tika で処理するバイナリデータ。`stream` および `path` と相互排他的です"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "入力データ"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Binary data to process with Tika",
+          "message": "Tika で処理するバイナリデータ"
+        },
+        "app.VGlrYQ.action.ZXh0cmFjdC1kYXRh.short_desc": {
+          "source": "Extract text content and metadata from inline binary data",
+          "message": "インラインバイナリデータからテキストコンテンツとメタデータを抽出"
+        },
+        "app.VGlrYQ.desc": {
+          "source": "Detect content types and extract text from documents using [Apache Tika](https://tika.apache.org/).\n\n**Capabilities**:\n- Extract text content from HTML, XML, plain text, and other formats\n- Detect MIME content types automatically\n- Extract document metadata (author, title, creation date, etc.)\n\nAdditional format support (PDF, Office, images) can be enabled by adding Tika parser module JARs to the Java classpath.",
+          "message": "[Apache Tika](https://tika.apache.org/) を使用してドキュメントのコンテンツタイプを検出し、テキストを抽出します。\n\n**機能**:\n- HTML、XML、プレーンテキスト、その他のフォーマットからテキストコンテンツを抽出\n- MIME コンテンツタイプを自動検出\n- ドキュメントのメタデータ (作成者、タイトル、作成日など) を抽出\n\nJava クラスパスに Tika パーサーモジュールの JAR を追加することで、追加のフォーマットサポート (PDF、Office、画像) を有効にできます。"
+        },
+        "app.VGlrYQ.display_name": {
+          "source": "Apache Tika",
+          "message": "Apache Tika"
+        },
+        "app.VGlrYQ.short_desc": {
+          "source": "Universal content detection and extraction",
+          "message": "汎用コンテンツ検出および抽出"
+        }
+      }
+    }
+  }
+}

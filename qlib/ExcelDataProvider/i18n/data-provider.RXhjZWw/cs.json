@@ -1,0 +1,417 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.RXhjZWw.action.cmVhZA.desc": {
+          "source": "Read Excel spreadsheet from a specific file location",
+          "message": "Přečíst tabulku Excel z konkrétního umístění souboru"
+        },
+        "app.RXhjZWw.action.cmVhZA.display_name": {
+          "source": "Read Excel Spreadsheet File",
+          "message": "Přečíst soubor tabulky Excel"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "Rozsah buněk pro data ke zpracování"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Datové buňky"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "Rozsah buněk pro data ke zpracování"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Pokud je `True`, objekt naparsuje názvy záhlaví z prvního řádku záhlaví; v tomto případě, pokud není `header_cells` výslovně nastaveno, bude se předpokládat, že jde o první řádek"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "Názvy záhlaví?"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "Mají být řádky záhlaví použity jako názvy výstupních polí?"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Rozsah buněk pro záhlaví nebo číslo řádku"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Buňky záhlaví"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Rozsah buněk pro záhlaví nebo číslo řádku"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Seznam názvů záhlaví / sloupců pro iterovaná data; pokud je přítomen, `header_names` musí být `False`"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Výstupní záhlaví"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Seznam názvů záhlaví / sloupců pro iterovaná data"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umístění dat Excelu; vzájemně se vylučuje s `data` a `stream`; vyřešeno voláním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Excel Input Path",
+          "message": "Vstupní cesta Excelu"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Excel data",
+          "message": "Umístění dat Excelu"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
+          "message": "Název pracovního listu k iteraci; pokud chybí, zpracuje se první pracovní list"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Název pracovního listu"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "Název pracovního listu k iteraci"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Pokud je `True` (výchozí `False`), všechny automaticky zjištěné názvy záhlaví budou převedeny na malá písmena"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Převést záhlaví na malá písmena"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Převést všechny názvy záhlaví na malá písmena"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Oblast časového pásma použitá při zpracování dat"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Oblast časového pásma"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Oblast časového pásma použitá při zpracování dat"
+        },
+        "app.RXhjZWw.action.cmVhZA.short_desc": {
+          "source": "Read Excel spreadsheet from a specific file location",
+          "message": "Přečíst tabulku Excel z konkrétního umístění souboru"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Excel spreadsheet inline data",
+          "message": "Přečíst přímá data tabulky Excel"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Excel Spreadsheet Inline Data",
+          "message": "Přečíst přímá data tabulky Excel"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Excel data to process; conflicts with `stream` and `path`",
+          "message": "Data Excelu ke zpracování; je v konfliktu s `stream` a `path`"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupní data"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Excel data to process",
+          "message": "Data Excelu ke zpracování"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "Rozsah buněk pro data ke zpracování"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "Datové buňky"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "Rozsah buněk pro data ke zpracování"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "Pokud je `True`, objekt naparsuje názvy záhlaví z prvního řádku záhlaví; v tomto případě, pokud není `header_cells` výslovně nastaveno, bude se předpokládat, že jde o první řádek"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "Názvy záhlaví?"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "Mají být řádky záhlaví použity jako názvy výstupních polí?"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Rozsah buněk pro záhlaví nebo číslo řádku"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "Buňky záhlaví"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "Rozsah buněk pro záhlaví nebo číslo řádku"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "Seznam názvů záhlaví / sloupců pro iterovaná data; pokud je přítomen, `header_names` musí být `False`"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Výstupní záhlaví"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Seznam názvů záhlaví / sloupců pro iterovaná data"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
+          "message": "Název pracovního listu k iteraci; pokud chybí, zpracuje se první pracovní list"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Název pracovního listu"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to iterate",
+          "message": "Název pracovního listu k iteraci"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "Pokud je `True` (výchozí `False`), všechny automaticky zjištěné názvy záhlaví budou převedeny na malá písmena"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Převést záhlaví na malá písmena"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Převést všechny názvy záhlaví na malá písmena"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Oblast časového pásma použitá při zpracování dat"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Oblast časového pásma"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Oblast časového pásma použitá při zpracování dat"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Excel spreadsheet inline data",
+          "message": "Přečíst přímá data tabulky Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGU.desc": {
+          "source": "Write data to an Excel spreadsheet file at a specified path",
+          "message": "Zapsat data do souboru tabulky Excel na zadané cestě"
+        },
+        "app.RXhjZWw.action.d3JpdGU.display_name": {
+          "source": "Write Excel Spreadsheet File",
+          "message": "Zapsat soubor tabulky Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
+          "message": "Formát Excel 2007+ (`.xlsx`); podporuje režim streamování pro velké soubory"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Formát Excel 2007+ (.xlsx)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
+          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
+          "message": "Původní binární formát Excel 97-2003 (`.xls`); omezen na 65 536 řádků a 256 sloupců na list"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
+          "source": "XLS",
+          "message": "XLS"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
+          "source": "Excel 97-2003 format (.xls)",
+          "message": "Formát Excel 97-2003 (.xls)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.desc": {
+          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
+          "message": "Použitý formát Excelu: `xlsx` (výchozí, Excel 2007+) nebo `xls` (Excel 97-2003)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.display_name": {
+          "source": "Output Format",
+          "message": "Výstupní formát"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.short_desc": {
+          "source": "Excel format to use",
+          "message": "Použitý formát Excelu"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Seznam názvů záhlaví / sloupců pro data; pokud není zadán, záhlaví budou automaticky zjištěna z prvního záznamu"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Záhlaví sloupců"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Seznam názvů záhlaví / sloupců pro data"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.desc": {
+          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
+          "message": "Pokud je `True`, použije se pro zápis velkých souborů se sníženou spotřebou paměti režim streamování SXSSF; platí pouze pro formát `xlsx`"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.display_name": {
+          "source": "Streaming Mode",
+          "message": "Režim streamování"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.short_desc": {
+          "source": "Use streaming mode for large files",
+          "message": "Použít režim streamování pro velké soubory"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Excel data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Umístění výstupního datového souboru Excelu; vzájemně se vylučuje s `stream`; výstupní umístění je zpracováno voláním [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Excel Output Path",
+          "message": "Výstupní cesta souboru Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Excel file",
+          "message": "Umístění pro zápis souboru Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; default is `Sheet1`",
+          "message": "Název vytvářeného pracovního listu; výchozí hodnota je `Sheet1`"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Název pracovního listu"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "Název vytvářeného pracovního listu"
+        },
+        "app.RXhjZWw.action.d3JpdGU.short_desc": {
+          "source": "Write data to an Excel spreadsheet file",
+          "message": "Zapsat data do tabulkového souboru Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Excel spreadsheet data in memory and return it as binary data; useful for generating Excel files without writing to disk",
+          "message": "Vytvořit data tabulky Excel v paměti a vrátit je jako binární data; užitečné pro generování souborů Excel bez zápisu na disk"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Excel Spreadsheet Data",
+          "message": "Vytvořit data tabulky Excel"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
+          "message": "Formát Excel 2007+ (`.xlsx`); podporuje režim streamování pro velké soubory"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Formát Excel 2007+ (.xlsx)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
+          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
+          "message": "Původní binární formát Excel 97-2003 (`.xls`); omezen na 65 536 řádků a 256 sloupců na list"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
+          "source": "XLS",
+          "message": "XLS"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
+          "source": "Excel 97-2003 format (.xls)",
+          "message": "Formát Excel 97-2003 (.xls)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.desc": {
+          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
+          "message": "Použitý formát Excelu: `xlsx` (výchozí, Excel 2007+) nebo `xls` (Excel 97-2003)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.display_name": {
+          "source": "Output Format",
+          "message": "Výstupní formát"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.short_desc": {
+          "source": "Excel format to use",
+          "message": "Použitý formát Excelu"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "Seznam názvů záhlaví / sloupců pro data; pokud není zadán, záhlaví budou automaticky zjištěna z prvního záznamu"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "Záhlaví sloupců"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "Seznam názvů záhlaví / sloupců pro data"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.desc": {
+          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
+          "message": "Pokud je `True`, použije se pro zápis velkých souborů se sníženou spotřebou paměti režim streamování SXSSF; platí pouze pro formát `xlsx`"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.display_name": {
+          "source": "Streaming Mode",
+          "message": "Režim streamování"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.short_desc": {
+          "source": "Use streaming mode for large files",
+          "message": "Použít režim streamování pro velké soubory"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; default is `Sheet1`",
+          "message": "Název vytvářeného pracovního listu; výchozí hodnota je `Sheet1`"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
+          "source": "Worksheet Name",
+          "message": "Název pracovního listu"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.short_desc": {
+          "source": "The name of the worksheet to create",
+          "message": "Název vytvářeného pracovního listu"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Excel spreadsheet data and return as binary",
+          "message": "Vytvořit data tabulky Excel a vrátit je jako binární"
+        },
+        "app.RXhjZWw.desc": {
+          "source": "Read and write Excel spreadsheets",
+          "message": "Číst a zapisovat tabulky Excel"
+        },
+        "app.RXhjZWw.display_name": {
+          "source": "Excel Spreadsheets",
+          "message": "Tabulky Excel"
+        },
+        "app.RXhjZWw.short_desc": {
+          "source": "Read and write Excel spreadsheets",
+          "message": "Číst a zapisovat tabulky Excel"
+        }
+      }
+    }
+  }
+}

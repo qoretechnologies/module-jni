@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.QXZybw.action.cmVhZA.desc": {
+          "source": "Read records from an Apache Avro (`.avro`) container file at a specific file location.\n\nAvro files are self-describing — the schema is stored in the file header and used to deserialize records automatically.\n\nEach record is returned as a hash with field names and types determined by the embedded schema.",
+          "message": "Odczytuj rekordy z pliku kontenera Apache Avro (`.avro`) w określonej lokalizacji pliku.\n\nPliki Avro są samopiszące się — schemat jest przechowywany w nagłówku pliku i używany do automatycznej deserializacji rekordów.\n\nKażdy rekord jest zwracany jako hash z nazwami pól i typami określonymi przez wbudowany schemat."
+        },
+        "app.QXZybw.action.cmVhZA.display_name": {
+          "source": "Read Avro File",
+          "message": "Odczytaj plik Avro"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Avro data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Lokalizacja danych Avro; wyklucza się z `data` i `stream`; rozwiązywana za pomocą wywołania [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Avro Input Path",
+          "message": "Ścieżka wejściowa Avro"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Avro data",
+          "message": "Lokalizacja danych Avro"
+        },
+        "app.QXZybw.action.cmVhZA.short_desc": {
+          "source": "Read records from an Avro file at a specific file location",
+          "message": "Odczytuj rekordy z pliku Avro w określonej lokalizacji pliku"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.desc": {
+          "source": "Read records from inline Apache Avro binary data.\n\nAvro data is self-describing — the schema is stored in the header and used to deserialize records automatically.\n\nEach record is returned as a hash with field names and types determined by the embedded schema.",
+          "message": "Odczytuj rekordy ze wstawianych danych binarnych Apache Avro.\n\nDane Avro są samopiszące się — schemat jest przechowywany w nagłówku i używany do automatycznej deserializacji rekordów.\n\nKażdy rekord jest zwracany jako hash z nazwami pól i typami określonymi przez wbudowany schemat."
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Avro Inline Data",
+          "message": "Odczytaj dane wstawiane Avro"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Avro data to process; conflicts with `stream` and `path`",
+          "message": "Dane Avro do przetworzenia; konflikt z `stream` i `path`"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dane wejściowe"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Avro data to process",
+          "message": "Dane Avro do przetworzenia"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read records from inline Avro data",
+          "message": "Odczytuj rekordy ze wstawianych danych Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.desc": {
+          "source": "Write records to an Apache Avro (`.avro`) container file at a specified path.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\n**Tip**: use `write-data` to generate Avro data in memory without writing to disk.",
+          "message": "Zapisuj rekordy do pliku kontenera Apache Avro (`.avro`) pod określoną ścieżką.\n\nOpcja `schema` jest **wymagana** i musi być prawidłowym ciągiem znaków schematu Avro JSON definiującym strukturę rekordów.\n\n**Wskazówka**: użyj `write-data`, aby wygenerować dane Avro w pamięci bez zapisywania na dysku."
+        },
+        "app.QXZybw.action.d3JpdGU.display_name": {
+          "source": "Write Avro File",
+          "message": "Zapisz plik Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.desc": {
+          "source": "The Avro JSON schema string that defines the record structure; this option is required for writing Avro data",
+          "message": "Ciąg znaków schematu Avro JSON definiujący strukturę rekordów; opcja wymagana do zapisu danych Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.display_name": {
+          "source": "Avro Schema",
+          "message": "Schemat Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.short_desc": {
+          "source": "The Avro JSON schema for the records",
+          "message": "Schemat Avro JSON dla rekordów"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Avro data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Lokalizacja wyjściowego pliku danych Avro; wyklucza się z `stream`; lokalizacja wyjściowa jest obsługiwana przez wywołanie [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Avro Output Path",
+          "message": "Ścieżka wyjściowa Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Avro file",
+          "message": "Lokalizacja zapisu pliku Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.short_desc": {
+          "source": "Write records to an Avro file at a specified path",
+          "message": "Zapisuj rekordy do pliku Avro pod określoną ścieżką"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nAfter writing all records, use `getData()` to retrieve the binary Avro data.",
+          "message": "Twórz dane Apache Avro w pamięci i zwracaj je jako dane binarne; przydatne do generowania danych Avro bez zapisywania na dysku.\n\nOpcja `schema` jest **wymagana** i musi być prawidłowym ciągiem znaków schematu Avro JSON definiującym strukturę rekordów.\n\nPo zapisaniu wszystkich rekordów użyj `getData()`, aby pobrać binarne dane Avro."
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Avro Data",
+          "message": "Utwórz dane Avro"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.desc": {
+          "source": "The Avro JSON schema string that defines the record structure; this option is required for writing Avro data",
+          "message": "Ciąg znaków schematu Avro JSON definiujący strukturę rekordów; opcja wymagana do zapisu danych Avro"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.display_name": {
+          "source": "Avro Schema",
+          "message": "Schemat Avro"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.short_desc": {
+          "source": "The Avro JSON schema for the records",
+          "message": "Schemat Avro JSON dla rekordów"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Avro data and return as binary",
+          "message": "Utwórz dane Avro i zwróć jako binarne"
+        },
+        "app.QXZybw.desc": {
+          "source": "Read and write [Apache Avro](https://avro.apache.org/) data files with schema-based serialization.\n\n**Capabilities**:\n- Read Avro container files with automatic schema detection\n- Write records using a JSON schema definition\n- Support for all Avro types: primitives, records, arrays, maps, unions, enums\n- Binary and stream-based I/O for integration pipelines\n\nCommonly used with Apache Kafka for enterprise event streaming.",
+          "message": "Odczytuj i zapisuj pliki danych [Apache Avro](https://avro.apache.org/) z serializacją opartą na schematach.\n\n**Możliwości**:\n- Odczytywanie plików kontenerowych Avro z automatycznym wykrywaniem schematu\n- Zapisywanie rekordów przy użyciu definicji schematu JSON\n- Obsługa wszystkich typów Avro: typy proste, rekordy, tablice, mapy, unie, wyliczenia\n- Binarne i strumieniowe wejście/wyjście dla potoków integracyjnych\n\nCzęsto używane z Apache Kafka do strumieniowania zdarzeń w przedsiębiorstwach."
+        },
+        "app.QXZybw.display_name": {
+          "source": "Apache Avro",
+          "message": "Apache Avro"
+        },
+        "app.QXZybw.short_desc": {
+          "source": "Read and write Apache Avro data files",
+          "message": "Odczytuj i zapisuj pliki danych Apache Avro"
+        }
+      }
+    }
+  }
+}

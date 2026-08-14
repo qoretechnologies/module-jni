@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.T0RU.action.cmVhZA.desc": {
+          "source": "Reads and parses an ODT document from a file location specified by the `path` option.\n\nUse this action to extract structured content from `.odt` files stored on disk or accessible via a URL.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to extract tabular data\n- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n- `header_row` — set to `True` if the first table row contains column headers\n- `headers` — provide explicit column header names for table mode",
+          "message": "`path` 옵션으로 지정된 파일 위치에서 ODT 문서를 읽고 구문 분석합니다.\n\n디스크에 저장되어 있거나 URL을 통해 액세스할 수 있는 `.odt` 파일에서 구조화된 콘텐츠를 추출하려면 이 작업을 사용하세요.\n\n**주요 옵션**:\n- `content_type` — 스타일이 적용된 텍스트의 경우 `\"paragraphs\"`(으)로 설정하거나, 표 형식 데이터를 추출하려면 `\"table\"`(으)로 설정\n- `table_index` — `\"table\"` 모드를 사용할 때 읽을 표 선택(0부터 시작)\n- `header_row` — 첫 번째 표 행에 열 헤더가 포함된 경우 `True`(으)로 설정\n- `headers` — 표 모드에 사용할 명시적 열 헤더 이름 제공"
+        },
+        "app.T0RU.action.cmVhZA.display_name": {
+          "source": "Read ODT Document File",
+          "message": "ODT 문서 파일 읽기"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "텍스트 콘텐츠 및 스타일 정보(제목, 일반 텍스트)가 포함된 문서 단락 읽기"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "단락"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs with text and style information",
+          "message": "텍스트 및 스타일 정보가 포함된 문서 단락 읽기"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "열 헤더가 있는 구조화된 행 데이터로 표 읽기"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "테이블을 행 데이터로 읽기"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to extract from the ODT document.\n\n- `\"paragraphs\"` — reads document paragraphs with text and style information\n- `\"table\"` — reads a specific table as row data, using `table_index` to select the table",
+          "message": "ODT 문서에서 추출할 콘텐츠의 유형입니다.\n\n- `\"paragraphs\"` — 텍스트 및 스타일 정보가 포함된 문서 단락을 읽습니다.\n- `\"table\"` — `table_index`을(를) 사용하여 표를 선택하고 특정 표를 행 데이터로 읽습니다."
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.T0RU.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "읽을 콘텐츠 유형"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table is used as column headers. Only applies when `content_type` is `\"table\"`; mutually exclusive with `headers`",
+          "message": "`True`인 경우 표의 첫 번째 행이 열 헤더로 사용됩니다. `content_type`이(가) `\"table\"`인 경우에만 적용되며 `headers`과(와) 상호 배제됩니다."
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "첫 번째 행에 헤더 포함"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column header names to use for table columns. Only applies when `content_type` is `\"table\"`; mutually exclusive with `header_row`",
+          "message": "표 열에 사용할 열 헤더 이름의 명시적 목록입니다. `content_type`이(가) `\"table\"`인 경우에만 적용되며 `header_row`과(와) 상호 배제됩니다."
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RU.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "열 헤더의 명시적 목록"
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ODT document data; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "ODT 문서 데이터의 위치입니다. `data` 및 `stream`과(와) 상호 배제됩니다.\n\n[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출로 확인됩니다."
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ODT Input Path",
+          "message": "ODT 입력 경로"
+        },
+        "app.T0RU.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ODT document",
+          "message": "ODT 문서의 위치"
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.desc": {
+          "source": "The 0-based index of the table to read when `content_type` is `\"table\"`. Default is `0` (the first table in the document)",
+          "message": "`content_type`이(가) `\"table\"`일 때 읽을 표의 0 기반 인덱스입니다. 기본값은 `0`(문서의 첫 번째 표)입니다."
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "테이블 인덱스"
+        },
+        "app.T0RU.action.cmVhZA.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "읽을 테이블의 인덱스 (0부터 시작)"
+        },
+        "app.T0RU.action.cmVhZA.short_desc": {
+          "source": "Read ODT document from a specific file location",
+          "message": "특정 파일 위치에서 ODT 문서 읽기"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.desc": {
+          "source": "Reads and parses an ODT document from inline binary data provided via the `data` option.\n\nUse this action when the ODT document content is already available in memory as binary data rather than stored in a file.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` for text with styles, or `\"table\"` to extract tabular data\n- `table_index` — select which table to read (0-based) when using `\"table\"` mode\n- `header_row` — set to `True` if the first table row contains column headers\n- `headers` — provide explicit column header names for table mode",
+          "message": "`data` 옵션을 통해 제공된 인라인 바이너리 데이터에서 ODT 문서를 읽고 구문 분석합니다.\n\nODT 문서 콘텐츠가 파일에 저장되지 않고 이미 메모리에 바이너리 데이터로 준비되어 있는 경우 이 작업을 사용하세요.\n\n**주요 옵션**:\n- `content_type` — 스타일이 적용된 텍스트의 경우 `\"paragraphs\"`(으)로 설정하거나, 표 형식 데이터를 추출하려면 `\"table\"`(으)로 설정\n- `table_index` — `\"table\"` 모드를 사용할 때 읽을 표 선택(0부터 시작)\n- `header_row` — 첫 번째 표 행에 열 헤더가 포함된 경우 `True`(으)로 설정\n- `headers` — 표 모드에 사용할 명시적 열 헤더 이름 제공"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ODT Document Inline Data",
+          "message": "ODT 문서 인라인 데이터 읽기"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Read document paragraphs with text content and style information (headings, normal text)",
+          "message": "텍스트 콘텐츠 및 스타일 정보(제목, 일반 텍스트)가 포함된 문서 단락 읽기"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "단락"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Read document paragraphs with text and style information",
+          "message": "텍스트 및 스타일 정보가 포함된 문서 단락 읽기"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Read a table as structured row data with column headers",
+          "message": "열 헤더가 있는 구조화된 행 데이터로 표 읽기"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Read a table as row data",
+          "message": "테이블을 행 데이터로 읽기"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to extract from the ODT document.\n\n- `\"paragraphs\"` — reads document paragraphs with text and style information\n- `\"table\"` — reads a specific table as row data, using `table_index` to select the table",
+          "message": "ODT 문서에서 추출할 콘텐츠의 유형입니다.\n\n- `\"paragraphs\"` — 텍스트 및 스타일 정보가 포함된 문서 단락을 읽습니다.\n- `\"table\"` — `table_index`을(를) 사용하여 표를 선택하고 특정 표를 행 데이터로 읽습니다."
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to read",
+          "message": "읽을 콘텐츠 유형"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ODT document binary data to process; mutually exclusive with `stream` and `path`",
+          "message": "처리할 ODT 문서 바이너리 데이터입니다. `stream` 및 `path`과(와) 상호 배제됩니다."
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "입력 데이터"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ODT document data to process",
+          "message": "처리할 ODT 문서 데이터"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "If `True`, the first row of the table is used as column headers. Only applies when `content_type` is `\"table\"`; mutually exclusive with `headers`",
+          "message": "`True`인 경우 표의 첫 번째 행이 열 헤더로 사용됩니다. `content_type`이(가) `\"table\"`인 경우에만 적용되며 `headers`과(와) 상호 배제됩니다."
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "First row contains headers",
+          "message": "첫 번째 행에 헤더 포함"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "Explicit list of column header names to use for table columns. Only applies when `content_type` is `\"table\"`; mutually exclusive with `header_row`",
+          "message": "표 열에 사용할 열 헤더 이름의 명시적 목록입니다. `content_type`이(가) `\"table\"`인 경우에만 적용되며 `header_row`과(와) 상호 배제됩니다."
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "Explicit list of column headers",
+          "message": "열 헤더의 명시적 목록"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.desc": {
+          "source": "The 0-based index of the table to read when `content_type` is `\"table\"`. Default is `0` (the first table in the document)",
+          "message": "`content_type`이(가) `\"table\"`일 때 읽을 표의 0 기반 인덱스입니다. 기본값은 `0`(문서의 첫 번째 표)입니다."
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.display_name": {
+          "source": "Table Index",
+          "message": "테이블 인덱스"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.option.dGFibGVfaW5kZXg.short_desc": {
+          "source": "Index of table to read (0-based)",
+          "message": "읽을 테이블의 인덱스 (0부터 시작)"
+        },
+        "app.T0RU.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read ODT document inline data",
+          "message": "ODT 문서 인라인 데이터 읽기"
+        },
+        "app.T0RU.action.d3JpdGU.desc": {
+          "source": "Creates an ODT document and writes it to the file location specified by the `path` option.\n\nUse this action to generate `.odt` files with paragraphs or tabular data for reports, documents, or data exports.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` to write styled text, or `\"table\"` to write structured tabular data\n- `headers` — provide column headers for `\"table\"` mode\n- `title` — optional document title added as a `Heading1` at the top",
+          "message": "ODT 문서를 생성하고 `path` 옵션으로 지정된 파일 위치에 씁니다.\n\n보고서, 문서 또는 데이터 내보내기를 위해 단락이나 표 형식 데이터가 포함된 `.odt` 파일을 생성하려면 이 작업을 사용하세요.\n\n**주요 옵션**:\n- `content_type` — 스타일이 적용된 텍스트를 쓰려면 `\"paragraphs\"`(으)로 설정하거나, 구조화된 표 데이터를 쓰려면 `\"table\"`(으)로 설정\n- `headers` — `\"table\"` 모드용 열 헤더 제공\n- `title` — 맨 위에 `Heading1`(으)로 추가되는 선택적 문서 제목"
+        },
+        "app.T0RU.action.d3JpdGU.display_name": {
+          "source": "Write ODT Document File",
+          "message": "ODT 문서 파일 쓰기"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "텍스트 및 제목 스타일이 적용된 단락 쓰기"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "단락"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "텍스트 및 제목 스타일이 적용된 단락 쓰기"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data",
+          "message": "구조화된 표 데이터 쓰기"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write structured tabular data",
+          "message": "구조화된 표 데이터 쓰기"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to write to the ODT document.\n\n- `\"paragraphs\"` — writes styled paragraphs with text and heading styles\n- `\"table\"` — writes structured tabular data with column headers",
+          "message": "ODT 문서에 쓸 콘텐츠의 유형입니다.\n\n- `\"paragraphs\"` — 텍스트 및 제목 스타일이 적용된 단락을 씁니다.\n- `\"table\"` — 열 헤더가 있는 구조화된 표 데이터를 씁니다."
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.T0RU.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "작성할 콘텐츠 유형"
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of column header names for `\"table\"` mode. If not provided, headers will be auto-detected from the keys of the first record",
+          "message": "`\"table\"` 모드의 열 헤더 이름 목록입니다. 제공되지 않으면 첫 번째 레코드의 키에서 헤더가 자동 감지됩니다."
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RU.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "테이블 모드용 열 헤더 목록"
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ODT document data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "출력 ODT 문서 데이터 파일의 위치입니다. `stream`과(와) 상호 배제됩니다.\n\n출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 호출로 처리됩니다."
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ODT Output Path",
+          "message": "ODT 출력 경로"
+        },
+        "app.T0RU.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ODT document",
+          "message": "ODT 문서를 쓸 위치"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a `Heading1` at the beginning of the document",
+          "message": "문서 시작 부분에 `Heading1`(으)로 추가할 선택적 제목"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "문서 제목"
+        },
+        "app.T0RU.action.d3JpdGU.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "시작 부분에 추가할 제목"
+        },
+        "app.T0RU.action.d3JpdGU.short_desc": {
+          "source": "Write data to an ODT document file",
+          "message": "ODT 문서 파일에 데이터 쓰기"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Creates an ODT document in memory and returns it as binary data, without writing to disk.\n\nUse this action when you need to generate an ODT document for further processing, email attachment, or API response without creating a file on the filesystem.\n\n**Key Options**:\n- `content_type` — set to `\"paragraphs\"` to write styled text, or `\"table\"` to write structured tabular data\n- `headers` — provide column headers for `\"table\"` mode\n- `title` — optional document title added as a `Heading1` at the top",
+          "message": "메모리에 ODT 문서를 생성하고 디스크에 쓰지 않고 바이너리 데이터로 반환합니다.\n\n파일 시스템에 파일을 생성하지 않고 추가 처리, 이메일 첨부 파일 또는 API 응답을 위해 ODT 문서를 생성해야 할 때 이 작업을 사용하세요.\n\n**주요 옵션**:\n- `content_type` — 스타일이 적용된 텍스트를 쓰려면 `\"paragraphs\"`(으)로 설정하거나, 구조화된 표 데이터를 쓰려면 `\"table\"`(으)로 설정\n- `headers` — `\"table\"` 모드용 열 헤더 제공\n- `title` — 맨 위에 `Heading1`(으)로 추가되는 선택적 문서 제목"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ODT Document Data",
+          "message": "ODT 문서 데이터 생성"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "텍스트 및 제목 스타일이 적용된 단락 쓰기"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.display_name": {
+          "source": "Paragraphs",
+          "message": "단락"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaHM.short_desc": {
+          "source": "Write styled paragraphs with text and heading styles",
+          "message": "텍스트 및 제목 스타일이 적용된 단락 쓰기"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.desc": {
+          "source": "Write structured tabular data",
+          "message": "구조화된 표 데이터 쓰기"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRhYmxl.short_desc": {
+          "source": "Write structured tabular data",
+          "message": "구조화된 표 데이터 쓰기"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of content to write to the ODT document.\n\n- `\"paragraphs\"` — writes styled paragraphs with text and heading styles\n- `\"table\"` — writes structured tabular data with column headers",
+          "message": "ODT 문서에 쓸 콘텐츠의 유형입니다.\n\n- `\"paragraphs\"` — 텍스트 및 제목 스타일이 적용된 단락을 씁니다.\n- `\"table\"` — 열 헤더가 있는 구조화된 표 데이터를 씁니다."
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "콘텐츠 유형"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of content to write",
+          "message": "작성할 콘텐츠 유형"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of column header names for `\"table\"` mode. If not provided, headers will be auto-detected from the keys of the first record",
+          "message": "`\"table\"` 모드의 열 헤더 이름 목록입니다. 제공되지 않으면 첫 번째 레코드의 키에서 헤더가 자동 감지됩니다."
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of column headers for table mode",
+          "message": "테이블 모드용 열 헤더 목록"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
+          "source": "Optional title to add as a `Heading1` at the beginning of the document",
+          "message": "문서 시작 부분에 `Heading1`(으)로 추가할 선택적 제목"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.display_name": {
+          "source": "Document Title",
+          "message": "문서 제목"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.option.dGl0bGU.short_desc": {
+          "source": "Title to add at the beginning",
+          "message": "시작 부분에 추가할 제목"
+        },
+        "app.T0RU.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create ODT document data and return as binary",
+          "message": "ODT 문서 데이터를 생성하고 바이너리로 반환"
+        },
+        "app.T0RU.desc": {
+          "source": "Provides data provider operations for **ODT** (OpenDocument Text) files, the native document format for LibreOffice Writer and part of the [OpenDocument](https://en.wikipedia.org/wiki/OpenDocument) standard.\n\n**Supported Operations**:\n- **Read paragraphs** — extract text with heading hierarchy and style information\n- **Read tables** — extract table data with automatic or explicit header detection\n- **Write paragraphs** — create documents with styled text and headings\n- **Write tables** — create documents with structured tabular data\n\n**Key Features**:\n- Heading style detection (`Heading1`, `Heading2`, `Heading3`)\n- Table extraction with `header_row` auto-detection or explicit `headers`\n- `paragraphs` and `table` content modes for both reading and writing\n- File path, stream, and in-memory binary data support\n\n**Business Use Cases**:\n- Processing LibreOffice Writer documents in automated workflows\n- Extracting structured text and tables from `.odt` files\n- Generating ODT reports and documents programmatically",
+          "message": "LibreOffice Writer의 기본 문서 형식이자 [OpenDocument](https://en.wikipedia.org/wiki/OpenDocument) 표준의 일부인 **ODT**(OpenDocument Text) 파일에 대한 데이터 공급자 작업을 제공합니다.\n\n**지원되는 작업**:\n- **단락 읽기** — 제목 계층 구조 및 스타일 정보가 포함된 텍스트 추출\n- **표 읽기** — 자동 또는 명시적 헤더 감지를 통해 표 데이터 추출\n- **단락 쓰기** — 스타일이 적용된 텍스트 및 제목이 포함된 문서 생성\n- **표 쓰기** — 구조화된 표 데이터가 포함된 문서 생성\n\n**주요 기능**:\n- 제목 스타일 감지(`Heading1`, `Heading2`, `Heading3`)\n- `header_row` 자동 감지 또는 명시적 `headers`을(를) 사용한 표 추출\n- 읽기 및 쓰기 모두를 위한 `paragraphs` 및 `table` 콘텐츠 모드\n- 파일 경로, 스트림 및 메모리 내 바이너리 데이터 지원\n\n**비즈니스 사용 사례**:\n- 자동화된 워크플로에서 LibreOffice Writer 문서 처리\n- `.odt` 파일에서 구조화된 텍스트 및 표 추출\n- 프로그래밍 방식으로 ODT 보고서 및 문서 생성"
+        },
+        "app.T0RU.display_name": {
+          "source": "ODT Documents",
+          "message": "ODT 문서"
+        },
+        "app.T0RU.short_desc": {
+          "source": "Read and write ODT documents",
+          "message": "ODT 문서 읽기 및 쓰기"
+        }
+      }
+    }
+  }
+}

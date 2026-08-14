@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.VmlzaW8.action.cmVhZA.desc": {
+          "source": "Read Visio document from a specific file location and extract text from each page",
+          "message": "특정 파일 위치에서 Visio 문서를 읽고 각 페이지에서 텍스트 추출"
+        },
+        "app.VmlzaW8.action.cmVhZA.display_name": {
+          "source": "Read Visio Document File",
+          "message": "Visio 문서 파일 읽기"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Visio document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Visio 문서 데이터의 위치; `data` 및 `stream`과(와) 상호 배타적임; [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출을 통해 해석됨"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Visio Input Path",
+          "message": "Visio 입력 경로"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Visio document",
+          "message": "Visio 문서의 위치"
+        },
+        "app.VmlzaW8.action.cmVhZA.short_desc": {
+          "source": "Read Visio document from a specific file location",
+          "message": "특정 파일 위치에서 Visio 문서 읽기"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Visio document inline data and extract text from each page",
+          "message": "Visio 문서 인라인 데이터를 읽고 각 페이지에서 텍스트 추출"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Visio Document Inline Data",
+          "message": "Visio 문서 인라인 데이터 읽기"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Visio document data to process; conflicts with `stream` and `path`",
+          "message": "처리할 Visio 문서 데이터; `stream` 및 `path`과(와) 충돌함"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "입력 데이터"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Visio document data to process",
+          "message": "처리할 Visio 문서 데이터"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Visio document inline data",
+          "message": "Visio 문서 인라인 데이터 읽기"
+        },
+        "app.VmlzaW8.desc": {
+          "source": "Read Microsoft Visio documents (.vsdx format) and extract page text and shape data",
+          "message": "Microsoft Visio 문서(.vsdx 형식)를 읽고 페이지 텍스트 및 도형 데이터 추출"
+        },
+        "app.VmlzaW8.display_name": {
+          "source": "Visio Documents",
+          "message": "Visio 문서"
+        },
+        "app.VmlzaW8.short_desc": {
+          "source": "Read Microsoft Visio documents",
+          "message": "Microsoft Visio 문서 읽기"
+        }
+      }
+    }
+  }
+}

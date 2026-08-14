@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.QXZybw.action.cmVhZA.desc": {
+          "source": "Read records from an Apache Avro (`.avro`) container file at a specific file location.\n\nAvro files are self-describing — the schema is stored in the file header and used to deserialize records automatically.\n\nEach record is returned as a hash with field names and types determined by the embedded schema.",
+          "message": "Čítať záznamy z kontajnerového súboru Apache Avro (`.avro`) zo špecifického umiestnenia súboru.\n\nSúbory Avro sú samoopisné — schéma je uložená v hlavičke súboru a používa sa na automatickú deserializáciu záznamov.\n\nKaždý záznam sa vracia ako hash s názvami a typmi polí určenými vloženou schémou."
+        },
+        "app.QXZybw.action.cmVhZA.display_name": {
+          "source": "Read Avro File",
+          "message": "Čítať súbor Avro"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Avro data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umiestnenie dát Avro; vzájomne sa vylučuje s `data` a `stream`; vyriešené volaním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Avro Input Path",
+          "message": "Vstupná cesta Avro"
+        },
+        "app.QXZybw.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Avro data",
+          "message": "Umiestnenie dát Avro"
+        },
+        "app.QXZybw.action.cmVhZA.short_desc": {
+          "source": "Read records from an Avro file at a specific file location",
+          "message": "Čítať záznamy zo súboru Avro zo špecifického umiestnenia súboru"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.desc": {
+          "source": "Read records from inline Apache Avro binary data.\n\nAvro data is self-describing — the schema is stored in the header and used to deserialize records automatically.\n\nEach record is returned as a hash with field names and types determined by the embedded schema.",
+          "message": "Čítať záznamy z priamych binárnych dát Apache Avro.\n\nDáta Avro sú samoopisné — schéma je uložená v hlavičke a používa sa na automatickú deserializáciu záznamov.\n\nKaždý záznam sa vracia ako hash s názvami a typmi polí určenými vloženou schémou."
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Avro Inline Data",
+          "message": "Čítať priame dáta Avro"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Avro data to process; conflicts with `stream` and `path`",
+          "message": "Dáta Avro na spracovanie; v konflikte s `stream` a `path`"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupné dáta"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Avro data to process",
+          "message": "Dáta Avro na spracovanie"
+        },
+        "app.QXZybw.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read records from inline Avro data",
+          "message": "Čítať záznamy z priamych dát Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.desc": {
+          "source": "Write records to an Apache Avro (`.avro`) container file at a specified path.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\n**Tip**: use `write-data` to generate Avro data in memory without writing to disk.",
+          "message": "Zapísať záznamy do kontajnerového súboru Apache Avro (`.avro`) na zadanej ceste.\n\nMožnosť `schema` je **povinná** a musí byť platným reťazcom schémy Avro JSON, ktorý definuje štruktúru záznamu.\n\n**Tip**: použite `write-data` na vygenerovanie dát Avro v pamäti bez zápisu na disk."
+        },
+        "app.QXZybw.action.d3JpdGU.display_name": {
+          "source": "Write Avro File",
+          "message": "Zapísať súbor Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.desc": {
+          "source": "The Avro JSON schema string that defines the record structure; this option is required for writing Avro data",
+          "message": "Reťazec schémy Avro JSON, ktorý definuje štruktúru záznamu; táto možnosť je povinná pre zápis dát Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.display_name": {
+          "source": "Avro Schema",
+          "message": "Schéma Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.option.c2NoZW1h.short_desc": {
+          "source": "The Avro JSON schema for the records",
+          "message": "Schéma Avro JSON pre záznamy"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Avro data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Umiestnenie výstupného dátového súboru Avro; vzájomne sa vylučuje s `stream`; výstupné umiestnenie sa spracováva volaním [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Avro Output Path",
+          "message": "Výstupná cesta Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the Avro file",
+          "message": "Umiestnenie pre zápis súboru Avro"
+        },
+        "app.QXZybw.action.d3JpdGU.short_desc": {
+          "source": "Write records to an Avro file at a specified path",
+          "message": "Zapísať záznamy do súboru Avro na zadanej ceste"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nAfter writing all records, use `getData()` to retrieve the binary Avro data.",
+          "message": "Vytvoriť dáta Apache Avro v pamäti a vrátiť ich ako binárne dáta; užitočné na generovanie dát Avro bez zápisu na disk.\n\nMožnosť `schema` je **povinná** a musí byť platným reťazcom schémy Avro JSON, ktorý definuje štruktúru záznamu.\n\nPo zapísaní všetkých záznamov použite `getData()` na získanie binárnych dát Avro."
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create Avro Data",
+          "message": "Vytvoriť dáta Avro"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.desc": {
+          "source": "The Avro JSON schema string that defines the record structure; this option is required for writing Avro data",
+          "message": "Reťazec schémy Avro JSON, ktorý definuje štruktúru záznamu; táto možnosť je povinná pre zápis dát Avro"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.display_name": {
+          "source": "Avro Schema",
+          "message": "Schéma Avro"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.short_desc": {
+          "source": "The Avro JSON schema for the records",
+          "message": "Schéma Avro JSON pre záznamy"
+        },
+        "app.QXZybw.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Avro data and return as binary",
+          "message": "Vytvoriť dáta Avro a vrátiť ako binárne"
+        },
+        "app.QXZybw.desc": {
+          "source": "Read and write [Apache Avro](https://avro.apache.org/) data files with schema-based serialization.\n\n**Capabilities**:\n- Read Avro container files with automatic schema detection\n- Write records using a JSON schema definition\n- Support for all Avro types: primitives, records, arrays, maps, unions, enums\n- Binary and stream-based I/O for integration pipelines\n\nCommonly used with Apache Kafka for enterprise event streaming.",
+          "message": "Čítanie a zápis dátových súborov [Apache Avro](https://avro.apache.org/) ako serializácia založená na schéme.\n\n**Schopnosti**:\n- Čítanie kontajnerových súborov Avro s automatickým zistením schémy\n- Zápis záznamov pomocou definície schémy JSON\n- Podpora všetkých typov Avro: primitívne typy, záznamy, polia, mapy, zjednotenia (unions), výčty (enums)\n- Binárne a streamové I/O pre integračné kanály (pipelines)\n\nBežne sa používa s Apache Kafka pre podnikové streamovanie udalostí."
+        },
+        "app.QXZybw.display_name": {
+          "source": "Apache Avro",
+          "message": "Apache Avro"
+        },
+        "app.QXZybw.short_desc": {
+          "source": "Read and write Apache Avro data files",
+          "message": "Čítanie a zápis dátových súborov Apache Avro"
+        }
+      }
+    }
+  }
+}

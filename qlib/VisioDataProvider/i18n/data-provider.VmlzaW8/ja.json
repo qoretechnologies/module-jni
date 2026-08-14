@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.VmlzaW8.action.cmVhZA.desc": {
+          "source": "Read Visio document from a specific file location and extract text from each page",
+          "message": "特定ファイル位置にある Visio ドキュメントを読み込み、各ページからテキストを抽出"
+        },
+        "app.VmlzaW8.action.cmVhZA.display_name": {
+          "source": "Read Visio Document File",
+          "message": "Visio ドキュメントファイルを読み込み"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Visio document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Visio ドキュメントデータの場所。`data` および `stream` と相互排他的です。[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Visio Input Path",
+          "message": "Visio 入力パス"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Visio document",
+          "message": "Visio ドキュメントの場所"
+        },
+        "app.VmlzaW8.action.cmVhZA.short_desc": {
+          "source": "Read Visio document from a specific file location",
+          "message": "特定ファイル位置にある Visio ドキュメントを読み込み"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Visio document inline data and extract text from each page",
+          "message": "Visio ドキュメントのインラインデータを読み込み、各ページからテキストを抽出"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Visio Document Inline Data",
+          "message": "Visio ドキュメントのインラインデータを読み込み"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Visio document data to process; conflicts with `stream` and `path`",
+          "message": "処理する Visio ドキュメントデータ。`stream` および `path` と競合します"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "入力データ"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Visio document data to process",
+          "message": "処理する Visio ドキュメントデータ"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Visio document inline data",
+          "message": "Visio ドキュメントのインラインデータを読み込み"
+        },
+        "app.VmlzaW8.desc": {
+          "source": "Read Microsoft Visio documents (.vsdx format) and extract page text and shape data",
+          "message": "Microsoft Visio ドキュメント (.vsdx フォーマット) を読み込み、ページテキストとシェイプデータを抽出"
+        },
+        "app.VmlzaW8.display_name": {
+          "source": "Visio Documents",
+          "message": "Visio ドキュメント"
+        },
+        "app.VmlzaW8.short_desc": {
+          "source": "Read Microsoft Visio documents",
+          "message": "Microsoft Visio ドキュメントを読み込み"
+        }
+      }
+    }
+  }
+}

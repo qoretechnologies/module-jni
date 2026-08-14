@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.SUNT.action.cmVhZA.desc": {
+          "source": "Read an ICS file from a file location and return the calendar events or to-dos as records.\n\nUse this action to import calendar events or VTODO tasks from ICS files stored on disk or accessible via a URL. The file location is resolved using the `FileLocationHandler` module, supporting local file paths and remote URLs.\n\n**Key Options**:\n- `path` (required) -- the file location to read from\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "Odczytaj plik ICS z lokalizacji pliku i zwróć wydarzenia z kalendarza lub zadania jako rekordy.\n\nUżyj tej akcji, aby zaimportować wydarzenia z kalendarza lub zadania VTODO z plików ICS przechowywanych na dysku lub dostępnych przez adres URL. Lokalizacja pliku jest rozwiązywana przy użyciu modułu `FileLocationHandler`, co obsługuje lokalne ścieżki plików i zdalne adresy URL.\n\n**Główne opcje**:\n- `path` (wymagane) -- lokalizacja pliku do odczytu\n- `content_type` (opcjonalne) -- \"events\" (domyślnie) lub \"todos\""
+        },
+        "app.SUNT.action.cmVhZA.display_name": {
+          "source": "Read ICS Calendar File",
+          "message": "Odczytaj plik kalendarza ICS"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "Read VEVENT (calendar event) components with fields for dates, location, attendees, recurrence, categories, and alarms",
+          "message": "Odczytaj komponenty VEVENT (wydarzenia kalendarza) z polami dat, lokalizacji, uczestników, powtarzalności, kategorii i alarmów"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Events",
+          "message": "Wydarzenia"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.short_desc": {
+          "source": "Read VEVENT components",
+          "message": "Odczytaj komponenty VEVENT"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.desc": {
+          "source": "Read VTODO (task/to-do) components with fields for due date, completion status, priority, percent complete, and categories",
+          "message": "Odczytaj komponenty VTODO (zadania) z polami daty wykonania, stanu ukończenia, priorytetu, procentu ukończenia i kategorii"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.display_name": {
+          "source": "To-dos",
+          "message": "Zadania do wykonania"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.short_desc": {
+          "source": "Read VTODO components",
+          "message": "Odczytaj komponenty VTODO"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of iCalendar component to extract: \"events\" (default) or \"todos\"",
+          "message": "Typ komponentu iCalendar do wyodrębnienia: \"events\" (domyślnie) lub \"todos\""
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ zawartości"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of calendar component to read",
+          "message": "Typ komponentu kalendarza do odczytu"
+        },
+        "app.SUNT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ICS file; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Lokalizacja pliku ICS; wyklucza się wzajemnie z `data` i `stream`.\n\nRozwiązywana za pomocą wywołania [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.SUNT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ICS Input Path",
+          "message": "Ścieżka wejściowa pliku ICS"
+        },
+        "app.SUNT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ICS file",
+          "message": "Lokalizacja pliku ICS"
+        },
+        "app.SUNT.action.cmVhZA.short_desc": {
+          "source": "Read iCalendar events or to-dos from a specific file location",
+          "message": "Odczytaj wydarzenia lub zadania iCalendar z określonej lokalizacji pliku"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.desc": {
+          "source": "Read iCalendar events or to-dos from inline binary data and return them as records.\n\nUse this action when the ICS data is already available in memory (e.g., received from an API response, uploaded by a user, or read from a database BLOB column) rather than stored as a file.\n\n**Key Options**:\n- `data` (required) -- the ICS binary data to parse\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "Odczytaj wydarzenia lub zadania iCalendar z bezpośrednich danych binarnych i zwróć je jako rekordy.\n\nUżyj tej akcji, gdy dane ICS są już dostępne w pamięci (np. odebrane z odpowiedzi API, przesłane przez użytkownika lub odczytane z kolumny BLOB bazy danych), a nie przechowywane jako plik.\n\n**Główne opcje**:\n- `data` (wymagane) -- dane binarne ICS do przetworzenia\n- `content_type` (opcjonalne) -- \"events\" (domyślnie) lub \"todos\""
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ICS Calendar Inline Data",
+          "message": "Odczytaj bezpośrednie dane kalendarza ICS"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "Read VEVENT (calendar event) components with fields for dates, location, attendees, recurrence, categories, and alarms",
+          "message": "Odczytaj komponenty VEVENT (wydarzenia kalendarza) z polami dat, lokalizacji, uczestników, powtarzalności, kategorii i alarmów"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Events",
+          "message": "Wydarzenia"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.short_desc": {
+          "source": "Read VEVENT components",
+          "message": "Odczytaj komponenty VEVENT"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.desc": {
+          "source": "Read VTODO (task/to-do) components with fields for due date, completion status, priority, percent complete, and categories",
+          "message": "Odczytaj komponenty VTODO (zadania) z polami daty wykonania, stanu ukończenia, priorytetu, procentu ukończenia i kategorii"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.display_name": {
+          "source": "To-dos",
+          "message": "Zadania do wykonania"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.short_desc": {
+          "source": "Read VTODO components",
+          "message": "Odczytaj komponenty VTODO"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of iCalendar component to extract: \"events\" (default) or \"todos\"",
+          "message": "Typ komponentu iCalendar do wyodrębnienia: \"events\" (domyślnie) lub \"todos\""
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ zawartości"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of calendar component to read",
+          "message": "Typ komponentu kalendarza do odczytu"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ICS data to process; conflicts with `stream` and `path`",
+          "message": "Dane ICS do przetworzenia; występuje konflikt z `stream` i `path`"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dane wejściowe"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ICS data to process",
+          "message": "Dane ICS do przetworzenia"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read iCalendar events or to-dos from inline binary data",
+          "message": "Odczytaj wydarzenia lub zadania do wykonania iCalendar z wbudowanych danych binarnych"
+        },
+        "app.SUNT.action.d3JpdGU.desc": {
+          "source": "Write calendar events or to-dos to an ICS file at a specified path.\n\nUse this action to generate ICS files from structured event or to-do data for calendar sharing, task management, or integration with calendar applications.\n\n**Key Options**:\n- `path` (required) -- the output file location\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "Zapisz wydarzenia kalendarza lub zadania do pliku ICS pod określoną ścieżką.\n\nUżyj tej akcji, aby wygenerować pliki ICS z ustrukturyzowanych danych wydarzeń lub zadań w celu udostępniania kalendarza, zarządzania zadaniami lub integracji z aplikacjami kalendarza.\n\n**Główne opcje**:\n- `path` (wymagane) -- lokalizacja pliku wyjściowego\n- `content_type` (opcjonalnie) -- \"events\" (domyślnie) lub \"todos\""
+        },
+        "app.SUNT.action.d3JpdGU.display_name": {
+          "source": "Write ICS Calendar File",
+          "message": "Zapisz plik kalendarza ICS"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "Write VEVENT (calendar event) components with fields for dates, location, attendees, recurrence, categories, and alarms",
+          "message": "Zapisz komponenty VEVENT (wydarzenie kalendarza) z polami dla dat, lokalizacji, uczestników, powtarzalności, kategorii i alarmów"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Events",
+          "message": "Wydarzenia"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.short_desc": {
+          "source": "Write VEVENT components",
+          "message": "Zapisz komponenty VEVENT"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.desc": {
+          "source": "Write VTODO (task/to-do) components with fields for due date, completion status, priority, percent complete, and categories",
+          "message": "Zapisz komponenty VTODO (zadanie do wykonania) z polami dla terminu, statusu ukończenia, priorytetu, procentu ukończenia i kategorii"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.display_name": {
+          "source": "To-dos",
+          "message": "Zadania do wykonania"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.short_desc": {
+          "source": "Write VTODO components",
+          "message": "Zapisz komponenty VTODO"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of iCalendar component to write: \"events\" (default) or \"todos\"",
+          "message": "Typ komponentu iCalendar do zapisania: \"events\" (domyślnie) lub \"todos\""
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ zawartości"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of calendar component to write",
+          "message": "Typ komponentu kalendarza do zapisania"
+        },
+        "app.SUNT.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ICS data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Lokalizacja wyjściowego pliku danych ICS; wyklucza się wzajemnie z `stream`.\n\nLokalizacja wyjściowa jest obsługiwana przez wywołanie [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.SUNT.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ICS Output Path",
+          "message": "Ścieżka wyjściowa ICS"
+        },
+        "app.SUNT.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ICS file",
+          "message": "Lokalizacja do zapisu pliku ICS"
+        },
+        "app.SUNT.action.d3JpdGU.short_desc": {
+          "source": "Write calendar events or to-dos to an ICS file",
+          "message": "Zapisz wydarzenia kalendarza lub zadania do pliku ICS"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create iCalendar event or to-do data in memory and return it as binary data.\n\nUse this action when you need to generate an ICS file without writing to disk -- for example, to return the calendar as an API response, attach it to an email, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `content_type` (optional) -- \"events\" (default) or \"todos\"\n- No other required options -- records are added via `createRecord()` and binary data is retrieved via `getData()`",
+          "message": "Utwórz dane wydarzeń lub zadań iCalendar w pamięci i zwróć je jako dane binarne.\n\nUżyj tej akcji, gdy musisz wygenerować plik ICS bez zapisywania na dysku -- na przykład, aby zwrócić kalendarz jako odpowiedź API, dołączyć go do wiadomości e-mail lub przekazać do innego kroku przetwarzania. Pobierz wynik, wywołując `getData()` na dostawcy po utworzeniu wszystkich rekordów.\n\n**Główne opcje**:\n- `content_type` (opcjonalnie) -- \"events\" (domyślnie) lub \"todos\"\n- Brak innych wymaganych opcji -- rekordy są dodawane przez `createRecord()`, a dane binarne są pobierane przez `getData()`"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ICS Calendar Data",
+          "message": "Utwórz dane kalendarza ICS"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "Write VEVENT (calendar event) components with fields for dates, location, attendees, recurrence, categories, and alarms",
+          "message": "Zapisz komponenty VEVENT (wydarzenie kalendarza) z polami dla dat, lokalizacji, uczestników, powtarzalności, kategorii i alarmów"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Events",
+          "message": "Wydarzenia"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.short_desc": {
+          "source": "Write VEVENT components",
+          "message": "Zapisz komponenty VEVENT"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.desc": {
+          "source": "Write VTODO (task/to-do) components with fields for due date, completion status, priority, percent complete, and categories",
+          "message": "Zapisz komponenty VTODO (zadanie do wykonania) z polami dla terminu, statusu ukończenia, priorytetu, procentu ukończenia i kategorii"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.display_name": {
+          "source": "To-dos",
+          "message": "Zadania do wykonania"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.short_desc": {
+          "source": "Write VTODO components",
+          "message": "Zapisz komponenty VTODO"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of iCalendar component to write: \"events\" (default) or \"todos\"",
+          "message": "Typ komponentu iCalendar do zapisania: \"events\" (domyślnie) lub \"todos\""
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ zawartości"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of calendar component to write",
+          "message": "Typ komponentu kalendarza do zapisania"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create iCalendar event or to-do data and return as binary",
+          "message": "Utwórz dane wydarzeń lub zadań iCalendar i zwróć jako dane binarne"
+        },
+        "app.SUNT.desc": {
+          "source": "Read and write iCalendar (ICS) files, the standard format for calendar data exchange defined by RFC 5545.\n\n**Supported Operations**:\n- **Read**: Parse ICS files and extract calendar events (VEVENT components) as structured records with fields for summary, dates, location, attendees, and recurrence rules\n- **Write**: Create ICS files from structured event data with full VCALENDAR wrapper and VEVENT components\n\n**Key Features**:\n- Supports all standard VEVENT properties: UID, summary, start/end dates, duration, location, description, organizer, attendees, status, and recurrence rules (RRULE)\n- Automatic UID generation when writing events without explicit UIDs\n- In-memory operation: read from or write to binary data without file I/O\n- Compatible with all major calendar applications (Google Calendar, Outlook, Apple Calendar, etc.)\n\n**Business Use Cases**:\n- Importing calendar events from ICS files into data pipelines\n- Exporting scheduled events as ICS for email or download\n- Migrating calendar data between systems\n- Processing meeting invitations and RSVPs programmatically",
+          "message": "Odczytuj i zapisuj pliki iCalendar (ICS), standardowy format wymiany danych kalendarza zdefiniowany w RFC 5545.\n\n**Obsługiwane operacje**:\n- **Read**: Analizuj pliki ICS i wyciągaj wydarzenia kalendarza (komponenty VEVENT) jako ustrukturyzowane rekordy z polami dla podsumowania, dat, lokalizacji, uczestników i reguł powtarzalności\n- **Write**: Twórz pliki ICS z ustrukturyzowanych danych wydarzeń z pełną osłonką VCALENDAR i komponentami VEVENT\n\n**Kluczowe funkcje**:\n- Obsługuje wszystkie standardowe właściwości VEVENT: UID, podsumowanie, daty rozpoczęcia/zakończenia, czas trwania, lokalizację, opis, organizatora, uczestników, status i reguły powtarzalności (RRULE)\n- Automatyczne generowanie UID podczas zapisywania wydarzeń bez jawnych UID\n- Operacja w pamięci: odczyt z lub zapis do danych binarnych bez operacji I/O pliku\n- Zgodność ze wszystkimi głównymi aplikacjami kalendarza (Google Calendar, Outlook, Apple Calendar itp.)\n\n**Biznesowe przypadki użycia**:\n- Importowanie wydarzeń kalendarza z plików ICS do potoków danych\n- Eksportowanie zaplanowanych wydarzeń jako ICS do wiadomości e-mail lub pobrania\n- Migracja danych kalendarza między systemami\n- Programowe przetwarzanie zaproszeń na spotkania i odpowiedzi RSVP"
+        },
+        "app.SUNT.display_name": {
+          "source": "ICS Calendars",
+          "message": "Kalendarze ICS"
+        },
+        "app.SUNT.short_desc": {
+          "source": "Read and write iCalendar (ICS) files",
+          "message": "Odczytuj i zapisuj pliki iCalendar (ICS)"
+        }
+      }
+    }
+  }
+}

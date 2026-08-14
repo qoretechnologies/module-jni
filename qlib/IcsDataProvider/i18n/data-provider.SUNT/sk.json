@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.SUNT.action.cmVhZA.desc": {
+          "source": "Read an ICS file from a file location and return the calendar events or to-dos as records.\n\nUse this action to import calendar events or VTODO tasks from ICS files stored on disk or accessible via a URL. The file location is resolved using the `FileLocationHandler` module, supporting local file paths and remote URLs.\n\n**Key Options**:\n- `path` (required) -- the file location to read from\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "Prečítať súbor ICS z umiestnenia súboru a vrátiť kalendárové udalosti alebo úlohy ako záznamy.\n\nTúto akciu použite na import kalendárových udalostí alebo úloh VTODO zo súborov ICS uložených na disku alebo prístupných prostredníctvom URL. Umiestnenie súboru sa rozlišuje pomocou modulu `FileLocationHandler`, pričom sa podporujú lokálne cesty k súborom a vzdialené URL.\n\n**Kľúčové možnosti**:\n- `path` (povinné) -- umiestnenie súboru, z ktorého sa má čítať\n- `content_type` (voliteľné) -- \"events\" (predvolené) alebo \"todos\""
+        },
+        "app.SUNT.action.cmVhZA.display_name": {
+          "source": "Read ICS Calendar File",
+          "message": "Prečítať súbor kalendára ICS"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "Read VEVENT (calendar event) components with fields for dates, location, attendees, recurrence, categories, and alarms",
+          "message": "Čítať komponenty VEVENT (kalendárová udalosť) s poľami pre dátumy, umiestnenie, účastníkov, opakovanie, kategórie a alarmy"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Events",
+          "message": "Udalosti"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.short_desc": {
+          "source": "Read VEVENT components",
+          "message": "Čítať komponenty VEVENT"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.desc": {
+          "source": "Read VTODO (task/to-do) components with fields for due date, completion status, priority, percent complete, and categories",
+          "message": "Čítať komponenty VTODO (úloha/to-do) s poľami pre termín dokončenia, stav dokončenia, prioritu, percento dokončenia a kategórie"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.display_name": {
+          "source": "To-dos",
+          "message": "Úlohy"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.short_desc": {
+          "source": "Read VTODO components",
+          "message": "Čítať komponenty VTODO"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of iCalendar component to extract: \"events\" (default) or \"todos\"",
+          "message": "Typ komponentu iCalendar na extrahovanie: \"events\" (predvolené) alebo \"todos\""
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.SUNT.action.cmVhZA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of calendar component to read",
+          "message": "Typ komponentu kalendára na čítanie"
+        },
+        "app.SUNT.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the ICS file; mutually exclusive with `data` and `stream`.\n\nResolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umiestnenie súboru ICS; vzájomne sa vylučuje s `data` a `stream`.\n\nVyriešené volaním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.SUNT.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "ICS Input Path",
+          "message": "Vstupná cesta ICS"
+        },
+        "app.SUNT.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the ICS file",
+          "message": "Umiestnenie súboru ICS"
+        },
+        "app.SUNT.action.cmVhZA.short_desc": {
+          "source": "Read iCalendar events or to-dos from a specific file location",
+          "message": "Prečítať udalosti iCalendar alebo úlohy z konkrétneho umiestnenia súboru"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.desc": {
+          "source": "Read iCalendar events or to-dos from inline binary data and return them as records.\n\nUse this action when the ICS data is already available in memory (e.g., received from an API response, uploaded by a user, or read from a database BLOB column) rather than stored as a file.\n\n**Key Options**:\n- `data` (required) -- the ICS binary data to parse\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "Prečítať udalosti iCalendar alebo úlohy z priamych (inline) binárnych údajov a vrátiť ich ako záznamy.\n\nTúto akciu použite, keď sú údaje ICS už dostupné v pamäti (napr. prijaté z odpovede API, odovzdané používateľom alebo prečítané zo stĺpca BLOB v databáze) a nie uložené ako súbor.\n\n**Kľúčové možnosti**:\n- `data` (povinné) -- binárne údaje ICS na spracovanie\n- `content_type` (voliteľné) -- \"events\" (predvolené) alebo \"todos\""
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read ICS Calendar Inline Data",
+          "message": "Prečítať priame údaje kalendára ICS"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "Read VEVENT (calendar event) components with fields for dates, location, attendees, recurrence, categories, and alarms",
+          "message": "Čítať komponenty VEVENT (kalendárová udalosť) s poľami pre dátumy, umiestnenie, účastníkov, opakovanie, kategórie a alarmy"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Events",
+          "message": "Udalosti"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.short_desc": {
+          "source": "Read VEVENT components",
+          "message": "Čítať komponenty VEVENT"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.desc": {
+          "source": "Read VTODO (task/to-do) components with fields for due date, completion status, priority, percent complete, and categories",
+          "message": "Čítať komponenty VTODO (úloha/to-do) s poľami pre termín dokončenia, stav dokončenia, prioritu, percento dokončenia a kategórie"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.display_name": {
+          "source": "To-dos",
+          "message": "Úlohy"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.short_desc": {
+          "source": "Read VTODO components",
+          "message": "Čítať komponenty VTODO"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of iCalendar component to extract: \"events\" (default) or \"todos\"",
+          "message": "Typ komponentu iCalendar na extrahovanie: \"events\" (predvolené) alebo \"todos\""
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of calendar component to read",
+          "message": "Typ komponentu kalendára na čítanie"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "ICS data to process; conflicts with `stream` and `path`",
+          "message": "Údaje ICS na spracovanie; v konflikte s `stream` a `path`"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupné dáta"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "ICS data to process",
+          "message": "Údaje ICS na spracovanie"
+        },
+        "app.SUNT.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read iCalendar events or to-dos from inline binary data",
+          "message": "Čítanie udalostí alebo úloh iCalendar z priamych binárnych dát"
+        },
+        "app.SUNT.action.d3JpdGU.desc": {
+          "source": "Write calendar events or to-dos to an ICS file at a specified path.\n\nUse this action to generate ICS files from structured event or to-do data for calendar sharing, task management, or integration with calendar applications.\n\n**Key Options**:\n- `path` (required) -- the output file location\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "Zápis kalendárových udalostí alebo úloh do súboru ICS na určenej ceste.\n\nTúto akciu použite na generovanie súborov ICS zo štruktúrovaných dát udalostí alebo úloh pre zdieľanie kalendára, správu úloh alebo integráciu s kalendárovými aplikáciami.\n\n**Kľúčové možnosti**:\n- `path` (povinné) -- umiestnenie výstupného súboru\n- `content_type` (voliteľné) -- \"events\" (predvolené) alebo \"todos\""
+        },
+        "app.SUNT.action.d3JpdGU.display_name": {
+          "source": "Write ICS Calendar File",
+          "message": "Zapísať súbor kalendára ICS"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "Write VEVENT (calendar event) components with fields for dates, location, attendees, recurrence, categories, and alarms",
+          "message": "Zápis komponentov VEVENT (kalendárová udalosť) s poľami pre dátumy, miesto, účastníkov, opakovanie, kategórie a upozornenia"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Events",
+          "message": "Udalosti"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.short_desc": {
+          "source": "Write VEVENT components",
+          "message": "Zapísať komponenty VEVENT"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.desc": {
+          "source": "Write VTODO (task/to-do) components with fields for due date, completion status, priority, percent complete, and categories",
+          "message": "Zápis komponentov VTODO (úloha) s poľami pre termín dokončenia, stav dokončenia, prioritu, percento dokončenia a kategórie"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.display_name": {
+          "source": "To-dos",
+          "message": "Úlohy"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.short_desc": {
+          "source": "Write VTODO components",
+          "message": "Zapísať komponenty VTODO"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of iCalendar component to write: \"events\" (default) or \"todos\"",
+          "message": "Typ komponentu iCalendar na zápis: \"events\" (predvolené) alebo \"todos\""
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.SUNT.action.d3JpdGU.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of calendar component to write",
+          "message": "Typ kalendárového komponentu na zápis"
+        },
+        "app.SUNT.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output ICS data file; mutually exclusive with `stream`.\n\nThe output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "Umiestnenie pre výstupný dátový súbor ICS; vzájomne sa vylučuje s `stream`.\n\nUmiestnenie výstupu je spracované volaním [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)"
+        },
+        "app.SUNT.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "ICS Output Path",
+          "message": "Výstupná cesta ICS"
+        },
+        "app.SUNT.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The location to write the ICS file",
+          "message": "Umiestnenie na zápis súboru ICS"
+        },
+        "app.SUNT.action.d3JpdGU.short_desc": {
+          "source": "Write calendar events or to-dos to an ICS file",
+          "message": "Zapísať kalendárové udalosti alebo úlohy do súboru ICS"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create iCalendar event or to-do data in memory and return it as binary data.\n\nUse this action when you need to generate an ICS file without writing to disk -- for example, to return the calendar as an API response, attach it to an email, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `content_type` (optional) -- \"events\" (default) or \"todos\"\n- No other required options -- records are added via `createRecord()` and binary data is retrieved via `getData()`",
+          "message": "Vytvorenie dát kalendárových udalostí alebo úloh iCalendar v pamäti a ich vrátenie ako binárne dáta.\n\nTúto akciu použite, keď potrebujete vygenerovať súbor ICS bez zápisu na disk -- napríklad na vrátenie kalendára ako odpoveď API, jeho priloženie k e-mailu alebo odovzdanie do ďalšieho kroku spracovania. Výsledok získate volaním `getData()` na poskytovateľovi po vytvorení všetkých záznamov.\n\n**Kľúčové možnosti**:\n- `content_type` (voliteľné) -- \"events\" (predvolené) alebo \"todos\"\n- Žiadne ďalšie povinné možnosti -- záznamy sa pridávajú cez `createRecord()` a binárne dáta sa získavajú cez `getData()`"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Create ICS Calendar Data",
+          "message": "Vytvoriť dáta kalendára ICS"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "Write VEVENT (calendar event) components with fields for dates, location, attendees, recurrence, categories, and alarms",
+          "message": "Zápis komponentov VEVENT (kalendárová udalosť) s poľami pre dátumy, miesto, účastníkov, opakovanie, kategórie a upozornenia"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Events",
+          "message": "Udalosti"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOmV2ZW50cw.short_desc": {
+          "source": "Write VEVENT components",
+          "message": "Zapísať komponenty VEVENT"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.desc": {
+          "source": "Write VTODO (task/to-do) components with fields for due date, completion status, priority, percent complete, and categories",
+          "message": "Zápis komponentov VTODO (úloha) s poľami pre termín dokončenia, stav dokončenia, prioritu, percento dokončenia a kategórie"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.display_name": {
+          "source": "To-dos",
+          "message": "Úlohy"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.allowed-value.c3RyaW5nOnRvZG9z.short_desc": {
+          "source": "Write VTODO components",
+          "message": "Zapísať komponenty VTODO"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The type of iCalendar component to write: \"events\" (default) or \"todos\"",
+          "message": "Typ komponentu iCalendar na zápis: \"events\" (predvolené) alebo \"todos\""
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Type of calendar component to write",
+          "message": "Typ kalendárového komponentu na zápis"
+        },
+        "app.SUNT.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create iCalendar event or to-do data and return as binary",
+          "message": "Vytvoriť dáta kalendárovej udalosti alebo úlohy iCalendar a vrátiť ako binárne dáta"
+        },
+        "app.SUNT.desc": {
+          "source": "Read and write iCalendar (ICS) files, the standard format for calendar data exchange defined by RFC 5545.\n\n**Supported Operations**:\n- **Read**: Parse ICS files and extract calendar events (VEVENT components) as structured records with fields for summary, dates, location, attendees, and recurrence rules\n- **Write**: Create ICS files from structured event data with full VCALENDAR wrapper and VEVENT components\n\n**Key Features**:\n- Supports all standard VEVENT properties: UID, summary, start/end dates, duration, location, description, organizer, attendees, status, and recurrence rules (RRULE)\n- Automatic UID generation when writing events without explicit UIDs\n- In-memory operation: read from or write to binary data without file I/O\n- Compatible with all major calendar applications (Google Calendar, Outlook, Apple Calendar, etc.)\n\n**Business Use Cases**:\n- Importing calendar events from ICS files into data pipelines\n- Exporting scheduled events as ICS for email or download\n- Migrating calendar data between systems\n- Processing meeting invitations and RSVPs programmatically",
+          "message": "Čítanie a zápis súborov iCalendar (ICS), štandardného formátu pre výmenu kalendárových dát definovaného v RFC 5545.\n\n**Podporované operácie**:\n- **Čítanie**: Analyzovanie súborov ICS a extrahovanie kalendárových udalostí (komponentov VEVENT) ako štruktúrovaných záznamov s poľami pre súhrn, dátumy, miesto, účastníkov a pravidlá opakovania\n- **Zápis**: Vytváranie súborov ICS zo štruktúrovaných dát udalostí s úplným obalom VCALENDAR a komponentmi VEVENT\n\n**Kľúčové funkcie**:\n- Podpora všetkých štandardných vlastností VEVENT: UID, súhrn, dátumy začiatku/konca, trvanie, miesto, popis, organizátor, účastníci, stav a pravidlá opakovania (RRULE)\n- Automatické generovanie UID pri zápise udalostí bez explicitných UID\n- Operácia v pamäti: čítanie z binárnych dát alebo zápis do nich bez súborových I/O operácií\n- Kompatibilné so všetkými hlavnými kalendárovými aplikáciami (Google Calendar, Outlook, Apple Calendar atď.)\n\n**Prípady použitia v biznise**:\n- Importovanie kalendárových udalostí zo súborov ICS do dátových reťazcov\n- Exportovanie naplánovaných udalostí ako ICS pre e-mail alebo stiahnutie\n- Migrácia kalendárových dát medzi systémami\n- Programové spracovanie pozvánok na stretnutia a odpovedí RSVP"
+        },
+        "app.SUNT.display_name": {
+          "source": "ICS Calendars",
+          "message": "ICS Kalendáre"
+        },
+        "app.SUNT.short_desc": {
+          "source": "Read and write iCalendar (ICS) files",
+          "message": "Čítanie a zápis súborov iCalendar (ICS)"
+        }
+      }
+    }
+  }
+}

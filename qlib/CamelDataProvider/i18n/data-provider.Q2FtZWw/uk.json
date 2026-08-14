@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.Q2FtZWw.action.c2VuZA.desc": {
+          "source": "Send a message to a Camel endpoint.\n\nSpecify the endpoint URI (e.g., `seda:orders`, `file:output`, `direct:process`) and provide the message body and optional headers.\n\n**Note**: the endpoint must have an active consumer route or be a built-in component that accepts messages directly.",
+          "message": "Надіслати повідомлення на кінцеву точку Camel.\n\nВкажіть URI кінцевої точки (наприклад, `seda:orders`, `file:output`, `direct:process`) та надайте тіло повідомлення і необов'язкові заголовки.\n\n**Примітка**: кінцева точка повинна мати активний маршрут споживача або бути вбудованим компонентом, який приймає повідомлення безпосередньо."
+        },
+        "app.Q2FtZWw.action.c2VuZA.display_name": {
+          "source": "Send Camel Message",
+          "message": "Надіслати повідомлення Camel"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.desc": {
+          "source": "The message body / payload to send.\n\nThe body type depends on the target endpoint — most endpoints accept `string` or `binary` data.",
+          "message": "Тіло/корисне навантаження повідомлення для надсилання.\n\nТип тіла залежить від цільової кінцевої точки — більшість кінцевих точок приймають дані `string` або `binary`."
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Тіло повідомлення"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.Ym9keQ.short_desc": {
+          "source": "The message body / payload to send",
+          "message": "Тіло/корисне навантаження повідомлення для надсилання"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.desc": {
+          "source": "The Camel endpoint URI to send the message to.\n\nBuilt-in components include:\n- `direct:name` — synchronous in-memory messaging\n- `seda:name` — asynchronous in-memory queue\n- `file:directory` — file system integration\n- `log:category` — logging\n- `timer:name` — periodic timer events\n\nAdditional components can be loaded by adding their JARs to the Java classpath.",
+          "message": "URI кінцевої точки Camel для надсилання повідомлення.\n\nВбудовані компоненти включають:\n- `direct:name` — синхронне обмін повідомленнями в пам'яті\n- `seda:name` — асинхронна черга в пам'яті\n- `file:directory` — інтеграція з файловою системою\n- `log:category` — ведення журналу\n- `timer:name` — періодичні події таймера\n\nДодаткові компоненти можна завантажити, додавши їхні JAR-файли до Java classpath."
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.display_name": {
+          "source": "Endpoint URI",
+          "message": "URI кінцевої точки"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.ZW5kcG9pbnQ.short_desc": {
+          "source": "The Camel endpoint URI to send the message to",
+          "message": "URI кінцевої точки Camel для надсилання повідомлення"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.desc": {
+          "source": "Optional message headers as a hash of key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"priority\": \"high\"}`",
+          "message": "Необов'язкові заголовки повідомлення у вигляді хешу пар ключ-значення.\n\n**Приклад**: `{\"source\": \"order-system\", \"priority\": \"high\"}`"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Заголовки повідомлення"
+        },
+        "app.Q2FtZWw.action.c2VuZA.option.aGVhZGVycw.short_desc": {
+          "source": "Optional message headers as a hash of key-value pairs",
+          "message": "Необов'язкові заголовки повідомлення у вигляді хешу пар ключ-значення"
+        },
+        "app.Q2FtZWw.action.c2VuZA.short_desc": {
+          "source": "Send a message to a Camel endpoint",
+          "message": "Надіслати повідомлення на кінцеву точку Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.desc": {
+          "source": "List all active routes in the Camel context",
+          "message": "Список усіх активних маршрутів у контексті Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.display_name": {
+          "source": "List Camel Routes",
+          "message": "Список маршрутів Camel"
+        },
+        "app.Q2FtZWw.action.cm91dGVz.short_desc": {
+          "source": "List active Camel routes",
+          "message": "Список активних маршрутів Camel"
+        },
+        "app.Q2FtZWw.desc": {
+          "source": "Enterprise integration using [Apache Camel](https://camel.apache.org/) with support for 300+ connectors.\n\n**Built-in components**:\n- `direct` — synchronous in-memory messaging\n- `seda` — asynchronous in-memory queues\n- `file` — file system integration\n- `timer` — periodic timer events\n- `log` — message logging\n\nAdditional components (HTTP, JMS, Kafka, AWS, etc.) can be loaded by adding their JARs to the Java classpath.",
+          "message": "Корпоративна інтеграція за допомогою [Apache Camel](https://camel.apache.org/) із підтримкою 300+ конекторів.\n\n**Вбудовані компоненти**:\n- `direct` — синхронне обмін повідомленнями в пам'яті\n- `seda` — асинхронні черги в пам'яті\n- `file` — інтеграція з файловою системою\n- `timer` — періодичні події таймера\n- `log` — ведення журналу повідомлень\n\nДодаткові компоненти (HTTP, JMS, Kafka, AWS тощо) можна завантажити, додавши їхні JAR-файли до Java classpath."
+        },
+        "app.Q2FtZWw.display_name": {
+          "source": "Apache Camel",
+          "message": "Apache Camel"
+        },
+        "app.Q2FtZWw.short_desc": {
+          "source": "Apache Camel enterprise integration patterns",
+          "message": "Шаблони корпоративної інтеграції Apache Camel"
+        }
+      }
+    }
+  }
+}

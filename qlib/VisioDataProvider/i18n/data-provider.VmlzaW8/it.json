@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.VmlzaW8.action.cmVhZA.desc": {
+          "source": "Read Visio document from a specific file location and extract text from each page",
+          "message": "Leggi il documento Visio da una posizione di file specifica ed estrai il testo da ogni pagina"
+        },
+        "app.VmlzaW8.action.cmVhZA.display_name": {
+          "source": "Read Visio Document File",
+          "message": "Leggi file di documento Visio"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Visio document data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "La posizione dei dati del documento Visio; mutuamente esclusivo con `data` e `stream`; risolto con una chiamata a [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Visio Input Path",
+          "message": "Percorso di input Visio"
+        },
+        "app.VmlzaW8.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the Visio document",
+          "message": "La posizione del documento Visio"
+        },
+        "app.VmlzaW8.action.cmVhZA.short_desc": {
+          "source": "Read Visio document from a specific file location",
+          "message": "Leggi il documento Visio da una posizione di file specifica"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Visio document inline data and extract text from each page",
+          "message": "Leggi i dati inline del documento Visio ed estrai il testo da ogni pagina"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read Visio Document Inline Data",
+          "message": "Leggi dati inline del documento Visio"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Visio document data to process; conflicts with `stream` and `path`",
+          "message": "Dati del documento Visio da elaborare; è in conflitto con `stream` e `path`"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dati di input"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "Visio document data to process",
+          "message": "Dati del documento Visio da elaborare"
+        },
+        "app.VmlzaW8.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Visio document inline data",
+          "message": "Leggi dati inline del documento Visio"
+        },
+        "app.VmlzaW8.desc": {
+          "source": "Read Microsoft Visio documents (.vsdx format) and extract page text and shape data",
+          "message": "Leggi documenti Microsoft Visio (formato .vsdx) ed estrai il testo delle pagine e i dati delle forme"
+        },
+        "app.VmlzaW8.display_name": {
+          "source": "Visio Documents",
+          "message": "Documenti Visio"
+        },
+        "app.VmlzaW8.short_desc": {
+          "source": "Read Microsoft Visio documents",
+          "message": "Leggi documenti Microsoft Visio"
+        }
+      }
+    }
+  }
+}
