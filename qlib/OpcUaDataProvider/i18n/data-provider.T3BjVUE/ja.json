@@ -92,8 +92,8 @@
           "message": "方向"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.short_desc": {
-          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'",
-          "message": "ブラウズ方向: 'Forward'、'Inverse'、または'Both'（デフォルトは'Forward'）"
+          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'",
+          "message": "ブラウズ方向: 'Forward'、'Inverse'、または'Both'"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.desc": {
           "source": "Maximum number of references to return; `0` or omitted means no limit",
@@ -212,8 +212,8 @@
           "message": "ノードID"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.short_desc": {
-          "source": "The OPC UA node ID to read (e",
-          "message": "読み取るOPC UAノードID（例"
+          "source": "The OPC UA node ID to read (e.g., 'ns=2;s=Temperature')",
+          "message": "読み取るOPC UAノードID（例: 'ns=2;s=Temperature'）"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.short_desc": {
           "source": "Read a value from an OPC UA node",
@@ -236,8 +236,8 @@
           "message": "ノードID一覧"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.short_desc": {
-          "source": "List of OPC UA node IDs to read (e",
-          "message": "読み取るOPC UAノードIDのリスト（例"
+          "source": "List of OPC UA node IDs to read (e.g., 'ns=2;s=Temperature')",
+          "message": "読み取るOPC UAノードIDのリスト（例: 'ns=2;s=Temperature'）"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.short_desc": {
           "source": "Read values from multiple OPC UA nodes in a single request",
@@ -412,8 +412,8 @@
           "message": "ノードID"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.short_desc": {
-          "source": "The target OPC UA node ID (e",
-          "message": "ターゲット OPC UA ノード ID (e"
+          "source": "The target OPC UA node ID (e.g., 'ns=2;s=SetPoint')",
+          "message": "ターゲット OPC UA ノード ID（例: 'ns=2;s=SetPoint'）"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.desc": {
           "source": "The value to write to the node",
@@ -448,8 +448,8 @@
           "message": "値"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.short_desc": {
-          "source": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)",
-          "message": "書き込む値のリスト。各項目は 'node_id'（文字列、必須）、'value'（自動、必須）、および 'data_type'（文字列、オプション）を持つハッシュです"
+          "source": "List of values to write, each a hash with 'node_id' (string, required),…",
+          "message": "書き込む値のリスト。各項目は…"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.short_desc": {
           "source": "Write values to multiple OPC UA nodes",

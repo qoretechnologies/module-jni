@@ -56,8 +56,8 @@
           "message": "コンテンツタイプ"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
-          "source": "The MIME content type of the message payload (e",
-          "message": "メッセージペイロードの MIME コンテンツタイプ（例"
+          "source": "The MIME content type of the message payload…",
+          "message": "メッセージペイロードの MIME コンテンツタイプ…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
           "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
@@ -104,8 +104,8 @@
           "message": "ペイロード形式インジケーター"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
-          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
-          "message": "ペイロード形式インジケーター: 'True' = UTF-8 エンコードテキスト、'False' または省略時 = 未指定のバイナリデータ"
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted =…",
+          "message": "ペイロード形式インジケーター: 'True' = UTF-8 エンコードテキスト、'False'…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
           "source": "QoS 0: message is delivered at most once with no acknowledgment",
@@ -176,7 +176,7 @@
           "message": "応答トピック"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
-          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "source": "The topic to which the receiver should publish a response…",
           "message": "受信者がレスポンスを公開すべきトピック（MQTT 5 リクエスト/レスポンスパターン）"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {

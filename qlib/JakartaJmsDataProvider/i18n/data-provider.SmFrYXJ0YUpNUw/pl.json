@@ -32,8 +32,8 @@
           "message": "Selektor"
         },
         "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.short_desc": {
-          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e",
-          "message": "Hash filtrów właściwości do zastosowania jako selektor wiadomości JMS SQL-92 (np"
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector…",
+          "message": "Hash filtrów właściwości do zastosowania jako selektor wiadomości JMS SQL-92…"
         },
         "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.short_desc": {
           "source": "Non-destructively browse messages in a JMS queue",
@@ -164,8 +164,8 @@
           "message": "Miejsce docelowe"
         },
         "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.short_desc": {
-          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
-          "message": "Miejsce docelowe, do którego ma zostać wysłana wiadomość, w formacie 'queue://name' lub 'topic://name'"
+          "source": "The destination to send the message to, in format 'queue://name' or…",
+          "message": "Miejsce docelowe, do którego ma zostać wysłana wiadomość, w formacie…"
         },
         "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.desc": {
           "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",
@@ -376,8 +376,8 @@
           "message": "Miejsce docelowe"
         },
         "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.short_desc": {
-          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
-          "message": "Miejsce docelowe, do którego ma zostać wysłana wiadomość, w formacie 'queue://name' lub 'topic://name'"
+          "source": "The destination to send the message to, in format 'queue://name' or…",
+          "message": "Miejsce docelowe, do którego ma zostać wysłana wiadomość, w formacie…"
         },
         "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.desc": {
           "source": "User-defined string properties to set on the message.\n\nProvide a hash of string key-value pairs.\n\n**Example**: `{\"source\": \"order-system\", \"region\": \"us-east\"}`",

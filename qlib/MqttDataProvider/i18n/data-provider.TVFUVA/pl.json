@@ -56,8 +56,8 @@
           "message": "Typ zawartości"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
-          "source": "The MIME content type of the message payload (e",
-          "message": "Typ zawartości MIME ładunku wiadomości (np."
+          "source": "The MIME content type of the message payload…",
+          "message": "Typ zawartości MIME ładunku wiadomości…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
           "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
@@ -104,8 +104,8 @@
           "message": "Wskaźnik formatu ładunku"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
-          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
-          "message": "Wskaźnik formatu ładunku: 'True' = tekst kodowany w UTF-8, 'False' lub pominięty = nieokreślone dane binarne"
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted =…",
+          "message": "Wskaźnik formatu ładunku: 'True' = tekst kodowany w UTF-8, 'False' lub…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
           "source": "QoS 0: message is delivered at most once with no acknowledgment",
@@ -176,8 +176,8 @@
           "message": "Temat odpowiedzi"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
-          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
-          "message": "Temat, w którym odbiorca powinien opublikować odpowiedź (wzorzec żądanie/odpowiedź MQTT 5)"
+          "source": "The topic to which the receiver should publish a response…",
+          "message": "Temat, w którym odbiorca powinien opublikować odpowiedź…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {
           "source": "The message topic",

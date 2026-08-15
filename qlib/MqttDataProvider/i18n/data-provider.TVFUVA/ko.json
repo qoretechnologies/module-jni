@@ -56,8 +56,8 @@
           "message": "콘텐츠 유형"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
-          "source": "The MIME content type of the message payload (e",
-          "message": "메시지 페이로드의 MIME 콘텐츠 유형(예:"
+          "source": "The MIME content type of the message payload…",
+          "message": "메시지 페이로드의 MIME 콘텐츠 유형…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
           "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
@@ -104,8 +104,8 @@
           "message": "페이로드 형식 표시기"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
-          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
-          "message": "페이로드 형식 표시기: 'True' = UTF-8 인코딩된 텍스트, 'False' 또는 생략됨 = 지정되지 않은 바이너리 데이터"
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted =…",
+          "message": "페이로드 형식 표시기: 'True' = UTF-8 인코딩된 텍스트, 'False' 또는 생략됨 =…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
           "source": "QoS 0: message is delivered at most once with no acknowledgment",
@@ -176,7 +176,7 @@
           "message": "응답 토픽"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
-          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "source": "The topic to which the receiver should publish a response…",
           "message": "수신자가 응답을 게시해야 하는 토픽(MQTT 5 요청/응답 패턴)"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {

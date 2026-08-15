@@ -56,8 +56,8 @@
           "message": "Tipo de contenido"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
-          "source": "The MIME content type of the message payload (e",
-          "message": "El tipo de contenido MIME de la carga útil del mensaje (p."
+          "source": "The MIME content type of the message payload…",
+          "message": "El tipo de contenido MIME de la carga útil del mensaje…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
           "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
@@ -104,8 +104,8 @@
           "message": "Indicador de formato de carga útil"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
-          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
-          "message": "Indicador de formato de carga útil: 'True' = texto codificado en UTF-8, 'False' u omitido = datos binarios no especificados"
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted =…",
+          "message": "Indicador de formato de carga útil: 'True' = texto codificado en UTF-8,…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
           "source": "QoS 0: message is delivered at most once with no acknowledgment",
@@ -176,8 +176,8 @@
           "message": "Tema de respuesta"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
-          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
-          "message": "El tema en el que el receptor debe publicar una respuesta (patrón de solicitud/respuesta de MQTT 5)"
+          "source": "The topic to which the receiver should publish a response…",
+          "message": "El tema en el que el receptor debe publicar una respuesta…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {
           "source": "The message topic",

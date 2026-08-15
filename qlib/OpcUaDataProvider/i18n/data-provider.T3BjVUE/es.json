@@ -92,8 +92,8 @@
           "message": "Dirección"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.short_desc": {
-          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'",
-          "message": "Dirección de navegación: 'Forward', 'Inverse' o 'Both'; el valor predeterminado es 'Forward'"
+          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'",
+          "message": "Dirección de navegación: 'Forward', 'Inverse' o 'Both'"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.desc": {
           "source": "Maximum number of references to return; `0` or omitted means no limit",
@@ -212,8 +212,8 @@
           "message": "ID de nodo"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.short_desc": {
-          "source": "The OPC UA node ID to read (e",
-          "message": "El ID de nodo OPC UA que se va a leer (p. ej."
+          "source": "The OPC UA node ID to read (e.g., 'ns=2;s=Temperature')",
+          "message": "El ID de nodo OPC UA que se va a leer (p. ej., 'ns=2;s=Temperature')"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.short_desc": {
           "source": "Read a value from an OPC UA node",
@@ -236,8 +236,8 @@
           "message": "ID de nodos"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.short_desc": {
-          "source": "List of OPC UA node IDs to read (e",
-          "message": "Lista de ID de nodo OPC UA que se van a leer (p. ej."
+          "source": "List of OPC UA node IDs to read (e.g., 'ns=2;s=Temperature')",
+          "message": "Lista de ID de nodo OPC UA que se van a leer (p. ej., 'ns=2;s=Temperature')"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.short_desc": {
           "source": "Read values from multiple OPC UA nodes in a single request",
@@ -412,8 +412,8 @@
           "message": "ID de nodo"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.short_desc": {
-          "source": "The target OPC UA node ID (e",
-          "message": "El ID de nodo de OPC UA de destino (p. ej."
+          "source": "The target OPC UA node ID (e.g., 'ns=2;s=SetPoint')",
+          "message": "El ID de nodo de OPC UA de destino (p. ej., 'ns=2;s=SetPoint')"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.desc": {
           "source": "The value to write to the node",
@@ -448,8 +448,8 @@
           "message": "Valores"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.short_desc": {
-          "source": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)",
-          "message": "Lista de valores que se van a escribir, cada uno como un hash con 'node_id' (string, requerido), 'value' (auto, requerido) y 'data_type' (string, opcional)"
+          "source": "List of values to write, each a hash with 'node_id' (string, required),…",
+          "message": "Lista de valores que se van a escribir, cada uno como un hash con 'node_id'…"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.short_desc": {
           "source": "Write values to multiple OPC UA nodes",

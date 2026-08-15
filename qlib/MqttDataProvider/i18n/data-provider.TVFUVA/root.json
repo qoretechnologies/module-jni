@@ -152,8 +152,8 @@
           "message": "Content Type"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
-          "source": "The MIME content type of the message payload (e",
-          "message": "The MIME content type of the message payload (e"
+          "source": "The MIME content type of the message payload…",
+          "message": "The MIME content type of the message payload…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.desc": {
           "source": "The MIME content type of the message payload (e.g., `application/json`, `text/plain`)",
@@ -164,8 +164,8 @@
           "message": "Response Topic"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
-          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
-          "message": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)"
+          "source": "The topic to which the receiver should publish a response…",
+          "message": "The topic to which the receiver should publish a response…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.desc": {
           "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
@@ -200,8 +200,8 @@
           "message": "Payload Format Indicator"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
-          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
-          "message": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data"
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted =…",
+          "message": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted =…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.desc": {
           "source": "Payload format indicator: `True` = UTF-8 encoded text, `False` or omitted = unspecified binary data",

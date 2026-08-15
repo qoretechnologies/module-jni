@@ -68,8 +68,8 @@
           "message": "Node ID"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.short_desc": {
-          "source": "The target OPC UA node ID (e",
-          "message": "The target OPC UA node ID (e"
+          "source": "The target OPC UA node ID (e.g., 'ns=2;s=SetPoint')",
+          "message": "The target OPC UA node ID (e.g., 'ns=2;s=SetPoint')"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.desc": {
           "source": "The target OPC UA node ID (e.g., `ns=2;s=SetPoint`)",
@@ -172,8 +172,8 @@
           "message": "Node ID"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.short_desc": {
-          "source": "The OPC UA node ID to read (e",
-          "message": "The OPC UA node ID to read (e"
+          "source": "The OPC UA node ID to read (e.g., 'ns=2;s=Temperature')",
+          "message": "The OPC UA node ID to read (e.g., 'ns=2;s=Temperature')"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.desc": {
           "source": "The OPC UA node ID to read (e.g., `ns=2;s=Temperature`)",
@@ -208,8 +208,8 @@
           "message": "Direction"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.short_desc": {
-          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'",
-          "message": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'"
+          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'",
+          "message": "Browse direction: 'Forward', 'Inverse', or 'Both'"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.desc": {
           "source": "Browse direction: `Forward`, `Inverse`, or `Both`; defaults to `Forward`",
@@ -304,8 +304,8 @@
           "message": "Node IDs"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.short_desc": {
-          "source": "List of OPC UA node IDs to read (e",
-          "message": "List of OPC UA node IDs to read (e"
+          "source": "List of OPC UA node IDs to read (e.g., 'ns=2;s=Temperature')",
+          "message": "List of OPC UA node IDs to read (e.g., 'ns=2;s=Temperature')"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.desc": {
           "source": "List of OPC UA node IDs to read (e.g., `ns=2;s=Temperature`)",
@@ -328,8 +328,8 @@
           "message": "Values"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.short_desc": {
-          "source": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)",
-          "message": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)"
+          "source": "List of values to write, each a hash with 'node_id' (string, required),…",
+          "message": "List of values to write, each a hash with 'node_id' (string, required),…"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.desc": {
           "source": "List of values to write, each a hash with `node_id` (string, required), `value` (auto, required), and `data_type` (string, optional)",

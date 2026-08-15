@@ -56,8 +56,8 @@
           "message": "內容類型"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
-          "source": "The MIME content type of the message payload (e",
-          "message": "訊息承載資料的 MIME 內容類型（例"
+          "source": "The MIME content type of the message payload…",
+          "message": "訊息承載資料的 MIME 內容類型…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
           "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
@@ -104,7 +104,7 @@
           "message": "承載資料格式指示符"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
-          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted =…",
           "message": "承載資料格式指示符：'True' = UTF-8 編碼文字，'False' 或省略 = 未指定的二進位資料"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
@@ -176,7 +176,7 @@
           "message": "回應主題"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
-          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
+          "source": "The topic to which the receiver should publish a response…",
           "message": "接收者應發布回應的主題（MQTT 5 請求/回應模式）"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {

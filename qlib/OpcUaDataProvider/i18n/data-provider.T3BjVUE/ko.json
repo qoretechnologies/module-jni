@@ -92,8 +92,8 @@
           "message": "방향"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.short_desc": {
-          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'",
-          "message": "탐색 방향: 'Forward', 'Inverse' 또는 'Both', 기본값은 'Forward'입니다"
+          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'",
+          "message": "탐색 방향: 'Forward', 'Inverse' 또는 'Both'"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.desc": {
           "source": "Maximum number of references to return; `0` or omitted means no limit",
@@ -212,8 +212,8 @@
           "message": "노드 ID"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.short_desc": {
-          "source": "The OPC UA node ID to read (e",
-          "message": "읽을 OPC UA 노드 ID (예:"
+          "source": "The OPC UA node ID to read (e.g., 'ns=2;s=Temperature')",
+          "message": "읽을 OPC UA 노드 ID입니다 (예: 'ns=2;s=Temperature')"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.short_desc": {
           "source": "Read a value from an OPC UA node",
@@ -236,8 +236,8 @@
           "message": "노드 ID 목록"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.short_desc": {
-          "source": "List of OPC UA node IDs to read (e",
-          "message": "읽을 OPC UA 노드 ID 목록 (예:"
+          "source": "List of OPC UA node IDs to read (e.g., 'ns=2;s=Temperature')",
+          "message": "읽을 OPC UA 노드 ID 목록입니다 (예: 'ns=2;s=Temperature')"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.short_desc": {
           "source": "Read values from multiple OPC UA nodes in a single request",
@@ -412,8 +412,8 @@
           "message": "노드 ID"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.short_desc": {
-          "source": "The target OPC UA node ID (e",
-          "message": "대상 OPC UA 노드 ID (예:"
+          "source": "The target OPC UA node ID (e.g., 'ns=2;s=SetPoint')",
+          "message": "대상 OPC UA 노드 ID (예: 'ns=2;s=SetPoint')"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.desc": {
           "source": "The value to write to the node",
@@ -448,8 +448,8 @@
           "message": "값 목록"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.short_desc": {
-          "source": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)",
-          "message": "쓸 값의 목록으로, 각각 'node_id' (문자열, 필수), 'value' (자동, 필수), 'data_type' (문자열, 선택)을 포함하는 해시입니다."
+          "source": "List of values to write, each a hash with 'node_id' (string, required),…",
+          "message": "쓸 값의 목록으로, 각각 'node_id' (문자열, 필수), 'value' (자동, 필수),…"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.short_desc": {
           "source": "Write values to multiple OPC UA nodes",

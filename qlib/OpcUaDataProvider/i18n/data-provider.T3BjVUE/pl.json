@@ -92,8 +92,8 @@
           "message": "Kierunek"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.ZGlyZWN0aW9u.short_desc": {
-          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'; defaults to 'Forward'",
-          "message": "Kierunek przeglądania: 'Forward', 'Inverse' lub 'Both'; domyślnie 'Forward'"
+          "source": "Browse direction: 'Forward', 'Inverse', or 'Both'",
+          "message": "Kierunek przeglądania: 'Forward', 'Inverse' lub 'Both'"
         },
         "app.T3BjVUE.action.YnJvd3NlLW5vZGVz.option.bWF4X3Jlc3VsdHM.desc": {
           "source": "Maximum number of references to return; `0` or omitted means no limit",
@@ -212,8 +212,8 @@
           "message": "ID węzła"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.option.bm9kZV9pZA.short_desc": {
-          "source": "The OPC UA node ID to read (e",
-          "message": "ID węzła OPC UA do odczytu (np."
+          "source": "The OPC UA node ID to read (e.g., 'ns=2;s=Temperature')",
+          "message": "ID węzła OPC UA do odczytu (np. 'ns=2;s=Temperature')"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZQ.short_desc": {
           "source": "Read a value from an OPC UA node",
@@ -236,8 +236,8 @@
           "message": "ID węzłów"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.option.bm9kZV9pZHM.short_desc": {
-          "source": "List of OPC UA node IDs to read (e",
-          "message": "Lista ID węzłów OPC UA do odczytu (np."
+          "source": "List of OPC UA node IDs to read (e.g., 'ns=2;s=Temperature')",
+          "message": "Lista ID węzłów OPC UA do odczytu (np. 'ns=2;s=Temperature')"
         },
         "app.T3BjVUE.action.cmVhZC12YWx1ZXM.short_desc": {
           "source": "Read values from multiple OPC UA nodes in a single request",
@@ -412,8 +412,8 @@
           "message": "ID węzła"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.bm9kZV9pZA.short_desc": {
-          "source": "The target OPC UA node ID (e",
-          "message": "Docelowy identyfikator węzła OPC UA (n"
+          "source": "The target OPC UA node ID (e.g., 'ns=2;s=SetPoint')",
+          "message": "Docelowy identyfikator węzła OPC UA (np. 'ns=2;s=SetPoint')"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWU.option.dmFsdWU.desc": {
           "source": "The value to write to the node",
@@ -448,8 +448,8 @@
           "message": "Wartości"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.option.dmFsdWVz.short_desc": {
-          "source": "List of values to write, each a hash with 'node_id' (string, required), 'value' (auto, required), and 'data_type' (string, optional)",
-          "message": "Lista wartości do zapisania, każda jako hasz z 'node_id' (łańcuch znaków, wymagany), 'value' (auto, wymagany) i 'data_type' (łańcuch znaków, opcjonalny)"
+          "source": "List of values to write, each a hash with 'node_id' (string, required),…",
+          "message": "Lista wartości do zapisania, każda jako hasz z 'node_id'…"
         },
         "app.T3BjVUE.action.d3JpdGUtdmFsdWVz.short_desc": {
           "source": "Write values to multiple OPC UA nodes",

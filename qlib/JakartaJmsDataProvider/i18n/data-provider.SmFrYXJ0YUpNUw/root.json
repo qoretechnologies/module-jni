@@ -80,8 +80,8 @@
           "message": "Destination"
         },
         "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.short_desc": {
-          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
-          "message": "The destination to send the message to, in format 'queue://name' or 'topic://name'"
+          "source": "The destination to send the message to, in format 'queue://name' or…",
+          "message": "The destination to send the message to, in format 'queue://name' or…"
         },
         "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.desc": {
           "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
@@ -292,8 +292,8 @@
           "message": "Destination"
         },
         "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.short_desc": {
-          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
-          "message": "The destination to send the message to, in format 'queue://name' or 'topic://name'"
+          "source": "The destination to send the message to, in format 'queue://name' or…",
+          "message": "The destination to send the message to, in format 'queue://name' or…"
         },
         "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.desc": {
           "source": "The destination to send the message to, in format `queue://name` or `topic://name`",
@@ -516,8 +516,8 @@
           "message": "Selector"
         },
         "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.short_desc": {
-          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e",
-          "message": "A hash of property filters to apply as a JMS SQL-92 message selector (e"
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector…",
+          "message": "A hash of property filters to apply as a JMS SQL-92 message selector…"
         },
         "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.desc": {
           "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e.g., `{\"color\": \"red\"}` becomes `color = 'red'`)",

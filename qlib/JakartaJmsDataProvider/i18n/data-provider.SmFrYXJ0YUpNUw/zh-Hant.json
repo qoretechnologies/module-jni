@@ -32,8 +32,8 @@
           "message": "選擇器"
         },
         "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.option.c2VsZWN0b3I.short_desc": {
-          "source": "A hash of property filters to apply as a JMS SQL-92 message selector (e",
-          "message": "作為 JMS SQL-92 訊息選擇器套用的屬性篩選器雜湊 (e"
+          "source": "A hash of property filters to apply as a JMS SQL-92 message selector…",
+          "message": "作為 JMS SQL-92 訊息選擇器套用的屬性篩選器雜湊…"
         },
         "app.SmFrYXJ0YUpNUw.action.YnJvd3NlLWptcy1xdWV1ZQ.short_desc": {
           "source": "Non-destructively browse messages in a JMS queue",
@@ -164,7 +164,7 @@
           "message": "目的地"
         },
         "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.ZGVzdGluYXRpb24.short_desc": {
-          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "source": "The destination to send the message to, in format 'queue://name' or…",
           "message": "傳送訊息的目的地，格式為 'queue://name' 或 'topic://name'"
         },
         "app.SmFrYXJ0YUpNUw.action.am1zLXJlcXVlc3QtcmVwbHk.option.aGVhZGVycw.desc": {
@@ -376,7 +376,7 @@
           "message": "目的地"
         },
         "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.ZGVzdGluYXRpb24.short_desc": {
-          "source": "The destination to send the message to, in format 'queue://name' or 'topic://name'",
+          "source": "The destination to send the message to, in format 'queue://name' or…",
           "message": "傳送訊息的目的地，格式為 'queue://name' 或 'topic://name'"
         },
         "app.SmFrYXJ0YUpNUw.action.c2VuZC1qbXMtbWVzc2FnZQ.option.aGVhZGVycw.desc": {

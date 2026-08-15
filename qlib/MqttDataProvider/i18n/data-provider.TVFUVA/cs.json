@@ -56,8 +56,8 @@
           "message": "Typ obsahu"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29udGVudF90eXBl.short_desc": {
-          "source": "The MIME content type of the message payload (e",
-          "message": "Typ obsahu MIME užitečného zatížení zprávy (např."
+          "source": "The MIME content type of the message payload…",
+          "message": "Typ obsahu MIME užitečného zatížení zprávy…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.Y29ycmVsYXRpb25fZGF0YQ.desc": {
           "source": "Correlation data for matching responses to requests; echoed back by the responder (MQTT 5 request/response pattern)",
@@ -104,8 +104,8 @@
           "message": "Indikátor formátu užitečného zatížení"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cGF5bG9hZF9mb3JtYXQ.short_desc": {
-          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted = unspecified binary data",
-          "message": "Indikátor formátu užitečného zatížení: 'True' = text v kódování UTF-8, 'False' nebo vynecháno = nespecifikovaná binární data"
+          "source": "Payload format indicator: 'True' = UTF-8 encoded text, 'False' or omitted =…",
+          "message": "Indikátor formátu užitečného zatížení: 'True' = text v kódování UTF-8, 'False'…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cW9z.allowed-value.aW50OjA.desc": {
           "source": "QoS 0: message is delivered at most once with no acknowledgment",
@@ -176,8 +176,8 @@
           "message": "Téma odpovědi"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.cmVzcG9uc2VfdG9waWM.short_desc": {
-          "source": "The topic to which the receiver should publish a response (MQTT 5 request/response pattern)",
-          "message": "Téma, do kterého by měl příjemce publikovat odpověď (vzor požadavek/odpověď MQTT 5)"
+          "source": "The topic to which the receiver should publish a response…",
+          "message": "Téma, do kterého by měl příjemce publikovat odpověď…"
         },
         "app.TVFUVA.action.c2VuZC1tc2c.option.dG9waWM.desc": {
           "source": "The message topic",
