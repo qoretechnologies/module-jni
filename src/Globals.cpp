@@ -899,15 +899,6 @@ static void JNICALL java_api_deregister_java_thread(JNIEnv* jenv, jobject obj) {
     q_deregister_foreign_thread();
 }
 
-static void JNICALL qore_exception_wrapper_finalize(JNIEnv*, jclass, jlong ptr) {
-    ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
-    //printd(LogLevel, "qore_exception_wrapper_finalize() xsink: %p\n", xsink);
-    if (xsink != nullptr) {
-        xsink->clear();
-        delete xsink;
-    }
-}
-
 static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, jlong ptr) {
     ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
 
@@ -1080,14 +1071,6 @@ static jobject JNICALL qore_closure_call(JNIEnv* jenv, jclass jcls, QoreProgram*
 static jobject JNICALL qore_closure_call_save(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
         jobjectArray args) {
     return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, true, nullptr, args);
-}
-
-static void JNICALL qore_closure_finalize(JNIEnv*, jclass, jlong ptr) {
-    assert(ptr);
-    ResolvedCallReferenceNode* call = reinterpret_cast<ResolvedCallReferenceNode*>(ptr);
-    ExceptionSink xsink;
-    call->deref(&xsink);
-    // NOTE: any exceptions would be printed to stderr; no way to capture them in any case
 }
 
 static jobject JNICALL qore_object_get_member_value(JNIEnv* jenv, jobject jobj, QoreObject* obj,
@@ -2210,11 +2193,6 @@ static void JNICALL qore_object_destroy(JNIEnv* jenv, jclass, jlong ptr) {
     }
 }
 
-static void JNICALL qore_object_finalize(JNIEnv*, jclass, jlong ptr) {
-    assert(ptr);
-    reinterpret_cast<QoreObject*>(ptr)->tDeref();
-}
-
 static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperName) {
     LocalReference<jclass> wrapperClass = env.findClass(wrapperName);
     jfieldID typeFieldId = env.getStaticField(wrapperClass, "TYPE", "Ljava/lang/Class;");
@@ -2480,8 +2458,7 @@ static JNINativeMethod qoreJavaApiNativeMethods[] = {
 };
 
 static JNINativeMethod qoreExceptionWrapperNativeMethods[] = {
-    // The release path runs in module-jni's NativeCleanup C++ thread, which calls
-    // qore_exception_wrapper_finalize directly without a JNI native-method binding.
+    // The release path runs directly in module-jni's NativeCleanup C++ thread without a JNI native-method binding.
     {
         const_cast<char*>("getMessage0"),
         const_cast<char*>("(J)Ljava/lang/String;"),
@@ -2505,11 +2482,8 @@ static JNINativeMethod qoreObjectBaseNativeMethods[] = {
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_object_destroy)
     },
-    // pointerRelease0 (formerly bound to qore_object_finalize) is gone: the
-    // weak-reference release path now runs in module-jni's NativeCleanup C++
-    // thread, which calls qore_object_finalize directly without going through
-    // a JNI native-method invocation adapter.  See native_cleanup_thread_main
-    // in Jvm.cpp.
+    // pointerRelease0 is gone: the weak-reference release path now runs directly in module-jni's NativeCleanup C++
+    // thread without going through a JNI native-method invocation adapter. See native_cleanup_thread_main below.
 };
 
 static JNINativeMethod qoreObjectNativeMethods[] = {
@@ -2551,8 +2525,7 @@ static JNINativeMethod qoreClosureNativeMethods[] = {
         const_cast<char*>("(JJ[Ljava/lang/Object;)Ljava/lang/Object;"),
         reinterpret_cast<void*>(qore_closure_call_save)
     },
-    // The release path runs in module-jni's NativeCleanup C++ thread, which calls
-    // qore_closure_finalize directly without a JNI native-method binding.
+    // The release path runs directly in module-jni's NativeCleanup C++ thread without a JNI native-method binding.
 };
 
 static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {

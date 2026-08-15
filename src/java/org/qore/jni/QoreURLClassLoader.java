@@ -3,7 +3,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@ package org.qore.jni;
 
 import java.net.URLClassLoader;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 
 import java.io.File;
@@ -256,7 +257,7 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     public void addPathOrig(String path) throws Exception {
         //debugLog("QoreURLClassLoader.addPath(): file://" + path);
-        super.addURL(new URL("file", null, 0, path));
+        super.addURL(new File(path).toURI().toURL());
     }
 
     //! adds byte code for an inner class to the byte code cache; requires a binary name (ex: \c my.package.MyClass$1)
@@ -1297,10 +1298,10 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     private URL createUrl(File fileentry) {
         try {
-            URL url = fileentry.toURI().toURL();
-            String path = url.getPath();
+            URI uri = fileentry.toURI();
+            URL url = uri.toURL();
             if (url.getPath().endsWith(".jar")) {
-                url = new URL("jar:file:" + path + "!/");
+                url = URI.create("jar:" + uri + "!/").toURL();
             }
             //infoLog("Added URL: '" + url.toString() + "'");
             if (classPath.length() > 0) {
