@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  JniLegacyPackageHostSymbols.qtest Copyright 2016 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# Symbols a module provides must be reached through the canonical qoremod.<mod>.<rest> Java
+# package, not the legacy qore.<X> form, or the same Qore class ends up with two Java Class
+# objects.  That rule used to be enforced by refusing to list the whole namespace whenever it
+# had exactly one contributing module that was not marked injected.
+#
+# A namespace has exactly one contributing module both when the module declared it and when the
+# module merely published into a namespace the host program owns: Qore attributes a namespace to
+# whichever module first creates the node in a Program, so a module loaded before the host
+# declares its own symbols claims the host's namespace.  Refusing the whole namespace then hides
+# the host's own symbols too - and those have no module, so no canonical name exists for them and
+# the legacy form is the only Java name they will ever have.
+#
+# That is how qorus-core lost "qore.OMQ": one internal module publishing a single class into
+# ::OMQ made javac report "package qore.OMQ does not exist" for every Java interface, and Java
+# services failed to load with NoClassDefFoundError for qore/OMQ/... .
+#
+# Without the fix the first test case below sees an empty package.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires jni
+%requires QUnit
+
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+
+%exec-class JniLegacyPackageHostSymbolsTest
+
+class JniLegacyPackageHostSymbolsTest inherits QUnit::Test {
+    public {
+        #! host source: loads the publisher module FIRST, so the module claims ::JniHostNs
+        const HostSrc = "%append-module-path " + get_script_dir() + "/qore-modules\n"
+            "%requires JniHostNsPublisher\n"
+            "%requires jni\n"
+            "%module-cmd(jni) import org.qore.jni.QoreURLClassLoader\n"
+            # the host program's own symbol in the namespace the module claimed
+            "public namespace JniHostNs { public class HostOwned {} }\n"
+            "list<string> sub scan(string pkg) {\n"
+            "    return map $1, QoreURLClassLoader::getCurrent().getClassesInNamespace(pkg);\n"
+            "}\n";
+    }
+
+    constructor() : Test("JniLegacyPackageHostSymbolsTest", "1.0") {
+        addTestCase("host symbols survive a single module contributor", \hostSymbolsSurviveTest());
+        addTestCase("a module-only namespace is still withheld", \moduleOnlyNamespaceWithheldTest());
+        addTestCase("the canonical module package still resolves", \canonicalPackageIntactTest());
+        addTestCase("an injected module is exposed in full", \injectedModuleTest());
+        addTestCase("a multi-contributor namespace is unchanged", \multiContributorTest());
+        set_return_value(main());
+    }
+
+    #! Returns a Program whose ::JniHostNs was claimed by JniHostNsPublisher
+    private Program getHostProgram(*string extra) {
+        Program p(PO_NEW_STYLE);
+        p.parse(HostSrc + (extra ?? ""), "host");
+        return p;
+    }
+
+    private list<string> scan(Program p, string pkg) {
+        return p.callFunction("scan", pkg);
+    }
+
+    hostSymbolsSurviveTest() {
+        Program p = getHostProgram();
+        list<string> l = scan(p, "qore.JniHostNs");
+
+        # the host's own class has no canonical qoremod name; the legacy form must list it
+        assertEq(True, inlist("qore.JniHostNs.HostOwned", l),
+            "the host program's own class is listed under the legacy package");
+        # the module's class is reachable as qoremod.JniHostNsPublisher.JniHostNs.ModuleOwned,
+        # so exposing it here too would give one Qore class two Java Class objects
+        assertEq(False, inlist("qore.JniHostNs.ModuleOwned", l),
+            "the module's own class is withheld from the legacy package");
+    }
+
+    moduleOnlyNamespaceWithheldTest() {
+        Program p = getHostProgram();
+        # every member of ::JniHostNsOnly came from the module, so the canonical form is the
+        # only correct one and the whole package stays withheld
+        assertEq((), scan(p, "qore.JniHostNsOnly"),
+            "a namespace whose every member came from the module lists nothing");
+    }
+
+    canonicalPackageIntactTest() {
+        Program p = getHostProgram();
+        list<string> l = scan(p, "qoremod.JniHostNsPublisher.JniHostNs");
+        assertEq(True, inlist("qoremod.JniHostNsPublisher.JniHostNs.ModuleOwned", l),
+            "the module's class is still reachable under its canonical package");
+    }
+
+    injectedModuleTest() {
+        # an injected module's symbols are declared part of the host's own API surface, so the
+        # legacy form is correct for them and nothing is withheld
+        Program p = getHostProgram("%module-cmd(jni) mark-module-injected JniHostNsPublisher\n");
+        list<string> l = scan(p, "qore.JniHostNs");
+        assertEq(True, inlist("qore.JniHostNs.HostOwned", l),
+            "the host's class is listed when the contributing module is injected");
+        assertEq(True, inlist("qore.JniHostNs.ModuleOwned", l),
+            "the injected module's class is listed under the legacy package");
+    }
+
+    multiContributorTest() {
+        # with two contributors no single module owns the namespace, so there is no unambiguous
+        # canonical form to enforce and everything is listed - unchanged by this fix
+        Program p = getHostProgram("%requires JniHostNsPublisher2\n");
+        list<string> l = scan(p, "qore.JniHostNs");
+        assertEq(True, inlist("qore.JniHostNs.HostOwned", l), "host class listed");
+        assertEq(True, inlist("qore.JniHostNs.ModuleOwned", l), "first module's class listed");
+        assertEq(True, inlist("qore.JniHostNs.ModuleOwned2", l), "second module's class listed");
+    }
+}

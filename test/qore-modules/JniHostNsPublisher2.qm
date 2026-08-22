@@ -1,0 +1,55 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore JniHostNsPublisher2 test module definition
+
+/*  JniHostNsPublisher2.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module JniHostNsPublisher2 {
+    version = "1.0";
+    desc = "test module that publishes into a namespace the loading program also declares";
+    author = "Qore Technologies, s.r.o.";
+}
+
+/*  Fixture for JniLegacyPackageHostSymbols.qtest.
+
+    ::JniHostNs models a namespace the *host program* owns and this module merely publishes
+    into; ::JniHostNsOnly models one where every member really did come from this module.
+    Loading this module before the host declares its own symbols makes this module the single
+    contributing module of both.
+*/
+
+public namespace JniHostNs {
+public class ModuleOwned2 {
+    static string who() {
+        return "module2";
+    }
+}
+}
+
+public namespace JniHostNsOnly2 {
+public class OnlyModule2 {
+    static string who() {
+        return "module-only2";
+    }
+}
+}

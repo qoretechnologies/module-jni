@@ -1692,6 +1692,50 @@ const QoreNamespace* find_ns_path(const QoreNamespace* ns, const char* ns_path) 
     return ns;
 }
 
+//! Returns true if \a ns declares any class, function, or constant that \a mod did not provide
+/** Used to tell a namespace that a module *owns* from one that a module merely *publishes into*.
+    A module that adds symbols to a namespace declared by the host program (or by another module)
+    leaves the host's own symbols in that namespace with no module attribution; those symbols have
+    no canonical \c qoremod.<mod>.<rest> name, so the legacy \c qore.<X> form is the only Java name
+    they will ever have.
+
+    @param ns the namespace to scan
+    @param mod the module name to compare against; must not be nullptr
+
+    @return true if at least one member of \a ns came from somewhere other than \a mod
+*/
+static bool ns_has_foreign_members(const QoreNamespace& ns, const char* mod) {
+    assert(mod);
+    {
+        QoreNamespaceClassIterator i(ns);
+        while (i.next()) {
+            const char* m = i.get().getModuleName();
+            if (!m || strcmp(m, mod)) {
+                return true;
+            }
+        }
+    }
+    {
+        QoreNamespaceFunctionIterator i(ns);
+        while (i.next()) {
+            const char* m = i.get().getModuleName();
+            if (!m || strcmp(m, mod)) {
+                return true;
+            }
+        }
+    }
+    {
+        QoreNamespaceConstantIterator i(ns);
+        while (i.next()) {
+            const char* m = i.get().getModuleName();
+            if (!m || strcmp(m, mod)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jenv, jclass jcls, jlong ptr,
         jstring qname, jstring module, jboolean python, jboolean kotlin, jobject arraylist) {
     Env env(jenv);
@@ -1831,6 +1875,10 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
         if (ns) {
             QoreString java_pfx;
 
+            // when set, members provided by this module are withheld from the legacy `qore.<X>`
+            // listing while the rest of the namespace is still published; see below
+            const char* skip_mod = nullptr;
+
             if (!mod_str && !ns->isRoot()) {
                 // The lookup arrived via the legacy `qore.<X>` form (no module
                 // qualifier).  Skip the rejection for multi-contributor
@@ -1843,9 +1891,26 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
                 if (ns->getModuleCount() == 1) {
                     const char* mod = ns->getModuleName();
                     if (mod && !jpc->isInjectedModule(mod)) {
-                        printd(5, "qore_url_classloader_get_classes_in_namespace() not scanning ns %p "
-                            "(from single module %s, not injected)\n", ns, mod);
-                        return nullptr;
+                        // A namespace has exactly one contributing module both when the module
+                        // declared it and when the module merely published into a namespace the
+                        // host program owns - Qore attributes a namespace to whichever module
+                        // first creates the node in a Program, so a module loaded before the host
+                        // declares its own symbols claims the host's namespace.  Rejecting the
+                        // whole namespace in that case hides the host's own symbols, which have no
+                        // module and therefore no canonical `qoremod.<mod>.<rest>` name: the legacy
+                        // form is the only Java name they have.  Withhold just the module's own
+                        // members instead, and keep the blanket rejection for a namespace whose
+                        // every member really did come from the module.
+                        if (ns_has_foreign_members(*ns, mod)) {
+                            printd(5, "qore_url_classloader_get_classes_in_namespace() scanning ns %p "
+                                "(single module %s, not injected, but namespace has foreign members; "
+                                "withholding only %s's members)\n", ns, mod, mod);
+                            skip_mod = mod;
+                        } else {
+                            printd(5, "qore_url_classloader_get_classes_in_namespace() not scanning ns %p "
+                                "(from single module %s, not injected)\n", ns, mod);
+                            return nullptr;
+                        }
                     }
                 }
             }
@@ -1854,6 +1919,15 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
             while (i.next()) {
                 const QoreClass& qc = i.get();
                 const char* cls_name = qc.getName();
+
+                // reachable only as `qoremod.<skip_mod>.<rest>`; see skip_mod above
+                if (skip_mod) {
+                    const char* cls_mod = qc.getModuleName();
+                    if (cls_mod && !strcmp(cls_mod, skip_mod)) {
+                        printd(5, "+ withholding class %s (from module %s)\n", cls_name, cls_mod);
+                        continue;
+                    }
+                }
 
                 // Skip Kotlin companion object inner classes (ending with $Companion or __Companion)
                 // Only filter when processing Kotlin classes to avoid affecting other languages
@@ -1887,6 +1961,12 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
             }
             QoreNamespaceFunctionIterator fi(*ns);
             while (fi.next()) {
+                if (skip_mod) {
+                    const char* f_mod = fi.get().getModuleName();
+                    if (f_mod && !strcmp(f_mod, skip_mod)) {
+                        continue;
+                    }
+                }
                 // if there is at least one, then create the special "$Functions" class
                 if (java_pfx.empty()) {
                     get_java_pfx(java_pfx, python, kotlin, mod_str.c_str(), lang_path, nsname.c_str());
@@ -1905,6 +1985,12 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
             }
             QoreNamespaceConstantIterator ci(*ns);
             while (ci.next()) {
+                if (skip_mod) {
+                    const char* c_mod = ci.get().getModuleName();
+                    if (c_mod && !strcmp(c_mod, skip_mod)) {
+                        continue;
+                    }
+                }
                 // if there is at least one, then create the special "$Constants" class
                 if (java_pfx.empty()) {
                     get_java_pfx(java_pfx, python, kotlin, mod_str.c_str(), lang_path, nsname.c_str());
