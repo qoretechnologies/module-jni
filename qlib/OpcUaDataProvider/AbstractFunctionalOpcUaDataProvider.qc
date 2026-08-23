@@ -1129,6 +1129,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 "expanded_node_id": endpoint.expanded_node_id ?? endpoint.node_id,
                 "directions": directions,
                 "direction": directions ? directions[0] : NOTHING,
+                "display_name": getApiEndpointDisplayName(endpoint, endpoint_id),
             };
             rv += item;
         }
@@ -1157,6 +1158,33 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         if (location) {
             return NodeSet2Importer::parse(FileLocationHandler::getTextFileFromLocation(location));
         }
+    }
+
+    #! Returns a label for one API-management endpoint that a person can read
+    /** An endpoint is keyed by its \c endpoint_id, which for OPC UA is derived from the node and reads like
+        \c "ns=1;s=Setpoint" - an address, not a name.  A schema snapshot resolved from a live server or imported
+        from a NodeSet2 model carries the node's own DisplayName, but a snapshot supplied as an API schema need
+        not, and every consumer that shows an endpoint to a person then has only the node id to show.
+
+        The browse name is preferred as the fallback because it is the node's name in its own namespace; its
+        namespace-index prefix is dropped because the index is a per-session detail rather than part of the name.
+
+        @param endpoint the endpoint from the schema snapshot
+        @param endpoint_id the endpoint's stable id, used when the snapshot describes the node no other way
+
+        @return a readable label; never empty
+    */
+    private static string getApiEndpointDisplayName(hash<auto> endpoint, string endpoint_id) {
+        if (endpoint.display_name.val()) {
+            return endpoint.display_name;
+        }
+        if (endpoint.browse_name.val()) {
+            return regex_subst(endpoint.browse_name, "^[0-9]+:", "");
+        }
+        if (endpoint.browse_path.val()) {
+            return endpoint.browse_path;
+        }
+        return endpoint_id;
     }
 
     private static list<string> getApiEndpointDirections(hash<auto> endpoint) {

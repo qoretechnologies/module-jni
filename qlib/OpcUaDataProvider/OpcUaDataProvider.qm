@@ -103,7 +103,7 @@
 # implements file/resource location handling for offline NodeSet2 import
 %requires FileLocationHandler
 module OpcUaDataProvider {
-    version = "1.9.1";
+    version = "1.9.2";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -520,6 +520,12 @@ module OpcUaDataProvider {
     implicit history retention.  Runtime callbacks may still return explicit values for \c history-read.
 
     @section opcuadataproviderrelnotes Release Notes
+
+    @subsection opcuadataproviderv192 OpcUaDataProvider v1.9.2
+    - every API-management endpoint now reports a \c display_name, so a listing can name the node instead of
+      showing its address; an endpoint is keyed by a node-derived id (\c "ns=1;s=Setpoint"), and a schema
+      handed over as a snapshot need not carry the node's own DisplayName, in which case the browse name is
+      used, without its per-session namespace index
 
     @subsection opcuadataproviderv191 OpcUaDataProvider v1.9.1
     - fixed a bug where connecting to (or disconnecting from) an unreachable or unresponsive OPC UA
