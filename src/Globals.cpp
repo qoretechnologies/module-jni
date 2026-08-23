@@ -205,6 +205,7 @@ jmethodID Globals::methodQoreURLClassLoaderGetPtr;
 jmethodID Globals::methodQoreURLClassLoaderGetCurrent;
 jmethodID Globals::methodQoreURLClassLoaderCheckInProgress;
 jmethodID Globals::methodQoreURLClassLoaderClearProgramPtr;
+jmethodID Globals::methodQoreURLClassLoaderRegisterSharedDynamicClass;
 
 GlobalReference<jclass> Globals::classJavaClassBuilder;
 jmethodID Globals::methodJavaClassBuilderGetClassBuilder;
@@ -3201,6 +3202,8 @@ void Globals::defineQoreURLClassLoader(Env& env) {
     methodQoreURLClassLoaderCheckInProgress = env.getMethod(classQoreURLClassLoader, "checkInProgress",
         "(Ljava/lang/String;)Z");
     methodQoreURLClassLoaderClearProgramPtr = env.getMethod(classQoreURLClassLoader, "clearProgramPtr", "()V");
+    methodQoreURLClassLoaderRegisterSharedDynamicClass = env.getMethod(classQoreURLClassLoader,
+        "registerSharedDynamicClass", "(Ljava/lang/String;)V");
 
     //printd(5, "defineQoreURLClassLoader() done\n");
 }

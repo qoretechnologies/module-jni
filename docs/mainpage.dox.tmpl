@@ -344,6 +344,9 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
       global runtime dynamic classpath; supports environment variable substitution
     - @code{.qore} %module-cmd(jni) global-add-relative-classpath ../relative/path @endcode adds the given paths as relative
       to the current program to the global runtime dynamic classpath
+    - @code{.qore} %module-cmd(jni) register-shared-class qore.Namespace.ClassName @endcode gives an exact dynamically
+      projected %Qore class one Java identity across sibling %Program classloaders; the first registering %Program
+      owns the Java class and every later registrant delegates to it
 
     All classes in \c java.lang.* are imported implicitly.  Referencing an imported class in %Qore code
     causes a %Qore class to be generated dynamically that presents the Java class.   Instantiating a %Qore class
@@ -480,6 +483,17 @@ System::out.println("testing...");
 
     @note The class loader supplied by this module, @ref org.qore.jni.QoreURLClassLoader, supports dynamic bytecode
     generation from Python and %Qore imports.
+
+    Same-path classes projected as \c qore.<i>Namespace</i>.<i>Class</i> are Program-local by default because separate
+    %Programs can legitimately provide different implementations at the same path.  Applications that pass objects
+    of one semantically identical %Qore API class between sibling Program classloaders must register that exact Java
+    binary name before loading it in any participating Program:
+    @code{.qore}
+%module-cmd(jni) register-shared-class qore.MyApi.Request
+    @endcode
+    The first registering Program becomes the process-wide owner for that name, and registration by other Programs is
+    idempotent.  Registering after two loaders have already defined the name raises an error because an existing JVM
+    class-identity split cannot be repaired.  Do not register a name whose Qore definitions differ between Programs.
 
     @subsection jni_exceptions Java Exceptions in Qore
 
@@ -991,6 +1005,17 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - <b>Added explicit shared identity for dynamically projected %Qore classes</b>
+      - <b>Symptom.</b> Passing an object between two Java-enabled %Programs could fail with
+        \c ClassCastException even when the object's projected class inherited the requested type; the exception
+        named two sibling \c QoreURLClassLoader instances for the same Java binary name.
+      - <b>Cause.</b> Parent delegation already preserves identity along a classloader ancestry chain, but separate
+        %Program loaders are siblings.  When an application intentionally exposes the same non-module %Qore API
+        class in multiple Programs, each sibling could dynamically define its own Java \c Class object.
+      - <b>Fix.</b> The new \c register-shared-class module command lets an application opt an exact
+        \c qore.* or \c qoremod.* name into one process-wide identity before it is loaded.  The first registering
+        Program owns the definition; sibling loaders delegate to it.  Unregistered same-path classes remain
+        Program-local, preserving applications whose implementations intentionally differ.
     - <b>Fixed the process aborting during <tt>exit()</tt> when the jni module is loaded</b>
       - <b>Symptom.</b> A program that loaded the jni module and then called \c exit() aborted
         instead of exiting, losing the exit status the script had set; on macOS the process died

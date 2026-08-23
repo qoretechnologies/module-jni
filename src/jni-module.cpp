@@ -105,6 +105,8 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
 static void qore_jni_mc_set_compat_types(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 static void qore_jni_mc_set_property(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 static void qore_jni_mc_mark_module_injected(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
+static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram* pgm,
+    JniExternalProgramData* jpc);
 static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 
 // module cmds
@@ -120,6 +122,7 @@ static mcmap_t mcmap = {
     {"set-compat-types", qore_jni_mc_set_compat_types},
     {"set-property", qore_jni_mc_set_property},
     {"mark-module-injected", qore_jni_mc_mark_module_injected},
+    {"register-shared-class", qore_jni_mc_register_shared_class},
     {"kotlin-eval", qore_jni_mc_kotlin_eval},
 };
 
@@ -662,6 +665,19 @@ static void qore_jni_mc_mark_module_injected(const QoreString& arg, QoreProgram*
     assert(jpc);
 
     jpc->addInjectedModule(arg.c_str());
+}
+
+static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram* pgm,
+        JniExternalProgramData* jpc) {
+    assert(pgm);
+    assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
+    assert(jpc);
+
+    Env env;
+    LocalReference<jstring> jname = env.newString(arg.c_str());
+    jvalue jarg;
+    jarg.l = jname;
+    env.callVoidMethod(jpc->getClassLoader(), Globals::methodQoreURLClassLoaderRegisterSharedDynamicClass, &jarg);
 }
 
 static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {

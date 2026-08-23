@@ -103,6 +103,14 @@ public class QoreURLClassLoader extends URLClassLoader {
     /** Using ConcurrentHashMap for thread-safe access */
     private final ConcurrentHashMap<String, Class<?>> classCache = new ConcurrentHashMap<String, Class<?>>();
 
+    //! Explicit process-wide owners for dynamically projected Qore classes
+    /** Applications can declare that a particular Qore class has one Java identity across
+        Program classloaders with {@link #registerSharedDynamicClass(String)}.  The first
+        registering Program loader owns the name; sibling loaders delegate to it.
+    */
+    private static final ConcurrentHashMap<String, QoreURLClassLoader> sharedDynamicClassLoaders =
+        new ConcurrentHashMap<String, QoreURLClassLoader>();
+
     // when used to bootstrap Java
     private static boolean static_bootstrap = false;
 
@@ -223,6 +231,10 @@ public class QoreURLClassLoader extends URLClassLoader {
         if (name.endsWith(".class")) {
             String qualifiedClassName = name.substring(0,
                     name.length() - ".class".length()).replace('/', '.');
+            QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(qualifiedClassName);
+            if (shared_loader != null && shared_loader != this) {
+                return shared_loader.getResourceAsStream(name);
+            }
             QoreJavaFileObject file = classes.get(qualifiedClassName);
             if (file != null) {
                 return new ByteArrayInputStream(file.getByteCode());
@@ -276,6 +288,10 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     public Class<?> getResolveClass(String name) throws ClassNotFoundException {
+        QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(name);
+        if (shared_loader != null && shared_loader != this) {
+            return shared_loader.getResolveClass(name);
+        }
         Class<?> rv = tryGetPendingClass(name);
         if (rv == null) {
             rv = super.findClass(name);
@@ -314,6 +330,102 @@ public class QoreURLClassLoader extends URLClassLoader {
         classCache.clear();
         classes.clear();
         classInProgress.get().clear();
+    }
+
+    //! Registers an exact dynamically projected Qore class name as process-wide
+    /** The first Program loader to register the name becomes its owner.  Definitions and
+        loads through sibling {@code QoreURLClassLoader} instances then resolve through
+        that owner so the JVM sees one {@link Class} object for the name.
+
+        Registration is idempotent and must happen before the class is loaded in every
+        participating Program.  Register only classes whose Qore definitions are
+        semantically identical across those Programs; same-path Qore classes are otherwise
+        intentionally Program-local.
+
+        @param bin_name exact Java binary name in dotted form, beginning with {@code qore.}
+                        or {@code qoremod.}
+        @throws IllegalArgumentException if {@code bin_name} is not a dynamic Qore class name
+        @throws IllegalStateException if this loader already defined a different Class for a
+                                      name owned by another registered loader
+    */
+    public void registerSharedDynamicClass(String bin_name) {
+        if (!isDynamicQoreBinaryName(bin_name)) {
+            throw new IllegalArgumentException(String.format(
+                "invalid shared dynamic class binary name; expected 'qore.<class>' or "
+                + "'qoremod.<module>.<class>': '%s'", bin_name));
+        }
+
+        while (true) {
+            QoreURLClassLoader owner = getSharedDynamicClassLoader(bin_name);
+            if (owner == null) {
+                owner = sharedDynamicClassLoaders.putIfAbsent(bin_name, this);
+                if (owner == null) {
+                    return;
+                }
+                if (owner.pgm_ptr.get() == 0) {
+                    sharedDynamicClassLoaders.remove(bin_name, owner);
+                    continue;
+                }
+            }
+            if (owner != this && findLoadedClass(bin_name) != null) {
+                throw new IllegalStateException(String.format(
+                    "cannot share dynamic class '%s': this loader has already defined a different Class",
+                    bin_name));
+            }
+            return;
+        }
+    }
+
+    //! Returns true if the argument is a syntactically valid dynamic Qore Java binary name
+    private static boolean isDynamicQoreBinaryName(String bin_name) {
+        if (bin_name == null) {
+            return false;
+        }
+
+        int offset;
+        boolean module_name;
+        if (bin_name.startsWith("qore.")) {
+            offset = 5;
+            module_name = false;
+        } else if (bin_name.startsWith("qoremod.")) {
+            offset = 8;
+            module_name = true;
+        } else {
+            return false;
+        }
+
+        boolean segment_start = true;
+        boolean segment_separator = false;
+        for (int i = offset; i < bin_name.length();) {
+            int c = bin_name.codePointAt(i);
+            if (c == '.') {
+                if (segment_start) {
+                    return false;
+                }
+                segment_start = true;
+                segment_separator = true;
+            } else if (segment_start) {
+                if (!Character.isJavaIdentifierStart(c)) {
+                    return false;
+                }
+                segment_start = false;
+            } else if (!Character.isJavaIdentifierPart(c)) {
+                return false;
+            }
+            i += Character.charCount(c);
+        }
+        return !segment_start && (!module_name || segment_separator);
+    }
+
+    //! Returns the registered owner for a shared dynamic class, removing stale owners
+    private static QoreURLClassLoader getSharedDynamicClassLoader(String bin_name) {
+        while (true) {
+            QoreURLClassLoader owner = sharedDynamicClassLoaders.get(bin_name);
+            if (owner == null || owner.pgm_ptr.get() != 0) {
+                return owner;
+            }
+            sharedDynamicClassLoaders.remove(bin_name, owner);
+        }
     }
 
     public byte[] removePendingByteCode(String bin_name) {
@@ -421,6 +533,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         cached.
     */
     public byte[] getClassFileBytes(String bin_name) {
+        QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(bin_name);
+        if (shared_loader != null && shared_loader != this) {
+            return shared_loader.getClassFileBytes(bin_name);
+        }
+
         // Bytecode lookup must follow the same canonical-loader routing as loadClass().
         // Otherwise a QoreClassFileLocator attached to a consumer Program regenerates a
         // shared qoremod.* superclass in the consumer loader.  Besides giving Byte Buddy
@@ -548,6 +665,11 @@ public class QoreURLClassLoader extends URLClassLoader {
     public Class<?> loadClass(String bin_name) throws ClassNotFoundException {
         //System.out.printf("QoreURLClassLoader.loadClass() this: %x '%s' pgm: %x (startup: %s)\n",
         //    hashCode(), bin_name, pgm_ptr, startup);
+        QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(bin_name);
+        if (shared_loader != null && shared_loader != this) {
+            return shared_loader.loadClass(bin_name);
+        }
+
         // A class already defined in THIS loader always wins; defining it again here would make a
         // duplicate Class object and a LinkageError.  The parent chain is consulted further below,
         // after locally-injected byte code has had its say.
@@ -736,6 +858,13 @@ public class QoreURLClassLoader extends URLClassLoader {
      */
     public Class<?> loadClassWithPtr(String bin_name, long class_ptr) throws ClassNotFoundException {
         //debugLog(String.format("loadClassWithPtr() %s: %x", bin_name, class_ptr));
+        QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(bin_name);
+        if (shared_loader != null && shared_loader != this) {
+            // The class pointer belongs to the calling Program.  The registered owner must
+            // generate bytecode from its own view of the Qore class instead.
+            return shared_loader.loadClass(bin_name);
+        }
+
         Class<?> rv;
         synchronized (getClassLoadingLock(bin_name)) {
             rv = checkLoadedClass(bin_name);
@@ -886,6 +1015,25 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     protected Class<?> defineClassIntern(String name, byte[] byte_code, int off, int len) throws ClassFormatError {
+        QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(name);
+        if (shared_loader != null) {
+            if (shared_loader != this) {
+                return shared_loader.defineClassIntern(name, byte_code, off, len);
+            }
+            synchronized (getClassLoadingLock(name)) {
+                Class<?> loaded = findLoadedClass(name);
+                if (loaded != null) {
+                    return loaded;
+                }
+                return defineClassInternLocal(name, byte_code, off, len);
+            }
+        }
+
+        return defineClassInternLocal(name, byte_code, off, len);
+    }
+
+    //! Defines a class in this loader without shared-owner routing
+    private Class<?> defineClassInternLocal(String name, byte[] byte_code, int off, int len) throws ClassFormatError {
         Class<?> rv = defineClass(name, byte_code, off, len);
 
         if (enable_cache) {
@@ -903,6 +1051,10 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     public Class<?> defineResolveClass(String name, byte[] b, int off, int len) throws ClassFormatError {
+        QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(name);
+        if (shared_loader != null && shared_loader != this) {
+            return shared_loader.defineResolveClass(name, b, off, len);
+        }
         Class<?> rv = defineClassIntern(name, b, off, len);
         resolveClass(rv);
         return rv;
@@ -936,6 +1088,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     public void clearProgramPtr() {
         pgm_ptr.set(0);
+        sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
     }
 
     //! Returns the program pointer from the current thread's classloader context
