@@ -901,6 +901,29 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
     // Lock order: Program parse lock -> m.  This method does not call into Java or load a module, so
     // it may hold the parse lock (per-Program) across its work; the jpc class-map accesses take the
     // strict-leaf m for a short critical section, always inside the parse lock (parseLock -> m).
+
+    // A class that has not yet been published into its declaring namespace must NOT be copied into a
+    // Program's namespace here.  QoreClass copies SHARE qore_class_private (QoreClass(const QoreClass&)
+    // takes old.priv), and QoreNamespace::addSystemClass() assigns the namespace through
+    // setNamespaceConditional(), which claims the class for the FIRST namespace to receive it.  Adding
+    // an unpublished class therefore stamps the shared private data with this Program's namespace, and
+    // the later publish into the global default_jns tree silently does nothing.  The class stays in the
+    // process-global cache while its declaring namespace dies with this Program, so every later Program
+    // handed that cached class gets one whose namespace has been purged:
+    //
+    //   PROGRAM-ERROR: cannot call method 'QoreURLClassLoader::addPath()'; the Program object that owns
+    //   class 'QoreURLClassLoader' has already been deleted and therefore cannot be accessed at runtime
+    //
+    // This is reached through createClassInNamespace()'s same-thread recursion path, which hands the
+    // caller the still-unpublished partial class (the frame that owns the in-progress marker publishes
+    // it).  That owning frame calls addClassToProgram() again once the class is published, so skipping
+    // here loses nothing.
+    if (!qc->getNamespace()) {
+        printd(LogLevel, "QoreJniClassMap::addClassToProgram() '%s' qc: %p not yet published to its "
+            "declaring namespace; deferring to the frame that owns its creation\n", jpath, qc);
+        return;
+    }
+
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     if (!jpc) {
         return;
