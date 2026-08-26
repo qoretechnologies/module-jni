@@ -16,4 +16,5 @@ export QORE_MODULE_DIR="${src_dir}/build/qlib-qmod${QORE_MODULE_DIR:+:${QORE_MOD
 # metadata-only check does not log, so silence the APIs' missing-provider status diagnostics without hiding Qore errors.
 export QORE_JNI_JVM_ARGS="${QORE_JNI_JVM_ARGS:+${QORE_JNI_JVM_ARGS} }-Dslf4j.internal.verbosity=ERROR -Dlog4j2.statusLoggerLevel=OFF"
 
-qore-data-provider-i18n --no-color --check-source-tree --require-standard-locales --output "${src_dir}/qlib"
+qore-data-provider-i18n --no-color --check-source-tree --require-standard-locales \
+    --require-complete-locales --output "${src_dir}/qlib"
