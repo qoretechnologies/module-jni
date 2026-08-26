@@ -150,9 +150,29 @@ public class QoreKotlinCompiler implements AutoCloseable {
             StringBuilder classpath = new StringBuilder();
             classpath.append(stubsDir.toString());
 
-            // Add URLs from the class loader
-            for (java.net.URL url : classLoader.getURLs()) {
-                classpath.append(File.pathSeparator).append(url.getPath());
+            // Add URLs from the whole class loader CHAIN, not just this one.
+            //
+            // The constructor wraps the loader it is given in a fresh child
+            // (`new QoreURLClassLoader(loader.getPtr(), loader)`), and
+            // `URLClassLoader.getURLs()` reports only the URLs of the loader it
+            // is called on - never the parent's. Every path the caller added
+            // with `QoreURLClassLoader.addPath()` therefore sat on the parent
+            // and was invisible here, so the compile classpath contained the
+            // stubs directory and nothing else.
+            //
+            // That is why Kotlin could not resolve any Qorus class while Java
+            // compiled the identical source: QoreJavaCompiler reads
+            // `loader.getURLs()` - the parent - when it populates the file
+            // manager's CLASS_PATH.
+            for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
+                if (cl instanceof java.net.URLClassLoader) {
+                    for (java.net.URL url : ((java.net.URLClassLoader) cl).getURLs()) {
+                        String entry = urlToClasspathEntry(url);
+                        if (entry != null) {
+                            classpath.append(File.pathSeparator).append(entry);
+                        }
+                    }
+                }
             }
 
             // Add qore-jni.jar for base classes like QoreJavaClassBase
@@ -512,6 +532,41 @@ public class QoreKotlinCompiler implements AutoCloseable {
      */
     public void injectClass(String binName, byte[] byteCode) {
         classLoader.addPendingClass(binName, byteCode);
+    }
+
+    /**
+     * Converts a class loader URL into a filesystem path the compiler can open.
+     *
+     * `QoreURLClassLoader.addPath()` registers jars as `jar:` URLs, whose
+     * `getPath()` is the inner spec — `file:/path/to.jar!/` — not a filesystem
+     * path. Handing that to the compiler produces a classpath entry it cannot
+     * open, which reads exactly like the jar not being on the classpath at all.
+     *
+     * @param url a class loader URL
+     * @return the filesystem path, or null if the URL names no local file
+     */
+    private static String urlToClasspathEntry(java.net.URL url) {
+        String spec = url.toString();
+
+        if (spec.startsWith("jar:")) {
+            spec = spec.substring(4);
+            int sep = spec.indexOf("!/");
+            if (sep >= 0) {
+                spec = spec.substring(0, sep);
+            }
+        }
+
+        if (!spec.startsWith("file:")) {
+            return null;
+        }
+
+        try {
+            return new File(new java.net.URI(spec)).getPath();
+        } catch (Exception e) {
+            // A URI the parser rejects (an unencoded space, for instance) still
+            // names a real file often enough to be worth the fallback.
+            return spec.substring("file:".length());
+        }
     }
 
     /**
