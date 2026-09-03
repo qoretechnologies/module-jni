@@ -1056,7 +1056,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     */
     hash<auto> importNodeSet2(string location) {
         string xml = FileLocationHandler::getTextFileFromLocation(location);
-        return NodeSet2Importer::parse(xml);
+        return OpcUaDataProvider::nodeSet2ToAddressSpace(xml);
     }
 
     #! Returns the schema snapshot used for generic API management
@@ -1147,16 +1147,17 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     private static *hash<auto> resolveApiManagementSchema(hash<auto> opts) {
         if (opts.schema.typeCode() == NT_HASH) {
-            return opts.schema;
+            return OpcUaDataProvider::describeAddressSpace(opts.schema);
         }
         if (opts.nodeset2.typeCode() == NT_STRING) {
-            return NodeSet2Importer::parse(opts.nodeset2);
+            return OpcUaDataProvider::nodeSet2ToAddressSpace(opts.nodeset2);
         }
 
         *string location = opts.schema_location ?? opts."schema-location"
             ?? opts.nodeset2_location ?? opts."nodeset2-location";
         if (location) {
-            return NodeSet2Importer::parse(FileLocationHandler::getTextFileFromLocation(location));
+            return OpcUaDataProvider::nodeSet2ToAddressSpace(
+                FileLocationHandler::getTextFileFromLocation(location));
         }
     }
 

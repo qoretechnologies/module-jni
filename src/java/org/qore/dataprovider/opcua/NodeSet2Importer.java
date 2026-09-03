@@ -57,6 +57,9 @@ public class NodeSet2Importer {
         DocumentBuilder builder = factory.newDocumentBuilder();
         Document doc = builder.parse(new InputSource(new StringReader(xml)));
         Element root = doc.getDocumentElement();
+        if (root == null || !"UANodeSet".equals(localName(root.getTagName()))) {
+            throw new IllegalArgumentException("the NodeSet2 root element must be UANodeSet");
+        }
 
         // namespace table: index 0 is the standard UA namespace, then the declared NamespaceUris in order
         List<String> uris = new ArrayList<>();
@@ -69,6 +72,7 @@ public class NodeSet2Importer {
         }
 
         Hash snapshot = new Hash();
+        snapshot.put("opcua", AddressSpaceSchema.OPCUA_VERSION);
         snapshot.put("contract_version", SchemaResolver.CONTRACT_VERSION);
         snapshot.put("source", "imported");
 
@@ -163,8 +167,76 @@ public class NodeSet2Importer {
             endpoint.put("data_type", dataType.isEmpty() ? null : dataType);
             String valueRank = element.getAttribute("ValueRank");
             endpoint.put("value_rank", valueRank.isEmpty() ? -1 : Integer.parseInt(valueRank));
+            String arrayDimensions = element.getAttribute("ArrayDimensions");
+            endpoint.put("array_dimensions", parseArrayDimensions(arrayDimensions));
+            int accessLevel = parseAccessLevel(element.getAttribute("AccessLevel"), 1);
+            int userAccessLevel = parseAccessLevel(element.getAttribute("UserAccessLevel"), accessLevel);
+            boolean readable = (accessLevel & 1) != 0;
+            boolean writable = (accessLevel & 2) != 0;
+            boolean historizing = parseBoolean(element.getAttribute("Historizing"), false);
+            endpoint.put("access_level", accessLevel);
+            endpoint.put("user_access_level", userAccessLevel);
+            endpoint.put("readable", readable);
+            endpoint.put("writable", writable);
+            endpoint.put("user_writable", (userAccessLevel & 2) != 0);
+            endpoint.put("historizing", historizing);
+            List<Object> directions = new ArrayList<>();
+            if (readable) {
+                directions.add("read");
+                directions.add("observe");
+            }
+            if (writable) {
+                directions.add("write");
+            }
+            if (historizing) {
+                directions.add("history-read");
+            }
+            endpoint.put("directions", directions);
+        } else {
+            endpoint.put("input_arguments", new ArrayList<>());
+            endpoint.put("output_arguments", new ArrayList<>());
         }
         endpoints.add(endpoint);
+    }
+
+    private static int parseAccessLevel(String value, int defaultValue) {
+        if (value == null || value.isEmpty()) {
+            return defaultValue;
+        }
+        int parsed = Integer.parseInt(value);
+        if (parsed < 0 || parsed > 255) {
+            throw new IllegalArgumentException("NodeSet2 access level must be between 0 and 255; got " + value);
+        }
+        return parsed;
+    }
+
+    private static boolean parseBoolean(String value, boolean defaultValue) {
+        if (value == null || value.isEmpty()) {
+            return defaultValue;
+        }
+        if ("true".equalsIgnoreCase(value) || "1".equals(value)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(value) || "0".equals(value)) {
+            return false;
+        }
+        throw new IllegalArgumentException("NodeSet2 boolean attributes must be true, false, 1, or 0; got "
+            + value);
+    }
+
+    private static List<Object> parseArrayDimensions(String value) {
+        List<Object> dimensions = new ArrayList<>();
+        if (value == null || value.isEmpty()) {
+            return dimensions;
+        }
+        for (String part : value.split(",")) {
+            int dimension = Integer.parseInt(part.trim());
+            if (dimension < 0) {
+                throw new IllegalArgumentException("NodeSet2 array dimensions must be non-negative; got " + value);
+            }
+            dimensions.add(dimension);
+        }
+        return dimensions;
     }
 
     /** Returns the namespace index of a NodeId string (\c ns=N;... ; defaults to 0). */

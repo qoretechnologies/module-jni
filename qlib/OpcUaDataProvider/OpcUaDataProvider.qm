@@ -84,6 +84,7 @@
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.ViewDescription
 %module-cmd(jni) import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue
 %module-cmd(jni) import org.qore.dataprovider.opcua.GenericServer
+%module-cmd(jni) import org.qore.dataprovider.opcua.AddressSpaceSchema
 %module-cmd(jni) import org.qore.dataprovider.opcua.NodeSet2Importer
 %module-cmd(jni) import org.qore.dataprovider.opcua.OpcUaEndpointSelector
 %module-cmd(jni) import org.qore.dataprovider.opcua.OpcUaDataChangeListener
@@ -103,7 +104,7 @@
 # implements file/resource location handling for offline NodeSet2 import
 %requires FileLocationHandler
 module OpcUaDataProvider {
-    version = "1.9.2";
+    version = "1.10.0";
     desc = "user module providing a data provider API for OPC UA servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -520,6 +521,17 @@ module OpcUaDataProvider {
     implicit history retention.  Runtime callbacks may still return explicit values for \c history-read.
 
     @section opcuadataproviderrelnotes Release Notes
+
+    @subsection opcuadataproviderv110 OpcUaDataProvider v1.10.0
+    - added the parse-only @ref OpcUaDataProvider::describeAddressSpace() entry point for validating and
+      normalizing native OPC UA address-space documents without constructing a runtime or binding a port;
+      invalid documents raise \c OPCUA-SCHEMA-ERROR with a JSON pointer and endpoint identity
+    - added @ref OpcUaDataProvider::nodeSet2ToAddressSpace() and the document overload
+      @ref OpcUaDataProvider::exportNodeSet2() for offline NodeSet2 conversion
+    - native address-space snapshots now accept and emit the explicit \c opcua: "1" root marker; legacy
+      documents without the marker remain accepted and are normalized with the marker
+    - the server runtime now consumes the same validated document representation used by the parse-only API,
+      and live, imported, schema-only, and materialized snapshots all carry the discriminator
 
     @subsection opcuadataproviderv192 OpcUaDataProvider v1.9.2
     - every API-management endpoint now reports a \c display_name, so a listing can name the node instead of

@@ -75,6 +75,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("data change subscription and history", \subscriptionAndHistoryTest());
         addTestCase("nodeset2 import", \nodeSet2ImportTest());
         addTestCase("nodeset2 import robustness", \nodeSet2ImportRobustnessTest());
+        addTestCase("parse-only OPC UA address-space description", \addressSpaceDescriptionTest());
+        addTestCase("parse-only OPC UA address-space validation", \addressSpaceValidationTest());
+        addTestCase("offline OPC UA NodeSet2 round trip", \nodeSet2RoundTripTest());
         addTestCase("generic OPC UA server runtime rejects non-loopback endpoints",
             \genericServerRuntimeLoopbackOnlyTest());
         addTestCase("generic OPC UA server runtime honors network sandbox",
@@ -480,9 +483,12 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
     private static hash<auto> getApiManagementTestSchema() {
         string ns = "urn:qore:opcua:api-management-test";
         return {
+            "opcua": "1",
             "contract_version": 1,
             "source": "test",
             "namespaces": {"1": ns},
+            "root_node_id": "ns=1;s=Machine",
+            "root_browse_path": "/1:Machine",
             "endpoints": (
                 {
                     "endpoint_id": "setpoint",
@@ -491,11 +497,20 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
                     "browse_path": "/1:Machine/1:Setpoint",
                     "namespace_uri": ns,
                     "kind": "variable",
-                    "data_type": "Double",
+                    "data_type": "Int32",
                     "value_rank": -1,
                     "readable": True,
                     "writable": True,
                     "historizing": True,
+                    "value": 21,
+                    "minimum": 0,
+                    "maximum": 100,
+                    "validation": {
+                        "minimum": 0,
+                        "maximum": 100,
+                        "status_code": 2151415808,
+                        "rejected_status": "setpoint-out-of-range",
+                    },
                 },
                 {
                     "endpoint_id": "start",
@@ -548,11 +563,12 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             "projection uses JSON Schema 2020-12");
         assertEq("json-schema", projection{"x-opcua"}.projection, "projection metadata type");
         assertEq("qore-native", projection{"x-opcua"}.projection_mode, "projection mode");
-        assertEq(OpcUaSchemaProjection::getSnapshotHash(schema), projection{"x-opcua"}.snapshot_hash,
+        assertEq(OpcUaSchemaProjection::getSnapshotHash(prov.getApiManagementSchemaSnapshot()),
+            projection{"x-opcua"}.snapshot_hash,
             "snapshot hash is stable and externally reproducible");
 
         hash<auto> defs = projection{"$defs"};
-        assertEq("number", defs.setpoint_value.type, "Double variable maps to JSON Schema number");
+        assertEq("integer", defs.setpoint_value.type, "Int32 variable maps to JSON Schema integer");
         assertEq(("endpoint_id", "value"), defs.setpoint_write_request.required,
             "write request requires endpoint and value");
         assertTrue(defs.hasKey("setpoint_data_change_event"), "data-change payload schema is present");
@@ -600,7 +616,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             "JSON Schema content type");
         assertEq("application/vnd.oai.openapi+json", by_type.openapi.content_type,
             "OpenAPI content type");
-        assertEq(OpcUaSchemaProjection::getSnapshotHash(schema), by_type."json-schema".snapshot_hash,
+        assertEq(OpcUaSchemaProjection::getSnapshotHash(prov.getApiManagementSchemaSnapshot()),
+            by_type."json-schema".snapshot_hash,
             "artifact carries snapshot hash");
         assertEq(OpcUaSchemaProjection::getProjectionHash(by_type."json-schema".content),
             by_type."json-schema".hash, "artifact hash matches content");
@@ -1068,6 +1085,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         OpcUaDataProvider prov({"url": "opc.tcp://localhost:14840", "monitored_nodes": ()});
         hash<auto> snap = prov.importNodeSet2(file);
 
+        assertEq("1", snap.opcua, "imported snapshot root marker");
         assertEq("imported", snap.source, "imported snapshot source");
         assertEq(1, snap.contract_version, "imported contract version");
         assertEq("urn:qore:opcua:imported", snap.namespaces{"1"}, "imported namespace uri");
@@ -1077,6 +1095,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertEq("variable", bn."1:ImportedTemperature".kind, "imported variable kind");
         assertEq("i=11", bn."1:ImportedTemperature".data_type, "imported variable data_type");
         assertEq(-1, bn."1:ImportedTemperature".value_rank, "imported variable value_rank");
+        assertTrue(bn."1:ImportedTemperature".writable, "imported variable access level");
+        assertTrue(bn."1:ImportedTemperature".user_writable, "imported variable user access level");
+        assertTrue(bn."1:ImportedTemperature".historizing, "numeric NodeSet2 boolean attribute");
         assertEq("method-call", bn."1:ImportedReset".kind, "imported method kind");
 
         # required model dependencies and missing-dependency detection
@@ -1149,6 +1170,178 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             assertFalse(info =~ /NullPointer/, "no NullPointerException leaks to the caller");
         }
         assertTrue(threw, "out-of-range namespace index raises a parse error");
+    }
+
+    #! Tests the parse-only API with the Qorus OPC UA API-manager fixture document
+    addressSpaceDescriptionTest() {
+        hash<auto> document = getApiManagementTestSchema();
+        hash<auto> snapshot = OpcUaDataProvider::describeAddressSpace(document);
+
+        assertEq("1", snapshot.opcua, "parse-only snapshot carries the OPC UA root marker");
+        assertEq(1, snapshot.contract_version, "parse-only snapshot contract version");
+        assertEq("http://opcfoundation.org/UA/", snapshot.namespaces{"0"},
+            "parse-only snapshot supplies the standard namespace");
+        assertEq("ns=1;s=Machine", snapshot.root_node_id, "parse-only snapshot root node id");
+        assertEq("/1:Machine", snapshot.root_browse_path, "parse-only snapshot root browse path");
+        assertEq(2, snapshot.endpoints.size(), "parse-only snapshot endpoint count");
+
+        hash<string, hash<auto>> by_id = map {$1.endpoint_id: $1}, snapshot.endpoints;
+        assertEq("ns=1;s=Setpoint", by_id.setpoint.node_id, "variable node id retained");
+        assertEq("1:Setpoint", by_id.setpoint.browse_name, "variable browse name retained");
+        assertEq("/1:Machine/1:Setpoint", by_id.setpoint.browse_path, "variable browse path retained");
+        assertEq("urn:qore:opcua:api-management-test", by_id.setpoint.namespace_uri,
+            "variable namespace URI retained");
+        assertEq("variable", by_id.setpoint.kind, "variable endpoint kind retained");
+        assertEq("Int32", by_id.setpoint.data_type, "variable data type retained");
+        assertEq(-1, by_id.setpoint.value_rank, "variable value rank retained");
+        assertEq(("read", "write", "history-read", "observe"), by_id.setpoint.directions,
+            "variable access flags produce snapshot directions");
+        assertEq(100, by_id.setpoint.validation.maximum, "variable validation metadata retained");
+        assertEq("Int32", by_id.start.input_arguments[0].data_type,
+            "method input arguments retained");
+        assertEq("Boolean", by_id.start.output_arguments[0].data_type,
+            "method output arguments retained");
+
+        # describing a document must not mutate the caller's namespace hash
+        assertFalse(document.namespaces.hasKey("0"), "parse-only description returns an independent snapshot");
+
+        hash<auto> legacy = document{"contract_version", "source", "namespaces", "root_node_id",
+            "root_browse_path", "endpoints",};
+        assertEq("1", OpcUaDataProvider::describeAddressSpace(legacy).opcua,
+            "legacy documents without a marker remain accepted and emit it");
+
+        hash<auto> generated_ids = getApiManagementTestSchema();
+        generated_ids.endpoints[0].endpoint_id = NOTHING;
+        generated_ids.endpoints[0].node_id = NOTHING;
+        hash<auto> generated_snapshot = OpcUaDataProvider::describeAddressSpace(generated_ids);
+        assertTrue(generated_snapshot.endpoints[0].endpoint_id.val(), "a missing endpoint id is derived");
+        assertTrue(generated_snapshot.endpoints[0].node_id =~ /^ns=1;s=var:Setpoint:/,
+            "a missing variable node id is derived in its declared namespace");
+    }
+
+    #! Tests structured parse-only validation errors, including the acceptance-case missing data type
+    addressSpaceValidationTest() {
+        hash<auto> missing_data_type = getApiManagementTestSchema();
+        missing_data_type.endpoints[0].data_type = NOTHING;
+        hash<ExceptionInfo> data_type_error;
+        try {
+            OpcUaDataProvider::describeAddressSpace(missing_data_type);
+        } catch (hash<ExceptionInfo> ex) {
+            data_type_error = ex;
+        }
+        assertEq("OPCUA-SCHEMA-ERROR", data_type_error.err,
+            "a variable without data_type raises the schema error code");
+        assertEq("/endpoints/0/data_type", data_type_error.arg.pointer,
+            "the schema error identifies the offending field");
+        assertEq("setpoint", data_type_error.arg.endpoint_id,
+            "the schema error identifies the offending endpoint");
+        assertTrue(data_type_error.desc =~ /setpoint.*data_type/,
+            "the schema error description names the endpoint and field");
+
+        hash<auto> invalid_marker = getApiManagementTestSchema();
+        invalid_marker.opcua = "2";
+        hash<ExceptionInfo> marker_error;
+        try {
+            OpcUaDataProvider::describeAddressSpace(invalid_marker);
+        } catch (hash<ExceptionInfo> ex) {
+            marker_error = ex;
+        }
+        assertEq("OPCUA-SCHEMA-ERROR", marker_error.err, "an invalid root marker is rejected");
+        assertEq("/opcua", marker_error.arg.pointer, "the invalid marker error has a root-field pointer");
+
+        hash<auto> duplicate_endpoint = getApiManagementTestSchema();
+        duplicate_endpoint.endpoints[1].endpoint_id = "setpoint";
+        hash<ExceptionInfo> duplicate_error;
+        try {
+            OpcUaDataProvider::describeAddressSpace(duplicate_endpoint);
+        } catch (hash<ExceptionInfo> ex) {
+            duplicate_error = ex;
+        }
+        assertEq("OPCUA-SCHEMA-ERROR", duplicate_error.err, "duplicate endpoint ids are rejected");
+        assertEq("/endpoints/1/endpoint_id", duplicate_error.arg.pointer,
+            "the duplicate endpoint error identifies the second endpoint");
+
+        hash<auto> missing_argument_type = getApiManagementTestSchema();
+        missing_argument_type.endpoints[1].input_arguments[0].data_type = NOTHING;
+        hash<ExceptionInfo> argument_error;
+        try {
+            OpcUaDataProvider::describeAddressSpace(missing_argument_type);
+        } catch (hash<ExceptionInfo> ex) {
+            argument_error = ex;
+        }
+        assertEq("OPCUA-SCHEMA-ERROR", argument_error.err,
+            "method arguments without a data type are rejected");
+        assertEq("/endpoints/1/input_arguments/0/data_type", argument_error.arg.pointer,
+            "the method argument error carries the nested JSON pointer");
+
+        hash<auto> fractional_contract = getApiManagementTestSchema();
+        fractional_contract.contract_version = 1.5;
+        hash<ExceptionInfo> contract_error;
+        try {
+            OpcUaDataProvider::describeAddressSpace(fractional_contract);
+        } catch (hash<ExceptionInfo> ex) {
+            contract_error = ex;
+        }
+        assertEq("OPCUA-SCHEMA-ERROR", contract_error.err,
+            "fractional contract versions are rejected rather than truncated");
+        assertEq("/contract_version", contract_error.arg.pointer,
+            "the contract version error identifies the root field");
+
+        string missing_xml_data_type = '<?xml version="1.0" encoding="utf-8"?>
+<UANodeSet xmlns="http://opcfoundation.org/UA/2011/03/UANodeSet.xsd">
+  <NamespaceUris><Uri>urn:qore:opcua:missing-data-type</Uri></NamespaceUris>
+  <UAVariable NodeId="ns=1;s=MissingType" BrowseName="1:MissingType" ValueRank="-1"/>
+</UANodeSet>';
+        hash<ExceptionInfo> import_error;
+        try {
+            OpcUaDataProvider::nodeSet2ToAddressSpace(missing_xml_data_type);
+        } catch (hash<ExceptionInfo> ex) {
+            import_error = ex;
+        }
+        assertEq("OPCUA-SCHEMA-ERROR", import_error.err,
+            "NodeSet2 variables without a data type are rejected consistently");
+        assertEq("/endpoints/0/data_type", import_error.arg.pointer,
+            "the NodeSet2 validation error identifies the variable data type");
+    }
+
+    #! Tests XML -> native hash -> XML -> native hash without constructing or starting a runtime
+    nodeSet2RoundTripTest() {
+        string xml = File::readTextFile(normalize_dir(get_script_dir()) + DirSep
+            + "opcua-nodeset2-minimal.xml");
+        hash<auto> imported = OpcUaDataProvider::nodeSet2ToAddressSpace(xml);
+        string exported = OpcUaDataProvider::exportNodeSet2(imported);
+        hash<auto> round_trip = OpcUaDataProvider::nodeSet2ToAddressSpace(exported);
+
+        assertEq("1", imported.opcua, "NodeSet2 conversion adds the root marker");
+        assertTrue(exported =~ /<UANodeSet /, "offline export returns NodeSet2 XML");
+        assertEq(imported.namespaces, round_trip.namespaces, "NodeSet2 namespace table round trips");
+        assertEq(imported.required_models, round_trip.required_models,
+            "NodeSet2 required model dependencies round trip");
+        assertEq(imported.missing_dependencies, round_trip.missing_dependencies,
+            "NodeSet2 missing dependencies round trip");
+        assertEq(imported.endpoints.size(), round_trip.endpoints.size(),
+            "NodeSet2 endpoint count round trips");
+
+        hash<string, hash<auto>> original_by_id = map {$1.endpoint_id: $1}, imported.endpoints;
+        hash<string, hash<auto>> round_trip_by_id = map {$1.endpoint_id: $1}, round_trip.endpoints;
+        assertEq(keys original_by_id, keys round_trip_by_id, "NodeSet2 endpoint identities round trip");
+        foreach string endpoint_id in (keys original_by_id) {
+            hash<auto> original = original_by_id{endpoint_id};
+            hash<auto> actual = round_trip_by_id{endpoint_id};
+            assertEq(original.node_id, actual.node_id, endpoint_id + " node id round trips");
+            assertEq(original.browse_name, actual.browse_name, endpoint_id + " browse name round trips");
+            assertEq(original.kind, actual.kind, endpoint_id + " kind round trips");
+            assertEq(original.data_type, actual.data_type, endpoint_id + " data type round trips");
+            assertEq(original.value_rank, actual.value_rank, endpoint_id + " value rank round trips");
+            if (original.kind == "variable") {
+                assertEq(original.access_level, actual.access_level,
+                    endpoint_id + " access level round trips");
+                assertEq(original.user_access_level, actual.user_access_level,
+                    endpoint_id + " user access level round trips");
+                assertEq(original.historizing, actual.historizing,
+                    endpoint_id + " historizing flag round trips");
+            }
+        }
     }
 
     genericServerRuntimeLoopbackOnlyTest() {
@@ -1297,6 +1490,7 @@ sub startSandboxedRuntime(int port) {
         on_exit runtime.stop();
 
         hash<auto> materialized = runtime.getSchemaSnapshot();
+        assertEq("1", materialized.opcua, "runtime snapshot carries the OPC UA root marker");
         assertEq("server", materialized.source, "runtime schema source");
         assertTrue(materialized.root_node_id =~ /^ns=[0-9]+;s=Line$/,
             "runtime materializes declared string root NodeId in the live namespace");

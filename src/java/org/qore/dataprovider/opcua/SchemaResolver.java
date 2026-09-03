@@ -64,6 +64,7 @@ public class SchemaResolver {
         NamespaceTable namespaceTable = client.readNamespaceTable();
 
         Hash snapshot = new Hash();
+        snapshot.put("opcua", AddressSpaceSchema.OPCUA_VERSION);
         snapshot.put("contract_version", CONTRACT_VERSION);
         snapshot.put("source", "live");
 

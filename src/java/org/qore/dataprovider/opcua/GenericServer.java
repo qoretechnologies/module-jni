@@ -114,7 +114,7 @@ public class GenericServer {
 
     /** Creates a server with an optional Qore callback dispatcher. */
     public GenericServer(Map<String, Object> options, QoreClosure callback) throws Exception {
-        this.options = options != null ? new LinkedHashMap<>(options) : Collections.emptyMap();
+        this.options = normalizeOptions(options);
         this.callback = callback;
         this.bindAddress = stringOption("bind_address", "127.0.0.1");
         this.hostname = stringOption("hostname", bindAddress);
@@ -230,27 +230,26 @@ public class GenericServer {
 
     /** Exports the materialized variable/method endpoints to a small NodeSet2 subset. */
     public String exportNodeSet2() {
-        StringBuilder xml = new StringBuilder();
-        xml.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
-        xml.append("<UANodeSet xmlns=\"http://opcfoundation.org/UA/2011/03/UANodeSet.xsd\">\n");
-        xml.append("  <NamespaceUris>\n");
-        xml.append("    <Uri>").append(xmlEscape(namespaceUri)).append("</Uri>\n");
-        xml.append("  </NamespaceUris>\n");
-        for (Endpoint endpoint : namespace.orderedEndpoints) {
-            String tag = endpoint.method ? "UAMethod" : "UAVariable";
-            xml.append("  <").append(tag)
-                .append(" NodeId=\"").append(xmlEscape(exportNodeId(endpoint.nodeId))).append("\"")
-                .append(" BrowseName=\"1:").append(xmlEscape(endpoint.localName)).append("\"");
-            if (!endpoint.method) {
-                xml.append(" DataType=\"").append(xmlEscape(exportDataType(endpoint.dataType))).append("\"")
-                    .append(" ValueRank=\"").append(endpoint.valueRank).append("\"");
-            }
-            xml.append(">\n");
-            xml.append("    <DisplayName>").append(xmlEscape(endpoint.displayName)).append("</DisplayName>\n");
-            xml.append("  </").append(tag).append(">\n");
+        return AddressSpaceSchema.exportNodeSet2(getSchemaSnapshot());
+    }
+
+    private static Map<String, Object> normalizeOptions(Map<String, Object> options) {
+        if (options == null) {
+            return Collections.emptyMap();
         }
-        xml.append("</UANodeSet>\n");
-        return xml.toString();
+        Map<String, Object> normalized = new LinkedHashMap<>(options);
+        for (String key : new String[] {"schema", "schema_snapshot"}) {
+            Object value = normalized.get(key);
+            if (value == null) {
+                continue;
+            }
+            Map<String, Object> schema = asMap(value);
+            if (schema == null) {
+                throw new IllegalArgumentException(key + " must be a hash");
+            }
+            normalized.put(key, AddressSpaceSchema.describe(schema));
+        }
+        return normalized;
     }
 
     private void validateLoopbackOnlyEndpoint() {
@@ -334,7 +333,6 @@ public class GenericServer {
         return DEFAULT_NAMESPACE_URI;
     }
 
-    @SafeVarargs
     private static Map<String, Object> mapOption(Map<String, Object> options, String... keys) {
         for (String key : keys) {
             Map<String, Object> map = asMap(options.get(key));
@@ -443,28 +441,6 @@ public class GenericServer {
             return rv;
         }
         return value;
-    }
-
-    private static String xmlEscape(Object value) {
-        String s = value != null ? String.valueOf(value) : "";
-        return s.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&apos;");
-    }
-
-    private static String exportNodeId(NodeId nodeId) {
-        Object id = nodeId.getIdentifier();
-        if (id instanceof Number) {
-            return "ns=1;i=" + ((Number) id).longValue();
-        }
-        return "ns=1;s=" + String.valueOf(id);
-    }
-
-    private static String exportDataType(NodeId dataType) {
-        String name = builtinName(dataType);
-        return name != null ? name : dataType.toParseableString();
     }
 
     private final class RuntimeNamespace extends ManagedNamespaceWithLifecycle {
@@ -732,6 +708,7 @@ public class GenericServer {
 
             synchronized (schemaSnapshot) {
                 schemaSnapshot.clear();
+                schemaSnapshot.put("opcua", AddressSpaceSchema.OPCUA_VERSION);
                 schemaSnapshot.put("contract_version", SchemaResolver.CONTRACT_VERSION);
                 schemaSnapshot.put("source", "server");
                 schemaSnapshot.put("namespaces", namespaces);
@@ -808,13 +785,13 @@ public class GenericServer {
             Object initialValue = spec.containsKey("value") ? spec.get("value")
                 : spec.containsKey("default_value") ? spec.get("default_value") : defaultValue(dataType);
 
-            UaVariableNode node = UaVariableNode.builder(getNodeContext())
+            UaVariableNode node = UaVariableNode.build(getNodeContext(), builder -> builder
                 .setNodeId(nodeId)
                 .setBrowseName(new QualifiedName(idx, localName))
                 .setDisplayName(LocalizedText.english(displayName))
                 .setDataType(dataType)
                 .setTypeDefinition(NodeIds.BaseDataVariableType)
-                .build();
+                .build());
             node.setValueRank(valueRank);
             node.setAccessLevel(UByte.valueOf(accessLevel));
             node.setUserAccessLevel(UByte.valueOf(accessLevel));

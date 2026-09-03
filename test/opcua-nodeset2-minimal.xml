@@ -15,7 +15,7 @@
     </Model>
   </Models>
   <UAVariable NodeId="ns=1;s=ImportedTemperature" BrowseName="1:ImportedTemperature"
-      DataType="i=11" ValueRank="-1">
+      DataType="i=11" ValueRank="-1" AccessLevel="7" UserAccessLevel="3" Historizing="1">
     <DisplayName>ImportedTemperature</DisplayName>
     <References>
       <Reference ReferenceType="HasTypeDefinition">i=63</Reference>

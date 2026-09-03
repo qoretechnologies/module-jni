@@ -472,6 +472,7 @@ set(OPCUA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-clie
 set(OPCUA_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(OPCUA_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/)
 set(OPCUA_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/AddressSpaceSchema.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/SchemaResolver.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/ValueCodec.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/NodeSet2Importer.java
