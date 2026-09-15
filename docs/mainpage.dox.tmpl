@@ -1023,6 +1023,15 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - fixed a %Qore static variable mirroring a mutable Java static field holding a copy of the field's value
+      taken when the class was imported; a change made on either side was invisible to the other.  The variable
+      is now read from and written to the Java field, so both sides always agree
+    - fixed the declared type of fields holding a Java map or list; such a value is converted to a %Qore hash or
+      list only when its contents allow it (a map needs string keys) and compatibility types are not in effect,
+      so the field now declares both forms and a field holding the Java object no longer conflicts with its type
+    - fixed assigning a %Qore list to a Java argument, field or variable of a collection type such as
+      <tt>java.util.List</tt> failing with <tt>cannot instantiate array from ...</tt>; a list is now converted to
+      the target collection type, as a hash is converted to a map
     - fixed process crashes when loading or invoking generated API classes after their generating %Qore Program
       was destroyed or from a saved JAR in another process; generated classes now use validated binding handles
       for constants, functions, methods, constructors, and native class identity, and cleanup drains active calls

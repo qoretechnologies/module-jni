@@ -3566,6 +3566,41 @@ static const char* access_str(ClassAccess a) {
     }
 }
 
+//! Returns true if the Java-to-Qore conversion of a value of this type depends on the value itself
+/** A Java map or list is converted to a Qore hash or list only when its contents allow it (a map needs string keys)
+    and compatibility types are not in effect; every other mapping in jtmap is unconditional.
+*/
+static bool jniFieldConversionIsConditional(const QoreTypeInfo* ti) {
+    return ti == autoHashOrNothingTypeInfo || ti == autoListOrNothingTypeInfo;
+}
+
+//! Reads a Java static field for the %Qore static variable mirroring it
+static QoreValue jni_static_field_get(const QoreClass& cls, const void* ptr, ExceptionSink* xsink) {
+    BaseField* field = const_cast<BaseField*>(static_cast<const BaseField*>(ptr));
+    try {
+        return field->getStatic(getProgram(), JniExternalProgramData::compatTypes());
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+        return QoreValue();
+    }
+}
+
+//! Writes a Java static field for the %Qore static variable mirroring it
+static void jni_static_field_set(const QoreClass& cls, const void* ptr, QoreValue val, ExceptionSink* xsink) {
+    BaseField* field = const_cast<BaseField*>(static_cast<const BaseField*>(ptr));
+    ValueHolder holder(val, xsink);
+    try {
+        field->setStatic(*holder, jni_get_context());
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+    }
+}
+
+//! Releases the field held for a %Qore static variable mirroring a Java static field
+static void jni_static_field_del(const QoreClass& cls, const void* ptr) {
+    const_cast<BaseField*>(static_cast<const BaseField*>(ptr))->deref();
+}
+
 void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm) {
     Env env;
 
@@ -3587,19 +3622,34 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
             continue;
         }
 
-        const QoreTypeInfo* fieldTypeInfo = field->getQoreTypeInfo(*this, pgm);
+        // a Java container is converted to a Qore container only when the conversion applies to its contents (a
+        // map needs string keys) and compatibility types are not in effect; otherwise the value stays a Java object
+        // wrapper.  A field has a single declared type, so it must accept both forms
+        const QoreTypeInfo* altFieldTypeInfo = nullptr;
+        const QoreTypeInfo* fieldTypeInfo = field->getQoreTypeInfo(*this, altFieldTypeInfo, pgm);
+        if (altFieldTypeInfo && jniFieldConversionIsConditional(fieldTypeInfo)) {
+            type_vec_t field_types = {fieldTypeInfo, altFieldTypeInfo};
+            if (const QoreTypeInfo* union_type = qore_get_union_or_nothing_type(field_types)) {
+                fieldTypeInfo = union_type;
+            }
+        }
 
         if (field->isStatic()) {
             printd(LogLevel, "+ adding static field %s %s %s.%s (%s)\n", access_str(field->getAccess()),
                 typeInfoGetName(fieldTypeInfo), qc.getName(), fname.c_str(), field->isFinal() ? "const" : "var");
 
-            QoreValue v(field->getStatic(pgm, false));
             if (field->isFinal()) {
+                QoreValue v(field->getStatic(pgm, false));
                 if (v.isNothing())
                     v.assign(0ll);
                 qc.addBuiltinConstant(fname.c_str(), v, field->getAccess());
-            } else
-                qc.addBuiltinStaticVar(fname.c_str(), v, field->getAccess(), fieldTypeInfo);
+            } else {
+                // a mutable Java field is read and written through accessors: a copy of its value taken here would
+                // diverge from the field as soon as either side changed it
+                field->ref();
+                qc.addBuiltinStaticVarWithAccessors(fname.c_str(), field->getAccess(), fieldTypeInfo,
+                    jni_static_field_get, jni_static_field_set, *field, jni_static_field_del);
+            }
         } else if (!qc.findLocalMember(fname.c_str())) {
             printd(LogLevel, "+ adding field %s %s %s.%s\n", access_str(field->getAccess()),
                 typeInfoGetName(fieldTypeInfo), qc.getName(), fname.c_str());

@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -89,6 +89,9 @@ public:
     static jobject toAnyObject(Env& env, const QoreValue& value, JniExternalProgramData* jpc = nullptr);
 
     static jobject makeMap(const QoreHashNode& h, jclass cls, JniExternalProgramData* jpc = nullptr);
+
+    //! Returns a Java collection holding the list's elements, for a target class that is not an array
+    static jobject makeList(const QoreListNode& l, jclass cls, JniExternalProgramData* jpc = nullptr);
 
     static jbyteArray makeByteArray(Env& env, const BinaryNode& b);
 

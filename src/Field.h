@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -119,6 +119,12 @@ public:
 
     DLLLOCAL const QoreTypeInfo* getQoreTypeInfo(QoreJniClassMap& clsmap, QoreProgram* pgm = nullptr) {
         return clsmap.getQoreType(typeClass, pgm);
+    }
+
+    //! as above; \a altType is set to the Java class type when the field's value is not always converted to it
+    DLLLOCAL const QoreTypeInfo* getQoreTypeInfo(QoreJniClassMap& clsmap, const QoreTypeInfo*& altType,
+            QoreProgram* pgm) {
+        return clsmap.getQoreType(typeClass, altType, pgm);
     }
 
     DLLLOCAL int isStatic() const {

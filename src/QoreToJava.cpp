@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -206,6 +206,11 @@ jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniEx
             break;
         }
         case NT_LIST: {
+            // an array target takes a Java array; a collection target (such as java.util.List) takes a collection
+            // object, as a hash assigned to a map target does
+            if (cls && !env.callObjectMethod(cls, Globals::methodClassGetComponentType, nullptr)) {
+                return makeList(*value.get<QoreListNode>(), cls, jpc);
+            }
             javaObjectRef = static_cast<jobject>(qjcm.getJavaArray(value.get<QoreListNode>(), cls));
             break;
         }
@@ -336,6 +341,38 @@ jobject QoreToJava::makeMap(const QoreHashNode& h, jclass cls, JniExternalProgra
     }
 
     return hm.release();
+}
+
+jobject QoreToJava::makeList(const QoreListNode& l, jclass cls, JniExternalProgramData* jpc) {
+    Env env;
+
+    // get constructor for class
+    jmethodID ctor;
+    jmethodID add;
+    try {
+        ctor = env.getMethod(cls, "<init>", "()V");
+        add = env.getMethod(cls, "add", "(Ljava/lang/Object;)Z");
+    } catch (jni::Exception& e) {
+        e.ignore();
+        // an interface or a class that cannot be created here takes the standard list implementation
+        cls = Globals::classArrayList;
+        ctor = Globals::ctorArrayList;
+        add = Globals::methodArrayListAdd;
+    }
+
+    LocalReference<jobject> al = env.newObject(cls, ctor, nullptr);
+
+    ConstListIterator i(l);
+    while (i.next()) {
+        QoreValue v(i.getValue());
+        LocalReference<jobject> value = toAnyObject(env, v, jpc);
+
+        jvalue jarg;
+        jarg.l = value;
+        env.callBooleanMethod(al, add, &jarg);
+    }
+
+    return al.release();
 }
 
 jbyteArray QoreToJava::makeByteArray(Env& env, const BinaryNode& b) {

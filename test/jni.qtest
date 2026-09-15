@@ -264,6 +264,8 @@ public class Main inherits QUnit::Test {
         addTestCase("instance method invocation test", \testInstanceMethods());
         addTestCase("float conversion test", \testFloatConversions());
         addTestCase("static fields access test", \testStaticFields());
+        addTestCase("container field types test", \testContainerFieldTypes());
+        addTestCase("live static fields test", \testLiveStaticFields());
         addTestCase("instance fields access test", \testInstanceFields());
         addTestCase("callback test", \testCallback());
         addTestCase("foreign-thread thread resource cleanup test", \testForeignThreadResourceCleanup());
@@ -2498,6 +2500,42 @@ string sub javaName() {
         assertThrows("JNI-ERROR", sub() { ba.set(NOTHING, myint); });            # Integer is not a byte[]
 
         o.set(NOTHING, clazz);                                                   # classes are objects, too
+    }
+
+    #! a mutable Java static field is read from and written to the JVM, so both sides always agree
+    testLiveStaticFields() {
+        load_class("org/qore/jni/test/StaticFields");
+        Reflection::Class cls = Reflection::Class::forName("Jni::org::qore::jni::test::StaticFields");
+        reflect::Field jfield = load_class("org/qore/jni/test/StaticFields").getDeclaredField("stringKeyMap");
+        StaticMember m = cls.getStaticMember("stringKeyMap");
+
+        # a change made in Java is visible in Qore: the value is read from the field, not copied at import time
+        object jmap = new Jni::java::util::HashMap();
+        jmap.put("set-by", "java");
+        jfield.set(NOTHING, jmap);
+        assertEq({"set-by": "java"}, m.getValue(), "a Java write is visible in Qore");
+
+        # a change made in Qore is visible in Java
+        m.setValue({"set-by": "qore"});
+        assertEq({"set-by": "qore"}, jfield.get(NOTHING), "a Qore write is visible in Java");
+        assertEq({"set-by": "qore"}, m.getValue(), "the Qore write is read back from the field");
+    }
+
+    #! a Java container field holds either the converted Qore container or the Java object, so it declares both
+    /** a map is converted to a hash only when all its keys are strings and compatibility types are not in effect
+    */
+    testContainerFieldTypes() {
+        # the Java class must be loaded into this Program before its Qore class can be found
+        load_class("org/qore/jni/test/StaticFields");
+        Reflection::Class cls = Reflection::Class::forName("Jni::org::qore::jni::test::StaticFields");
+        foreach string name in (("stringKeyMap", "otherKeyMap")) {
+            string type_name = cls.getStaticMember(name).getType().getName();
+            assertEq("union<*hash<auto>, *object<Map>>", type_name, name + " declared type");
+        }
+        # both forms the conversion can produce are accepted by the declared type
+        hash<string, bool> accepted = cls.getStaticMember("stringKeyMap").getType().getAcceptTypeHash(True);
+        assertTrue(accepted{"hash"} ?? False, "the converted hash is accepted");
+        assertTrue(accepted{"Map"} ?? False, "the Java object is accepted");
     }
 
     testInstanceFields() {

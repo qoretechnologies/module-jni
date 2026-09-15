@@ -28,7 +28,9 @@ if(NOT Qore_DIR AND DEFINED ENV{QORE_GIT_ROOT})
         set(Qore_DIR "${_qore_build_cmake}")
     endif()
 endif()
-find_package(Qore 2.0 REQUIRED)
+# accessor-backed static class variables (QoreClass::addBuiltinStaticVarWithAccessors()) and union types are
+# required to mirror mutable Java static fields
+find_package(Qore 3.0 REQUIRED)
 find_package(JNI REQUIRED)
 find_package(Java REQUIRED)
 if (${Java_VERSION_MAJOR} LESS 21)

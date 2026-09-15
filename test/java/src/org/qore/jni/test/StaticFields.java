@@ -1,5 +1,8 @@
 package org.qore.jni.test;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class StaticFields {
 
     private static boolean z;
@@ -17,6 +20,15 @@ public class StaticFields {
     public static Object o;
     public static Object[] oa = new Object[3];
     public static Integer[] ia = new Integer[3];
+
+    // a map with string keys is converted to a Qore hash; one with other keys stays a Java object
+    public static Map<String, String> stringKeyMap = new HashMap<String, String>();
+    public static Map<Integer, String> otherKeyMap = new HashMap<Integer, String>();
+
+    static {
+        stringKeyMap.put("key", "value");
+        otherKeyMap.put(1, "value");
+    }
 
     public static Integer wrap(int i) {
         return i;
