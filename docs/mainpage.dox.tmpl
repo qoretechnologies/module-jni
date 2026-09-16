@@ -1042,14 +1042,6 @@ foreach hash<auto> column in (result.schemaV2()) {
       <tt>Java provider AccessDataProvider has no qmod build target</tt> when
       <tt>QORE_BUILD_AOT_MODULES=OFF</tt>; source builds now validate after generating provider JARs, while
       AOT builds retain the required qmod dependencies
-    - fixed the bundled <a href="../../OpcUaDataProvider/html/index.html">OpcUaDataProvider</a> module's
-      offline OPC UA NodeSet2 conversion: an imported node's browse path is now built from the model's
-      containment hierarchy instead of from its browse name alone, so a real published model no longer
-      fails to import with a duplicate endpoint id and no longer converts to a flat address space; method
-      argument properties are folded into method endpoints, the export writes the hierarchy back out, and
-      the generic server runtime materializes each browse path segment only once (see the
-      <a href="../../OpcUaDataProvider/html/index.html#opcuadataproviderv1101">OpcUaDataProvider v1.10.1</a>
-      release notes)
     - fixed \c NoClassDefFoundError for a module class referenced by another module's method
       signatures (for example <tt>java.lang.NoClassDefFoundError: qore/Qore/astparser/AstParser</tt>
       when generating Java classes for a module that uses the astparser module); a class's canonical
