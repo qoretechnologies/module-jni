@@ -211,6 +211,9 @@ void Array::set(jarray array, Type elementType, jclass elementClass, int64 index
 }
 
 LocalReference<jclass> Array::getClassForValue(QoreValue v, JniExternalProgramData* jpc) {
+    // the element of a list may be a weak (":=") or opaque ("@=") reference; the Java class has
+    // to be chosen for what it refers to, exactly as QoreToJava::toAnyObject() converts it
+    v = v.resolveIndirect();
     switch (v.getType()) {
         case NT_INT: return Globals::classLong.toLocal();
         case NT_FLOAT: return Globals::classDouble.toLocal();

@@ -2,6 +2,10 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
+
+# conversion to Java has to resolve these; see indirectReferences()
+%allow-weak-references
+%allow-opaque-references
 %requires QUnit
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
@@ -17,7 +21,47 @@ class JniListConversionTest inherits QUnit::Test {
         addTestCase("Typed empty arrays retain their component type", \typedArrays());
         addTestCase("Varargs retain their component type and offset", \varargs());
         addTestCase("Invalid typed elements throw and subsequent conversions recover", \invalidElements());
+        addTestCase("Indirect references convert as their targets", \indirectReferences());
         set_return_value(main());
+    }
+
+    #! A weak or opaque reference must convert exactly as the value it refers to
+    /** A container holds what was assigned to it, so a member assigned with ":=" or "@=" is stored
+        as the reference itself and iterating the container yields that, not its target.  Without
+        QoreValue::resolveIndirect(), Array::getClassForValue() picks a Java class for the reference
+        and QoreToJava::toAnyObject() refuses to convert it.
+
+        Comparing against the same structure built with "=" is what makes this meaningful: it
+        asserts the indirection is invisible, rather than pinning a particular Java signature.
+    */
+    indirectReferences() {
+        hash<auto> inner = {"a": 1, "b": "two"};
+        list<auto> ilist = ("one", "two");
+
+        list<auto> plain = (inner, ilist);
+        list<auto> weak = ();
+        weak[0] := inner;
+        weak[1] := ilist;
+        assertEq(ListConversions::describe(plain), ListConversions::describe(weak),
+            "a list of weak references describes as a list of their targets");
+        assertEq(ListConversions::roundTrip(plain), ListConversions::roundTrip(weak),
+            "a list of weak references round trips as its targets");
+
+        list<auto> opaque = ();
+        opaque[0] @= inner;
+        opaque[1] @= ilist;
+        assertEq(ListConversions::describe(plain), ListConversions::describe(opaque),
+            "a list of opaque references describes as a list of their targets");
+        assertEq(ListConversions::roundTrip(plain), ListConversions::roundTrip(opaque),
+            "a list of opaque references round trips as its targets");
+
+        # the hash path reaches QoreToJava::toAnyObject() through a different caller
+        hash<auto> plain_hash = {"h": inner, "l": ilist};
+        hash<auto> weak_hash = {};
+        weak_hash{"h"} := inner;
+        weak_hash{"l"} := ilist;
+        assertEq(ListConversions::roundTrip((plain_hash,)), ListConversions::roundTrip((weak_hash,)),
+            "weak references inside a hash round trip as their targets");
     }
 
     emptyLists() {
