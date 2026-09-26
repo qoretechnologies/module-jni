@@ -68,10 +68,14 @@ public class ValueCodec {
     }
 
     /**
-     * Unwraps a Milo value for delivery to Qore: OPC UA unsigned wrapper types become plain integers
-     * so Qore receives a native value instead of a Java object; other values are returned unchanged.
+     * Unwraps a Milo value for delivery to Qore: OPC UA unsigned wrapper types become plain integers and a
+     * ByteString its bytes (a Qore binary), so Qore receives a native value instead of a Java object; other
+     * values are returned unchanged.
      */
     public static Object unwrap(Object value) {
+        if (value instanceof ByteString) {
+            return ((ByteString) value).bytesOrEmpty();
+        }
         if (value instanceof UByte) {
             return (long) ((UByte) value).intValue();
         }

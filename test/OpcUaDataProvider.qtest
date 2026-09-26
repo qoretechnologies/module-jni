@@ -73,6 +73,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("write type conversion", \writeTypeConversionTest());
         addTestCase("connection detection", \connectionDetectionTest());
         addTestCase("embedded server integration", \embeddedServerIntegrationTest());
+        addTestCase("a ByteString value is read as a binary", \byteStringValueTest());
         addTestCase("data change subscription and history", \subscriptionAndHistoryTest());
         addTestCase("nodeset2 import", \nodeSet2ImportTest());
         addTestCase("nodeset2 import robustness", \nodeSet2ImportRobustnessTest());
@@ -1819,6 +1820,41 @@ sub startSandboxedRuntime(int port) {
             assertEq("NETWORK-ACCESS-DENIED", ex.err, "sandboxed runtime bind is denied before listener startup");
         }
         assertTrue(threw, "generic runtime honors active network sandbox bind restrictions");
+    }
+
+    #! A ByteString value reaches Qore as a binary, not a Java object
+    byteStringValueTest() {
+        string ns = "urn:qore:opcua:bytestring-test";
+        OpcUaServerRuntime runtime({
+            "port": 57200 + (getpid() % 1000),
+            "namespace_uri": ns,
+            "schema": {
+                "contract_version": 1,
+                "source": "test",
+                "namespaces": {"1": ns},
+                "root_node_id": "ns=1;s=Store",
+                "root_browse_path": "/1:Store",
+                "endpoints": ({
+                    "endpoint_id": "blob",
+                    "browse_name": "1:Blob",
+                    "browse_path": "/1:Store/1:Blob",
+                    "kind": "variable",
+                    "data_type": "ByteString",
+                    "value_rank": -1,
+                    "writable": True,
+                },),
+            },
+        }, NOTHING);
+        runtime.start();
+        on_exit runtime.stop();
+        string node_id = (map $1.node_id, runtime.getSchemaSnapshot().endpoints, $1.endpoint_id == "blob")[0];
+
+        OpcUaDataProvider prov({"url": runtime.getEndpointUrl(), "monitored_nodes": ()});
+        binary value = binary("ab\x00cd");
+        prov.sendMessage("write-value", {"node_id": node_id, "value": value, "data_type": "ByteString"});
+        auto read = prov.doRequest({"action": "read-value", "node_id": node_id}).value;
+        assertEq(Type::Binary, read.type(), "a ByteString is read as a binary");
+        assertEq(value, read, "the bytes written are the bytes read");
     }
 
     #! Tests the generic schema-backed OPC UA server runtime (Epic B1)
