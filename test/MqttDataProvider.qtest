@@ -22,6 +22,9 @@ public class MqttDataProviderTest inherits QUnit::Test {
         #! The MQTT broker URL for integration tests
         string mqtt_url;
 
+        #! The error raised when a configured MQTT connection could not be set up
+        *hash<ExceptionInfo> setup_error;
+
         # command-line options
         const MyOpts = Opts + {
             "conn": "c,connection=s",
@@ -54,6 +57,10 @@ public class MqttDataProviderTest inherits QUnit::Test {
         try {
             setupConnection();
         } catch (hash<ExceptionInfo> ex) {
+            # a configured broker that cannot be used fails the integration test instead of skipping it
+            if ((m_options.conn ?? ENV.MQTT_CONNECTION).val()) {
+                setup_error = ex;
+            }
             if (m_options.verbose > 2) {
                 printf("%s\n", get_exception_string(ex));
             } else if (m_options.verbose) {
@@ -688,8 +695,12 @@ public class MqttDataProviderTest inherits QUnit::Test {
     }
 
     mqttIntegrationTest() {
+        if (setup_error) {
+            throw setup_error.err, sprintf("the configured MQTT connection could not be set up: %s",
+                setup_error.desc), setup_error.arg;
+        }
         if (!mqtt) {
-            testSkip("no connection");
+            testSkip("no MQTT connection configured (set MQTT_CONNECTION or use -c)");
         }
 
         assertEq("mqtt", mqtt.getName());

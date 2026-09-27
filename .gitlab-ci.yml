@@ -44,6 +44,37 @@ default:
         AMQ_USER: admin
         AMQ_PASSWORD: admin
         HEALTHCHECK_TCP_PORT: "61616"
+    # single-node KRaft Kafka broker for the KafkaDataProvider integration test; the configuration is written
+    # explicitly because the image turns every KAFKA_* environment variable into a broker property, and the
+    # job variables (including KAFKA_CONNECTION) are passed to all service containers; the health check on the
+    # client port holds the job until the broker accepts connections
+    - name: apache/kafka:3.9.0
+      alias: kafka
+      entrypoint: ["/bin/sh", "-ec"]
+      command:
+        - |
+          cat > /tmp/server.properties <<'EOF'
+          process.roles=broker,controller
+          node.id=1
+          controller.quorum.voters=1@localhost:9093
+          listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://localhost:9093
+          advertised.listeners=PLAINTEXT://kafka:9092
+          controller.listener.names=CONTROLLER
+          inter.broker.listener.name=PLAINTEXT
+          listener.security.protocol.map=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          log.dirs=/tmp/kraft-logs
+          num.partitions=1
+          auto.create.topics.enable=true
+          offsets.topic.replication.factor=1
+          transaction.state.log.replication.factor=1
+          transaction.state.log.min.isr=1
+          group.initial.rebalance.delay.ms=0
+          EOF
+          /opt/kafka/bin/kafka-storage.sh format --ignore-formatted -c /tmp/server.properties \
+            -t "$(/opt/kafka/bin/kafka-storage.sh random-uuid)"
+          exec /opt/kafka/bin/kafka-server-start.sh /tmp/server.properties
+      variables:
+        HEALTHCHECK_TCP_PORT: "9092"
   before_script:
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
@@ -56,6 +87,7 @@ variables:
   POSTGRES_PASSWORD: omq
   QORE_DB_CONNSTR: pgsql:postgres/omq@postgres%postgres
   MQTT_CONNECTION: "mqtttcp://artemis:61616"
+  KAFKA_CONNECTION: "kafka://kafka:9092"
   OPCUA_CONNECTION: "opc.tcp://opcua:4840"
   JMS_CONNECTION: "tcp://artemis:61616"
   ARTEMIS_JAKARTA_JAR_URL: "https://repo1.maven.org/maven2/org/apache/activemq/artemis-jakarta-client-all/2.40.0/artemis-jakarta-client-all-2.40.0.jar"

@@ -16,15 +16,43 @@
 
 public class KafkaDataProviderTest inherits QUnit::Test {
     private {
+        #! The Kafka connection for the integration test, if one is configured
+        KafkaConnection kafka_conn;
+
+        #! The error raised when a configured Kafka connection could not be set up
+        *hash<ExceptionInfo> setup_error;
+
         const AsyncApiChannel = "messages";
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+
+        #! The maximum time to wait for a produced message to be consumed
+        const ConsumeTimeout = 30s;
     }
 
-    constructor() : Test("KafkaDataProviderTest Test", "1.0", \ARGV) {
+    constructor() : Test("KafkaDataProviderTest Test", "1.0", \ARGV, MyOpts) {
         addTestCase("AsyncAPI options", \asyncApiOptionsTest());
         addTestCase("AsyncAPI validation", \asyncApiValidationTest());
         addTestCase("AsyncAPI option validation", \asyncApiOptionValidationTest());
         addTestCase("factory child option forwarding", \factoryChildOptionForwardingTest());
         addTestCase("action registration", \actionRegistrationTest());
+        addTestCase("Kafka integration test", \kafkaIntegrationTest());
+
+        # the integration test runs only when a broker is configured; a configured broker that cannot be used
+        # fails the test instead of skipping it
+        *string conn_url = m_options.conn ?? ENV.KAFKA_CONNECTION;
+        if (conn_url.val()) {
+            try {
+                kafka_conn = new KafkaConnection("test-kafka", "Kafka integration test connection", conn_url);
+            } catch (hash<ExceptionInfo> ex) {
+                setup_error = ex;
+            }
+        }
 
         set_return_value(main());
     }
@@ -223,6 +251,79 @@ public class KafkaDataProviderTest inherits QUnit::Test {
             sprintf("%s option should allow locations", name));
     }
 
+    kafkaIntegrationTest() {
+        if (setup_error) {
+            throw setup_error.err, sprintf("the configured Kafka connection could not be set up: %s",
+                setup_error.desc), setup_error.arg;
+        }
+        if (!kafka_conn) {
+            testSkip("no Kafka connection configured (set KAFKA_CONNECTION or use -c)");
+        }
+
+        string topic = "qore-test-" + get_random_string(12);
+
+        # produce before the consumer subscribes; the consumer reads from the earliest offset of a new consumer
+        # group, so it receives the messages however long its group join takes
+        KafkaProducerDataProvider producer(kafka_conn);
+        hash<auto> md1 = producer.doRequest({
+            "topic": topic,
+            "key": "key-1",
+            "value": "value-1",
+        });
+        assertEq(topic, md1.topic, "the first message is sent to the requested topic");
+        assertEq(0, md1.partition, "the first message is sent to the only partition");
+        assertEq(0, md1.offset, "the first message has the first offset of a new topic");
+        assertEq(5, md1.serialized_key_size, "the serialized key size is reported");
+        assertEq(7, md1.serialized_value_size, "the serialized value size is reported");
+        assertEq(Type::Date, md1.timestamp.type(), "the send timestamp is reported");
+
+        hash<auto> md2 = producer.doRequest({
+            "topic": topic,
+            "partition": 0,
+            "key": "key-2",
+            "value": "value-2",
+        });
+        assertEq(0, md2.partition, "an explicit partition is used");
+        assertEq(1, md2.offset, "the second message follows the first");
+
+        KafkaConsumerDataProvider consumer(kafka_conn, {
+            "topics": (topic,),
+            "group.id": "qore-test-" + get_random_string(12),
+            "auto.offset.reset": "earliest",
+        });
+        on_exit consumer.stopEvents();
+
+        Queue msg_queue();
+        KafkaTestObserver obs(msg_queue);
+        consumer.registerObserver(obs);
+        consumer.observersReady();
+
+        auto received = msg_queue.get(ConsumeTimeout);
+        assertTrue(exists received, "the consumer receives the first message");
+        assertEq(topic, received.topic, "the first message arrives on the topic");
+        assertEq("key-1", received.key, "the first message key arrives");
+        assertEq("value-1", received.value, "the first message value arrives");
+        assertEq(0, received.partition, "the first message arrives from the only partition");
+        assertEq(0, received.offset, "the first message arrives with its offset");
+        assertEq("CreateTime", received.timestamp_type, "the producer's timestamp is used");
+
+        received = msg_queue.get(ConsumeTimeout);
+        assertTrue(exists received, "the consumer receives the second message");
+        assertEq("key-2", received.key, "the second message key arrives");
+        assertEq("value-2", received.value, "the second message value arrives");
+        assertEq(1, received.offset, "the second message arrives in order");
+
+        # stopping the consumer ends its polling thread
+        consumer.stopEvents();
+        assertEq(0, msg_queue.size(), "no other messages arrive");
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set the Kafka connection URL (ex: kafka://localhost:9092)",
+            OptionColumn);
+    }
+
     private assertNoAsyncApiConfig(KafkaDataProvider prov) {
         *AsyncApi::AsyncApi3Schema validator = prov.getAsyncApiValidator();
         *string channel = prov.getAsyncApiChannel();
@@ -338,5 +439,21 @@ components:
         message:
           type: string
 ", AsyncApiChannel, AsyncApiChannel, AsyncApiChannel, AsyncApiChannel, AsyncApiChannel);
+    }
+}
+
+class KafkaTestObserver inherits Observer {
+    private {
+        Queue queue;
+    }
+
+    constructor(Queue queue) {
+        self.queue = queue;
+    }
+
+    update(string event_id, hash<auto> data) {
+        if (event_id == KafkaConsumerDataProvider::EVENT_KAFKA_MESSAGE) {
+            queue.push(data);
+        }
     }
 }
