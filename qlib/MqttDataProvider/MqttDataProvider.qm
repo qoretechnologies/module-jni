@@ -209,6 +209,8 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
     @section MqttDataProvider_relnotes Release Notes
 
     @subsection MqttDataProvider_v3_0 MqttDataProvider v3.0
+    - added \c getMessageFormat(), so that a consumer of the provider's messages knows whether their payloads were
+      decoded
     - errors raised in MQTT callbacks are now always reported; they are logged if a logger is set and
       written to @ref Qore::stderr "stderr" otherwise.  MQTT callbacks run on the Paho client's own
       thread and have no caller that could receive an exception, so an unreported error was visible

@@ -4,6 +4,7 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import org.qore.jni.Hash;
 
@@ -13,6 +14,7 @@ import java.util.Collections;
 import java.util.concurrent.Future;
 import java.util.TimeZone;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.io.PrintWriter;
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -120,7 +122,7 @@ public class QoreKafkaProducer {
                     PrintWriter printWriter = new PrintWriter( writer );
                     e.printStackTrace(printWriter);
                     printWriter.flush();
-                    System.out.printf("Exception with msg %y: %s\n", info, writer.toString());
+                    System.out.printf("Exception with msg %s: %s\n", info, writer.toString());
                 }
             }
         });
@@ -129,20 +131,51 @@ public class QoreKafkaProducer {
     protected Future<RecordMetadata> sendMessageAsyncIntern(Map<String, Object> info, Callback callback) throws Throwable {
         String topic = (String)info.get("topic");
         Object value = info.get("value");
-
-        ProducerRecord<Object, Object> rec;
-        if (info.containsKey("key")) {
-            Object key = (String)info.get("key");
-            if (info.containsKey("partition")) {
-                int partition = ((Number)info.get("partition")).intValue();
-                rec = new ProducerRecord<Object, Object>(topic, partition, key, value);
-            } else {
-                rec = new ProducerRecord<Object, Object>(topic, key, value);
-            }
-        } else {
-            rec = new ProducerRecord<Object, Object>(topic, value);
+        // a record without a key is distributed over the topic's partitions by the producer
+        Object key = info.get("key");
+        Integer partition = null;
+        Object partition_value = info.get("partition");
+        if (partition_value != null) {
+            partition = ((Number)partition_value).intValue();
         }
+
+        ProducerRecord<Object, Object> rec = new ProducerRecord<Object, Object>(topic, partition, key, value,
+            getHeaders(info.get("headers")));
         return callback != null ? prod.send(rec, callback) : prod.send(rec);
+    }
+
+    /** Returns the record headers for the headers of a request
+
+        A header value that is a string is sent as its UTF-8 bytes, a binary value (byte[]) as it is, and a missing
+        value as a header without a value; any other value is sent as the UTF-8 bytes of its string form.
+
+        @param headers the request's headers: a map of header names to values, or null
+
+        @return the record headers; empty when the request has none
+     */
+    public static RecordHeaders getHeaders(Object headers) {
+        RecordHeaders rv = new RecordHeaders();
+        if (headers == null) {
+            return rv;
+        }
+        if (!(headers instanceof Map)) {
+            throw new IllegalArgumentException(String.format("Kafka record headers must be a hash of header names "
+                + "to values; got %s", headers.getClass().getName()));
+        }
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>)headers).entrySet()) {
+            String name = entry.getKey().toString();
+            Object value = entry.getValue();
+            byte[] bytes;
+            if (value == null) {
+                bytes = null;
+            } else if (value instanceof byte[]) {
+                bytes = (byte[])value;
+            } else {
+                bytes = value.toString().getBytes(StandardCharsets.UTF_8);
+            }
+            rv.add(name, bytes);
+        }
+        return rv;
     }
 
      /** Returns a KafkaProducer object based on configuration

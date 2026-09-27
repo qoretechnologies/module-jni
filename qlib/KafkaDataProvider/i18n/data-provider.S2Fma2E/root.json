@@ -384,8 +384,8 @@
           "message": "The message key"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "The message key"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "The message key; a message without a key is distributed over the topic's partitions by the producer"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.display_name": {
           "source": "Message Value",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.action.c2VuZC1tc2c.option.dmFsdWU.desc": {
           "source": "The message value",
           "message": "The message value"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Message Headers"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "The record headers, as a hash of header names to values"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned"
         }
       }
     }

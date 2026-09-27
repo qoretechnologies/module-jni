@@ -41,7 +41,9 @@ public class KafkaDataProviderTest inherits QUnit::Test {
         addTestCase("AsyncAPI option validation", \asyncApiOptionValidationTest());
         addTestCase("factory child option forwarding", \factoryChildOptionForwardingTest());
         addTestCase("action registration", \actionRegistrationTest());
+        addTestCase("event data types", \eventDataTypeTest());
         addTestCase("Kafka integration test", \kafkaIntegrationTest());
+        addTestCase("Kafka record headers", \kafkaHeadersTest());
 
         # the integration test runs only when a broker is configured; a configured broker that cannot be used
         # fails the test instead of skipping it
@@ -316,6 +318,91 @@ public class KafkaDataProviderTest inherits QUnit::Test {
         # stopping the consumer ends its polling thread
         consumer.stopEvents();
         assertEq(0, msg_queue.size(), "no other messages arrive");
+    }
+
+    eventDataTypeTest() {
+        # a message to send may carry headers, and needs no key
+        hash<auto> send_fields = KafkaEventDataType.getFields();
+        assertTrue(send_fields.hasKey("headers"), "a message to send has headers");
+        assertThrows("MISSING-VALUE-ERROR", \KafkaEventDataType.acceptsValue(), {"value": "v"});
+        hash<auto> req = KafkaEventDataType.acceptsValue({
+            "topic": "t",
+            "value": "v",
+            "headers": {"correlation_id": "c-1", "raw": <0001ff>},
+        });
+        assertEq({"correlation_id": "c-1", "raw": <0001ff>}, req.headers, "headers are accepted as given");
+        assertFalse(req.hasKey("key"), "a message without a key is accepted without one");
+        assertThrows("RUNTIME-TYPE-ERROR", \KafkaEventDataType.acceptsValue(),
+            {"topic": "t", "value": "v", "headers": "not a hash"});
+
+        # a received message has headers too
+        assertTrue(KafkaEventRecvDataType.getFields().hasKey("headers"), "a received message has headers");
+    }
+
+    #! Record headers are sent with a message and delivered with it
+    /** A string header value is sent as its UTF-8 bytes and delivered as a string; a value that is not valid UTF-8
+        is delivered as the binary it was sent as; a message without a key is sent and delivered without one.
+    */
+    kafkaHeadersTest() {
+        if (setup_error) {
+            throw setup_error.err, sprintf("the configured Kafka connection could not be set up: %s",
+                setup_error.desc), setup_error.arg;
+        }
+        if (!kafka_conn) {
+            testSkip("no Kafka connection configured (set KAFKA_CONNECTION or use -c)");
+        }
+
+        string topic = "qore-test-headers-" + get_random_string(12);
+        KafkaProducerDataProvider producer(kafka_conn);
+        producer.doRequest({
+            "topic": topic,
+            "key": "key-1",
+            "value": "value-1",
+            "headers": {
+                "correlation_id": "corr-1",
+                "operation": "placeOrder",
+                "content-type": "application/json",
+                # "č" is two bytes of UTF-8
+                "text": "přílišč",
+                # not valid UTF-8
+                "raw": <00ff80fe>,
+            },
+        });
+        # no key and no headers
+        producer.doRequest({
+            "topic": topic,
+            "value": "value-2",
+        });
+
+        KafkaConsumerDataProvider consumer(kafka_conn, {
+            "topics": (topic,),
+            "group.id": "qore-test-" + get_random_string(12),
+            "auto.offset.reset": "earliest",
+        });
+        on_exit consumer.stopEvents();
+
+        Queue msg_queue();
+        KafkaTestObserver obs(msg_queue);
+        consumer.registerObserver(obs);
+        consumer.observersReady();
+
+        hash<auto> received = msg_queue.get(ConsumeTimeout);
+        assertEq("value-1", received.value);
+        assertEq("key-1", received.key);
+        assertEq({
+            "correlation_id": "corr-1",
+            "operation": "placeOrder",
+            "content-type": "application/json",
+            "text": "přílišč",
+            "raw": <00ff80fe>,
+        }, received.headers, "headers arrive: UTF-8 text as strings, other bytes as binary");
+        assertEq(Type::String, received.headers.text.type(), "a UTF-8 header value is a string");
+        assertEq(Type::Binary, received.headers.raw.type(), "a header value that is not UTF-8 is a binary");
+
+        received = msg_queue.get(ConsumeTimeout);
+        assertEq("value-2", received.value);
+        assertNothing(received.key, "a message sent without a key has none");
+        assertEq({}, received.headers, "a message sent without headers has none");
     }
 
     private usageIntern() {

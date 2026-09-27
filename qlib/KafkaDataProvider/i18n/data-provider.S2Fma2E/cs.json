@@ -288,8 +288,8 @@
           "message": "Celkový počet bajtů paměti, které může producent použít k ukládání záznamů čekajících na odeslání do vyrovnávací paměti"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "Klíč zprávy"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "Klíč zprávy; zprávu bez klíče rozdělí producent mezi oddíly tématu"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Zprávy Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Hlavičky zprávy"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "Hlavičky záznamu jako hash názvů hlaviček a hodnot"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "Hlavičky záznamu jako hash názvů hlaviček a hodnot.\n\nPři odesílání se řetězcová hodnota odešle jako její bajty v UTF-8, binární hodnota beze změny a jakákoli jiná hodnota jako bajty UTF-8 jejího řetězcového tvaru.\n\nPři příjmu se hodnota, která je platným UTF-8, vrátí jako řetězec a jakákoli jiná hodnota jako binární data; hlavička bez hodnoty se vrátí jako `NOTHING`, a pokud záznam nese hlavičku vícekrát, vrátí se poslední hodnota"
         }
       }
     }

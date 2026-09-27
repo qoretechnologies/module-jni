@@ -288,8 +288,8 @@
           "message": "生產者可用於緩衝等待傳送之記錄的總記憶體位元組數"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "訊息金鑰"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "訊息鍵；沒有鍵的訊息會由生產者分散到主題的各個分割區"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Kafka 訊息傳送"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "訊息標頭"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "記錄標頭，以標頭名稱對應值的雜湊表示"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "記錄標頭，以標頭名稱對應值的雜湊表示。\n\n傳送時，字串值以其 UTF-8 位元組傳送，二進位值原樣傳送，其他值則以其字串形式的 UTF-8 位元組傳送。\n\n接收時，有效 UTF-8 的值以字串傳回，其他值以二進位傳回；沒有值的標頭以 `NOTHING` 傳回，若記錄多次攜帶同一標頭，則傳回最後一個值"
         }
       }
     }

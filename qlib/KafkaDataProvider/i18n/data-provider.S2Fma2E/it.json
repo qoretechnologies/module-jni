@@ -288,8 +288,8 @@
           "message": "I byte totali di memoria che il producer può utilizzare per memorizzare nel buffer i record in attesa di essere inviati"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "La chiave del messaggio"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "La chiave del messaggio; un messaggio senza chiave viene distribuito dal producer tra le partizioni del topic"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Messaggistica Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Intestazioni del messaggio"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "Le intestazioni del record, come hash di nomi di intestazione e valori"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "Le intestazioni del record, come hash di nomi di intestazione e valori.\n\nIn invio, un valore stringa viene inviato come i suoi byte UTF-8, un valore binario così com'è e qualsiasi altro valore come i byte UTF-8 della sua forma stringa.\n\nIn ricezione, un valore UTF-8 valido viene restituito come stringa e qualsiasi altro valore come binario; un'intestazione senza valore viene restituita come `NOTHING` e, quando un record contiene un'intestazione più volte, viene restituito l'ultimo valore"
         }
       }
     }

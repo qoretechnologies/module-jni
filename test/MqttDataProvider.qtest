@@ -740,6 +740,12 @@ public class MqttDataProviderTest inherits QUnit::Test {
         # create a publisher and send a message
         MqttDataProvider publisher({"url": mqtt_url, "subscription_topic": "unused",
             "client_id": "QoreTestPublisher-" + get_random_string(4)});
+        # a consumer of the provider's messages can tell whether their payloads were decoded
+        assertEq("json", subscriber.getMessageFormat(), "payloads are decoded as JSON by default");
+        MqttDataProvider raw_reader({"url": mqtt_url, "subscription_topic": "unused",
+            "client_id": "QoreTestRawReader-" + get_random_string(4), "message_format": "none"});
+        assertEq("none", raw_reader.getMessageFormat(), "the configured message format is returned");
+
         publisher.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
             "topic": test_topic,
             "payload": test_payload,

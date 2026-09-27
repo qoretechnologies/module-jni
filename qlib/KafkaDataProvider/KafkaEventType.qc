@@ -44,8 +44,8 @@ public class KafkaEventDataType inherits HashDataType {
             "key": {
                 "display_name": "Message Key",
                 "type": AutoType,
-                "desc": "The message key",
-                "required": True,
+                "desc": "The message key; a message without a key is distributed over the topic's partitions by "
+                    "the producer",
                 "preselected": True,
             },
             "value": {
@@ -54,6 +54,16 @@ public class KafkaEventDataType inherits HashDataType {
                 "desc": "The message value",
                 "required": True,
                 "preselected": True,
+            },
+            "headers": {
+                "display_name": "Message Headers",
+                "type": AutoHashOrNothingType,
+                "desc": "The record headers, as a hash of header names to values.\n\n"
+                    "When sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other "
+                    "value as the UTF-8 bytes of its string form.\n\n"
+                    "When receiving, a value that is valid UTF-8 is returned as a string and any other value as a "
+                    "binary; a header without a value is returned as `NOTHING`, and when a record "
+                    "carries a header more than once, the last value is returned",
             },
         };
     }
@@ -72,11 +82,6 @@ public class KafkaEventRecvDataType inherits KafkaEventDataType {
     private {
         #! Field descriptions
         const Fields = {
-            "headers": {
-                "display_name": "Message Headers",
-                "type": HashType,
-                "desc": "Any headers included with the message",
-            },
             "offset": {
                 "display_name": "Offset",
                 "type": IntType,

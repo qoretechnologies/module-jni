@@ -288,8 +288,8 @@
           "message": "Całkowita liczba bajtów pamięci, której producent może użyć do buforowania rekordów oczekujących na wysłanie"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "Klucz wiadomości"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "Klucz wiadomości; wiadomość bez klucza jest rozdzielana przez producenta między partycje tematu"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Przesyłanie wiadomości Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Nagłówki wiadomości"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "Nagłówki rekordu jako hash nazw nagłówków i wartości"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "Nagłówki rekordu jako hash nazw nagłówków i wartości.\n\nPodczas wysyłania wartość tekstowa jest wysyłana jako jej bajty UTF-8, wartość binarna bez zmian, a każda inna wartość jako bajty UTF-8 jej postaci tekstowej.\n\nPodczas odbierania wartość będąca poprawnym UTF-8 jest zwracana jako ciąg znaków, a każda inna wartość jako dane binarne; nagłówek bez wartości jest zwracany jako `NOTHING`, a gdy rekord zawiera nagłówek więcej niż raz, zwracana jest ostatnia wartość"
         }
       }
     }

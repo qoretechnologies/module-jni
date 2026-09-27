@@ -197,9 +197,15 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
             LoggerWrapper::debug("KafkaProducerDataProvider::doRequestImpl() req: %y", req);
         }
         auto value = req.value;
-        hash<auto> headers;
+        hash<auto> headers = req.headers ?? {};
         validateOutgoingMessage(\value, \headers);
         req.value = value;
+        # the record's headers: a string value is sent as its UTF-8 bytes, a binary value as it is
+        if (headers) {
+            req.headers = headers;
+        } else {
+            remove req.headers;
+        }
         return prod.sendMessage(req);
     }
 

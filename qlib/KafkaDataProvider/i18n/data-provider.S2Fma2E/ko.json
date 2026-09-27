@@ -288,8 +288,8 @@
           "message": "프로듀서가 전송 대기 중인 레코드를 버퍼링하기 위해 사용할 수 있는 전체 메모리 바이트 수"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "메시지 키"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "메시지 키. 키가 없는 메시지는 프로듀서가 토픽의 파티션에 분산합니다"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Kafka 메시징"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "메시지 헤더"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "헤더 이름을 값에 매핑하는 해시로 표현된 레코드 헤더"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "헤더 이름을 값에 매핑하는 해시로 표현된 레코드 헤더.\n\n전송 시 문자열 값은 UTF-8 바이트로, 바이너리 값은 그대로, 기타 값은 문자열 형식의 UTF-8 바이트로 전송됩니다.\n\n수신 시 유효한 UTF-8 값은 문자열로, 기타 값은 바이너리로 반환됩니다. 값이 없는 헤더는 `NOTHING`으로 반환되며, 레코드에 같은 헤더가 여러 번 있으면 마지막 값이 반환됩니다"
         }
       }
     }

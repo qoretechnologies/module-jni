@@ -288,8 +288,8 @@
           "message": "Los bytes totales de memoria que el productor puede usar para almacenar en búfer los registros que esperan ser enviados"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "La clave del mensaje"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "La clave del mensaje; el productor distribuye un mensaje sin clave entre las particiones del tema"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Mensajería Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Encabezados del mensaje"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "Los encabezados del registro, como un hash de nombres de encabezado a valores"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "Los encabezados del registro, como un hash de nombres de encabezado a valores.\n\nAl enviar, un valor de cadena se envía como sus bytes UTF-8, un valor binario tal cual y cualquier otro valor como los bytes UTF-8 de su forma de cadena.\n\nAl recibir, un valor que es UTF-8 válido se devuelve como cadena y cualquier otro valor como binario; un encabezado sin valor se devuelve como `NOTHING` y, cuando un registro lleva un encabezado más de una vez, se devuelve el último valor"
         }
       }
     }
