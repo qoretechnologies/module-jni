@@ -744,6 +744,24 @@ public class MqttDataProviderTest inherits QUnit::Test {
         assertEq(42, received.payload.number, "received payload number should match");
         assertEq(1, received.qos, "received qos should match");
         assertEq("application/json", received.content_type, "received content_type should match");
+
+        # MQTT 5 user properties and correlation data arrive with the message; a message carrying user
+        # properties used to be dropped because the properties were read with a Java list method from the Qore
+        # list the jni module delivers
+        publisher.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
+            "topic": test_topic,
+            "payload": test_payload,
+            "qos": 1,
+            "response_topic": test_topic + "/reply",
+            "correlation_data": binary("corr-1"),
+            "user_properties": {"operation": "placeOrder", "tenant": "t1"},
+        });
+        received = msg_queue.get(10s);
+        assertTrue(exists received, "should receive a message with user properties");
+        assertEq({"operation": "placeOrder", "tenant": "t1"}, received.user_properties,
+            "user properties arrive with the message");
+        assertEq(binary("corr-1"), received.correlation_data, "correlation data arrives with the message");
+        assertEq(test_topic + "/reply", received.response_topic, "the response topic arrives with the message");
     }
 
     private usageIntern() {
