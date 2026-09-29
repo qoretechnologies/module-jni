@@ -198,7 +198,8 @@ public class QoreKotlinCompiler implements AutoCloseable {
             // Add kotlin-stdlib to classpath
             String kotlinHome = System.getenv("KOTLIN_HOME");
             if (kotlinHome == null || kotlinHome.isEmpty()) {
-                kotlinHome = "/opt/kotlin";
+                kotlinHome = new File("/opt/kotlin/lib/kotlin-stdlib.jar").isFile()
+                    ? "/opt/kotlin" : "/usr/share/qore/java/kotlin";
             }
             String kotlinStdlib = kotlinHome + "/lib/kotlin-stdlib.jar";
             if (new File(kotlinStdlib).exists()) {

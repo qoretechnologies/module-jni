@@ -1,0 +1,11 @@
+Tests: runtime
+Depends: qore-jni-module, openjdk-21-jdk-headless, python3
+Restrictions: allow-stderr
+
+Tests: compiler
+Depends: qore-jni-module, qore-jni-tools, libqore-dev
+Restrictions: allow-stderr
+
+Tests: kotlin
+Depends: qore-jni-kotlin, python3
+Restrictions: allow-stderr

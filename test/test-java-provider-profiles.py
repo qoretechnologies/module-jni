@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for Java provider dependency-profile qualification."""
 
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -148,6 +149,42 @@ class JavaProviderProfileTest(unittest.TestCase):
         self.assertFalse(payload["complete"])
         self.assertTrue(payload["errors"])
         self.assertEqual([], list(report.parent.glob(".*.tmp.*")))
+
+    def test_source_archive_requires_exact_inventory_and_bytes(self):
+        jar = self.make_jar("example-1.jar")
+        self.write_profile("none", (jar.name,))
+        checksums = self.base / "dependencies.sha256"
+        path = "qlib/ExampleDataProvider/jar/example-1.jar"
+        checksums.write_text(hashlib.sha256(jar.read_bytes()).hexdigest() + "  " + path + "\n")
+        args = ("--source-archive", "--checksums", checksums)
+        self.assertEqual(0, self.run_validator(*args).returncode)
+
+        self.make_jar("undeclared-1.jar")
+        result = self.run_validator(*args)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("not declared by a provider", result.stderr)
+        (self.jar_dir / "undeclared-1.jar").unlink()
+
+        self.make_jar(jar.name, marker=b"changed")
+        result = self.run_validator(*args)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("checksum mismatch", result.stderr)
+
+    def test_source_archive_requires_checksums(self):
+        result = self.run_validator("--source-archive")
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("requires --checksums", result.stderr)
+
+    def test_source_archive_rejects_stale_checksum_entries(self):
+        jar = self.make_jar("example-1.jar")
+        self.write_profile("none", (jar.name,))
+        checksums = self.base / "dependencies.sha256"
+        digest = hashlib.sha256(jar.read_bytes()).hexdigest()
+        checksums.write_text(digest + "  qlib/ExampleDataProvider/jar/example-1.jar\n"
+                            + digest + "  qlib/ExampleDataProvider/jar/absent-1.jar\n")
+        result = self.run_validator("--source-archive", "--checksums", checksums)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("checksum inventory contains undeclared JARs", result.stderr)
 
 
 if __name__ == "__main__":

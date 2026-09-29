@@ -1,0 +1,9 @@
+Document: qore-jni-module
+Title: Qore JNI API reference
+Author: Qore Technologies, s.r.o.
+Abstract: Java and Kotlin integration and Java-backed Qore providers.
+Section: Programming
+
+Format: HTML
+Index: /usr/share/doc/qore-jni-module-doc/docs/jni/html/index.html
+Files: /usr/share/doc/qore-jni-module-doc/docs/*/html/*.html

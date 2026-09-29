@@ -43,11 +43,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/stax2-api-4.2.1.jar
 %module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/woodstox-core-6.5.1.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/JasperReportsDataProvider
+%requires JasperReportsDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.jasperreports.JasperReportTestHelper
 

@@ -24,11 +24,12 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/PowerPointDataProvider
+%requires PowerPointDataProvider
 
 # Add classpaths for the test helper - uses ExcelDataProvider jars for shared POI dependencies
 %module-cmd(jni) add-relative-classpath ../qlib/PowerPointDataProvider/jar/qore-dataprovider-powerpoint.jar

@@ -4,9 +4,10 @@
 %modern
 %allow-injection
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires Util
 %requires QUnit
-%requires ../qlib/BusyLightDataProvider
+%requires BusyLightDataProvider
 
 %exec-class BusyLightDataProviderTest
 

@@ -24,6 +24,7 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
@@ -57,7 +58,7 @@
 
 %module-cmd(jni) import org.qore.dataprovider.email.EmailTestHelper
 
-%requires ../qlib/EmailDataProvider
+%requires EmailDataProvider
 
 %exec-class EmailDataProviderTest
 

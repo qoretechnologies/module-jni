@@ -32,11 +32,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/freemarker-2.3.32.jar
 %module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/jackson-core-2.15.2.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/VcfDataProvider
+%requires VcfDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.vcard.VcfTestHelper
 

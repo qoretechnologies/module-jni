@@ -1,0 +1,15 @@
+.\" Copyright (C) 2026 David Nichols; SPDX-License-Identifier: MIT
+.TH QJAVA2JAR 1 "September 2026" "Qore JNI"
+.SH NAME
+qjava2jar \- build a JAR from Java sources with Qore support
+.SH SYNOPSIS
+.B qjava2jar
+[options] output.jar source-directory
+.SH DESCRIPTION
+Compiles a directory of Java sources using Qore dynamic bindings and writes a JAR archive.
+.SH OPTIONS
+Use --root=DIRECTORY to select the Java package root, -d DIRECTORY for temporary class output, and -cp PATH for additional dependencies.
+.PP
+Run the command with --help for the full option list.
+.SH SEE ALSO
+.BR qore (1)

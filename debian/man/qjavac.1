@@ -1,0 +1,15 @@
+.\" Copyright (C) 2026 David Nichols; SPDX-License-Identifier: MIT
+.TH QJAVAC 1 "September 2026" "Qore JNI"
+.SH NAME
+qjavac \- compile Java sources against Qore APIs
+.SH SYNOPSIS
+.B qjavac
+[options] source.java ...
+.SH DESCRIPTION
+Compiles Java classes with dynamic Qore API support. The JNI bridge JARs are added to the class path automatically.
+.SH OPTIONS
+Use -d DIRECTORY to select the output directory and -cp PATH to extend the class path. Other compiler options are passed to the Java compiler.
+.PP
+Run the command with --help for the full option list.
+.SH SEE ALSO
+.BR qore (1)

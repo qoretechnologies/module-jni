@@ -37,11 +37,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/slf4j-api-2.0.13.jar
 %module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/slf4j-nop-2.0.13.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/AvroDataProvider
+%requires AvroDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.avro.AvroTestHelper
 

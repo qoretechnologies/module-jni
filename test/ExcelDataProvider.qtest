@@ -24,11 +24,12 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/ExcelDataProvider
+%requires ExcelDataProvider
 
 # Add classpaths for the test helper - must come after ExcelDataProvider to share its POI classpath
 %module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar

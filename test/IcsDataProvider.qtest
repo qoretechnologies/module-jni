@@ -24,6 +24,7 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
@@ -40,7 +41,7 @@
 %module-cmd(jni) add-relative-classpath ../qlib/IcsDataProvider/jar/threeten-extra-1.8.0.jar
 %module-cmd(jni) import org.qore.dataprovider.ical.IcsTestHelper
 
-%requires ../qlib/IcsDataProvider
+%requires IcsDataProvider
 
 %exec-class IcsDataProviderTest
 

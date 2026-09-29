@@ -8,6 +8,9 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 
+option(QORE_JAVA_PROVIDER_SOURCE_ARCHIVE
+    "Validate checksum-locked source archive JARs without Git metadata" OFF)
+
 set(QORE_JAVA_PROVIDER_PROFILE_FILE
     "${CMAKE_CURRENT_BINARY_DIR}/java-provider-profiles.tsv")
 file(WRITE "${QORE_JAVA_PROVIDER_PROFILE_FILE}" "# module\tlogging-policy\truntime-jar\n")
@@ -95,13 +98,17 @@ function(qore_finalize_java_provider_profiles)
     if(NOT QORE_JAVA_PROVIDER_PYTHON)
         message(FATAL_ERROR "python3 is required to validate Java provider profiles")
     endif()
+    set(_inventory_mode --require-committed)
+    if(QORE_JAVA_PROVIDER_SOURCE_ARCHIVE)
+        set(_inventory_mode --source-archive)
+    endif()
     add_custom_target(validate-java-provider-profiles ALL
         COMMAND "${QORE_JAVA_PROVIDER_PYTHON}"
             "${CMAKE_SOURCE_DIR}/test/docker_test/validate-java-provider-profiles.py"
             --profiles "${QORE_JAVA_PROVIDER_PROFILE_FILE}"
             --root "${CMAKE_SOURCE_DIR}/qlib"
             --checksums "${CMAKE_SOURCE_DIR}/qlib/java-provider-dependencies.sha256"
-            --require-committed
+            ${_inventory_mode}
         # qore-jni builds and stages every generated provider JAR, including
         # when qmod targets are absent. ALL targets alone do not order a
         # parallel build, and validation can also be requested directly.

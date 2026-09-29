@@ -1,0 +1,15 @@
+#!/bin/sh
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+set -eu
+build=$1
+for suite in test/*.qtest; do
+    # The legacy JMS suite needs a separately configured application server.
+    case "$suite" in test/jms.qtest) continue ;; esac
+    provider=$(basename "$suite" .qtest)
+    set -- -l "$build/jni-api-$(/usr/bin/qore --latest-module-api).qmod"
+    if test -f "$build/qlib-qmod/$provider/$provider.qmod"; then
+        set -- "$@" -l "$build/qlib-qmod/$provider/$provider.qmod"
+    fi
+    timeout 240 /usr/bin/qore "$@" "$suite" -v
+done

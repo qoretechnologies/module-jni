@@ -31,7 +31,13 @@ endif()
 # accessor-backed static class variables (QoreClass::addBuiltinStaticVarWithAccessors()) and union types are
 # required to mirror mutable Java static fields
 find_package(Qore 3.0 REQUIRED)
-find_package(JNI REQUIRED)
+# The bridge uses JNI's JVM API, not the native AWT drawing interface.
+# Older CMake releases do not support FindJNI components.
+if(CMAKE_VERSION VERSION_LESS 3.24)
+    find_package(JNI REQUIRED)
+else()
+    find_package(JNI REQUIRED COMPONENTS JVM)
+endif()
 find_package(Java REQUIRED)
 if (${Java_VERSION_MAJOR} LESS 21)
     message(FATAL_ERROR "This module requires Java 21+; the current Java version is ${Java_VERSION}.")
@@ -47,7 +53,7 @@ set(_kotlin_candidates "")
 if (KOTLIN_HOME)
     list(APPEND _kotlin_candidates "${KOTLIN_HOME}")
 else()
-    list(APPEND _kotlin_candidates "/opt/kotlin" "/opt/kotlinc")
+    list(APPEND _kotlin_candidates "/opt/kotlin" "/opt/kotlinc" "/usr/share/qore/java/kotlin")
 endif()
 foreach (_kotlin_dir IN LISTS _kotlin_candidates)
     if (EXISTS "${_kotlin_dir}/lib/kotlin-compiler.jar")
@@ -1301,7 +1307,20 @@ endif()
 
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR} ${JAVA_JAR_SRC} ${JAVA_JAR_COMPILER_SRC})
 qore_external_binary_module(${module_name} ${PROJECT_VERSION})
-qore_user_modules("${QMOD}")
+
+# Qore's AOT rules decide at configure time whether to stage a provider's jar/
+# directory. For providers with only generated JARs, creating that directory
+# during the build changes the rule on the next configure. CMake then removes
+# the old qmod because its command changed; a docs-only target will not rebuild
+# it. Establish declared generated-JAR directories before registering modules.
+foreach(_provider IN LISTS QMOD)
+    get_filename_component(_provider_name "${_provider}" NAME)
+    file(STRINGS "${CMAKE_SOURCE_DIR}/${_provider}/${_provider_name}.qm" _generated_provider_jars
+        REGEX "^[ \t]*%module-cmd\\(jni\\).*add-relative-classpath[ \t]+(\\./)?jar/qore-dataprovider-")
+    if(_generated_provider_jars)
+        file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/${_provider}/jar")
+    endif()
+endforeach()
 
 qore_external_user_module("qlib/MqttDataProvider" "")
 qore_external_user_module("qlib/OpcUaDataProvider" "")

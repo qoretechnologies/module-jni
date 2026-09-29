@@ -1,0 +1,99 @@
+#!/usr/bin/python3
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+"""Install verbatim upstream notices without changing any runtime JAR."""
+
+import hashlib
+import json
+from pathlib import Path
+import re
+import shutil
+import tarfile
+import zipfile
+
+
+def notices(path):
+    """Read notice files and copyright/license comments in source archives."""
+    found = {}
+    with zipfile.ZipFile(path) as archive:
+        for name in sorted(archive.namelist()):
+            if name.endswith("/"):
+                continue
+            base = Path(name).name.lower()
+            if (re.search(r"licen[cs]e|notice|copying|copyright", base)
+                    and not base.endswith((".class", ".java", ".kt"))) or base == "about.html":
+                found[name] = archive.read(name).decode("utf-8", errors="replace")
+            elif name.endswith((".java", ".kt")):
+                source = archive.read(name).decode("utf-8", errors="replace")
+                # Some projects put the complete BSD notice at the end of a file.
+                for comment in re.findall(r"/\*.*?\*/", source, re.DOTALL):
+                    if re.search(r"copyright|SPDX-License-Identifier|redistribution and use|public domain", comment, re.I):
+                        found[name + "#" + hashlib.sha256(comment.encode()).hexdigest()[:12]] = comment
+    return found
+
+
+def archive_notices(path):
+    found = {}
+    with tarfile.open(path) as archive:
+        for member in archive:
+            if not member.isfile():
+                continue
+            base = Path(member.name).name.lower()
+            if (re.search(r"licen[cs]e|notice|copying|copyright|authors", base)
+                    and not base.endswith((".class", ".java", ".kt"))):
+                with archive.extractfile(member) as source:
+                    found[member.name] = source.read().decode("utf-8", errors="replace")
+    return found
+
+
+def main():
+    repo = Path(__file__).resolve().parents[1]
+    manifest = json.loads((repo / "debian/java-dependencies.json").read_text())
+    package = repo / "debian/qore-jni-module"
+    if package.is_dir():
+        out = package / "usr/share/doc/qore-jni-module/third-party-notices"
+        out.mkdir(parents=True, exist_ok=True)
+        for name, record in sorted(manifest["dependencies"].items()):
+            inputs = [repo / record["paths"][0]]
+            source = repo / "vendor/sources" / (name[:-4] + "-sources.jar")
+            if source.is_file():
+                inputs.append(source)
+            blocks = [record["coordinate"], "Upstream: " + record["upstream"]["url"]]
+            if "modification" in record:
+                blocks.append(record["modification"])
+            seen = set()
+            for path in inputs:
+                for member, text in notices(path).items():
+                    if text not in seen:
+                        seen.add(text)
+                        blocks.append(path.name + ":" + member + "\n\n" + text)
+            for name_in_vendor in record.get("notice_archives", []):
+                path = repo / "vendor" / name_in_vendor
+                for member, text in archive_notices(path).items():
+                    if text not in seen:
+                        seen.add(text)
+                        blocks.append(path.name + ":" + member + "\n\n" + text)
+            for sibling in record.get("notice_siblings", []):
+                sibling_inputs = [repo / manifest["dependencies"][sibling]["paths"][0]]
+                source = repo / "vendor/sources" / (sibling[:-4] + "-sources.jar")
+                if source.is_file():
+                    sibling_inputs.append(source)
+                for path in sibling_inputs:
+                    for member, text in notices(path).items():
+                        if text not in seen:
+                            seen.add(text)
+                            blocks.append(path.name + ":" + member + "\n\n" + text)
+            if not seen:
+                raise ValueError("No upstream notices found for " + name)
+            (out / (name + ".txt")).write_text("\n\n".join(blocks) + "\n")
+        shutil.copyfile(repo / "debian/java-dependencies.json", out / "provenance.json")
+    kotlin = repo / "debian/qore-jni-kotlin"
+    if kotlin.is_dir():
+        source = kotlin / "usr/share/qore/java/kotlin/license"
+        if not source.is_dir():
+            raise ValueError("Kotlin package lacks upstream license notices")
+        shutil.copytree(source, kotlin / "usr/share/doc/qore-jni-kotlin/upstream-licenses", dirs_exist_ok=True)
+
+
+if __name__ == "__main__":
+    main()

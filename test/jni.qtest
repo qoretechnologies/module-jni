@@ -4,6 +4,7 @@
 
 %modern
 
+%prepend-module-path ../build
 %requires jni
 %requires QUnit
 %requires Util
@@ -16,6 +17,10 @@
 %requires FsUtil
 
 %requires reflection
+
+%try-module xml
+%define NO_XML
+%endtry
 
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 # warning: hardcoded build directory
@@ -236,6 +241,7 @@ public class Main inherits QUnit::Test {
 
     constructor() : Test("jni test", "1.0") {
         addTestCase("codegen test", \javaCodegenTest());
+        addTestCase("XML codegen test", \javaXmlCodegenTest());
         addTestCase("arg test", \argTest());
         addTestCase("class compat test", \classCompatTest());
         addTestCase("code test", \testCode());
@@ -459,6 +465,25 @@ Main::run();
             assertEq(0, rc, sprintf("child Program teardown + module teardown (run %d) must not "
                 "crash; rc=%d (-1 means killed by a signal)", i + 1, rc));
         }
+    }
+
+    javaXmlCodegenTest() {
+%ifdef NO_XML
+        testSkip("xml module is not available");
+%else
+        # compile and execute QoreDynamicTest6.java
+        QoreJavaCompiler compiler();
+        compiler::CompilerOutput newClassData = compiler.compile("org.qore.test.QoreDynamicTest6",
+            File::readTextFile(get_script_dir() + "/QoreDynamicTest6.java"));
+        binary fdata = newClassData.file.openInputStream().readAllBytes();
+        assertEq(True, fdata.size() > 0);
+        reflect::Method m = newClassData.cls.getMethod("test0", load_class("org/qore/jni/Hash"));
+        string url = "https://localhost:8001/";
+        auto rc = m.invoke(NOTHING, {"url": url});
+        on_error printf("h: %N\n", rc);
+        assertEq("object<XmlRpcClient>", rc.fullType());
+        assertEq(url, rc.getURL());
+%endif
     }
 
     javaCodegenTest() {
@@ -1064,20 +1089,7 @@ public class GenericIteratorProbe {
                 assertEq(url, rc.getURL());
             }
 
-            {
-                # compile and execute QoreDynamicTest6.java
-                QoreJavaCompiler compiler();
-                compiler::CompilerOutput newClassData = compiler.compile("org.qore.test.QoreDynamicTest6",
-                File::readTextFile(get_script_dir() + "/../test/QoreDynamicTest6.java"));
-                binary fdata = newClassData.file.openInputStream().readAllBytes();
-                assertEq(True, fdata.size() > 0);
-                reflect::Method m = newClassData.cls.getMethod("test0", load_class("org/qore/jni/Hash"));
-                string url = "https://localhost:8001/";
-                auto rc = m.invoke(NOTHING, {"url": url});
-                on_error printf("h: %N\n", rc);
-                assertEq("object<XmlRpcClient>", rc.fullType());
-                assertEq(url, rc.getURL());
-            }
+
         } catch (hash<ExceptionInfo> ex) {
             if (ex.arg.typeCode() == NT_OBJECT) {
                 object arg = ex.arg;

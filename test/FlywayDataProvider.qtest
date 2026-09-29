@@ -24,12 +24,13 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires ConnectionProvider
 %requires jni
-%requires ../qlib/FlywayDataProvider
+%requires FlywayDataProvider
 
 %exec-class FlywayDataProviderTest
 

@@ -1,0 +1,141 @@
+#!/usr/bin/make -f
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+
+include /usr/share/dpkg/architecture.mk
+
+builddir = obj-$(DEB_HOST_GNU_TYPE)
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export TZ = UTC
+export LC_ALL = C.UTF-8
+# Fixed qcc partitions keep output independent of jobserver load and CPU count.
+# Debhelper still builds independent targets in parallel.
+export QCC_JOBS = 1
+export JAVA_HOME = /usr/lib/jvm/java-21-openjdk-$(DEB_HOST_ARCH)
+export PATH := $(JAVA_HOME)/bin:$(PATH)
+export KOTLIN_HOME = $(CURDIR)/$(builddir)/vendor-kotlin/kotlinc
+unexport CLASSPATH
+unexport QORE_CLASSPATH
+unexport QORE_JNI_CLASSPATH
+unexport JAVA_TOOL_OPTIONS
+unexport JDK_JAVA_OPTIONS
+unexport _JAVA_OPTIONS
+unexport QCC_SPLIT_THRESHOLD
+unexport QORE_DOC_DEFINES
+unexport CMAKE_PREFIX_PATH
+unexport LD_LIBRARY_PATH
+unexport LD_PRELOAD
+unexport QORE_MODULE_DIR
+unexport QORE_INCLUDE_DIR
+unexport QORE_INCLUDE_DIRS
+unexport QORE_LIBDIR
+unexport DOXYGEN_EXECUTABLE
+unexport QORE_AOT_LINK_CONF
+unexport QORE_AOT_BIG_FN_THRESHOLD
+unexport QORE_AOT_NO_DEBUG_INFO
+# All Qore tools must use this build and the packaged standard library only.
+export QORE_MODULE_DIR_ONLY = 1
+stdlib_paths := $(shell env -u QORE_MODULE_DIR -u QORE_MODULE_DIR_ONLY /usr/bin/qore --module-path)
+build_module_paths = $(CURDIR)/$(builddir):$(CURDIR)/$(builddir)/qlib-qmod
+export QORE_MODULE_DIR = $(build_module_paths):$(stdlib_paths)
+
+build_docs = $(if $(filter nodoc,$(DEB_BUILD_OPTIONS) $(DEB_BUILD_PROFILES)),,$(filter qore-jni-module-doc,$(shell dh_listpackages)))
+
+%:
+	dh $@ --buildsystem=cmake --builddirectory=$(builddir) --without=autoreconf
+
+override_dh_auto_configure:
+	python3 debian/prepare-vendor.py verify
+	python3 debian/prepare-vendor.py unpack-kotlin --destination $(builddir)/vendor-kotlin
+	# qpp and Qore run during a native build; cross builds need a separate host SDK.
+	test '$(DEB_BUILD_GNU_TYPE)' = '$(DEB_HOST_GNU_TYPE)'
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=None \
+		-DQORE_JAVA_PROVIDER_SOURCE_ARCHIVE=ON \
+		-DQORE_BUILD_AOT_MODULES=ON \
+		-DQORE_AOT_LINK_SOURCE_MODULES=OFF \
+		-DQORE_AOT_MODULE_OPT_LEVEL=$(if $(filter noopt,$(DEB_BUILD_OPTIONS)),0,3) \
+		-DCMAKE_SKIP_RPATH=OFF \
+		-DCMAKE_SKIP_INSTALL_RPATH=OFF \
+		-DCMAKE_INSTALL_RPATH=$(JAVA_HOME)/lib/server \
+		-DCMAKE_IGNORE_PREFIX_PATH=/usr/local \
+		-DQore_DIR:PATH=/usr/lib/$(DEB_HOST_MULTIARCH)/cmake/Qore \
+		-DQORE_EXECUTABLE:FILEPATH=/usr/bin/qore \
+		-DQORE_QPP_EXECUTABLE:FILEPATH=/usr/bin/qpp \
+		-DQORE_QCC_EXECUTABLE:FILEPATH=/usr/bin/qcc \
+		-DQORE_QM_METADATA_ENV:STRING="QORE_MODULE_DIR=$(build_module_paths):$(CURDIR)/qlib:$(stdlib_paths);QORE_MODULE_DIR_ONLY=1;QORE_INCLUDE_DIR=;LD_LIBRARY_PATH=" \
+		-DCMAKE_DISABLE_FIND_PACKAGE_Doxygen=$(if $(build_docs),OFF,ON)
+
+override_dh_auto_build:
+	dh_auto_build
+ifneq (,$(build_docs))
+	dh_auto_build -- docs
+endif
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS) $(DEB_BUILD_PROFILES)))
+	python3 debian/tests/test_aot_metadata.py
+	python3 debian/tests/test_vendor.py
+	ctest --test-dir $(builddir) --output-on-failure
+	sh test/java/build-test-server.sh
+	$(KOTLIN_HOME)/bin/kotlinc -jvm-target 21 -cp $(builddir)/qore-jni.jar \
+		-d test/kotlin-test.jar test/KotlinQoreApiTest.kt test/KotlinTestClass.kt
+	QORE_JNI_CLASSPATH=$(CURDIR)/$(builddir)/qore-jni.jar:$(CURDIR)/$(builddir)/qore-jni-compiler.jar \
+		debian/tests/build-tests $(CURDIR)/$(builddir)
+	qore-data-provider-i18n --no-color --check-source-tree --require-standard-locales \
+		--require-complete-locales --output $(CURDIR)/qlib
+endif
+
+override_dh_installdocs:
+	dh_installdocs -Nqore-jni-module-doc
+	python3 debian/install-notices.py
+ifneq (,$(build_docs))
+	dh_installdocs -pqore-jni-module-doc --doc-main-package=qore-jni-module-doc $(builddir)/docs
+else
+ifneq (,$(filter qore-jni-module-doc,$(shell dh_listpackages)))
+	dh_installdocs -pqore-jni-module-doc --doc-main-package=qore-jni-module-doc
+endif
+endif
+
+override_dh_missing:
+	dh_missing --fail-missing
+
+override_dh_dwz:
+	# dwz does not support all LLVM DWARF forms in AOT modules.
+	dh_dwz -Nqore-jni-module
+
+override_dh_strip:
+	# Keep Qore's dependency, source-location and optional-module trailers.
+	python3 debian/preserve-aot-metadata.py debian/qore-jni-module dh_strip
+
+override_dh_gencontrol:
+	# Require the runtime and SONAME package from the SDK used for compilation.
+	# dh_shlibdeps supplies the other shared-library dependencies.
+	if dh_listpackages | grep -qx qore-jni-module; then \
+		qore_lib_dep=$$(dpkg-query -W -f='$${Depends}' libqore-dev | tr ',' '\n' | \
+			sed -n 's/^ *\(libqore[0-9][0-9]*\) (= \([^)]*\))$$/\1 (>= \2)/p'); \
+		test -n "$$qore_lib_dep" || exit 1; \
+		qore_version=$$(dpkg-query -W -f='$${Version}' libqore-dev); \
+		dh_gencontrol -pqore-jni-module -- "-Vqore:Depends=$$qore_lib_dep, qore (>= $$qore_version)"; \
+	fi
+	dh_gencontrol --remaining-packages
+
+override_dh_auto_install:
+	dh_auto_install
+	mkdir -p debian/tmp/usr/share/qore/java/kotlin
+	cp -a $(KOTLIN_HOME)/. debian/tmp/usr/share/qore/java/kotlin/
+
+override_dh_strip_nondeterminism:
+	# Preserve upstream signatures and checksum-locked third-party JAR bytes.
+	dh_strip_nondeterminism -X.jar
+	# These two archives are built from Qore-owned source in this build.
+	if test -d debian/qore-jni-module; then \
+		strip-nondeterminism -T $$(date -d "$$(dpkg-parsechangelog -SDate)" +%s) \
+			debian/qore-jni-module/usr/share/qore/java/qore-jni.jar \
+			debian/qore-jni-module/usr/share/qore/java/qore-jni-compiler.jar; \
+	fi
+
+override_dh_shlibdeps:
+	# libjvm has no versioned SONAME/shlibs entry; the explicit JRE dependency
+	# and the module's private JVM RUNPATH identify its provider.
+	dh_shlibdeps -l$(JAVA_HOME)/lib/server

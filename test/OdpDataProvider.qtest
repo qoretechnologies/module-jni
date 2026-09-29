@@ -24,11 +24,12 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/OdpDataProvider
+%requires OdpDataProvider
 
 # Add classpaths for the test helper - uses OdsDataProvider jars for shared ODF dependencies
 %module-cmd(jni) add-relative-classpath ../qlib/OdpDataProvider/jar/qore-dataprovider-odp.jar

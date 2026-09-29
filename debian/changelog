@@ -1,0 +1,7 @@
+qore-jni-module (2.7.0~git20260929.1+ds-0qore1~ubuntu26.04) resolute; urgency=medium
+
+  * Package the JNI bridge, bundled providers, Java tools and optional Kotlin.
+  * Pin upstream JAR provenance and corresponding source for offline PPA builds.
+  * Support headless JDK builds and checksum validation in exported sources.
+
+ -- David Nichols <david@qore.org>  Tue, 29 Sep 2026 08:20:00 +0000

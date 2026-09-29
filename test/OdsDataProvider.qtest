@@ -24,6 +24,7 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
@@ -62,7 +63,7 @@
 %module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/RoaringBitmap-1.0.0.jar
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsTestHelper
 
-%requires ../qlib/OdsDataProvider
+%requires OdsDataProvider
 
 %exec-class OdsDataProviderTest
 
