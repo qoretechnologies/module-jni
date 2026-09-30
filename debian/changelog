@@ -1,3 +1,11 @@
+qore-jni-module (2.7.0~git20260930.1+ds-0qore1~ubuntu26.04) resolute; urgency=medium
+
+  * Declare Git and the Qore catalog tool as dependencies of the build tests.
+  * Require the font libraries and default fonts used by the Java reporting
+    providers at build-test time and at runtime, including headless installs.
+
+ -- David Nichols <david@qore.org>  Wed, 30 Sep 2026 04:48:12 +0000
+
 qore-jni-module (2.7.0~git20260929.1+ds-0qore1~ubuntu26.04) resolute; urgency=medium
 
   * Package the JNI bridge, bundled providers, Java tools and optional Kotlin.

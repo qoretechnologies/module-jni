@@ -9,6 +9,12 @@ Build-Depends: debhelper-compat (= 13),
                openjdk-21-jdk-headless,
                libbz2-dev,
                python3,
+               git <!nocheck>,
+               qore-misc-tools (>= 3.0.0~) <!nocheck>,
+               libfontconfig1 <!nocheck>,
+               libfreetype6 <!nocheck>,
+               libharfbuzz0b <!nocheck>,
+               fonts-dejavu-core <!nocheck>,
                unzip,
                zip,
                strip-nondeterminism
@@ -21,7 +27,8 @@ Vcs-Browser: https://github.com/qoretechnologies/module-jni
 
 Package: qore-jni-module
 Architecture: any
-Depends: ${qore:Depends}, ${shlibs:Depends}, ${misc:Depends}, openjdk-21-jre-headless
+Depends: ${qore:Depends}, ${shlibs:Depends}, ${misc:Depends}, openjdk-21-jre-headless,
+         libfontconfig1, libfreetype6, libharfbuzz0b, fonts-dejavu-core
 Suggests: qore-jni-tools, qore-jni-kotlin, qore-jni-module-doc
 Description: bidirectional Java bridge and Java data providers for Qore
  This package provides native Java integration, JDBC, dynamic Java bindings,
