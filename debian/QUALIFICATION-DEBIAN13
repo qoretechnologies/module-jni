@@ -1,0 +1,52 @@
+Debian 13 package qualification: 2026-10-01
+==========================================
+
+Copyright 2026 Qore Technologies, s.r.o.
+
+Result: PASS for the local development snapshot below, on native amd64 and
+arm64 (aarch64 Linux on hoppy). This is not a final release or publication.
+
+Package version: 2.7.0~git20261001.1+ds-0qore1~deb13
+Source base commit: e709a0a0b8e6e6a771c8070017b84927d7ffb0e1
+Qore SDK/runtime: 3.0.0~git20261001.1-0qore1~deb13
+Evidence bundle: qore-debian13-final-modules-20261001
+Results: <architecture>/jni/QUALIFICATION.json and architecture-only.json.
+The bundle retains source/binary hashes, dependency inventories, image IDs,
+commands, complete logs, original failures and corrected runs.
+
+Completed checks
+----------------
+
+- Independent source preparations reproduce the .dsc and all source archives.
+- Two full unprivileged, offline builds use the same clean dependency image,
+  different build paths and parallelism, and varied incoming locale/timezone.
+- All 5 binary packages, including documentation and detached debug symbols,
+  match byte-for-byte between the full builds on each architecture.
+- A third clean architecture-only (-B) build omits Doxygen and Graphviz;
+  its packages match the corresponding full-build packages exactly.
+- Source/binary Lintian has no errors. A pinned Lintian 2.129 checker uses the
+  Debian profile separately from the Debian build and runtime environments.
+- Package manifest, ELF hardening, detached DWARF/build IDs/debuglink CRCs,
+  and Qore AOT metadata checks pass where applicable.
+- Installation without Recommends or libqore-dev loads the packaged modules.
+  Installed autopkgtests pass offline as an unprivileged user:
+  runtime, compiler, kotlin.
+- Exact coinstallation of runtime/documentation/debug artifacts, dpkg file
+  verification, purge, autoremove and SDK-free reinstall all pass.
+
+Native JNI uses the exact packaged OpenJDK 21 server-library RUNPATH, with
+an explicit openjdk-21-jre-headless dependency. The artifact checker permits
+only that native JNI path through --allow-private-jvm; all other RPATH/RUNPATH
+checks remain strict. Pinned third-party JAR bytes and their sources remain
+subject to the vendor inventory and license policy in README.source.
+
+Scope and remaining gates
+-------------------------
+
+Only services exercised by the package tests are covered. There is no prior
+Debian package baseline for upgrade/ABI qualification. Other distribution
+versions, additional profiles, final Qore ABI/release freeze and exact final
+artifact acceptance remain separate checks. These unsigned local artifacts
+need a signed Debian archive before public delivery; an Ubuntu PPA does not
+publish Debian packages. Existing upstream and private dependency licensing
+and maintenance requirements in README.source continue to apply.
