@@ -533,8 +533,49 @@ public class QoreURLClassLoader extends URLClassLoader {
         cached.
     */
     public byte[] getClassFileBytes(String bin_name) {
+        HashMap<String, HashSet<QoreURLClassLoader>> routing = classFileBytesRouting.get();
+        HashSet<QoreURLClassLoader> routed = routing.get(bin_name);
+        boolean outermost = routed == null;
+        if (outermost) {
+            routed = new HashSet<QoreURLClassLoader>();
+            routing.put(bin_name, routed);
+        }
+        routed.add(this);
+        try {
+            return getClassFileBytesIntern(bin_name, routed);
+        } finally {
+            if (outermost) {
+                routing.remove(bin_name);
+            }
+        }
+    }
+
+    //! The loaders already asked for a binary name on this thread, keyed by that name
+    /** Bytecode lookup is routed to the canonical owning loader from two independent sources: the
+        shared-owner registry ({@link #getSharedDynamicClassLoader}) and, natively, the QoreProgram
+        that owns the underlying QoreClass as seen from the asking loader's Program
+        ({@link #resolveSharedClassLoader}).  The native answer depends on which Program asks, so for
+        a class visible in more than one Program - a Qorus API injection such as
+        <tt>qore.OMQ.UserApi.</tt><i>X</i> - loader A can route the name to B while B routes the same
+        name back to A.  Each hop only checked that its target was not itself, so the two loaders
+        recursed until the stack was exhausted; javac reported that as a bare
+        <tt>StackOverflowError</tt> with no diagnostics while compiling a class that wildcard-imports
+        a dynamic namespace.  Recording the loaders already asked for the name makes the hop back
+        fall through to the local lookup instead, which is what a loader with no canonical owner
+        does anyway.  The map is keyed by binary name because generating one class legitimately asks
+        the same loader for others.
+    */
+    private static final ThreadLocal<HashMap<String, HashSet<QoreURLClassLoader>>> classFileBytesRouting =
+        ThreadLocal.withInitial(HashMap::new);
+
+    //! Returns the class file bytecode for the given binary name without re-entering a loader
+    /** @param bin_name the binary name to look up
+        @param routed the loaders already asked for <i>bin_name</i> on this thread; see
+        {@link #classFileBytesRouting}
+    */
+    private byte[] getClassFileBytesIntern(String bin_name, HashSet<QoreURLClassLoader> routed) {
         QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(bin_name);
-        if (shared_loader != null && shared_loader != this) {
+        if (shared_loader != null && shared_loader != this && !routed.contains(shared_loader)) {
             return shared_loader.getClassFileBytes(bin_name);
         }
 
@@ -545,7 +586,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         // class currently under generation.
         if (isDynamic(bin_name) && isSharedDynamicClassName(bin_name)) {
             QoreURLClassLoader target = resolveSharedClassLoader(bin_name);
-            if (target != null && target != this) {
+            if (target != null && target != this && !routed.contains(target)) {
                 byte[] bytes = target.getClassFileBytes(bin_name);
                 if (bytes != null) {
                     return bytes;
