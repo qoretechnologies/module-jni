@@ -251,7 +251,7 @@ public class QoreOpcUaTestServer {
 
         private UaVariableNode addVariable(UaFolderNode folder, int idx, String name, NodeId dataType,
                 Variant value, boolean writable) {
-            UaVariableNode node = UaVariableNode.builder(getNodeContext())
+            UaVariableNode node = new UaVariableNode.UaVariableNodeBuilder(getNodeContext())
                 .setNodeId(new NodeId(idx, name))
                 .setBrowseName(new QualifiedName(idx, name))
                 .setDisplayName(LocalizedText.english(name))

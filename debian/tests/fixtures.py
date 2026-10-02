@@ -25,6 +25,6 @@ if not classpath:
     raise ValueError("Installed OPC UA provider JARs are missing")
 server_output = root / "opcua-classes"
 server_output.mkdir()
-subprocess.run(["javac", "--release", "21", "-cp", classpath, "-d", str(server_output),
+subprocess.run(["javac", "--release", "21", "-Xlint:deprecation", "-Werror", "-cp", classpath, "-d", str(server_output),
                 str(root / "java/org/qore/opcua/test/QoreOpcUaTestServer.java")], check=True)
 subprocess.run(["jar", "cf", str(root / "opcua-test-server.jar"), "-C", str(server_output), "."], check=True)

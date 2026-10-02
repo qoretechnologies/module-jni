@@ -10,6 +10,6 @@ root=$(cd "$here/../.." && pwd)
 cp=$(ls "$root"/qlib/OpcUaDataProvider/jar/*.jar | paste -sd: -)
 rm -rf "$here/classes"
 mkdir -p "$here/classes"
-javac --release 21 -cp "$cp" -d "$here/classes" "$here/org/qore/opcua/test/QoreOpcUaTestServer.java"
+javac --release 21 -Xlint:deprecation -Werror -cp "$cp" -d "$here/classes" "$here/org/qore/opcua/test/QoreOpcUaTestServer.java"
 jar cf "$root/test/opcua-test-server.jar" -C "$here/classes" .
 echo "built $root/test/opcua-test-server.jar"
