@@ -110,6 +110,11 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("write: negative - path+stream conflict", \testWriteNegativePathStreamConflict());
         addTestCase("action registration", \testActionRegistration());
         addTestCase("roundtrip: write and read", \testRoundtrip());
+        addTestCase("read: no header options reads from the first row", \testReadFromFirstRow());
+        addTestCase("cell ranges: columns past Z", \testColumnsPastZ());
+        addTestCase("negative: headers + header_names in every constructor", \testHeaderOptionConflictAllCtors());
+        addTestCase("worksheet provider: options constructor", \testWorksheetOptionsCtor());
+        addTestCase("write: headers from the first record", \testWriteHeadersFromFirstRecord());
 
         set_return_value(main());
     }
@@ -733,5 +738,127 @@ public class OdsDataProviderTest inherits QUnit::Test {
         assertFalse(records[1].Active);
         assertEq("Item3", records[2].Name);
         assertEq(0.01, records[2].Amount);
+    }
+
+    testReadFromFirstRow() {
+        # with no header options at all, data starts on row 1 and keys are cell references
+        OdsReadDataProvider dp(test_data_dir + "/no-headers.ods");
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("value1", records[0].A1);
+        assertEq(100.0, records[0].B1);
+        assertEq("value2", records[1].A2);
+
+        # explicit headers without data_cells also start on row 1
+        dp = new OdsReadDataProvider(test_data_dir + "/no-headers.ods", {
+            "headers": ("Col1", "Col2", "Col3"),
+        });
+        records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("value1", records[0].Col1);
+        assertEq(100.0, records[0].Col2);
+        assertEq("value2", records[1].Col1);
+    }
+
+    testColumnsPastZ() {
+        assertEq(0, OdsReadDataProvider::getColumnIndex("a"));
+        assertEq(0, OdsReadDataProvider::getColumnIndex("-"));
+        assertEq(25, OdsReadDataProvider::getColumnIndex("Z"));
+        assertEq(26, OdsReadDataProvider::getColumnIndex("aa"));
+        assertEq(52, OdsReadDataProvider::getColumnIndex("bA"));
+
+        # "z" < "aa" by column position even though it sorts after it as a string
+        assertEq("aa", OdsReadDataProvider::parseRange("z1:aa10").end.column);
+        assertThrows("ODS-INVALID-LOCATION", \OdsReadDataProvider::parseRange(), "aa1:z10");
+        assertThrows("ODS-INVALID-LOCATION", \OdsReadDataProvider::parseRange(), "c1:B2");
+
+        hash<auto> opts = {"header_cells": "z1", "data_cells": "aa2"};
+        assertEq("aa", OdsReadDataProvider::processCellOptions(opts).data_cells.start.column);
+        opts = {"header_cells": "aa1", "data_cells": "z2"};
+        assertThrows("ODS-INVALID-LOCATION", \OdsReadDataProvider::processCellOptions(), opts);
+
+        # read a sheet whose headers and data are in columns Y-AB
+        hash<auto> rec = map {sprintf("c%d", $1): $1}, xrange(1, 29);
+        OdsWriteDataProvider wdp({"headers": keys rec});
+        wdp.createRecord(rec);
+        OdsReadDataProvider dp({"data": wdp.getData(), "header_cells": "y1:ab1", "data_cells": "y2:ab2"});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(({"c25": 25.0, "c26": 26.0, "c27": 27.0, "c28": 28.0},), records);
+    }
+
+    testHeaderOptionConflictAllCtors() {
+        hash<auto> opts = {"headers": ("A", "B"), "header_names": True};
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsReadDataProvider dp(test_data_dir + "/simple.ods", opts);
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.ods");
+            OdsReadDataProvider dp(fis, opts);
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsReadDataProvider dp({"path": test_data_dir + "/simple.ods"} + opts);
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsWorksheetReadDataProvider dp({"path": test_data_dir + "/simple.ods"} + opts);
+        });
+    }
+
+    testWorksheetOptionsCtor() {
+        binary data = ReadOnlyFile::readBinaryFile(test_data_dir + "/multi-sheet.ods");
+        string sheet = (new OdsReadDataProvider({"data": data})).getChildProviderNames()[1];
+
+        # inline data
+        OdsWorksheetReadDataProvider dp({"data": data, "worksheet": sheet, "header_names": True});
+        list<hash<auto>> from_data = map $1, dp.searchRecords();
+        assertTrue(from_data.size() > 0);
+
+        # path, resolved as a file location
+        dp = new OdsWorksheetReadDataProvider({"path": "file://" + test_data_dir + "/multi-sheet.ods",
+            "worksheet": sheet, "header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # stream
+        dp = new OdsWorksheetReadDataProvider({"stream": new BinaryInputStream(data), "worksheet": sheet,
+            "header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # path constructor, resolved as a file location (plain path and file:// URL)
+        dp = new OdsWorksheetReadDataProvider(test_data_dir + "/multi-sheet.ods", "name", sheet, {"header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+        dp = new OdsWorksheetReadDataProvider("file://" + test_data_dir + "/multi-sheet.ods", "name", sheet,
+            {"header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # only one input source is allowed
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsWorksheetReadDataProvider wdp({"data": data, "path": test_data_dir + "/multi-sheet.ods"});
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsWorksheetReadDataProvider wdp({"data": data, "stream": new BinaryInputStream(data)});
+        });
+    }
+
+    testWriteHeadersFromFirstRecord() {
+        # the first record defines the columns and keeps its value types (it was previously copied down a row,
+        # which turned its dates into strings); later records are written by those columns
+        OdsWriteDataProvider dp();
+        date d = 2026-01-02T00:00:00;
+        dp.createRecord({"B": 1, "A": d, "F": True});
+        dp.createRecord({"A": d + 1D, "C": "ignored", "B": 2, "F": False});
+        dp.createRecord({"B": 3});
+
+        OdsReadDataProvider rdp({"data": dp.getData(), "header_names": True});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(3, records.size());
+        assertEq(("B", "A", "F"), keys records[0]);
+        assertEq(1.0, records[0].B);
+        assertEq("date", records[0].A.type());
+        assertEq(d, records[0].A);
+        assertEq(True, records[0].F);
+        assertEq(2.0, records[1].B);
+        assertEq(d + 1D, records[1].A);
+        assertEq(False, records[1].F);
+        assertEq(3.0, records[2].B);
+        assertEq(NOTHING, records[2].A);
     }
 }

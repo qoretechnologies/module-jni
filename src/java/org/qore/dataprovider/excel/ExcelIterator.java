@@ -63,6 +63,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     private String end_column = "-";
     private Hash row_data = null;
     private long count = 0;
+    private boolean ignore_empty = false;
 
     public ExcelIterator(java.io.InputStream stream, String sheet_name) throws Throwable {
         try {
@@ -99,6 +100,13 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
 
     public ExcelIterator(String path, String sheet_name) throws Throwable {
         this(new FileInputStream(new File(path)), sheet_name);
+    }
+
+    /**
+     * Sets whether empty rows are skipped; if false (the default), iteration stops at the first empty row.
+     */
+    public void setIgnoreEmpty(boolean ignore_empty) {
+        this.ignore_empty = ignore_empty;
     }
 
     public void setZone(String zonestr) throws DateTimeException, ZoneRulesException {
@@ -196,11 +204,8 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     public boolean next() {
         if (current_row == -1) {
             if (start_row == -1) {
-                if (header_row_end != -1) {
-                    current_row = header_row_end + 1;
-                } else {
-                    ++current_row;
-                }
+                // rows are 1-based; with no header row, data starts on the first row
+                current_row = header_row_end != -1 ? header_row_end + 1 : 1;
             } else {
                 current_row = start_row;
             }
@@ -212,6 +217,16 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         }
         if (current_row != -1) {
             row_data = getRowData(current_row);
+            if (row_data == null && ignore_empty) {
+                // skip empty rows up to the end of the data range or the last physical row of the sheet
+                int last_row = sheet.getLastRowNum() + 1;
+                if (end_row != -1 && end_row < last_row) {
+                    last_row = end_row;
+                }
+                while (row_data == null && current_row < last_row) {
+                    row_data = getRowData(++current_row);
+                }
+            }
             if (row_data == null) {
                 current_row = -1;
             } else {
@@ -275,6 +290,10 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
 
             String key;
             if (!headers.isEmpty()) {
+                // a data range wider than the headers ends at the last header column
+                if (col_no >= headers.size()) {
+                    break;
+                }
                 key = headers.get(col_no);
             } else {
                 key = String.format("%s%d", CellReference.convertNumToColString(col_no), rownum);

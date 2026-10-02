@@ -210,11 +210,8 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
     public boolean next() {
         if (current_row == -1) {
             if (start_row == -1) {
-                if (header_row_end != -1) {
-                    current_row = header_row_end + 1;
-                } else {
-                    ++current_row;
-                }
+                // rows are 1-based; with no header row, data starts on the first row
+                current_row = header_row_end != -1 ? header_row_end + 1 : 1;
             } else {
                 current_row = start_row;
             }

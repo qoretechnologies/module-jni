@@ -99,6 +99,13 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("write: negative - invalid format", \testWriteNegativeInvalidFormat());
         addTestCase("action registration", \testActionRegistration());
         addTestCase("roundtrip: write and read", \testRoundtrip());
+        addTestCase("read: no header options reads from the first row", \testReadFromFirstRow());
+        addTestCase("read: empty rows", \testReadEmptyRows());
+        addTestCase("cell ranges: columns past Z", \testColumnsPastZ());
+        addTestCase("negative: headers + header_names in every constructor", \testHeaderOptionConflictAllCtors());
+        addTestCase("worksheet provider: options constructor", \testWorksheetOptionsCtor());
+        addTestCase("write: streaming without headers", \testWriteStreamingNoHeaders());
+        addTestCase("write: headers from the first record", \testWriteHeadersFromFirstRecord());
 
         set_return_value(main());
     }
@@ -787,5 +794,185 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         assertFalse(records[1].Active);
         assertEq("Item3", records[2].Name);
         assertEq(0.01, records[2].Amount);
+    }
+
+    testReadFromFirstRow() {
+        # with no header options at all, data starts on row 1 and keys are cell references
+        ExcelReadDataProvider dp(test_data_dir + "/no-headers.xlsx");
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+        assertEq({"A1": "value1", "B1": 100.0, "C1": True}, records[0]);
+        assertEq({"A2": "value2", "B2": 200.0, "C2": False}, records[1]);
+
+        # explicit headers without data_cells also start on row 1
+        dp = new ExcelReadDataProvider(test_data_dir + "/no-headers.xlsx", {
+            "headers": ("Col1", "Col2", "Col3"),
+        });
+        records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+        assertEq({"Col1": "value1", "Col2": 100.0, "Col3": True}, records[0]);
+        assertEq({"Col1": "value2", "Col2": 200.0, "Col3": False}, records[1]);
+    }
+
+    # returns an xlsx with a header row, two data rows separated by an empty row, and two trailing empty rows
+    private binary getEmptyRowsData() {
+        ExcelWriteDataProvider dp({"headers": ("Sku", "Qty")});
+        dp.createRecord({"Sku": "A-1", "Qty": 5});
+        dp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        dp.createRecord({"Sku": "B-2", "Qty": 7});
+        dp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        dp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        return dp.getData();
+    }
+
+    testReadEmptyRows() {
+        binary data = getEmptyRowsData();
+
+        # default: reading stops at the first empty row
+        ExcelReadDataProvider dp({"data": data, "header_names": True});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), records);
+
+        # ignore_empty: empty rows are skipped, trailing empty rows end the iteration
+        dp = new ExcelReadDataProvider({"data": data, "header_names": True, "ignore_empty": True});
+        records = map $1, dp.searchRecords();
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), records);
+
+        # ignore_empty stays within data_cells (rows 2-3 hold only the first record and the empty row)
+        dp = new ExcelReadDataProvider({"data": data, "header_names": True, "ignore_empty": True,
+            "data_cells": "a2:b3"});
+        records = map $1, dp.searchRecords();
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), records);
+
+        # the option is also applied to worksheet child providers
+        dp = new ExcelReadDataProvider({"data": data, "header_names": True, "ignore_empty": True});
+        records = map $1, dp.getChildProviderEx("Sheet1").searchRecords();
+        assertEq(2, records.size());
+        assertEq("B-2", records[1].Sku);
+    }
+
+    testColumnsPastZ() {
+        assertEq(0, ExcelReadDataProvider::getColumnIndex("a"));
+        assertEq(0, ExcelReadDataProvider::getColumnIndex("-"));
+        assertEq(25, ExcelReadDataProvider::getColumnIndex("Z"));
+        assertEq(26, ExcelReadDataProvider::getColumnIndex("aa"));
+        assertEq(51, ExcelReadDataProvider::getColumnIndex("AZ"));
+        assertEq(52, ExcelReadDataProvider::getColumnIndex("bA"));
+        assertEq(16383, ExcelReadDataProvider::getColumnIndex("XFD"));
+
+        # "z" < "aa" by column position even though it sorts after it as a string
+        hash<CellRangeInfo> r = ExcelReadDataProvider::parseRange("z1:aa10");
+        assertEq("z", r.start.column);
+        assertEq("aa", r.end.column);
+        assertThrows("EXCEL-INVALID-LOCATION", \ExcelReadDataProvider::parseRange(), "aa1:z10");
+        # case does not affect ordering
+        assertEq("B", ExcelReadDataProvider::parseRange("B1:c2").start.column);
+        assertThrows("EXCEL-INVALID-LOCATION", \ExcelReadDataProvider::parseRange(), "c1:B2");
+
+        # header and data start columns are compared by position as well
+        hash<auto> opts = {"header_cells": "z1", "data_cells": "aa2"};
+        assertEq("aa", ExcelReadDataProvider::processCellOptions(opts).data_cells.start.column);
+        opts = {"header_cells": "aa1", "data_cells": "z2"};
+        assertThrows("EXCEL-INVALID-LOCATION", \ExcelReadDataProvider::processCellOptions(), opts);
+
+        # read a sheet whose headers and data are in columns Y-AB
+        hash<auto> rec = map {sprintf("c%d", $1): $1}, xrange(1, 29);
+        ExcelWriteDataProvider wdp({"headers": keys rec});
+        wdp.createRecord(rec);
+        ExcelReadDataProvider dp({"data": wdp.getData(), "header_cells": "y1:ab1", "data_cells": "y2:ab2"});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(({"c25": 25.0, "c26": 26.0, "c27": 27.0, "c28": 28.0},), records);
+
+        # a data range wider than the header range ends at the last header column
+        dp = new ExcelReadDataProvider({"data": wdp.getData(), "header_cells": "y1:z1", "data_cells": "y2:ab2"});
+        records = map $1, dp.searchRecords();
+        assertEq(({"c25": 25.0, "c26": 26.0},), records);
+    }
+
+    testHeaderOptionConflictAllCtors() {
+        hash<auto> opts = {"headers": ("A", "B"), "header_names": True};
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", opts);
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.xlsx");
+            ExcelReadDataProvider dp(fis, opts);
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelReadDataProvider dp({"path": test_data_dir + "/simple.xlsx"} + opts);
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelWorksheetReadDataProvider dp({"path": test_data_dir + "/simple.xlsx"} + opts);
+        });
+    }
+
+    testWorksheetOptionsCtor() {
+        binary data = ReadOnlyFile::readBinaryFile(test_data_dir + "/multi-sheet.xlsx");
+        string sheet = (new ExcelReadDataProvider({"data": data})).getChildProviderNames()[1];
+
+        # inline data
+        ExcelWorksheetReadDataProvider dp({"data": data, "worksheet": sheet, "header_names": True});
+        list<hash<auto>> from_data = map $1, dp.searchRecords();
+        assertTrue(from_data.size() > 0);
+
+        # path, resolved as a file location
+        dp = new ExcelWorksheetReadDataProvider({"path": "file://" + test_data_dir + "/multi-sheet.xlsx",
+            "worksheet": sheet, "header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # stream
+        dp = new ExcelWorksheetReadDataProvider({"stream": new BinaryInputStream(data), "worksheet": sheet,
+            "header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # path constructor, resolved as a file location (plain path and file:// URL)
+        dp = new ExcelWorksheetReadDataProvider(test_data_dir + "/multi-sheet.xlsx", "name", sheet, {"header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+        dp = new ExcelWorksheetReadDataProvider("file://" + test_data_dir + "/multi-sheet.xlsx", "name", sheet,
+            {"header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # only one input source is allowed
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelWorksheetReadDataProvider wdp({"data": data, "path": test_data_dir + "/multi-sheet.xlsx"});
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelWorksheetReadDataProvider wdp({"data": data, "stream": new BinaryInputStream(data)});
+        });
+    }
+
+    testWriteStreamingNoHeaders() {
+        # more rows than the 100-row SXSSF window, so rows are flushed while writing; dates are written and read
+        # in the local time zone
+        ExcelWriteDataProvider dp({"streaming": True});
+        date d = 2026-03-04T05:06:07;
+        for (int n = 1; n <= 250; ++n) {
+            dp.createRecord({"Id": n, "Name": sprintf("row-%d", n), "Shipped": d});
+        }
+        assertEq(250, dp.getCreatedCount());
+
+        ExcelReadDataProvider rdp({"data": dp.getData(), "header_names": True});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(250, records.size());
+        assertEq(("Id", "Name", "Shipped"), keys records[0]);
+        assertEq({"Id": 1.0, "Name": "row-1", "Shipped": d}, records[0]);
+        assertEq({"Id": 250.0, "Name": "row-250", "Shipped": d}, records[249]);
+    }
+
+    testWriteHeadersFromFirstRecord() {
+        # the first record defines the columns; later records are written by those columns
+        ExcelWriteDataProvider dp();
+        date d = 2026-01-02T00:00:00;
+        dp.createRecord({"B": 1, "A": d});
+        dp.createRecord({"A": d + 1D, "C": "ignored", "B": 2});
+        dp.createRecord({"B": 3});
+
+        ExcelReadDataProvider rdp({"data": dp.getData(), "header_names": True});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq((
+            {"B": 1.0, "A": d},
+            {"B": 2.0, "A": d + 1D},
+            {"B": 3.0, "A": NOTHING},
+        ), records);
     }
 }

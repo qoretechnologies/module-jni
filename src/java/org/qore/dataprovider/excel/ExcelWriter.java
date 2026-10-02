@@ -138,41 +138,19 @@ public class ExcelWriter implements Closeable {
      * @param data The hash containing the row data
      */
     public void writeRow(Hash data) {
-        // Write headers first if not done and we have headers defined
-        if (!headersWritten && !headers.isEmpty()) {
-            writeHeaders();
+        // With no predefined headers, the first record's keys define the columns; they are taken before any row is
+        // written, so the header row is always written first and no rows ever need to be shifted (SXSSF streaming
+        // sheets cannot shift rows that were already flushed)
+        if (headers.isEmpty()) {
+            for (Object key : data.keySet()) {
+                headers.add(key.toString());
+            }
         }
+        writeHeaders();
 
         Row row = sheet.createRow(currentRow++);
-
-        if (headers.isEmpty()) {
-            // No predefined headers - use keys from the hash
-            int col = 0;
-            for (Object key : data.keySet()) {
-                if (!headersWritten) {
-                    headers.add(key.toString());
-                }
-                Cell cell = row.createCell(col++);
-                setCellValue(cell, data.get(key));
-            }
-            // Write headers on first row if we collected them
-            if (!headersWritten && !headers.isEmpty()) {
-                // Shift all data down by one row
-                sheet.shiftRows(0, currentRow - 1, 1);
-                Row headerRow = sheet.createRow(0);
-                for (int i = 0; i < headers.size(); i++) {
-                    headerRow.createCell(i).setCellValue(headers.get(i));
-                }
-                currentRow++;
-                headersWritten = true;
-            }
-        } else {
-            // Use predefined headers
-            for (int i = 0; i < headers.size(); i++) {
-                Cell cell = row.createCell(i);
-                Object value = data.get(headers.get(i));
-                setCellValue(cell, value);
-            }
+        for (int i = 0; i < headers.size(); i++) {
+            setCellValue(row.createCell(i), data.get(headers.get(i)));
         }
     }
 
