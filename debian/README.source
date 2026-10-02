@@ -1,3 +1,8 @@
+Debian 13 update (2026-10-01)
+----------------------------
+See QUALIFICATION-DEBIAN13 for the native amd64/arm64 package qualification.
+Ubuntu-only scope statements below describe the initial packaging checkpoint.
+
 Qore JNI packages for the testing PPA
 ====================================
 
