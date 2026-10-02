@@ -375,6 +375,7 @@ jmethodID Globals::methodDatabaseMetaDataGetDriverVersion;
 
 GlobalReference<jclass> Globals::classPreparedStatement;
 jmethodID Globals::methodPreparedStatementAddBatch;
+jmethodID Globals::methodPreparedStatementClearBatch;
 jmethodID Globals::methodPreparedStatementClose;
 jmethodID Globals::methodPreparedStatementExecute;
 jmethodID Globals::methodPreparedStatementExecuteBatch;
@@ -3636,6 +3637,7 @@ bool Globals::init() {
 
     classPreparedStatement = env.findClass("java/sql/PreparedStatement").makeGlobal();
     methodPreparedStatementAddBatch = env.getMethod(classPreparedStatement, "addBatch", "()V");
+    methodPreparedStatementClearBatch = env.getMethod(classPreparedStatement, "clearBatch", "()V");
     methodPreparedStatementClose = env.getMethod(classPreparedStatement, "close", "()V");
     methodPreparedStatementExecute = env.getMethod(classPreparedStatement, "execute", "()Z");
     methodPreparedStatementExecuteBatch = env.getMethod(classPreparedStatement, "executeBatch", "()[I");

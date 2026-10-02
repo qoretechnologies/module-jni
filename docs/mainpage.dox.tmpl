@@ -941,6 +941,27 @@ set_save_object_callback(callback);
     @note the initial \c jdbc: in the \c db value is optional; if missing, it is added automatically by the %Qore
     \c jdbc driver when the internal URL string is passed to the internal Java JDBC call.
 
+    @subsection jdbc_transaction_boundaries JDBC Transaction Boundaries
+
+    Ordinary selects outside a transaction use JDBC auto-commit mode, so a connection returned to a
+    \c DatasourcePool does not retain read locks. \c beginTransaction(), mutating datasource calls, and
+    prepared statement execution start a transaction. Commit and rollback restore auto-commit mode;
+    if either operation or the mode change fails, the connection is discarded instead of being reused.
+
+    @par Explicit Transaction Example
+    @code
+DatasourcePool pool("jdbc:user/pass@ignored{url=postgresql://db.example.com/sales,classpath=/usr/share/java/postgresql.jar}");
+pool.beginTransaction();
+on_error pool.rollback();
+on_success pool.commit();
+hash<auto> order = pool.selectRow("select * from orders where id = %v for update", 123);
+pool.exec("update orders set status = %v where id = %v", "processed", order.id);
+    @endcode
+
+    JDBC result sets held by a \c SQLStatement remain valid across separate Java-to-%Qore calls until
+    the statement is closed or its transaction ends. Each result set and statement is closed even if
+    the other close operation reports an error.
+
     @subsection jdbc_columnar_results jdbc Columnar Result Support
 
     When module-jni is built against %Qore headers exposing the columnar result API, the \c jdbc DBI driver provides
@@ -1023,6 +1044,13 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - fixed JDBC pooled reads retaining transactions and blocking later writes or schema changes;
+      explicit transactions and prepared writes retain commit/rollback semantics
+    - fixed JDBC cursors retaining local JNI references across Java native-call frames, causing invalid
+      reference errors or JVM crashes; statement cleanup now preserves errors and closes every handle
+    - corrected Flyway action response descriptions and their integration tests
+    - fixed JDBC batch update counts, empty batches, and prepared statement reuse after failed binds;
+      unknown JDBC batch counts return \c -1 and count overflow raises \c JDBC-BATCH-COUNT-ERROR
     - added Kafka record headers to the \c KafkaDataProvider module: the producer sends a request's \c headers and
       the consumer delivers each record's headers, UTF-8 text as strings and other values as binaries; a producer
       request no longer needs a \c key

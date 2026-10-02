@@ -4,7 +4,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -133,12 +133,19 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
 
         printd(5, "QoreJdbcConnection::connect() got connection: %p\n", (jobject)connection);
 
-        // turn off autocommit
-        jargs[0].z = false;
+        // Qore starts transactions explicitly. Keep unallocated reads in auto-commit mode.
+        // Reconnection before the first write must preserve an already requested transaction.
+        jargs[0].z = !transaction;
         env.callVoidMethod(connection, Globals::methodConnectionSetAutoCommit, &jargs[0]);
     } catch (jni::Exception& e) {
         e.convert(xsink);
         xsink->appendLastDescription(" (using JDBC URL: '%s')", url.c_str());
+        // A connection can exist even when setting its initial mode failed.
+        try {
+            close(env);
+        } catch (jni::Exception& close_error) {
+            close_error.convert(xsink);
+        }
         return -1;
     }
     assert(!*xsink);
@@ -162,8 +169,9 @@ int QoreJdbcConnection::close(Env& env) {
         return 0;
     }
     JavaExceptionRethrowHelper erh;
-    env.callVoidMethod(connection, Globals::methodConnectionClose, nullptr);
-    connection = nullptr;
+    // Release our reference even if the JDBC driver's close() throws.
+    GlobalReference<jobject> closing = std::move(connection);
+    env.callVoidMethod(closing, Globals::methodConnectionClose, nullptr);
 
     return 0;
 }
@@ -301,26 +309,52 @@ bool QoreJdbcConnection::areArraysSupported(Env& env) {
 }
 #endif
 
-int QoreJdbcConnection::commit(ExceptionSink* xsink) {
+int QoreJdbcConnection::beginTransaction(ExceptionSink* xsink) {
     assert(connection);
-    Env env;
+    if (transaction) {
+        return 0;
+    }
     try {
-        env.callVoidMethod(connection, Globals::methodConnectionCommit, nullptr);
+        Env env;
+        jvalue arg{};
+        arg.z = false;
+        env.callVoidMethod(connection, Globals::methodConnectionSetAutoCommit, &arg);
+        transaction = true;
+        return 0;
     } catch (jni::Exception& e) {
         e.convert(xsink);
     }
-    return *xsink ? -1 : 0;
+    return -1;
+}
+
+int QoreJdbcConnection::endTransaction(bool do_commit, ExceptionSink* xsink) {
+    assert(connection);
+    if (!transaction) {
+        return 0;
+    }
+    try {
+        Env env;
+        env.callVoidMethod(connection, do_commit ? Globals::methodConnectionCommit
+            : Globals::methodConnectionRollback, nullptr);
+        // Restore auto-commit only after a successful outcome. setAutoCommit(true) can itself
+        // commit pending work, so it must never run after a failed commit or rollback.
+        jvalue arg{};
+        arg.z = true;
+        env.callVoidMethod(connection, Globals::methodConnectionSetAutoCommit, &arg);
+        transaction = false;
+        return 0;
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+    }
+    return -1;
+}
+
+int QoreJdbcConnection::commit(ExceptionSink* xsink) {
+    return endTransaction(true, xsink);
 }
 
 int QoreJdbcConnection::rollback(ExceptionSink* xsink) {
-    assert(connection);
-    Env env;
-    try {
-        env.callVoidMethod(connection, Globals::methodConnectionRollback, nullptr);
-    } catch (jni::Exception& e) {
-        e.convert(xsink);
-    }
-    return *xsink ? -1 : 0;
+    return endTransaction(false, xsink);
 }
 
 QoreValue QoreJdbcConnection::getServerVersion(ExceptionSink* xsink) {

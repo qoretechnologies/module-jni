@@ -4,7 +4,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -75,7 +75,7 @@ typedef std::vector<QoreJdbcColumn> cvec_t;
 
 class QoreJdbcStatement {
 public:
-    DLLLOCAL QoreJdbcStatement(ExceptionSink* xsink, QoreJdbcConnection* conn) : conn(conn), params(xsink) {
+    DLLLOCAL QoreJdbcStatement(ExceptionSink* xsink, QoreJdbcConnection* conn) : conn(conn), params(xsink), cleanup_xsink(xsink) {
     }
 
     DLLLOCAL virtual ~QoreJdbcStatement();
@@ -135,7 +135,7 @@ public:
     //! Closes the statement
     /**
     */
-    DLLLOCAL void close(Env& env);
+    DLLLOCAL void close(Env& env, ExceptionSink* xsink);
 
 protected:
     //! Possible comment types; used in the parse() method
@@ -163,11 +163,18 @@ protected:
     //! Column metadata from result sets
     cvec_t cvec;
 
-    //! Any active result set
-    LocalReference<jobject> rs;
+    //! Result sets can survive separate Java-to-Qore native calls; local JNI references cannot.
+    GlobalReference<jobject> rs;
+
+    //! Temporary statements use their caller's sink during destruction. Persistent prepared
+    //! statements must close their handles explicitly with the current call's sink first.
+    ExceptionSink* cleanup_xsink;
 
     //! Batch execute flag
     bool do_batch_execute = false;
+
+    //! Total for the last batch, or -1 if the driver does not report exact counts.
+    int batch_rows_affected = -1;
 
     DLLLOCAL void prepareAndBindStatement(Env& env, ExceptionSink* xsink, const QoreString& str);
 
@@ -180,7 +187,7 @@ protected:
 
         This call resets the query
     */
-    DLLLOCAL void reset(Env& env);
+    DLLLOCAL void reset(Env& env, ExceptionSink* xsink);
 
     //! Parse a Qore-style SQL statement
     /** @param str Qore-style SQL statement
@@ -202,17 +209,23 @@ protected:
     int bindInternArrayNative(Env& env, const QoreListNode* args, ExceptionSink* xsink);
 #endif
 
-    //! Return size of arrays in the passed arguments
-    /** @param args SQL parameters
-
-        @return parameter array size
-    */
-    DLLLOCAL size_t findArraySizeOfArgs(const QoreListNode* args) const;
-
     //! Return whether the passed arguments have arrays
-    DLLLOCAL bool hasArrayBind() {
-        array_bind_size = findArraySizeOfArgs(*params);
-        return array_bind_size > 0;
+    DLLLOCAL bool hasArrayBind(ExceptionSink* xsink) {
+        if (params) {
+            ConstListIterator i(*params);
+            size_t count = 0;
+            while (i.next()) {
+                if (++count % 100 == 0 && qore_check_cancel(xsink, "JDBC array bind detection")) {
+                    return false;
+                }
+                if (i.getValue().getType() == NT_LIST) {
+                    array_bind_size = i.getValue().get<const QoreListNode>()->size();
+                    return true;
+                }
+            }
+        }
+        array_bind_size = 0;
+        return false;
     }
 
     //! Bind a single value argument
@@ -292,14 +305,19 @@ protected:
 class JavaExceptionRethrowHelper {
 public:
     DLLLOCAL JavaExceptionRethrowHelper() {
-        if ((ex = env->ExceptionOccurred())) {
+        jthrowable pending = env->ExceptionOccurred();
+        if (pending) {
+            // LocalReference's debug assertion calls GetObjectRefType(), which is not valid
+            // while an exception is pending. Clear it before adopting the local reference.
             env->ExceptionClear();
+            ex = LocalReference<jthrowable>(pending);
         }
     }
 
     DLLLOCAL ~JavaExceptionRethrowHelper() {
         if (ex) {
-            env->Throw(ex.release());
+            // Throw retains the pending exception; the temporary local handle still belongs to us.
+            env->Throw(ex);
         }
     }
 

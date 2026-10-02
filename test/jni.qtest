@@ -1947,11 +1947,7 @@ lorem ipsum\r
         if (!connstr) {
             testSkip("no DB connection string available");
         }
-        try {
-            return new DatasourcePool(connstr);
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("failed to open %y: %s: %s", connstr, ex.err, ex.desc));
-        }
+        return new DatasourcePool(connstr);
     }
 
     callStaticMethodTest() {

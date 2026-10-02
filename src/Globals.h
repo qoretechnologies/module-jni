@@ -390,6 +390,7 @@ public:
 
     DLLLOCAL static GlobalReference<jclass> classPreparedStatement;               // java.sql.PreparedStatement
     DLLLOCAL static jmethodID methodPreparedStatementAddBatch;                    // void addBatch()
+    DLLLOCAL static jmethodID methodPreparedStatementClearBatch;                  // void clearBatch()
     DLLLOCAL static jmethodID methodPreparedStatementClose;                       // void close()
     DLLLOCAL static jmethodID methodPreparedStatementExecute;                     // boolean execute()
     DLLLOCAL static jmethodID methodPreparedStatementExecuteBatch;                // int[] executeBatch()

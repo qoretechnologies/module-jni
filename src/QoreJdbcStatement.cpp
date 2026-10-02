@@ -4,7 +4,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <set>
 
@@ -44,7 +45,7 @@ QoreJdbcColumn::QoreJdbcColumn(std::string&& name, std::string&& qname, jint cty
 QoreJdbcStatement::~QoreJdbcStatement() {
     if (stmt) {
         Env env;
-        close(env);
+        close(env, cleanup_xsink);
     }
 }
 
@@ -62,6 +63,9 @@ bool QoreJdbcStatement::exec(Env& env, ExceptionSink* xsink, const QoreString& q
     }
 
     prepareAndBindStatement(env, xsink, **str);
+    if (*xsink) {
+        return false;
+    }
 
     return execIntern(env, **str, xsink);
 }
@@ -83,7 +87,17 @@ void QoreJdbcStatement::prepareStatement(Env& env, const QoreString& str) {
 }
 
 int QoreJdbcStatement::bindQueryArguments(Env& env, ExceptionSink* xsink) {
-    if (hasArrayBind()) {
+    // A failed bind can leave a partially populated batch in a reusable statement.
+    if (do_batch_execute) {
+        env.callVoidMethod(stmt, Globals::methodPreparedStatementClearBatch, nullptr);
+    }
+    do_batch_execute = false;
+    batch_rows_affected = -1;
+    bool array_bind = hasArrayBind(xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (array_bind) {
         if (bindInternArray(env, *params, xsink)) {
             return -1;
         }
@@ -98,8 +112,40 @@ bool QoreJdbcStatement::execIntern(Env& env, const QoreString& qstr, ExceptionSi
         // check for a lost connection
         try {
             if (do_batch_execute) {
-                // ignore return value
-                env.callObjectMethod(stmt, Globals::methodPreparedStatementExecuteBatch, nullptr);
+                LocalReference<jintArray> counts = env.callObjectMethod(stmt,
+                    Globals::methodPreparedStatementExecuteBatch, nullptr).as<jintArray>();
+                if (!counts) {
+                    xsink->raiseException("JDBC-BATCH-COUNT-ERROR", "JDBC driver returned no batch update counts");
+                    return false;
+                }
+                int total = 0;
+                bool unknown = false;
+                jsize size = env.getArrayLength(counts);
+                if (static_cast<size_t>(size) != array_bind_size) {
+                    xsink->raiseException("JDBC-BATCH-COUNT-ERROR",
+                        "JDBC driver returned %d update counts for %zu batch entries", size, array_bind_size);
+                    return false;
+                }
+                for (jsize i = 0; i < size; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC batch update counts")) {
+                        return false;
+                    }
+                    jint count = env.getIntArrayElement(counts, i);
+                    if (count == -2) { // java.sql.Statement.SUCCESS_NO_INFO
+                        unknown = true;
+                    } else if (count < 0) {
+                        xsink->raiseException("JDBC-BATCH-COUNT-ERROR",
+                            "JDBC driver returned invalid update count %d for batch entry %d", count, i + 1);
+                        return false;
+                    } else if (count > std::numeric_limits<int>::max() - total) {
+                        xsink->raiseException("JDBC-BATCH-COUNT-ERROR",
+                            "batch update count exceeds the supported integer range");
+                        return false;
+                    } else {
+                        total += count;
+                    }
+                }
+                batch_rows_affected = unknown ? -1 : total;
                 return false;
             }
             return env.callBooleanMethod(stmt, Globals::methodPreparedStatementExecute, nullptr);
@@ -117,40 +163,48 @@ bool QoreJdbcStatement::execIntern(Env& env, const QoreString& qstr, ExceptionSi
                     assert(!*xsink);
                     // repeat statement execution after reconnection when not in a transaction
                     prepareAndBindStatement(env, xsink, qstr);
+                    if (*xsink) {
+                        return false;
+                    }
                     continue;
                 }
             }
-            e.restore(throwable.release());
+            e.restore(throwable);
             throw;
         }
     } while (false);
     return false;
 }
 
-void QoreJdbcStatement::close(Env& env_obj) {
-    // not using the Env wrapper because we don't want any C++ exceptions here
-    JNIEnv* env = *env_obj;
-    bool active_java_exception = env->ExceptionCheck();
-
+void QoreJdbcStatement::close(Env& env, ExceptionSink* xsink) {
+    // Preserve a Java exception already in flight, while reporting each independent cleanup
+    // failure to Qore. Always attempt both closes and release both references.
+    JavaExceptionRethrowHelper pending_exception;
     if (rs) {
-        env->CallVoidMethodA(rs, Globals::methodResultSetClose, nullptr);
-        rs = nullptr;
+        GlobalReference<jobject> closing = std::move(rs);
+        try {
+            env.callVoidMethod(closing, Globals::methodResultSetClose, nullptr);
+        } catch (jni::Exception& e) {
+            e.convert(xsink);
+        }
     }
     if (stmt) {
-        env->CallVoidMethodA(stmt, Globals::methodPreparedStatementClose, nullptr);
-        stmt = nullptr;
-    }
-    if (!active_java_exception && env->ExceptionCheck()) {
-        throw new JavaException;
+        GlobalReference<jobject> closing = std::move(stmt);
+        try {
+            env.callVoidMethod(closing, Globals::methodPreparedStatementClose, nullptr);
+        } catch (jni::Exception& e) {
+            e.convert(xsink);
+        }
     }
 }
 
-void QoreJdbcStatement::reset(Env& env) {
-    close(env);
+void QoreJdbcStatement::reset(Env& env, ExceptionSink* xsink) {
+    close(env, xsink);
 
     bind_size = 0;
     array_bind_size = 0;
     do_batch_execute = false;
+    batch_rows_affected = -1;
     params = nullptr;
     cvec.clear();
 }
@@ -163,7 +217,7 @@ int QoreJdbcStatement::reconnectLostConnection(Env& env, ExceptionSink* xsink) {
     }
 
     // Reset current statement state while the driver-specific context data is still present
-    close(env);
+    close(env, xsink);
 
     // Free and reset statement states for all active statements while the driver-specific context data is still
     // present
@@ -175,7 +229,7 @@ int QoreJdbcStatement::reconnectLostConnection(Env& env, ExceptionSink* xsink) {
     // try to reconnect
     if (conn->reconnect(env, xsink)) {
         // Free state completely.
-        reset(env);
+        reset(env, xsink);
 
         // Reconnect failed; marking connection as closed
         // The following call will close any open statements and then the datasource
@@ -270,11 +324,13 @@ bool QoreJdbcStatement::next(Env& env) {
 
 int QoreJdbcStatement::acquireResultSet(Env& env, ExceptionSink* xsink) {
     assert(!rs);
-    rs = env.callObjectMethod(stmt, Globals::methodPreparedStatementGetResultSet, nullptr);
-    if (!rs) {
+    LocalReference<jobject> result_set = env.callObjectMethod(stmt,
+        Globals::methodPreparedStatementGetResultSet, nullptr);
+    if (!result_set) {
         xsink->raiseException("JDBC-RESULTSET-ERROR", "no result set available from query");
         return -1;
     }
+    rs = result_set.makeGlobal();
 
     return 0;
 }
@@ -1648,10 +1704,13 @@ QoreColumnarResult* QoreJdbcStatement::getOutputColumnarIntern(Env& env, Excepti
 
 QoreHashNode* QoreJdbcStatement::getSingleRow(Env& env, ExceptionSink* xsink) {
     assert(!rs);
-    rs = env.callObjectMethod(stmt, Globals::methodPreparedStatementGetResultSet, nullptr);
-    if (!rs) {
+    LocalReference<jobject> result_set = env.callObjectMethod(stmt,
+        Globals::methodPreparedStatementGetResultSet, nullptr);
+    if (!result_set) {
         return nullptr;
     }
+
+    rs = result_set.makeGlobal();
 
     // make sure there is at least one row
     if (!next(env)) {
@@ -1716,6 +1775,9 @@ QoreValue QoreJdbcStatement::getColumnValue(Env& env, int column, QoreJdbcColumn
 }
 
 int QoreJdbcStatement::rowsAffected(Env& env) {
+    if (do_batch_execute) {
+        return batch_rows_affected;
+    }
     return env.callIntMethod(stmt, Globals::methodPreparedStatementGetUpdateCount, nullptr);
 }
 
@@ -1826,18 +1888,6 @@ int QoreJdbcStatement::parse(QoreString* str, const QoreListNode* args, Exceptio
         ++p;
     }
 
-    return 0;
-}
-
-size_t QoreJdbcStatement::findArraySizeOfArgs(const QoreListNode* args) const {
-    size_t count = args ? args->size() : 0;
-    for (unsigned int i = 0; i < count; ++i) {
-        QoreValue arg = args->retrieveEntry(i);
-        qore_type_t ntype = arg.getType();
-        if (ntype == NT_LIST) {
-            return arg.get<const QoreListNode>()->size();
-        }
-    }
     return 0;
 }
 
@@ -2044,22 +2094,35 @@ int QoreJdbcStatement::bindInternArrayNative(Env& env, const QoreListNode* args,
 
 int QoreJdbcStatement::bindInternArrayBatch(Env& env, const QoreListNode* args, ExceptionSink* xsink) {
     do_batch_execute = true;
-    size_t list_size = findArraySizeOfArgs(args);
+    size_t list_size = array_bind_size;
     size_t arg_count = args ? args->size() : 0;
 
+    // Validate every array before queuing anything, including when the first array is empty.
+    for (size_t j = 0; j < arg_count; ++j) {
+        if (j && !(j % 100) && qore_check_cancel(xsink, "JDBC batch bind validation")) {
+            return -1;
+        }
+        QoreValue arg = args->retrieveEntry(j);
+        if (arg.getType() == NT_LIST && arg.get<const QoreListNode>()->size() != list_size) {
+            xsink->raiseException("JDBC-BIND-ERROR", "the array size for bind argument %zu (starting from 1) "
+                "is %zu which is inconsistent with the detected array size %zu. All array bind arguments "
+                "must have the same array / list size.", j + 1, arg.get<const QoreListNode>()->size(), list_size);
+            return -1;
+        }
+    }
+
     for (size_t i = 0; i < list_size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "JDBC batch binding")) {
+            return -1;
+        }
         for (unsigned int j = 0; j < arg_count; ++j) {
+            if (j && !(j % 10) && qore_check_cancel(xsink, "JDBC batch parameter binding")) {
+                return -1;
+            }
             QoreValue arg = args->retrieveEntry(j);
             // get value to bind from the list if necessary
             if (arg.getType() == NT_LIST) {
                 const QoreListNode* l = arg.get<const QoreListNode>();
-                if (l->size() != list_size) {
-                    xsink->raiseException("JDBC-BIND-ERROR", "the array size for bind argument %d (starting from 1) "
-                        "is %zu which is inconsistent with the detected array size %zu.  This is an error, because "
-                        "all array bind arguments must have the same array / list size.", (int)j, l->size(),
-                        list_size);
-                    return -1;
-                }
                 arg = l->retrieveEntry(i);
             }
             if (bindParamSingleValue(env, j + 1, arg, xsink)) {

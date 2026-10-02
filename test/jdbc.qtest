@@ -1,7 +1,10 @@
 #!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
 
 %modern
 
+%prepend-module-path ../build
 %requires jni
 %requires QUnit
 
@@ -165,19 +168,14 @@ public class Main inherits QUnit::Test {
     }
 
     private *AbstractDatasource getConnection(string var) {
-        try {
-            if (!ENV{var}.val()) {
-                throw "ENV-VAR-ERROR", sprintf("envionment var %y for connection is not set", var);
-            }
-            Datasource ds(ENV{var});
-            if (ds.getDriverName() != "jdbc") {
-                stderr.printf("cannot execute jdbc tests on a connection using driver %y (var: %y = %y)\n",
-                    ds.getDriverName(), var, ENV{var});
-            }
-            ds.open();
-            return ds;
-        } catch (hash<ExceptionInfo> ex) {
-            printf("ERROR: %s: %s\n", ex.err, ex.desc);
+        if (!ENV{var}.val()) {
+            return;
         }
+        Datasource ds(ENV{var});
+        if (ds.getDriverName() != "jdbc") {
+            throw "JDBC-TEST-CONNECTION-ERROR", sprintf("%s must select the jdbc driver", var);
+        }
+        ds.open();
+        return ds;
     }
 }

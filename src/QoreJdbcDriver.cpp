@@ -4,7 +4,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -71,17 +71,33 @@ static int jdbc_close(Datasource* ds) {
 static int jdbc_commit(Datasource* ds, ExceptionSink* xsink) {
     QoreJdbcConnection* conn = ds->getPrivateData<QoreJdbcConnection>();
     assert(conn);
-    return conn->commit(xsink);
+    int rc = conn->commit(xsink);
+    if (rc) {
+        // A failed transaction boundary must never return an indeterminate connection to a pool.
+        ds->connectionAborted(xsink);
+    }
+    return rc;
 }
 
 static int jdbc_rollback(Datasource* ds, ExceptionSink* xsink) {
     QoreJdbcConnection* conn = ds->getPrivateData<QoreJdbcConnection>();
     assert(conn);
-    return conn->rollback(xsink);
+    int rc = conn->rollback(xsink);
+    if (rc) {
+        // A failed transaction boundary must never return an indeterminate connection to a pool.
+        ds->connectionAborted(xsink);
+    }
+    return rc;
 }
 
 static int jdbc_begin_transaction(Datasource* ds, ExceptionSink* xsink) {
-    return 0;
+    QoreJdbcConnection* conn = ds->getPrivateData<QoreJdbcConnection>();
+    assert(conn);
+    int rc = conn->beginTransaction(xsink);
+    if (rc) {
+        ds->connectionAborted(xsink);
+    }
+    return rc;
 }
 
 static QoreValue jdbc_select(Datasource* ds, const QoreString* qstr, const QoreListNode* args, ExceptionSink* xsink) {
@@ -198,6 +214,12 @@ static int jdbc_stmt_bind_values(SQLStatement* stmt, const QoreListNode& args, E
 }
 
 static int jdbc_stmt_exec(SQLStatement* stmt, ExceptionSink* xsink) {
+    // SQLStatement retains the connection until commit/rollback, but the core does not call
+    // the begin callback on this path. Preserve implicit transactions for prepared writes.
+    Datasource* ds = stmt->getDatasource();
+    if (!ds->getAutoCommit() && jdbc_begin_transaction(ds, xsink)) {
+        return -1;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -295,7 +317,7 @@ static int jdbc_stmt_close(SQLStatement* stmt, ExceptionSink* xsink) {
 
     try {
         Env env;
-        ps->close(env);
+        ps->close(env, xsink);
     } catch (JavaException& e) {
         e.convert(xsink);
     }

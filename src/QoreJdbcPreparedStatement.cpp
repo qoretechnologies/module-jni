@@ -4,7 +4,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,8 @@ QoreJdbcPreparedStatement::QoreJdbcPreparedStatement(ExceptionSink* xsink, QoreJ
 }
 
 QoreJdbcPreparedStatement::~QoreJdbcPreparedStatement() {
+    // jdbc_stmt_close() supplies the current call's sink before destroying persistent state.
+    assert(!stmt && !rs);
 }
 
 int QoreJdbcPreparedStatement::prepare(const QoreString& qstr, const QoreListNode* args, ExceptionSink* xsink) {
@@ -64,6 +66,11 @@ int QoreJdbcPreparedStatement::prepare(const QoreString& qstr, const QoreListNod
 int QoreJdbcPreparedStatement::exec(ExceptionSink* xsink) {
     try {
         Env env;
+        if (rs) {
+            GlobalReference<jobject> previous = std::move(rs);
+            env.callVoidMethod(previous, Globals::methodResultSetClose, nullptr);
+        }
+        cvec.clear();
         if (bindQueryArguments(env, xsink)) {
             assert(*xsink);
             return -1;
@@ -90,8 +97,20 @@ int QoreJdbcPreparedStatement::bind(const QoreListNode& args, ExceptionSink* xsi
     return -1;
 }
 
+bool QoreJdbcPreparedStatement::requireResultSet(ExceptionSink* xsink) const {
+    if (rs) {
+        return true;
+    }
+    xsink->raiseException("JDBC-RESULTSET-ERROR", "the executed statement did not produce a result set");
+    return false;
+}
+
 QoreHashNode* QoreJdbcPreparedStatement::getOutputHash(ExceptionSink* xsink, bool empty_hash_if_nothing,
         int max_rows) {
+    // Non-query statements have no output; getOutput() is also valid after a batch DML.
+    if (!rs) {
+        return nullptr;
+    }
     try {
         Env env;
         return getOutputHashIntern(env, xsink, empty_hash_if_nothing, max_rows);
@@ -102,6 +121,9 @@ QoreHashNode* QoreJdbcPreparedStatement::getOutputHash(ExceptionSink* xsink, boo
 }
 
 QoreHashNode* QoreJdbcPreparedStatement::fetchRow(ExceptionSink* xsink) {
+    if (!requireResultSet(xsink)) {
+        return nullptr;
+    }
     try {
         Env env;
         return getSingleRowIntern(env, xsink);
@@ -112,6 +134,9 @@ QoreHashNode* QoreJdbcPreparedStatement::fetchRow(ExceptionSink* xsink) {
 }
 
 QoreListNode* QoreJdbcPreparedStatement::fetchRows(int max_rows, ExceptionSink* xsink) {
+    if (!requireResultSet(xsink)) {
+        return nullptr;
+    }
     try {
         Env env;
         return getOutputListIntern(env, xsink, max_rows);
@@ -122,6 +147,9 @@ QoreListNode* QoreJdbcPreparedStatement::fetchRows(int max_rows, ExceptionSink* 
 }
 
 QoreHashNode* QoreJdbcPreparedStatement::fetchColumns(int max_rows, ExceptionSink* xsink) {
+    if (!requireResultSet(xsink)) {
+        return nullptr;
+    }
     try {
         Env env;
         return getOutputHashIntern(env, xsink, true, max_rows);
@@ -133,6 +161,9 @@ QoreHashNode* QoreJdbcPreparedStatement::fetchColumns(int max_rows, ExceptionSin
 
 #ifdef QORE_JNI_HAVE_COLUMNAR_RESULT_V2
 QoreColumnarResult* QoreJdbcPreparedStatement::fetchColumnar(int rows, ExceptionSink* xsink) {
+    if (!requireResultSet(xsink)) {
+        return nullptr;
+    }
     try {
         Env env;
         return getOutputColumnarIntern(env, xsink, rows);
@@ -144,6 +175,9 @@ QoreColumnarResult* QoreJdbcPreparedStatement::fetchColumnar(int rows, Exception
 #endif
 
 bool QoreJdbcPreparedStatement::next(ExceptionSink* xsink) {
+    if (!requireResultSet(xsink)) {
+        return false;
+    }
     try {
         Env env;
         return QoreJdbcStatement::next(env);
@@ -159,7 +193,7 @@ int QoreJdbcPreparedStatement::clear(ExceptionSink* xsink) {
         assignBindArgs(xsink, nullptr);
         sql.clear();
         Env env;
-        reset(env);
+        reset(env, xsink);
         return *xsink ? -1 : 0;
     } catch (JavaException& e) {
         e.convert(xsink);

@@ -45,15 +45,9 @@ public class FlywayRepairDataProvider inherits DataProvider::AbstractDataProvide
         #! Request type - no input needed
         const RequestType = AbstractDataProviderTypeMap."nothing";
 
-        #! Response fields
-        const ResponseFields = {
-            "success": {
-                "display_name": "Success",
-                "short_desc": "Whether the repair operation was successful",
-                "desc": "Whether the repair operation completed successfully",
-                "type": AbstractDataProviderTypeMap."bool",
-            },
-        };
+        #! Typed action response
+        const ResponseType = FlywaySuccessOutputDataType;
+
     }
 
     private {
@@ -99,7 +93,7 @@ public class FlywayRepairDataProvider inherits DataProvider::AbstractDataProvide
     /** @return the response type for this response message
     */
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new HashDataType("FlywayRepairResponse", ResponseFields);
+        return ResponseType;
     }
 }
 }

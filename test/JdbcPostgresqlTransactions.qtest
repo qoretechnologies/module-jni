@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path ../build
+%requires jni
+%requires QUnit
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.JdbcCursorTest
+%exec-class JdbcPostgresqlTransactionsTest
+
+class JdbcPostgresqlTransactionsTest inherits QUnit::Test {
+    constructor() : Test("JDBC PostgreSQL transaction integration", "1.0", \ARGV) {
+        addTestCase("pooled reads release PostgreSQL locks", \pooledReads());
+        addTestCase("commit, rollback, prepared writes and failed reads", \transactions());
+        addTestCase("result sets survive Java native-call boundaries", \cursorLifetime());
+        addTestCase("prepared results and batch bindings can be reused", \reuse());
+        set_return_value(main());
+    }
+
+    private cursorLifetime() {
+        DatasourcePool ds(connection());
+        assertEq(({"id": 11}, {"id": 22}), JdbcCursorTest::readRows(ds,
+            "select 11 as id union all select 22 as id order by id"));
+        assertEq((), JdbcCursorTest::readRows(ds, "select 1 as id where false"));
+        assertFalse(ds.inTransaction());
+        assertNoIdleTransactions(ds);
+    }
+
+    private string connection() {
+        if (!ENV.QORE_DB_CONNSTR_JDBC_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_JDBC_PGSQL is not configured");
+        }
+        return ENV.QORE_DB_CONNSTR_JDBC_PGSQL;
+    }
+
+    private reuse() {
+        Datasource ds(connection());
+        ds.execRaw("create temporary table jdbc_reuse_test (id integer primary key, value integer)");
+        ds.commit();
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into jdbc_reuse_test values (%v, %v)", (1, 2), (10, 20));
+        stmt.exec();
+        assertEq(2, stmt.affectedRows());
+        stmt.commit();
+        stmt.bind(3, 30);
+        stmt.exec();
+        assertEq(1, stmt.affectedRows());
+        stmt.commit();
+        stmt.bind((4, 5), (40, {}));
+        assertThrows("JDBC-BIND-ERROR", \stmt.exec());
+        stmt.bind((6, 7), (60, 70));
+        stmt.exec();
+        assertEq(2, stmt.affectedRows());
+        stmt.commit();
+        assertEq((1, 2, 3, 6, 7), ds.select("select id from jdbc_reuse_test order by id").id);
+        stmt.bind((), (80,));
+        assertThrows("JDBC-BIND-ERROR", \stmt.exec());
+        stmt.rollback();
+        stmt.bind((), ());
+        stmt.exec();
+        assertEq(0, stmt.affectedRows());
+        stmt.commit();
+
+        SQLStatement query(ds);
+        query.prepare("select id from jdbc_reuse_test where id >= %v order by id", 6);
+        query.exec();
+        assertTrue(query.next());
+        assertEq({"id": 6}, query.fetchRow());
+        query.bind(7);
+        query.exec();
+        assertTrue(query.next());
+        assertEq({"id": 7}, query.fetchRow());
+        assertFalse(query.next());
+        query.rollback();
+
+        assertThrows("JDBC-BIND-ERROR", sub () {
+            ds.exec("insert into jdbc_reuse_test values (%v, %v)", 8, {});
+        });
+        ds.rollback();
+        assertEq(5, ds.selectRow("select count(*) as count from jdbc_reuse_test").count);
+    }
+
+    private assertNoIdleTransactions(AbstractDatasource observer) {
+        # Inspect actual server state, including idle connections returned to the pool.
+        assertEq(0, observer.selectRow("select count(*) as count from pg_stat_activity "
+            "where usename = current_user and datname = current_database() "
+            "and state like 'idle in transaction%' and pid <> pg_backend_pid()").count);
+    }
+
+    private pooledReads() {
+        string connstr = connection();
+        Datasource configuration(connstr);
+        hash<auto> options = configuration.getConfigHash();
+        options.options += {"min": 2, "max": 2};
+        DatasourcePool ds(options);
+        Datasource observer(connstr);
+        ds.execRaw("create table jdbc_pool_transaction_test (id integer)");
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            observer.execRaw("drop table if exists jdbc_pool_transaction_test");
+            observer.commit();
+        }
+        ds.select("select * from jdbc_pool_transaction_test");
+        assertNoIdleTransactions(observer);
+        ds.selectRows("select * from jdbc_pool_transaction_test");
+        assertNoIdleTransactions(observer);
+        ds.selectRow("select count(*) as count from jdbc_pool_transaction_test");
+        assertNoIdleTransactions(observer);
+        ds.selectColumnar("select * from jdbc_pool_transaction_test");
+        assertNoIdleTransactions(observer);
+        # NOWAIT makes the former pool self-deadlock a deterministic immediate failure.
+        observer.execRaw("lock table jdbc_pool_transaction_test in access exclusive mode nowait");
+        observer.rollback();
+        assertFalse(ds.inTransaction());
+    }
+
+    private transactions() {
+        string connstr = connection();
+        Datasource configuration(connstr);
+        hash<auto> options = configuration.getConfigHash();
+        options.options += {"min": 2, "max": 2};
+        DatasourcePool ds(options);
+        Datasource observer(connstr);
+        ds.execRaw("create table jdbc_transaction_test (id integer primary key)");
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            observer.execRaw("drop table if exists jdbc_transaction_test");
+            observer.commit();
+        }
+        ds.exec("insert into jdbc_transaction_test values (%v)", 1);
+        assertEq(0, observer.selectRow("select count(*) as count from jdbc_transaction_test").count);
+        ds.rollback();
+        assertEq(0, observer.selectRow("select count(*) as count from jdbc_transaction_test").count);
+        ds.exec("insert into jdbc_transaction_test values (%v)", 2);
+        ds.commit();
+        assertEq(1, observer.selectRow("select count(*) as count from jdbc_transaction_test").count);
+
+        SQLStatement stmt(ds);
+        stmt.prepare("insert into jdbc_transaction_test values (%v)", 3);
+        stmt.exec();
+        assertEq(1, observer.selectRow("select count(*) as count from jdbc_transaction_test").count);
+        stmt.rollback();
+        assertEq(1, observer.selectRow("select count(*) as count from jdbc_transaction_test").count);
+        stmt.exec();
+        stmt.commit();
+        assertEq(2, observer.selectRow("select count(*) as count from jdbc_transaction_test").count);
+
+        ds.beginTransaction();
+        ds.selectRow("select * from jdbc_transaction_test where id = 2 for update");
+        assertTrue(ds.inTransaction());
+        ds.rollback();
+        assertNoIdleTransactions(observer);
+        assertThrows("JNI-ERROR", sub () { ds.selectRow("select 1 / 0"); });
+        assertEq(2, ds.selectRow("select count(*) as count from jdbc_transaction_test").count);
+        assertNoIdleTransactions(observer);
+    }
+}
