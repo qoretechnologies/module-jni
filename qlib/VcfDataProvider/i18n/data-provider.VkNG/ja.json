@@ -76,8 +76,8 @@
           "message": "指定されたパスにある vCard ファイルに連絡先を書き込み"
         },
         "app.VkNG.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nAfter writing all contacts, use `getData()` to retrieve the binary VCF data.",
-          "message": "メモリ上に vCard (.vcf) 連絡先データを作成し、バイナリデータとして返します。ディスクに書き込まずに VCF ファイルを生成するのに便利です。\n\n書き込まれる各レコードは、`formatted_name`、`emails`、`phones`、`addresses`、`organization`、`title`、`note`、`uid`、`birthday`、`url`、`nickname`、`categories`、および `role` を含む標準の vCard フィールドを持つ 1 つの連絡先を表します。\n\nすべての連絡先を書き込んだ後、バイナリ VCF データを取得するには `getData()` を使用します。"
+          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nThe action returns the generated VCF data in `data` and the number of contacts in `record_count`.",
+          "message": "メモリ上に vCard (.vcf) 連絡先データを作成し、バイナリデータとして返します。ディスクに書き込まずに VCF ファイルを生成するのに便利です。\n\n書き込まれる各レコードは、`formatted_name`、`emails`、`phones`、`addresses`、`organization`、`title`、`note`、`uid`、`birthday`、`url`、`nickname`、`categories`、および `role` を含む標準の vCard フィールドを持つ 1 つの連絡先を表します。\n\nアクションは生成された VCF データを `data` に、連絡先数を `record_count` に返します。"
         },
         "app.VkNG.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create VCF Contact Data",

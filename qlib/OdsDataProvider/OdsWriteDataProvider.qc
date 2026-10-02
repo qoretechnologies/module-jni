@@ -192,6 +192,23 @@ public class OdsWriteDataProvider inherits DataProvider::AbstractDataProvider {
         }
     }
 
+    #! Completes the create operations: writes the ODS data to its path or stream, if any
+    /** @return the generated ODS data and the number of records in it, if there is no output path or stream;
+        otherwise no value is returned
+    */
+    private *hash<GeneratedDataInfo> finishCreateImpl() {
+        if (path || stream) {
+            commit();
+            return;
+        }
+        # the data must be read before commit() closes the writer
+        on_exit commit();
+        return <GeneratedDataInfo>{
+            "data": getData(),
+            "record_count": created,
+        };
+    }
+
     #! Returns the data as binary
     binary getData() {
         if (!writer) {

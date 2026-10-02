@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -162,6 +162,8 @@ module WordDataProvider {
             "desc": "Create Word document data in memory and return it as binary data; useful for generating "
                 "Word files without writing to disk",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "WordDataProvider::WordWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 WordWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {

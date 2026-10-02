@@ -268,8 +268,8 @@
           "message": "將資料寫入 ODS 試算表檔案"
         },
         "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
-          "message": "在記憶體中建立 ODS 試算表資料並將其作為二進位資料傳回。\n\n當您需要生成 ODS 檔案而無需寫入磁碟時，請使用此動作 — 例如，將試算表作為 API 回應傳回、儲存在資料庫中，或傳遞至另一個處理步驟。建立所有記錄後，透過在提供者上呼叫 `getData()` 來擷取結果。\n\n**重要選項**：\n- `worksheet` — 工作表名稱 (預設為 `Sheet1`)\n- `headers` — 明確的欄位標題名稱；若未提供，系統將從第一筆記錄自動偵測標題"
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. The action returns the generated spreadsheet in `data` and the number of records in `record_count`.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "在記憶體中建立 ODS 試算表資料並將其作為二進位資料傳回。\n\n當您需要產生 ODS 檔案而不寫入磁碟時，請使用此動作，例如將試算表作為 API 回應傳回、儲存至資料庫，或傳遞至其他處理步驟。動作會在 `data` 中傳回產生的試算表，並在 `record_count` 中傳回記錄數。\n\n**重要選項**：\n- `worksheet` — 工作表名稱 (預設為 `Sheet1`)\n- `headers` — 明確的欄位標題名稱；若未提供，系統將從第一筆記錄自動偵測標題"
         },
         "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create ODS Spreadsheet Data",

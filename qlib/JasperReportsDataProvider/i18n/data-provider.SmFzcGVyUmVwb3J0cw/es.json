@@ -88,8 +88,8 @@
           "message": "Generar un informe a partir de una plantilla de JasperReports en una ubicación de archivo"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "Generar un informe a partir de datos binarios integrados de una plantilla de JasperReports.\n\nCada registro creado representa una única fila de datos que se incluirá en el informe. El informe se genera cuando el proveedor se confirma o se destruye.\n\nDespués de escribir todos los registros, use `getData()` para recuperar la salida del informe binario.\n\nFormatos de salida compatibles: `pdf`, `xlsx`, `html`, `csv`."
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Generar un informe a partir de datos binarios integrados de una plantilla de JasperReports.\n\nCada registro creado representa una única fila de datos que se incluirá en el informe. El informe se genera cuando finaliza la acción.\n\nLa acción devuelve el informe generado en `data`, su formato en `format` y el número de filas de datos en `record_count`.\n\nFormatos de salida compatibles: `pdf`, `xlsx`, `html`, `csv`."
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

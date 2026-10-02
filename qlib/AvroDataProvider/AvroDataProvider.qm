@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -153,9 +153,11 @@ module AvroDataProvider {
                 "generating Avro data without writing to disk.\n\n"
                 "The `schema` option is **required** and must be a valid Avro JSON schema string "
                 "that defines the record structure.\n\n"
-                "After writing all records, use `getData()` to retrieve the binary Avro data.",
+                "The action returns the generated Avro data in `data` and the number of records in "
+                "`record_count`.",
             "action_code": DPAT_CREATE,
-            "output_type": AvroWriteOutputDataType,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "AvroDataProvider::AvroWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AvroWriteDataProvider::ConstructorOptions{"schema",}, {

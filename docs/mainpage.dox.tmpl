@@ -1064,6 +1064,11 @@ foreach hash<auto> column in (result.schemaV2()) {
     - Fixed Java wrapper and provider documentation links, parameter descriptions, and JMS tables.
       Documentation builds use public QPP declarations and installed dependency indexes.
       Configure with <tt>-DQORE_JNI_STRICT_DOCS=ON</tt> to reject Doxygen warnings; RPM builds enable this check.
+    - the \c write-data actions of the Excel, ODS, ODT, ODP, Word, PowerPoint, Avro, VCF, ICS and Email (\c eml-write-data)
+      data providers and the JasperReports \c generate-report-data action now return the generated document as
+      their output (\c data and \c record_count, plus \c format for reports); previously the generated data was
+      lost when the action was run.  File-writing actions now write their file when the action completes, so
+      write errors are reported by the action (requires %Qore 3.0 / DataProvider 3.9)
     - fixed Excel and ODS spreadsheet reading and writing: reading without header options returned no data, cell
       ranges past column \c Z were rejected, streaming Excel writes without headers failed, and ODS writes
       turned the first record's dates into strings and empty values into empty strings; Excel reading can now

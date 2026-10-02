@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -164,6 +164,8 @@ module PowerPointDataProvider {
             "desc": "Create PowerPoint presentation data in memory and return it as binary data; useful for "
                 "generating PowerPoint files without writing to disk",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "PowerPointDataProvider::PowerPointWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 PowerPointWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {

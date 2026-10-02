@@ -108,8 +108,8 @@
           "message": "Generate a report from inline JasperReports template data"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`."
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`."
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.option.dGVtcGxhdGVfZGF0YQ.display_name": {
           "source": "Template Data",

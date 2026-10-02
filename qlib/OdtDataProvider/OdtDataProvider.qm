@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -213,6 +213,8 @@ module OdtDataProvider {
                 "- `headers` — provide column headers for `\"table\"` mode\n"
                 "- `title` — optional document title added as a `Heading1` at the top",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "OdtDataProvider::OdtWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OdtWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {

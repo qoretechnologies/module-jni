@@ -108,8 +108,8 @@
           "message": "Create Avro data and return as binary"
         },
         "app.QXZybw.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nAfter writing all records, use `getData()` to retrieve the binary Avro data.",
-          "message": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nAfter writing all records, use `getData()` to retrieve the binary Avro data."
+          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nThe action returns the generated Avro data in `data` and the number of records in `record_count`.",
+          "message": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nThe action returns the generated Avro data in `data` and the number of records in `record_count`."
         },
         "app.QXZybw.action.d3JpdGUtZGF0YQ.option.c2NoZW1h.display_name": {
           "source": "Avro Schema",

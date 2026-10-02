@@ -116,6 +116,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("worksheet provider: options constructor", \testWorksheetOptionsCtor());
         addTestCase("write: headers from the first record", \testWriteHeadersFromFirstRecord());
 
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
         set_return_value(main());
     }
 
@@ -860,5 +861,22 @@ public class OdsDataProviderTest inherits QUnit::Test {
         assertEq(False, records[1].F);
         assertEq(3.0, records[2].B);
         assertEq(NOTHING, records[2].A);
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("ODS", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject({"headers": ("Sku", "Qty")});
+        prov.createRecordsBulkWithOptions({"recs": {"Sku": ("A-1", "B-2"), "Qty": (5, 7)}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        assertEq("PK", output.data.substr(0, 2).toString());
+        OdsReadDataProvider rdp({"data": output.data, "header_names": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), (map $1, rdp.searchRecords()));
     }
 }

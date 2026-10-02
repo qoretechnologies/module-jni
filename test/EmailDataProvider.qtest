@@ -105,6 +105,7 @@ public class EmailDataProviderTest inherits QUnit::Test {
         addTestCase("negative: MBOX option conflicts", \testNegativeMboxOptionConflicts());
         addTestCase("dummy provider: no input", \testDummyProvider());
 
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
         set_return_value(main());
     }
 
@@ -819,5 +820,23 @@ public class EmailDataProviderTest inherits QUnit::Test {
         assertEq("mbox", mbox_dp.getName());
         *hash<string, AbstractDataField> mbox_rt = mbox_dp.getRecordType();
         assertEq(0, mbox_rt.size(), "dummy MBOX provider should have empty record type");
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("Email", "eml-write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject(NOTHING);
+        prov.createRecordsBulkWithOptions({"recs": {"from": "shipping@example.com", "subject": "Shipment notice", "body_text": "Your order has shipped."}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(1, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        EmlReadDataProvider rdp({"data": output.data});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(1, records.size());
+        assertEq("Shipment notice", records[0].subject);
     }
 }

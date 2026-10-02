@@ -88,8 +88,8 @@
           "message": "Згенерувати звіт із шаблону JasperReports за файловим розташуванням"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "Згенерувати звіт із вбудованих бінарних даних шаблону JasperReports.\n\nКожен створений запис представляє один рядок даних для включення до звіту. Звіт генерується під час фіксації або знищення провайдера.\n\nПісля запису всіх записів використовуйте `getData()` для отримання бінарного виводу звіту.\n\nПідтримувані формати виводу: `pdf`, `xlsx`, `html`, `csv`."
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Згенерувати звіт із вбудованих бінарних даних шаблону JasperReports.\n\nКожен створений запис представляє один рядок даних, який буде включено до звіту. Звіт генерується після завершення дії.\n\nДія повертає згенерований звіт у `data`, його формат у `format` і кількість рядків даних у `record_count`.\n\nПідтримувані формати виводу: `pdf`, `xlsx`, `html`, `csv`."
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

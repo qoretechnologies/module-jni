@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -168,8 +168,11 @@ module VcfDataProvider {
                 "Each record written represents a single contact with the standard vCard fields "
                 "including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, "
                 "`title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\n"
-                "After writing all contacts, use `getData()` to retrieve the binary VCF data.",
+                "The action returns the generated VCF data in `data` and the number of contacts in "
+                "`record_count`.",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "VcfDataProvider::VcfWriteDataProvider",
             "options": {},
         });

@@ -88,8 +88,8 @@
           "message": "指定されたパスの Avro ファイルにレコードを書き込みます"
         },
         "app.QXZybw.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nAfter writing all records, use `getData()` to retrieve the binary Avro data.",
-          "message": "メモリ内で Apache Avro データを生成し、バイナリデータとして返します。ディスクに書き込まずに Avro データを生成する場合に便利です。\n\n`schema` オプションは**必須**であり、レコード構造を定義する有効な Avro JSON スキーマ文字列である必要があります。\n\nすべてのレコードを書き込んだ後、`getData()` を使用してバイナリ Avro データを取得します。"
+          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nThe action returns the generated Avro data in `data` and the number of records in `record_count`.",
+          "message": "メモリ内で Apache Avro データを生成し、バイナリデータとして返します。ディスクに書き込まずに Avro データを生成する場合に便利です。\n\n`schema` オプションは**必須**であり、レコード構造を定義する有効な Avro JSON スキーマ文字列である必要があります。\n\nアクションは生成された Avro データを `data` に、レコード数を `record_count` に返します。"
         },
         "app.QXZybw.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create Avro Data",

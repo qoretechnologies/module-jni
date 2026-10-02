@@ -268,8 +268,8 @@
           "message": "ODS スプレッドシート ファイルにデータを書き込む"
         },
         "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
-          "message": "メモリ内に ODS スプレッドシート データを生成し、バイナリ データとして返します。\n\nディスクに書き込まずに ODS ファイルを生成する必要がある場合 (例: スプレッドシートを API レスポンスとして返したり、データベースに保存したり、別の処理ステップに渡したりする場合) にこのアクションを使用します。すべてのレコードを作成した後、プロバイダーで `getData()` を呼び出して結果を取得します。\n\n**主なオプション**:\n- `worksheet` — ワークシート名 (デフォルトは `Sheet1`)\n- `headers` — 明示的な列ヘッダー名。指定されない場合、ヘッダーは最初のレコードから自動検出されます"
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. The action returns the generated spreadsheet in `data` and the number of records in `record_count`.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "メモリ内に ODS スプレッドシート データを生成し、バイナリ データとして返します。\n\nディスクに書き込まずに ODS ファイルを生成する必要がある場合にこのアクションを使用します。たとえば、スプレッドシートを API レスポンスとして返したり、データベースに保存したり、別の処理ステップに渡したりできます。アクションは生成されたスプレッドシートを `data` に、レコード数を `record_count` に返します。\n\n**主なオプション**:\n- `worksheet` — ワークシート名 (デフォルトは `Sheet1`)\n- `headers` — 明示的な列ヘッダー名。指定されない場合、ヘッダーは最初のレコードから自動検出されます"
         },
         "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create ODS Spreadsheet Data",

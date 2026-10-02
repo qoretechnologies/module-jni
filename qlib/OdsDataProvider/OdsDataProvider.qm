@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -220,13 +220,15 @@ module OdsDataProvider {
             "desc": "Create ODS spreadsheet data in memory and return it as binary data.\n\n"
                 "Use this action when you need to generate an ODS file without writing to disk — for "
                 "example, to return the spreadsheet as an API response, store it in a database, or pass "
-                "it to another processing step. Retrieve the result by calling `getData()` on the "
-                "provider after creating all records.\n\n"
+                "it to another processing step. The action returns the generated spreadsheet in `data` and "
+                "the number of records in `record_count`.\n\n"
                 "**Key Options**:\n"
                 "- `worksheet` — the worksheet name (defaults to `Sheet1`)\n"
                 "- `headers` — explicit column header names; if not provided, headers are auto-detected "
                 "from the first record",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "OdsDataProvider::OdsWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OdsWriteDataProvider::ConstructorOptions{"worksheet", "headers"}, {

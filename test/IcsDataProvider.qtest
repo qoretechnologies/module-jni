@@ -93,6 +93,7 @@ public class IcsDataProviderTest inherits QUnit::Test {
         addTestCase("todo: roundtrip all fields", \testTodoRoundtrip());
         addTestCase("todo: content type default", \testContentTypeDefault());
 
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
         set_return_value(main());
     }
 
@@ -1207,5 +1208,22 @@ public class IcsDataProviderTest inherits QUnit::Test {
         IcsReadDataProvider dp_default(test_data_dir + "/simple.ics");
         list<hash<auto>> default_records = map $1, dp_default.searchRecords();
         assertEq(3, default_records.size(), "default content_type should read events");
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("ICS", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject(NOTHING);
+        prov.createRecordsBulkWithOptions({"recs": {"uid": ("e1@test.com", "e2@test.com"), "summary": ("Pickup", "Delivery"), "dtstart": (2026-04-01T09:00:00Z, 2026-04-02T09:00:00Z), "dtend": (2026-04-01T10:00:00Z, 2026-04-02T10:00:00Z)}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        assertEq("BEGIN:VCALENDAR", output.data.substr(0, 15).toString());
+        IcsReadDataProvider rdp({"data": output.data});
+        assertEq(("Pickup", "Delivery"), (map $1.summary, rdp.searchRecords()));
     }
 }

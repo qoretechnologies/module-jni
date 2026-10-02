@@ -216,8 +216,8 @@
           "message": "Create EML email data and return as binary"
         },
         "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.desc": {
-          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data.",
-          "message": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data."
+          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nThe action returns the generated EML data in `data` and the number of messages in `record_count`.",
+          "message": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nThe action returns the generated EML data in `data` and the number of messages in `record_count`."
         }
       }
     }

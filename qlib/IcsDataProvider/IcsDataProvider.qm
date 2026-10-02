@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -189,13 +189,13 @@ module IcsDataProvider {
                 "data.\n\n"
                 "Use this action when you need to generate an ICS file without writing to disk -- "
                 "for example, to return the calendar as an API response, attach it to an email, "
-                "or pass it to another processing step. Retrieve the result by calling "
-                "`getData()` on the provider after creating all records.\n\n"
+                "or pass it to another processing step. The action returns the generated ICS data in "
+                "`data` and the number of records in `record_count`.\n\n"
                 "**Key Options**:\n"
-                "- `content_type` (optional) -- \"events\" (default) or \"todos\"\n"
-                "- No other required options -- records are added via `createRecord()` and binary "
-                "data is retrieved via `getData()`",
+                "- `content_type` (optional) -- \"events\" (default) or \"todos\"",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "IcsDataProvider::IcsWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 IcsWriteDataProvider::ConstructorOptions{"content_type",}, {

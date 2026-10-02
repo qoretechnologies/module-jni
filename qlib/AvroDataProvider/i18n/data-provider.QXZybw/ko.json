@@ -88,8 +88,8 @@
           "message": "지정된 경로의 Avro 파일에 레코드 쓰기"
         },
         "app.QXZybw.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nAfter writing all records, use `getData()` to retrieve the binary Avro data.",
-          "message": "메모리에 Apache Avro 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 Avro 데이터를 생성하는 데 유용합니다.\n\n`schema` 옵션은 **필수**이며 레코드 구조를 정의하는 유효한 Avro JSON 스키마 문자열이어야 합니다.\n\n모든 레코드를 작성한 후 `getData()`을(를) 사용하여 바이너리 Avro 데이터를 검색하세요."
+          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nThe action returns the generated Avro data in `data` and the number of records in `record_count`.",
+          "message": "메모리에 Apache Avro 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 Avro 데이터를 생성하는 데 유용합니다.\n\n`schema` 옵션은 **필수**이며 레코드 구조를 정의하는 유효한 Avro JSON 스키마 문자열이어야 합니다.\n\n작업은 생성된 Avro 데이터를 `data`에, 레코드 수를 `record_count`에 반환합니다."
         },
         "app.QXZybw.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create Avro Data",
