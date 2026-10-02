@@ -1,0 +1,147 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path ../build
+%requires jni
+%requires QUnit
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.ExceptionConversionFixture
+%module-cmd(jni) import java.lang.Integer
+%exec-class ReferenceSafetyTest
+
+sub referenceSafetyThrow() {
+    throw "CALLBACK-FIXTURE", "callback description", 17;
+}
+
+class ReferenceSafetyTest inherits QUnit::Test {
+    constructor() : Test("JNI reference and exception safety", "1.0") {
+        addTestCase("array constructor retains borrowed class references", \arrays());
+        addTestCase("failed array construction releases references once", \invalidArrays());
+        addTestCase("exception strings and arguments survive repeated conversion", \exceptions());
+        addTestCase("nullable exception fields are handled", \nullableFields());
+        addTestCase("failed argument conversion preserves the original Java exception", \failedConversion());
+        addTestCase("wrapped Qore callback exceptions retain their data", \callbackExceptions());
+        addTestCase("object wrappers preserve identity through returns and exceptions", \objectArguments());
+        addTestCase("dispatcher cleanup retains a closed program until its final release", \closedProgram());
+        addTestCase("callback result ownership survives conversion and cleanup", \callbackValues());
+        set_return_value(main());
+    }
+
+    private arrays() {
+        lang::Class cls = load_class("java/lang/String");
+        for (int i = 0; i < 100; ++i) {
+            JavaArray strings = new_array(cls, 2);
+            strings.set(0, "retained");
+            assertEq("retained", strings.get(0));
+            assertNothing(strings.get(1));
+            JavaArray numbers = new_array(Integer::TYPE, 1);
+            numbers.set(0, i);
+            assertEq(i, numbers.get(0));
+        }
+        assertEq("java.lang.String", cls.getName());
+    }
+
+    private invalidArrays() {
+        lang::Class cls = load_class("java/lang/String");
+        foreach int size in ((0, -1, -100)) {
+            assertThrows("JNI-ERROR", sub() { new_array(cls, size); });
+            assertEq("java.lang.String", cls.getName());
+        }
+        assertEq(1, new_array(cls, 1).length());
+    }
+
+    private exceptions() {
+        for (int i = 0; i < 100; ++i) {
+            try {
+                ExceptionConversionFixture::raiseError("none");
+                fail("the fixture must throw");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("CONVERSION-FIXTURE", ex.err);
+                assertEq("exception description", ex.desc);
+                assertEq(42, ex.arg);
+            }
+        }
+    }
+
+    private nullableFields() {
+        foreach string field in (("null-description", "null-argument")) {
+            try {
+                ExceptionConversionFixture::raiseError(field);
+                fail("the fixture must throw");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("CONVERSION-FIXTURE", ex.err);
+                assertEq(field == "null-description" ? "" : "exception description", ex.desc);
+                assertEq(field == "null-argument" ? NOTHING : 42, ex.arg);
+            }
+        }
+    }
+
+    private failedConversion() {
+        foreach string field in (("bad-argument", "null-error")) {
+            try {
+                ExceptionConversionFixture::raiseError(field);
+                fail("the fixture must throw");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("JNI-ERROR", ex.err);
+                assertTrue(index(ex.desc, "QoreException") >= 0);
+                assertEq("org.qore.jni.QoreException",
+                    ex.arg.getClass().getName());
+            }
+            assertEq(42, Integer::parseInt("42"), "JNI remains usable after conversion failure");
+        }
+    }
+
+    private callbackExceptions() {
+        for (int i = 0; i < 10; ++i) {
+            try {
+                ExceptionConversionFixture::roundTrip();
+                fail("the callback must throw");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("CALLBACK-FIXTURE", ex.err);
+                assertEq("callback description", ex.desc);
+                assertEq(17, ex.arg);
+            }
+        }
+    }
+
+    private objectArguments() {
+        Mutex value();
+        for (int i = 0; i < 10; ++i) {
+            assertEq(value, ExceptionConversionFixture::returnObject(value));
+            try {
+                ExceptionConversionFixture::raiseObject(value);
+                fail("the object fixture must throw");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("OBJECT-FIXTURE", ex.err);
+                assertEq("object argument", ex.desc);
+                assertEq(value, ex.arg);
+            }
+        }
+    }
+
+    private closedProgram() {
+        Program program(PO_NEW_STYLE);
+        program.parse("code sub callback() { return sub(auto method, *list args) {}; }", "");
+        *code callback = program.callFunction("callback");
+        delete program;
+        Jni::org::qore::jni::QoreInvocationHandler handler(callback);
+        callback = NOTHING;
+        assertNothing(handler.destroy(), "the last closure release must leave program metadata valid for cleanup");
+        assertNothing(handler.destroy(), "explicit dispatcher destruction must be idempotent");
+    }
+    private callbackValues() {
+        int sequence = 0;
+        Jni::org::qore::jni::QoreInvocationHandler textHandler(string sub(auto method, *list args) {
+            return sprintf("owned callback value %d", sequence++);
+        });
+        for (int i = 0; i < 100; ++i) {
+            assertEq(sprintf("owned callback value %d", i), ExceptionConversionFixture::invokeHandler(textHandler));
+        }
+        assertNothing(textHandler.destroy());
+        Jni::org::qore::jni::QoreInvocationHandler emptyHandler(sub(auto method, *list args) { return NOTHING; });
+        assertNothing(ExceptionConversionFixture::invokeHandler(emptyHandler));
+        assertNothing(emptyHandler.destroy());
+    }
+
+}

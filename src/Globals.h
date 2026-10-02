@@ -517,8 +517,9 @@ public:
     DLLLOCAL static void startNativeCleanupThread();
 
     //! Stop the NativeCleanup C++ background thread and join it.
-    /** Enqueues a sentinel onto NativeCleanup.queue to wake the thread, then joins.
-        Called from Jvm::destroyVM before DestroyJavaVM. */
+    /** Closes registration, snapshots live handles, wakes and joins the cleanup
+        thread, then releases outstanding native pointers. Native clients must
+        be quiescent. Called from Jvm::destroyVM before DestroyJavaVM. */
     DLLLOCAL static void stopNativeCleanupThread();
 
     DLLLOCAL static jlong getContextProgram(jobject new_syscl, bool& created);

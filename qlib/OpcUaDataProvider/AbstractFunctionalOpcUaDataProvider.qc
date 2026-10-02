@@ -1036,7 +1036,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         @param root_node_id the node id to browse from; defaults to the standard Objects folder
         (\c ns=0;i=85)
 
-        @return the schema snapshot as a Qore hash (see @ref OpcUaDataProvider::SchemaResolver)
+        @return the schema snapshot as a Qore hash (see <tt>org.qore.dataprovider.opcua.SchemaResolver</tt>)
     */
     hash<auto> getSchemaSnapshot(*string root_node_id) {
         ensureConnected();

@@ -1,3 +1,4 @@
+// Copyright (C) 2026 Qore Technologies, s.r.o.
 package org.qore.jni;
 
 import java.lang.ref.PhantomReference;
@@ -42,22 +43,22 @@ import java.util.concurrent.ConcurrentHashMap;
     call {@link #unregister} to clear the Ref so the C++ thread does not also
     fire on the same pointer.
 
-    Shutdown: Jvm::destroyVM in module-jni calls {@link #shutdown}, which
-    enqueues a sentinel Ref (kind=-1) onto the queue.  The C++ thread drains
-    any remaining real Refs, sees the sentinel, and exits.  Module-jni then
-    joins the thread before tearing down the JVM.
+    Shutdown: once native clients are quiescent, Jvm::destroyVM calls
+    {@link #shutdown} to close registration, snapshot all outstanding handles,
+    and wake the C++ thread with a sentinel. After joining the thread, it
+    claims and releases every remaining handle, including wrappers not yet
+    collected by Java. Queue ordering and garbage collection are irrelevant.
  */
 public final class NativeCleanup {
     /** PhantomReference subclass carrying the native pointer and a kind
         discriminator the C++ dispatcher uses to pick the right release path.
-        Fields are exposed so the C++ thread can read them via JNI field IDs
-        without a Java method round-trip. */
+        Every release path must claim the pointer with acquireAndClear(). */
     public static final class Ref extends PhantomReference<Object> {
-        /** The native pointer.  Volatile so the C++ thread sees the latest
-            value if {@link #acquireAndClear} runs concurrently with phantom
-            enqueue (the C++ thread will see 0 and skip the native call). */
+        /** The native pointer; volatile for wrapper accessors. Release paths
+            must use {@link #acquireAndClear}, never a separate read and clear. */
         public volatile long ptr;
         public final int kind;
+        private boolean claimed;
 
         Ref(Object outer, long ptr, int kind, ReferenceQueue<? super Object> q) {
             super(outer, q);
@@ -69,11 +70,27 @@ public final class NativeCleanup {
             previous value and resets {@link #ptr} to 0; subsequent phantom
             dispatch will see 0 and skip the native release.  Used by
             explicit teardown methods (release / destroy / get) that take
-            ownership of the pointer themselves. */
+            ownership of the pointer themselves.
+            @return the pointer owned by this caller, or zero if already claimed
+        */
         public synchronized long acquireAndClear() {
+            claimed = true;
             long p = ptr;
             ptr = 0;
             return p;
+        }
+
+        /** Publish a pointer created after registration with a zero pointer.
+            @param value the newly created pointer
+            @return false if cleanup already claimed this handle or shutdown began;
+                the caller must then release value itself
+        */
+        synchronized boolean publish(long value) {
+            if (claimed || closed) {
+                return false;
+            }
+            ptr = value;
+            return true;
         }
     }
 
@@ -104,6 +121,7 @@ public final class NativeCleanup {
         here does NOT pin the wrapper outer (the Ref does not reference its
         referent strongly — that is the whole point of PhantomReference). */
     private static final Set<Ref> live = ConcurrentHashMap.newKeySet();
+    private static volatile boolean closed;
 
     /** Register a wrapper instance for phantom-driven native cleanup.
         @param outer the wrapper instance (held only via PhantomReference)
@@ -112,8 +130,12 @@ public final class NativeCleanup {
         @param kind one of the KIND_* constants; selects the C++ dispatch path
         @return a {@link Ref} the wrapper should hold for explicit-teardown
             handoff via {@link #unregister}
+        @throws IllegalStateException if native cleanup has shut down
     */
-    public static Ref register(Object outer, long ptr, int kind) {
+    public static synchronized Ref register(Object outer, long ptr, int kind) {
+        if (closed) {
+            throw new IllegalStateException("Native cleanup has shut down");
+        }
         Ref r = new Ref(outer, ptr, kind, queue);
         live.add(r);
         return r;
@@ -140,14 +162,20 @@ public final class NativeCleanup {
 
     private static final Object SENTINEL_REFERENT = new Object();
     private static final Ref SENTINEL = new Ref(SENTINEL_REFERENT, 0, KIND_SENTINEL, queue);
-    static { live.add(SENTINEL); }
 
-    /** Wake the C++ cleanup thread by enqueueing the sentinel.  Called from
-        Jvm::destroyVM in module-jni's C++ shutdown path; the C++ thread sees
-        kind = KIND_SENTINEL and exits its main loop. */
+    /** Close registration and wake the C++ cleanup thread. Native clients must
+        be quiescent before calling this method. The caller joins the thread,
+        then claims and dispatches every returned handle, and marks it processed.
+        Snapshot allocation precedes any state change so allocation failure
+        leaves registration and the worker operational.
+        @return outstanding handles, including wrappers not yet garbage collected
+    */
     @SuppressWarnings("deprecation")  // Reference.enqueue() is documented and stable
-    public static void shutdown() {
+    public static synchronized Ref[] shutdown() {
+        Ref[] pending = live.toArray(new Ref[0]);
+        closed = true;
         SENTINEL.enqueue();
+        return pending;
     }
 
     private NativeCleanup() {}

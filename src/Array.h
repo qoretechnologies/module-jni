@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -59,7 +59,7 @@ class Array : public QoreJniPrivateData {
 
     /**
      * \brief Constructor
-     * \param elementClass a local reference to the component class
+     * \param elementClass a borrowed reference to the component class
      * \param size the size of the array
      */
     DLLLOCAL Array(jclass elementClass, int size);

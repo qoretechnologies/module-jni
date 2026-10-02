@@ -143,7 +143,7 @@ public class OdtReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the OdtReadDataProvider with the input data path and optionally an option hash
     /** @param path the location of the input file; resolved with a call to
-        @ref FileLocationHandler::getBinaryStreamFromLocation()
+        @ref FileLocationHandler::FileLocationHandler::getBinaryStreamFromLocation()
         @param opts a hash of optional options
 
         @throw ODT-READ-OPTION-ERROR invalid or unknown option; invalid data type for option; \c "header_row"

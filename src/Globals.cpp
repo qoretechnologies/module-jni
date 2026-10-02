@@ -507,8 +507,36 @@ static qmnpc_t& qmnc_ref() {
     return *m;
 }
 
-static void JNICALL invocation_handler_finalize(JNIEnv *, jclass, jlong ptr) {
-    delete reinterpret_cast<Dispatcher*>(ptr);
+static void JNICALL invocation_handler_finalize(JNIEnv* jenv, jclass, jlong ptr) {
+    std::unique_ptr<Dispatcher> dispatcher(reinterpret_cast<Dispatcher*>(ptr));
+    ExceptionSink xsink;
+    auto raise = [jenv](const char* name, const char* message) {
+        jclass cls = jenv->FindClass(name);
+        if (cls) {
+            jenv->ThrowNew(cls, message);
+            jenv->DeleteLocalRef(cls);
+        }
+    };
+    try {
+        dispatcher->destroy(xsink);
+        dispatcher.reset();
+        if (xsink) {
+            Env env(jenv);
+            QoreToJava::wrapException(env, xsink);
+        }
+    } catch (JavaException&) {
+        // Preserve the JVM exception raised while constructing the error wrapper.
+        xsink.clear();
+    } catch (const std::bad_alloc& e) {
+        xsink.clear();
+        raise("java/lang/OutOfMemoryError", e.what());
+    } catch (const std::exception& e) {
+        xsink.clear();
+        raise("java/lang/RuntimeException", e.what());
+    } catch (...) {
+        xsink.clear();
+        raise("java/lang/RuntimeException", "Native invocation handler cleanup failed");
+    }
 }
 
 static jobject JNICALL invocation_handler_invoke(JNIEnv* jenv, jobject, jlong ptr, jobject proxy, jobject method, jobjectArray args) {
@@ -1149,7 +1177,7 @@ static jbyteArray JNICALL qore_url_classloader_get_cached_class(JNIEnv* jenv, jc
     SimpleRefHolder<BinaryNode> b(new BinaryNode);
     b->preallocate(i->second.len);
     unsigned size = i->second.len;
-    int rc = BZ2_bzBuffToBuffDecompress((char*)b->getPtr(), &size, (char*)i->second.byte_code,
+    [[maybe_unused]] int rc = BZ2_bzBuffToBuffDecompress((char*)b->getPtr(), &size, (char*)i->second.byte_code,
         i->second.compressed_len, 0, 0);
     assert(!rc);
     assert(size == i->second.len);
@@ -4037,12 +4065,13 @@ void Globals::initKotlinScriptEngine() {
 // Lifecycle:
 //   - startNativeCleanupThread(): called from Jvm::createVM after Globals::init.
 //     Caches NativeCleanup / Ref class refs, the queue static, the markProcessed
-//     and shutdown methods, and Ref's ptr/kind fields.  Spawns the thread.
-//   - The thread main loop calls queue.remove() (blocking).  On each Ref it reads
-//     ptr+kind via JNI field access, dispatches by kind, then calls back into
+//     and shutdown methods, and Ref's atomic acquire method/kind field. Spawns the thread.
+//   - The thread main loop calls queue.remove() (blocking). On each Ref it claims
+//     the pointer with acquireAndClear(), dispatches by kind, then calls back into
 //     NativeCleanup.markProcessed(ref) so Java can drop the strong ref.
 //   - stopNativeCleanupThread(): called from Jvm::destroyVM before DestroyJavaVM.
-//     Calls NativeCleanup.shutdown() (which enqueues a sentinel), then joins.
+//     Closes registration, snapshots live handles, enqueues a sentinel, then joins
+//     and releases outstanding handles, including wrappers not yet collected by Java.
 
 namespace {
 
@@ -4052,7 +4081,7 @@ GlobalReference<jobject> nativeCleanupQueue;     // global ref to ReferenceQueue
 jmethodID methodReferenceQueueRemove = nullptr;
 jmethodID methodNativeCleanupMarkProcessed = nullptr;
 jmethodID methodNativeCleanupShutdown = nullptr;
-jfieldID fieldNativeCleanupRefPtr = nullptr;
+jmethodID methodNativeCleanupAcquire = nullptr;
 jfieldID fieldNativeCleanupRefKind = nullptr;
 
 // Heap-allocated so we don't trigger std::terminate on abnormal exit.  A
@@ -4146,7 +4175,13 @@ void native_cleanup_thread_main(JavaVM* vm) {
             break;
         }
 
-        jlong ptr = env->GetLongField(ref, fieldNativeCleanupRefPtr);
+        jlong ptr = env->CallLongMethod(ref, methodNativeCleanupAcquire);
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+            env->DeleteLocalRef(ref);
+            break;
+        }
         jint kind = env->GetIntField(ref, fieldNativeCleanupRefKind);
 
         if (kind == -1) {  // NativeCleanup.KIND_SENTINEL
@@ -4188,7 +4223,7 @@ void Globals::startNativeCleanupThread() {
     nativeCleanupClass = env.findClass("org/qore/jni/NativeCleanup").makeGlobal();
     nativeCleanupRefClass = env.findClass("org/qore/jni/NativeCleanup$Ref").makeGlobal();
 
-    fieldNativeCleanupRefPtr = env.getField(nativeCleanupRefClass, "ptr", "J");
+    methodNativeCleanupAcquire = env.getMethod(nativeCleanupRefClass, "acquireAndClear", "()J");
     fieldNativeCleanupRefKind = env.getField(nativeCleanupRefClass, "kind", "I");
 
     jfieldID fieldQueue = env.getStaticField(nativeCleanupClass, "queue", "Ljava/lang/ref/ReferenceQueue;");
@@ -4199,7 +4234,8 @@ void Globals::startNativeCleanupThread() {
 
     methodNativeCleanupMarkProcessed = env.getStaticMethod(nativeCleanupClass, "markProcessed",
         "(Lorg/qore/jni/NativeCleanup$Ref;)V");
-    methodNativeCleanupShutdown = env.getStaticMethod(nativeCleanupClass, "shutdown", "()V");
+    methodNativeCleanupShutdown = env.getStaticMethod(nativeCleanupClass, "shutdown",
+        "()[Lorg/qore/jni/NativeCleanup$Ref;");
 
     JavaVM* vm = Jvm::getVm();
     native_cleanup_thread = new std::thread([vm]() { native_cleanup_thread_main(vm); });
@@ -4209,15 +4245,30 @@ void Globals::stopNativeCleanupThread() {
     if (!native_cleanup_thread_started.load()) {
         return;
     }
-    // Wake the thread by enqueueing the sentinel; loop will see kind=-1 and exit.
+    // Capture all registered handles before waking the worker. The sentinel may
+    // overtake queued references, and live wrappers may never have been enqueued.
     Env env;
-    env.callStaticVoidMethod(nativeCleanupClass, methodNativeCleanupShutdown, nullptr);
+    LocalReference<jobjectArray> pending = env.callStaticObjectMethod(nativeCleanupClass,
+        methodNativeCleanupShutdown, nullptr).as<jobjectArray>();
 
     if (native_cleanup_thread && native_cleanup_thread->joinable()) {
         native_cleanup_thread->join();
     }
     delete native_cleanup_thread;
     native_cleanup_thread = nullptr;
+
+    // Shutdown cleanup must complete even if cancellation is pending. Explicit
+    // releases and the worker use the same atomic claim, so each pointer is freed once.
+    for (jsize i = 0, size = env.getArrayLength(pending); i < size; ++i) {
+        LocalReference<jobject> ref = env.getObjectArrayElement(pending, i);
+        jint kind = env.getIntField(ref, fieldNativeCleanupRefKind);
+        jvalue arg;
+        arg.l = ref;
+        env.callStaticVoidMethod(nativeCleanupClass, methodNativeCleanupMarkProcessed, &arg);
+        jlong ptr = env.callLongMethod(ref, methodNativeCleanupAcquire, nullptr);
+        ref = nullptr;
+        native_cleanup_dispatch(ptr, kind);
+    }
 
     nativeCleanupQueue = nullptr;
     nativeCleanupClass = nullptr;

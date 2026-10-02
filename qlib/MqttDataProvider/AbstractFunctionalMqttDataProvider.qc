@@ -873,6 +873,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
 
     #! Sends a message from message-capable data providers
     /**
+        @param message_id the identifier of the message type to send
         @param msg the message to send
         @param send_message_options the options for sending the message
     */

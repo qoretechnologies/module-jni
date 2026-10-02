@@ -44,7 +44,7 @@ public class HTTPClient extends QoreObjectWrapper {
         @endcode
 
         @param opts sets options and changes default behaviour for the object, etc; key names are case-sensitive and therefore must all be in lower-case:
-        - \c additional_methods: An optional hash defining additional HTTP methods to handle.  This allows the HTTPClient class to handle various HTTP extensions like e.g. WebDAV. The hash is defined with new method names as keys; the values are @ref true or @ref false indicating if the method can accept a message body; for example:
+        - \c additional_methods: An optional hash defining additional HTTP methods to handle.  This allows the HTTPClient class to handle various HTTP extensions like e.g. WebDAV. The hash is defined with new method names as keys; the values are \c true or \c false indicating if the method can accept a message body; for example:
         @code{.java}
         # add two new HTTP methods for WebDAV; both require message bodies
         HTTPClient httpclient(("url": url, "additional_methods": ("PROPFIND": True, "MKCOL": True )));
@@ -59,7 +59,7 @@ public class HTTPClient extends QoreObjectWrapper {
         - \c ssl_cert_path: a path to an X.509 client certificate file in PEM format; if this option is used, then the calling context must not be restricted with sandbox restriction @ref Qore::PO_NO_FILESYSTEM which is checked at runtime
         - \c ssl_key_path: a path to a private key file in PEM format for the X.509 client certificate; if this option is used, then the calling context must not be restricted with sandbox restriction @ref Qore::PO_NO_FILESYSTEM which is checked at runtime
         - \c ssl_key_password: the password to the private key given with \c ssl_key_path
-        - \c ssl_verify_cert: if @ref true then the server's certificate will only be accepted if it's verified
+        - \c ssl_verify_cert: if \c true then the server's certificate will only be accepted if it's verified
         - \c timeout: The timeout value in milliseconds (also can be a @ref relative_dates "relative date-time value" for clarity, ex: \c 5m)
         - \c url: A string giving the URL to connect to
 
@@ -69,7 +69,7 @@ public class HTTPClient extends QoreObjectWrapper {
         @throw ILLEGAL-FILESYSTEM-ACCESS if the calling context is restricted with the @ref Qore::PO_NO_FILESYSTEM sandboxing restriction and one of the following options is used: \c ssl_cert_path or \c ssl_key_path
 
         @note
-        - URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
+        - URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref Qore::encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
         - other I/O errors can be thrown opening and reading the certificate and/or private key files if the \c ssl_cert_path or \c ssl_key_path options are used
         - the @ref Qore::PO_NO_FILESYSTEM sandbox restriction is checked at runtime if one of the following options is used: \c ssl_cert_path or \c ssl_key_path
 
@@ -823,7 +823,7 @@ public class HTTPClient extends QoreObjectWrapper {
 
         @see HTTPClient::getURL()
 
-        @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
+        @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref Qore::encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
     */
     public void setURL(String url) throws Throwable {
         obj.callMethod("setURL", url);
@@ -864,7 +864,7 @@ public class HTTPClient extends QoreObjectWrapper {
         @throw HTTP-CLIENT-URL-ERROR invalid proxy URL string; invalid authorization credentials in proxy URL (username without password or vice-versa)
         @throw HTTP-CLIENT-PROXY-PROTOCOL-ERROR unknown protocol passed in URL
 
-        @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
+        @note URLs with UNIX sockets are generally supported in Qore with the following syntax: <tt><b>scheme://socket=</b></tt><i>url_encoded_path</i><tt><b>/path</b></tt>, where <i>url_encoded_path</i> is a path with URL-encoding as performed by @ref Qore::encode_url() "encode_url(string, True)"; for example: \c "http://socket=%2ftmp%socket-dir%2fsocket-file-1/url/path"; this allows a filesystem path to be used in the host portion of the URL and for the URL to include a URL path as well.
     */
     public void setProxyURL(String url) throws Throwable {
         obj.callMethod("setProxyURL", url);
@@ -1206,7 +1206,7 @@ public class HTTPClient extends QoreObjectWrapper {
     httpclient.setPersistent();
         @endcode
 
-        The persistent flag is automatically reset to @ref false whenever the connection is closed; it must be called manually for every connection to turn off implicit reconnections.
+        The persistent flag is automatically reset to \c false whenever the connection is closed; it must be called manually for every connection to turn off implicit reconnections.
 
         To turn off the persistent flag manually, call @ref HTTPClient::disconnect()
 

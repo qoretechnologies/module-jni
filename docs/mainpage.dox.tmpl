@@ -461,9 +461,9 @@ System::out.println("testing...");
 
     <b>Java to Qore Access Mappings</b>
     |!Java|!Qore
-    |\c\b public|\c\b public
-    |\c\b protected|\c\b private (or \c\b private:hierarchy)
-    |\c\b private|\c\b private:internal
+    |<b><tt>public</tt></b>|<b><tt>public</tt></b>
+    |<b><tt>protected</tt></b>|<b><tt>private</tt></b> (or <b><tt>private:hierarchy</tt></b>)
+    |<b><tt>private</tt></b>|<b><tt>private:internal</tt></b>
 
     @subsection jni_classloader Java Classloader
 
@@ -549,6 +549,7 @@ class MyTest {
     java -Djava.library.path=/usr/local/lib -cp qore-jni.jar:. MyTest
     @endverbatim
 
+    @anchor jni_dynamic_import_qore_in_java
     @subsection jni_dynamic_import_in_java Importing Qore and Python APIs Dynamically in Java
 
     Dynamic %Qore and Python API imports are supported with \c qore-jni.jar at runtime; \c qore-jni-compiler.jar
@@ -934,9 +935,9 @@ set_save_object_callback(callback);
     instead.
 
     Some example %Qore datasource strings for the \c jdbc driver:
-    - <tt>jdbc:user/pass@postgresql:dbname{classpath=/usr/share/java/postgresql.jar}</tt>
-    - <tt>jdbc:user/pass@firebird:?serverName=hq&databaseName=/var/lib/firebird/data/mydb.fdb&encoding=WIN1252{classpath=/usr/share/java/jna-5.12.1.jar:/usr/share/java/jaybird-5.0.0.java11.jar}</tt>
-    - <tt>jdbc:user/pass@ignored{url=oracle:thin:@hostname:1521:dbserver,classpath=/usr/lib/oracle/21/client64/lib/ojdbc8.jar}</tt>
+    - <tt>jdbc:user/pass&#64;postgresql:dbname{classpath=/usr/share/java/postgresql.jar}</tt>
+    - <tt>jdbc:user/pass&#64;firebird:?serverName=hq&databaseName=/var/lib/firebird/data/mydb.fdb&encoding=WIN1252{classpath=/usr/share/java/jna-5.12.1.jar:/usr/share/java/jaybird-5.0.0.java11.jar}</tt>
+    - <tt>jdbc:user/pass&#64;ignored{url=oracle:thin:&#64;hostname:1521:dbserver,classpath=/usr/lib/oracle/21/client64/lib/ojdbc8.jar}</tt>
 
     @note the initial \c jdbc: in the \c db value is optional; if missing, it is added automatically by the %Qore
     \c jdbc driver when the internal URL string is passed to the internal Java JDBC call.
@@ -1044,6 +1045,23 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - Release every outstanding native wrapper during JVM shutdown, including wrappers Java has not
+      garbage-collected. Explicit release, phantom cleanup, and shutdown atomically claim each pointer
+      once; object construction cannot publish into an already closed cleanup handle.
+      Cleanup without a caller discards destructor exceptions; explicit handler destruction continues
+      to report them to the caller without throwing C++ exceptions through JNI or a destructor.
+    - Keep callback program metadata valid until dispatcher cleanup, including callbacks created from
+      closures whose owning program has already closed. This avoids reviving a cleared program's
+      strong reference count and dereferencing it after the final closure frees it.
+    - Release owned Qore callback results after converting them to Java, including temporary strings.
+    - Fixed duplicate JNI reference deletion when creating Java arrays and unchecked JNI calls
+      when converting Qore exceptions. Exception conversion now releases UTF string buffers and
+      preserves the original Java exception if converting its fields or argument fails.
+    - The main JNI test suite now returns its status through normal program teardown, allowing
+      Valgrind to verify native cleanup. The separate abrupt-exit subprocess test is retained.
+    - Fixed Java wrapper and provider documentation links, parameter descriptions, and JMS tables.
+      Documentation builds use public QPP declarations and installed dependency indexes.
+      Configure with <tt>-DQORE_JNI_STRICT_DOCS=ON</tt> to reject Doxygen warnings; RPM builds enable this check.
     - fixed JDBC pooled reads retaining transactions and blocking later writes or schema changes;
       explicit transactions and prepared writes retain commit/rollback semantics
     - fixed JDBC cursors retaining local JNI references across Java native-call frames, causing invalid
@@ -1275,8 +1293,8 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       module for Jakarta JMS 3.x messaging brokers
       - supports ActiveMQ Artemis, TIBCO EMS, IBM MQ, Oracle AQ, and any Jakarta Messaging 3.x
         compliant provider
-      - automatic Qore-to-JMS type mapping (\c string \u2194 \c TextMessage, \c hash \u2194
-        \c MapMessage, \c binary \u2194 \c BytesMessage)
+      - automatic Qore-to-JMS type mapping (\c string &harr; \c TextMessage, \c hash &harr;
+        \c MapMessage, \c binary &harr; \c BytesMessage)
       - send (fire-and-forget), request-reply, queue browsing, and event-driven consumption
       - JMS SQL-92 message selector support
       - durable topic subscriptions with \c client_id
@@ -1347,7 +1365,7 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       - added automatic filtering of Kotlin synthetic members (\c ACC_SYNTHETIC, \c ACC_BRIDGE)
       - added automatic filtering of Kotlin default parameter methods (\c $default variants)
       - added automatic filtering of Kotlin companion object classes (\c $Companion)
-      - added \c KotlinMetadataHelper Java class for detecting Kotlin classes via \c @kotlin.Metadata annotation
+      - added \c KotlinMetadataHelper Java class for detecting Kotlin classes via <tt>&#64;kotlin.Metadata</tt> annotation
       - added \c qkotlinc helper script for compiling Kotlin sources that use Qore APIs
       - added \c kotlin_eval() function for runtime Kotlin scripting (requires kotlin-scripting-jsr223 JARs)
       - added \c kotlin_scripting_available() function to check if scripting is available

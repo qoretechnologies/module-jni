@@ -300,8 +300,6 @@ public class Main inherits QUnit::Test {
         addTestCase("injected superclass loader test", \injectedSuperclassLoaderTest());
         addTestCase("loader precedence for cached byte code test", \cachedByteCodeLoaderPrecedenceTest());
         addTestCase("registered sibling classloader identity test", \registeredSiblingClassLoaderIdentityTest());
-
-        Qore::exit(main());
     }
 
     #! Returns the path to the qore binary running this test
@@ -3293,4 +3291,7 @@ class AutoParamTest {
     }
 }
 
-new Main();
+# Return through normal program teardown so native objects and the JVM are released.
+# The separate abrupt-exit subprocess regression still exercises exit().
+Main test();
+return test.main();

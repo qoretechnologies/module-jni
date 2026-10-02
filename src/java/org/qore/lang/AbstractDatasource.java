@@ -556,7 +556,7 @@ public class AbstractDatasource extends QoreObjectWrapper {
         return (String)obj.callMethod("getConfigString");
     }
 
-    //! Should return @ref true if the current thread is in a transaction with this object, must be re-implemented in subclasses to provide the desired functionality
+    //! Should return \c true if the current thread is in a transaction with this object, must be re-implemented in subclasses to provide the desired functionality
     /** @note
         - this is reimplemented as @ref Qore::SQL::Datasource::currentThreadInTransaction() "Datasource::currentThreadInTransaction()" and @ref Qore::SQL::DatasourcePool::currentThreadInTransaction() "DatasourcePool::currentThreadInTransaction()"
         - this method was added as a non-abstract method in Qore 0.8.10 to avoid breaking existing subclasses of AbstractDatasource

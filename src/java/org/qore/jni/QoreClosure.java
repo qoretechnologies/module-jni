@@ -68,6 +68,7 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * This method can be used to save objects in thread-local data that would otherwise go out of scope; see
      * @ref jni_qore_object_lifecycle_management for more information
      *
+     * @param name reserved for compatibility; the closure has no method name
      * @param args argument to the function call
      * @return the result of the call
      * @throws Throwable any Qore-language exception is rethrown here

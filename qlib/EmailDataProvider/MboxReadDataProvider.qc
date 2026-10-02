@@ -90,7 +90,7 @@ public class MboxReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the MboxReadDataProvider with the input data path and optionally an option hash
     /** @param path the location of the input file; resolved with a call to
-        @ref FileLocationHandler::getBinaryStreamFromLocation()
+        @ref FileLocationHandler::FileLocationHandler::getBinaryStreamFromLocation()
         @param opts a hash of optional options
 
         @throw MBOX-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
@@ -103,7 +103,8 @@ public class MboxReadDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     #! Creates the MboxReadDataProvider with the input data stream
-    /** @param stream the input stream to iterate
+    /** @param opts optional settings from ConstructorOptions
+        @param stream the input stream to iterate
 
         @throw MBOX-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */

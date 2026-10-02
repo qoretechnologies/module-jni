@@ -334,17 +334,17 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Registers an exact dynamically projected Qore class name as process-wide
     /** The first Program loader to register the name becomes its owner.  Definitions and
-        loads through sibling {@code QoreURLClassLoader} instances then resolve through
-        that owner so the JVM sees one {@link Class} object for the name.
+        loads through sibling <tt>QoreURLClassLoader</tt> instances then resolve through
+        that owner so the JVM sees one <tt>Class</tt> object for the name.
 
         Registration is idempotent and must happen before the class is loaded in every
         participating Program.  Register only classes whose Qore definitions are
         semantically identical across those Programs; same-path Qore classes are otherwise
         intentionally Program-local.
 
-        @param bin_name exact Java binary name in dotted form, beginning with {@code qore.}
-                        or {@code qoremod.}
-        @throws IllegalArgumentException if {@code bin_name} is not a dynamic Qore class name
+        @param bin_name exact Java binary name in dotted form, beginning with <tt>qore.</tt>
+                        or <tt>qoremod.</tt>
+        @throws IllegalArgumentException if <tt>bin_name</tt> is not a dynamic Qore class name
         @throws IllegalStateException if this loader already defined a different Class for a
                                       name owned by another registered loader
     */
@@ -522,7 +522,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Returns the class file bytecode for the given binary name, or null if it cannot be found.
-    /** Used as a Byte Buddy {@code ClassFileLocator} (via {@link QoreClassFileLocator}) so that a
+    /** Used as a Byte Buddy <tt>ClassFileLocator</tt> (via {@link QoreClassFileLocator}) so that a
         TypePool can describe the full superclass chain of a class under generation from bytecode
         (rather than via reflection on loaded classes, which forces eager JVM resolution of types
         referenced in method signatures and can re-enter generation of an in-progress class).
@@ -991,7 +991,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         return rv;
     }
 
-    //! Returns true if {@code bin_name} refers to a class that should be canonicalized
+    //! Returns true if <tt>bin_name</tt> refers to a class that should be canonicalized
     //! through the syscl loader (so all loaders that need the same shared type see the same
     //! Class object).
     /** Routing is required for two distinct shapes:
@@ -1001,8 +1001,8 @@ public class QoreURLClassLoader extends URLClassLoader {
           resolution and ClassCastException on legitimate casts across Program boundaries.
         - <b><tt>qore.Qore.</tt></b><i>...</i>: built-in <tt>Qore::*</tt> classes that have
           a fixed identity across Programs.  Routing them through syscl is what lets, e.g.,
-          a workflow program's {@code JavaSimpleTestStep1} call into a syscl-defined
-          {@code qoremod.SqlUtil.Table.&lt;init&gt;(qore.Qore.SQL.AbstractDatasource, String)}
+          a workflow program's <tt>JavaSimpleTestStep1</tt> call into a syscl-defined
+          <tt>qoremod.SqlUtil.Table.&lt;init&gt;(qore.Qore.SQL.AbstractDatasource, String)</tt>
           without the JVM rejecting the call site with "loader constraint violation".
 
         We deliberately do NOT route bare <tt>qore.</tt><i>X</i><tt>.</tt><i>Y</i> when X is
@@ -1032,12 +1032,12 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Resolves the canonical loader for a shared dynamic class name.
     /** Routes to the loader of the QoreProgram that owns the underlying QoreClass.  For
-        {@code qoremod.<mod>.<X>} this is the module's user-Program; for legacy / shadow
-        {@code qore.<X>.<Y>...} forms it is whichever Program owns the QoreClass at qpath
-        {@code ::<X>::<Y>::...} as visible from the calling loader's Program (typically
+        <tt>qoremod.&lt;mod&gt;.&lt;X&gt;</tt> this is the module's user-Program; for legacy / shadow
+        <tt>qore.&lt;X&gt;.&lt;Y&gt;...</tt> forms it is whichever Program owns the QoreClass at qpath
+        <tt>::&lt;X&gt;::&lt;Y&gt;::...</tt> as visible from the calling loader's Program (typically
         the host Program that loaded the binary module providing the class).
 
-        Returns {@code null} when no canonical owner is known; callers should fall back
+        Returns <tt>null</tt> when no canonical owner is known; callers should fall back
         to local generation in that case.
      */
     private QoreURLClassLoader resolveSharedClassLoader(String bin_name) {
@@ -1369,7 +1369,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     /**
-     * Adds a set of files using a generic base name to this loader's classpath.  See @link:addClassPath(String) for
+     * Adds a set of files using a generic base name to this loader's classpath.  See @ref addPath() for
      * details of the generic base name.
      */
     public void addWildcard(File dir, String nam) {
@@ -1538,42 +1538,42 @@ public class QoreURLClassLoader extends URLClassLoader {
     static private native void dummy0();
     static private native void debug0(long ptr);
 
-    //! Returns the canonical "system" {@code QoreURLClassLoader} (Globals::syscl in C++).
-    /** Used as the fallback shared home for {@code qore.Qore.*} built-in classes and for
+    //! Returns the canonical "system" <tt>QoreURLClassLoader</tt> (Globals::syscl in C++).
+    /** Used as the fallback shared home for <tt>qore.Qore.*</tt> built-in classes and for
         module classes whose owning user Program cannot be resolved (binary modules,
         modules not yet loaded under their canonical name).
-        {@code qoremod.<mod>.*} normally routes to the owning user module's Program loader
+        <tt>qoremod.&lt;mod&gt;.*</tt> normally routes to the owning user module's Program loader
         via {@link #getModuleLoader0(String)} instead.
 
-        Returns {@code null} during very early init before syscl exists.
+        Returns <tt>null</tt> during very early init before syscl exists.
     */
     static private native QoreURLClassLoader getSyscl0();
 
     //! Returns the {@link QoreURLClassLoader} of the named user module's owning Program.
     /** User modules (.qm files) live in a dedicated QoreProgram that is the canonical home
-        for their %Qore classes — and thus for the corresponding {@code qoremod.<mod>.*}
-        Java classes.  Routing every defineClass / loadClass for {@code qoremod.<mod>.*}
+        for their %Qore classes — and thus for the corresponding <tt>qoremod.&lt;mod&gt;.*</tt>
+        Java classes.  Routing every defineClass / loadClass for <tt>qoremod.&lt;mod&gt;.*</tt>
         through this single loader keeps Class identity consistent across consumer Programs.
 
-        Returns {@code null} for unknown module names and for binary modules that don't
+        Returns <tt>null</tt> for unknown module names and for binary modules that don't
         have an owning user Program; callers fall back to the syscl loader.
     */
     static private native QoreURLClassLoader getModuleLoader0(String module_name);
 
-    //! Returns the canonical {@link QoreURLClassLoader} for {@code bin_name}.
+    //! Returns the canonical {@link QoreURLClassLoader} for <tt>bin_name</tt>.
     /** The canonical loader is the {@link QoreURLClassLoader} of the QoreProgram that owns
         the underlying QoreClass.  Two name shapes are dispatched:
         <ul>
-        <li>{@code qoremod.<mod>.<X>} resolves to the user module's owning Program
-        <li>{@code qore.<X>.<Y>...} converts to qpath {@code ::<X>::<Y>::...} and looks the
+        <li><tt>qoremod.&lt;mod&gt;.&lt;X&gt;</tt> resolves to the user module's owning Program
+        <li><tt>qore.&lt;X&gt;.&lt;Y&gt;...</tt> converts to qpath <tt>::&lt;X&gt;::&lt;Y&gt;::...</tt> and looks the
             class up in the calling loader's Program (which is presumed to have the
             relevant module loaded — that is how the Java reference reached us); routes to
-            {@code qc.getProgram()} of the matching QoreClass.  Catches binary-module
-            shadow classes such as {@code qore.Qore.Logger.LoggerInterface} and Qorus
-            injections such as {@code qore.OMQ.UserApi.AbstractUserApi}.
+            <tt>qc.getProgram()</tt> of the matching QoreClass.  Catches binary-module
+            shadow classes such as <tt>qore.Qore.Logger.LoggerInterface</tt> and Qorus
+            injections such as <tt>qore.OMQ.UserApi.AbstractUserApi</tt>.
         </ul>
 
-        Returns {@code null} when no canonical owner can be determined; callers fall back
+        Returns <tt>null</tt> when no canonical owner can be determined; callers fall back
         to local generation.
     */
     private native QoreURLClassLoader getCanonicalLoader0(String bin_name);

@@ -222,7 +222,7 @@ public class AbstractDataProvider extends QoreObjectWrapper {
     }
 
     //! Returns an iterator for zero or more records matching the search options
-    /** @param block_size the number of records in a read block; must be a positive number
+    /**
         @param where_cond the search criteria; will be processed by processFieldValues()
         @param search_options the search options; will be processed by validateSearchOptions()
 
@@ -238,9 +238,8 @@ public class AbstractDataProvider extends QoreObjectWrapper {
     }
 
     //! Returns an iterator for zero or more records matching the search options
-    /** @param block_size the number of records in a read block; must be a positive number
+    /**
         @param where_cond the search criteria; will be processed by processFieldValues()
-        @param search_options the search options; will be processed by validateSearchOptions()
 
         @return a bulk record interface object that will return the records in bulk format
 

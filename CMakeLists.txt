@@ -31,6 +31,11 @@ endif()
 # accessor-backed static class variables (QoreClass::addBuiltinStaticVarWithAccessors()) and union types are
 # required to mirror mutable Java static fields
 find_package(Qore 3.0 REQUIRED)
+# Public Qore indexes used by the Java wrappers and provider documentation.
+list(APPEND QORE_DOXYGEN_MODULES AsyncApi ConnectionProvider DataProvider FileLocationHandler
+    HttpClientIo MailMessage Mapper Mime RestClient RestSchemaValidator SmtpClient SqlUtil
+    Swagger TableMapper Util reflection)
+option(QORE_JNI_STRICT_DOCS "Fail JNI documentation builds on warnings" OFF)
 # The bridge uses JNI's JVM API, not the native AWT drawing interface.
 # Older CMake releases do not support FindJNI components.
 if(CMAKE_VERSION VERSION_LESS 3.24)
@@ -1178,6 +1183,8 @@ install(PROGRAMS ${JNI_BIN_FILES}
 )
 
 set(JAVA_TEST_JAR_SRC
+    test/java/src/org/qore/jni/NativeCleanupLifecycleTest.java
+    test/java/src/org/qore/jni/ExceptionConversionFixture.java
     test/java/src/org/qore/jni/test/JdbcCursorTest.java
     test/java/src/org/qore/jni/test/JdbcTransactionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
@@ -1299,15 +1306,14 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/src/QoreJniClassMap.cpp
 
 target_link_libraries(${module_name} ${JNI_LIBRARIES} ${BZIP2_LIBRARIES} ${QORE_LIBRARY})
 
-set(MODULE_DOX_INPUT ${CMAKE_CURRENT_BINARY_DIR}/mainpage.dox ${JAVA_JAR_SRC_STR} ${QPP_DOX})
-string(REPLACE ";" " " MODULE_DOX_INPUT "${MODULE_DOX_INPUT}")
-#message(STATUS mdi: ${MODULE_DOX_INPUT})
+# Use generated QPP documentation, not the generated C++ implementation files.
+set(MODULE_DOX_INPUT ${CMAKE_CURRENT_BINARY_DIR}/mainpage.dox ${JAVA_JAR_SRC}
+    ${JAVA_JAR_COMPILER_SRC} ${QPP_DOX})
 
 if (DEFINED ENV{DOXYGEN_EXECUTABLE})
     set(DOXYGEN_EXECUTABLE $ENV{DOXYGEN_EXECUTABLE})
 endif()
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR} ${JAVA_JAR_SRC} ${JAVA_JAR_COMPILER_SRC})
 qore_external_binary_module(${module_name} ${PROJECT_VERSION})
 
 # Qore's AOT rules decide at configure time whether to stage a provider's jar/
@@ -1430,6 +1436,25 @@ if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_SRC ${QORE_DOX_TMPL_SRC})
     add_custom_target(QORE_MOD_DOX_FILES DEPENDS ${QORE_DOX_SRC})
     add_dependencies(docs-module QORE_MOD_DOX_FILES)
+    if (COMMAND qore_binary_module_two_phase_docs)
+        set(_jni_doc_modules "")
+        foreach(_jni_module IN LISTS QMOD)
+            get_filename_component(_jni_module_name "${_jni_module}" NAME)
+            list(APPEND _jni_doc_modules "${_jni_module_name}")
+        endforeach()
+        qore_binary_module_two_phase_docs(${module_name} "${_jni_doc_modules}")
+    endif()
+    if (QORE_JNI_STRICT_DOCS)
+        file(GLOB _jni_doxyfiles "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.*")
+        if (EXISTS "${CMAKE_BINARY_DIR}/Doxyfile.final")
+            list(APPEND _jni_doxyfiles "${CMAKE_BINARY_DIR}/Doxyfile.final")
+        else()
+            list(APPEND _jni_doxyfiles "${CMAKE_BINARY_DIR}/Doxyfile")
+        endif()
+        foreach(_jni_doxyfile IN LISTS _jni_doxyfiles)
+            file(APPEND "${_jni_doxyfile}" "\nWARN_AS_ERROR = FAIL_ON_WARNINGS\n")
+        endforeach()
+    endif()
 endif()
 
 # C++ regression test for the NativeCleanup foreign-thread deref crash: a Qore
@@ -1437,6 +1462,16 @@ endif()
 # daemon thread does in native_cleanup_dispatch()) must not crash.  See
 # src/Globals.cpp (QoreForeignThreadHelper).
 enable_testing()
+add_test(NAME native_cleanup_shutdown COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
+    ${CMAKE_SOURCE_DIR}/test/test-native-cleanup-shutdown.py
+    --qore ${QORE_EXECUTABLE} --module $<TARGET_FILE:jni>)
+set_tests_properties(native_cleanup_shutdown PROPERTIES TIMEOUT 40)
+foreach(_cleanup_case IN ITEMS empty live claim_race registration_race)
+    add_test(NAME native_cleanup_${_cleanup_case} COMMAND ${Java_JAVA_EXECUTABLE}
+        -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+        org.qore.jni.NativeCleanupLifecycleTest ${_cleanup_case})
+    set_tests_properties(native_cleanup_${_cleanup_case} PROPERTIES TIMEOUT 30)
+endforeach()
 find_package(Threads REQUIRED)
 add_executable(generated_binding_registry test/generated_binding_registry.cpp src/GeneratedBinding.cpp)
 target_include_directories(generated_binding_registry PRIVATE ${QORE_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/src)

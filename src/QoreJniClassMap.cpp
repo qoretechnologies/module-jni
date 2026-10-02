@@ -3558,7 +3558,7 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     }
 }
 
-static const char* access_str(ClassAccess a) {
+[[maybe_unused]] static const char* access_str(ClassAccess a) {
     switch (a) {
         case Public: return "public";
         case Private: return "private";

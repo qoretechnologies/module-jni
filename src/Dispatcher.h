@@ -42,6 +42,10 @@ public:
 
     virtual jobject dispatch(Env& env, jobject proxy, jobject method, jobjectArray args) = 0;
 
+    // Explicit destruction reports Qore cleanup errors to the caller. The
+    // destructor also releases resources, but must discard errors during GC/shutdown.
+    virtual void destroy(ExceptionSink& xsink) = 0;
+
 protected:
     Dispatcher() = default;
 
@@ -60,6 +64,8 @@ class QoreCodeDispatcher : public Dispatcher {
 public:
     QoreCodeDispatcher(const ResolvedCallReferenceNode* callback);
     ~QoreCodeDispatcher();
+
+    void destroy(ExceptionSink& xsink) override;
 
     jobject dispatch(Env& env, jobject proxy, jobject method, jobjectArray args) override;
 

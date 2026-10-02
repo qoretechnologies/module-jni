@@ -211,22 +211,20 @@ module JakartaJmsDataProvider {
 
     The root \c jms data provider has three child providers:
 
-    |Provider|Path|Purpose|
-    |---|---|---|
-    |@ref JakartaJmsDataProvider::JmsProducerDataProvider "producer"|<tt>/producer</tt>|Send messages (fire-and-forget) and request-reply|
-    |@ref JakartaJmsDataProvider::JmsBrowserDataProvider "browser"|<tt>/browser</tt>|Non-destructive queue browsing|
-    |@ref JakartaJmsDataProvider::JmsPollingDataProvider "polling"|<tt>/polling</tt>|Event-driven message consumption|
+    |!Provider|!Path|!Purpose
+    |@ref JakartaJmsDataProvider::JmsProducerDataProvider "producer"|<tt>/producer</tt>|Send messages (fire-and-forget) and request-reply
+    |@ref JakartaJmsDataProvider::JmsBrowserDataProvider "browser"|<tt>/browser</tt>|Non-destructive queue browsing
+    |@ref JakartaJmsDataProvider::JmsPollingDataProvider "polling"|<tt>/polling</tt>|Event-driven message consumption
 
     @subsection jakartajmsdataprovider_messagetypes Message Type Mapping
 
     Qore values are automatically mapped to JMS message types when sending:
 
-    |Qore Type|JMS Message Type|Notes|
-    |---|---|---|
-    |\c string|\c TextMessage|UTF-8 text|
-    |\c hash|\c MapMessage|Keys mapped to JMS map entries; nested hashes serialized as JSON strings|
-    |\c binary|\c BytesMessage|Raw bytes|
-    |other|\c BytesMessage|Serialized as JSON with \c content_type property set to \c application/json|
+    |!Qore Type|!JMS Message Type|!Notes
+    |\c string|\c TextMessage|UTF-8 text
+    |\c hash|\c MapMessage|Keys mapped to JMS map entries; nested hashes serialized as JSON strings
+    |\c binary|\c BytesMessage|Raw bytes
+    |other|\c BytesMessage|Serialized as JSON with \c content_type property set to \c application/json
 
     When receiving, the reverse mapping is applied automatically.
 
@@ -356,12 +354,11 @@ module JakartaJmsDataProvider {
 
     @section jakartajmsdataprovider_actions App Action Reference
 
-    |Action|Type|Description|
-    |---|---|---|
-    |\c send-jms-message|DPAT_SEND_MESSAGE|Fire-and-forget message send to a queue or topic|
-    |\c jms-request-reply|DPAT_API|Synchronous request-reply using a temporary queue|
-    |\c browse-jms-queue|DPAT_API|Non-destructive queue inspection with optional selector|
-    |\c jms-message-received|DPAT_EVENT|Event-driven message consumption with optional selector and durable subscriptions|
+    |!Action|!Type|!Description
+    |\c send-jms-message|DPAT_SEND_MESSAGE|Fire-and-forget message send to a queue or topic
+    |\c jms-request-reply|DPAT_API|Synchronous request-reply using a temporary queue
+    |\c browse-jms-queue|DPAT_API|Non-destructive queue inspection with optional selector
+    |\c jms-message-received|DPAT_EVENT|Event-driven message consumption with optional selector and durable subscriptions
 
     @section jakartajmsdataprovider_troubleshooting Troubleshooting
 
@@ -381,8 +378,8 @@ module JakartaJmsDataProvider {
     @subsection JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider v1.0
     - initial release of the module
     - support for sending, receiving, request-reply, and queue browsing
-    - automatic Qore-to-JMS type mapping (\c string \u2194 \c TextMessage, \c hash \u2194
-      \c MapMessage, \c binary \u2194 \c BytesMessage)
+    - automatic Qore-to-JMS type mapping (\c string &harr; \c TextMessage, \c hash &harr;
+      \c MapMessage, \c binary &harr; \c BytesMessage)
     - event-driven message consumption via \c MessageListener with queue-based handoff
     - thread-safe JMS session pool
     - JMS SQL-92 message selector support

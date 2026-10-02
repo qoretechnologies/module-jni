@@ -1,3 +1,4 @@
+// Copyright (C) 2026 Qore Technologies, s.r.o.
 package org.qore.jni;
 
 import java.lang.reflect.InvocationHandler;
@@ -73,7 +74,8 @@ public class QoreInvocationHandler implements InvocationHandler {
     }
 
     private void destroy() {
-        long p = state.acquireAndClearForDestroy();
+        state.acquireAndClearForDestroy();
+        long p = ref.acquireAndClear();
         NativeCleanup.unregister(ref);
         if (p != 0) {
             release0(p);

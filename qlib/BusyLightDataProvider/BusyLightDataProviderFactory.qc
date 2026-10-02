@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BusyLightDataProvider module definition
 
-/** BusyLightDataProviderFactory.qm Copyright 2022 Qore Technologies, s.r.o.
+/** BusyLightDataProviderFactory.qm Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,7 +41,7 @@ public class BusyLightDataProviderFactory inherits AbstractDataProviderFactory {
     }
 
     #! Returns static factory information without \a provider_info
-    /** @return static factory information without \a provider_info which is provided by @ref getProviderInfo()
+    /** @return static factory information without \a provider_info which is provided by @ref DataProvider::AbstractDataProviderFactory::getProviderInfo()
     */
     private hash<DataProviderFactoryInfo> getInfoImpl() {
         return FactoryInfo;

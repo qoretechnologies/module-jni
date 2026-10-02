@@ -12,7 +12,7 @@ import org.qore.jni.Hash;
 // qore imports
 import org.qore.lang.AbstractIterator;
 
-//! Java wrapper for the @ref Qore::ContextIterator class in Qore
+//! Java wrapper for the @ref Qore::HashListIterator class in Qore
 /** @note Loads and initializes the Qore library and the jni module in static initialization if necessary
 
     @deprecated Use @ref jni_dynamic_import_qore_in_java "dynamic imports" instead:

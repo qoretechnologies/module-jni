@@ -59,7 +59,7 @@ import org.qore.lang.AbstractSQLStatement;
       dropped with \c FORCE or \c CASCADE options
 
     @section InsertOptions Insert Options
-    In addition to any @ref SqlDataCallbackOptions, the following keys can be set for this option:
+    In addition to any @ref SqlUtil::AbstractTable::SqlDataCallbackOptions, the following keys can be set for this option:
     - \c returning: a list having elements of one of the two following types:
         - String: column names to return the value inserted
         - Map: a hash having the following keys:
@@ -261,12 +261,12 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @endcode
      */
     ///@{
-    //! returns a @ref ColumnOperatorInfo hash
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash
     /** @param cop the column operator (one of @ref sql_cops)
         @param column the column name
         @param arg the argument to the operator
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @note Normally this method is not called directly, but rather by the other column operator methods
     */
@@ -275,11 +275,11 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunction("make_cop", cop, column, arg);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash
     /** @param cop the column operator (one of @ref sql_cops)
         @param column the column name
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @note Normally this method is not called directly, but rather by the other column operator methods
     */
@@ -288,7 +288,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunction("make_cop", cop, column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "as" operator with the given argument
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "as" operator with the given argument
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -308,7 +308,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param column the column specification for the column (String name or dot notation for use in joins) or any other column "cop_..." method
         @param arg the new name of the output column
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @see cop_value for SQL literals handling
     */
@@ -317,7 +317,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_as", column, arg);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "cast" operator with the given argument(s)
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "cast" operator with the given argument(s)
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -341,7 +341,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param arg1 optional, type dependent, specification (e.g. size or precision)
         @param arg2 optional, type dependent, specification (e.g. scale)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @see cop_value for SQL literals handling
     */
@@ -350,7 +350,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_cast", column, arg, arg1, arg2);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "cast" operator with the given argument(s)
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "cast" operator with the given argument(s)
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -373,7 +373,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param arg the new datatype to cast the column value(s) to
         @param arg1 optional, type dependent, specification (e.g. size or precision)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @see cop_value for SQL literals handling
     */
@@ -382,7 +382,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_cast", column, arg, arg1);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "cast" operator with the given argument(s)
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "cast" operator with the given argument(s)
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -404,7 +404,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param column the column specification for the column (String name or dot notation for use in joins) or any other column "cop_..." method
         @param arg the new datatype to cast the column value(s) to
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @see cop_value for SQL literals handling
     */
@@ -413,7 +413,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_cast", column, arg);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "prepend" operator with the given argument
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "prepend" operator with the given argument
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -431,14 +431,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param column the column specification for the column (String name or dot notation for use in joins)
         @param arg the text to prepend to the row values in the output column
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_prepend(Object column, String arg) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_prepend", column, arg);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "append" operator with the given argument
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "append" operator with the given argument
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -456,14 +456,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param column the column specification for the column (String name or dot notation for use in joins)
         @param arg the text to append (ie concatenate) to the row values in the output column
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_append(Object column, String arg) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_append", column, arg);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "value" (literal) operator with the given argument
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "value" (literal) operator with the given argument
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -480,7 +480,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param arg the value to be returned in the column
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         SQL literals can be useful in some cases - as dummy values for select
         statements where there is exact columns required, unions, expected values
@@ -517,7 +517,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_value", arg);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "upper" operator with the given argument; returns a column value in upper case
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "upper" operator with the given argument; returns a column value in upper case
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -534,14 +534,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_upper(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_upper", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "lower" operator with the given argument; returns a column value in lower case
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "lower" operator with the given argument; returns a column value in lower case
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -558,14 +558,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_lower(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_lower", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "distinct" operator with the given argument; returns distinct column values
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "distinct" operator with the given argument; returns distinct column values
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -582,14 +582,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_distinct(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_distinct", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "min" operator; returns minimum column values
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "min" operator; returns minimum column values
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -606,14 +606,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_min(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_min", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "max" operator; returns maximum column values
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "max" operator; returns maximum column values
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -630,14 +630,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_max(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_max", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "avg" operator; returns average column values
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "avg" operator; returns average column values
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -654,14 +654,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_avg(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_avg", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "sum" operator; returns the total sum of a numeric column.
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "sum" operator; returns the total sum of a numeric column.
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -678,14 +678,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_sum(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_sum", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "count" operator; returns row counts
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "count" operator; returns row counts
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -700,14 +700,14 @@ HashMap<String, Object> sh = new HashMap<String, Object>() {
 HashMap<String, Object> rows = t.selectRows(sh);
         @endcode
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_count(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_count", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "count" operator; returns row counts
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "count" operator; returns row counts
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -722,14 +722,14 @@ HashMap<String, Object> sh = new HashMap<String, Object>() {
 HashMap<String, Object> rows = t.selectRows(sh);
         @endcode
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_count() throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_count");
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "over" clause
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "over" clause
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -744,14 +744,14 @@ HashMap<String, Object> sh = new HashMap<String, Object>() {
 HashMap<String, Object> rows = t.selectRows(sh);
         @endcode
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_over(Object column, String partitionby, String orderby) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_over", column, partitionby, orderby);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "over" clause
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "over" clause
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -766,14 +766,14 @@ HashMap<String, Object> sh = new HashMap<String, Object>() {
 HashMap<String, Object> rows = t.selectRows(sh);
         @endcode
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_over(Object column, String partitionby) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_over", column, partitionby);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "over" clause
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "over" clause
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -788,14 +788,14 @@ HashMap<String, Object> sh = new HashMap<String, Object>() {
 HashMap<String, Object> rows = t.selectRows(sh);
         @endcode
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_over(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_over", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "-" operator with the given arguments
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "-" operator with the given arguments
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -813,14 +813,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param column1 the column specification for the first argument (String name or dot notation for use in joins)
         @param column2 the column specification for the second argument (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_minus(Object column1, Object column2) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_minus", column1, column2);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "+" operator with the given arguments
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "+" operator with the given arguments
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -838,14 +838,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param column1 the column specification for the first argument (String name or dot notation for use in joins)
         @param column2 the column specification for the second argument (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_plus(Object column1, Object column2) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_plus", column1, column2);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "/" operator with the given arguments
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "/" operator with the given arguments
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -863,14 +863,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param column1 the column specification for the first argument (String name or dot notation for use in joins)
         @param column2 the column specification for the second argument (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_divide(Object column1, Object column2) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_divide", column1, column2);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "*" operator with the given arguments
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "*" operator with the given arguments
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -888,14 +888,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param column1 the column specification for the first argument (String name or dot notation for use in joins)
         @param column2 the column specification for the second argument (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_multiply(Object column1, Object column2) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_multiply", column1, column2);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "year" operator with the given argument
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "year" operator with the given argument
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -912,14 +912,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_year(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_year", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "year_month" operator with the given argument
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "year_month" operator with the given argument
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -936,14 +936,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_year_month(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_year_month", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "year_day" operator with the given argument
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "year_day" operator with the given argument
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -960,14 +960,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_year_day(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_year_day", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "year_hour" operator with the given argument
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "year_hour" operator with the given argument
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -984,14 +984,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_year_hour(Object column) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_year_hour", column);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "seq" operator with the given argument giving the sequence name whose value should be returned
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "seq" operator with the given argument giving the sequence name whose value should be returned
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1009,14 +1009,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param seq the name of the sequence whose value should be returned
         @param as an optional column name that should be returned for the sequence value (so that @ref cop_as() need not be used)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_seq(String seq, String as) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_seq", seq, as);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "seq" operator with the given argument giving the sequence name whose value should be returned
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "seq" operator with the given argument giving the sequence name whose value should be returned
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1033,14 +1033,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param seq the name of the sequence whose value should be returned
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_seq(String seq) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_seq", seq);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "seq_currval" operator with the given argument giving the sequence name whose current value should be returned
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "seq_currval" operator with the given argument giving the sequence name whose current value should be returned
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1058,14 +1058,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param seq the name of the sequence whose current value should be returned
         @param as an optional column name that should be returned for the sequence value (so that @ref cop_as() need not be used)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_seq_currval(String seq, String as) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_seq_currval", seq, as);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "seq_currval" operator with the given argument giving the sequence name whose current value should be returned
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "seq_currval" operator with the given argument giving the sequence name whose current value should be returned
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1082,14 +1082,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param seq the name of the sequence whose current value should be returned
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_seq_currval(String seq) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_seq_currval", seq);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "coalesce" operator with the given column arguments; the first non-NULL column value will be returned
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "coalesce" operator with the given column arguments; the first non-NULL column value will be returned
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1107,7 +1107,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param col1 the name or column operator hash for the first value
         @param col2 the name or column operator hash for the second value, additional values should follow this argument
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @throw COALESCE-ERROR the arguments must be either string column designators or column operator hashes
     */
@@ -1116,7 +1116,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_coalesce", col1, col2);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "coalesce" operator with the given column arguments; the first non-NULL column value will be returned
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "coalesce" operator with the given column arguments; the first non-NULL column value will be returned
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1135,7 +1135,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param col2 the name or column operator hash for the second value, additional values should follow this argument
         @param args other column names or column operator hashes for subsequent values
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @throw COALESCE-ERROR the arguments must be either string column designators or column operator hashes
     */
@@ -1148,7 +1148,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
         return (HashMap<String, Object>)QoreJavaApi.callFunctionArgs("cop_coalesce", new_args);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "substr" operator with the given arguments; returns a substring of a column value
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "substr" operator with the given arguments; returns a substring of a column value
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1167,14 +1167,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param start position where the substring starts
         @param count length of the substring in characters
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_substr(Object column, int start, int count) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_substr", column, start, count);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "substr" operator with the given arguments; returns a substring of a column value
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "substr" operator with the given arguments; returns a substring of a column value
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1193,14 +1193,14 @@ HashMap<String, Object> rows = t.selectRows(sh);
         @param start position where the substring starts
         @param count length of the substring in characters
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_substr(Object column, long start, long count) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_substr", column, start, count);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "substr" operator with the given arguments; returns a substring of a column value
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "substr" operator with the given arguments; returns a substring of a column value
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1217,16 +1217,15 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
         @param start position where the substring starts
-        @param count length of the substring in characters
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_substr(Object column, int start) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_substr", column, start);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "substr" operator with the given arguments; returns a substring of a column value
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "substr" operator with the given arguments; returns a substring of a column value
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1243,16 +1242,15 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
         @param start position where the substring starts
-        @param count length of the substring in characters
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
     */
     @SuppressWarnings("unchecked")
     public static HashMap<String, Object> cop_substr(Object column, long start) throws Throwable {
         return (HashMap<String, Object>)QoreJavaApi.callFunction("cop_substr", column, start);
     }
 
-    //! returns a @ref ColumnOperatorInfo hash for the \c "len" operator with the given argument; returns the length of the given text field
+    //! returns a @ref SqlUtil::ColumnOperatorInfo hash for the \c "len" operator with the given argument; returns the length of the given text field
     /** @par Example:
         @code{.java}
 HashMap<String, Object> wh = new HashMap<String, Object>() {
@@ -1269,7 +1267,7 @@ HashMap<String, Object> rows = t.selectRows(sh);
 
         @param column the column specification for the column (String name or dot notation for use in joins)
 
-        @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
+        @return a @ref SqlUtil::ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
         @since %SqlUtil 1.3.1
     */
@@ -1598,7 +1596,7 @@ select row_number() over (partition by row_type order by id) as "row_number" fro
     //! row was unchanged (only possible with @ref UpsertSelectFirst, @ref UpsertInsertOnly, and @ref UpsertUpdateOnly)
     public static int UR_Unchanged = 4;
 
-    //! row was deleted (only possible with batch upsert methods such as @ref upsertFromIterator() where @ref UpsertOptions "upsert option" \c delete_others is true)
+    //! row was deleted (only possible with batch upsert methods such as @ref SqlUtil::AbstractTable::upsertFromIterator() where @ref UpsertOptions "upsert option" \c delete_others is true)
     public static int UR_Deleted = 5;
     ///@}
 
@@ -1948,7 +1946,7 @@ table.truncate();
 String sql = table.getTruncateSql();
         @endcode
 
-        @param opt a hash of options for the SQL string; see @ref AbstractTable.AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to truncate the table
 
@@ -2042,7 +2040,7 @@ boolean b = table.empty();
 
     //! creates the object from a table description hash
     /** @param desc a @ref table_desc_hash "table description hash" describing the table
-        @param opt an optional hash of options for the table creation string; see @ref sqlutil.AbstractTableTableOptions for common options; each driver can support additional driver-specific options
+        @param opt an optional hash of options for the table creation string; see @ref SqlUtil::AbstractTable::TableOptions for common options; each driver can support additional driver-specific options
 
         @throw OPTION-ERROR invalid or unsupported option passed
         @throw DESCRIPTION-ERROR invalid or unsupported description hash value passed
@@ -2339,7 +2337,6 @@ String sql = table.getRenameColumnSql("name", "family_name");
 
         @param old_name the current name of the column
         @param new_name the new name of the column
-        @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL String that can be used to rename an existing column in the table
 
@@ -2364,7 +2361,7 @@ table.addPrimaryKey("pk_mytable", "id");
 
         @param pkname the name of the new primary key constraint
         @param columns a single column name or a list of columns that make up the primary key
-        @param opt a hash of options for the new primary key; each driver may implement its own options; for common options, see @ref AbstractTable::ConstraintOptions
+        @param opt a hash of options for the new primary key; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
 
         @throw PRIMARY-KEY-ERROR the table already has a primary key or invalid columns or options passed
 
@@ -2403,7 +2400,7 @@ String sql = table.getAddPrimaryKeySql("pk_mytable", "id", pkopt, opt);
 
         @param pkname the name of the new primary key constraint
         @param cols a single column name or a list of columns that make up the primary key
-        @param pkopt a hash of options for the new primary key; each driver may implement its own options; for common options, see @ref org.qore.sqlutil.AbstractTableConstraintOptions
+        @param pkopt a hash of options for the new primary key; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
         @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to add a primary key to the table
@@ -2429,7 +2426,7 @@ String sql = table.getAddPrimaryKeySql("pk_mytable", "id", pkopt);
 
         @param pkname the name of the new primary key constraint
         @param cols a single column name or a list of columns that make up the primary key
-        @param pkopt a hash of options for the new primary key; each driver may implement its own options; for common options, see @ref ConstraintOptions
+        @param pkopt a hash of options for the new primary key; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
 
         @return the SQL that can be used to add a primary key to the table
 
@@ -2565,9 +2562,8 @@ table.addUniqueConstraint("uk_mytable", "name", opt);
 
         @param cname the name of the new unique constraint
         @param cols a single column name or a list of columns that make up the unique constraint
-        @param opt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see @ref AbstractTable::ConstraintOptions
+        @param opt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
 
-        @return an AbstractUniqueConstraint object corresponding to the unique constraint created
 
         @throw UNIQUE-CONSTRAINT-ERROR the table already has a constraint with the given name or invalid columns passed
         @throw OPTION-ERROR invalid or unsupported option passed
@@ -2586,7 +2582,7 @@ String sql = table.getAddUniqueConstraintSql("uk_mytable", "name", ukopt);
 
         @param cname the name of the new unique constraint
         @param cols a single column name or a list of columns that make up the unique constraint
-        @param ukopt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see @ref ConstraintOptions
+        @param ukopt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
         @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL String that can be used to add a unique constraint to the table
@@ -2610,7 +2606,7 @@ String sql = table.getAddUniqueConstraintSql("name", ukopt);
 
         @param cname the name of the new unique constraint
         @param cols a single column name or a list of columns that make up the unique constraint
-        @param ukopt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see @ref ConstraintOptions
+        @param ukopt a hash of options for the new unique constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
 
         @return an SQL String that can be used to add a unique constraint to the table
 
@@ -2658,7 +2654,7 @@ table.addIndex("uk_mytable_name", true, new String[]{"name"}, opt);
         @param iname the name of the new index
         @param unique a flag to tell if the new index should be unique or not
         @param cols a single column name or a list of columns that make up the index
-        @param opt a hash of options for the new index; each driver may implement its own options; for common options, see @ref AbstractTable::IndexOptions
+        @param opt a hash of options for the new index; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::IndexOptions
 
         @throw INDEX-ERROR the table already has an index with the given name or invalid columns or options were passed
 
@@ -2817,7 +2813,7 @@ String sql = table.getAddForeignConstraintSql("fk_mytable_other_table", ("name",
         @param cols a single column name or a list of columns in the local table that make up the foreign constraint
         @param table the name of the other table that the constraint targets
         @param tcols a single column name or a list of columns in the foreign table or null meaning that the column names are the same as in the local table; if column names are given the same number of columns must be given in the local and foreign tables
-        @param fkopt a hash of options for the new foreign constraint; each driver may implement its own options; for common options, see @ref ForeignConstraintOptions
+        @param fkopt a hash of options for the new foreign constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ForeignConstraintOptions
         @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL String that can be used to add a foreign constraint to the table
@@ -2843,7 +2839,7 @@ String sql = table.getAddForeignConstraintSql("fk_mytable_other_table", cols, "o
         @param cols a single column name or a list of columns in the local table that make up the foreign constraint
         @param table the name of the other table that the constraint targets
         @param tcols a single column name or a list of columns in the foreign table or null meaning that the column names are the same as in the local table; if column names are given the same number of columns must be given in the local and foreign tables
-        @param fkopt a hash of options for the new foreign constraint; each driver may implement its own options; for common options, see @ref ForeignConstraintOptions
+        @param fkopt a hash of options for the new foreign constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ForeignConstraintOptions
 
         @return an SQL String that can be used to add a foreign constraint to the table
 
@@ -2915,7 +2911,7 @@ String sql = table.getAddCheckConstraintSql("check_mytable_id", "id > 10");
 
         @param cname the name of the new constraint
         @param src the source of the constraint clause
-        @param copt a hash of options for the new constraint; each driver may implement its own options; for common options, see @ref ConstraintOptions
+        @param copt a hash of options for the new constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
         @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL String that can be used to add a check constraint to the table
@@ -2941,8 +2937,7 @@ String sql = table.getAddCheckConstraintSql("check_mytable_id", "id > 10");
 
         @param cname the name of the new constraint
         @param src the source of the constraint clause
-        @param copt a hash of options for the new constraint; each driver may implement its own options; for common options, see @ref ConstraintOptions
-        @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
+        @param copt a hash of options for the new constraint; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::ConstraintOptions
 
         @return an SQL String that can be used to add a check constraint to the table
 
@@ -2967,8 +2962,6 @@ String sql = table.getAddCheckConstraintSql("check_mytable_id", "id > 10");
 
         @param cname the name of the new constraint
         @param src the source of the constraint clause
-        @param copt a hash of options for the new constraint; each driver may implement its own options; for common options, see @ref ConstraintOptions
-        @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return an SQL String that can be used to add a check constraint to the table
 
@@ -3014,7 +3007,6 @@ String sql = table.getDropConstraintSql("uk_mytable_name");
         @endcode
 
         @param cname the name of the constraint to drop
-        @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return the SQL that can be used to drop a constraint from the table; this can be any constraint on the table, a primary key, a foreign key constraint, or a generic constraint
 
@@ -3086,7 +3078,7 @@ String sql = table.getAddTriggerSql("trig_mytable", trigger_src);
 
         @param tname the name of the new trigger
         @param src the source of the trigger
-        @param topt a hash of options for the new trigger; each driver may implement its own options; for common options, see @ref TriggerOptions
+        @param topt a hash of options for the new trigger; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::TriggerOptions
         @param opt a hash of options for the SQL string; see @ref AlignTableOptions for common options; each driver can support additional driver-specific options
 
         @return a list of SQL strings that can be used to add a trigger to the table
@@ -3112,7 +3104,7 @@ String sql = table.getAddTriggerSql("trig_mytable", trigger_src);
 
         @param tname the name of the new trigger
         @param src the source of the trigger
-        @param topt a hash of options for the new trigger; each driver may implement its own options; for common options, see @ref TriggerOptions
+        @param topt a hash of options for the new trigger; each driver may implement its own options; for common options, see @ref SqlUtil::AbstractTable::TriggerOptions
 
         @return a list of SQL strings that can be used to add a trigger to the table
 
@@ -3246,7 +3238,7 @@ String sql = table.getDropColumnSql("notes_2");
     }
 
     //! inserts a row into the table without any transaction management; a transaction will be in progress after this method is successfully executed
-    /** @ingroup inserts
+    /** @par Insert operation
         @par Example:
         @code{.java}
 table.insert(row);
@@ -3290,7 +3282,7 @@ int rows = table.insertFromSelect(new String[]{"id", "name", "created"}, source_
         @param cols the list of column names to use to insert in the current table
         @param source the source table for the select statement
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref SqlDataCallbackOptions for more inf
+        @param opt optional SQL data operation callback options; see @ref SqlUtil::AbstractTable::SqlDataCallbackOptions for more inf
 
         @return the number of rows inserted
 
@@ -3416,7 +3408,6 @@ try {
     throw e;
 }
         @endcode
-        @endcode
 
         The table argument does not need to be in the same database as the current table; it can also
         be in a different database server or a database server of a different type (you can use this method to upsert or
@@ -3458,8 +3449,7 @@ int dcnt = table.del(cond_hash);
         @endcode
 
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
-        @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see @ref SqlUtil::AbstractTable::SqlDataCallbackOptions for more info
 
         @return the count of rows deleted
 
@@ -3487,8 +3477,7 @@ int ucnt = table.update(set_hash, cond_hash);
 
         @param set the hash of values to set, key values are column names, hash values are the values to assign to those columns or update operators (see @ref sql_uop_funcs)
         @param cond a hash of conditions for the where clause; see @ref where_clauses for more information
-        @param sql an optional reference to a string to return the SQL generated for the select statement
-        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see @ref SqlUtil::AbstractTable::SqlDataCallbackOptions for more info
 
         @return the count of rows updated
 
@@ -3521,7 +3510,6 @@ try {
     ds.collback();
     throw e;
 }
-        @endcode
         @endcode
 
         The table argument does not need to be in the same database as the current table; it can also
@@ -3579,7 +3567,7 @@ AbstractSQLStatement i = table.getStatement(sh, opts);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see @ref SqlUtil::AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref org.qore.lang.AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -3648,7 +3636,7 @@ AbstractSQLStatement i = table.getStatementNoExec(sh, opts);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see @ref SqlUtil::AbstractTable::SqlDataCallbackOptions for more info
 
         @return an @ref org.qore.lang.AbstractSQLStatement "AbstractSQLStatement" object that will iterate the results of a select statement matching the arguments
 
@@ -3717,7 +3705,7 @@ Map<String, Object> h = table.selectRow(sh);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see @ref SqlUtil::AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash representing the row in the table that matches the argument hash; if more than one row would be returned an exception is raised
 
@@ -3764,7 +3752,7 @@ Map<String, Object>[] l = table.selectRows(sh, opt);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see @ref SqlUtil::AbstractTable::SqlDataCallbackOptions for more info
 
         @return a list of hashes representing the rows in the table that match the argument hash
 
@@ -3829,7 +3817,7 @@ Map<String, Object> h = table.select(sh);
         @endcode
 
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
-        @param opt optional SQL data operation callback options; see @ref SqlDataCallbackOptions for more info
+        @param opt optional SQL data operation callback options; see @ref SqlUtil::AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash of lists representing the columns and rows in the table that match the argument hash
 

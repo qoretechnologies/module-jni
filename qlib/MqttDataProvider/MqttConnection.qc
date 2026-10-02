@@ -177,7 +177,7 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
     }
 
     #! Called by the constructor to set the real URL
-    /** @path the new URL
+    /** @param url the new URL
 
         sets the real HTTP URL for HTTP-based connections
     */
