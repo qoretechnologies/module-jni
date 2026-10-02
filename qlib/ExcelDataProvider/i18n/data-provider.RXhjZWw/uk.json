@@ -59,6 +59,18 @@
           "source": "List of header / column names for the data iterated",
           "message": "Список назв заголовків / стовпців для ітерованих даних"
         },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "Якщо `True`, порожні рядки пропускаються, а читання триває до кінця `data_cells` або до останнього рядка аркуша; якщо `False` (типово), читання зупиняється на першому порожньому рядку"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ігнорувати порожні рядки"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Пропускати порожні рядки замість зупинки на першому з них"
+        },
         "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
           "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
           "message": "Розташування даних Excel; взаємовиключне з `data` та `stream`; розділяється за допомогою виклику [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
@@ -178,6 +190,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
           "source": "List of header / column names for the data iterated",
           "message": "Список назв заголовків / стовпців для ітерованих даних"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "Якщо `True`, порожні рядки пропускаються, а читання триває до кінця `data_cells` або до останнього рядка аркуша; якщо `False` (типово), читання зупиняється на першому порожньому рядку"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ігнорувати порожні рядки"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Пропускати порожні рядки замість зупинки на першому з них"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
           "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
