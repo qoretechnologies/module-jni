@@ -22,7 +22,9 @@ archive checksum. A missing or corrupt aggregate is an error; no network
 access is needed during rpmbuild.
 
 ``debian/install-notices.py`` accepts ``--runtime-root`` and ``--kotlin-root``
-for an RPM staging directory. With no arguments it retains its Debian package
+for an RPM staging directory and ``--docdir`` for the distribution's absolute
+documentation prefix (for example, ``/usr/share/doc/packages`` on openSUSE).
+The prefix is resolved inside each staging root. With no arguments it retains its Debian package
 paths. It extracts verbatim upstream notices and provenance without modifying
 runtime JARs. Test both preparation and notice installation with::
 

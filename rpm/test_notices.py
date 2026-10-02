@@ -65,17 +65,44 @@ class NoticeInstallTest(unittest.TestCase):
                 patch.object(notices, 'install_runtime') as runtime, \
                 patch.object(notices, 'install_kotlin') as kotlin:
             notices.main()
-        runtime.assert_called_once_with(ROOT, ROOT / 'debian/qore-jni-module')
-        kotlin.assert_called_once_with(ROOT / 'debian/qore-jni-kotlin')
+        runtime.assert_called_once_with(ROOT, ROOT / 'debian/qore-jni-module', Path('/usr/share/doc'))
+        kotlin.assert_called_once_with(ROOT / 'debian/qore-jni-kotlin', Path('/usr/share/doc'))
 
     def test_rpm_can_select_one_shared_staging_root(self):
         with patch.object(sys, 'argv', ['install-notices.py', '--runtime-root', str(self.destination),
-                                       '--kotlin-root', str(self.destination)]), \
+                                       '--kotlin-root', str(self.destination), '--docdir', '/usr/share/doc/packages']), \
                 patch.object(notices, 'install_runtime') as runtime, \
                 patch.object(notices, 'install_kotlin') as kotlin:
             notices.main()
-        runtime.assert_called_once_with(ROOT, self.destination)
-        kotlin.assert_called_once_with(self.destination)
+        runtime.assert_called_once_with(ROOT, self.destination, Path('/usr/share/doc/packages'))
+        kotlin.assert_called_once_with(self.destination, Path('/usr/share/doc/packages'))
+
+    def test_suse_documentation_prefix_preserves_both_notice_sets(self):
+        with zipfile.ZipFile(self.jar, 'w') as archive:
+            archive.writestr('META-INF/LICENSE', 'Complete runtime license\n')
+        source = self.destination / 'usr/share/qore/java/kotlin/license'
+        source.mkdir(parents=True)
+        (source / 'LICENSE.txt').write_text('Complete compiler license\n')
+        docdir = Path('/usr/share/doc/packages')
+        notices.install_runtime(self.repo, self.destination, docdir)
+        notices.install_kotlin(self.destination, docdir)
+        base = self.destination / 'usr/share/doc/packages'
+        self.assertIn('Complete runtime license\n',
+                      (base / 'qore-jni-module/third-party-notices/dependency.jar.txt').read_text())
+        self.assertEqual(self.manifest,
+                         json.loads((base / 'qore-jni-module/third-party-notices/provenance.json').read_text()))
+        self.assertEqual('Complete compiler license\n',
+                         (base / 'qore-jni-kotlin/upstream-licenses/LICENSE.txt').read_text())
+        self.assertFalse((self.destination / 'usr/share/doc/qore-jni-module').exists())
+
+    def test_invalid_documentation_prefix_is_rejected_before_writing(self):
+        for docdir in ('relative', '/', '/usr/share/../doc'):
+            with self.subTest(docdir=docdir):
+                with self.assertRaisesRegex(ValueError, 'Documentation directory'):
+                    notices.install_runtime(self.repo, self.destination, docdir)
+                with self.assertRaisesRegex(ValueError, 'Documentation directory'):
+                    notices.install_kotlin(self.destination, docdir)
+        self.assertEqual([], list(self.destination.iterdir()))
 
     def test_absent_debian_subpackages_remain_optional(self):
         absent = self.root / 'not-built'

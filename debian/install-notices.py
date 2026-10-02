@@ -47,11 +47,19 @@ def archive_notices(path):
     return found
 
 
-def install_runtime(repo, package):
+def documentation_root(package, docdir):
+    """Resolve an absolute distribution documentation prefix inside a staging root."""
+    docdir = Path(docdir)
+    if not docdir.is_absolute() or docdir == Path('/') or '..' in docdir.parts:
+        raise ValueError('Documentation directory must be an absolute non-root path without parent traversal')
+    return package / docdir.relative_to('/')
+
+
+def install_runtime(repo, package, docdir=Path('/usr/share/doc')):
     """Install runtime notices below a Debian or RPM staging root."""
+    out = documentation_root(package, docdir) / 'qore-jni-module/third-party-notices'
     manifest = json.loads((repo / "debian/java-dependencies.json").read_text())
     if package.is_dir():
-        out = package / "usr/share/doc/qore-jni-module/third-party-notices"
         out.mkdir(parents=True, exist_ok=True)
         for name, record in sorted(manifest["dependencies"].items()):
             inputs = [repo / record["paths"][0]]
@@ -89,13 +97,14 @@ def install_runtime(repo, package):
         shutil.copyfile(repo / "debian/java-dependencies.json", out / "provenance.json")
 
 
-def install_kotlin(kotlin):
+def install_kotlin(kotlin, docdir=Path('/usr/share/doc')):
     """Retain the compiler's complete upstream notice directory."""
+    out = documentation_root(kotlin, docdir) / 'qore-jni-kotlin/upstream-licenses'
     if kotlin.is_dir():
         source = kotlin / "usr/share/qore/java/kotlin/license"
         if not source.is_dir():
             raise ValueError("Kotlin package lacks upstream license notices")
-        shutil.copytree(source, kotlin / "usr/share/doc/qore-jni-kotlin/upstream-licenses", dirs_exist_ok=True)
+        shutil.copytree(source, out, dirs_exist_ok=True)
 
 
 def main():
@@ -103,9 +112,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-root", type=Path, default=repo / "debian/qore-jni-module")
     parser.add_argument("--kotlin-root", type=Path, default=repo / "debian/qore-jni-kotlin")
+    parser.add_argument("--docdir", type=Path, default=Path('/usr/share/doc'),
+                        help="absolute documentation prefix inside the staging roots")
     args = parser.parse_args()
-    install_runtime(repo, args.runtime_root)
-    install_kotlin(args.kotlin_root)
+    install_runtime(repo, args.runtime_root, args.docdir)
+    install_kotlin(args.kotlin_root, args.docdir)
 
 
 if __name__ == "__main__":
