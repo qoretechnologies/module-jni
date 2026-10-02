@@ -100,6 +100,13 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "desc": "List of header / column names for the data iterated; if this is present, then "
                     "`header_names` must be `False`",
             },
+            "ignore_empty": <DataProviderOptionInfo>{
+                "display_name": "Ignore Empty Rows",
+                "short_desc": "Skip empty rows instead of stopping at the first one",
+                "type": AbstractDataProviderType::get(SoftBoolType),
+                "desc": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the "
+                    "last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+            },
             "path": <DataProviderOptionInfo>{
                 "display_name": "Excel Input Path",
                 "short_desc": "The location of the Excel data",
@@ -202,11 +209,6 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
             LoggerWrapper::debug("ExcelReadDataProvider::constructor() options: %y", options);
         }
         *hash<auto> copts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, options));
-        # Validate mutual exclusion of headers and header_names
-        if (copts.headers && copts.header_names) {
-            error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_names\" options; use "
-                "either one or the other");
-        }
         sheet = copts.worksheet ?? "";
         if (copts.path) {
             if (copts.stream) {
@@ -245,15 +247,27 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         return name;
     }
 
-    #! Process cell options
+    #! Validates option combinations and parses cell range options
+    /** @throw EXCEL-READ-OPTION-ERROR \c "headers" and \c "header_names" are both given
+        @throw EXCEL-INVALID-LOCATION invalid excel location or range string
+    */
     static *hash<auto> processCellOptions(*hash<auto> opts) {
+        if (opts) {
+            # parsed ranges replace the range strings, so the hash must accept any value type
+            opts = {} + opts;
+        }
+        if (opts.headers && opts.header_names) {
+            throw "EXCEL-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_names\" options; use "
+                "either one or the other";
+        }
         if (opts.header_cells) {
             opts.header_cells = ExcelReadDataProvider::parseRange(opts.header_cells);
         }
         if (opts.data_cells) {
             opts.data_cells = ExcelReadDataProvider::parseRange(opts.data_cells);
             if (opts.header_cells) {
-                if (opts.header_cells.start.column > opts.data_cells.start.column) {
+                if (ExcelReadDataProvider::getColumnIndex(opts.header_cells.start.column)
+                        > ExcelReadDataProvider::getColumnIndex(opts.data_cells.start.column)) {
                     throw "EXCEL-INVALID-LOCATION", sprintf("start column for header cells (%y) is after the start "
                         "column for data cells (%y)", opts.header_cells.start, opts.data_cells.start);
                 }
@@ -279,7 +293,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         };
         if (end) {
             rv.end = ExcelReadDataProvider::parseCellLocation(end);
-            if (rv.start.column > rv.end.column) {
+            if (ExcelReadDataProvider::getColumnIndex(rv.start.column)
+                    > ExcelReadDataProvider::getColumnIndex(rv.end.column)) {
                 throw "EXCEL-INVALID-LOCATION", sprintf("start column (%y) is after the end column (%y)", start, end);
             }
             if (rv.start.row > rv.end.row) {
@@ -294,8 +309,23 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         return rv;
     }
 
+    #! Returns the zero-based index of a column name (ex: \c "a" -> 0, \c "z" -> 25, \c "aa" -> 26)
+    /** Column names are case-insensitive; \c "-" (no column given) is the first column
+    */
+    static int getColumnIndex(string column) {
+        if (column == "-") {
+            return 0;
+        }
+        string col = column.upr();
+        int rv = 0;
+        for (int n = 0; n < col.length(); ++n) {
+            rv = rv * 26 + (ord(col[n]) - ord("A") + 1);
+        }
+        return rv - 1;
+    }
+
     #! Parses a string that designates a cell location (ex: \c "a1")
-    /** @throw INVALID-LOCATION invalid excel location or range string
+    /** @throw EXCEL-INVALID-LOCATION invalid excel location or range string
     */
     static hash<CellLocationInfo> parseCellLocation(string location) {
         *list<*string> row_values = (location =~ x/^(?:[a-z]+)?([0-9]+)$/i);
@@ -315,6 +345,14 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
             return;
         }
         it = new ExcelIterator(i, sheet);
+        ExcelReadDataProvider::configureIterator(it, opts);
+    }
+
+    #! Configures an iterator from processed options
+    /** @param it the iterator to configure
+        @param opts options already processed by processCellOptions()
+    */
+    static configureIterator(ExcelIterator it, *hash<auto> opts) {
         if (opts.header_cells) {
             it.setHeaderCells(opts.header_cells.start.column, opts.header_cells.start.row,
                 opts.header_cells.end.column, opts.header_cells.end.row);
@@ -333,6 +371,9 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (opts.data_cells) {
             it.setDataCells(opts.data_cells.start.column, opts.data_cells.start.row, opts.data_cells.end.column,
                 opts.data_cells.end.row);
+        }
+        if (opts.ignore_empty) {
+            it.setIgnoreEmpty(True);
         }
     }
 

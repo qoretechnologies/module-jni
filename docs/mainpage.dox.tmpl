@@ -1045,6 +1045,8 @@ foreach hash<auto> column in (result.schemaV2()) {
     @section jnireleasenotes jni Module Release Notes
 
     @subsection jni_2_7_0 jni Module Version 2.7.0
+    - Use the static JNI API for the headless graphics-environment query. Importing AWT-dependent
+      spreadsheet APIs now passes checked JNI validation during source and AOT compilation.
     - Release every outstanding native wrapper during JVM shutdown, including wrappers Java has not
       garbage-collected. Explicit release, phantom cleanup, and shutdown atomically claim each pointer
       once; object construction cannot publish into an already closed cleanup handle.
@@ -1062,6 +1064,10 @@ foreach hash<auto> column in (result.schemaV2()) {
     - Fixed Java wrapper and provider documentation links, parameter descriptions, and JMS tables.
       Documentation builds use public QPP declarations and installed dependency indexes.
       Configure with <tt>-DQORE_JNI_STRICT_DOCS=ON</tt> to reject Doxygen warnings; RPM builds enable this check.
+    - fixed Excel and ODS spreadsheet reading and writing: reading without header options returned no data, cell
+      ranges past column \c Z were rejected, streaming Excel writes without headers failed, and ODS writes
+      turned the first record's dates into strings and empty values into empty strings; Excel reading can now
+      skip empty rows with the new \c ignore_empty option
     - fixed JDBC pooled reads retaining transactions and blocking later writes or schema changes;
       explicit transactions and prepared writes retain commit/rollback semantics
     - fixed JDBC cursors retaining local JNI references across Java native-call frames, causing invalid

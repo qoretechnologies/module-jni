@@ -59,7 +59,7 @@ public class OdsWorksheetReadDataProvider inherits DataProvider::AbstractDataPro
 
     #! Creates the OdsWorksheetReadDataProvider with the input data path, name, sheet name, and optionally an option hash
     constructor(string path, string name, string sheet, *hash<auto> opts) {
-        self.i = new OdsIterator(path, sheet);
+        self.i = new OdsIterator(FileLocationHandler::getBinaryStreamFromLocation(path), sheet);
         setup(name, sheet, opts);
     }
 
@@ -68,16 +68,18 @@ public class OdsWorksheetReadDataProvider inherits DataProvider::AbstractDataPro
         *hash<auto> copts = OdsReadDataProvider::processCellOptions(checkOptions("ODS-READ-OPTION-ERROR",
             OdsReadDataProvider::ConstructorOptions, options));
         sheet = copts.worksheet ?? "";
+        if ((copts.path ? 1 : 0) + (copts.stream ? 1 : 0) + (copts.data ? 1 : 0) > 1) {
+            error("ODS-READ-OPTION-ERROR", "only one of the \"path\", \"stream\", and \"data\" options can be "
+                "given");
+        }
         if (copts.path) {
-            if (copts.stream) {
-                error("ODS-READ-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
-                    "one or the other");
-            }
-            i = new OdsIterator(copts.path, sheet);
+            i = new OdsIterator(FileLocationHandler::getBinaryStreamFromLocation(copts.path), sheet);
         } else if (copts.stream) {
             i = new OdsIterator(copts.stream, sheet);
+        } else if (copts.data) {
+            i = new OdsIterator(new BinaryInputStream(copts.data), sheet);
         }
-        self.opts = copts - ("stream", "path", "worksheet");
+        self.opts = copts - ("stream", "path", "worksheet", "data");
         if (!i) {
             i = new OdsIterator(new StringInputStream(""), sheet);
         }
@@ -94,24 +96,7 @@ public class OdsWorksheetReadDataProvider inherits DataProvider::AbstractDataPro
 
     #! Common setup code
     private setOptions() {
-        if (opts.header_cells) {
-            i.setHeaderCells(opts.header_cells.start.column, opts.header_cells.start.row,
-                opts.header_cells.end.column, opts.header_cells.end.row);
-        } else if (opts.header_names) {
-            i.setHeaderCells("-", 1, "-", 1);
-        } else if (opts.headers) {
-            i.setHeaders(opts.headers);
-        }
-        if (opts.tolwr) {
-            i.setHeadersToLower();
-        }
-        if (opts.timezone) {
-            i.setZone(opts.timezone);
-        }
-        if (opts.data_cells) {
-            i.setDataCells(opts.data_cells.start.column, opts.data_cells.start.row, opts.data_cells.end.column,
-                opts.data_cells.end.row);
-        }
+        OdsReadDataProvider::configureIterator(i, opts);
     }
 
     #! Returns the object name

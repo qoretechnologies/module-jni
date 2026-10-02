@@ -120,70 +120,20 @@ public class OdsWriter implements Closeable {
      * Writes a data row from a hash.
      */
     public void writeRow(Hash data) {
-        if (!headersWritten && !headers.isEmpty()) {
-            writeHeaders();
-        }
-
+        // With no predefined headers, the first record's keys define the columns; they are taken before any row is
+        // written, so the header row is always written first and the first record never has to be copied down a row
+        // (copying lost the value types of the first record, e.g. dates became strings)
         if (headers.isEmpty()) {
-            // No predefined headers - use keys from the hash
-            int col = 0;
             for (Object key : data.keySet()) {
-                if (!headersWritten) {
-                    headers.add(key.toString());
-                }
-                OdfTableCell cell = table.getCellByPosition(col++, currentRow);
-                setCellValue(cell, data.get(key));
+                headers.add(key.toString());
             }
-            // Write headers on first row if we collected them
-            if (!headersWritten && !headers.isEmpty()) {
-                // Move current data down - we need to insert headers at row 0
-                // Since OdfTable doesn't support shiftRows, we write headers first next time
-                // Actually for first row, let's just write headers at row 0 and data at row 1
-                // We need to shift: copy row currentRow to currentRow+1, then write headers at row 0
-                for (int i = 0; i < headers.size(); i++) {
-                    // Copy data from row 0 to row 1
-                    OdfTableCell srcCell = table.getCellByPosition(i, 0);
-                    OdfTableCell destCell = table.getCellByPosition(i, 1);
-                    copyCell(srcCell, destCell);
-                    // Write header at row 0
-                    srcCell.setStringValue(headers.get(i));
-                }
-                currentRow++;
-                headersWritten = true;
-            }
-        } else {
-            // Use predefined headers
-            for (int i = 0; i < headers.size(); i++) {
-                OdfTableCell cell = table.getCellByPosition(i, currentRow);
-                Object value = data.get(headers.get(i));
-                setCellValue(cell, value);
-            }
+        }
+        writeHeaders();
+
+        for (int i = 0; i < headers.size(); i++) {
+            setCellValue(table.getCellByPosition(i, currentRow), data.get(headers.get(i)));
         }
         currentRow++;
-    }
-
-    /**
-     * Copies cell value from one cell to another.
-     */
-    private void copyCell(OdfTableCell src, OdfTableCell dest) {
-        String valueType = src.getValueType();
-        if (valueType == null) {
-            return;
-        }
-        switch (valueType) {
-            case "string":
-                dest.setStringValue(src.getStringValue());
-                break;
-            case "float":
-                dest.setDoubleValue(src.getDoubleValue());
-                break;
-            case "boolean":
-                dest.setBooleanValue(src.getBooleanValue());
-                break;
-            default:
-                dest.setStringValue(src.getDisplayText());
-                break;
-        }
     }
 
     /**
@@ -191,7 +141,8 @@ public class OdsWriter implements Closeable {
      */
     private void setCellValue(OdfTableCell cell, Object value) {
         if (value == null) {
-            cell.setStringValue("");
+            // leave the cell empty so that it is read back as no value rather than as an empty string
+            return;
         } else if (value instanceof Boolean) {
             cell.setBooleanValue((Boolean) value);
         } else if (value instanceof Number) {

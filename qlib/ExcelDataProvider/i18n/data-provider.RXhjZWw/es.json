@@ -59,6 +59,18 @@
           "source": "List of header / column names for the data iterated",
           "message": "Lista de nombres de encabezado / columna para los datos iterados"
         },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "Si es `True`, se omiten las filas vacías y la lectura continúa hasta el final de `data_cells` o la última fila de la hoja de cálculo; si es `False` (predeterminado), la lectura se detiene en la primera fila vacía"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ignorar filas vacías"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Omitir las filas vacías en lugar de detenerse en la primera"
+        },
         "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
           "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
           "message": "La ubicación de los datos de Excel; mutuamente excluyente con `data` y `stream`; se resuelve con una llamada a [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
@@ -178,6 +190,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
           "source": "List of header / column names for the data iterated",
           "message": "Lista de nombres de encabezado / columna para los datos iterados"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "Si es `True`, se omiten las filas vacías y la lectura continúa hasta el final de `data_cells` o la última fila de la hoja de cálculo; si es `False` (predeterminado), la lectura se detiene en la primera fila vacía"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ignorar filas vacías"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Omitir las filas vacías en lugar de detenerse en la primera"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
           "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",

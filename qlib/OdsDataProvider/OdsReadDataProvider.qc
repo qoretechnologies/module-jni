@@ -182,11 +182,6 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
         *hash<auto> copts = processCellOptions(checkOptions("ODS-READ-OPTION-ERROR", ConstructorOptions, options));
-        # Validate mutual exclusion of headers and header_names
-        if (copts.headers && copts.header_names) {
-            error("ODS-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_names\" options; use "
-                "either one or the other");
-        }
         sheet = copts.worksheet ?? "";
         if (copts.path) {
             if (copts.stream) {
@@ -223,15 +218,27 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
         return name;
     }
 
-    #! Process cell options
+    #! Validates option combinations and parses cell range options
+    /** @throw ODS-READ-OPTION-ERROR \c "headers" and \c "header_names" are both given
+        @throw ODS-INVALID-LOCATION invalid location or range string
+    */
     static *hash<auto> processCellOptions(*hash<auto> opts) {
+        if (opts) {
+            # parsed ranges replace the range strings, so the hash must accept any value type
+            opts = {} + opts;
+        }
+        if (opts.headers && opts.header_names) {
+            throw "ODS-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_names\" options; use "
+                "either one or the other";
+        }
         if (opts.header_cells) {
             opts.header_cells = OdsReadDataProvider::parseRange(opts.header_cells);
         }
         if (opts.data_cells) {
             opts.data_cells = OdsReadDataProvider::parseRange(opts.data_cells);
             if (opts.header_cells) {
-                if (opts.header_cells.start.column > opts.data_cells.start.column) {
+                if (OdsReadDataProvider::getColumnIndex(opts.header_cells.start.column)
+                        > OdsReadDataProvider::getColumnIndex(opts.data_cells.start.column)) {
                     throw "ODS-INVALID-LOCATION", sprintf("start column for header cells (%y) is after the start "
                         "column for data cells (%y)", opts.header_cells.start, opts.data_cells.start);
                 }
@@ -256,7 +263,8 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
         };
         if (end) {
             rv.end = OdsReadDataProvider::parseCellLocation(end);
-            if (rv.start.column > rv.end.column) {
+            if (OdsReadDataProvider::getColumnIndex(rv.start.column)
+                    > OdsReadDataProvider::getColumnIndex(rv.end.column)) {
                 throw "ODS-INVALID-LOCATION", sprintf("start column (%y) is after the end column (%y)", start, end);
             }
             if (rv.start.row > rv.end.row) {
@@ -269,6 +277,21 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
             };
         }
         return rv;
+    }
+
+    #! Returns the zero-based index of a column name (ex: \c "a" -> 0, \c "z" -> 25, \c "aa" -> 26)
+    /** Column names are case-insensitive; \c "-" (no column given) is the first column
+    */
+    static int getColumnIndex(string column) {
+        if (column == "-") {
+            return 0;
+        }
+        string col = column.upr();
+        int rv = 0;
+        for (int n = 0; n < col.length(); ++n) {
+            rv = rv * 26 + (ord(col[n]) - ord("A") + 1);
+        }
+        return rv - 1;
     }
 
     #! Parses a string that designates a cell location (ex: \c "a1")
@@ -290,6 +313,14 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
             return;
         }
         it = new OdsIterator(i, sheet);
+        OdsReadDataProvider::configureIterator(it, opts);
+    }
+
+    #! Configures an iterator from processed options
+    /** @param it the iterator to configure
+        @param opts options already processed by processCellOptions()
+    */
+    static configureIterator(OdsIterator it, *hash<auto> opts) {
         if (opts.header_cells) {
             it.setHeaderCells(opts.header_cells.start.column, opts.header_cells.start.row,
                 opts.header_cells.end.column, opts.header_cells.end.row);

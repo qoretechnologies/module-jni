@@ -1,0 +1,8 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+%requires jni
+%module-cmd(jni) import sun.awt.dnd.SunDropTargetEvent
+
+# Importing this class must query GraphicsEnvironment.isHeadless() using the
+# static JNI API before choosing the existing headless-safe Object mapping.
+printf("headless class import completed\n");

@@ -59,6 +59,18 @@
           "source": "List of header / column names for the data iterated",
           "message": "Zoznam názvov hlavičiek / stĺpcov pre iterované dáta"
         },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "Ak je `True`, prázdne riadky sa preskočia a čítanie pokračuje do konca `data_cells` alebo do posledného riadka hárka; ak je `False` (predvolené), čítanie sa zastaví na prvom prázdnom riadku"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ignorovať prázdne riadky"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Preskočiť prázdne riadky namiesto zastavenia na prvom z nich"
+        },
         "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
           "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
           "message": "Umiestnenie dát Excel; navzájom sa vylučuje s `data` a `stream`; rieši sa volaním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
@@ -178,6 +190,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
           "source": "List of header / column names for the data iterated",
           "message": "Zoznam názvov hlavičiek / stĺpcov pre iterované dáta"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "Ak je `True`, prázdne riadky sa preskočia a čítanie pokračuje do konca `data_cells` alebo do posledného riadka hárka; ak je `False` (predvolené), čítanie sa zastaví na prvom prázdnom riadku"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ignorovať prázdne riadky"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Preskočiť prázdne riadky namiesto zastavenia na prvom z nich"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
           "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",

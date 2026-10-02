@@ -67,6 +67,9 @@ owning program has already closed. Run `ctest --test-dir build --output-on-failu
 for deterministic cleanup ownership tests, including concurrent claims, registration
 at shutdown, and construction that finishes after its cleanup handle was claimed.
 The native shutdown path drains wrappers even when Java has not collected them.
+CTest also imports the AWT drag-and-drop event class with checked JNI and an explicit
+headless JVM. This verifies the static graphics-environment query used while importing
+spreadsheet APIs on servers without a display.
 The main
 jni.qtest suite returns normally so native teardown is included in memory checks;
 its abrupt-exit behavior is tested in a separate subprocess. When running Valgrind

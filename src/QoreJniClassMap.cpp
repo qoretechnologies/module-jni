@@ -805,7 +805,7 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
     if (name == "sun.awt.dnd.SunDropTargetEvent") {
         Globals::ensureGraphicsEnvironment();
         Env env;
-        if (env.callBooleanMethod(Globals::classGraphicsEnvironment, Globals::methodGraphicsEnvironmentIsHeadless,
+        if (env.callStaticBooleanMethod(Globals::classGraphicsEnvironment, Globals::methodGraphicsEnvironmentIsHeadless,
             nullptr)) {
             printd(5, "retuning Object for '%s' when running in a headless environment\n", name.c_str());
             return QC_OBJECT;

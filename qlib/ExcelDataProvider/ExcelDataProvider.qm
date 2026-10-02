@@ -234,6 +234,8 @@ module ExcelDataProvider {
     - \c headers: List of header names to use
     - \c tolwr: Convert header names to lowercase
     - \c timezone: Timezone for date values
+    - \c ignore_empty: If \c True, skip empty rows and continue to the end of \c data_cells or the last row of the
+      worksheet; by default reading stops at the first empty row
 
     @subsection ExcelDataProvider_reading_multisheet Multi-Sheet Access
 
@@ -318,6 +320,15 @@ module ExcelDataProvider {
     - fixed typos in option names and comments
     - fixed Java error message for unknown worksheet
     - fixed resource leak in getWorksheets() methods
+    - added the \c ignore_empty read option to continue reading past empty rows
+    - fixed reading with no header options, or with \c headers and no \c data_cells, returning no data; data now
+      starts on the first row
+    - fixed cell ranges past column \c Z being rejected or accepted in the wrong order (ex: \c "z1:aa10")
+    - fixed a \c data_cells range wider than the header range raising a Java index error
+    - fixed the \c headers and \c header_names conflict check being skipped for the path and stream constructors
+    - fixed @ref ExcelDataProvider::ExcelWorksheetReadDataProvider "ExcelWorksheetReadDataProvider" ignoring the
+      \c data option and reading paths directly as local files instead of resolving them as file locations
+    - fixed streaming writes (\c streaming) failing when no \c headers are given
     - updated copyright to 2026
 
     @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0
