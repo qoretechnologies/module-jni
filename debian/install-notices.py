@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 """Install verbatim upstream notices without changing any runtime JAR."""
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -46,10 +47,9 @@ def archive_notices(path):
     return found
 
 
-def main():
-    repo = Path(__file__).resolve().parents[1]
+def install_runtime(repo, package):
+    """Install runtime notices below a Debian or RPM staging root."""
     manifest = json.loads((repo / "debian/java-dependencies.json").read_text())
-    package = repo / "debian/qore-jni-module"
     if package.is_dir():
         out = package / "usr/share/doc/qore-jni-module/third-party-notices"
         out.mkdir(parents=True, exist_ok=True)
@@ -87,12 +87,25 @@ def main():
                 raise ValueError("No upstream notices found for " + name)
             (out / (name + ".txt")).write_text("\n\n".join(blocks) + "\n")
         shutil.copyfile(repo / "debian/java-dependencies.json", out / "provenance.json")
-    kotlin = repo / "debian/qore-jni-kotlin"
+
+
+def install_kotlin(kotlin):
+    """Retain the compiler's complete upstream notice directory."""
     if kotlin.is_dir():
         source = kotlin / "usr/share/qore/java/kotlin/license"
         if not source.is_dir():
             raise ValueError("Kotlin package lacks upstream license notices")
         shutil.copytree(source, kotlin / "usr/share/doc/qore-jni-kotlin/upstream-licenses", dirs_exist_ok=True)
+
+
+def main():
+    repo = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--runtime-root", type=Path, default=repo / "debian/qore-jni-module")
+    parser.add_argument("--kotlin-root", type=Path, default=repo / "debian/qore-jni-kotlin")
+    args = parser.parse_args()
+    install_runtime(repo, args.runtime_root)
+    install_kotlin(args.kotlin_root)
 
 
 if __name__ == "__main__":
