@@ -285,6 +285,15 @@ public class OdpWriteDataProvider inherits DataProvider::AbstractDataProvider {
         return created;
     }
 
+    #! Returns an open record type because the record fields depend on the ODP presentation content type
+    /** @param search_options ignored
+
+        @return @ref NOTHING to represent an open record shape
+    */
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return NOTHING;
+    }
+
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;

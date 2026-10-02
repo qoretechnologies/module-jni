@@ -108,6 +108,7 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("write: headers from the first record", \testWriteHeadersFromFirstRecord());
 
         addTestCase("write-data action returns the generated data", \testWriteDataAction());
+        addTestCase("writer record type", \testWriterRecordType());
         set_return_value(main());
     }
 
@@ -992,5 +993,16 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         assertEq("PK", output.data.substr(0, 2).toString());
         ExcelReadDataProvider rdp({"data": output.data, "header_names": True});
         assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), (map $1, rdp.searchRecords()));
+    }
+
+    testWriterRecordType() {
+        # the headers option defines the columns
+        ExcelWriteDataProvider dp({"headers": ("Sku", "Qty")});
+        assertEq(("Sku", "Qty"), keys dp.getRecordType());
+        assertEq(("Sku", "Qty"), keys dp.getCreateRecordTypeWithOptions());
+        # without headers, the first record's keys define the columns: an open record type
+        dp = new ExcelWriteDataProvider();
+        assertNothing(dp.getRecordType());
+        assertEq({}, dp.getOrNothingRecordTypeWithOptions());
     }
 }

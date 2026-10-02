@@ -222,6 +222,18 @@ public class OdsWriteDataProvider inherits DataProvider::AbstractDataProvider {
         return created;
     }
 
+    #! Returns the record type: the \c headers columns, or an open record type if headers are taken from the first record
+    /** @param search_options ignored
+
+        @return a field for each column in the \c headers option, or @ref NOTHING (an open record shape) if no
+        headers are given, in which case the first record's keys are used as the columns
+    */
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return map {
+            $1: new QoreDataField($1, "ODS column " + $1, AbstractDataProviderType::anyDataType)
+        }, opts.headers;
+    }
+
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
