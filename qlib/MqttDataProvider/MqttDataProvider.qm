@@ -149,19 +149,19 @@ module MqttDataProvider {
     @ref MqttDataProvider::MqttDataProvider "MqttDataProvider").
 
     MQTT 5.0 features supported include:
-    - **User properties**: application-level key-value metadata on messages
-    - **Request/response pattern**: \c response_topic and \c correlation_data fields
-    - **Message expiry**: automatic message expiration with \c message_expiry_interval
-    - **Content type**: MIME content type metadata on messages
-    - **Payload format indicator**: distinguish UTF-8 text from binary payloads
-    - **Clean start / session expiry**: fine-grained session lifecycle control
-    - **Subscription options**: \c no_local, \c retain_as_published, \c retain_handling
-    - **Receive maximum**: flow control for concurrent unacknowledged messages
-    - **SSL/TLS**: keystore, truststore, protocol, and cipher suite configuration
-    - **Will messages**: Last Will and Testament with MQTT 5 properties
-    - **Enhanced authentication**: \c auth_method and \c auth_data for challenge-response flows
-    - **Connection lifecycle events**: \c connected and \c disconnected events
-    - **Failover**: multiple server URIs for automatic failover
+    - <b>User properties</b>: application-level key-value metadata on messages
+    - <b>Request/response pattern</b>: \c response_topic and \c correlation_data fields
+    - <b>Message expiry</b>: automatic message expiration with \c message_expiry_interval
+    - <b>Content type</b>: MIME content type metadata on messages
+    - <b>Payload format indicator</b>: distinguish UTF-8 text from binary payloads
+    - <b>Clean start / session expiry</b>: fine-grained session lifecycle control
+    - <b>Subscription options</b>: \c no_local, \c retain_as_published, \c retain_handling
+    - <b>Receive maximum</b>: flow control for concurrent unacknowledged messages
+    - <b>SSL/TLS</b>: keystore, truststore, protocol, and cipher suite configuration
+    - <b>Will messages</b>: Last Will and Testament with MQTT 5 properties
+    - <b>Enhanced authentication</b>: \c auth_method and \c auth_data for challenge-response flows
+    - <b>Connection lifecycle events</b>: \c connected and \c disconnected events
+    - <b>Failover</b>: multiple server URIs for automatic failover
 
     @section mqttdataprovider_examples MQTT Data Provider Examples
 

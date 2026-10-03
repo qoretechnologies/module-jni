@@ -559,7 +559,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         #! Mutex serializing access to the node metadata cache
         Qore::Thread::Mutex schema_cache_lock();
 
-        #! NodeId-keyed cache of resolved node attribute metadata (the `read-attributes` response hash)
+        #! NodeId-keyed cache of resolved node attribute metadata (the <tt>read-attributes</tt> response hash)
         /** Populated on demand and invalidated deterministically on reconnect / session recreation;
             accessed from both request and subscription callback threads, so all access is serialized
             with @ref schema_cache_lock.
