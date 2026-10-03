@@ -122,6 +122,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("read: repeated empty rows", \testReadRepeatedEmptyRows());
         addTestCase("profile: raw spreadsheet grid", \testProfileGrid());
         addTestCase("profile action", \testProfileAction());
+        addTestCase("read: the workbook is reusable in any call order", \testWorkbookReuse());
         set_return_value(main());
     }
 
@@ -986,5 +987,55 @@ public class OdsDataProviderTest inherits QUnit::Test {
             "redact": False, "sample_rows": 1});
         assertEq((("PO-1001", "000123", 5.0, "10.10.2026"),), profile.sheets[0].samples);
         assertThrows("TABULAR-PROFILE-ERROR", "exactly one", \prov.doRequest(), {});
+    }
+
+    #! The record type, the records, the worksheet names, and worksheet providers can be acquired in any order
+    /** Qorus reads the provider info (and with it the worksheet names) after the record type when it executes an
+        action; the worksheet names were then read from the input stream already consumed by the record type
+    */
+    testWorkbookReuse() {
+        string path = test_data_dir + "/multi-sheet.ods";
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        hash<auto> opts = {"worksheet": "Users", "header_names": True};
+        hash<string, code> sources = {
+            "data": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(opts + {"data": data});
+            },
+            "stream": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(opts + {"stream": new BinaryInputStream(data)});
+            },
+            "path": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(opts + {"path": path});
+            },
+            "stream constructor": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(new BinaryInputStream(data), opts);
+            },
+            "path constructor": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(path, opts);
+            },
+        };
+        list<string> sheets = ("Users", "Products", "Orders");
+        foreach hash<auto> i in (sources.pairIterator()) {
+            # the record type, then the provider info, as Qorus acquires them when executing an action
+            OdsReadDataProvider dp = i.value();
+            assertEq(("ID", "Username"), keys dp.getRecordType(), i.key);
+            assertEq(sheets, dp.getInfo().children, i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+            assertEq(sheets, dp.getChildProviderNames(), i.key);
+            assertEq(("Widget",), (map $1.Product, dp.getChildProvider("Products").searchRecords()), i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+
+            # a worksheet provider first, then the parent's own worksheet
+            dp = i.value();
+            assertEq((1001,), (map $1.OrderID.toInt(), dp.getChildProvider("Orders").searchRecords()), i.key);
+            assertEq(sheets, dp.getChildProviderNames(), i.key);
+            assertEq(("ID", "Username"), keys dp.getRecordType(), i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+        }
+
+        # a provider without input has no worksheets, record fields, or records
+        OdsReadDataProvider empty();
+        assertEq(NOTHING, empty.getChildProviderNames());
+        assertEq({}, empty.getRecordType());
     }
 }

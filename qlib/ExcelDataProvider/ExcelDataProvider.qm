@@ -363,6 +363,10 @@ module ExcelDataProvider {
     - fixed @ref ExcelDataProvider::ExcelWorksheetReadDataProvider "ExcelWorksheetReadDataProvider" ignoring the
       \c data option and reading paths directly as local files instead of resolving them as file locations
     - fixed streaming writes (\c streaming) failing when no \c headers are given
+    - fixed @ref ExcelDataProvider::ExcelReadDataProvider "ExcelReadDataProvider" failing with an empty-file error
+      when the worksheet names or the provider info were requested after the record type or the records, or when
+      the provider was used after acquiring a worksheet provider; this broke the \c read-data application action in
+      Qorus
     - added @ref ExcelDataProvider::ExcelProfileDataProvider "ExcelProfileDataProvider" and the \c profile
       application action, which describe the layout and column types of every sheet, including hidden sheets,
       named ranges, merged cells, and formulas

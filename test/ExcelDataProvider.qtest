@@ -111,6 +111,7 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("writer record type", \testWriterRecordType());
         addTestCase("profile: raw workbook grid", \testProfileGrid());
         addTestCase("profile action", \testProfileAction());
+        addTestCase("read: the workbook is reusable in any call order", \testWorkbookReuse());
         set_return_value(main());
     }
 
@@ -1070,5 +1071,55 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         dp = new ExcelWriteDataProvider();
         assertNothing(dp.getRecordType());
         assertEq({}, dp.getOrNothingRecordTypeWithOptions());
+    }
+
+    #! The record type, the records, the worksheet names, and worksheet providers can be acquired in any order
+    /** Qorus reads the provider info (and with it the worksheet names) after the record type when it executes an
+        action; the worksheet names were then read from the input stream already consumed by the record type
+    */
+    testWorkbookReuse() {
+        string path = test_data_dir + "/multi-sheet.xlsx";
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        hash<auto> opts = {"worksheet": "Users", "header_names": True};
+        hash<string, code> sources = {
+            "data": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(opts + {"data": data});
+            },
+            "stream": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(opts + {"stream": new BinaryInputStream(data)});
+            },
+            "path": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(opts + {"path": path});
+            },
+            "stream constructor": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(new BinaryInputStream(data), opts);
+            },
+            "path constructor": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(path, opts);
+            },
+        };
+        list<string> sheets = ("Users", "Products", "Orders");
+        foreach hash<auto> i in (sources.pairIterator()) {
+            # the record type, then the provider info, as Qorus acquires them when executing an action
+            ExcelReadDataProvider dp = i.value();
+            assertEq(("ID", "Username"), keys dp.getRecordType(), i.key);
+            assertEq(sheets, dp.getInfo().children, i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+            assertEq(sheets, dp.getChildProviderNames(), i.key);
+            assertEq(("Widget",), (map $1.Product, dp.getChildProvider("Products").searchRecords()), i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+
+            # a worksheet provider first, then the parent's own worksheet
+            dp = i.value();
+            assertEq((1001,), (map $1.OrderID.toInt(), dp.getChildProvider("Orders").searchRecords()), i.key);
+            assertEq(sheets, dp.getChildProviderNames(), i.key);
+            assertEq(("ID", "Username"), keys dp.getRecordType(), i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+        }
+
+        # a provider without input has no worksheets, record fields, or records
+        ExcelReadDataProvider empty();
+        assertEq(NOTHING, empty.getChildProviderNames());
+        assertEq({}, empty.getRecordType());
     }
 }

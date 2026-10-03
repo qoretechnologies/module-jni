@@ -148,8 +148,20 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     private {
-        #! The input stream for the Excel data
-        InputStream i;
+        #! The number of bytes requested with each read from an input stream
+        const ReadChunkSize = 64 * 1024;
+
+        #! The input stream for the Excel data; read once on first use, then released
+        *InputStream i;
+
+        #! The workbook data, buffered on first use
+        /** The workbook is opened once for each use (record type and records, worksheet names, worksheet providers),
+            and an input stream can only be read once, so its contents are kept here
+        */
+        *binary data;
+
+        #! Serializes buffering the input stream on first use
+        Mutex data_lock();
 
         #! the iterator object
         ExcelIterator it;
@@ -230,13 +242,13 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
             name = sprintf("excel-stream=%s", i.uniqueHash());
         } else if (copts.data) {
             # Handle binary data input
-            i = new BinaryInputStream(copts.data);
-            name = sprintf("excel-data=%s", i.uniqueHash());
+            data = binary(copts.data);
+            name = sprintf("excel-data=%s", self.uniqueHash());
         }
         self.opts = copts - ("stream", "path", "worksheet", "data");
-        if (!i) {
-            # create a dummy iterator with no input
-            i = new StringInputStream("");
+        if (!i && !exists data) {
+            # no input: a provider without worksheets or records
+            data = binary();
             name = "excel";
             dummy = True;
         }
@@ -339,12 +351,41 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         return rv;
     }
 
+    #! Returns the workbook data, reading the input stream on first use
+    /** The input stream is read once and released; every later use of the workbook opens a new stream on the
+        buffered data, so the record type, the records, the worksheet names, and the worksheet providers can be
+        acquired in any order
+
+        @return the workbook data
+    */
+    private binary getWorkbookData() {
+        AutoLock al(data_lock);
+        if (!exists data) {
+            data = ExcelReadDataProvider::readAll(i);
+            remove i;
+        }
+        return data;
+    }
+
+    #! Reads all remaining data from the given input stream
+    /** @param stream the stream to read
+
+        @return all remaining data in the stream; an empty binary if the stream is at its end
+    */
+    private static binary readAll(InputStream stream) {
+        binary rv = binary();
+        while (*binary chunk = stream.read(ReadChunkSize)) {
+            rv += chunk;
+        }
+        return rv;
+    }
+
     #! Common setup code
     private checkIterator() {
         if (it) {
             return;
         }
-        it = new ExcelIterator(i, sheet);
+        it = new ExcelIterator(new BinaryInputStream(getWorkbookData()), sheet);
         ExcelReadDataProvider::configureIterator(it, opts);
     }
 
@@ -405,13 +446,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (dummy) {
             return;
         }
-        # read the entire stream into a buffer so we can reset it for reuse
-        binary b = i.read(999999999) ?? binary();
-        i = new BinaryInputStream(b);
-        on_exit {
-            i = new BinaryInputStream(b);
-        }
-        return ExcelIterator::getWorksheets(i);
+        return ExcelIterator::getWorksheets(new BinaryInputStream(getWorkbookData()));
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -420,7 +455,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
     private *AbstractDataProvider getChildProviderImpl(string child_name) {
         *hash<string, bool> sheets = map {$1: True}, getChildProviderNamesImpl();
         if (sheets{child_name}) {
-            return new ExcelWorksheetReadDataProvider(i, name, child_name, opts);
+            return new ExcelWorksheetReadDataProvider(new BinaryInputStream(getWorkbookData()), name, child_name,
+                opts);
         }
     }
 
