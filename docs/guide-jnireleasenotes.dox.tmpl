@@ -4,9 +4,14 @@
 
     @tableofcontents
 
-    @section jni_2_7_0 jni Module Version 2.7.0
-    - Use the static JNI API for the headless graphics-environment query. Importing AWT-dependent
-      spreadsheet APIs now passes checked JNI validation during source and AOT compilation.
+    @section jni_3_0_0 jni Module Version 3.0.0
+
+    @anchor jni_2_5_0
+    @anchor jni_2_6_0
+    @anchor jni_2_7_0
+
+    Requires %Qore 3.0 and Java 21 or later.
+
     - Release every outstanding native wrapper during JVM shutdown, including wrappers Java has not
       garbage-collected. Explicit release, phantom cleanup, and shutdown atomically claim each pointer
       once; object construction cannot publish into an already closed cleanup handle.
@@ -19,26 +24,19 @@
     - Fixed duplicate JNI reference deletion when creating Java arrays and unchecked JNI calls
       when converting Qore exceptions. Exception conversion now releases UTF string buffers and
       preserves the original Java exception if converting its fields or argument fails.
-    - The main JNI test suite now returns its status through normal program teardown, allowing
-      Valgrind to verify native cleanup. The separate abrupt-exit subprocess test is retained.
     - Fixed Java wrapper and provider documentation links, parameter descriptions, and JMS tables.
       Documentation builds use public QPP declarations and installed dependency indexes.
       Configure with <tt>-DQORE_JNI_STRICT_DOCS=ON</tt> to reject Doxygen warnings; RPM builds enable this check.
-    - the \c write-data actions of the Excel, ODS, ODT, ODP, Word, PowerPoint, Avro, VCF, ICS and Email (\c eml-write-data)
-      data providers and the JasperReports \c generate-report-data action now return the generated document as
-      their output (\c data and \c record_count, plus \c format for reports); previously the generated data was
-      lost when the action was run.  File-writing actions now write their file when the action completes, so
-      write errors are reported by the action (requires %Qore 3.0 / DataProvider 3.9)
-    - fixed Excel and ODS spreadsheet reading and writing: reading without header options returned no data, cell
-      ranges past column \c Z were rejected, streaming Excel writes without headers failed, and ODS writes
-      turned the first record's dates into strings and empty values into empty strings; Excel and ODS reading
-      can now skip empty rows with the new \c ignore_empty option, and ODS reading no longer expands the runs of
-      repeated empty rows that spreadsheet applications write to the end of a sheet
+    - added document-writing actions for the Excel, ODS, ODT, ODP, Word, PowerPoint, Avro, VCF, ICS and Email
+      data providers, and report generation with JasperReports; actions can return document data or write
+      a file (requires %Qore 3.0 / DataProvider 3.9); see the provider documentation listed in
+      @ref jniqlibmodules
+    - fixed Excel reading without header options returning no data and rejecting cell ranges past column \c Z
+    - added the \c ignore_empty read option for Excel and ODS spreadsheets to skip empty rows
     - fixed JDBC pooled reads retaining transactions and blocking later writes or schema changes;
       explicit transactions and prepared writes retain commit/rollback semantics
     - fixed JDBC cursors retaining local JNI references across Java native-call frames, causing invalid
       reference errors or JVM crashes; statement cleanup now preserves errors and closes every handle
-    - corrected Flyway action response descriptions and their integration tests
     - fixed JDBC batch update counts, empty batches, and prepared statement reuse after failed binds;
       unknown JDBC batch counts return \c -1 and count overflow raises \c JDBC-BATCH-COUNT-ERROR
     - added Kafka record headers to the \c KafkaDataProvider module: the producer sends a request's \c headers and
@@ -59,18 +57,6 @@
       before invalidating their metadata; regenerate API classes produced by older JNI versions
     - preserve object-retention callback failures during generated Java construction and publish the wrapper's
       weak object reference only after all construction steps succeed
-    - fixed Java provider qualification aborting CMake configuration with
-      <tt>Java provider AccessDataProvider has no qmod build target</tt> when
-      <tt>QORE_BUILD_AOT_MODULES=OFF</tt>; source builds now validate after generating provider JARs, while
-      AOT builds retain the required qmod dependencies
-    - fixed the bundled @ref opcuadataproviderintro "OpcUaDataProvider" module's
-      offline OPC UA NodeSet2 conversion: an imported node's browse path is now built from the model's
-      containment hierarchy instead of from its browse name alone, so a real published model no longer
-      fails to import with a duplicate endpoint id and no longer converts to a flat address space; method
-      argument properties are folded into method endpoints, the export writes the hierarchy back out, and
-      the generic server runtime materializes each browse path segment only once (see the
-      @ref opcuadataproviderintro "OpcUaDataProvider v1.10.1"
-      release notes)
     - fixed \c NoClassDefFoundError for a module class referenced by another module's method
       signatures (for example <tt>java.lang.NoClassDefFoundError: qore/Qore/astparser/AstParser</tt>
       when generating Java classes for a module that uses the astparser module); a class's canonical
@@ -254,12 +240,12 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       date/time values retain logical schema metadata and use microsecond dense temporal storage when linked with
       %Qore dense temporal support; binary and driver-specific values retain schema metadata and fall back to list
       storage where needed
-    - optimized native \c jdbc columnar reads for packed result sets with a Java-side batch reader; supported
+      Packed result sets use a Java-side batch reader; supported
       integer, floating-point, boolean, string, and decimal columns are extracted into primitive Java arrays in
       chunks and imported into %Qore buffers, avoiding per-cell JNI/JDBC getter calls while preserving null bitmaps,
       \c CHAR trimming, and the mixed-column fallback path for driver-specific object values
-    - improved the @ref jdbcdataproviderintro "JdbcDataProvider"
-      module so provider and connection options can load JDBC driver JARs with \c classpath
+    - added the @ref jdbcdataproviderintro "JdbcDataProvider"
+      module; provider and connection options can load JDBC driver JARs with \c classpath
       and explicitly register drivers with \c driver_class before opening a connection
     - added the @ref jakartajmsdataproviderintro "JakartaJmsDataProvider"
       module for Jakarta JMS 3.x messaging brokers
@@ -280,7 +266,7 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       - supports read/write node values, browse address space, and call methods via the request API
       - supports connection provider with \c opcua, \c opcuatcp, and \c opcuahttps schemes
       - supports SSL/TLS and OPC UA security policy configuration
-      - includes action catalog integration (7 actions)
+      - includes action catalog integration and offline NodeSet2 import/export with hierarchical browse paths
     - fixed a bug in \c QoreCodeDispatcher::dispatch() where \c callback->getProgram() could return
       a null pointer, causing a SIGSEGV when Java callback threads invoked Qore code via
       \c implement_interface(); the dispatcher now checks for null before accessing the program's
@@ -312,10 +298,6 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
         re-enter generation of an in-progress class
     - upgraded the bundled Byte Buddy library from 1.14.19 to 1.18.10, which natively supports newer
       Java class file versions; this is required for the bytecode-backed superclass description above
-    - simplified \c Jni::org::qore::jni::check_network_bind() to resolve the active sandbox across the
-      thread's program-context (call) stack, so module/library code invoked from a sandboxed program
-      correctly inherits the caller's sandbox without needing an owner object (requires a %Qore release
-      that resolves the sandbox manager across the program-context stack)
     - fixed an ABBA deadlock between the global class-map lock and the per-Program code-generation lock
       that could hang concurrent %Qore-to-Java byte code generation and Java-to-%Qore class import (for
       example during parallel service startup); the global class-map lock is now acquired strictly before
@@ -330,7 +312,6 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
     - fixed process-exit aborts after dynamic Java bytecode generation by preventing deferred
       destruction of the JNI global %Program after %Qore synchronization state has been finalized
 
-    @section jni_2_6_0 jni Module Version 2.6.0
     - added Kotlin language integration support
       (<a href="https://github.com/qoretechnologies/qore/issues/5131">issue 5131</a>)
       - added \c kotlin.* and \c kotlinmod.* package prefixes for dynamic Kotlin class imports
@@ -357,12 +338,10 @@ qjava-migrate-imports --in-place --backup <java-source-dir>   # apply, .bak per 
       - automatic conversion of \c java.time.LocalDateTime and \c java.time.Instant to %Qore \c date type;
         note that \c LocalDateTime has no timezone and will be interpreted as a local/floating date-time,
         while \c Instant is always UTC
-    - added Kotlin integration tests
     - added default JVM native access enablement for unnamed modules; use
       \c QORE_JNI_DISABLE_NATIVE_ACCESS=1 to suppress the option
     - added \c native_access_option_enabled() to report native access enablement status
 
-    @section jni_2_5_0 jni Module Version 2.5.0
     - added support for interruptible I/O for graceful termination of sandboxed programs; interrupt
       checks are performed before JVM thread attachment
       (<a href="https://github.com/qoretechnologies/qore/issues/5116">issue 5116</a>)

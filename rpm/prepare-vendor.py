@@ -32,7 +32,7 @@ def prepare(repo, vendor, cache):
             raise ValueError('Missing regular generator input: ' + name)
         inputs[name] = path.read_bytes()
     cache.mkdir(parents=True, exist_ok=True)
-    top = 'qore-jni-vendor-2.7.0'
+    top = 'qore-jni-vendor-3.0.0'
     with tempfile.TemporaryDirectory(prefix='.jni-vendor-', dir=cache) as temporary:
         archive_path = Path(temporary) / 'vendor.tar.xz'
         with tarfile.open(archive_path, 'w:xz', format=tarfile.PAX_FORMAT) as archive:

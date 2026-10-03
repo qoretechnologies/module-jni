@@ -26,7 +26,7 @@
 %global __brp_java_repack_jars %{nil}
 %global _find_debuginfo_dwz_opts %{nil}
 Name: qore-jni-module
-Version: 2.7.0
+Version: 3.0.0
 Release: 1%{?dist}
 Summary: Bidirectional Java bridge and Java data providers for Qore
 License: MIT AND Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND EPL-2.0 AND LGPL-2.1-or-later AND LGPL-3.0-or-later AND MPL-1.1 AND MPL-2.0 AND LicenseRef-Public-Domain AND LicenseRef-OpenPDF-notices
@@ -395,6 +395,9 @@ qore-data-provider-i18n --no-color --check-source-tree --require-standard-locale
 %doc %{_docdir}/%{name}-doc/
 %endif
 %changelog
+* Sat Oct 03 2026 David Nichols <david@qore.org> - 3.0.0-1
+- Align the JNI release with Qore 3.0 and consolidate unreleased 2.5 through 2.7 notes.
+
 * Fri Oct 02 2026 David Nichols <david@qore.org> - 2.7.0-1
 - Package the native bridge, AOT providers, metadata, translations and documentation.
 - Pin Java and Kotlin inputs with source archives and complete upstream notices.

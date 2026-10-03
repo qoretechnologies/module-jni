@@ -72,9 +72,23 @@ class JniDocIndexTest(unittest.TestCase):
         self.assertFalse(any(name.endswith(".cpp") for name in files), files)
 
     def test_legacy_dynamic_import_anchor(self):
-        page = (BUILD / "docs/jni/html/index.html").read_text()
+        page = (BUILD / "docs/jni/html/jni_from_javaguide.html").read_text()
         self.assertIn('id="jni_dynamic_import_qore_in_java"', page)
         self.assertIn('id="jni_dynamic_import_in_java"', page)
+
+    def test_unreleased_versions_are_consolidated_into_3_0(self):
+        page = (BUILD / "docs/jni/html/jnireleasenotesguide.html").read_text()
+        self.assertIn('id="jni_3_0_0"', page)
+        self.assertIn('jni Module Version 3.0.0', page)
+        self.assertIn('jni Module Version 2.4.0', page)
+        self.assertIn('Kotlin language integration', page)
+        self.assertIn('interruptible I/O', page)
+        for version in (5, 6, 7):
+            self.assertIn(f'id="jni_2_{version}_0"', page)
+            self.assertNotIn(f'jni Module Version 2.{version}.0', page)
+        parser = Links()
+        parser.feed((BUILD / "docs/jni/html/index.html").read_text())
+        self.assertIn(["jnireleasenotesguide.html", "jni Module Release Notes"], parser.links)
 
     def test_core_module_links(self):
         for name, label, target in [

@@ -2,14 +2,14 @@
   "schema": 1,
   "components": [
     {
-      "archive": "qore-jni-vendor-2.7.0.tar.xz",
-      "top": "qore-jni-vendor-2.7.0",
-      "sha256": "d8ebc84f3fe03204079f9a98b2b0d2d786120b12c1dc2bf4e739b6a2d2c7e194",
+      "archive": "qore-jni-vendor-3.0.0.tar.xz",
+      "top": "qore-jni-vendor-3.0.0",
+      "sha256": "1d499d7d74113600d4e4646ab94814c5429865955e83912830dd6008437500b6",
       "generated_from": {
         "debian/java-dependencies.json": "038c18f91a001b8172a63718b75812f361107f208503bd8777dbb1c876d80391",
         "debian/prepare-vendor.py": "648994c45007f220f53eb98669dc95161b486785799819774030ea1cc5d1ee13",
         "debian/copyright": "3be65eb215b7924e170aee5bd9792809e38e4d2a68d20618de1a797c8428707a",
-        "rpm/prepare-vendor.py": "bc476652436ff7dbf20abc2ddd451bd7c2beb471397841fbdf97163bc8c5c7b4"
+        "rpm/prepare-vendor.py": "f3724f6b97387a98449a61a5d7c33f35f63b71a7ad3ca7da29bc2a28b7031806"
       },
       "licenses": [
         "COPYRIGHT"
