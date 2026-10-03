@@ -119,6 +119,39 @@ java.lang.reflect.Method[] methods = api.getDeclaredMethods();
     namespace are imported automatically into a special class with this name as <tt><b>static final</b></tt> fields in
     the corresponding dynamic Java package.
 
+    @subsection jni_dynamic_import_migration Migrating Java Imports to JNI 3.0
+
+    Module-owned APIs have one canonical Java name:
+    <tt>qoremod.&lt;module&gt;.&lt;class-path&gt;</tt>. For example, replace
+    <tt>import qore.SqlUtil.AbstractTable;</tt> with
+    <tt>import qoremod.SqlUtil.AbstractTable;</tt>. JNI 3.0 rejects the legacy module alias with
+    \c ClassNotFoundException so the same %Qore class cannot acquire two different Java identities.
+    Built-in imports such as <tt>qore.Qore.SQL.AbstractDatasource</tt> and per-Program names such as
+    <tt>qore.OMQ.MyClass</tt> keep their existing form.
+
+    The \c qjava-migrate-imports helper can update Java sources:
+    @verbatim
+qjava-migrate-imports --dry-run -v <java-source-dir>
+qjava-migrate-imports --in-place --backup <java-source-dir>
+    @endverbatim
+    Preview the changes first. The helper preserves the \c Qore and \c OMQ leading namespaces by
+    default; use <tt>--keep=A,B,...</tt> to preserve additional per-Program namespaces. Other leading
+    namespaces are treated as module names. The \c --backup option retains a \c .bak copy of each
+    changed file. Recompile affected Java sources after updating the imports.
+
+    Regenerate API classes produced by older JNI versions. Generated bindings are process-local, so
+    loading saved API bytecode in another process also requires regeneration, as described in
+    @ref jni_dynamic_import_in_java. Module-owned classes are shared through the owning module's
+    classloader; non-module classes remain Program-local unless explicitly registered with
+    \c register-shared-class. See @ref jni_classloader.
+
+    @subsection jni_dynamic_import_generics Generic Signatures in Generated Java APIs
+
+    Generated Java classes preserve parameterized %Qore parents, interfaces, return types, and argument
+    types when built against %Qore headers exposing \c QORE_HAVE_GENERIC_CLASSES. For example,
+    <tt>AbstractIterator&lt;string&gt;</tt> is exposed as
+    <tt>qore.Qore.AbstractIterator&lt;String&gt;</tt>. Builds without that API use raw Java signatures.
+
     @subsection jni_dynamic_import_classloader Running Java Programs Using Dynamic Imports
 
     You must use the @ref org.qore.jni.QoreURLClassLoader class as the system classloader to run Java bytecode using

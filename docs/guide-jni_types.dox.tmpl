@@ -49,7 +49,7 @@
     |@ref list_type "list"|java Arrays of the list type; if no list type can be found, then the Array type is \
         \c java.lang.Object
     |@ref hash_type "hash"|@ref org.qore.jni.Hash (extends \c java.util.LinkedHashMap), however any type \
-        implementing \c java.util.Map that has a constructor that takes no arguments and a compatibule \c put() \
+        implementing \c java.util.Map that has a constructor that takes no arguments and a compatible \c put() \
         method will be constructed / converted automatically to the desired type
     |@ref code_type "code" (closure or call reference)|@ref org.qore.jni.QoreClosure
     |@ref Jni::org::qore::jni::JavaArray "JavaArray"|\c java.lang.Array
@@ -64,11 +64,21 @@
 
     @section jni_java_to_qore Java to Qore Type Conversions
 
+    Java and Kotlin collections convert to the most specific compatible %Qore collection type. For example,
+    <tt>List&lt;Integer&gt;</tt> converts to <tt>list&lt;int&gt;</tt>, and
+    <tt>Map&lt;String,Integer&gt;</tt> converts to <tt>hash&lt;string,int&gt;</tt>. Inserting a value of an
+    incompatible type into the resulting collection raises a runtime type error. Maps require string keys
+    for conversion to %Qore hashes; other maps retain their Java object representation.
+
+    Generated Java method signatures for %Qore <tt>hash&lt;auto&gt;</tt> parameters use
+    \c java.util.Map rather than @ref org.qore.jni.Hash. This allows Java and Kotlin map implementations
+    to be passed directly. See @ref jni_compatguide for options that retain Java object representations.
+
     Java to %Qore Type Conversions
     |!Source Java Type|!Target %Qore Type
     |\c boolean|@ref bool_type "bool"
     |\c byte|@ref int_type "int"
-    |\c byte[]|@ref binary_type "binary" (see also @ref jni_compat)
+    |\c byte[]|@ref binary_type "binary" (see also @ref jni_compatguide)
     |\c char|@ref int_type "int"
     |\c short|@ref int_type "int"
     |\c int|@ref int_type "int"
@@ -85,7 +95,7 @@
     |<tt>@ref org.qore.jni.QoreRelativeTime</tt>|@ref date_type "date" (@ref relative_dates "relative date")
     |\c java.math.BigDecimal|@ref number_type "number"
     |\c java.lang.AbstractArray and arrays|@ref list_type "list"
-    |\c java.util.Map|@ref hash_type "hash" (see also @ref jni_compat)
+    |\c java.util.Map|@ref hash_type "hash" (see also @ref jni_compatguide)
     |<tt>@ref org.qore.jni.QoreClosure</tt>|@ref code_type "code"
     |<tt>@ref org.qore.jni.QoreClosureMarker</tt>|@ref code_type "code"
     |all other objects|direct conversion

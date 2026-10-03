@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: MIT
 """Validate the generated JNI documentation and strict-warning gate."""
 import argparse
+import os
 from html.parser import HTMLParser
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from urllib.parse import unquote, urlsplit
 import xml.etree.ElementTree as ET
 
 BUILD = None
@@ -53,6 +55,26 @@ class TableHeaders(HTMLParser):
             self.in_header = False
 
 
+class Headings(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.headings = []
+        self.current = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            self.current = [tag, ""]
+
+    def handle_data(self, text):
+        if self.current is not None:
+            self.current[1] += text
+
+    def handle_endtag(self, tag):
+        if self.current is not None and tag == self.current[0]:
+            self.headings.append((tag, self.current[1].strip()))
+            self.current = None
+
+
 class JniDocIndexTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -89,6 +111,38 @@ class JniDocIndexTest(unittest.TestCase):
         parser = Links()
         parser.feed((BUILD / "docs/jni/html/index.html").read_text())
         self.assertIn(["jnireleasenotesguide.html", "jni Module Release Notes"], parser.links)
+
+    def test_major_release_outline_and_related_documentation(self):
+        path = BUILD / "docs/jni/html/jnireleasenotesguide.html"
+        page = path.read_text()
+        current = page.split('id="jni_3_0_0"', 1)[1].split('id="jni_2_4_0"', 1)[0]
+        headings = Headings()
+        headings.feed(current)
+        self.assertEqual(["Overview", "New Features", "Bugfixes"],
+                         [title for level, title in headings.headings if level == "h2"])
+        self.assertEqual([
+            "Kotlin Integration", "Data Provider Integrations", "Columnar JDBC Results",
+            "Java API Generation and Interoperability", "Runtime and Resource Management",
+        ], [title for level, title in headings.headings if level == "h3"])
+        parser = Links()
+        parser.feed(current)
+        labels = {label for _, label in parser.links}
+        for label in ("Java import migration", "Kotlin example", "kotlin_eval()",
+                      "JakartaJmsDataProvider", "OpcUaDataProvider", "columnar result support",
+                      "generic signatures", "JDBC transaction boundaries"):
+            self.assertIn(label, labels)
+        for href, label in parser.links:
+            with self.subTest(link=label, href=href):
+                url = urlsplit(href)
+                if url.scheme or url.netloc:
+                    continue
+                target = Path(os.path.abspath(path.parent / unquote(url.path))) if url.path else path
+                self.assertTrue(target.is_file(), href)
+                if url.fragment:
+                    self.assertIn('id="' + unquote(url.fragment) + '"', target.read_text(), href)
+        migration = (path.parent / "jni_from_javaguide.html").read_text()
+        self.assertIn("qjava-migrate-imports --dry-run", migration)
+        self.assertIn('id="jni_dynamic_import_generics"', migration)
 
     def test_core_module_links(self):
         for name, label, target in [
