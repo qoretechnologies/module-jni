@@ -120,6 +120,8 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("writer record type", \testWriterRecordType());
         addTestCase("read: empty rows", \testReadEmptyRows());
         addTestCase("read: repeated empty rows", \testReadRepeatedEmptyRows());
+        addTestCase("profile: raw spreadsheet grid", \testProfileGrid());
+        addTestCase("profile action", \testProfileAction());
         set_return_value(main());
     }
 
@@ -140,6 +142,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         OdsTestHelper::createMixedCaseHeadersOds(test_data_dir + "/mixed-case-headers.ods");
         OdsTestHelper::createOffsetDataOds(test_data_dir + "/offset-data.ods");
         OdsTestHelper::createDataTypesOds(test_data_dir + "/data-types.ods");
+        OdsTestHelper::createProfileOds(test_data_dir + "/profile.ods");
 
         assertTrue(is_file(test_data_dir + "/simple.ods"), "simple.ods created");
     }
@@ -930,5 +933,58 @@ public class OdsDataProviderTest inherits QUnit::Test {
         dp = new OdsReadDataProvider(path, {"header_names": True, "ignore_empty": True});
         assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "C-3", "Qty": 9.0}), (map $1, dp.searchRecords()));
         assertLt(10s, now_us() - start, "the repeated empty rows were not iterated one by one");
+    }
+
+    testProfileGrid() {
+        hash<TabularWorkbookGrid> grid = OdsProfileDataProvider::readWorkbookGrid(
+            ReadOnlyFile::readBinaryFile(test_data_dir + "/profile.ods"), 1000);
+        assertEq("ods", grid.format);
+        assertEq(("Confirmations", "Lookup"), (map $1.name, grid.sheets));
+        hash<TabularSheetGrid> sheet = grid.sheets[0];
+        assertFalse(sheet.hidden);
+        assertTrue(grid.sheets[1].hidden, "the lookup sheet is hidden");
+        assertEq(6, sheet.rows.size(), "rows are read up to the last row with content");
+        assertEq((), sheet.rows[1], "an empty row is an empty list");
+        assertEq(("PO-1001", "000123", 5.0, "10.10.2026"), sheet.rows[3]);
+        assertEq((<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 3},), sheet.merged);
+        assertEq({"C6": "SUM(C4:C5)"}, sheet.formulas, "the ODF formula is returned in A1 notation");
+        assertEq({"Rates": "$Lookup.$A$1:.$B$2"}, grid.named_ranges);
+
+        grid = OdsProfileDataProvider::readWorkbookGrid(
+            ReadOnlyFile::readBinaryFile(test_data_dir + "/profile.ods"), 2);
+        assertEq(2, grid.sheets[0].rows.size());
+        assertEq(6, grid.sheets[0].row_count);
+
+        # a million repeated empty rows are never expanded
+        date start = now_us();
+        grid = OdsProfileDataProvider::readWorkbookGrid(
+            ReadOnlyFile::readBinaryFile(test_data_dir + "/repeated-empty-rows.ods"), 10);
+        assertEq(10, grid.sheets[0].rows.size());
+        assertEq(1000003, grid.sheets[0].row_count, "the row count ends at the last row with content");
+        assertLt(30s, now_us() - start, "repeated empty rows are counted, not expanded");
+    }
+
+    testProfileAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("ODS", "profile");
+        assertEq(DPAT_API, action.action_code);
+        assertEq("TabularWorkbookProfile", action.output_type.getName());
+
+        hash<auto> opts = {"path": test_data_dir + "/profile.ods"};
+        AbstractDataProvider prov = DataProviderActionCatalog::getDataProviderForAction(action, \opts);
+        hash<auto> profile = prov.doRequest(opts);
+        assertEq(profile, action.output_type.acceptsValue(profile));
+        hash<auto> sheet = profile.sheets[0];
+        assertEq(3, sheet.header_row);
+        assertEq((1,), sheet.title_rows);
+        assertEq((6,), sheet.totals_rows);
+        assertEq(("string", "string", "int", "date"), (map $1.type, sheet.columns));
+        assertEq("DD.MM.YYYY", sheet.columns[3].date_format);
+        assertEq(("XX-9999", "999999", "9", "99.99.9999"), sheet.samples[0]);
+        assertTrue(profile.sheets[1].hidden);
+
+        profile = prov.doRequest({"data": ReadOnlyFile::readBinaryFile(test_data_dir + "/profile.ods"),
+            "redact": False, "sample_rows": 1});
+        assertEq((("PO-1001", "000123", 5.0, "10.10.2026"),), profile.sheets[0].samples);
+        assertThrows("TABULAR-PROFILE-ERROR", "exactly one", \prov.doRequest(), {});
     }
 }

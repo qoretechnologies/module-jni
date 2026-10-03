@@ -25,7 +25,13 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Name;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.usermodel.DataFormat;
 
 import java.io.File;
@@ -414,6 +420,62 @@ public class ExcelTestHelper {
             dateCell2.setCellValue(LocalDateTime.of(2024, 12, 25, 0, 0, 0));
             dateCell2.setCellStyle(dateStyle);
 
+            try (FileOutputStream out = new FileOutputStream(new File(path))) {
+                workbook.write(out);
+            }
+        }
+    }
+
+    /**
+     * Creates a workbook laid out the way supplier PO confirmations are maintained by hand: a merged title banner,
+     * a blank row, the header, identifiers with leading zeros, dates stored as text, a totals row with a SUM
+     * formula, a hidden lookup sheet, and a named range on it.
+     *
+     * @param path The path to create the file at
+     * @param xls true for the Excel 97-2003 (.xls) format, false for .xlsx
+     */
+    public static void createProfileExcel(String path, boolean xls) throws IOException {
+        try (Workbook workbook = xls ? new HSSFWorkbook() : new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Confirmations");
+            sheet.createRow(0).createCell(0).setCellValue("Supplier PO confirmations - week 41");
+            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 3));
+            Row header = sheet.createRow(2);
+            String[] headers = {"PO", "SKU", "Qty", "Ship date"};
+            for (int i = 0; i < headers.length; ++i) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            Object[][] data = {
+                {"PO-1001", "000123", 5.0, "10.10.2026"},
+                {"PO-1002", "000456", 7.0, "24.10.2026"},
+            };
+            for (int r = 0; r < data.length; ++r) {
+                Row row = sheet.createRow(3 + r);
+                for (int c = 0; c < data[r].length; ++c) {
+                    if (data[r][c] instanceof Double) {
+                        row.createCell(c).setCellValue((Double)data[r][c]);
+                    } else {
+                        row.createCell(c).setCellValue((String)data[r][c]);
+                    }
+                }
+            }
+            Row total = sheet.createRow(5);
+            total.createCell(0).setCellValue("Total");
+            total.createCell(2).setCellFormula("SUM(C4:C5)");
+
+            Sheet lookup = workbook.createSheet("Lookup");
+            Row lh = lookup.createRow(0);
+            lh.createCell(0).setCellValue("Code");
+            lh.createCell(1).setCellValue("Rate");
+            Row lr = lookup.createRow(1);
+            lr.createCell(0).setCellValue("X");
+            lr.createCell(1).setCellValue(1.5);
+            workbook.setSheetHidden(1, true);
+
+            Name name = workbook.createName();
+            name.setNameName("Rates");
+            name.setRefersToFormula("Lookup!$A$1:$B$2");
+
+            workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
             try (FileOutputStream out = new FileOutputStream(new File(path))) {
                 workbook.write(out);
             }

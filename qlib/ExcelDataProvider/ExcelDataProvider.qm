@@ -50,6 +50,7 @@
 %module-cmd(jni) add-relative-classpath ./jar/SparseBitSet-1.3.jar
 
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelIterator
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelGridReader
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelWriter
 
 module ExcelDataProvider {
@@ -104,6 +105,33 @@ module ExcelDataProvider {
                     "header_names", "stream", "data"), {
                     "loc": "constructor",
                 }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ExcelDataProvider::AppName,
+            "path": "/",
+            "action": "profile",
+            "display_name": "Profile Excel Spreadsheet",
+            "short_desc": "Describe the layout and columns of every sheet of an Excel spreadsheet",
+            "desc": "Describes how every sheet of an Excel spreadsheet (`.xlsx` or `.xls`) is laid out, so it can be "
+                "read correctly before an integration is built around it.\n\n"
+                "**Detects:**\n"
+                "- hidden sheets, named ranges, merged cells, and formulas\n"
+                "- the header row, title rows and banners above it, and the data region\n"
+                "- totals and subtotal rows and blank-row gaps\n"
+                "- each column's type with a confidence and counter-examples\n"
+                "- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\n"
+                "Sample values are redacted to their shape by default (`redact`), so a profile can be shared "
+                "without the data itself.",
+            "action_code": DPAT_API,
+            "cls": "ExcelDataProvider::ExcelProfileDataProvider",
+            "output_type": TabularWorkbookProfileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TabularProfileRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TabularProfileRequestDataType::Fields - ("path",)
             ),
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -335,6 +363,9 @@ module ExcelDataProvider {
     - fixed @ref ExcelDataProvider::ExcelWorksheetReadDataProvider "ExcelWorksheetReadDataProvider" ignoring the
       \c data option and reading paths directly as local files instead of resolving them as file locations
     - fixed streaming writes (\c streaming) failing when no \c headers are given
+    - added @ref ExcelDataProvider::ExcelProfileDataProvider "ExcelProfileDataProvider" and the \c profile
+      application action, which describe the layout and column types of every sheet, including hidden sheets,
+      named ranges, merged cells, and formulas
     - updated copyright to 2026
 
     @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0

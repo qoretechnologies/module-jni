@@ -323,6 +323,7 @@ set(EXCEL_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(EXCEL_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/)
 set(EXCEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelGridReader.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelWriter.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelTestHelper.java
 )
@@ -556,6 +557,7 @@ set(ODS_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(ODS_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/)
 set(ODS_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsGridReader.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsWriter.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsTestHelper.java
 )

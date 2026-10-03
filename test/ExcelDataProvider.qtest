@@ -109,6 +109,8 @@ public class ExcelDataProviderTest inherits QUnit::Test {
 
         addTestCase("write-data action returns the generated data", \testWriteDataAction());
         addTestCase("writer record type", \testWriterRecordType());
+        addTestCase("profile: raw workbook grid", \testProfileGrid());
+        addTestCase("profile action", \testProfileAction());
         set_return_value(main());
     }
 
@@ -129,6 +131,8 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         ExcelTestHelper::createMixedCaseHeadersExcel(test_data_dir + "/mixed-case-headers.xlsx");
         ExcelTestHelper::createOffsetDataExcel(test_data_dir + "/offset-data.xlsx");
         ExcelTestHelper::createDataTypesExcel(test_data_dir + "/data-types.xlsx");
+        ExcelTestHelper::createProfileExcel(test_data_dir + "/profile.xlsx", False);
+        ExcelTestHelper::createProfileExcel(test_data_dir + "/profile.xls", True);
 
         assertTrue(is_file(test_data_dir + "/simple.xlsx"), "simple.xlsx created");
     }
@@ -993,6 +997,68 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         assertEq("PK", output.data.substr(0, 2).toString());
         ExcelReadDataProvider rdp({"data": output.data, "header_names": True});
         assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), (map $1, rdp.searchRecords()));
+    }
+
+    testProfileGrid() {
+        foreach string ext in (("xlsx", "xls")) {
+            hash<TabularWorkbookGrid> grid = ExcelProfileDataProvider::readWorkbookGrid(
+                ReadOnlyFile::readBinaryFile(test_data_dir + "/profile." + ext), 1000);
+            assertEq(ext, grid.format);
+            assertEq(("Confirmations", "Lookup"), (map $1.name, grid.sheets));
+            hash<TabularSheetGrid> sheet = grid.sheets[0];
+            assertFalse(sheet.hidden);
+            assertTrue(grid.sheets[1].hidden, ext + ": the lookup sheet is hidden");
+            assertEq(6, sheet.rows.size(), ext + ": every row up to the last is read");
+            assertEq((), sheet.rows[1], ext + ": an empty row is an empty list");
+            assertEq(("PO-1001", "000123", 5.0, "10.10.2026"), sheet.rows[3]);
+            assertEq((<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 3},),
+                sheet.merged);
+            assertEq({"C6": "SUM(C4:C5)"}, sheet.formulas);
+            assertEq(12.0, sheet.rows[5][2], ext + ": a formula cell holds its cached value");
+            assertEq({"Rates": "Lookup!$A$1:$B$2"}, grid.named_ranges);
+            assertNothing(sheet.row_count);
+
+            # a row limit reports the row count
+            grid = ExcelProfileDataProvider::readWorkbookGrid(
+                ReadOnlyFile::readBinaryFile(test_data_dir + "/profile." + ext), 2);
+            assertEq(2, grid.sheets[0].rows.size());
+            assertEq(6, grid.sheets[0].row_count);
+        }
+        assertThrows("JNI-ERROR", \ExcelProfileDataProvider::readWorkbookGrid(), (binary("not a workbook"), 10));
+    }
+
+    testProfileAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("Excel", "profile");
+        assertEq(DPAT_API, action.action_code);
+        assertEq("TabularWorkbookProfile", action.output_type.getName());
+        assertTrue(action.options.path.preselected);
+
+        hash<auto> opts = {"path": test_data_dir + "/profile.xlsx"};
+        AbstractDataProvider prov = DataProviderActionCatalog::getDataProviderForAction(action, \opts);
+        hash<auto> profile = prov.doRequest(opts);
+        assertEq(profile, action.output_type.acceptsValue(profile));
+        assertEq("xlsx", profile.format);
+        hash<auto> sheet = profile.sheets[0];
+        assertEq(3, sheet.header_row);
+        assertEq((1,), sheet.title_rows);
+        assertEq((6,), sheet.totals_rows);
+        assertEq(("PO", "SKU", "Qty", "Ship date"), (map $1.header, sheet.columns));
+        assertEq(("string", "string", "int", "date"), (map $1.type, sheet.columns));
+        assertTrue(sheet.columns[1].leading_zeros);
+        assertEq("DD.MM.YYYY", sheet.columns[3].date_format);
+        assertEq(("SUM",), (select sheet.findings, $1.code == "formulas")[0].detail);
+        assertTrue(profile.sheets[1].hidden);
+        assertEq("hidden_sheet", profile.sheets[1].findings[0].code);
+        assertEq({"Rates": "Lookup!$A$1:$B$2"}, profile.named_ranges);
+        assertEq(("XX-9999", "999999", "9", "99.99.9999"), sheet.samples[0], "samples are redacted by default");
+
+        # inline data and options
+        profile = prov.doRequest({"data": ReadOnlyFile::readBinaryFile(test_data_dir + "/profile.xls"),
+            "redact": False, "sample_rows": 1});
+        assertEq("xls", profile.format);
+        assertEq((("PO-1001", "000123", 5.0, "10.10.2026"),), profile.sheets[0].samples);
+
+        assertThrows("TABULAR-PROFILE-ERROR", "exactly one", \prov.doRequest(), {});
     }
 
     testWriterRecordType() {

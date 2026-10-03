@@ -352,4 +352,83 @@ public class OdsTestHelper {
             doc.save(path);
         }
     }
+
+    /**
+     * Creates a spreadsheet laid out the way supplier PO confirmations are maintained by hand: a merged title
+     * banner, a blank row, the header, identifiers with leading zeros, dates stored as text, a totals row with a SUM
+     * formula, a hidden lookup sheet, and a named range on it.
+     *
+     * @param path The path to create the file at
+     */
+    public static void createProfileOds(String path) throws Exception {
+        try (OdfSpreadsheetDocument doc = OdfSpreadsheetDocument.newSpreadsheetDocument()) {
+            String table_ns = OdfDocumentNamespace.TABLE.getUri();
+            OdfTable table = doc.getTableList().get(0);
+            table.setTableName("Confirmations");
+            table.getCellByPosition(0, 0).setStringValue("Supplier PO confirmations - week 41");
+            String[] headers = {"PO", "SKU", "Qty", "Ship date"};
+            for (int i = 0; i < headers.length; ++i) {
+                table.getCellByPosition(i, 2).setStringValue(headers[i]);
+            }
+            Object[][] data = {
+                {"PO-1001", "000123", 5.0, "10.10.2026"},
+                {"PO-1002", "000456", 7.0, "24.10.2026"},
+            };
+            for (int r = 0; r < data.length; ++r) {
+                for (int c = 0; c < data[r].length; ++c) {
+                    OdfTableCell cell = table.getCellByPosition(c, 3 + r);
+                    if (data[r][c] instanceof Double) {
+                        cell.setDoubleValue((Double)data[r][c]);
+                    } else {
+                        cell.setStringValue((String)data[r][c]);
+                    }
+                }
+            }
+            table.getCellByPosition(0, 5).setStringValue("Total");
+            OdfTableCell sum = table.getCellByPosition(2, 5);
+            sum.setDoubleValue(12.0);
+            sum.setFormula("of:=SUM([.C4:.C5])");
+
+            // the banner is merged once every row exists: ODFDOM copies a row's cell attributes to the rows it
+            // creates after it
+            table.getCellByPosition(0, 0).getOdfElement().setAttributeNS(table_ns, "table:number-columns-spanned",
+                "4");
+
+            OdfTable lookup = OdfTable.newTable(doc, 2, 2);
+            lookup.setTableName("Lookup");
+            lookup.getCellByPosition(0, 0).setStringValue("Code");
+            lookup.getCellByPosition(1, 0).setStringValue("Rate");
+            lookup.getCellByPosition(0, 1).setStringValue("X");
+            lookup.getCellByPosition(1, 1).setDoubleValue(1.5);
+
+            OdfFileDom dom = doc.getContentDom();
+            String office_ns = OdfDocumentNamespace.OFFICE.getUri();
+            String style_ns = OdfDocumentNamespace.STYLE.getUri();
+            Element styles = (Element)dom.getElementsByTagNameNS(office_ns, "automatic-styles").item(0);
+            if (styles == null) {
+                styles = dom.createElementNS(office_ns, "office:automatic-styles");
+                dom.getDocumentElement().insertBefore(styles,
+                    dom.getElementsByTagNameNS(office_ns, "body").item(0));
+            }
+            Element hidden = dom.createElementNS(style_ns, "style:style");
+            hidden.setAttributeNS(style_ns, "style:name", "hidden_table");
+            hidden.setAttributeNS(style_ns, "style:family", "table");
+            Element props = dom.createElementNS(style_ns, "style:table-properties");
+            props.setAttributeNS(table_ns, "table:display", "false");
+            hidden.appendChild(props);
+            styles.appendChild(hidden);
+            lookup.getOdfElement().setAttributeNS(table_ns, "table:style-name", "hidden_table");
+
+            Element spreadsheet = (Element)dom.getElementsByTagNameNS(OdfDocumentNamespace.OFFICE.getUri(),
+                "spreadsheet").item(0);
+            Element expressions = dom.createElementNS(table_ns, "table:named-expressions");
+            Element range = dom.createElementNS(table_ns, "table:named-range");
+            range.setAttributeNS(table_ns, "table:name", "Rates");
+            range.setAttributeNS(table_ns, "table:cell-range-address", "$Lookup.$A$1:.$B$2");
+            expressions.appendChild(range);
+            spreadsheet.appendChild(expressions);
+
+            doc.save(path);
+        }
+    }
 }

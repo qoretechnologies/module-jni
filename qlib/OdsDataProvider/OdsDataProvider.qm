@@ -62,6 +62,7 @@
 %module-cmd(jni) add-relative-classpath ./jar/RoaringBitmap-1.0.0.jar
 
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsIterator
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsGridReader
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsWriter
 
 module OdsDataProvider {
@@ -143,6 +144,33 @@ module OdsDataProvider {
                     "header_names", "stream", "data"), {
                     "loc": "constructor",
                 }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdsDataProvider::AppName,
+            "path": "/",
+            "action": "profile",
+            "display_name": "Profile ODS Spreadsheet",
+            "short_desc": "Describe the layout and columns of every sheet of an ODS spreadsheet",
+            "desc": "Describes how every sheet of an OpenDocument spreadsheet (`.ods`) is laid out, so it can be "
+                "read correctly before an integration is built around it.\n\n"
+                "**Detects:**\n"
+                "- hidden sheets, named ranges, merged cells, and formulas\n"
+                "- the header row, title rows and banners above it, and the data region\n"
+                "- totals and subtotal rows and blank-row gaps\n"
+                "- each column's type with a confidence and counter-examples\n"
+                "- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\n"
+                "Sample values are redacted to their shape by default (`redact`), so a profile can be shared "
+                "without the data itself.",
+            "action_code": DPAT_API,
+            "cls": "OdsDataProvider::OdsProfileDataProvider",
+            "output_type": TabularWorkbookProfileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TabularProfileRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TabularProfileRequestDataType::Fields - ("path",)
             ),
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{

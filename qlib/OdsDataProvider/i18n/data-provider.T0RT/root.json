@@ -135,6 +135,78 @@
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters"
         },
+        "app.T0RT.action.cHJvZmlsZQ.display_name": {
+          "source": "Profile ODS Spreadsheet",
+          "message": "Profile ODS Spreadsheet"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.short_desc": {
+          "source": "Describe the layout and columns of every sheet of an ODS spreadsheet",
+          "message": "Describe the layout and columns of every sheet of an ODS spreadsheet"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.desc": {
+          "source": "Describes how every sheet of an OpenDocument spreadsheet (`.ods`) is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- hidden sheets, named ranges, merged cells, and formulas\n- the header row, title rows and banners above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself.",
+          "message": "Describes how every sheet of an OpenDocument spreadsheet (`.ods`) is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- hidden sheets, named ranges, merged cells, and formulas\n- the header row, title rows and banners above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself."
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.cGF0aA.display_name": {
+          "source": "Spreadsheet Location",
+          "message": "Spreadsheet Location"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The location of the spreadsheet to profile",
+          "message": "The location of the spreadsheet to profile"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.cGF0aA.desc": {
+          "source": "The location of the spreadsheet to profile, for example `file:///data/stock.xlsx` or an `sftp://` location; conflicts with `data`",
+          "message": "The location of the spreadsheet to profile, for example `file:///data/stock.xlsx` or an `sftp://` location; conflicts with `data`"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.ZGF0YQ.display_name": {
+          "source": "Spreadsheet Data",
+          "message": "Spreadsheet Data"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.ZGF0YQ.short_desc": {
+          "source": "The spreadsheet content to profile",
+          "message": "The spreadsheet content to profile"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.ZGF0YQ.desc": {
+          "source": "The spreadsheet content to profile, as bytes or as a Base64 string; conflicts with `path`",
+          "message": "The spreadsheet content to profile, as bytes or as a Base64 string; conflicts with `path`"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
+          "source": "Maximum Rows",
+          "message": "Maximum Rows"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.short_desc": {
+          "source": "The maximum number of rows read per sheet",
+          "message": "The maximum number of rows read per sheet"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
+          "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
+          "message": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.display_name": {
+          "source": "Sample Rows",
+          "message": "Sample Rows"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.short_desc": {
+          "source": "The number of sample rows returned per sheet",
+          "message": "The number of sample rows returned per sheet"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.desc": {
+          "source": "The number of sample data rows returned per sheet",
+          "message": "The number of sample data rows returned per sheet"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
+          "source": "Redact Samples",
+          "message": "Redact Samples"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.cmVkYWN0.short_desc": {
+          "source": "Return sample values redacted to their shape",
+          "message": "Return sample values redacted to their shape"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.cmVkYWN0.desc": {
+          "source": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data",
+          "message": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data"
+        },
         "app.T0RT.action.cmVhZC1kYXRh.display_name": {
           "source": "Read ODS Spreadsheet Inline Data",
           "message": "Read ODS Spreadsheet Inline Data"
