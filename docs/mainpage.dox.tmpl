@@ -6,19 +6,39 @@
 
     <img src="java_horizontal_logo.svg" width="192" alt="Java module logo"/>
 
-    The \c jni module allows for Java APIs to be used in %Qore as if the Java APIs were %Qore APIs and vice-versa, as
-    %Qore APIs can be dynamically imported into Java programs at runtime; additionally a
-    @ref org.qore.jni.compiler.QoreJavaCompiler "custom Java compiler" implementation is included that allows for
-    building bytecode with the @ref org.qore.jni.QoreURLClassLoader "Qore class loader" that supports dynamic byte
-    code generation for %Qore and Python language bindings; see @ref jni_dynamic_import_in_java for more
-    information.
+    The \c jni module integrates %Qore with <b>Java and Kotlin</b> on the JVM. Java and compiled Kotlin APIs can
+    be imported and used as %Qore APIs, and Java and Kotlin programs can call %Qore APIs through generated Java
+    bindings. The module handles API imports and runtime data conversion between the languages; see
+    @ref jni_use_java_in_qoreguide "importing JVM APIs into Qore" and
+    @ref jni_typesguide "type conversions".
 
-    Native API imports and bindings as well as run-time data translations between Java and %Qore and Java and Python
-    are supported.
+    The @ref org.qore.jni.QoreURLClassLoader "Qore class loader" generates Java bytecode for %Qore and Python
+    language bindings at runtime. A @ref org.qore.jni.compiler.QoreJavaCompiler "custom Java compiler" and the
+    \c qjavac and \c qkotlinc command-line helpers support compiling callers of %Qore APIs. See
+    @ref jni_dynamic_import_in_java "dynamic API imports" and
+    @ref jni_dynamic_imports_compile "compilation".
+
+    JNI 3.0 requires %Qore 3.0 and Java 21 or later.
 
     Java bytecode generation for dynamic API generation is provided by
-    <a href="https://bytebuddy.net/">Byte Buddy</a>, an excellent and flexible open-source API for Java bytecode
-    generation.
+    <a href="https://bytebuddy.net/">Byte Buddy</a>.
+
+    @subsection jnikotlin Kotlin Integration
+
+    - <b>Use Kotlin libraries from %Qore.</b> Add compiled Kotlin classes and their runtime dependencies to the
+      classpath and import them with the same @ref jniimport "class-loading directives" used for Java APIs.
+      Kotlin synthetic methods, companion-object classes, and default-parameter variants are filtered from the
+      imported API. Java and Kotlin collections use the @ref jni_java_to_qore "collection type conversions".
+    - <b>Call %Qore from Kotlin.</b> Compile Kotlin sources with \c qkotlinc and an installed Kotlin compiler.
+      See the @ref jni_kotlin_example "Kotlin interoperability example" and
+      @ref jni_dynamic_imports_compile "compilation guide".
+    - <b>Evaluate Kotlin scripts from %Qore.</b> Use
+      @ref Jni::org::qore::jni::kotlin_eval() "kotlin_eval()" at runtime or the \c kotlin-eval module command
+      at parse time. Scripting requires additional Kotlin scripting JARs on the classpath; the
+      \c download-kotlin-scripting-jars helper downloads them. Check availability with
+      @ref Jni::org::qore::jni::kotlin_scripting_available() "kotlin_scripting_available()", or retry
+      initialization after adding JARs with
+      @ref Jni::org::qore::jni::kotlin_scripting_retry() "kotlin_scripting_retry()".
 
     @section jniqlibmodules Qore User Modules
     - @ref accessdataproviderintro "AccessDataProvider" a data provider API for reading
@@ -105,10 +125,10 @@
 
     @section jnidocumentation Documentation
 
-    - @anchor jni_examples @subpage jni_examplesguide
+    - @anchor jni_examples @subpage jni_examplesguide &mdash; Java, Kotlin, and %Qore interoperability examples
     - @anchor jniinit @subpage jniinitguide
-    - @anchor jni_use_java_in_qore @subpage jni_use_java_in_qoreguide
-    - @anchor jni_from_java @subpage jni_from_javaguide
+    - @anchor jni_use_java_in_qore @subpage jni_use_java_in_qoreguide &mdash; importing Java and compiled Kotlin APIs
+    - @anchor jni_from_java @subpage jni_from_javaguide &mdash; generated bindings and Java/Kotlin compilation
     - @anchor jni_compat @subpage jni_compatguide
     - @anchor jni_types @subpage jni_typesguide
     - @anchor jni_qore_object_lifecycle_management @subpage jni_qore_object_lifecycle_managementguide

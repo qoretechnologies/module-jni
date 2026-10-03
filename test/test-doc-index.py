@@ -98,6 +98,33 @@ class JniDocIndexTest(unittest.TestCase):
         self.assertIn('id="jni_dynamic_import_qore_in_java"', page)
         self.assertIn('id="jni_dynamic_import_in_java"', page)
 
+    def test_mainpage_covers_kotlin_with_resolved_links(self):
+        path = BUILD / "docs/jni/html/index.html"
+        page = path.read_text()
+        intro = page.split('id="jniintro"', 1)[1].split('id="jniqlibmodules"', 1)[0]
+        self.assertIn("Java and Kotlin", intro)
+        self.assertIn('id="jnikotlin"', intro)
+        for text in ("Use Kotlin libraries from", "Call Qore from Kotlin", "Evaluate Kotlin scripts from",
+                     "qkotlinc", "download-kotlin-scripting-jars"):
+            self.assertIn(text, intro)
+        parser = Links()
+        parser.feed(intro)
+        for label in ("Kotlin interoperability example", "class-loading directives", "compilation guide",
+                      "collection type conversions", "kotlin_eval()", "kotlin_scripting_available()",
+                      "kotlin_scripting_retry()"):
+            with self.subTest(label=label):
+                links = [href for href, text in parser.links if text == label]
+                self.assertTrue(links, "Missing linked documentation: " + label)
+                for href in links:
+                    url = urlsplit(href)
+                    self.assertFalse(url.scheme or url.netloc, href)
+                    target = path.parent / unquote(url.path) if url.path else path
+                    self.assertTrue(target.is_file(), href)
+                    if url.fragment:
+                        self.assertIn('id="' + unquote(url.fragment) + '"', target.read_text(), href)
+        navigation = page.split('id="jnidocumentation"', 1)[1]
+        self.assertIn("Kotlin", navigation)
+
     def test_unreleased_versions_are_consolidated_into_3_0(self):
         page = (BUILD / "docs/jni/html/jnireleasenotesguide.html").read_text()
         self.assertIn('id="jni_3_0_0"', page)
