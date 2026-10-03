@@ -76,8 +76,8 @@
           "message": "將 EML 電子郵件訊息寫入檔案位置"
         },
         "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.desc": {
-          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data.",
-          "message": "在記憶體中建立 EML (RFC 822 / MIME) 電子郵件資料並將其作為二進位資料傳回；適用於在不寫入磁碟的情況下生成 EML 檔案。\n\n寫入的每筆記錄代表單一電子郵件訊息，具有標準電子郵件欄位，包括 `from`、`to`、`cc`、`bcc`、`subject`、`date`、`body_text`、`body_html`、`attachments`、`message_id`、`in_reply_to`、`reply_to` 和 `references`。\n\n寫入所有訊息後，使用 `getData()` 取回二進位 EML 資料。"
+          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nThe action returns the generated EML data in `data` and the number of messages in `record_count`.",
+          "message": "在記憶體中建立 EML (RFC 822 / MIME) 電子郵件資料並將其作為二進位資料傳回；適用於在不寫入磁碟的情況下生成 EML 檔案。\n\n寫入的每筆記錄代表單一電子郵件訊息，具有標準電子郵件欄位，包括 `from`、`to`、`cc`、`bcc`、`subject`、`date`、`body_text`、`body_html`、`attachments`、`message_id`、`in_reply_to`、`reply_to` 和 `references`。\n\n動作會在 `data` 中傳回產生的 EML 資料，並在 `record_count` 中傳回郵件數。"
         },
         "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.display_name": {
           "source": "Create EML Email Data",

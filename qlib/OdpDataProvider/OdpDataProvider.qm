@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -233,6 +233,8 @@ module OdpDataProvider {
                 "Useful for generating ODP presentations dynamically in workflows where the output is "
                 "sent to a downstream system or returned as a response rather than saved to a file.",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "OdpDataProvider::OdpWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OdpWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {

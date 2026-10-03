@@ -76,8 +76,8 @@
           "message": "將聯絡人寫入指定路徑的 vCard 檔案"
         },
         "app.VkNG.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nAfter writing all contacts, use `getData()` to retrieve the binary VCF data.",
-          "message": "在記憶體中建立 vCard (.vcf) 聯絡人資料並作為二進位資料傳回；適用於無需寫入磁碟即可產生 VCF 檔案的情況。\n\n寫入的每個記錄代表單一聯絡人，包含標準 vCard 欄位，包括 `formatted_name`、`emails`、`phones`、`addresses`、`organization`、`title`、`note`、`uid`、`birthday`、`url`、`nickname`、`categories` 以及 `role`。\n\n寫入所有聯絡人後，請使用 `getData()` 來擷取二進位 VCF 資料。"
+          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nThe action returns the generated VCF data in `data` and the number of contacts in `record_count`.",
+          "message": "在記憶體中建立 vCard (.vcf) 聯絡人資料並作為二進位資料傳回；適用於無需寫入磁碟即可產生 VCF 檔案的情況。\n\n寫入的每個記錄代表單一聯絡人，包含標準 vCard 欄位，包括 `formatted_name`、`emails`、`phones`、`addresses`、`organization`、`title`、`note`、`uid`、`birthday`、`url`、`nickname`、`categories` 以及 `role`。\n\n動作會在 `data` 中傳回產生的 VCF 資料，並在 `record_count` 中傳回聯絡人數。"
         },
         "app.VkNG.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create VCF Contact Data",

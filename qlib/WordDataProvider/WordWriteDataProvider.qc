@@ -240,6 +240,23 @@ public class WordWriteDataProvider inherits DataProvider::AbstractDataProvider {
         }
     }
 
+    #! Completes the create operations: writes the Word data to its path or stream, if any
+    /** @return the generated Word data and the number of records in it, if there is no output path or stream;
+        otherwise no value is returned
+    */
+    private *hash<GeneratedDataInfo> finishCreateImpl() {
+        if (path || stream) {
+            commit();
+            return;
+        }
+        # the data must be read before commit() closes the writer
+        on_exit commit();
+        return <GeneratedDataInfo>{
+            "data": getData(),
+            "record_count": created,
+        };
+    }
+
     #! Returns the data as binary
     /** @return the Word document contents as binary data
 
@@ -255,6 +272,15 @@ public class WordWriteDataProvider inherits DataProvider::AbstractDataProvider {
     #! Returns the number of records created
     int getCreatedCount() {
         return created;
+    }
+
+    #! Returns an open record type because the record fields depend on the Word document content type
+    /** @param search_options ignored
+
+        @return @ref NOTHING to represent an open record shape
+    */
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return NOTHING;
     }
 
     #! Returns data provider static info

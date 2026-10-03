@@ -192,6 +192,23 @@ public class OdsWriteDataProvider inherits DataProvider::AbstractDataProvider {
         }
     }
 
+    #! Completes the create operations: writes the ODS data to its path or stream, if any
+    /** @return the generated ODS data and the number of records in it, if there is no output path or stream;
+        otherwise no value is returned
+    */
+    private *hash<GeneratedDataInfo> finishCreateImpl() {
+        if (path || stream) {
+            commit();
+            return;
+        }
+        # the data must be read before commit() closes the writer
+        on_exit commit();
+        return <GeneratedDataInfo>{
+            "data": getData(),
+            "record_count": created,
+        };
+    }
+
     #! Returns the data as binary
     binary getData() {
         if (!writer) {
@@ -203,6 +220,18 @@ public class OdsWriteDataProvider inherits DataProvider::AbstractDataProvider {
     #! Returns the number of records created
     int getCreatedCount() {
         return created;
+    }
+
+    #! Returns the record type: the \c headers columns, or an open record type if headers are taken from the first record
+    /** @param search_options ignored
+
+        @return a field for each column in the \c headers option, or @ref NOTHING (an open record shape) if no
+        headers are given, in which case the first record's keys are used as the columns
+    */
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return map {
+            $1: new QoreDataField($1, "ODS column " + $1, AbstractDataProviderType::anyDataType)
+        }, opts.headers;
     }
 
     #! Returns data provider static info

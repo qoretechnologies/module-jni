@@ -88,8 +88,8 @@
           "message": "Generuj raport z szablonu JasperReports w lokalizacji pliku"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "Generuj raport z dwójkowych danych szablonu JasperReports podanych bezpośrednio.\n\nKażdy utworzony rekord reprezentuje pojedynczy wiersz danych, który ma zostać dołączony do raportu. Raport jest generowany po zatwierdzeniu lub zniszczeniu dostawcy.\n\nPo zapisaniu wszystkich rekordów użyj `getData()`, aby pobrać binarne dane wyjściowe raportu.\n\nObsługiwane formaty wyjściowe: `pdf`, `xlsx`, `html`, `csv`."
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Generuj raport z dwójkowych danych szablonu JasperReports podanych bezpośrednio.\n\nKażdy utworzony rekord reprezentuje pojedynczy wiersz danych, który zostanie uwzględniony w raporcie. Raport jest generowany po zakończeniu akcji.\n\nAkcja zwraca wygenerowany raport w `data`, jego format w `format` oraz liczbę wierszy danych w `record_count`.\n\nObsługiwane formaty wyjściowe: `pdf`, `xlsx`, `html`, `csv`."
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

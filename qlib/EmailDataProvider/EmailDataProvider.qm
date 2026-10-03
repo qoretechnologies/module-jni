@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -292,8 +292,11 @@ module EmailDataProvider {
                 "Each record written represents a single email message with the standard email fields "
                 "including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, "
                 "`attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\n"
-                "After writing all messages, use `getData()` to retrieve the binary EML data.",
+                "The action returns the generated EML data in `data` and the number of messages in "
+                "`record_count`.",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "EmailDataProvider::EmlWriteDataProvider",
             "options": {},
         });

@@ -88,8 +88,8 @@
           "message": "Generovat sestavu ze šablony JasperReports v souborovém umístění"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "Generovat sestavu z přímých binárních dat šablony JasperReports.\n\nKaždý vytvořený záznam představuje jeden datový řádek, který má být zahrnut do sestavy. Sestava se vygeneruje při potvrzení nebo zničení poskytovatele.\n\nPo zapsání všech záznamů použijte `getData()` ke získání binárního výstupu sestavy.\n\nPodporované výstupní formáty: `pdf`, `xlsx`, `html`, `csv`."
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Generovat sestavu z přímých binárních dat šablony JasperReports.\n\nKaždý vytvořený záznam představuje jeden datový řádek, který bude zahrnut do sestavy. Sestava se vygeneruje po dokončení akce.\n\nAkce vrací vygenerovanou sestavu v `data`, její formát v `format` a počet datových řádků v `record_count`.\n\nPodporované výstupní formáty: `pdf`, `xlsx`, `html`, `csv`."
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

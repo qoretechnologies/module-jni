@@ -268,8 +268,8 @@
           "message": "ODS 스프레드시트 파일에 데이터 쓰기"
         },
         "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
-          "message": "메모리에 ODS 스프레드시트 데이터를 생성하고 바이너리 데이터로 반환합니다.\n\n디스크에 쓰지 않고 ODS 파일을 생성해야 하는 경우(예: 스프레드시트를 API 응답으로 반환하거나, 데이터베이스에 저장하거나, 다른 처리 단계로 전달) 이 작업을 사용하세요. 모든 레코드를 생성한 후 공급자에서 `getData()`을 호출하여 결과를 가져옵니다.\n\n**주요 옵션**:\n- `worksheet` — 워크시트 이름(기본값: `Sheet1`)\n- `headers` — 명시적 열 헤더 이름. 제공되지 않으면 첫 번째 레코드에서 헤더가 자동 감지됩니다."
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. The action returns the generated spreadsheet in `data` and the number of records in `record_count`.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
+          "message": "메모리에 ODS 스프레드시트 데이터를 생성하고 바이너리 데이터로 반환합니다.\n\n디스크에 쓰지 않고 ODS 파일을 생성해야 할 때 이 작업을 사용합니다. 예를 들어 스프레드시트를 API 응답으로 반환하거나, 데이터베이스에 저장하거나, 다른 처리 단계로 전달할 수 있습니다. 작업은 생성된 스프레드시트를 `data`에, 레코드 수를 `record_count`에 반환합니다.\n\n**주요 옵션**:\n- `worksheet` — 워크시트 이름(기본값: `Sheet1`)\n- `headers` — 명시적 열 헤더 이름. 제공되지 않으면 첫 번째 레코드에서 헤더가 자동 감지됩니다."
         },
         "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create ODS Spreadsheet Data",

@@ -88,8 +88,8 @@
           "message": "Einen Bericht aus einer JasperReports-Vorlage an einem Dateipfad generieren"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "Generieren Sie einen Bericht aus binären Inline-JasperReports-Vorlagendaten.\n\nJeder erstellte Datensatz stellt eine einzelne Datenzeile dar, die in den Bericht aufgenommen wird. Der Bericht wird generiert, wenn der Provider committet oder zerstört wird.\n\nVerwenden Sie nach dem Schreiben aller Datensätze `getData()`, um die binäre Berichtsausgabe abzurufen.\n\nUnterstützte Ausgabeformate: `pdf`, `xlsx`, `html`, `csv`."
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Generieren Sie einen Bericht aus binären Inline-JasperReports-Vorlagendaten.\n\nJeder erstellte Datensatz stellt eine einzelne Datenzeile dar, die in den Bericht aufgenommen wird. Der Bericht wird beim Abschluss der Aktion erzeugt.\n\nDie Aktion gibt den erzeugten Bericht in `data`, sein Format in `format` und die Anzahl der Datenzeilen in `record_count` zurück.\n\nUnterstützte Ausgabeformate: `pdf`, `xlsx`, `html`, `csv`."
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

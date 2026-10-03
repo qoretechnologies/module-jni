@@ -76,8 +76,8 @@
           "message": "ファイルパスに EML メールメッセージを書き込み"
         },
         "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.desc": {
-          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data.",
-          "message": "メモリ内で EML (RFC 822 / MIME) メールデータを作成し、バイナリデータとして返します。ディスクに書き込まずに EML ファイルを生成する場合に便利です。\n\n書き込まれる各レコードは、`from`、`to`、`cc`、`bcc`、`subject`、`date`、`body_text`、`body_html`、`attachments`、`message_id`、`in_reply_to`、`reply_to`、および `references` を含む標準メールフィールドを持つ単一のメールメッセージを表します。\n\nすべてのメッセージを書き込んだ後、`getData()` を使用してバイナリ EML データを取得します。"
+          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nThe action returns the generated EML data in `data` and the number of messages in `record_count`.",
+          "message": "メモリ内で EML (RFC 822 / MIME) メールデータを作成し、バイナリデータとして返します。ディスクに書き込まずに EML ファイルを生成する場合に便利です。\n\n書き込まれる各レコードは、`from`、`to`、`cc`、`bcc`、`subject`、`date`、`body_text`、`body_html`、`attachments`、`message_id`、`in_reply_to`、`reply_to`、および `references` を含む標準メールフィールドを持つ単一のメールメッセージを表します。\n\nアクションは生成された EML データを `data` に、メッセージ数を `record_count` に返します。"
         },
         "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.display_name": {
           "source": "Create EML Email Data",
