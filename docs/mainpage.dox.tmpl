@@ -1191,7 +1191,7 @@ foreach hash<auto> column in (result.schemaV2()) {
         same-named class belonging to an unrelated %Program in the process, so calls dispatched to
         the wrong implementation.  In Qorus this bound server-side Java interfaces to the
         \c QorusClient variant of \c OMQ::UserApi::UserApi, which failed at runtime with
-        <tt>no pseudo method &lt;nothing&gt;::getClientLogger()</tt>.
+        <tt>no pseudo method &lt;nothing&gt;::%getClientLogger()</tt>.
       - <b>Cause.</b> A \c qore.<i>X</i>.<i>Y</i>... binary name addresses a namespace path, and two
         %Programs in one process can legitimately hold different classes at the same path.
         Canonical classloader resolution scanned every loaded user-module %Program for that path
