@@ -259,3 +259,15 @@ Scope: qore-jni-module.spec, rpm/run-tests.py, rpm/check-jdbc-fixture.py and rpm
    * - 62. Correctness: Algorithms verified against reference implementations; edge cases tested (empty data, single sample, all-zero features)
      - Pass
      - All three candidate builds and installed checks pass; 22 AOT/debug artifacts, 195 JAR copies and 176 provenance records verified per target.
+
+Kotlin documentation-directory ownership
+----------------------------------------
+
+OBS revision 1 passed all 37 suites on all three targets, then Leap rejected an
+unowned parent of the Kotlin license directory. The Kotlin subpackage now owns
+that parent explicitly. A fresh Leap candidate passes 37 suites (619 cases and
+8,574 assertions), 13 CTests and the existing helper checks, with only previously
+approved OpenJDK diagnostics. The directory-ownership regression rejects the
+original payload and accepts the corrected runtime/tools/Kotlin/documentation
+payloads, matching the application-package scope of OBS 50-check-filelist.
+The 62-item audit above remains applicable; no native behavior changed.

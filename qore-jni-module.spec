@@ -384,6 +384,7 @@ qore-data-provider-i18n --no-color --check-source-tree --require-standard-locale
 %{_bindir}/qjava-migrate-imports
 %files -n qore-jni-kotlin
 %license debian/copyright
+%dir %{_docdir}/qore-jni-kotlin
 %license %{_docdir}/qore-jni-kotlin/upstream-licenses/
 %{_bindir}/qkotlinc
 %{_bindir}/download-kotlin-scripting-jars
