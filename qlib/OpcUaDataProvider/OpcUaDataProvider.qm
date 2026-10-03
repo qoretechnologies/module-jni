@@ -445,6 +445,8 @@ module OpcUaDataProvider {
 
     @section opcuadataproviderintro Introduction to the OpcUaDataProvider Module
 
+    <img src="opc-ua-logo.svg" width="96" alt="OpcUaDataProvider module logo"/>
+
     The %OpcUaDataProvider module provides a data provider API for OPC UA (Open Platform Communications
     Unified Architecture) servers, supporting industrial communication and IoT use cases.
 
@@ -693,18 +695,7 @@ module OpcUaDataProvider {
     - batch writes are fully validated before any write is sent (no partial writes on validation failure)
 
     @subsection opcuadataproviderv10 OpcUaDataProvider v1.0
-    - initial release of the module with support for:
-      - data change subscriptions for monitored nodes
-      - single and batch reading/writing of node values
-      - reading node attributes (display name, data type, access level, etc.)
-      - browsing the OPC UA address space with server-side pagination
-      - calling methods on OPC UA server objects
-      - reading raw historical data with time range filtering
-      - server endpoint discovery and server status
-      - connection lifecycle events (connected/disconnected) with auto-reconnect
-      - security policy and authentication configuration (Anonymous, Username/Password, Certificate)
-      - SSL/TLS keystore and truststore configuration
-      - cooperative cancellation support for all blocking operations
+    - initial release
 */
 
 #! contains all public definitions in the OpcUaDataProvider module

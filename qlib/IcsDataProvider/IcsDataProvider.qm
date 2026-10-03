@@ -213,6 +213,8 @@ module IcsDataProvider {
 
     @section icsdataproviderintro IcsDataProvider Module Introduction
 
+    <img src="ics-logo.svg" width="96" alt="IcsDataProvider module logo"/>
+
     @anchor IcsDataProviderintro
 
     The %IcsDataProvider module provides a data provider API for reading and writing ICS
@@ -229,7 +231,7 @@ module IcsDataProvider {
     @section IcsDataProvider_relnotes Release Notes
 
     @subsection IcsDataProvider_v1_0 IcsDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the IcsDataProvider module

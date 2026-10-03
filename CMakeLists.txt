@@ -1337,6 +1337,7 @@ list(APPEND MODULE_DOX_INPUT
     ${CMAKE_CURRENT_BINARY_DIR}/guide-jnireleasenotes.dox
 )
 set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/docs/java_horizontal_logo.svg"
     "${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/access-logo.svg"
     "${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/avro-logo.svg"
     "${CMAKE_SOURCE_DIR}/qlib/BusyLightDataProvider/busylight-logo.svg"

@@ -185,6 +185,8 @@ module VcfDataProvider {
 
     @section vcfdataproviderintro VcfDataProvider Module Introduction
 
+    <img src="vcf-logo.svg" width="96" alt="VcfDataProvider module logo"/>
+
     @anchor VcfDataProviderintro
 
     The %VcfDataProvider module provides a data provider API for reading and writing vCard (.vcf) contact files
@@ -272,12 +274,7 @@ module VcfDataProvider {
     @section VcfDataProvider_relnotes Release Notes
 
     @subsection VcfDataProvider_v1_0 VcfDataProvider v1.0
-    - initial release of the module
-    - support for reading vCard (.vcf) files with single and multiple contacts
-    - support for writing vCard (.vcf) files in vCard 3.0 format
-    - full support for contact fields: name, email, phone, address, organization, title, note, uid
-    - binary data input/output support
-    - stream-based input/output support
+    - initial release
 */
 
 #! contains all public definitions in the VcfDataProvider module

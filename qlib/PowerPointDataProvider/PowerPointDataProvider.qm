@@ -183,6 +183,8 @@ module PowerPointDataProvider {
 
     @section powerpointdataproviderintro PowerPointDataProvider Module Introduction
 
+    <img src="powerpoint-logo.svg" width="96" alt="PowerPointDataProvider module logo"/>
+
     @anchor PowerPointDataProviderintro
 
     The %PowerPointDataProvider module provides a data provider API for reading and writing Microsoft PowerPoint
@@ -325,14 +327,7 @@ module PowerPointDataProvider {
     @section PowerPointDataProvider_relnotes Release Notes
 
     @subsection PowerPointDataProvider_v1_0 PowerPointDataProvider v1.0
-    - initial release of the module
-    - support for reading PowerPoint presentations (.pptx format)
-    - support for writing PowerPoint presentations (.pptx format)
-    - slides and table read/write modes
-    - speaker notes support
-    - slide layout support
-    - header row detection for tables
-    - binary data input/output support
+    - initial release
 */
 
 #! contains all public definitions in the PowerPointDataProvider module

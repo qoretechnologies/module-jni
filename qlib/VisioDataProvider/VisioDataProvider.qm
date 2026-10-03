@@ -118,6 +118,8 @@ module VisioDataProvider {
 
     @section visiodataproviderintro VisioDataProvider Module Introduction
 
+    <img src="visio-logo.svg" width="96" alt="VisioDataProvider module logo"/>
+
     @anchor VisioDataProviderintro
 
     The %VisioDataProvider module provides a data provider API for reading Microsoft Visio documents
@@ -160,10 +162,7 @@ module VisioDataProvider {
     @section VisioDataProvider_relnotes Release Notes
 
     @subsection VisioDataProvider_v1_0 VisioDataProvider v1.0
-    - initial release of the module
-    - support for reading Visio documents (.vsdx format)
-    - page-level text extraction from shapes
-    - binary data input support
+    - initial release
 */
 
 #! contains all public definitions in the VisioDataProvider module

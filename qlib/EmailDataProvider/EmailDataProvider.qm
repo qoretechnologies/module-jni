@@ -309,6 +309,8 @@ module EmailDataProvider {
 
     @section emaildataproviderintro EmailDataProvider Module Introduction
 
+    <img src="email-logo.svg" width="96" alt="EmailDataProvider module logo"/>
+
     @anchor EmailDataProviderintro
 
     The %EmailDataProvider module provides a data provider API for reading and writing email messages in
@@ -428,13 +430,7 @@ module EmailDataProvider {
     @section EmailDataProvider_relnotes Release Notes
 
     @subsection EmailDataProvider_v1_0 EmailDataProvider v1.0
-    - initial release of the module
-    - support for reading EML (RFC 822 / MIME) email files
-    - support for writing EML (RFC 822 / MIME) email files with text, HTML, and attachments
-    - support for reading MSG (Microsoft Outlook) email files
-    - support for reading MBOX (Unix Mailbox) files with multiple messages
-    - unified record schema across all email formats
-    - binary data and stream input/output support
+    - initial release
 */
 
 #! contains all public definitions in the EmailDataProvider module

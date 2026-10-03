@@ -193,6 +193,8 @@ module ExcelDataProvider {
 
     @section exceldataproviderintro ExcelDataProvider Module Introduction
 
+    <img src="excel-logo.svg" width="96" alt="ExcelDataProvider module logo"/>
+
     @anchor ExcelDataProviderintro
 
     The %ExcelDataProvider module provides a data provider API for reading and writing Excel spreadsheets
@@ -336,7 +338,7 @@ module ExcelDataProvider {
     - updated copyright to 2026
 
     @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the ExcelDataProvider module

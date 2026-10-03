@@ -232,6 +232,8 @@ module OdtDataProvider {
 
     @section odtdataproviderintro OdtDataProvider Module Introduction
 
+    <img src="odt-logo.svg" width="96" alt="OdtDataProvider module logo"/>
+
     @anchor OdtDataProviderintro
 
     The %OdtDataProvider module provides a data provider API for reading and writing ODT
@@ -371,12 +373,7 @@ module OdtDataProvider {
     @section OdtDataProvider_relnotes Release Notes
 
     @subsection OdtDataProvider_v1_0 OdtDataProvider v1.0
-    - initial release of the module
-    - support for reading ODT documents (.odt format)
-    - support for writing ODT documents (.odt format)
-    - paragraph and table read/write modes
-    - header row detection for tables
-    - binary data input/output support
+    - initial release
 */
 
 #! contains all public definitions in the OdtDataProvider module

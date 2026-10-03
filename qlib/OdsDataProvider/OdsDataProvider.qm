@@ -246,6 +246,8 @@ module OdsDataProvider {
 
     @section odsdataproviderintro OdsDataProvider Module Introduction
 
+    <img src="ods-logo.svg" width="96" alt="OdsDataProvider module logo"/>
+
     @anchor OdsDataProviderintro
 
     The %OdsDataProvider module provides a data provider API for reading and writing ODS
@@ -263,7 +265,7 @@ module OdsDataProvider {
     @section OdsDataProvider_relnotes Release Notes
 
     @subsection OdsDataProvider_v1_0 OdsDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the OdsDataProvider module

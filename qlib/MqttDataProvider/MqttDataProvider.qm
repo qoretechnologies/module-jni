@@ -139,6 +139,8 @@ module MqttDataProvider {
 
     @section mqttdataproviderintro Introduction to the MqttDataProvider Module
 
+    <img src="mqtt-logo.svg" width="96" alt="MqttDataProvider module logo"/>
+
     The %MqttDataProvider module provides a data provider API for MQTT 5.0 servers for sending and receiving
     MQTT messages with full MQTT 5.0 protocol support.
 
@@ -244,7 +246,7 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
       (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
 
     @subsection MqttDataProvider_v1_0 MqttDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the MqttDataProvider module

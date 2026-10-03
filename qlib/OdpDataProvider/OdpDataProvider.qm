@@ -252,6 +252,8 @@ module OdpDataProvider {
 
     @section odpdataproviderintro OdpDataProvider Module Introduction
 
+    <img src="odp-logo.svg" width="96" alt="OdpDataProvider module logo"/>
+
     @anchor OdpDataProviderintro
 
     The %OdpDataProvider module provides a data provider API for reading and writing ODP
@@ -395,14 +397,7 @@ module OdpDataProvider {
     @section OdpDataProvider_relnotes Release Notes
 
     @subsection OdpDataProvider_v1_0 OdpDataProvider v1.0
-    - initial release of the module
-    - support for reading ODP presentations (.odp format)
-    - support for writing ODP presentations (.odp format)
-    - slides and table read/write modes
-    - speaker notes support
-    - slide layout support
-    - header row detection for tables
-    - binary data input/output support
+    - initial release
 */
 
 #! contains all public definitions in the OdpDataProvider module

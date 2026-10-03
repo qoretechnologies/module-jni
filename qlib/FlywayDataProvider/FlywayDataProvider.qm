@@ -195,6 +195,8 @@ module FlywayDataProvider {
 
     @section flywaydataproviderintro Introduction to the FlywayDataProvider Module
 
+    <img src="flyway-logo.svg" width="96" alt="FlywayDataProvider module logo"/>
+
     The %FlywayDataProvider module provides a data provider API for Flyway database schema migration.
 
     This data provider provides Flyway functionality with the \c flyway factory and data provider with the
@@ -216,9 +218,7 @@ module FlywayDataProvider {
     @section flywaydataprovider_relnotes Release Notes
 
     @subsection flywaydataprovider_v1_0 FlywayDataProvider v1.0
-    - corrected action output descriptions: migration results are a list, validation exposes
-      \c errorDetails, and clean and repair return a \c success flag
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the FlywayDataProvider module

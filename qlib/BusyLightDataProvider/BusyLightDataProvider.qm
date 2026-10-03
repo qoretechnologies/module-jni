@@ -90,6 +90,8 @@ module BusyLightDataProvider {
 
     @section busylightdataproviderintro BusyLightDataProvider Module Introduction
 
+    <img src="busylight-logo.svg" width="96" alt="BusyLightDataProvider module logo"/>
+
     @anchor BusyLightDataProviderintro
 
     The %BusyLightDataProvider module provides a data provider API for BusyLight devices through MQTT.
@@ -108,7 +110,7 @@ module BusyLightDataProvider {
     @section BusyLightDataProvider_relnotes Release Notes
 
     @subsection BusyLightDataProvider_v1_0 BusyLightDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the BusyLightDataProvider module

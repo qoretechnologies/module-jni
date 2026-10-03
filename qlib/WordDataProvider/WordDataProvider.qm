@@ -181,6 +181,8 @@ module WordDataProvider {
 
     @section worddataproviderintro WordDataProvider Module Introduction
 
+    <img src="word-logo.svg" width="96" alt="WordDataProvider module logo"/>
+
     @anchor WordDataProviderintro
 
     The %WordDataProvider module provides a data provider API for reading and writing Microsoft Word documents
@@ -319,12 +321,7 @@ module WordDataProvider {
     @section WordDataProvider_relnotes Release Notes
 
     @subsection WordDataProvider_v1_0 WordDataProvider v1.0
-    - initial release of the module
-    - support for reading Word documents (.docx format)
-    - support for writing Word documents (.docx format)
-    - paragraph and table read/write modes
-    - header row detection for tables
-    - binary data input/output support
+    - initial release
 */
 
 #! contains all public definitions in the WordDataProvider module

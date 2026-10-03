@@ -120,6 +120,8 @@ module KafkaDataProvider {
 
     @section kafkadataproviderintro Introduction to the KafkaDataProvider Module
 
+    <img src="kafka-logo.svg" width="96" alt="KafkaDataProvider module logo"/>
+
     The %KafkaDataProvider module provides a data provider API for sending and receiving Kafka messages.
 
     This data provider provides Kafka functionality with the \c Kafka factory and data provider with the same name,
@@ -152,7 +154,7 @@ module KafkaDataProvider {
       a schema location
 
     @subsection kafkadataprovider_v1_0 KafkaDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the KafkaDataProvider module

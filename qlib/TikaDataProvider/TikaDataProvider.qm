@@ -165,6 +165,8 @@ module TikaDataProvider {
 
     @section tikadataproviderintro Introduction to the TikaDataProvider Module
 
+    <img src="tika-logo.svg" width="96" alt="TikaDataProvider module logo"/>
+
     The %TikaDataProvider module provides a data provider API for universal content detection and text
     extraction through the @ref dataproviderintro "DataProvider" API using
     <a href="https://tika.apache.org/">Apache Tika</a> 3.0.
@@ -229,11 +231,7 @@ module TikaDataProvider {
     @section TikaDataProvider_relnotes Release Notes
 
     @subsection TikaDataProvider_v1_0 TikaDataProvider v1.0
-    - initial release of the module
-    - support for text extraction from files using Apache Tika 3.0
-    - support for MIME type detection
-    - metadata extraction support
-    - file path, stream, and binary data input support
+    - initial release
 */
 
 #! contains all public definitions in the TikaDataProvider module

@@ -176,6 +176,8 @@ module AvroDataProvider {
 
     @section avrodataproviderintro Introduction to the AvroDataProvider Module
 
+    <img src="avro-logo.svg" width="96" alt="AvroDataProvider module logo"/>
+
     The %AvroDataProvider module provides a data provider API for reading and writing Apache Avro data files
     through the @ref dataproviderintro "DataProvider" API. It supports the Avro 1.12.0 format using the
     <a href="https://avro.apache.org/">Apache Avro</a> Java library.
@@ -276,12 +278,7 @@ module AvroDataProvider {
     @section AvroDataProvider_relnotes Release Notes
 
     @subsection AvroDataProvider_v1_0 AvroDataProvider v1.0
-    - initial release of the module
-    - support for reading Apache Avro (.avro) files with schema-based deserialization
-    - support for writing Apache Avro (.avro) files with schema-based serialization
-    - full support for all Avro primitive and complex types
-    - binary data input/output support
-    - stream-based input/output support
+    - initial release
 */
 
 #! contains all public definitions in the AvroDataProvider module

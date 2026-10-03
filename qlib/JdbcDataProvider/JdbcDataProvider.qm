@@ -138,6 +138,8 @@ module JdbcDataProvider {
 
     @section jdbcdataproviderintro Introduction to the JdbcDataProvider Module
 
+    <img src="jdbc-dp-logo.svg" width="96" alt="JdbcDataProvider module logo"/>
+
     The %JdbcDataProvider module provides a data provider API for JDBC database access.
 
     This data provider provides JDBC functionality with the \c jdbc-dp factory and data provider with
@@ -168,7 +170,7 @@ module JdbcDataProvider {
     @section jdbcdataprovider_relnotes Release Notes
 
     @subsection jdbcdataprovider_v1_0 JdbcDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the JdbcDataProvider module
