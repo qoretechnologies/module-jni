@@ -24,6 +24,9 @@ package org.qore.dataprovider.ods;
 import org.odftoolkit.odfdom.doc.OdfSpreadsheetDocument;
 import org.odftoolkit.odfdom.doc.table.OdfTable;
 import org.odftoolkit.odfdom.doc.table.OdfTableCell;
+import org.odftoolkit.odfdom.dom.OdfDocumentNamespace;
+import org.odftoolkit.odfdom.pkg.OdfFileDom;
+import org.w3c.dom.Element;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -185,6 +188,61 @@ public class OdsTestHelper {
 
             doc.save(path);
         }
+    }
+
+    /**
+     * Creates an ODS file stored the way spreadsheet applications store sparse sheets: runs of empty rows are
+     * single row elements with a repeat count.
+     *
+     * Rows: headers (Sku, Qty), A-1/5, 1,000,000 repeated empty rows, C-3/9, then 1,048,000 repeated empty rows.
+     */
+    public static void createRepeatedEmptyRowsOds(String path) throws Exception {
+        try (OdfSpreadsheetDocument doc = OdfSpreadsheetDocument.newSpreadsheetDocument()) {
+            OdfTable table = doc.getTableList().get(0);
+            table.setTableName("Counts");
+            table.getCellByPosition(0, 0).setStringValue("Sku");
+            table.getCellByPosition(1, 0).setStringValue("Qty");
+            table.getCellByPosition(0, 1).setStringValue("A-1");
+            table.getCellByPosition(1, 1).setDoubleValue(5.0);
+
+            OdfFileDom dom = doc.getContentDom();
+            Element table_element = table.getOdfElement();
+            table_element.appendChild(newEmptyRows(dom, 1000000));
+            Element row = newRow(dom);
+            row.appendChild(newCell(dom, "string", "C-3"));
+            row.appendChild(newCell(dom, "float", "9"));
+            table_element.appendChild(row);
+            table_element.appendChild(newEmptyRows(dom, 1048000));
+            doc.save(path);
+        }
+    }
+
+    private static Element newRow(OdfFileDom dom) {
+        return dom.createElementNS(OdfDocumentNamespace.TABLE.getUri(), "table:table-row");
+    }
+
+    private static Element newEmptyRows(OdfFileDom dom, int repeated) {
+        Element row = newRow(dom);
+        row.setAttributeNS(OdfDocumentNamespace.TABLE.getUri(), "table:number-rows-repeated",
+            Integer.toString(repeated));
+        // as written by LibreOffice: one empty cell repeated to the last column
+        Element cell = dom.createElementNS(OdfDocumentNamespace.TABLE.getUri(), "table:table-cell");
+        cell.setAttributeNS(OdfDocumentNamespace.TABLE.getUri(), "table:number-columns-repeated", "1024");
+        row.appendChild(cell);
+        return row;
+    }
+
+    private static Element newCell(OdfFileDom dom, String value_type, String value) {
+        String office_ns = OdfDocumentNamespace.OFFICE.getUri();
+        Element cell = dom.createElementNS(OdfDocumentNamespace.TABLE.getUri(), "table:table-cell");
+        cell.setAttributeNS(office_ns, "office:value-type", value_type);
+        if (!value_type.equals("string")) {
+            cell.setAttributeNS(office_ns, "office:value", value);
+        }
+        Element text = dom.createElementNS(OdfDocumentNamespace.TEXT.getUri(), "text:p");
+        text.setTextContent(value);
+        cell.appendChild(text);
+        return cell;
     }
 
     /**

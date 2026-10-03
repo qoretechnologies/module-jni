@@ -23,8 +23,14 @@ package org.qore.dataprovider.ods;
 
 import org.odftoolkit.odfdom.doc.OdfSpreadsheetDocument;
 import org.odftoolkit.odfdom.doc.table.OdfTable;
-import org.odftoolkit.odfdom.doc.table.OdfTableRow;
 import org.odftoolkit.odfdom.doc.table.OdfTableCell;
+import org.odftoolkit.odfdom.dom.OdfDocumentNamespace;
+import org.odftoolkit.odfdom.dom.element.table.TableTableCellElementBase;
+import org.odftoolkit.odfdom.dom.element.table.TableTableElement;
+import org.odftoolkit.odfdom.dom.element.table.TableTableRowElement;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -64,7 +70,14 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
     private String end_column = "-";
     private Hash row_data = null;
     private long count = 0;
-    // Cached table dimensions - must be saved before any getCellByPosition() call
+    private boolean ignore_empty = false;
+    // the 1-based number of the last row with content
+    private int last_data_row = 0;
+    // the row elements of the table and the 0-based number of the first row each one represents; runs of identical
+    // rows are single elements with a repeat count, so rows are located without expanding them
+    private ArrayList<TableTableRowElement> row_elements = new ArrayList<TableTableRowElement>();
+    private ArrayList<Integer> row_starts = new ArrayList<Integer>();
+    // Cached table dimensions
     // because ODFDOM auto-expands tables when accessing non-existent cells
     private int cachedRowCount = 0;
     private int cachedColCount = 0;
@@ -112,9 +125,16 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
                 throw new RuntimeException(String.format("sheet %s is unknown", sheet_name));
             }
         }
-        // Cache dimensions immediately - before any getCellByPosition() which auto-expands tables
-        cachedRowCount = table.getRowCount();
+        // Cache dimensions immediately
+        indexRows();
         cachedColCount = table.getColumnCount();
+    }
+
+    /**
+     * Sets whether empty rows are skipped; if false (the default), iteration stops at the first empty row.
+     */
+    public void setIgnoreEmpty(boolean ignore_empty) {
+        this.ignore_empty = ignore_empty;
     }
 
     public void setZone(String zonestr) throws DateTimeException, ZoneRulesException {
@@ -141,8 +161,7 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
 
     public void setHeaderCells(String col_start, int row_start, String col_end, int row_end) {
         header_row_end = row_end == -1 ? row_start : row_end;
-        OdfTableRow row = table.getRowByIndex(row_start - 1);
-        if (row == null) {
+        if (getRowElement(row_start - 1) == null) {
             return;
         }
 
@@ -154,13 +173,12 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
         if (!col_end.equals("-")) {
             end_cell = colStringToIndex(col_end);
         }
-        // Use cached column count; getCellByPosition() auto-expands tables in ODFDOM
         while (cell_no < cachedColCount) {
-            OdfTableCell cell = table.getCellByPosition(cell_no, row_start - 1);
-            String valueType = cell.getValueType();
+            OdfTableCell cell = getCell(cell_no, row_start - 1);
+            String valueType = cell == null ? null : cell.getValueType();
             if (valueType == null || valueType.isEmpty()) {
                 // Check if the cell has any text content
-                String text = cell.getDisplayText();
+                String text = cell == null ? null : cell.getDisplayText();
                 if (text == null || text.trim().isEmpty()) {
                     break;
                 }
@@ -223,6 +241,22 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
         }
         if (current_row != -1) {
             row_data = getRowData(current_row);
+            if (row_data == null && ignore_empty) {
+                // skip empty rows up to the end of the data range or the last row with content
+                int last_row = getLastDataRow();
+                if (end_row != -1 && end_row < last_row) {
+                    last_row = end_row;
+                }
+                while (row_data == null && current_row < last_row) {
+                    // jump over runs of empty rows without visiting each row in them
+                    int next_row = getNextRowWithContent(current_row);
+                    if (next_row == -1 || next_row > last_row) {
+                        break;
+                    }
+                    current_row = next_row;
+                    row_data = getRowData(current_row);
+                }
+            }
             if (row_data == null) {
                 current_row = -1;
             } else {
@@ -232,6 +266,145 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             row_data = null;
         }
         return current_row != -1;
+    }
+
+    /**
+     * Indexes the row elements of the table.
+     *
+     * Spreadsheet applications store runs of identical rows, such as the empty rows to the end of the sheet, as a
+     * single row element with a repeat count; ODFDOM's positional cell access expands such runs, which is
+     * prohibitively slow for a sheet ending in a million repeated empty rows, so rows and cells are located through
+     * this index instead.  The number of rows and the last row with content are determined at the same time.
+     */
+    private void indexRows() {
+        TableTableElement table_element = table.getOdfElement();
+        NodeList rows = table_element.getElementsByTagNameNS(OdfDocumentNamespace.TABLE.getUri(), "table-row");
+        int row = 0;
+        for (int i = 0; i < rows.getLength(); ++i) {
+            TableTableRowElement row_element = (TableTableRowElement)rows.item(i);
+            // ignore the rows of tables nested in cells
+            if (getOwnerTable(row_element) != table_element) {
+                continue;
+            }
+            Integer repeated = row_element.getTableNumberRowsRepeatedAttribute();
+            int n = (repeated == null || repeated < 1) ? 1 : repeated;
+            row_elements.add(row_element);
+            row_starts.add(row);
+            row += n;
+            if (rowHasContent(row_element)) {
+                last_data_row = row;
+            }
+        }
+        cachedRowCount = row;
+    }
+
+    private int getLastDataRow() {
+        return last_data_row;
+    }
+
+    /**
+     * Returns the 1-based number of the first row after the given 1-based row in a row element with content, or -1
+     * if there is none
+     */
+    private int getNextRowWithContent(int row) {
+        // the 0-based index of the next row is the given 1-based row number
+        for (int i = getRowElementIndex(row); i >= 0 && i < row_elements.size(); ++i) {
+            if (rowHasContent(row_elements.get(i))) {
+                return Math.max(row, row_starts.get(i)) + 1;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Returns the index of the row element holding the given 0-based row, or -1 if the row is past the end of the
+     * table
+     */
+    private int getRowElementIndex(int row_idx) {
+        if (row_idx < 0 || row_idx >= cachedRowCount) {
+            return -1;
+        }
+        // the last row element starting at or before the row
+        int lo = 0;
+        int hi = row_starts.size() - 1;
+        while (lo < hi) {
+            int mid = (lo + hi + 1) >>> 1;
+            if (row_starts.get(mid) <= row_idx) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return lo;
+    }
+
+    /**
+     * Returns the row element holding the given 0-based row, or null if the row is past the end of the table
+     */
+    private TableTableRowElement getRowElement(int row_idx) {
+        int i = getRowElementIndex(row_idx);
+        return i == -1 ? null : row_elements.get(i);
+    }
+
+    /**
+     * Returns the cell at the given 0-based position, or null if the row has no cell in the column
+     */
+    private OdfTableCell getCell(int col_idx, int row_idx) {
+        TableTableRowElement row_element = getRowElement(row_idx);
+        if (row_element == null) {
+            return null;
+        }
+        String table_ns = OdfDocumentNamespace.TABLE.getUri();
+        int col = 0;
+        for (Node child = row_element.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (!(child instanceof TableTableCellElementBase)) {
+                continue;
+            }
+            Element cell = (Element)child;
+            String repeated = cell.getAttributeNS(table_ns, "number-columns-repeated");
+            int n = 1;
+            if (!repeated.isEmpty()) {
+                try {
+                    n = Math.max(1, Integer.parseInt(repeated));
+                } catch (NumberFormatException e) {
+                    n = 1;
+                }
+            }
+            if (col_idx < col + n) {
+                // an empty cell has no value; empty cells are mostly repeated, and ODFDOM logs warnings for each
+                // repeated cell it wraps
+                if (!cellHasContent(cell)) {
+                    return null;
+                }
+                return OdfTableCell.getInstance((TableTableCellElementBase)child);
+            }
+            col += n;
+        }
+        return null;
+    }
+
+    private static Node getOwnerTable(Node node) {
+        for (Node parent = node.getParentNode(); parent != null; parent = parent.getParentNode()) {
+            if (parent instanceof TableTableElement) {
+                return parent;
+            }
+        }
+        return null;
+    }
+
+    private static boolean rowHasContent(Element row_element) {
+        for (Node child = row_element.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child instanceof Element && "table-cell".equals(child.getLocalName())
+                && cellHasContent((Element)child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean cellHasContent(Element cell) {
+        return !cell.getAttributeNS(OdfDocumentNamespace.OFFICE.getUri(), "value-type").isEmpty()
+            || !cell.getTextContent().trim().isEmpty();
     }
 
     public Hash getValue() throws QoreException {
@@ -268,18 +441,17 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
         int col_no = 0;
         boolean found_data = false;
         Hash row_data = null;
-        // Use cached column count; ODFDOM's getCellByPosition() auto-expands tables
         while (true) {
             if (cell_no >= cachedColCount) {
                 break;
             }
-            OdfTableCell cell = table.getCellByPosition(cell_no, rowIdx);
+            OdfTableCell cell = getCell(cell_no, rowIdx);
             Object val;
 
-            // In ODFDOM, getCellByPosition never returns null - check for truly empty cells
-            String valueType = cell.getValueType();
+            // a row element can have fewer cells than the table has columns, in which case there is no cell
+            String valueType = cell == null ? null : cell.getValueType();
             boolean cellEmpty = (valueType == null || valueType.isEmpty());
-            if (cellEmpty) {
+            if (cellEmpty && cell != null) {
                 String display = cell.getDisplayText();
                 cellEmpty = (display == null || display.trim().isEmpty());
             }

@@ -1071,8 +1071,9 @@ foreach hash<auto> column in (result.schemaV2()) {
       write errors are reported by the action (requires %Qore 3.0 / DataProvider 3.9)
     - fixed Excel and ODS spreadsheet reading and writing: reading without header options returned no data, cell
       ranges past column \c Z were rejected, streaming Excel writes without headers failed, and ODS writes
-      turned the first record's dates into strings and empty values into empty strings; Excel reading can now
-      skip empty rows with the new \c ignore_empty option
+      turned the first record's dates into strings and empty values into empty strings; Excel and ODS reading
+      can now skip empty rows with the new \c ignore_empty option, and ODS reading no longer expands the runs of
+      repeated empty rows that spreadsheet applications write to the end of a sheet
     - fixed JDBC pooled reads retaining transactions and blocking later writes or schema changes;
       explicit transactions and prepared writes retain commit/rollback semantics
     - fixed JDBC cursors retaining local JNI references across Java native-call frames, causing invalid

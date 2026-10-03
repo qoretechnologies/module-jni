@@ -100,6 +100,13 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "desc": "List of header / column names for the data iterated; if this is present, then "
                     "`header_names` must be `False`",
             },
+            "ignore_empty": <DataProviderOptionInfo>{
+                "display_name": "Ignore Empty Rows",
+                "short_desc": "Skip empty rows instead of stopping at the first one",
+                "type": AbstractDataProviderType::get(SoftBoolType),
+                "desc": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the "
+                    "last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+            },
             "path": <DataProviderOptionInfo>{
                 "display_name": "ODS Input Path",
                 "short_desc": "The location of the ODS data",
@@ -338,6 +345,9 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (opts.data_cells) {
             it.setDataCells(opts.data_cells.start.column, opts.data_cells.start.row, opts.data_cells.end.column,
                 opts.data_cells.end.row);
+        }
+        if (opts.ignore_empty) {
+            it.setIgnoreEmpty(True);
         }
     }
 

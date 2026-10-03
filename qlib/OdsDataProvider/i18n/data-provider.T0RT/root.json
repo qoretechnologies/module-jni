@@ -99,6 +99,18 @@
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
           "message": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`"
         },
+        "app.T0RT.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ignore Empty Rows"
+        },
+        "app.T0RT.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Skip empty rows instead of stopping at the first one"
+        },
+        "app.T0RT.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row"
+        },
         "app.T0RT.action.cmVhZA.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
           "message": "Timezone Region"
@@ -206,6 +218,18 @@
         "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
           "message": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ignore Empty Rows"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Skip empty rows instead of stopping at the first one"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row"
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",

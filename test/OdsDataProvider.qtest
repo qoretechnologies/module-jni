@@ -118,6 +118,8 @@ public class OdsDataProviderTest inherits QUnit::Test {
 
         addTestCase("write-data action returns the generated data", \testWriteDataAction());
         addTestCase("writer record type", \testWriterRecordType());
+        addTestCase("read: empty rows", \testReadEmptyRows());
+        addTestCase("read: repeated empty rows", \testReadRepeatedEmptyRows());
         set_return_value(main());
     }
 
@@ -133,6 +135,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         OdsTestHelper::createDatesOds(test_data_dir + "/dates.ods");
         OdsTestHelper::createEmptyOds(test_data_dir + "/empty.ods");
         OdsTestHelper::createNoHeadersOds(test_data_dir + "/no-headers.ods");
+        OdsTestHelper::createRepeatedEmptyRowsOds(test_data_dir + "/repeated-empty-rows.ods");
         OdsTestHelper::createSpecialCharsOds(test_data_dir + "/special-chars.ods");
         OdsTestHelper::createMixedCaseHeadersOds(test_data_dir + "/mixed-case-headers.ods");
         OdsTestHelper::createOffsetDataOds(test_data_dir + "/offset-data.ods");
@@ -890,5 +893,42 @@ public class OdsDataProviderTest inherits QUnit::Test {
         dp = new OdsWriteDataProvider();
         assertNothing(dp.getRecordType());
         assertEq({}, dp.getOrNothingRecordTypeWithOptions());
+    }
+
+    testReadEmptyRows() {
+        # a header row, two data rows separated by an empty row, and two trailing empty rows
+        OdsWriteDataProvider wdp({"headers": ("Sku", "Qty")});
+        wdp.createRecord({"Sku": "A-1", "Qty": 5});
+        wdp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        wdp.createRecord({"Sku": "B-2", "Qty": 7});
+        wdp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        wdp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        binary data = wdp.getData();
+
+        # default: reading stops at the first empty row
+        OdsReadDataProvider dp({"data": data, "header_names": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), (map $1, dp.searchRecords()));
+
+        # ignore_empty: empty rows are skipped, trailing empty rows end the iteration
+        dp = new OdsReadDataProvider({"data": data, "header_names": True, "ignore_empty": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), (map $1, dp.searchRecords()));
+
+        # ignore_empty stays within data_cells
+        dp = new OdsReadDataProvider({"data": data, "header_names": True, "ignore_empty": True,
+            "data_cells": "a2:b3"});
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), (map $1, dp.searchRecords()));
+    }
+
+    testReadRepeatedEmptyRows() {
+        # spreadsheet applications store runs of empty rows as one repeated row element: a million empty rows are
+        # skipped without materializing them
+        string path = test_data_dir + "/repeated-empty-rows.ods";
+        OdsReadDataProvider dp(path, {"header_names": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), (map $1, dp.searchRecords()));
+
+        date start = now_us();
+        dp = new OdsReadDataProvider(path, {"header_names": True, "ignore_empty": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "C-3", "Qty": 9.0}), (map $1, dp.searchRecords()));
+        assertLt(10s, now_us() - start, "the repeated empty rows were not iterated one by one");
     }
 }
