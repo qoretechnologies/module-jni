@@ -1462,6 +1462,10 @@ endif()
 # daemon thread does in native_cleanup_dispatch()) must not crash.  See
 # src/Globals.cpp (QoreForeignThreadHelper).
 enable_testing()
+add_test(NAME make_inc_reproducibility COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
+    ${CMAKE_SOURCE_DIR}/test/test-make-inc.py
+    --qore ${QORE_EXECUTABLE} --make-inc ${CMAKE_SOURCE_DIR}/make-inc)
+set_tests_properties(make_inc_reproducibility PROPERTIES TIMEOUT 120)
 add_test(NAME headless_class_import COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
     ${CMAKE_SOURCE_DIR}/test/test-headless-class-import.py
     --qore ${QORE_EXECUTABLE} --module $<TARGET_FILE:jni>)

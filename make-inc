@@ -128,7 +128,9 @@ class MakeInc {
         Dir d();
         d.chdir(path);
 
-        list<string> targ = d.listDirs("^(?!.*?META-INF).*$");
+        # Directory enumeration order varies across filesystems. Keep embedded
+        # class data and the class map stable across independent builds.
+        list<string> targ = sort(d.listDirs("^(?!.*?META-INF).*$"));
         foreach string name in (targ) {
             *string njpath = jpath;
             if (exists jpath) {
@@ -139,9 +141,9 @@ class MakeInc {
         }
 
         # process inner classes first
-        targ = d.listFiles(".*\\$.*\\.class$");
+        targ = sort(d.listFiles(".*\\$.*\\.class$"));
         map processClass(w, path, jpath, $1), targ;
-        targ = d.listFiles("^(?!.*?\\$).*\\.class$");
+        targ = sort(d.listFiles("^(?!.*?\\$).*\\.class$"));
         map processClass(w, path, jpath, $1), targ;
     }
 
