@@ -115,7 +115,9 @@ module AccessDataProvider {
 
     @tableofcontents
 
-    @section AccessDataProviderintro Introduction to the AccessDataProvider Module
+    @section accessdataproviderintro AccessDataProvider Module Introduction
+
+    @anchor AccessDataProviderintro
 
     The %AccessDataProvider module provides a data provider API for reading Microsoft Access databases
     through the @ref dataproviderintro "DataProvider" API. It supports both .mdb (Access 2003 and earlier)

@@ -211,7 +211,9 @@ module IcsDataProvider {
 
     @tableofcontents
 
-    @section IcsDataProviderintro Introduction to the IcsDataProvider Module
+    @section icsdataproviderintro IcsDataProvider Module Introduction
+
+    @anchor IcsDataProviderintro
 
     The %IcsDataProvider module provides a data provider API for reading and writing ICS
     (iCalendar) files through the @ref dataproviderintro "DataProvider" API.

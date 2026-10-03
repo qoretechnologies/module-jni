@@ -1,0 +1,131 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jnijdbc_driverguide jdbc DBI Driver for Qore
+
+    @tableofcontents
+
+    This module implements the \c "jdbc" driver for %Qore to allow %Qore (as well as other languages such as %Python
+    that use %Qore as a "language bridge") to access data in databases with jdbc drivers.
+
+    To use the \c jdbc DBI driver, use the driver name \c "jdbc".
+
+    %Qore datasource strings do not follow the same format as standard Java JDBC URL strings, so some care must be
+    taken when creating the %Qore datasource strings for the jdbc driver.
+
+    The format for %Qore datasource strings with the jdbc driver is as follows:
+    <tt><b>jdbc:</b>[</tt><em>user</em><tt>]/[</tt><em>pass</em><tt>]\@</tt><em>db</em><tt>[{</tt><em>option</em><tt>=</tt><em>val</em><tt>[,...]}]</tt> \n
+    where all elements except <tt>\@</tt><em>db</em> are optional.
+
+    The \a host, \a port, and \a charset values in %Qore datasource strings are ignored; the host and port must be
+    given in the \a db value, and, if the jdbc driver's URL format requires the use of \c @ or \c : characters, then
+    a dummy value must be provided for the \a db value, and the @ref jdbc_option_url "url option" must be used
+    instead.
+
+    Some example %Qore datasource strings for the \c jdbc driver:
+    - <tt>jdbc:user/pass&#64;postgresql:dbname{classpath=/usr/share/java/postgresql.jar}</tt>
+    - <tt>jdbc:user/pass&#64;firebird:?serverName=hq&databaseName=/var/lib/firebird/data/mydb.fdb&encoding=WIN1252{classpath=/usr/share/java/jna-5.12.1.jar:/usr/share/java/jaybird-5.0.0.java11.jar}</tt>
+    - <tt>jdbc:user/pass&#64;ignored{url=oracle:thin:&#64;hostname:1521:dbserver,classpath=/usr/lib/oracle/21/client64/lib/ojdbc8.jar}</tt>
+
+    @note the initial \c jdbc: in the \c db value is optional; if missing, it is added automatically by the %Qore
+    \c jdbc driver when the internal URL string is passed to the internal Java JDBC call.
+
+    @section jdbc_transaction_boundaries JDBC Transaction Boundaries
+
+    Ordinary selects outside a transaction use JDBC auto-commit mode, so a connection returned to a
+    \c DatasourcePool does not retain read locks. \c beginTransaction(), mutating datasource calls, and
+    prepared statement execution start a transaction. Commit and rollback restore auto-commit mode;
+    if either operation or the mode change fails, the connection is discarded instead of being reused.
+
+    @par Explicit Transaction Example
+    @code{.py}
+DatasourcePool pool("jdbc:user/pass@ignored{url=postgresql://db.example.com/sales,classpath=/usr/share/java/postgresql.jar}");
+pool.beginTransaction();
+on_error pool.rollback();
+on_success pool.commit();
+hash<auto> order = pool.selectRow("select * from orders where id = %v for update", 123);
+pool.exec("update orders set status = %v where id = %v", "processed", order.id);
+    @endcode
+
+    JDBC result sets held by a \c SQLStatement remain valid across separate Java-to-%Qore calls until
+    the statement is closed or its transaction ends. Each result set and statement is closed even if
+    the other close operation reports an error.
+
+    @section jdbc_columnar_results jdbc Columnar Result Support
+
+    When module-jni is built against %Qore headers exposing the columnar result API, the \c jdbc DBI driver provides
+    native implementations of \c Datasource::selectColumnar() and \c SQLStatement::fetchColumnar().  Fixed-width JDBC
+    result types are returned as dense %Qore buffers:
+    - \c TINYINT, \c SMALLINT, \c INTEGER, and \c BIGINT map to \c buffer<*int8>, \c buffer<*int16>,
+      \c buffer<*int32>, and \c buffer<*int64>
+    - integer \c NUMERIC / \c DECIMAL values with precision <= 18 map to \c buffer<*int64>
+    - other \c NUMERIC / \c DECIMAL values with precision <= 38 map to \c buffer<*decimal128> when module-jni
+      is built against %Qore headers exposing the decimal128 buffer API
+    - \c REAL, \c FLOAT, and \c DOUBLE map to \c buffer<*float32> or \c buffer<*float64>
+    - \c BOOLEAN and \c BIT map to \c buffer<*bool>
+    - character columns map to \c buffer<*string>
+    - \c DATE and \c TIMESTAMP values carry logical date/timestamp schema metadata and map to microsecond
+      \c buffer<*int64> columns when the linked %Qore runtime supports dense temporal column conversion
+
+    Decimal values that exceed decimal128 limits, or builds against %Qore headers without the decimal128 buffer API,
+    are returned as lists with JDBC precision and scale metadata.  Binary and driver-specific values are returned
+    through the compatibility list path with schema metadata where the JDBC type is known.
+
+    @par Columnar JDBC Example
+    @code{.py}
+Datasource ds("jdbc:user/pass@ignored{url=postgresql://db.example.com/sales,classpath=/usr/share/java/postgresql.jar}");
+ds.open();
+
+ColumnarResult result = ds.selectColumnar(
+    "select id, customer_name, total, active from orders order by id");
+
+buffer<*int64> ids = result.getColumn("id");
+buffer<*string> customers = result.getColumn("customer_name");
+buffer<*bool> active = result.getColumn("active");
+
+foreach hash<auto> column in (result.schemaV2()) {
+    printf("%s: %s%s\n", column.name, column.kind, column.nullable ? " nullable" : "");
+}
+    @endcode
+
+    Builds against older %Qore releases that do not expose the columnar result API keep the previous \c jdbc DBI
+    behavior and do not register these native columnar DBI hooks.
+
+    @section jdbc_driver_options jdbc DBI Driver Options
+
+    The jdbc driver supports the following DBI options:
+    - \c "classpath": @ref jdbc_option_classpath "sets the classpath" with jar or class files providing the \c jdbc
+      driver
+    - \c "numeric-numbers": return received \c SQL_NUMERIC and \c SQL_DECIMAL values as arbitrary-precision numbers
+      (Qore number values)
+    - \c "optimal-numbers": return received \c SQL_NUMERIC and \c SQL_DECIMAL values as integers if possible, if not
+      return them as an arbitrary-precision numbers; this is the default
+    - \c "string-numbers": return received \c SQL_NUMERIC and \c SQL_DECIMAL values as strings (for backwards-
+      compatibility)
+    - \c "url": @ref jdbc_option_url "sets the URL" for the \c jdbc driver in case the database value in the %Qore
+      datasource connection string cannot accommodate the \c jdbc URL because of special characters
+
+    @note By default \c optimal-numbers is set on the driver for maximum compatibility with other %Qore DBI drivers
+
+    @subsection jdbc_option_classpath jdbc classpath Option
+
+    The \c classpath option allows for the classpath to be set before the JVM loads the Java \c jdbc driver.  The
+    value of this option must be a string and is subject to environment variable substitution before being used.
+
+    If this option is used, then the \c java.util.ServiceLoader for \c "java.sql.Driver" objects is run and iterated
+    after updating the classpath, to ensure that any new drivers are loaded and available to drivers loaded after the
+    initial driver is loaded, otherwise the \c java.sql.DriverManager will not see the new drivers as they were not
+    present in the classpath during on-demand static initialization).
+
+    @subsection jdbc_option_url jdbc url Option
+
+    The \c url option allows for \c jdbc URLs to be used that contain special characters like \c @ and \c : that would
+    cause the datasource to fail to parse when used as a database name.
+
+    @par url Option Example
+    @verbatim
+    Datasource ds("jdbc:user/pass@ignored{url=oracle:thin:@hostname:1521:dbserver,classpath=/usr/lib/oracle/21/client64/lib/ojdbc8.jar}");
+    @endverbatim
+
+    @note the initial \c jdbc: in the url option is optional; if missing, then it is added automatically by the %Qore
+    jdbc driver when the internal URL string is passed to the internal Java JDBC call.
+*/

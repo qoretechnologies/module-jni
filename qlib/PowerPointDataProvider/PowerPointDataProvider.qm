@@ -181,7 +181,9 @@ module PowerPointDataProvider {
 
     @tableofcontents
 
-    @section PowerPointDataProviderintro Introduction to the PowerPointDataProvider Module
+    @section powerpointdataproviderintro PowerPointDataProvider Module Introduction
+
+    @anchor PowerPointDataProviderintro
 
     The %PowerPointDataProvider module provides a data provider API for reading and writing Microsoft PowerPoint
     presentations through the @ref dataproviderintro "DataProvider" API. It supports the modern .pptx format

@@ -191,7 +191,9 @@ module ExcelDataProvider {
 
     @tableofcontents
 
-    @section ExcelDataProviderintro Introduction to the ExcelDataProvider Module
+    @section exceldataproviderintro ExcelDataProvider Module Introduction
+
+    @anchor ExcelDataProviderintro
 
     The %ExcelDataProvider module provides a data provider API for reading and writing Excel spreadsheets
     through the @ref dataproviderintro "DataProvider" API. It supports both modern Excel formats (.xlsx,

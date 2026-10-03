@@ -179,7 +179,9 @@ module WordDataProvider {
 
     @tableofcontents
 
-    @section WordDataProviderintro Introduction to the WordDataProvider Module
+    @section worddataproviderintro WordDataProvider Module Introduction
+
+    @anchor WordDataProviderintro
 
     The %WordDataProvider module provides a data provider API for reading and writing Microsoft Word documents
     through the @ref dataproviderintro "DataProvider" API. It supports the modern .docx format (Word 2007+)

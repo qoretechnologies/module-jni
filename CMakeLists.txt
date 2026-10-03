@@ -1288,6 +1288,16 @@ endforeach()
 
 set(QORE_DOX_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/guide-jdbc_driver.dox.tmpl
+    docs/guide-jni_compat.dox.tmpl
+    docs/guide-jni_examples.dox.tmpl
+    docs/guide-jni_from_java.dox.tmpl
+    docs/guide-jni_qore_object_lifecycle_management.dox.tmpl
+    docs/guide-jni_thread_stacks.dox.tmpl
+    docs/guide-jni_types.dox.tmpl
+    docs/guide-jni_use_java_in_qore.dox.tmpl
+    docs/guide-jniinit.dox.tmpl
+    docs/guide-jnireleasenotes.dox.tmpl
 )
 
 add_library(${module_name} MODULE ${CPP_SRC} ${QPP_SOURCES})
@@ -1314,6 +1324,42 @@ if (DEFINED ENV{DOXYGEN_EXECUTABLE})
     set(DOXYGEN_EXECUTABLE $ENV{DOXYGEN_EXECUTABLE})
 endif()
 
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jdbc_driver.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_compat.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_examples.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_from_java.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_qore_object_lifecycle_management.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_thread_stacks.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_types.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_use_java_in_qore.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jniinit.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jnireleasenotes.dox
+)
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/access-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/avro-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/BusyLightDataProvider/busylight-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/camel-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/email-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/excel-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/flyway-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/ics-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/JakartaJmsDataProvider/jms-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jasperreports-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/JdbcDataProvider/jdbc-dp-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/kafka-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/MqttDataProvider/mqtt-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/OdpDataProvider/odp-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/ods-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/OdtDataProvider/odt-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/opc-ua-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/powerpoint-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/tika-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/vcf-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/VisioDataProvider/visio-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/word-logo.svg"
+)
 qore_external_binary_module(${module_name} ${PROJECT_VERSION})
 
 # Qore's AOT rules decide at configure time whether to stage a provider's jar/

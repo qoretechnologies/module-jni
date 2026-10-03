@@ -244,7 +244,9 @@ module OdsDataProvider {
 
     @tableofcontents
 
-    @section OdsDataProviderintro Introduction to the OdsDataProvider Module
+    @section odsdataproviderintro OdsDataProvider Module Introduction
+
+    @anchor OdsDataProviderintro
 
     The %OdsDataProvider module provides a data provider API for reading and writing ODS
     (OpenDocument Spreadsheet) files through the @ref dataproviderintro "DataProvider" API.

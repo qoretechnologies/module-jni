@@ -183,7 +183,9 @@ module VcfDataProvider {
 
     @tableofcontents
 
-    @section VcfDataProviderintro Introduction to the VcfDataProvider Module
+    @section vcfdataproviderintro VcfDataProvider Module Introduction
+
+    @anchor VcfDataProviderintro
 
     The %VcfDataProvider module provides a data provider API for reading and writing vCard (.vcf) contact files
     through the @ref dataproviderintro "DataProvider" API. It supports the vCard 3.0 format using the

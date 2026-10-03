@@ -230,7 +230,9 @@ module OdtDataProvider {
 
     @tableofcontents
 
-    @section OdtDataProviderintro Introduction to the OdtDataProvider Module
+    @section odtdataproviderintro OdtDataProvider Module Introduction
+
+    @anchor OdtDataProviderintro
 
     The %OdtDataProvider module provides a data provider API for reading and writing ODT
     (OpenDocument Text) documents through the @ref dataproviderintro "DataProvider" API.

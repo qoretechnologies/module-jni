@@ -250,7 +250,9 @@ module OdpDataProvider {
 
     @tableofcontents
 
-    @section OdpDataProviderintro Introduction to the OdpDataProvider Module
+    @section odpdataproviderintro OdpDataProvider Module Introduction
+
+    @anchor OdpDataProviderintro
 
     The %OdpDataProvider module provides a data provider API for reading and writing ODP
     (OpenDocument Presentation) files through the @ref dataproviderintro "DataProvider" API.

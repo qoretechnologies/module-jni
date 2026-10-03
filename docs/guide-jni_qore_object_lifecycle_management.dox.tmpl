@@ -1,0 +1,54 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jni_qore_object_lifecycle_managementguide Managing the Lifecycle of Qore objects from Java
+
+    @tableofcontents
+
+    %Qore's deterministic garbage collection approach and reliance on destructors means that %Qore objects created by
+    Java must have their lifecycles managed externally.
+
+    Java objects wrapping %Qore objects (such as @ref org.qore.jni.QoreObject and @ref org.qore.jni.QoreObjectWrapper)
+    hold only weak references to %Qore objects.
+
+    Java methods in the jni module that explicitly save strong references to %Qore objects are as follows:
+    - @ref org.qore.jni.QoreObject.callMethodSave()
+    - @ref org.qore.jni.QoreObject.callMethodArgsSave()
+    - @ref org.qore.jni.QoreJavaApi.callFunctionSave()
+    - @ref org.qore.jni.QoreJavaApi.callStaticMethodSave()
+    - @ref org.qore.jni.QoreJavaApi.newObjectSave()
+
+    The strong reference to any %Qore object returned by the preceding methods is managed in one of two ways
+    described in the following sections.
+
+    @section jni_qore_object_lifecycle_default Default Qore Object Lifecycle Management
+
+    By default, %Qore objects are saved in thread-local data, so the lifecycle of the object is automatically limited
+    to the existence of the thread.
+
+    The thread-local hash key name used to save the list of objects created is determined by the value of the
+    \c "_jni_save" thread-local key, if set.  If no such key is set, then \c "_jni_save" is used instead as the
+    literal key for saving the list of objects.
+
+    @note To register a Java thread in %Qore and therefore to ensure that %Qore object data is persistent in a native
+    Java thread, call @ref org.qore.jni.QoreJavaApi.registerJavaThread() and then
+    @ref org.qore.jni.QoreJavaApi.deregisterJavaThread() before the Java thread terminates, when you are done working
+    with %Qore data, otherwise %Qore objects will be immediately deleted when the implicit %Qore thread registration
+    expires after each %Qore API call.
+
+    @section jni_qore_object_lifecycle_explicit Explicit Qore Object Lifecycle Management
+
+    The lifecycle of %Qore objects can be managed explicitly by using the
+    @ref Jni::org::qore::jni::set_save_object_callback() "set_save_object_callback()" function to set a callback that
+    is called every time a %Qore object is created using the Java API.
+
+    This callback must take a single object argument as in the following example:
+
+    @code{.py}
+hash<string, object> object_cache;
+code callback = sub (object obj) {
+    # save object in object cache, so it doesn't go out of scope
+    object_cache{obj.uniqueHash()} = obj;
+}
+set_save_object_callback(callback);
+    @endcode
+*/

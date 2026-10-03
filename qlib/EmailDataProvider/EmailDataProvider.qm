@@ -307,7 +307,9 @@ module EmailDataProvider {
 
     @tableofcontents
 
-    @section EmailDataProviderintro Introduction to the EmailDataProvider Module
+    @section emaildataproviderintro EmailDataProvider Module Introduction
+
+    @anchor EmailDataProviderintro
 
     The %EmailDataProvider module provides a data provider API for reading and writing email messages in
     multiple formats through the @ref dataproviderintro "DataProvider" API. It supports EML (RFC 822),

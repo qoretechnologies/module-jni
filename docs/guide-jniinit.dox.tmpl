@@ -1,0 +1,43 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jniinitguide JVM Initialization
+
+    @tableofcontents
+
+    The JVM is initialized when the module is loaded.  It is possible to disable JIT when the module is loaded,
+    however the module is loaded an initialized before module parse commands are processed, therefore to tell the
+    module to disable JIT, the following environment variable must be set to \c 1:
+    - <tt>QORE_JNI_DISABLE_JIT=1</tt>
+
+    Heap sizes can be controlled by the following environment variables:
+    - \c QORE_JNI_MIN_HEAP_SIZE: will set the <tt><b>-Xms</b></tt> JVM initialization option for the minimum heap size
+    - \c QORE_JNI_MAX_HEAP_SIZE: will set the <tt><b>-Xmx</b></tt> JVM initialization option for the maximum heap size
+    - \c QORE_JNI_DISABLE_NATIVE_ACCESS: when set to \c 1, do not add
+      <tt><b>--enable-native-access=ALL-UNNAMED</b></tt> to JVM initialization options
+
+    For example:
+    @verbatim
+# to initialize the JVM with a minimum and maximum heap size of 20MB
+QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
+    @endverbatim
+
+    @section jni_signals Signals Used By the JVM
+
+    The JVM requires signals to run properly, and, while %Qore initializes the JVM with reduced signals (using the
+    <tt>-Xrs</tt> argument to the JVM), certain signals are critical to the operation of the JVM and cannot be used by
+    %Qore programs.
+
+    The signals in the following table are reserved by the JVM.
+
+    <b>Signals Reserved by the JVM</b>
+    |!Signal|!Description
+    |\c SIGTRAP|Trap exception
+    |\c SIGSEGV|Segmentation violation
+    |\c SIGBUS|Bus error
+    |\c SIGCHLD|Child process terminated
+    |\c SIGILL|Illegal instruction
+    |\c SIGFPE|Floating-point exception
+
+    If any %Qore code has a signal handler assigned to any of the above signals (for the signals that can be
+    assigned), the \c jni module cannot be initialized and will fail to load.
+*/

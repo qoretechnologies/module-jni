@@ -116,7 +116,9 @@ module VisioDataProvider {
 
     @tableofcontents
 
-    @section VisioDataProviderintro Introduction to the VisioDataProvider Module
+    @section visiodataproviderintro VisioDataProvider Module Introduction
+
+    @anchor VisioDataProviderintro
 
     The %VisioDataProvider module provides a data provider API for reading Microsoft Visio documents
     through the @ref dataproviderintro "DataProvider" API. It supports the modern .vsdx format (Visio 2013+)

@@ -1,0 +1,138 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jni_typesguide Type Conversions Between Qore and Java
+
+    @tableofcontents
+
+    The \c jni module uses reflection to automatically map Java classes to Qore classes.  This class mapping and Qore
+    class creation happens at parse time (when @ref jniimport "importing Java APIs" into %Qore) and also at runtime
+    (if a new class is encountered that has not already been mapped).
+
+    There are two types of conversions from %Qore to Java:
+    - @ref jni_qore2java_specific "Qore to Java Defined Type Conversions": when the type is known in advance
+    - @ref jni_qore2java_default "Qore to Java Default Type Conversions": when the type is \c java.lang.Object
+
+    @section jni_qore2java_specific Qore to Java Defined Type Conversions
+
+    The following table describes type conversions for Java types when the \c jni module must convert a %Qore value to
+    the declared type:
+
+    Qore to Specific Java Type Conversions
+    |!Target Java Type|!Source %Qore Type
+    |\c boolean|any; conversions are made like with @ref Qore::boolean() "boolean()"
+    |\c byte|any; conversions are made like with @ref Qore::int() "int()"
+    |\c char|any; conversions are made like with @ref Qore::int() "int()"
+    |\c short|any; conversions are made like with @ref Qore::int() "int()"
+    |\c int|any; conversions are made like with @ref Qore::int() "int()"
+    |\c long|any; conversions are made like with @ref Qore::int() "int()"
+    |\c float|any; conversions are made like with @ref Qore::float() "float()"
+    |\c double|any; conversions are made like with @ref Qore::float() "float()"
+
+    For other types, @ref jni_qore2java_default "default conversions" are used.
+
+    @section jni_qore2java_default Qore to Java Default Type Conversions
+
+    The following table describes type conversions for Java types when the \c jni module must convert a %Qore value to
+    the declared type:
+
+    Qore to Java Default Type Conversions
+    |!Source %Qore Type|!Target Java Type
+    |@ref bool_type "bool"|\c boolean
+    |@ref int_type "int"|\c long
+    |@ref float_type "float"|\c double
+    |@ref string_type "string"|\c java.lang.String
+    |@ref date_type "date"|\c java.lang.Object (compile time) or \c java.time.ZonedDateTime or \
+        @ref org.qore.jni.QoreRelativeTime (runtime)
+    |@ref number_type "number"|\c java.math.BigDecimal
+    |@ref binary_type "binary"|\c byte[]
+    |@ref nothing_type "NOTHING" and @ref null_type "NULL"|\c void
+    |@ref list_type "list"|java Arrays of the list type; if no list type can be found, then the Array type is \
+        \c java.lang.Object
+    |@ref hash_type "hash"|@ref org.qore.jni.Hash (extends \c java.util.LinkedHashMap), however any type \
+        implementing \c java.util.Map that has a constructor that takes no arguments and a compatibule \c put() \
+        method will be constructed / converted automatically to the desired type
+    |@ref code_type "code" (closure or call reference)|@ref org.qore.jni.QoreClosure
+    |@ref Jni::org::qore::jni::JavaArray "JavaArray"|\c java.lang.Array
+    |@ref object_type "object"|to the Java class if the Qore object is an instantiation of \c java.lang.Object, \
+        otherwise @ref org.qore.jni.QoreObject
+    |all \c jni objects|direct conversion
+
+    @note
+    - %Qore 64-bit integers are automatically converted to 64-bit Java long values; to get a Java \c int value; use:
+      @code{.py} new Integer(val) @endcode
+    - see @ref jni_arrays for more information about conversions between %Qore lists and Java arrays
+
+    @section jni_java_to_qore Java to Qore Type Conversions
+
+    Java to %Qore Type Conversions
+    |!Source Java Type|!Target %Qore Type
+    |\c boolean|@ref bool_type "bool"
+    |\c byte|@ref int_type "int"
+    |\c byte[]|@ref binary_type "binary" (see also @ref jni_compat)
+    |\c char|@ref int_type "int"
+    |\c short|@ref int_type "int"
+    |\c int|@ref int_type "int"
+    |\c long|@ref int_type "int"
+    |\c float|@ref float_type "float"
+    |\c double|@ref float_type "double"
+    |\c java.lang.String|@ref string_type "string"
+    |\c java.sql.Date|@ref date_type "date" (@ref absolute_dates "absolute date")
+    |\c java.sql.Time|@ref date_type "date" (@ref absolute_dates "absolute date" based on \c 1970-01-01)
+    |\c java.sql.Timestamp|@ref date_type "date" (@ref absolute_dates "absolute date")
+    |\c java.time.ZonedDateTime|@ref date_type "date" (@ref absolute_dates "absolute date")
+    |\c java.time.LocalDateTime|@ref date_type "date" (@ref absolute_dates "absolute date", no timezone)
+    |\c java.time.Instant|@ref date_type "date" (@ref absolute_dates "absolute date", UTC)
+    |<tt>@ref org.qore.jni.QoreRelativeTime</tt>|@ref date_type "date" (@ref relative_dates "relative date")
+    |\c java.math.BigDecimal|@ref number_type "number"
+    |\c java.lang.AbstractArray and arrays|@ref list_type "list"
+    |\c java.util.Map|@ref hash_type "hash" (see also @ref jni_compat)
+    |<tt>@ref org.qore.jni.QoreClosure</tt>|@ref code_type "code"
+    |<tt>@ref org.qore.jni.QoreClosureMarker</tt>|@ref code_type "code"
+    |all other objects|direct conversion
+
+    @note see @ref jni_arrays for more information about conversions between %Qore lists and Java arrays
+
+    @section jni_arrays Java Arrays
+
+    Arrays are mapped directly to and from Qore lists.  When converting from a Qore list to a Java array, the list is
+    scanned, and if it can be mapped to a single Java type, then an array of that type is created.  Otherwise, an
+    array of \c java.lang.Object is created and the %Qore values are mapped directly to Java values.
+
+    An empty %Qore list becomes an empty \c Object[] when no Java array component type is specified, including
+    lists nested in hashes or other lists.  Empty lists remain distinct from \c null.  If a Java parameter
+    specifies an array type such as \c String[] or \c long[], an empty list produces an empty array of that type.
+
+    %Qore lists are passed by value and Java arrays are objects (which, like %Qore objects, are passed with a copy of
+    a reference to the object).  To get similar functionality in %Qore, you can use the
+    @ref Jni::org::qore::jni::JavaArray "JavaArray" class supplied with the \c jni module, which is automatically
+    converted to a Java array object like a list, but is also passed with a copy of a reference to the object in
+    %Qore.
+
+    @subsection jni_array_varargs Java Arrays as Variable Arguments
+
+    When a Java method declares variable arguments, such arguments must be generally given as a single array value (so
+    a %Qore list or @ref Jni::org::qore::jni::JavaArray "JavaArray" object).  Consider the following example:
+    @code{.py}
+    StringBuilder stringBuilder("");
+    lang::Class stringBuilderClass = lang::Class::forName("java.lang.StringBuilder");
+    Method stringBuilderAppendLong = stringBuilderClass.getMethod("append", (Long::TYPE,));
+    stringBuilderAppendLong.invoke(stringBuilder, (20,));
+    printf("%y\n", stringBuilder.toString());
+    @endcode
+
+    In the above example, the \c java.lang.Class.getMethod() and the \c java.lang.Method.invoke() methods both take a
+    variable number of arguments after the first argument.  In the mapped Qore class, these must be given as a %Qore
+    list (as in the above example) or a @ref Jni::org::qore::jni::JavaArray "JavaArray" object.
+
+    If the last argument of a Java method has an array type, then the arguments in Qore can also be given in the flat
+    argument list, and the final array argument will be created automatically for the call.
+
+    Because of this, the example above also works as follows:
+    @code{.py}
+    StringBuilder stringBuilder("");
+    lang::Class stringBuilderClass = lang::Class::forName("java.lang.StringBuilder");
+    Method stringBuilderAppendLong = stringBuilderClass.getMethod("append", Long::TYPE);
+    stringBuilderAppendLong.invoke(stringBuilder, 20);
+    printf("%y\n", stringBuilder.toString());
+    @endcode
+*/

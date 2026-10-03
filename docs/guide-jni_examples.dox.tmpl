@@ -1,0 +1,192 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jni_examplesguide Examples
+
+    @tableofcontents
+
+    @par Java Dynamic Python Import Example:
+    @code{.java}
+// import the "xml" module and all symbols from xml.etree.ElementTree into Java
+import pythonmod.xml.etree.ElementTree.*;
+
+// extend the pythonmod.xml.etree.ElementTree.ElementTree class
+public class QoreDynamicTest10 extends ElementTree {
+    // we need to declare that our constructor can throw an exception
+    public QoreDynamicTest10() throws Throwable {
+    }
+
+    // parse some XML and then return the value of the given element
+    public static Object test(String str, String name) throws Throwable {
+        Element elem = (Element)pythonmod.xml.etree.ElementTree.$Functions.fromstring(str);
+        Element e0 = elem.find(name);
+        Object rv = e0.getMemberValue("text");
+        return rv;
+    }
+}
+
+    @endcode
+
+    @par Java Dynamic %Qore Import Example:
+    @code{.java}
+import java.util.Arrays;
+import java.util.Iterator;
+
+// import ::Qore::AbstractIterator as an abstract Java base class
+import qore.Qore.AbstractIterator;
+
+// this class wraps a Java Iterator as a Qore AbstractIterator
+class QoreIteratorTest extends AbstractIterator {
+    private Iterator i;
+
+    QoreIteratorTest(Iterator i) throws Throwable {
+        this.i = i;
+    }
+
+    public boolean next() {
+        return i.hasNext();
+    }
+
+    public Object getValue() {
+        return i.next();
+    }
+
+    public boolean valid() {
+        return true;
+    }
+}
+    @endcode
+
+    @par Kotlin Dynamic %Qore Import Example:
+    @code{.kt}
+// import ::Qore::Thread::Sequence as a Kotlin class
+import qore.Qore.Thread.Sequence
+
+// Kotlin class using Qore's Sequence
+class KotlinSequenceExample {
+    private val seq = Sequence()
+
+    fun getNextValue(): Long {
+        return seq.next()
+    }
+
+    fun getCurrentValue(): Long {
+        return seq.getCurrent()
+    }
+}
+
+// Kotlin data class example
+data class Person(val name: String, val age: Int)
+
+// Kotlin class with companion object and default parameters
+class KotlinHelper(val id: Int) {
+    // Method with default parameter
+    fun greet(name: String = "World"): String {
+        return "Hello, $name! ID: $id"
+    }
+
+    companion object {
+        const val VERSION = "1.0"
+
+        fun create(id: Int): KotlinHelper {
+            return KotlinHelper(id)
+        }
+    }
+}
+    @endcode
+
+    @note Kotlin classes can be compiled with \c qkotlinc to use Qore APIs, and loaded from %Qore using the standard
+    class loading mechanisms. Kotlin-specific features like synthetic methods, companion objects, and default parameter
+    variants are automatically filtered to provide a clean API.
+
+    @par %Qore JMS Example:
+    @code{.java}
+ #!/usr/bin/env qore
+
+ %new-style
+ %require-types
+ %strict-args
+ %enable-all-warnings
+
+ %requires jni
+ %requires QUnit
+ %requires Util
+
+ # import Java classes to our script
+ %module-cmd(jni) import javax.naming.InitialContext
+ %module-cmd(jni) import javax.jms.*
+
+ # add environment variable $GLASSFISH_JAR to the dynamic classpath (if set)
+ %module-cmd(jni) add-classpath $GLASSFISH_JAR
+
+ %exec-class Main
+
+ public class Main inherits QUnit::Test {
+     private {
+         Counter c(1);
+         auto data;
+
+         const TextMsg = "Hello, world!";
+     }
+
+     constructor() : Test("JMS test", "1.0", \ARGV) {
+         addTestCase("base test", \testJms());
+
+         # Return for compatibility with test harness that checks return value.
+         set_return_value(main());
+     }
+
+     testJms() {
+         # these properties are the default; included here to provide an example for connecting to a remote server
+         Properties props();
+         props.setProperty("java.naming.factory.initial", "com.sun.enterprise.naming.SerialInitContextFactory");
+         props.setProperty("org.omg.CORBA.ORBInitialHost", "localhost");
+         props.setProperty("org.omg.CORBA.ORBInitialPort", "3700");
+
+         InitialContext ctx(props);
+
+         Connection connection =
+            cast<ConnectionFactory>(ctx.lookup("jms/__defaultConnectionFactory")).createConnection();
+         Session session = connection.createSession(Session::CLIENT_ACKNOWLEDGE);
+
+         Destination queue = cast<Destination>(ctx.lookup("abc"));
+
+         MessageProducer producer = session.createProducer(queue);
+         MessageConsumer consumer = session.createConsumer(queue);
+
+         # in order to implement the MessageListener interface for the callback, we have to use implement_interface()
+         # as follows:
+         ClassLoader loader = connection.getClass().getClassLoader();
+         consumer.setMessageListener(cast<MessageListener>(implement_interface(loader,
+            new QoreInvocationHandler(\messageCallback()), Class::forName("javax.jms.MessageListener", True,
+                loader))));
+
+         connection.start();
+
+         TextMessage message = session.createTextMessage();
+         message.setText(TextMsg);
+
+         producer.send(message);
+         # wait for message to be received
+         c.waitForZero();
+
+         assertEq(TextMsg, data);
+
+         # unset the listener and exit
+         consumer.setMessageListener(NOTHING);
+     }
+
+     # JMS message callback for the MessageListener interface
+     messageCallback(Method method, *list args) {
+         TextMessage msg = args[0];
+         # ignore redeliveries
+         if (msg.getJMSRedelivered())
+             return;
+         data = msg.getText();
+         msg.acknowledge();
+         if (m_options.verbose)
+             printf("*** JMS message received: %y (id: %y)\n", msg.getText(), msg.getJMSMessageID());
+         c.dec();
+     }
+ }
+    @endcode
+*/
