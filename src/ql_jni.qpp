@@ -393,7 +393,7 @@ set_save_object_callback(save_object_callback: callback);
     The callback set here will be called any time a %Qore object is created from Java code; if no callback is set,
     then the standard thread-local implementation is used where %Qore objects are saved in a thread-local hash.
 
-    @see @ref jni_qore_object_lifecycle_management for more information
+    @see @ref jni_qore_object_lifecycle_managementguide for more information
 */
 set_save_object_callback(*code save_object_callback) [dom=PROCESS;flags=NAMED_ARGS] {
     // NOTE: this must be qore_get_call_program_context() and not jni::jni_get_program_context() or jni_get_context()

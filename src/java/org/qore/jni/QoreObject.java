@@ -61,14 +61,14 @@ public class QoreObject extends QoreObjectBase {
     //! Calls the given method with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
     /**
      * This method can be used to save objects in thread-local data that would otherwise go out of scope; see
-     * @ref jni_qore_object_lifecycle_management for more information
+     * @ref jni_qore_object_lifecycle_managementguide for more information
      *
      * @param name the name of the method to call
      * @param args argument to the function call
      * @return the result of the call
      * @throws Throwable any Qore-language exception is rethrown here
      *
-     * @see jni_qore_object_lifecycle_management
+     * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callMethodSave(String name, Object... args) throws Throwable {
         return callMethodSave0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
@@ -77,14 +77,14 @@ public class QoreObject extends QoreObjectBase {
     //! Calls the given method with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
     /**
      * This method can be used to save objects in thread-local data that would otherwise go out of scope; see
-     * @ref jni_qore_object_lifecycle_management for more information
+     * @ref jni_qore_object_lifecycle_managementguide for more information
      *
      * @param name the name of the method to call
      * @param args argument to the function call
      * @return the result of the call
      * @throws Throwable any Qore-language exception is rethrown here
      *
-     * @see jni_qore_object_lifecycle_management
+     * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callMethodArgsSave(String name, Object[] args) throws Throwable {
         return callMethodSave0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
