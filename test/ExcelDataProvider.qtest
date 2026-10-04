@@ -272,6 +272,14 @@ public class ExcelDataProviderTest inherits QUnit::Test {
 
         assertEq(2, records.size());
         assertTrue(records[0].Date instanceof date, "Date should be a date type");
+
+        # a date cell is its clock time in the zone: midnight in New York, not the JVM's zone
+        foreach string zone in (("America/New_York", "Asia/Tokyo", "UTC")) {
+            ExcelReadDataProvider zdp(test_data_dir + "/dates.xlsx", {"header_names": True, "timezone": zone});
+            hash<auto> r = (map $1, zdp.searchRecords())[0];
+            assertEq(new TimeZone(zone).date("2025-01-15 00:00:00", "YYYY-MM-DD HH:mm:SS"), r.Date, zone);
+            assertEq("00:00:00", r.Date.format("HH:mm:SS"), zone);
+        }
     }
 
     testWorksheet() {

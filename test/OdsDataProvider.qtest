@@ -90,6 +90,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("header_names option", \testHeaderNames());
         addTestCase("tolwr option", \testTolwr());
         addTestCase("timezone option", \testTimezone());
+        addTestCase("date and time cells are their clock time in the timezone", \testWallClockTimes());
         addTestCase("worksheet option", \testWorksheet());
         addTestCase("cell range parsing", \testCellRangeParsing());
         addTestCase("data types", \testDataTypes());
@@ -136,6 +137,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         OdsTestHelper::createSimpleOds(test_data_dir + "/simple.ods");
         OdsTestHelper::createMultiSheetOds(test_data_dir + "/multi-sheet.ods");
         OdsTestHelper::createDatesOds(test_data_dir + "/dates.ods");
+        OdsTestHelper::createDateTimesOds(test_data_dir + "/date-times.ods");
         OdsTestHelper::createEmptyOds(test_data_dir + "/empty.ods");
         OdsTestHelper::createNoHeadersOds(test_data_dir + "/no-headers.ods");
         OdsTestHelper::createRepeatedEmptyRowsOds(test_data_dir + "/repeated-empty-rows.ods");
@@ -282,6 +284,22 @@ public class OdsDataProviderTest inherits QUnit::Test {
 
         assertEq(2, records.size());
         assertTrue(records[0].Date instanceof date, "Date should be a date type");
+    }
+
+    testWallClockTimes() {
+        # the file has no zone: each cell is its written clock time in the zone the reader is given, whatever
+        # the zone of the JVM, as for Excel
+        foreach string zone in (("America/New_York", "Europe/Prague", "Asia/Tokyo", "UTC")) {
+            OdsReadDataProvider dp(test_data_dir + "/date-times.ods", {"header_names": True, "timezone": zone});
+            hash<auto> r = (map $1, dp.searchRecords())[0];
+            TimeZone tz(zone);
+            assertEq(tz.date("2025-01-15 00:00:00", "YYYY-MM-DD HH:mm:SS"), r.Date, zone + ": a date");
+            assertEq(tz.date("2025-07-01 14:30:05", "YYYY-MM-DD HH:mm:SS"), r.DateTime, zone + ": a date and time");
+            # a time cell: its clock time, in the zone
+            assertEq("09:45:00", r.Time.format("HH:mm:SS"), zone + ": a time");
+            assertEq(tz.date(r.Time.format("YYYY-MM-DD HH:mm:SS"), "YYYY-MM-DD HH:mm:SS"), r.Time,
+                zone + ": a time in the zone");
+        }
     }
 
     testWorksheet() {

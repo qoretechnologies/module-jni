@@ -2061,6 +2061,14 @@ lorem ipsum\r
         date d = ZonedDateTime::parse(new String(date_str));
         assertEq(now, d);
 
+        # a ZonedDateTime at a whole minute keeps its zone (its toString() leaves out the seconds)
+        d = ZonedDateTime::parse(new String("2025-01-15T00:00-05:00[America/New_York]"));
+        assertEq(2025-01-15T00:00:00-05:00, d);
+        assertEq("00:00:00", d.format("HH:mm:SS"));
+        # nanoseconds are read to the microsecond
+        d = ZonedDateTime::parse(new String("2025-07-01T14:30:05.123456789+09:00[Asia/Tokyo]"));
+        assertEq(2025-07-01T14:30:05.123456+09:00, d);
+
         d = QoreJavaApiTest::dateTest(now);
         # the java API returns a date with the same UTC offset, so we have to use 48h instead of 2D
         assertEq(now - 48h, d);

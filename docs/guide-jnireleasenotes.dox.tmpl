@@ -146,6 +146,10 @@
       class generation. Java exception conversion preserves the original exception if reading its
       metadata fails, and Java native stack frames no longer abort Debug %Qore;
       see @ref jni_exceptions "Java exceptions in Qore".
+    - A \c java.time.ZonedDateTime at a whole minute keeps its time zone when converted to a %Qore date;
+      before, it was read in the local time zone. This also corrects the date and time cells of the
+      @ref exceldataproviderintro "Excel" and @ref odsdataproviderintro "ODS" readers with the
+      \c timezone option, which are now the clock time written in the file, in that zone.
 
     @par Lifetimes and shutdown
 

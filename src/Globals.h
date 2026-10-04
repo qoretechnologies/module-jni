@@ -298,6 +298,8 @@ public:
     DLLLOCAL static GlobalReference<jclass> classZonedDateTime;                   // java.time.ZonedDateTime
     DLLLOCAL static jmethodID methodZonedDateTimeParse;                           // ZonedDateTime.parse()
     DLLLOCAL static jmethodID methodZonedDateTimeToString;                        // ZonedDateTime.toString()
+    DLLLOCAL static jmethodID methodZonedDateTimeFormat;                          // ZonedDateTime.format()
+    DLLLOCAL static GlobalReference<jobject> isoOffsetDateTimeFormatter;          // DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
     DLLLOCAL static GlobalReference<jclass> classLocalDateTime;                   // java.time.LocalDateTime
     DLLLOCAL static jmethodID methodLocalDateTimeToString;                        // LocalDateTime.toString()

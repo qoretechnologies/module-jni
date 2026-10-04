@@ -283,6 +283,8 @@ jmethodID Globals::methodIteratorNext;
 GlobalReference<jclass> Globals::classZonedDateTime;
 jmethodID Globals::methodZonedDateTimeParse;
 jmethodID Globals::methodZonedDateTimeToString;
+jmethodID Globals::methodZonedDateTimeFormat;
+GlobalReference<jobject> Globals::isoOffsetDateTimeFormatter;
 
 GlobalReference<jclass> Globals::classLocalDateTime;
 jmethodID Globals::methodLocalDateTimeToString;
@@ -3559,6 +3561,14 @@ bool Globals::init() {
     methodZonedDateTimeParse = env.getStaticMethod(classZonedDateTime, "parse",
         "(Ljava/lang/CharSequence;)Ljava/time/ZonedDateTime;");
     methodZonedDateTimeToString = env.getMethod(classZonedDateTime, "toString", "()Ljava/lang/String;");
+    methodZonedDateTimeFormat = env.getMethod(classZonedDateTime, "format",
+        "(Ljava/time/format/DateTimeFormatter;)Ljava/lang/String;");
+    {
+        LocalReference<jclass> formatter_class = env.findClass("java/time/format/DateTimeFormatter");
+        jfieldID iso_field = env.getStaticField(formatter_class, "ISO_OFFSET_DATE_TIME",
+            "Ljava/time/format/DateTimeFormatter;");
+        isoOffsetDateTimeFormatter = env.getStaticObjectField(formatter_class, iso_field).makeGlobal();
+    }
 
     // issue #4892: LocalDateTime support for Kotlin/Java date conversion
     classLocalDateTime = env.findClass("java/time/LocalDateTime").makeGlobal();
@@ -4327,6 +4337,7 @@ void Globals::cleanup() {
     classEntry = nullptr;
     classIterator = nullptr;
     classZonedDateTime = nullptr;
+    isoOffsetDateTimeFormatter = nullptr;
     classLocalDateTime = nullptr;
     classInstant = nullptr;
     classQoreRelativeTime = nullptr;

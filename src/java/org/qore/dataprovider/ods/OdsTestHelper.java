@@ -160,6 +160,28 @@ public class OdsTestHelper {
     }
 
     /**
+     * Creates an ODS workbook with a date, a date with a time, and a time: the clock times written in
+     * the file, without a zone.
+     */
+    public static void createDateTimesOds(String path) throws Exception {
+        try (OdfSpreadsheetDocument doc = OdfSpreadsheetDocument.newSpreadsheetDocument()) {
+            OdfTable table = doc.getTableList().get(0);
+            table.setTableName("Times");
+
+            table.getCellByPosition(0, 0).setStringValue("Date");
+            table.getCellByPosition(1, 0).setStringValue("DateTime");
+            table.getCellByPosition(2, 0).setStringValue("Time");
+
+            table.getCellByPosition(0, 1).setLocalDateValue(java.time.LocalDate.of(2025, 1, 15));
+            table.getCellByPosition(1, 1).setLocalDateTimeValue(java.time.LocalDateTime.of(2025, 7, 1, 14, 30, 5));
+            GregorianCalendar time = new GregorianCalendar(1970, Calendar.JANUARY, 1, 9, 45, 0);
+            table.getCellByPosition(2, 1).setTimeValue(time);
+
+            doc.save(path);
+        }
+    }
+
+    /**
      * Creates an empty ODS workbook.
      */
     public static void createEmptyOds(String path) throws Exception {
