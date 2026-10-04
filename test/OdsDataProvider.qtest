@@ -138,6 +138,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("read: row groups, header rows, repeated and covered cells", \testStructuredTable());
         addTestCase("read: a large document is read in bounded memory", \testLargeDocument());
         addTestCase("read: closing an iteration early releases the document", \testEarlyClose());
+        addTestCase("read: currency and percentage cells are numbers", \testNumberFormats());
         set_return_value(main());
     }
 
@@ -1182,6 +1183,31 @@ printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatche
         assertEq(open_files, countOpenFiles());
         assertEq(temp_files, getTempFiles("qore-ods-"));
         assertThrows("JNI-ERROR", "the ODS iterator is closed", \it.next());
+    }
+
+    testNumberFormats() {
+        string path = test_data_dir + "/number-formats.ods";
+        OdsTestHelper::createNumberFormatsOds(path);
+
+        # a currency cell is its amount and a percentage cell its fraction; a cell without a value is its text
+        OdsReadDataProvider dp(path, {"header_names": True});
+        assertEq((
+            {"Item": "A", "Price": 3.5, "Share": 0.25},
+            {"Item": "B", "Price": -1250.75, "Share": 1.5},
+            {"Item": "C", "Price": "n/a", "Share": 0.0},
+        ), (map $1, dp.searchRecords()));
+
+        # as header cells, the numbers are the header names
+        dp = new OdsReadDataProvider(path, {"header_cells": "a2:c2", "data_cells": "a3:c3"});
+        assertEq(("A", "3.5", "0.25"), keys dp.getRecordType());
+        assertEq(({"A": "B", "3.5": -1250.75, "0.25": 1.5},), (map $1, dp.searchRecords()));
+
+        # the profiler reads them as numbers as well
+        hash<TabularWorkbookGrid> grid = OdsProfileDataProvider::readWorkbookGrid(ReadOnlyFile::readBinaryFile(path),
+            10);
+        assertEq(("A", 3.5, 0.25), grid.sheets[0].rows[1]);
+        assertEq(("B", -1250.75, 1.5), grid.sheets[0].rows[2]);
+        assertEq(("C", NOTHING, 0.0), grid.sheets[0].rows[3]);
     }
 
     #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints

@@ -286,6 +286,10 @@ module OdsDataProvider {
     Records are read from a sheet one row at a time as they are iterated, so sheets of any size are read in bounded
     memory; the runs of repeated rows and cells that spreadsheet applications write are not expanded.
 
+    Float, currency, and percentage cells are read as numbers (a currency cell is its amount, a percentage cell its
+    fraction, such as \c 0.25 for 25%), boolean cells as booleans, date and time cells as dates, and other cells as
+    their text.
+
     The following classes are provided by this module:
     - @ref OdsDataProvider::OdsReadDataProvider "OdsReadDataProvider" - for reading ODS files
     - @ref OdsDataProvider::OdsReadDataProviderFactory "OdsReadDataProviderFactory" - factory for read providers

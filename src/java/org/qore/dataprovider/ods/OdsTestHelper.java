@@ -612,4 +612,38 @@ public class OdsTestHelper {
         return "<table:table-cell office:value-type=\"date\" office:date-value=\"" + value + "\"><text:p>" + value
             + "</text:p></table:table-cell>";
     }
+
+    /**
+     * Creates an ODS document with currency and percentage cells.
+     *
+     * The table "Prices" has the columns Item, Price (currency cells in USD), and Share (percentage cells): A, 3.5,
+     * 0.25 (25%); B, -1250.75, 1.5 (150%); and C, a currency cell without a value displayed as "n/a", and 0.
+     *
+     * @param path The path to create the file at
+     */
+    public static void createNumberFormatsOds(String path) throws IOException {
+        writeOds(path, out -> {
+            out.write("<table:table table:name=\"Prices\">"
+                + "<table:table-column table:number-columns-repeated=\"3\"/>"
+                + "<table:table-row>" + str("Item") + str("Price") + str("Share") + "</table:table-row>"
+                + "<table:table-row>" + str("A") + currency("3.5", "$3.50") + percentage("0.25", "25%")
+                + "</table:table-row>"
+                + "<table:table-row>" + str("B") + currency("-1250.75", "-$1,250.75") + percentage("1.5", "150%")
+                + "</table:table-row>"
+                + "<table:table-row>" + str("C")
+                + "<table:table-cell office:value-type=\"currency\" office:currency=\"USD\"><text:p>n/a</text:p>"
+                + "</table:table-cell>" + percentage("0", "0%") + "</table:table-row>"
+                + "</table:table>");
+        });
+    }
+
+    private static String currency(String value, String display) {
+        return "<table:table-cell office:value-type=\"currency\" office:currency=\"USD\" office:value=\"" + value
+            + "\"><text:p>" + display + "</text:p></table:table-cell>";
+    }
+
+    private static String percentage(String value, String display) {
+        return "<table:table-cell office:value-type=\"percentage\" office:value=\"" + value + "\"><text:p>" + display
+            + "</text:p></table:table-cell>";
+    }
 }

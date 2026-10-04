@@ -175,12 +175,12 @@ final class OdsCell {
     }
 
     /**
-     * Returns the value of a float cell, null if not set; throws IllegalArgumentException for any other value type,
-     * including currency and percentage cells, as OdfTableCell.getDoubleValue() does
+     * Returns the office:value of a float, currency, or percentage cell, null if not set; a percentage is its
+     * fraction (0.25 for 25%), and a currency amount does not include its currency
      */
     Double getDoubleValue() {
-        if (!"float".equals(value_type)) {
-            throw new IllegalArgumentException();
+        if (!"float".equals(value_type) && !"currency".equals(value_type) && !"percentage".equals(value_type)) {
+            throw new IllegalArgumentException(String.format("a cell with value type %s has no number", value_type));
         }
         if (value != null && !value.isEmpty()) {
             return Double.parseDouble(value);

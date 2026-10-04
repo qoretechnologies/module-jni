@@ -323,9 +323,11 @@ public class OdsGridReader {
             case "string":
                 return cell.getStringValue();
             case "float":
+                return cell.getDoubleValue();
             case "currency":
             case "percentage":
-                return cell.getDoubleValue();
+                // OdfTableCell.getDoubleValue() only accepts float cells; these have their number in office:value
+                return cell.getOdfElement().getOfficeValueAttribute();
             case "boolean":
                 return cell.getBooleanValue();
             case "date": {
