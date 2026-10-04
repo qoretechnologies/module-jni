@@ -72,6 +72,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("status mapping", \statusMappingTest());
         addTestCase("write type conversion", \writeTypeConversionTest());
         addTestCase("connection detection", \connectionDetectionTest());
+        addTestCase("embedded servers reserve independent ports", \embeddedServerPortsTest());
         addTestCase("embedded server integration", \embeddedServerIntegrationTest());
         addTestCase("a ByteString value is read as a binary", \byteStringValueTest());
         addTestCase("data change subscription and history", \subscriptionAndHistoryTest());
@@ -907,11 +908,34 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             "Good is not a connection loss");
     }
 
+    #! The OS assigns each fixture a port that remains reserved until shutdown, even before startup
+    embeddedServerPortsTest() {
+        auto first = new QoreOpcUaTestServer();
+        on_exit first.stop();
+        auto second = new QoreOpcUaTestServer();
+        on_exit second.stop();
+        assertTrue(first.getPort() > 0, "the OS assigns a concrete port");
+        assertTrue(first.getPort() != second.getPort(), "simultaneous fixtures hold different ports");
+
+        Socket collision();
+        assertThrows("SOCKET-BIND-ERROR", \collision.bindINET(), ("127.0.0.1", first.getPort()),
+            "the port remains reserved before Milo starts");
+
+        first.start();
+        second.start();
+        foreach auto server in ((first, second)) {
+            OpcUaDataProvider prov({"url": server.getEndpointUrl(), "monitored_nodes": ()});
+            hash<auto> endpoints = prov.doRequest({"action": "discover-endpoints"});
+            assertEq(server.getEndpointUrl(), endpoints.endpoints[0].endpoint_url,
+                "discovery advertises the reserved port");
+            assertEq(42, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int32Var"}).value,
+                "both simultaneous servers accept client requests");
+        }
+    }
+
     #! Integration test against the in-process Milo 1.1.4 test server (regression baseline)
     embeddedServerIntegrationTest() {
-        # use a per-process port to avoid collisions across parallel runs
-        int port = 54000 + (getpid() % 1500);
-        auto server = new QoreOpcUaTestServer(port);
+        auto server = new QoreOpcUaTestServer();
         server.start();
         on_exit server.stop();
 
@@ -1027,8 +1051,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         safety net) rather than polling, per the deterministic-test requirement.
     */
     subscriptionAndHistoryTest() {
-        int port = 55600 + (getpid() % 1500);
-        auto server = new QoreOpcUaTestServer(port);
+        auto server = new QoreOpcUaTestServer();
         server.start();
         on_exit server.stop();
 

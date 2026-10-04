@@ -9,8 +9,17 @@
 
 package org.qore.opcua.test;
 
+import java.net.InetSocketAddress;
+import java.nio.channels.ServerSocketChannel;
 import java.util.Set;
 
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.util.concurrent.GlobalEventExecutor;
 import org.eclipse.milo.opcua.sdk.server.OpcUaServer;
 import org.eclipse.milo.opcua.sdk.server.OpcUaServerConfig;
 import org.eclipse.milo.opcua.sdk.server.EndpointConfig;
@@ -35,8 +44,10 @@ import org.eclipse.milo.opcua.stack.core.types.builtin.Variant;
 import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UShort;
 import org.eclipse.milo.opcua.stack.core.types.builtin.unsigned.UByte;
 import org.eclipse.milo.opcua.stack.core.types.enumerated.MessageSecurityMode;
-import org.eclipse.milo.opcua.stack.transport.server.tcp.OpcTcpServerTransport;
+import org.eclipse.milo.opcua.stack.transport.server.OpcServerTransport;
+import org.eclipse.milo.opcua.stack.transport.server.ServerApplicationContext;
 import org.eclipse.milo.opcua.stack.transport.server.tcp.OpcTcpServerTransportConfig;
+import org.eclipse.milo.opcua.stack.transport.server.uasc.UascServerHelloHandler;
 import org.eclipse.milo.opcua.sdk.server.items.DataItem;
 import org.eclipse.milo.opcua.sdk.server.items.MonitoredItem;
 import org.eclipse.milo.opcua.sdk.server.util.SubscriptionModel;
@@ -62,10 +73,30 @@ public class QoreOpcUaTestServer {
 
     private final OpcUaServer server;
     private final int port;
+    private final ServerSocketChannel listener;
+    private final TestNamespace namespace;
 
+    /** Reserves an OS-assigned port until the server is stopped. */
+    public QoreOpcUaTestServer() throws Exception {
+        this(0);
+    }
+
+    /** A zero port lets the OS choose a free port; an explicit port must be available. */
     public QoreOpcUaTestServer(int port) throws Exception {
-        this.port = port;
+        listener = ServerSocketChannel.open();
+        try {
+            listener.bind(new InetSocketAddress("127.0.0.1", port));
+            this.port = ((InetSocketAddress) listener.getLocalAddress()).getPort();
+            server = createServer();
+            namespace = new TestNamespace(server);
+            namespace.startup();
+        } catch (Exception | Error e) {
+            listener.close();
+            throw e;
+        }
+    }
 
+    private OpcUaServer createServer() {
         MemoryCertificateQuarantine quarantine = new MemoryCertificateQuarantine();
         DefaultCertificateManager certificateManager = new DefaultCertificateManager(quarantine);
 
@@ -88,11 +119,34 @@ public class QoreOpcUaTestServer {
             .setIdentityValidator(AnonymousIdentityValidator.INSTANCE)
             .build();
 
-        this.server = new OpcUaServer(config, transportProfile ->
-            new OpcTcpServerTransport(OpcTcpServerTransportConfig.newBuilder().build()));
+        // Milo's TCP transport cannot adopt a bound socket. Register our reserved listener with
+        // Netty and use Milo's normal protocol handler, without a close/rebind race. The actual port
+        // is already in the immutable endpoint configuration, including discovery responses.
+        return new OpcUaServer(config, transportProfile -> new OpcServerTransport() {
+            private final ChannelGroup channels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
-        TestNamespace namespace = new TestNamespace(server);
-        namespace.startup();
+            @Override
+            public void bind(ServerApplicationContext context, InetSocketAddress address) throws Exception {
+                OpcTcpServerTransportConfig transportConfig = OpcTcpServerTransportConfig.newBuilder().build();
+                channels.add(new ServerBootstrap()
+                    .channelFactory(() -> new NioServerSocketChannel(listener))
+                    .group(transportConfig.getEventLoop())
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel channel) {
+                            channels.add(channel);
+                            channel.pipeline().addLast(new UascServerHelloHandler(
+                                transportConfig, context, TransportProfile.TCP_UASC_UABINARY));
+                        }
+                    })
+                    .register().sync().channel());
+            }
+
+            @Override
+            public void unbind() {
+                channels.close().awaitUninterruptibly();
+            }
+        });
     }
 
     /** Returns the opc.tcp endpoint URL clients should connect to. */
@@ -100,18 +154,40 @@ public class QoreOpcUaTestServer {
         return "opc.tcp://127.0.0.1:" + port + "/qore";
     }
 
+    /** Returns the port held by the test server, including before startup. */
+    public int getPort() {
+        return port;
+    }
+
     /** Starts the server (blocks until ready). */
     public void start() throws Exception {
-        server.startup().get();
+        try {
+            server.startup().get();
+        } catch (Exception e) {
+            try {
+                stop();
+            } catch (Exception cleanupError) {
+                e.addSuppressed(cleanupError);
+            }
+            throw e;
+        }
     }
 
     /** Stops the server (blocks until shut down). */
     public void stop() throws Exception {
-        server.shutdown().get();
+        try {
+            namespace.shutdown();
+        } finally {
+            try {
+                server.shutdown().get();
+            } finally {
+                listener.close();
+            }
+        }
     }
 
     public static void main(String[] args) throws Exception {
-        int port = args.length > 0 ? Integer.parseInt(args[0]) : 54840;
+        int port = args.length > 0 ? Integer.parseInt(args[0]) : 0;
         QoreOpcUaTestServer s = new QoreOpcUaTestServer(port);
         s.start();
         System.out.println("READY " + s.getEndpointUrl());
