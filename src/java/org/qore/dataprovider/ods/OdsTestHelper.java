@@ -28,8 +28,17 @@ import org.odftoolkit.odfdom.dom.OdfDocumentNamespace;
 import org.odftoolkit.odfdom.pkg.OdfFileDom;
 import org.w3c.dom.Element;
 
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.zip.CRC32;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 
@@ -452,5 +461,155 @@ public class OdsTestHelper {
 
             doc.save(path);
         }
+    }
+
+    private static final String CONTENT_START = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        + "<office:document-content xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" "
+        + "xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" "
+        + "xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" office:version=\"1.3\">"
+        + "<office:body><office:spreadsheet>";
+    private static final String CONTENT_END = "</office:spreadsheet></office:body></office:document-content>";
+
+    /**
+     * Writes an ODS document whose content.xml is written by the given writer, so a document of any size is written
+     * in bounded memory
+     */
+    private interface ContentWriter {
+        void write(Writer out) throws IOException;
+    }
+
+    private static void writeOds(String path, ContentWriter content) throws IOException {
+        try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(path))) {
+            // the media type is the first entry, stored without compression
+            byte[] mimetype = "application/vnd.oasis.opendocument.spreadsheet".getBytes(StandardCharsets.UTF_8);
+            ZipEntry entry = new ZipEntry("mimetype");
+            entry.setMethod(ZipEntry.STORED);
+            entry.setSize(mimetype.length);
+            CRC32 crc = new CRC32();
+            crc.update(mimetype);
+            entry.setCrc(crc.getValue());
+            zip.putNextEntry(entry);
+            zip.write(mimetype);
+            zip.closeEntry();
+
+            zip.putNextEntry(new ZipEntry("META-INF/manifest.xml"));
+            zip.write(("<?xml version=\"1.0\" encoding=\"UTF-8\"?><manifest:manifest "
+                + "xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.3\">"
+                + "<manifest:file-entry manifest:full-path=\"/\" "
+                + "manifest:media-type=\"application/vnd.oasis.opendocument.spreadsheet\"/>"
+                + "<manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/>"
+                + "</manifest:manifest>").getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+
+            zip.putNextEntry(new ZipEntry("content.xml"));
+            // the writer is not closed, as that would close the zip stream
+            Writer out = new BufferedWriter(new OutputStreamWriter(zip, StandardCharsets.UTF_8));
+            out.write(CONTENT_START);
+            content.write(out);
+            out.write(CONTENT_END);
+            out.flush();
+            zip.closeEntry();
+        }
+    }
+
+    /**
+     * Creates a large ODS document as spreadsheet applications write it, written in bounded memory.
+     *
+     * The table "Large" has 5 columns followed by repeated empty columns to column 16384, a header row (Id, Name,
+     * Amount, When, Flag) and the given number of data rows; data row i (1-based) has Id i, Name "name-i", Amount
+     * i / 4, When 2025-01-01T00:00 plus i seconds (a date cell), and Flag true for even i.  The data rows are followed
+     * by one row element repeated 3 times (Id -1, Name "repeated", Amount 0.5, When 2025-06-30T12:00, Flag false) and
+     * then by 1048000 repeated empty rows.
+     *
+     * @param path The path to create the file at
+     * @param rows The number of data rows
+     */
+    public static void createLargeOds(String path, int rows) throws IOException {
+        writeOds(path, out -> {
+            out.write("<table:table table:name=\"Large\">"
+                + "<table:table-column table:number-columns-repeated=\"5\"/>"
+                + "<table:table-column table:number-columns-repeated=\"16379\"/>"
+                + "<table:table-row>");
+            for (String header : new String[]{"Id", "Name", "Amount", "When", "Flag"}) {
+                out.write("<table:table-cell office:value-type=\"string\"><text:p>" + header
+                    + "</text:p></table:table-cell>");
+            }
+            out.write("<table:table-cell table:number-columns-repeated=\"16379\"/></table:table-row>");
+            LocalDateTime base = LocalDateTime.of(2025, 1, 1, 0, 0);
+            for (int i = 1; i <= rows; ++i) {
+                writeLargeRow(out, 1, i, "name-" + i, i / 4.0, base.plusSeconds(i), i % 2 == 0);
+            }
+            writeLargeRow(out, 3, -1, "repeated", 0.5, LocalDateTime.of(2025, 6, 30, 12, 0), false);
+            out.write("<table:table-row table:number-rows-repeated=\"1048000\">"
+                + "<table:table-cell table:number-columns-repeated=\"16384\"/></table:table-row>");
+            out.write("</table:table>");
+        });
+    }
+
+    private static void writeLargeRow(Writer out, int repeated, int id, String name, double amount,
+            LocalDateTime when, boolean flag) throws IOException {
+        out.write("<table:table-row" + (repeated > 1 ? " table:number-rows-repeated=\"" + repeated + "\"" : "")
+            + "><table:table-cell office:value-type=\"float\" office:value=\"" + id + "\"><text:p>" + id
+            + "</text:p></table:table-cell><table:table-cell office:value-type=\"string\"><text:p>" + name
+            + "</text:p></table:table-cell><table:table-cell office:value-type=\"float\" office:value=\"" + amount
+            + "\"><text:p>" + amount + "</text:p></table:table-cell>"
+            + "<table:table-cell office:value-type=\"date\" office:date-value=\"" + when + "\"><text:p>" + when
+            + "</text:p></table:table-cell><table:table-cell office:value-type=\"boolean\" office:boolean-value=\""
+            + flag + "\"><text:p>" + (flag ? "TRUE" : "FALSE") + "</text:p></table:table-cell>"
+            + "<table:table-cell table:number-columns-repeated=\"16379\"/></table:table-row>");
+    }
+
+    /**
+     * Creates an ODS document with the table structures that spreadsheet applications write: header rows to repeat on
+     * printed pages and row groups, repeated rows and cells, covered (merged) cells, and formatted text.
+     *
+     * The table "Structured" has the columns Sku, Qty, Note, and Day; after the header row:
+     * - row 2 is in table:table-header-rows: A-1, 5, "x", 2025-03-01
+     * - rows 3 to 5 are in a row group, rows 4 and 5 being one row element repeated twice: B-2, 6, "y", 2025-03-02
+     *   and C-3, 7, "z", 2025-03-03
+     * - row 6: D-4, then one cell repeated over Qty and Note: 8, and a covered cell (merged) for Day
+     * - row 7 is empty
+     * - row 8: E-5, 9, text with spaces, a tab, and a line break ("a   b", tab, "c", newline, "d"), 2025-03-08
+     * followed by 1048000 repeated empty rows.
+     *
+     * @param path The path to create the file at
+     */
+    public static void createStructuredOds(String path) throws IOException {
+        writeOds(path, out -> {
+            out.write("<table:table table:name=\"Structured\">"
+                + "<table:table-column table:number-columns-repeated=\"4\"/>"
+                + "<table:table-column table:number-columns-repeated=\"1020\"/>"
+                + "<table:table-row>" + str("Sku") + str("Qty") + str("Note") + str("Day")
+                + "<table:table-cell table:number-columns-repeated=\"1020\"/></table:table-row>"
+                + "<table:table-header-rows><table:table-row>" + str("A-1") + num(5) + str("x") + day("2025-03-01")
+                + "</table:table-row></table:table-header-rows>"
+                + "<table:table-row-group><table:table-row>" + str("B-2") + num(6) + str("y") + day("2025-03-02")
+                + "</table:table-row><table:table-row table:number-rows-repeated=\"2\">" + str("C-3") + num(7)
+                + str("z") + day("2025-03-03") + "</table:table-row></table:table-row-group>"
+                + "<table:table-row>" + str("D-4") + "<table:table-cell office:value-type=\"float\" office:value=\"8\" "
+                + "table:number-columns-repeated=\"2\"><text:p>8</text:p></table:table-cell>"
+                + "<table:covered-table-cell/></table:table-row>"
+                + "<table:table-row><table:table-cell table:number-columns-repeated=\"1024\"/></table:table-row>"
+                + "<table:table-row>" + str("E-5") + num(9) + "<table:table-cell office:value-type=\"string\">"
+                + "<text:p>a<text:s text:c=\"3\"/>b<text:tab/>c<text:line-break/>d</text:p></table:table-cell>"
+                + day("2025-03-08") + "</table:table-row>"
+                + "<table:table-row table:number-rows-repeated=\"1048000\">"
+                + "<table:table-cell table:number-columns-repeated=\"1024\"/></table:table-row>"
+                + "</table:table>");
+        });
+    }
+
+    private static String str(String value) {
+        return "<table:table-cell office:value-type=\"string\"><text:p>" + value + "</text:p></table:table-cell>";
+    }
+
+    private static String num(int value) {
+        return "<table:table-cell office:value-type=\"float\" office:value=\"" + value + "\"><text:p>" + value
+            + "</text:p></table:table-cell>";
+    }
+
+    private static String day(String value) {
+        return "<table:table-cell office:value-type=\"date\" office:date-value=\"" + value + "\"><text:p>" + value
+            + "</text:p></table:table-cell>";
     }
 }

@@ -283,6 +283,9 @@ module OdsDataProvider {
     ODS is the native spreadsheet format for LibreOffice Calc and other OpenDocument-compatible
     applications.
 
+    Records are read from a sheet one row at a time as they are iterated, so sheets of any size are read in bounded
+    memory; the runs of repeated rows and cells that spreadsheet applications write are not expanded.
+
     The following classes are provided by this module:
     - @ref OdsDataProvider::OdsReadDataProvider "OdsReadDataProvider" - for reading ODS files
     - @ref OdsDataProvider::OdsReadDataProviderFactory "OdsReadDataProviderFactory" - factory for read providers

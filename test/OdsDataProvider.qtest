@@ -28,6 +28,8 @@
 %requires QUnit
 %requires Util
 %requires DataProvider
+%requires json
+%requires FsUtil
 %requires jni
 
 # Add classpaths for ODFDOM and the test helper BEFORE loading OdsDataProvider
@@ -62,12 +64,21 @@
 %module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/jena-iri-4.10.0.jar
 %module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/RoaringBitmap-1.0.0.jar
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsTestHelper
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsIterator
+%module-cmd(jni) import java.lang.System
 
 %requires OdsDataProvider
 
 %exec-class OdsDataProviderTest
 
 public class OdsDataProviderTest inherits QUnit::Test {
+    public {
+        #! the number of data rows of the large document
+        const LargeRows = 200000;
+        #! the JVM heap of the child process that reads a large document
+        const ChildHeap = "64m";
+    }
+
     private {
         string test_data_dir;
     }
@@ -124,6 +135,9 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("profile: raw spreadsheet grid", \testProfileGrid());
         addTestCase("profile action", \testProfileAction());
         addTestCase("read: the workbook is reusable in any call order", \testWorkbookReuse());
+        addTestCase("read: row groups, header rows, repeated and covered cells", \testStructuredTable());
+        addTestCase("read: a large document is read in bounded memory", \testLargeDocument());
+        addTestCase("read: closing an iteration early releases the document", \testEarlyClose());
         set_return_value(main());
     }
 
@@ -1055,5 +1069,161 @@ public class OdsDataProviderTest inherits QUnit::Test {
         OdsReadDataProvider empty();
         assertEq(NOTHING, empty.getChildProviderNames());
         assertEq({}, empty.getRecordType());
+    }
+
+    testStructuredTable() {
+        string path = test_data_dir + "/structured.ods";
+        OdsTestHelper::createStructuredOds(path);
+
+        list<hash<auto>> expected = (
+            # a row in table:table-header-rows (a row to repeat on printed pages)
+            {"Sku": "A-1", "Qty": 5.0, "Note": "x", "Day": 2025-03-01T00:00:00Z},
+            # rows in a row group; the second row element is repeated for two rows
+            {"Sku": "B-2", "Qty": 6.0, "Note": "y", "Day": 2025-03-02T00:00:00Z},
+            {"Sku": "C-3", "Qty": 7.0, "Note": "z", "Day": 2025-03-03T00:00:00Z},
+            {"Sku": "C-3", "Qty": 7.0, "Note": "z", "Day": 2025-03-03T00:00:00Z},
+            # a cell repeated over two columns and a covered (merged) cell
+            {"Sku": "D-4", "Qty": 8.0, "Note": 8.0, "Day": NOTHING},
+        );
+        OdsReadDataProvider dp(path, {"header_names": True, "timezone": "UTC"});
+        assertEq(("Sku", "Qty", "Note", "Day"), keys dp.getRecordType());
+        # reading stops at the empty row 7
+        assertEq(expected, (map $1, dp.searchRecords()));
+        # each iteration reads the table from its first data row
+        assertEq(expected, (map $1, dp.searchRecords()));
+
+        # spaces, tabs, and line breaks are part of the text
+        dp = new OdsReadDataProvider(path, {"header_names": True, "timezone": "UTC", "ignore_empty": True});
+        assertEq(expected + ({"Sku": "E-5", "Qty": 9.0, "Note": "a   b\tc\nd", "Day": 2025-03-08T00:00:00Z},),
+            (map $1, dp.searchRecords()));
+
+        # data cells within the repeated rows
+        dp = new OdsReadDataProvider(path, {"header_names": True, "timezone": "UTC", "data_cells": "a5:c6"});
+        assertEq(({"Sku": "C-3", "Qty": 7.0, "Note": "z"}, {"Sku": "D-4", "Qty": 8.0, "Note": 8.0}),
+            (map $1, dp.searchRecords()));
+    }
+
+    testLargeDocument() {
+        # a table with 200000 rows is read with a JVM heap far smaller than the document loaded in memory needs;
+        # a child process has its own JVM with a 64 MB heap
+        string path = test_data_dir + "/large.ods";
+        on_exit unlink(path);
+        OdsTestHelper::createLargeOds(path, LargeRows);
+
+        string src = sprintf("%%modern
+%%prepend-module-path \"%s/../qlib\"
+%%requires DataProvider
+%%requires json
+%%requires OdsDataProvider
+
+OdsReadDataProvider dp({\"path\": ARGV[0], \"header_names\": True, \"timezone\": \"UTC\"});
+AbstractDataProviderRecordIterator i = dp.searchRecords();
+int count = 0;
+int mismatches = 0;
+int repeated = 0;
+int rows = ARGV[1].toInt();
+while (i.next()) {
+    hash<auto> r = i.getValue();
+    ++count;
+    if (count > rows) {
+        # the rows of the repeated row element at the end
+        if (r == {\"Id\": -1.0, \"Name\": \"repeated\", \"Amount\": 0.5, \"When\": 2025-06-30T12:00:00Z,
+            \"Flag\": False}) {
+            ++repeated;
+        }
+        continue;
+    }
+    if (keys r != (\"Id\", \"Name\", \"Amount\", \"When\", \"Flag\") || r.Id != count.toFloat()
+        || r.Name != (\"name-\" + count) || r.Amount != (count / 4.0)
+        || r.When != (2025-01-01T00:00:00Z + seconds(count)) || r.Flag != (count %% 2 == 0)) {
+        ++mismatches;
+    }
+}
+printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatches, \"repeated\": repeated}));
+", get_script_dir() == "." ? getcwd() : get_script_dir());
+        hash<auto> result = runChild(src, path, LargeRows.toString());
+        assertEq(LargeRows + 3, result.count);
+        assertEq(0, result.mismatches);
+        assertEq(3, result.repeated);
+    }
+
+    testEarlyClose() {
+        string path = test_data_dir + "/early-close.ods";
+        on_exit unlink(path);
+        OdsTestHelper::createLargeOds(path, 20000);
+        binary data = ReadOnlyFile::readBinaryFile(path);
+
+        # a complete iteration first, so that later file counts do not include the JVM's class files
+        {
+            OdsIterator it(new BinaryInputStream(data), "");
+            it.setHeaderCells("-", 1, "-", 1);
+            int count = 0;
+            while (it.next()) {
+                ++count;
+            }
+            assertEq(20003, count);
+            it.close();
+        }
+        list<string> temp_files = getTempFiles("qore-ods-");
+        int open_files = countOpenFiles();
+
+        OdsIterator it(new BinaryInputStream(data), "");
+        it.setHeaderCells("-", 1, "-", 1);
+        for (int i = 1; i <= 10; ++i) {
+            assertTrue(it.next());
+            assertEq(i.toFloat(), it.getValue().Id);
+        }
+        # the document is open while the iteration is in progress; its temporary copy is already deleted
+        assertGt(open_files, countOpenFiles());
+        assertEq(temp_files, getTempFiles("qore-ods-"));
+
+        # closing the iterator in the middle of the table releases the document
+        it.close();
+        assertEq(open_files, countOpenFiles());
+        assertEq(temp_files, getTempFiles("qore-ods-"));
+        assertThrows("JNI-ERROR", "the ODS iterator is closed", \it.next());
+    }
+
+    #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints
+    private hash<auto> runChild(string src, string arg1, string arg2) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(src);
+        tmp.file.close();
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "QORE_JNI_MAX_HEAP_SIZE=%s %s --enable-debug %s %s %s 2>&1; echo CHILD_EXIT=$?", ChildHeap,
+            shellQuote(qoreBin()), shellQuote(tmp.path), shellQuote(arg1), shellQuote(arg2));
+        string output = trim(backquote(cmd));
+        *string result = (output =~ x/^RESULT:(.*)$/m)[0];
+        if (!result) {
+            fail(sprintf("child process did not complete: %s", output));
+        }
+        assertRegex("CHILD_EXIT=0$", output);
+        return parse_json(result);
+    }
+
+    #! Returns the number of open files of this process
+    private static int countOpenFiles() {
+        Dir dir();
+        if (!dir.chdir("/dev/fd")) {
+            throw "TEST-ERROR", "/dev/fd is not available";
+        }
+        return dir.list().size();
+    }
+
+    #! Returns the files with the given prefix in the JVM's temporary directory
+    private static list<string> getTempFiles(string prefix) {
+        Dir dir();
+        dir.chdir(System::getProperty("java.io.tmpdir"));
+        return sort(dir.list("^" + prefix) ?? ());
+    }
+
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
     }
 }

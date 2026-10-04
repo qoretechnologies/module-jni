@@ -229,6 +229,10 @@ module ExcelDataProvider {
     through the @ref dataproviderintro "DataProvider" API. It supports both modern Excel formats (.xlsx,
     Excel 2007+) and legacy formats (.xls, Excel 97-2003).
 
+    Records are read from an .xlsx worksheet one row at a time as they are iterated, so worksheets of any size, up
+    to Excel's limit of 1048576 rows, are read in bounded memory; only the workbook's shared string table is held
+    in memory.  An .xls workbook, whose format holds at most 65536 rows, is loaded in memory.
+
     The following classes are provided by this module:
     - @ref ExcelDataProvider::ExcelReadDataProvider "ExcelReadDataProvider" - for reading Excel files
     - @ref ExcelDataProvider::ExcelReadDataProviderFactory "ExcelReadDataProviderFactory" - factory for read providers
@@ -370,6 +374,8 @@ module ExcelDataProvider {
     - added @ref ExcelDataProvider::ExcelProfileDataProvider "ExcelProfileDataProvider" and the \c profile
       application action, which describe the layout and column types of every sheet, including hidden sheets,
       named ranges, merged cells, and formulas
+    - records are read from .xlsx worksheets one row at a time, so worksheets with millions of rows are read in
+      bounded memory instead of loading the workbook in memory
     - updated copyright to 2026
 
     @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0

@@ -74,7 +74,9 @@
       require DataProvider 3.9 or later.
     - <b>Existing provider enhancements:</b> @ref kafkadataproviderintro "KafkaDataProvider" supports
       record headers and producer requests without keys. @ref exceldataproviderintro "ExcelDataProvider"
-      and @ref odsdataproviderintro "OdsDataProvider" add the \c ignore_empty read option to skip empty rows.
+      and @ref odsdataproviderintro "OdsDataProvider" add the \c ignore_empty read option to skip empty rows,
+      and read records one row at a time, so .xlsx and ODS sheets with millions of rows are read in bounded
+      memory instead of loading the whole workbook.
 
     @subsubsection jni_3_0_0_columnar Columnar JDBC Results
 
