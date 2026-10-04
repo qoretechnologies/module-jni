@@ -29,6 +29,39 @@
     @note the initial \c jdbc: in the \c db value is optional; if missing, it is added automatically by the %Qore
     \c jdbc driver when the internal URL string is passed to the internal Java JDBC call.
 
+    @section jdbc_capabilities JDBC Driver Capabilities
+
+    These capabilities describe what the JDBC driver can do. They are feature flags, not switches
+    that enable or disable behavior. Use @ref Qore::SQL::Datasource::getCapabilities() "Datasource::getCapabilities()" to inspect the loaded driver;
+    @ref Qore::SQL::Datasource::getCapabilityList() "Datasource::getCapabilityList()" returns readable names for the same flags.
+    The connected database and client driver must also support the requested operation.
+    For configurable settings and their accepted values, see @ref jdbc_driver_options.
+
+    |!Feature|!What it means|!Capability flag
+    |Transactions|Group changes into a transaction and finish it with @ref Qore::SQL::Datasource::commit() "Datasource::commit()" or undo it with @ref Qore::SQL::Datasource::rollback() "Datasource::rollback()".|@ref Qore::SQL::DBI_CAP_TRANSACTION_MANAGEMENT "DBI_CAP_TRANSACTION_MANAGEMENT"
+    |Character encoding|Convert text between Qore strings and the database connection encoding when sending and receiving values.|@ref Qore::SQL::DBI_CAP_CHARSET_SUPPORT "DBI_CAP_CHARSET_SUPPORT"
+    |Large text and binary values|Read and bind large text and binary database values as Qore strings and binary values.|@ref Qore::SQL::DBI_CAP_LOB_SUPPORT "DBI_CAP_LOB_SUPPORT"
+    |Stored procedures|Execute database procedures through the DBI; procedure syntax and returned values depend on the server.|@ref Qore::SQL::DBI_CAP_STORED_PROCEDURES "DBI_CAP_STORED_PROCEDURES"
+    |Input parameters|Pass values separately from SQL with \c %v placeholders, so values do not become SQL syntax. See @ref Qore::SQL::Datasource::exec() "Datasource::exec()".|@ref Qore::SQL::DBI_CAP_BIND_BY_VALUE "DBI_CAP_BIND_BY_VALUE"
+    |Literal SQL execution|Use @ref Qore::SQL::Datasource::execRaw() "Datasource::execRaw()" to send SQL without Qore placeholder parsing. Values must already be safely represented in the SQL.|@ref Qore::SQL::DBI_CAP_HAS_EXECRAW "DBI_CAP_HAS_EXECRAW"
+    |Prepared statements|Prepare SQL once, bind parameters, and fetch results through @ref Qore::SQL::SQLStatement "SQLStatement".|@ref Qore::SQL::DBI_CAP_HAS_STATEMENT "DBI_CAP_HAS_STATEMENT"
+    |Single-row queries|Provide a native implementation of @ref Qore::SQL::Datasource::selectRow() "Datasource::selectRow()" for queries expected to return at most one row.|@ref Qore::SQL::DBI_CAP_HAS_SELECT_ROW "DBI_CAP_HAS_SELECT_ROW"
+    |Arbitrary-precision numbers|Bind and retrieve decimal values using Qore arbitrary-precision numbers; database precision and configured number conversion still apply.|@ref Qore::SQL::DBI_CAP_HAS_NUMBER_SUPPORT "DBI_CAP_HAS_NUMBER_SUPPORT"
+    |Time zone conversion|Handle time zones when converting date/time values; the database type determines whether a zone is stored.|@ref Qore::SQL::DBI_CAP_TIME_ZONE_SUPPORT "DBI_CAP_TIME_ZONE_SUPPORT"
+    |Server time zone interpretation|Interpret date/time values using the datasource server time zone. This controls value conversion and does not change the database server configuration.|@ref Qore::SQL::DBI_CAP_SERVER_TIME_ZONE "DBI_CAP_SERVER_TIME_ZONE"
+    |Connection recovery|Reconnect a lost connection outside an active transaction. A lost transaction is reported to the caller; uncommitted work cannot be recovered.|@ref Qore::SQL::DBI_CAP_AUTORECONNECT "DBI_CAP_AUTORECONNECT"
+    |Driver options|Read and change supported driver settings with @ref Qore::SQL::Datasource::getOption() "Datasource::getOption()" and @ref Qore::SQL::Datasource::setOption() "Datasource::setOption()". See @ref jdbc_driver_options.|@ref Qore::SQL::DBI_CAP_HAS_OPTION_SUPPORT "DBI_CAP_HAS_OPTION_SUPPORT"
+    |Native columnar results|Return columns suitable for analytical processing through @ref Qore::SQL::Datasource::selectColumnar() "Datasource::selectColumnar()" and @ref Qore::SQL::SQLStatement::fetchColumnar() "SQLStatement::fetchColumnar()" when built with columnar Qore APIs.|@ref Qore::SQL::DBI_CAP_HAS_COLUMNAR_SELECT "DBI_CAP_HAS_COLUMNAR_SELECT"
+
+    Native typed and columnar flags indicate optimized driver implementations. When those flags are absent,
+    Qore versions providing these APIs can use their compatibility conversion paths; applications should
+    check the running Qore version as well as the driver capabilities.
+
+    Statement result metadata is available through @ref Qore::SQL::SQLStatement::describe() "SQLStatement::describe()". This is separate from
+    datasource-level @ref Qore::SQL::Datasource::describe() "Datasource::describe()" and its @ref Qore::SQL::DBI_CAP_HAS_DESCRIBE "DBI_CAP_HAS_DESCRIBE" flag.
+
+    See @ref jdbc_columnar_results for supported columnar types and examples.
+
     @section jdbc_transaction_boundaries JDBC Transaction Boundaries
 
     Ordinary selects outside a transaction use JDBC auto-commit mode, so a connection returned to a
