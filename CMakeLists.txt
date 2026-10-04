@@ -329,6 +329,7 @@ set(EXCEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/SheetSource.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/WorkbookSheetSource.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/XlsxSheetSource.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelFile.java
 )
 
 # Each data provider jar uses its own output subdirectory (-d jar-<name>) so that the shared
@@ -565,6 +566,7 @@ set(ODS_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsTestHelper.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsSheetReader.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsCell.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsFile.java
 )
 
 add_custom_command(

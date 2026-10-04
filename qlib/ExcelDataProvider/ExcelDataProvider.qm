@@ -50,6 +50,7 @@
 %module-cmd(jni) add-relative-classpath ./jar/SparseBitSet-1.3.jar
 
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelIterator
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelFile
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelGridReader
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelWriter
 
@@ -231,7 +232,9 @@ module ExcelDataProvider {
 
     Records are read from an .xlsx worksheet one row at a time as they are iterated, so worksheets of any size, up
     to Excel's limit of 1048576 rows, are read in bounded memory; only the workbook's shared string table is held
-    in memory.  An .xls workbook, whose format holds at most 65536 rows, is loaded in memory.
+    in memory.  An .xls workbook, whose format holds at most 65536 rows, is loaded in memory.  The input (a location,
+    a stream, or binary data) is copied once to a temporary file, in bounded memory, which is read for the record
+    type, the records, the worksheet names, and the worksheet providers, and deleted with the last provider using it.
 
     The following classes are provided by this module:
     - @ref ExcelDataProvider::ExcelReadDataProvider "ExcelReadDataProvider" - for reading Excel files
@@ -379,6 +382,7 @@ module ExcelDataProvider {
       to its last cell with a value
     - records are read from .xlsx worksheets one row at a time, so worksheets with millions of rows are read in
       bounded memory instead of loading the workbook in memory
+    - the input of the read data provider is copied to a temporary file instead of being read into memory
     - updated copyright to 2026
 
     @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0

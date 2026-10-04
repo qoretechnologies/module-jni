@@ -141,6 +141,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("read: currency and percentage cells are numbers", \testNumberFormats());
         addTestCase("read: date and time cells across daylight saving time changes", \testDaylightSaving());
         addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
+        addTestCase("read: the input is copied to a file once and deleted with the providers", \testWorkbookFile());
         set_return_value(main());
     }
 
@@ -1297,6 +1298,41 @@ printf(\"RESULT:%%s\\n\", make_json(rv));
         dp = new OdsReadDataProvider(path, {"data_cells": "c6", "ignore_empty": True});
         assertEq(({"A6": 8.0}, {"A8": "a   b\tc\nd", "B8": 2025-03-08T00:00:00}),
             (map $1, dp.searchRecords()));
+    }
+
+    testWorkbookFile() {
+        string path = test_data_dir + "/workbook-file.ods";
+        on_exit unlink(path);
+        OdsTestHelper::createMultiSheetOds(path);
+        list<string> temp_files = getTempFiles("qore-odsfile-");
+
+        # the input stream is copied to a temporary file on first use, not read into memory
+        OdsReadDataProvider dp(new FileInputStream(path), {"header_names": True});
+        assertEq(temp_files, getTempFiles("qore-odsfile-"), "nothing is copied before the workbook is used");
+        list<string> sheets = dp.getChildProviderNames();
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-odsfile-"), "the input is copied once");
+        int records = elements (map $1, dp.searchRecords());
+        assertGt(0, records);
+
+        # a worksheet provider uses the same file, which is kept until the last provider using it is destroyed
+        AbstractDataProvider ws = dp.getChildProviderEx(sheets[0]);
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-odsfile-"),
+            "worksheet providers use the same file");
+        delete dp;
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-odsfile-"),
+            "the worksheet provider keeps the file");
+        assertEq(records, elements (map $1, ws.searchRecords()));
+        delete ws;
+        assertEq(temp_files, getTempFiles("qore-odsfile-"), "the file is deleted with the last provider");
+
+        # a provider given a path and data in the options works the same way
+        foreach hash<auto> opts in ({"path": path}, {"data": ReadOnlyFile::readBinaryFile(path)}) {
+            dp = new OdsReadDataProvider(opts + {"header_names": True});
+            assertEq(sheets, dp.getChildProviderNames(), (keys opts)[0]);
+            assertEq(records, elements (map $1, dp.searchRecords()), (keys opts)[0]);
+            delete dp;
+            assertEq(temp_files, getTempFiles("qore-odsfile-"), (keys opts)[0]);
+        }
     }
 
     #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints

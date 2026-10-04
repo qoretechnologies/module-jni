@@ -41,6 +41,9 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
         #! the iterator object
         ExcelIterator i;
 
+        #! the workbook file of the parent provider, if the provider was created from it
+        *ExcelFile file;
+
         #! the name of the object
         string name;
 
@@ -72,6 +75,25 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
     constructor(string path, string name, string sheet, *hash<auto> opts) {
         self.i = new ExcelIterator(FileLocationHandler::getBinaryStreamFromLocation(path), sheet);
         setup(name, sheet, opts);
+    }
+
+    #! Creates the ExcelWorksheetReadDataProvider with the workbook file of a parent provider
+    /** @param file the workbook file; it is retained until this object is destroyed
+        @param name the name of the object
+        @param sheet the name of the current worksheet
+        @param opts a hash of optional options, must be already processed for validity
+    */
+    constructor(ExcelFile file, string name, string sheet, *hash<auto> opts) {
+        self.i = new ExcelIterator(file.getPath(), sheet);
+        self.file = file.retain();
+        setup(name, sheet, opts);
+    }
+
+    #! Releases the workbook file of the parent provider, if any
+    destructor() {
+        if (file) {
+            file.close();
+        }
     }
 
     #! Creates the object from constructor options

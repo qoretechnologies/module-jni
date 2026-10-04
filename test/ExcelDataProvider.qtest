@@ -127,6 +127,7 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("read: a large workbook is read in bounded memory", \testLargeWorkbook());
         addTestCase("read: closing an iteration early releases the workbook", \testEarlyClose());
         addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
+        addTestCase("read: the input is copied to a file once and deleted with the providers", \testWorkbookFile());
         set_return_value(main());
     }
 
@@ -1287,6 +1288,41 @@ printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatche
         w.commit();
         dp = new ExcelReadDataProvider(xls, {"data_cells": "b2"});
         assertEq(({"A2": 5.0, "B2": "x"}, {"A3": 7.0}), (map $1, dp.searchRecords()));
+    }
+
+    testWorkbookFile() {
+        string path = test_data_dir + "/workbook-file.xlsx";
+        on_exit unlink(path);
+        ExcelTestHelper::createMultiSheetExcel(path);
+        list<string> temp_files = getTempFiles("qore-excelfile-");
+
+        # the input stream is copied to a temporary file on first use, not read into memory
+        ExcelReadDataProvider dp(new FileInputStream(path), {"header_names": True});
+        assertEq(temp_files, getTempFiles("qore-excelfile-"), "nothing is copied before the workbook is used");
+        list<string> sheets = dp.getChildProviderNames();
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-excelfile-"), "the input is copied once");
+        int records = elements (map $1, dp.searchRecords());
+        assertGt(0, records);
+
+        # a worksheet provider uses the same file, which is kept until the last provider using it is destroyed
+        AbstractDataProvider ws = dp.getChildProviderEx(sheets[0]);
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-excelfile-"),
+            "worksheet providers use the same file");
+        delete dp;
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-excelfile-"),
+            "the worksheet provider keeps the file");
+        assertEq(records, elements (map $1, ws.searchRecords()));
+        delete ws;
+        assertEq(temp_files, getTempFiles("qore-excelfile-"), "the file is deleted with the last provider");
+
+        # a provider given a path and data in the options works the same way
+        foreach hash<auto> opts in ({"path": path}, {"data": ReadOnlyFile::readBinaryFile(path)}) {
+            dp = new ExcelReadDataProvider(opts + {"header_names": True});
+            assertEq(sheets, dp.getChildProviderNames(), (keys opts)[0]);
+            assertEq(records, elements (map $1, dp.searchRecords()), (keys opts)[0]);
+            delete dp;
+            assertEq(temp_files, getTempFiles("qore-excelfile-"), (keys opts)[0]);
+        }
     }
 
     #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints

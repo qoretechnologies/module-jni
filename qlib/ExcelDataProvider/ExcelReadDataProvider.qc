@@ -148,19 +148,20 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     private {
-        #! The number of bytes requested with each read from an input stream
-        const ReadChunkSize = 64 * 1024;
-
-        #! The input stream for the Excel data; read once on first use, then released
+        #! The input stream for the Excel data; copied to a temporary file on first use, then released
         *InputStream i;
 
-        #! The workbook data, buffered on first use
-        /** The workbook is opened once for each use (record type and records, worksheet names, worksheet providers),
-            and an input stream can only be read once, so its contents are kept here
-        */
+        #! The Excel data given with the \c data option; copied to a temporary file on first use, then released
         *binary data;
 
-        #! Serializes buffering the input stream on first use
+        #! The Excel data in a temporary file, created on first use
+        /** The workbook is opened once for each use (record type and records, worksheet names, worksheet providers),
+            and an input stream can only be read once, so it is copied to a file, in bounded memory, and opened from
+            there
+        */
+        *ExcelFile file;
+
+        #! Serializes copying the input on first use
         Mutex data_lock();
 
         #! the iterator object
@@ -351,33 +352,27 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         return rv;
     }
 
-    #! Returns the workbook data, reading the input stream on first use
-    /** The input stream is read once and released; every later use of the workbook opens a new stream on the
-        buffered data, so the record type, the records, the worksheet names, and the worksheet providers can be
-        acquired in any order
+    #! Returns the workbook file, copying the input to it on first use
+    /** The input is copied once and released; every later use of the workbook opens the file, so the record type,
+        the records, the worksheet names, and the worksheet providers can be acquired in any order
 
-        @return the workbook data
+        @return the workbook file
     */
-    private binary getWorkbookData() {
+    private ExcelFile getWorkbookFile() {
         AutoLock al(data_lock);
-        if (!exists data) {
-            data = ExcelReadDataProvider::readAll(i);
+        if (!file) {
+            file = new ExcelFile(exists data ? new BinaryInputStream(data) : i);
             remove i;
+            remove data;
         }
-        return data;
+        return file;
     }
 
-    #! Reads all remaining data from the given input stream
-    /** @param stream the stream to read
-
-        @return all remaining data in the stream; an empty binary if the stream is at its end
-    */
-    private static binary readAll(InputStream stream) {
-        binary rv = binary();
-        while (*binary chunk = stream.read(ReadChunkSize)) {
-            rv += chunk;
+    #! Deletes the workbook file once the worksheet providers using it are also destroyed
+    destructor() {
+        if (file) {
+            file.close();
         }
-        return rv;
     }
 
     #! Common setup code
@@ -385,7 +380,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (it) {
             return;
         }
-        it = new ExcelIterator(new BinaryInputStream(getWorkbookData()), sheet);
+        it = new ExcelIterator(getWorkbookFile().getPath(), sheet);
         ExcelReadDataProvider::configureIterator(it, opts);
     }
 
@@ -446,7 +441,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (dummy) {
             return;
         }
-        return ExcelIterator::getWorksheets(new BinaryInputStream(getWorkbookData()));
+        return ExcelIterator::getWorksheets(getWorkbookFile().getPath());
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
@@ -455,7 +450,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
     private *AbstractDataProvider getChildProviderImpl(string child_name) {
         *hash<string, bool> sheets = map {$1: True}, getChildProviderNamesImpl();
         if (sheets{child_name}) {
-            return new ExcelWorksheetReadDataProvider(new BinaryInputStream(getWorkbookData()), name, child_name,
+            return new ExcelWorksheetReadDataProvider(getWorkbookFile(), name, child_name,
                 opts);
         }
     }
