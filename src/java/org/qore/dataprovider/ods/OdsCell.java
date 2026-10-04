@@ -30,9 +30,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.Calendar;
-import java.util.GregorianCalendar;
 
 /**
  * A cell of an ODF spreadsheet table read from content.xml.
@@ -199,13 +198,40 @@ final class OdsCell {
     }
 
     /**
-     * Returns the date of a date cell in the JVM's default zone, as OdfTableCell.getDateValue() does; null if the
-     * date is not set or invalid
+     * Returns the date and time of a date cell as its clock time in the given zone, or null if the cell has no valid
+     * office:date-value
+     *
+     * The value has no zone in the file (as Excel's date cells have none): it is that clock time in the reader's
+     * zone.  A date without a time is midnight.  A clock time that does not exist in the zone, because it falls in
+     * a gap when clocks are put forward, is resolved as java.time resolves it: moved later by the length of the gap
+     * (02:30 on the day clocks go from 02:00 to 03:00 is 03:30); a clock time that occurs twice, when clocks are put
+     * back, is the earlier of the two.
      */
-    Calendar getDateValue() {
+    ZonedDateTime getDateValue(ZoneId zone) {
         if (!"date".equals(value_type)) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException(String.format("a cell with value type %s has no date", value_type));
         }
+        return toDateTime(date_value, zone);
+    }
+
+    /**
+     * Returns the time of a time cell as its clock time in the given zone, or null if the cell has no valid
+     * office:time-value
+     *
+     * A time cell is a duration (such as PT13H45M) without a date; as Excel's time cells, it is that duration after
+     * midnight on Excel's day zero, 1899-12-31, so a duration of more than 24 hours moves to the following days.
+     */
+    ZonedDateTime getTimeValue(ZoneId zone) {
+        if (!"time".equals(value_type)) {
+            throw new IllegalArgumentException(String.format("a cell with value type %s has no time", value_type));
+        }
+        return toTime(time_value, zone);
+    }
+
+    /**
+     * Returns the date and time of an office:date-value in the given zone, or null if it is missing or invalid
+     */
+    static ZonedDateTime toDateTime(String date_value, ZoneId zone) {
         if (date_value == null) {
             return null;
         }
@@ -219,20 +245,25 @@ final class OdsCell {
         } catch (DateTimeParseException e) {
             return null;
         }
-        return GregorianCalendar.from(datetime.atZone(ZoneId.systemDefault()));
+        return ZonedDateTime.of(datetime, zone);
     }
 
     /**
-     * Returns the duration of a time cell from the epoch, as OdfTableCell.getTimeValue() does: a calendar in the
-     * JVM's default zone at that instant
+     * Returns the time of an office:time-value in the given zone, or null if it is missing or invalid
      */
-    Calendar getTimeValue() {
-        if (!"time".equals(value_type)) {
-            throw new IllegalArgumentException();
+    static ZonedDateTime toTime(String time_value, ZoneId zone) {
+        if (time_value == null) {
+            return null;
         }
-        Duration duration = Duration.parse(time_value);
-        Calendar calendar = Calendar.getInstance();
-        calendar.setTimeInMillis(duration.toMillis());
-        return calendar;
+        Duration duration;
+        try {
+            duration = Duration.parse(time_value);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+        return ZonedDateTime.of(TIME_BASE.plus(duration), zone);
     }
+
+    // the date of time cells: Excel's day zero, which is the date of its time cells
+    private static final LocalDateTime TIME_BASE = LocalDateTime.of(1899, 12, 31, 0, 0);
 }

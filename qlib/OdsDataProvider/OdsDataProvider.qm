@@ -290,6 +290,13 @@ module OdsDataProvider {
     fraction, such as \c 0.25 for 25%), boolean cells as booleans, date and time cells as dates, and other cells as
     their text.
 
+    Date cells have no time zone in the file: a date cell is its clock time in the zone given with the \c timezone
+    option (the local zone by default), whatever the zone of the JVM.  A clock time that does not exist in that zone,
+    because clocks are put forward then, is moved later by the length of the gap (02:30 on the day clocks go from
+    02:00 to 03:00 is 03:30); a clock time that occurs twice, when clocks are put back, is the earlier one.  A time
+    cell is its clock time on 1899-12-31, the date that Excel time cells are read with; a time over 24 hours
+    continues on the following days.
+
     The following classes are provided by this module:
     - @ref OdsDataProvider::OdsReadDataProvider "OdsReadDataProvider" - for reading ODS files
     - @ref OdsDataProvider::OdsReadDataProviderFactory "OdsReadDataProviderFactory" - factory for read providers

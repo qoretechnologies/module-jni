@@ -139,6 +139,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("read: a large document is read in bounded memory", \testLargeDocument());
         addTestCase("read: closing an iteration early releases the document", \testEarlyClose());
         addTestCase("read: currency and percentage cells are numbers", \testNumberFormats());
+        addTestCase("read: date and time cells across daylight saving time changes", \testDaylightSaving());
         set_return_value(main());
     }
 
@@ -1210,13 +1211,79 @@ printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatche
         assertEq(("C", NOTHING, 0.0), grid.sheets[0].rows[3]);
     }
 
+    testDaylightSaving() {
+        string path = test_data_dir + "/daylight-saving.ods";
+        OdsTestHelper::createDaylightSavingOds(path);
+
+        # a date and time is its clock time in the reader's zone; a clock time in a gap of the reader's zone is moved
+        # later by the length of the gap, and one that occurs twice is the earlier one, as java.time resolves them;
+        # a time is its clock time on Excel's day zero, 1899-12-31, as for Excel
+        hash<string, hash<string, string>> expected = {
+            "Europe/Prague": {
+                "prague-gap": "2025-03-30 03:30:00.000 +02:00",
+                "ny-gap": "2025-03-09 02:30:00.000 +01:00",
+                "prague-overlap": "2025-10-26 02:30:00.000 +02:00",
+                "date-only": "2025-03-30 00:00:00.000 +01:00",
+            },
+            "America/New_York": {
+                "prague-gap": "2025-03-30 02:30:00.000 -04:00",
+                "ny-gap": "2025-03-09 03:30:00.000 -04:00",
+                "prague-overlap": "2025-10-26 02:30:00.000 -04:00",
+                "date-only": "2025-03-30 00:00:00.000 -04:00",
+            },
+        };
+        hash<string, string> times = {
+            "prague-gap": "1899-12-31 13:45:00.000",
+            "ny-gap": "1900-01-01 12:00:00.000",
+            "prague-overlap": "1899-12-31 00:00:00.000",
+            "date-only": "1899-12-31 23:59:59.500",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            OdsReadDataProvider dp(path, {"header_names": True, "timezone": i.key});
+            hash<string, string> when;
+            hash<string, string> time;
+            foreach hash<auto> r in (dp.searchRecords()) {
+                when{r.Event} = r.When.format("YYYY-MM-DD HH:mm:SS.ms Z");
+                time{r.Event} = r.Time.format("YYYY-MM-DD HH:mm:SS.ms");
+            }
+            assertEq(i.value, when, i.key);
+            assertEq(times, time, i.key);
+        }
+
+        # the JVM's own zone does not change the clock times: a child process has a JVM in America/New_York and
+        # reads the file in Europe/Prague
+        string src = sprintf("%%modern
+%%prepend-module-path \"%s/../qlib\"
+%%requires DataProvider
+%%requires json
+%%requires OdsDataProvider
+
+OdsReadDataProvider dp({\"path\": ARGV[0], \"header_names\": True, \"timezone\": \"Europe/Prague\"});
+hash<string, string> rv;
+foreach hash<auto> r in (dp.searchRecords()) {
+    rv{r.Event} = r.When.format(\"YYYY-MM-DD HH:mm:SS.ms Z\") + \" \" + r.Time.format(\"YYYY-MM-DD HH:mm:SS.ms\");
+}
+printf(\"RESULT:%%s\\n\", make_json(rv));
+", get_script_dir() == "." ? getcwd() : get_script_dir());
+        hash<auto> result = runChild(src, path, "-", "TZ=America/New_York");
+        assertEq((map {$1.key: $1.value + " " + times{$1.key}}, expected."Europe/Prague".pairIterator()), result);
+
+        # the profiler reads date and time cells as the record reader does, in the JVM's zone
+        hash<TabularWorkbookGrid> grid = OdsProfileDataProvider::readWorkbookGrid(ReadOnlyFile::readBinaryFile(path),
+            10);
+        assertEq("2025-03-30 00:00:00", grid.sheets[0].rows[4][1].format("YYYY-MM-DD HH:mm:SS"),
+            "a date in the profile");
+        assertEq("1899-12-31 13:45:00", grid.sheets[0].rows[1][2].format("YYYY-MM-DD HH:mm:SS"),
+            "a time in the profile");
+    }
+
     #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints
-    private hash<auto> runChild(string src, string arg1, string arg2) {
+    private hash<auto> runChild(string src, string arg1, string arg2, string env = "") {
         TmpFile tmp(NOTHING, ".qr");
         tmp.file.write(src);
         tmp.file.close();
         string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
-            "QORE_JNI_MAX_HEAP_SIZE=%s %s --enable-debug %s %s %s 2>&1; echo CHILD_EXIT=$?", ChildHeap,
+            "QORE_JNI_MAX_HEAP_SIZE=%s %s %s --enable-debug %s %s %s 2>&1; echo CHILD_EXIT=$?", ChildHeap, env,
             shellQuote(qoreBin()), shellQuote(tmp.path), shellQuote(arg1), shellQuote(arg2));
         string output = trim(backquote(cmd));
         *string result = (output =~ x/^RESULT:(.*)$/m)[0];

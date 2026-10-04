@@ -183,8 +183,8 @@ public class OdsTestHelper {
 
             table.getCellByPosition(0, 1).setLocalDateValue(java.time.LocalDate.of(2025, 1, 15));
             table.getCellByPosition(1, 1).setLocalDateTimeValue(java.time.LocalDateTime.of(2025, 7, 1, 14, 30, 5));
-            GregorianCalendar time = new GregorianCalendar(1970, Calendar.JANUARY, 1, 9, 45, 0);
-            table.getCellByPosition(2, 1).setTimeValue(time);
+            // a calendar would be written as its duration from the epoch in UTC, which depends on the JVM's zone
+            table.getCellByPosition(2, 1).setDurationValue(java.time.Duration.ofHours(9).plusMinutes(45));
 
             doc.save(path);
         }
@@ -645,5 +645,35 @@ public class OdsTestHelper {
     private static String percentage(String value, String display) {
         return "<table:table-cell office:value-type=\"percentage\" office:value=\"" + value + "\"><text:p>" + display
             + "</text:p></table:table-cell>";
+    }
+
+    /**
+     * Creates an ODS document with date and time cells around changes of daylight saving time.
+     *
+     * The table "Clock" has the columns Event, When (date cells), and Time (time cells):
+     * - prague-gap: 2025-03-30T02:30:00, in the gap when clocks in Europe/Prague go from 02:00 to 03:00; PT13H45M
+     * - ny-gap: 2025-03-09T02:30:00, in the gap when clocks in America/New_York go from 02:00 to 03:00; PT36H
+     * - prague-overlap: 2025-10-26T02:30:00, which occurs twice in Europe/Prague; PT0S
+     * - date-only: 2025-03-30; PT23H59M59.5S
+     *
+     * @param path The path to create the file at
+     */
+    public static void createDaylightSavingOds(String path) throws IOException {
+        writeOds(path, out -> {
+            out.write("<table:table table:name=\"Clock\">"
+                + "<table:table-column table:number-columns-repeated=\"3\"/>"
+                + "<table:table-row>" + str("Event") + str("When") + str("Time") + "</table:table-row>"
+                + clockRow("prague-gap", "2025-03-30T02:30:00", "PT13H45M")
+                + clockRow("ny-gap", "2025-03-09T02:30:00", "PT36H")
+                + clockRow("prague-overlap", "2025-10-26T02:30:00", "PT0S")
+                + clockRow("date-only", "2025-03-30", "PT23H59M59.5S")
+                + "</table:table>");
+        });
+    }
+
+    private static String clockRow(String event, String date_value, String time_value) {
+        return "<table:table-row>" + str(event) + day(date_value)
+            + "<table:table-cell office:value-type=\"time\" office:time-value=\"" + time_value + "\"><text:p>"
+            + time_value + "</text:p></table:table-cell></table:table-row>";
     }
 }

@@ -37,7 +37,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -330,14 +329,11 @@ public class OdsGridReader {
                 return cell.getOdfElement().getOfficeValueAttribute();
             case "boolean":
                 return cell.getBooleanValue();
-            case "date": {
-                Calendar cal = cell.getDateValue();
-                return cal == null ? null : ZonedDateTime.ofInstant(cal.toInstant(), zone);
-            }
-            case "time": {
-                Calendar cal = cell.getTimeValue();
-                return cal == null ? null : ZonedDateTime.ofInstant(cal.toInstant(), zone);
-            }
+            case "date":
+                // the clock time written in the file, as the record reader reads it
+                return OdsCell.toDateTime(cell.getOdfElement().getOfficeDateValueAttribute(), zone);
+            case "time":
+                return OdsCell.toTime(cell.getOdfElement().getOfficeTimeValueAttribute(), zone);
             default:
                 return cell.getDisplayText();
         }

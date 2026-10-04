@@ -33,7 +33,6 @@ import java.time.ZonedDateTime;
 import java.time.ZoneId;
 import java.time.DateTimeException;
 import java.time.zone.ZoneRulesException;
-import java.util.Calendar;
 
 import org.qore.jni.Hash;
 import org.qore.jni.QoreException;
@@ -104,17 +103,6 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
      */
     public void setIgnoreEmpty(boolean ignore_empty) {
         this.ignore_empty = ignore_empty;
-    }
-
-    /**
-     * An ODS date or time cell is the clock time written in the file, without a zone (as Excel's cells
-     * are): it is that clock time in the reader's zone.  The cell's calendar holds the written fields in
-     * the JVM's default zone, so converting its instant to another zone would shift the time.
-     */
-    private ZonedDateTime wallClock(Calendar cal) {
-        return ZonedDateTime.of(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH),
-            cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), cal.get(Calendar.SECOND),
-            cal.get(Calendar.MILLISECOND) * 1000000, zone);
     }
 
     public void setZone(String zonestr) throws DateTimeException, ZoneRulesException {
@@ -437,30 +425,12 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             case "boolean":
                 return cell.getBooleanValue();
 
-            case "date": {
-                Calendar cal = cell.getDateValue();
-                if (cal != null) {
-                    try {
-                        return wallClock(cal);
-                    } catch (Exception e) {
-                        // Fall back to display text
-                        return cell.getDisplayText();
-                    }
-                }
-                return null;
-            }
+            case "date":
+                // the clock time written in the file, in the reader's zone
+                return cell.getDateValue(zone);
 
-            case "time": {
-                Calendar cal = cell.getTimeValue();
-                if (cal != null) {
-                    try {
-                        return wallClock(cal);
-                    } catch (Exception e) {
-                        return cell.getDisplayText();
-                    }
-                }
-                return null;
-            }
+            case "time":
+                return cell.getTimeValue(zone);
 
             default:
                 break;
