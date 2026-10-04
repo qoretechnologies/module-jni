@@ -370,6 +370,12 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         int end_cell = -1;
         if (!end_column.equals("-")) {
             end_cell = CellReference.convertColStringToIndex(end_column);
+        } else if (!auto_detect_data && headers.isEmpty()) {
+            // a data range without an end column and without headers ends at the last cell with a value in the row
+            end_cell = getLastValueColumn(row, cell_no);
+            if (end_cell == -1) {
+                return null;
+            }
         }
         int col_no = 0;
         boolean found_data = false;
@@ -420,6 +426,20 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
             return null;
         }
         return row_data;
+    }
+
+    /**
+     * Returns the last 0-based column from the given column with a cell with a value in the row, or -1 if there is
+     * none
+     */
+    private int getLastValueColumn(SheetSource.Row row, int first_col) {
+        for (int col = row.getLastCellNum() - 1; col >= first_col; --col) {
+            SheetSource.Cell cell = row.getCell(col);
+            if (cell != null && cellToValue(cell) != null) {
+                return col;
+            }
+        }
+        return -1;
     }
 
     private Object cellToValue(SheetSource.Cell cell) {

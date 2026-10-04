@@ -126,6 +126,7 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("read: cell encodings of a streamed worksheet", \testStreamedCellEncodings());
         addTestCase("read: a large workbook is read in bounded memory", \testLargeWorkbook());
         addTestCase("read: closing an iteration early releases the workbook", \testEarlyClose());
+        addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
         set_return_value(main());
     }
 
@@ -1256,6 +1257,36 @@ printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatche
         assertEq(open_files, countOpenFiles());
         assertEq(temp_files, getTempFiles("qore-xlsx-"));
         assertThrows("JNI-ERROR", "the Excel iterator is closed", \it.next());
+    }
+
+    testOpenDataRange() {
+        # without an end column and without headers, each row is read to its last cell with a value; reading such a
+        # range never ended before
+        ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", {"data_cells": "b2"});
+        assertEq((
+            {"A2": 30.0, "B2": "New York"},
+            {"A3": 25.0, "B3": "Los Angeles"},
+            {"A4": 35.0, "B4": "Chicago"},
+        ), (map $1, dp.searchRecords()));
+
+        # rows end at different columns; a row without a value from the start column is empty
+        string path = test_data_dir + "/streaming-features.xlsx";
+        ExcelTestHelper::createStreamingFeaturesExcel(path);
+        dp = new ExcelReadDataProvider(path, {"worksheet": "Sparse", "data_cells": "b1", "ignore_empty": True});
+        assertEq(({"A1": 2.0}, {"A2": NOTHING, "B2": 3.0, "C2": 4.0}), (map $1, dp.searchRecords()));
+        # without ignore_empty, reading stops at the first row without a value
+        dp = new ExcelReadDataProvider(path, {"worksheet": "Sparse", "data_cells": "c1"});
+        assertEq(0, elements (map $1, dp.searchRecords()));
+
+        # an .xls workbook
+        string xls = test_data_dir + "/open-range.xls";
+        on_exit unlink(xls);
+        ExcelWriteDataProvider w(xls, {"format": "xls"});
+        w.createRecord({"Sku": "A-1", "Qty": 5, "Note": "x"});
+        w.createRecord({"Sku": "B-2", "Qty": 7, "Note": NOTHING});
+        w.commit();
+        dp = new ExcelReadDataProvider(xls, {"data_cells": "b2"});
+        assertEq(({"A2": 5.0, "B2": "x"}, {"A3": 7.0}), (map $1, dp.searchRecords()));
     }
 
     #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints

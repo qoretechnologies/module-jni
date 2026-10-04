@@ -268,7 +268,8 @@ module ExcelDataProvider {
     - \c worksheet: Name of the worksheet to read (default: first sheet)
     - \c header_names: If \c True, use first row as header names
     - \c header_cells: Cell range for headers (e.g., "a1:e1" or just "1" for row 1)
-    - \c data_cells: Cell range for data (e.g., "a2:e100")
+    - \c data_cells: Cell range for data (e.g., "a2:e100"); a range without an end column (e.g., "b2") ends at the
+      last header column, or, without headers, at the last cell with a value in each row
     - \c headers: List of header names to use
     - \c tolwr: Convert header names to lowercase
     - \c timezone: Timezone for date values
@@ -374,6 +375,8 @@ module ExcelDataProvider {
     - added @ref ExcelDataProvider::ExcelProfileDataProvider "ExcelProfileDataProvider" and the \c profile
       application action, which describe the layout and column types of every sheet, including hidden sheets,
       named ranges, merged cells, and formulas
+    - fixed reading a \c data_cells range without an end column and without headers never ending; each row is read
+      to its last cell with a value
     - records are read from .xlsx worksheets one row at a time, so worksheets with millions of rows are read in
       bounded memory instead of loading the workbook in memory
     - updated copyright to 2026

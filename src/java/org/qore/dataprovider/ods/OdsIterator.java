@@ -336,6 +336,12 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
         int end_cell = -1;
         if (!end_column.equals("-")) {
             end_cell = colStringToIndex(end_column);
+        } else if (!auto_detect_data && headers.isEmpty()) {
+            // a data range without an end column and without headers ends at the last cell with a value in the row
+            end_cell = getLastValueColumn(row, cell_no);
+            if (end_cell == -1) {
+                return null;
+            }
         }
         int col_no = 0;
         boolean found_data = false;
@@ -348,27 +354,13 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             Object val;
 
             // a row element can have fewer cells than the table has columns, in which case there is no cell
-            String valueType = cell == null ? null : cell.getValueType();
-            boolean cellEmpty = (valueType == null || valueType.isEmpty());
-            if (cellEmpty && cell != null) {
-                String display = cell.getDisplayText();
-                cellEmpty = (display == null || display.trim().isEmpty());
-            }
-
-            if (cellEmpty) {
+            if (isEmpty(cell)) {
                 if (auto_detect_data) {
                     break;
                 }
                 val = null;
             } else {
-                val = cellToValue(cell);
-                if (val == null) {
-                    // Cell has a valueType but cellToValue didn't handle it - use display text
-                    String display = cell.getDisplayText();
-                    if (display != null && !display.trim().isEmpty()) {
-                        val = display.trim();
-                    }
-                }
+                val = getCellValue(cell);
                 if (val != null && !found_data) {
                     found_data = true;
                 }
@@ -403,6 +395,56 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             return null;
         }
         return row_data;
+    }
+
+    /**
+     * Returns true if there is no cell or the cell has neither a value type nor text
+     */
+    private static boolean isEmpty(OdsCell cell) {
+        if (cell == null) {
+            return true;
+        }
+        String valueType = cell.getValueType();
+        if (valueType != null && !valueType.isEmpty()) {
+            return false;
+        }
+        String display = cell.getDisplayText();
+        return display == null || display.trim().isEmpty();
+    }
+
+    /**
+     * Returns the value of a cell that is not empty, or null if it has none
+     */
+    private Object getCellValue(OdsCell cell) {
+        Object val = cellToValue(cell);
+        if (val == null) {
+            // Cell has a valueType but cellToValue didn't handle it - use display text
+            String display = cell.getDisplayText();
+            if (display != null && !display.trim().isEmpty()) {
+                val = display.trim();
+            }
+        }
+        return val;
+    }
+
+    /**
+     * Returns the last 0-based column from the given column, within the columns of the table, with a cell with a
+     * value in the row, or -1 if there is none
+     */
+    private int getLastValueColumn(OdsSheetReader.RowRun row, int first_col) {
+        for (int i = row.getCellRunCount() - 1; i >= 0; --i) {
+            OdsCell cell = row.getCellRunCell(i);
+            int start = row.getCellRunStart(i);
+            int last = Math.min(start + row.getCellRunColumns(i), cachedColCount) - 1;
+            if (last < first_col) {
+                return -1;
+            }
+            if (last < start || isEmpty(cell) || getCellValue(cell) == null) {
+                continue;
+            }
+            return last;
+        }
+        return -1;
     }
 
     private Object cellToValue(OdsCell cell) {

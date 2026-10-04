@@ -67,6 +67,9 @@ interface SheetSource extends Closeable {
 
         /** Returns the cell in the given 0-based column, or null if the row has no cell there */
         Cell getCell(int col);
+
+        /** Returns the 0-based column after the last cell of the row, or -1 if the row has no cells */
+        int getLastCellNum();
     }
 
     /**

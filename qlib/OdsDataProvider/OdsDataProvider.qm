@@ -297,6 +297,9 @@ module OdsDataProvider {
     cell is its clock time on 1899-12-31, the date that Excel time cells are read with; a time over 24 hours
     continues on the following days.
 
+    A \c data_cells range without an end column (e.g., \c "b2") ends at the last header column, or, without headers,
+    at the last cell with a value in each row.
+
     The following classes are provided by this module:
     - @ref OdsDataProvider::OdsReadDataProvider "OdsReadDataProvider" - for reading ODS files
     - @ref OdsDataProvider::OdsReadDataProviderFactory "OdsReadDataProviderFactory" - factory for read providers

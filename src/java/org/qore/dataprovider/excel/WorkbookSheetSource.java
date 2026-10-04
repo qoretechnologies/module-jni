@@ -126,6 +126,11 @@ final class WorkbookSheetSource implements SheetSource {
             org.apache.poi.ss.usermodel.Cell cell = row.getCell(col);
             return cell == null ? null : new WorkbookCell(cell);
         }
+
+        @Override
+        public int getLastCellNum() {
+            return row.getLastCellNum();
+        }
     }
 
     private static final class WorkbookCell implements Cell {

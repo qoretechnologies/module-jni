@@ -516,6 +516,34 @@ final class OdsSheetReader implements Closeable {
         }
 
         /**
+         * Returns the number of cell runs of the row
+         */
+        int getCellRunCount() {
+            return size;
+        }
+
+        /**
+         * Returns the 0-based first column of the given cell run
+         */
+        int getCellRunStart(int i) {
+            return col_starts[i];
+        }
+
+        /**
+         * Returns the number of columns of the given cell run
+         */
+        int getCellRunColumns(int i) {
+            return col_counts[i];
+        }
+
+        /**
+         * Returns the cell of the given cell run, or null if it has no content
+         */
+        OdsCell getCellRunCell(int i) {
+            return cells[i];
+        }
+
+        /**
          * Returns the cell in the given 0-based column, or null if the row has no cell with content there
          */
         OdsCell getCell(int col) {

@@ -702,6 +702,7 @@ final class XlsxSheetSource implements SheetSource {
                         rv.cells.put(cell.col, cell);
                         if (cell.col > max_col) {
                             max_col = cell.col;
+                            rv.last_col = max_col;
                         }
                     } else {
                         skipElement(xr);
@@ -806,6 +807,8 @@ final class XlsxSheetSource implements SheetSource {
         private final class XlsxRow implements Row {
             private final int row;
             private final HashMap<Integer, XlsxCell> cells = new HashMap<Integer, XlsxCell>();
+            // the last column with a cell; -1 if none
+            int last_col = -1;
 
             XlsxRow(int row) {
                 this.row = row;
@@ -819,6 +822,11 @@ final class XlsxSheetSource implements SheetSource {
             @Override
             public Cell getCell(int col) {
                 return cells.get(col);
+            }
+
+            @Override
+            public int getLastCellNum() {
+                return last_col == -1 ? -1 : last_col + 1;
             }
         }
 

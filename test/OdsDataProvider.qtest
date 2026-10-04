@@ -140,6 +140,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("read: closing an iteration early releases the document", \testEarlyClose());
         addTestCase("read: currency and percentage cells are numbers", \testNumberFormats());
         addTestCase("read: date and time cells across daylight saving time changes", \testDaylightSaving());
+        addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
         set_return_value(main());
     }
 
@@ -1275,6 +1276,27 @@ printf(\"RESULT:%%s\\n\", make_json(rv));
             "a date in the profile");
         assertEq("1899-12-31 13:45:00", grid.sheets[0].rows[1][2].format("YYYY-MM-DD HH:mm:SS"),
             "a time in the profile");
+    }
+
+    testOpenDataRange() {
+        # without an end column and without headers, each row is read to its last cell with a value, not to the
+        # last column of the table
+        string path = test_data_dir + "/structured.ods";
+        OdsTestHelper::createStructuredOds(path);
+        OdsReadDataProvider dp(path, {"data_cells": "b2", "timezone": "UTC"});
+        assertEq((
+            {"A2": 5.0, "B2": "x", "C2": 2025-03-01T00:00:00Z},
+            {"A3": 6.0, "B3": "y", "C3": 2025-03-02T00:00:00Z},
+            {"A4": 7.0, "B4": "z", "C4": 2025-03-03T00:00:00Z},
+            {"A5": 7.0, "B5": "z", "C5": 2025-03-03T00:00:00Z},
+            # the covered cell after the repeated cell has no value
+            {"A6": 8.0, "B6": 8.0},
+        ), (map $1, dp.searchRecords()));
+
+        # a row without a value from the start column is empty
+        dp = new OdsReadDataProvider(path, {"data_cells": "c6", "ignore_empty": True});
+        assertEq(({"A6": 8.0}, {"A8": "a   b\tc\nd", "B8": 2025-03-08T00:00:00}),
+            (map $1, dp.searchRecords()));
     }
 
     #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints
