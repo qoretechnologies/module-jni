@@ -48,8 +48,8 @@
           "message": "Der Name des zu iterierenden Arbeitsblatts"
         },
         "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
-          "message": "Der Name des zu iterierenden Arbeitsblatts; wenn nicht angegeben, wird das erste Arbeitsblatt verarbeitet"
+          "source": "The name of the worksheet to iterate, matched exactly, with case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `ODS-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "Der Name des zu durchlaufenden Arbeitsblatts, verglichen genau, mit Beachtung der Groß-/Kleinschreibung, oder seine 0-basierte Position als Zeichenkette; fehlt er, wird das erste Arbeitsblatt verarbeitet; steht im Konflikt mit `worksheet_pattern`.  Ein unbekanntes Arbeitsblatt löst `ODS-WORKSHEET-NOT-FOUND` aus, das die Arbeitsblätter der Datei auflistet"
         },
         "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -134,6 +134,18 @@
         "app.T0RT.action.cmVhZA.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "Wenn `True` (Standard `False`), werden alle automatisch erkannten Header-Namen in Kleinbuchstaben umgewandelt"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "Muster für den Arbeitsblattnamen"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "Ein regulärer Ausdruck für den Namen des zu durchlaufenden Arbeitsblatts"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `ODS-WORKSHEET-NOT-FOUND` and more than one match raises `ODS-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "Ein regulärer Ausdruck, dem der Name genau eines Arbeitsblatts entsprechen muss, für Dateien, deren Arbeitsblattname sich von Datei zu Datei ändert, etwa `Jan 2026` und `Feb 2026`: verwenden Sie `^\\w+ \\d{4}$` oder `(?i)^export` für einen Vergleich ohne Beachtung der Groß-/Kleinschreibung; das Muster wird im Namen gesucht, verankern Sie es daher mit `^` und `$`, um den ganzen Namen zu vergleichen.  Keine Übereinstimmung löst `ODS-WORKSHEET-NOT-FOUND` aus und mehrere Übereinstimmungen lösen `ODS-WORKSHEET-AMBIGUOUS` aus, beide mit der Liste der Arbeitsblätter der Datei; steht im Konflikt mit `worksheet`"
         },
         "app.T0RT.action.cHJvZmlsZQ.display_name": {
           "source": "Profile ODS Spreadsheet",
@@ -240,8 +252,8 @@
           "message": "Der Name des zu iterierenden Arbeitsblatts"
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
-          "message": "Der Name des zu iterierenden Arbeitsblatts; wenn nicht angegeben, wird das erste Arbeitsblatt verarbeitet"
+          "source": "The name of the worksheet to iterate, matched exactly, with case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `ODS-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "Der Name des zu durchlaufenden Arbeitsblatts, verglichen genau, mit Beachtung der Groß-/Kleinschreibung, oder seine 0-basierte Position als Zeichenkette; fehlt er, wird das erste Arbeitsblatt verarbeitet; steht im Konflikt mit `worksheet_pattern`.  Ein unbekanntes Arbeitsblatt löst `ODS-WORKSHEET-NOT-FOUND` aus, das die Arbeitsblätter der Datei auflistet"
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -326,6 +338,18 @@
         "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "Wenn `True` (Standard `False`), werden alle automatisch erkannten Header-Namen in Kleinbuchstaben umgewandelt"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "Muster für den Arbeitsblattnamen"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "Ein regulärer Ausdruck für den Namen des zu durchlaufenden Arbeitsblatts"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `ODS-WORKSHEET-NOT-FOUND` and more than one match raises `ODS-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "Ein regulärer Ausdruck, dem der Name genau eines Arbeitsblatts entsprechen muss, für Dateien, deren Arbeitsblattname sich von Datei zu Datei ändert, etwa `Jan 2026` und `Feb 2026`: verwenden Sie `^\\w+ \\d{4}$` oder `(?i)^export` für einen Vergleich ohne Beachtung der Groß-/Kleinschreibung; das Muster wird im Namen gesucht, verankern Sie es daher mit `^` und `$`, um den ganzen Namen zu vergleichen.  Keine Übereinstimmung löst `ODS-WORKSHEET-NOT-FOUND` aus und mehrere Übereinstimmungen lösen `ODS-WORKSHEET-AMBIGUOUS` aus, beide mit der Liste der Arbeitsblätter der Datei; steht im Konflikt mit `worksheet`"
         },
         "app.T0RT.action.d3JpdGU.display_name": {
           "source": "Write ODS Spreadsheet File",

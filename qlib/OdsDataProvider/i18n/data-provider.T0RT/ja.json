@@ -48,8 +48,8 @@
           "message": "反復処理するワークシートの名前"
         },
         "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
-          "message": "反復処理するワークシートの名前。指定しない場合、最初のワークシートが処理されます"
+          "source": "The name of the worksheet to iterate, matched exactly, with case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `ODS-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "反復処理するワークシートの名前（大文字と小文字を区別して正確に照合）、または文字列としての 0 から始まる位置。省略すると最初のワークシートが処理されます。`worksheet_pattern` と競合します。不明なワークシートは `ODS-WORKSHEET-NOT-FOUND` を発生させ、ファイルのワークシートを一覧表示します"
         },
         "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -134,6 +134,18 @@
         "app.T0RT.action.cmVhZA.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "`True` の場合 (デフォルト: `False`)、自動検出されたすべてのヘッダー名が小文字に変換されます"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "ワークシート名のパターン"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "反復処理するワークシートの名前に一致する正規表現"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `ODS-WORKSHEET-NOT-FOUND` and more than one match raises `ODS-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "ファイルごとにワークシート名が変わるファイル（`Jan 2026` と `Feb 2026` など）で、ちょうど 1 つのワークシートの名前が一致する必要がある正規表現。`^\\w+ \\d{4}$` を使用し、大文字と小文字を区別しない場合は `(?i)^export` を使用します。パターンは名前の中で検索されるため、名前全体に一致させるには `^` と `$` で固定してください。一致がない場合は `ODS-WORKSHEET-NOT-FOUND`、複数一致した場合は `ODS-WORKSHEET-AMBIGUOUS` が発生し、どちらもファイルのワークシートを一覧表示します。`worksheet` と競合します"
         },
         "app.T0RT.action.cHJvZmlsZQ.display_name": {
           "source": "Profile ODS Spreadsheet",
@@ -240,8 +252,8 @@
           "message": "反復処理するワークシートの名前"
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
-          "message": "反復処理するワークシートの名前。指定しない場合、最初のワークシートが処理されます"
+          "source": "The name of the worksheet to iterate, matched exactly, with case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `ODS-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "反復処理するワークシートの名前（大文字と小文字を区別して正確に照合）、または文字列としての 0 から始まる位置。省略すると最初のワークシートが処理されます。`worksheet_pattern` と競合します。不明なワークシートは `ODS-WORKSHEET-NOT-FOUND` を発生させ、ファイルのワークシートを一覧表示します"
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -326,6 +338,18 @@
         "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "`True` の場合 (デフォルト: `False`)、自動検出されたすべてのヘッダー名が小文字に変換されます"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "ワークシート名のパターン"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "反復処理するワークシートの名前に一致する正規表現"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `ODS-WORKSHEET-NOT-FOUND` and more than one match raises `ODS-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "ファイルごとにワークシート名が変わるファイル（`Jan 2026` と `Feb 2026` など）で、ちょうど 1 つのワークシートの名前が一致する必要がある正規表現。`^\\w+ \\d{4}$` を使用し、大文字と小文字を区別しない場合は `(?i)^export` を使用します。パターンは名前の中で検索されるため、名前全体に一致させるには `^` と `$` で固定してください。一致がない場合は `ODS-WORKSHEET-NOT-FOUND`、複数一致した場合は `ODS-WORKSHEET-AMBIGUOUS` が発生し、どちらもファイルのワークシートを一覧表示します。`worksheet` と競合します"
         },
         "app.T0RT.action.d3JpdGU.display_name": {
           "source": "Write ODS Spreadsheet File",

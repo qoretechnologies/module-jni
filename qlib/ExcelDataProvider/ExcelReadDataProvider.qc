@@ -106,6 +106,14 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "type": AbstractDataProviderType::get(SoftBoolType),
                 "desc": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the "
                     "last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+                "default_value": False,
+                "metadata": {
+                    # what each value does with an empty row: with the default, an empty row ends the data
+                    "empty_row_handling": {
+                        "false": "stop",
+                        "true": "skip",
+                    },
+                },
             },
             "path": <DataProviderOptionInfo>{
                 "display_name": "Excel Input Path",
@@ -142,7 +150,33 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "display_name": "Worksheet Name",
                 "short_desc": "The name of the worksheet to iterate",
                 "type": AbstractDataProviderType::get(StringType),
-                "desc": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
+                "desc": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Conflicts,
+                        "option": "worksheet_pattern",
+                        "desc": "a worksheet is chosen either by name or by pattern",
+                    },),
+                },
+            },
+            "worksheet_pattern": <DataProviderOptionInfo>{
+                "display_name": "Worksheet Name Pattern",
+                "short_desc": "A regular expression matching the name of the worksheet to iterate",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "A regular expression that the name of exactly one worksheet must match, for files whose "
+                    "worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, "
+                    "or `(?i)^export` to match without regard to case; the pattern is searched in the name, so "
+                    "anchor it with `^` and `$` to match the whole name.  No match raises "
+                    "`EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both "
+                    "listing the worksheets of the file; conflicts with `worksheet`",
+                "example_value": "^Export_\\d{8}$",
+                "metadata": {
+                    OptionInteractionsKey: (<DataProviderOptionInteraction>{
+                        "kind": OI_Conflicts,
+                        "option": "worksheet",
+                        "desc": "a worksheet is chosen either by name or by pattern",
+                    },),
+                },
             },
         };
     }
@@ -173,6 +207,12 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         #! the name of the worksheet
         string sheet;
 
+        #! the regular expression that the name of the worksheet to iterate must match, if any
+        *string sheet_pattern;
+
+        #! True once the worksheet to iterate has been resolved against the worksheets of the file
+        bool sheet_resolved;
+
         #! dummy iterator
         bool dummy;
 
@@ -194,6 +234,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         name = path;
         self.opts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, opts));
         sheet = self.opts.worksheet ?? "";
+        sheet_pattern = self.opts.worksheet_pattern;
     }
 
     #! Creates the ExcelReadDataProvider with the input data stream and optionally an option hash
@@ -209,6 +250,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         self.opts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, opts));
         name = sprintf("stream=%s", stream.uniqueHash());
         sheet = self.opts.worksheet ?? "";
+        sheet_pattern = self.opts.worksheet_pattern;
     }
 
     #! Creates the object from constructor options
@@ -223,6 +265,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         }
         *hash<auto> copts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, options));
         sheet = copts.worksheet ?? "";
+        sheet_pattern = copts.worksheet_pattern;
         if (copts.path) {
             if (copts.stream) {
                 error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
@@ -246,7 +289,7 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
             data = binary(copts.data);
             name = sprintf("excel-data=%s", self.uniqueHash());
         }
-        self.opts = copts - ("stream", "path", "worksheet", "data");
+        self.opts = copts - ("stream", "path", "worksheet", "worksheet_pattern", "data");
         if (!i && !exists data) {
             # no input: a provider without worksheets or records
             data = binary();
@@ -268,6 +311,10 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (opts) {
             # parsed ranges replace the range strings, so the hash must accept any value type
             opts = {} + opts;
+        }
+        if (opts.worksheet.val() && exists opts.worksheet_pattern) {
+            throw "EXCEL-READ-OPTION-ERROR", "cannot provide both \"worksheet\" and \"worksheet_pattern\" "
+                "options; use either one or the other";
         }
         if (opts.headers && opts.header_names) {
             throw "EXCEL-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_names\" options; use "
@@ -375,11 +422,74 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         }
     }
 
+    #! Resolves the worksheet to iterate against the worksheets of the file
+    /** @throw EXCEL-WORKSHEET-NOT-FOUND no worksheet has the name or position, or matches the pattern
+        @throw EXCEL-WORKSHEET-AMBIGUOUS more than one worksheet matches the pattern
+    */
+    private resolveSheet() {
+        if (sheet_resolved) {
+            return;
+        }
+        sheet = ExcelReadDataProvider::resolveWorksheet(getChildProviderNamesImpl() ?? (), sheet, sheet_pattern);
+        sheet_resolved = True;
+    }
+
+    #! Returns the name of the worksheet to read, given the worksheets of a file
+    /** @param names the names of the worksheets of the file, in order
+        @param sheet the worksheet option: a name, matched without regard to case, or a 0-based position
+        as a string; an empty string means the first worksheet
+        @param pattern a regular expression that the name of exactly one worksheet must match, if any
+
+        @return the name of the worksheet to read, or an empty string for the first worksheet
+
+        @throw EXCEL-WORKSHEET-NOT-FOUND no worksheet has the name or position, or matches the pattern; \c arg has
+        the \c worksheet or \c worksheet_pattern and the \c available worksheet names
+        @throw EXCEL-READ-OPTION-ERROR the pattern is not a valid regular expression
+        @throw EXCEL-WORKSHEET-AMBIGUOUS more than one worksheet matches the pattern; \c arg has the
+        \c worksheet_pattern, the \c matches, and the \c available worksheet names
+    */
+    static string resolveWorksheet(list<string> names, string sheet, *string pattern) {
+        if (exists pattern) {
+            list<string> matches;
+            try {
+                matches = select names, regex($1, pattern);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "EXCEL-READ-OPTION-ERROR", sprintf("invalid \"worksheet_pattern\" regular expression %y: "
+                    "%s", pattern, ex.desc);
+            }
+            if (!matches) {
+                throw "EXCEL-WORKSHEET-NOT-FOUND", sprintf("no worksheet name matches %y; the worksheets of the file "
+                    "are: %y", pattern, names), {"worksheet_pattern": pattern, "available": names};
+            }
+            if (matches.size() > 1) {
+                throw "EXCEL-WORKSHEET-AMBIGUOUS", sprintf("%d worksheet names match %y: %y; the pattern must match "
+                    "exactly one of the worksheets of the file: %y", matches.size(), pattern, matches, names),
+                    {"worksheet_pattern": pattern, "matches": matches, "available": names};
+            }
+            return matches[0];
+        }
+        if (!sheet.val()) {
+            return sheet;
+        }
+        foreach string name in (names) {
+            if (name.lwr() == sheet.lwr()) {
+                return name;
+            }
+        }
+        # a 0-based position
+        if (sheet =~ /^[0-9]+$/ && sheet.toInt() < names.size()) {
+            return names[sheet.toInt()];
+        }
+        throw "EXCEL-WORKSHEET-NOT-FOUND", sprintf("worksheet %y does not exist; the worksheets of the file are: %y",
+            sheet, names), {"worksheet": sheet, "available": names};
+    }
+
     #! Common setup code
     private checkIterator() {
         if (it) {
             return;
         }
+        resolveSheet();
         it = new ExcelIterator(getWorkbookFile().getPath(), sheet);
         ExcelReadDataProvider::configureIterator(it, opts);
     }

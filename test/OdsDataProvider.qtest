@@ -109,6 +109,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("factory tests", \testFactory());
         addTestCase("negative: invalid path", \testNegativeInvalidPath());
         addTestCase("negative: invalid worksheet", \testNegativeInvalidWorksheet());
+        addTestCase("worksheet selection by name, position and pattern", \testWorksheetSelection());
         addTestCase("negative: invalid cell range", \testNegativeInvalidCellRange());
         addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
         addTestCase("edge case: empty worksheet", \testEdgeCaseEmptyWorksheet());
@@ -437,18 +438,74 @@ public class OdsDataProviderTest inherits QUnit::Test {
     }
 
     testNegativeInvalidWorksheet() {
-        # Invalid worksheet should throw an exception
-        bool threw = False;
+        # an unknown worksheet raises ODS-WORKSHEET-NOT-FOUND, naming it and listing the worksheets of the file
+        OdsReadDataProvider dp(test_data_dir + "/multi-sheet.ods", {"worksheet": "NonexistentSheet"});
+        hash<ExceptionInfo> ex;
         try {
-            OdsReadDataProvider dp(test_data_dir + "/simple.ods", {
-                "worksheet": "NonexistentSheet",
-            });
             dp.searchRecords();
-        } catch (hash<ExceptionInfo> ex) {
-            threw = True;
-            assertTrue(ex.desc.contains("unknown"), "should mention unknown sheet");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
         }
-        assertTrue(threw, "should throw exception for invalid worksheet");
+        assertEq("ODS-WORKSHEET-NOT-FOUND", ex.err);
+        assertRegex("NonexistentSheet", ex.desc);
+        assertRegex("Users.*Products.*Orders", ex.desc);
+        assertEq({"worksheet": "NonexistentSheet", "available": ("Users", "Products", "Orders")}, ex.arg);
+        # the record type raises the same error
+        assertThrows("ODS-WORKSHEET-NOT-FOUND", sub () {
+            new OdsReadDataProvider(test_data_dir + "/multi-sheet.ods", {"worksheet": "Nope", "header_names": True})
+                .getRecordType();
+        });
+        # a position after the last worksheet
+        assertThrows("ODS-WORKSHEET-NOT-FOUND", sub () {
+            new OdsReadDataProvider(test_data_dir + "/multi-sheet.ods", {"worksheet": "3"}).searchRecords();
+        });
+    }
+
+    #! the worksheet option selects by name (with case) or by 0-based position, and the
+    #! worksheet_pattern option by a regular expression matching exactly one name
+    testWorksheetSelection() {
+        code<list<auto>(hash<auto>)> read = list<auto> sub (hash<auto> opts) {
+            OdsReadDataProvider dp(test_data_dir + "/multi-sheet.ods", {"header_names": True} + opts);
+            return map $1, dp.searchRecords();
+        };
+        list<auto> products = read({"worksheet": "Products"});
+        assertTrue(products.size() > 0);
+        assertEq(products, read({"worksheet": "1"}), "by position");
+        assertEq(products, read({"worksheet_pattern": "^Prod"}), "by pattern");
+        assertEq(products, read({"worksheet_pattern": "(?i)^products$"}), "by pattern without regard to case");
+        assertEq(read({}), read({"worksheet_pattern": "^Users$"}), "the first worksheet");
+        assertThrows("ODS-WORKSHEET-NOT-FOUND", read, ({"worksheet": "PRODUCTS"},),
+            "names are matched with case");
+
+        hash<ExceptionInfo> ex;
+        try {
+            read({"worksheet_pattern": "^(Users|Orders)$"});
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("ODS-WORKSHEET-AMBIGUOUS", ex.err);
+        assertEq({"worksheet_pattern": "^(Users|Orders)$", "matches": ("Users", "Orders"),
+            "available": ("Users", "Products", "Orders")}, ex.arg);
+        assertThrows("ODS-WORKSHEET-NOT-FOUND", "Invoices", read, ({"worksheet_pattern": "Invoices"},));
+
+        # the options conflict, and the pattern must be a valid regular expression
+        assertThrows("ODS-READ-OPTION-ERROR", "worksheet_pattern", sub () {
+            new OdsReadDataProvider(test_data_dir + "/multi-sheet.ods", {"worksheet": "Users",
+                "worksheet_pattern": "^U"});
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", "regular expression", sub () {
+            new OdsReadDataProvider({"path": test_data_dir + "/multi-sheet.ods", "worksheet_pattern": "("})
+                .searchRecords();
+        });
+
+        # the option metadata
+        hash<auto> opts = OdsReadDataProvider::ConstructorOptions;
+        assertEq(OI_Conflicts, AbstractDataProvider::getOptionInteractions(opts.worksheet_pattern)[0].kind);
+        assertEq("worksheet", AbstractDataProvider::getOptionInteractions(opts.worksheet_pattern)[0].option);
+        assertEq("worksheet_pattern", AbstractDataProvider::getOptionInteractions(opts.worksheet)[0].option);
+        # ignore_empty: the default stops at the first empty row
+        assertFalse(opts.ignore_empty.default_value);
+        assertEq({"false": "stop", "true": "skip"}, opts.ignore_empty.metadata.empty_row_handling);
     }
 
     testNegativeInvalidCellRange() {

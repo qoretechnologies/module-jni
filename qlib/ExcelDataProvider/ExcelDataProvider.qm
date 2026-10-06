@@ -350,6 +350,13 @@ module ExcelDataProvider {
     @section ExcelDataProvider_relnotes Release Notes
 
     @subsection ExcelDataProvider_v1_1 ExcelDataProvider v1.1
+    - an unknown worksheet raises \c EXCEL-WORKSHEET-NOT-FOUND, naming the worksheet and listing the worksheets of
+      the file, instead of a Java exception
+    - added the \c worksheet_pattern read option: a regular expression that the name of exactly one worksheet must
+      match, for files whose worksheet name changes from file to file; no match raises
+      \c EXCEL-WORKSHEET-NOT-FOUND and more than one raises \c EXCEL-WORKSHEET-AMBIGUOUS
+    - the \c worksheet option is documented to accept a 0-based position, and the \c ignore_empty option declares
+      its default (\c false: reading stops at the first empty row) and that behavior in its option metadata
     - added @ref ExcelDataProvider::ExcelWriteDataProvider "ExcelWriteDataProvider" for writing Excel files
     - added @ref ExcelDataProvider::ExcelWriteDataProviderFactory "ExcelWriteDataProviderFactory"
     - added support for XLS (Excel 97-2003) format in both read and write operations

@@ -48,8 +48,8 @@
           "message": "El nombre de la hoja de trabajo a iterar"
         },
         "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
-          "message": "El nombre de la hoja de trabajo a iterar; si no se proporciona, se procesa la primera hoja de trabajo"
+          "source": "The name of the worksheet to iterate, matched exactly, with case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `ODS-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "El nombre de la hoja que se recorre, comparado exactamente, distinguiendo mayúsculas y minúsculas, o su posición basada en 0 como cadena; si falta, se procesa la primera hoja; entra en conflicto con `worksheet_pattern`.  Una hoja desconocida genera `ODS-WORKSHEET-NOT-FOUND`, que enumera las hojas del archivo"
         },
         "app.T0RT.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -134,6 +134,18 @@
         "app.T0RT.action.cmVhZA.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "Si `True` (por defecto `False`), todos los nombres de encabezado detectados automáticamente se convertirán a minúsculas"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "Patrón de nombre de hoja"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "Una expresión regular que coincide con el nombre de la hoja que se recorre"
+        },
+        "app.T0RT.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `ODS-WORKSHEET-NOT-FOUND` and more than one match raises `ODS-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "Una expresión regular con la que debe coincidir el nombre de exactamente una hoja, para archivos cuyo nombre de hoja cambia de un archivo a otro, como `Jan 2026` y `Feb 2026`: use `^\\w+ \\d{4}$`, o `(?i)^export` para coincidir sin distinguir mayúsculas y minúsculas; el patrón se busca en el nombre, así que ánclelo con `^` y `$` para que coincida con el nombre completo.  Ninguna coincidencia genera `ODS-WORKSHEET-NOT-FOUND` y más de una coincidencia genera `ODS-WORKSHEET-AMBIGUOUS`, ambos con la lista de hojas del archivo; entra en conflicto con `worksheet`"
         },
         "app.T0RT.action.cHJvZmlsZQ.display_name": {
           "source": "Profile ODS Spreadsheet",
@@ -240,8 +252,8 @@
           "message": "El nombre de la hoja de trabajo a iterar"
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if not provided, the first worksheet is processed",
-          "message": "El nombre de la hoja de trabajo a iterar; si no se proporciona, se procesa la primera hoja de trabajo"
+          "source": "The name of the worksheet to iterate, matched exactly, with case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `ODS-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "El nombre de la hoja que se recorre, comparado exactamente, distinguiendo mayúsculas y minúsculas, o su posición basada en 0 como cadena; si falta, se procesa la primera hoja; entra en conflicto con `worksheet_pattern`.  Una hoja desconocida genera `ODS-WORKSHEET-NOT-FOUND`, que enumera las hojas del archivo"
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -326,6 +338,18 @@
         "app.T0RT.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "Si `True` (por defecto `False`), todos los nombres de encabezado detectados automáticamente se convertirán a minúsculas"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "Patrón de nombre de hoja"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "Una expresión regular que coincide con el nombre de la hoja que se recorre"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `ODS-WORKSHEET-NOT-FOUND` and more than one match raises `ODS-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "Una expresión regular con la que debe coincidir el nombre de exactamente una hoja, para archivos cuyo nombre de hoja cambia de un archivo a otro, como `Jan 2026` y `Feb 2026`: use `^\\w+ \\d{4}$`, o `(?i)^export` para coincidir sin distinguir mayúsculas y minúsculas; el patrón se busca en el nombre, así que ánclelo con `^` y `$` para que coincida con el nombre completo.  Ninguna coincidencia genera `ODS-WORKSHEET-NOT-FOUND` y más de una coincidencia genera `ODS-WORKSHEET-AMBIGUOUS`, ambos con la lista de hojas del archivo; entra en conflicto con `worksheet`"
         },
         "app.T0RT.action.d3JpdGU.display_name": {
           "source": "Write ODS Spreadsheet File",

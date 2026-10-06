@@ -48,8 +48,8 @@
           "message": "要迭代的工作表名稱"
         },
         "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "要迭代的工作表名稱；若未指定，則處理第一個工作表"
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "要逐一處理的工作表名稱（不區分大小寫比對），或以字串表示、從 0 起算的位置；若省略則處理第一個工作表；與 `worksheet_pattern` 衝突。未知的工作表會引發 `EXCEL-WORKSHEET-NOT-FOUND`，並列出檔案的工作表"
         },
         "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -134,6 +134,18 @@
         "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "若為 `True` (預設為 `False`)，所有自動偵測到的標頭名稱都會轉換為小寫字母"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "工作表名稱模式"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "符合要逐一處理之工作表名稱的正規表示式"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "工作表名稱必須恰好符合一個工作表的正規表示式，適用於工作表名稱隨檔案改變的檔案，例如 `Jan 2026` 與 `Feb 2026`：使用 `^\\w+ \\d{4}$`，或使用 `(?i)^export` 以不區分大小寫比對；模式會在名稱中搜尋，因此請以 `^` 與 `$` 錨定以比對整個名稱。沒有符合時會引發 `EXCEL-WORKSHEET-NOT-FOUND`，有多個符合時會引發 `EXCEL-WORKSHEET-AMBIGUOUS`，兩者都會列出檔案的工作表；與 `worksheet` 衝突"
         },
         "app.RXhjZWw.action.cHJvZmlsZQ.display_name": {
           "source": "Profile Excel Spreadsheet",
@@ -240,8 +252,8 @@
           "message": "要迭代的工作表名稱"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "要迭代的工作表名稱；若未指定，則處理第一個工作表"
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "要逐一處理的工作表名稱（不區分大小寫比對），或以字串表示、從 0 起算的位置；若省略則處理第一個工作表；與 `worksheet_pattern` 衝突。未知的工作表會引發 `EXCEL-WORKSHEET-NOT-FOUND`，並列出檔案的工作表"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -326,6 +338,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "若為 `True` (預設為 `False`)，所有自動偵測到的標頭名稱都會轉換為小寫字母"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "工作表名稱模式"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "符合要逐一處理之工作表名稱的正規表示式"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "工作表名稱必須恰好符合一個工作表的正規表示式，適用於工作表名稱隨檔案改變的檔案，例如 `Jan 2026` 與 `Feb 2026`：使用 `^\\w+ \\d{4}$`，或使用 `(?i)^export` 以不區分大小寫比對；模式會在名稱中搜尋，因此請以 `^` 與 `$` 錨定以比對整個名稱。沒有符合時會引發 `EXCEL-WORKSHEET-NOT-FOUND`，有多個符合時會引發 `EXCEL-WORKSHEET-AMBIGUOUS`，兩者都會列出檔案的工作表；與 `worksheet` 衝突"
         },
         "app.RXhjZWw.action.d3JpdGU.display_name": {
           "source": "Write Excel Spreadsheet File",

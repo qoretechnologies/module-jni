@@ -48,8 +48,8 @@
           "message": "Назва робочого аркуша для ітерації"
         },
         "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "Назва робочого аркуша для ітерації; якщо не вказано, обробляється перший робочий аркуш"
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "Назва аркуша для обробки, яка порівнюється без урахування регістру, або його позиція від 0 у вигляді рядка; якщо її немає, обробляється перший аркуш; конфліктує з `worksheet_pattern`.  Невідомий аркуш спричиняє `EXCEL-WORKSHEET-NOT-FOUND`, що перелічує аркуші файлу"
         },
         "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -134,6 +134,18 @@
         "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "Якщо `True` (за замовчуванням `False`), усі автоматично виявлені назви заголовків будуть перетворені на нижній регістр"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "Шаблон назви аркуша"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "Регулярний вираз, що відповідає назві аркуша для обробки"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "Регулярний вираз, якому має відповідати назва рівно одного аркуша, для файлів, у яких назва аркуша змінюється від файлу до файлу, наприклад `Jan 2026` і `Feb 2026`: використайте `^\\w+ \\d{4}$` або `(?i)^export` для збігу без урахування регістру; шаблон шукається в назві, тому закріпіть його за допомогою `^` і `$`, щоб він відповідав усій назві.  Відсутність збігу спричиняє `EXCEL-WORKSHEET-NOT-FOUND`, а більше одного збігу — `EXCEL-WORKSHEET-AMBIGUOUS`, обидві зі списком аркушів файлу; конфліктує з `worksheet`"
         },
         "app.RXhjZWw.action.cHJvZmlsZQ.display_name": {
           "source": "Profile Excel Spreadsheet",
@@ -240,8 +252,8 @@
           "message": "Назва робочого аркуша для ітерації"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "Назва робочого аркуша для ітерації; якщо не вказано, обробляється перший робочий аркуш"
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "Назва аркуша для обробки, яка порівнюється без урахування регістру, або його позиція від 0 у вигляді рядка; якщо її немає, обробляється перший аркуш; конфліктує з `worksheet_pattern`.  Невідомий аркуш спричиняє `EXCEL-WORKSHEET-NOT-FOUND`, що перелічує аркуші файлу"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -326,6 +338,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "Якщо `True` (за замовчуванням `False`), усі автоматично виявлені назви заголовків будуть перетворені на нижній регістр"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "Шаблон назви аркуша"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "Регулярний вираз, що відповідає назві аркуша для обробки"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "Регулярний вираз, якому має відповідати назва рівно одного аркуша, для файлів, у яких назва аркуша змінюється від файлу до файлу, наприклад `Jan 2026` і `Feb 2026`: використайте `^\\w+ \\d{4}$` або `(?i)^export` для збігу без урахування регістру; шаблон шукається в назві, тому закріпіть його за допомогою `^` і `$`, щоб він відповідав усій назві.  Відсутність збігу спричиняє `EXCEL-WORKSHEET-NOT-FOUND`, а більше одного збігу — `EXCEL-WORKSHEET-AMBIGUOUS`, обидві зі списком аркушів файлу; конфліктує з `worksheet`"
         },
         "app.RXhjZWw.action.d3JpdGU.display_name": {
           "source": "Write Excel Spreadsheet File",

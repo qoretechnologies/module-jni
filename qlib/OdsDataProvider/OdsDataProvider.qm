@@ -315,6 +315,12 @@ module OdsDataProvider {
 
     @subsection OdsDataProvider_v1_0 OdsDataProvider v1.0
     - initial release
+    - an unknown worksheet raises \c ODS-WORKSHEET-NOT-FOUND, naming the worksheet and listing the worksheets of the
+      file, instead of a Java exception
+    - added the \c worksheet_pattern read option: a regular expression that the name of exactly one worksheet must
+      match; no match raises \c ODS-WORKSHEET-NOT-FOUND and more than one raises \c ODS-WORKSHEET-AMBIGUOUS
+    - the \c ignore_empty option declares its default (\c false: reading stops at the first empty row) and that
+      behavior in its option metadata
 */
 
 #! contains all public definitions in the OdsDataProvider module
