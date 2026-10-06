@@ -31,6 +31,11 @@
       @ref jni_qore_object_lifecycle_managementguide "object lifecycle management" and
       @ref org.qore.jni.QoreObjectBase.release().
 
+    - Public methods on non-public Java implementations now resolve through accessible public interfaces
+      or superclasses when the implementation module is closed. For example, Kafka partition assignments
+      returned as an unmodifiable set support \c size() without \c --add-opens. Private access restrictions,
+      virtual dispatch, target exceptions, and context class-loader restoration are preserved.
+
     @subsection jni_3_0_0_features New Features
 
     @subsubsection jni_3_0_0_kotlin Kotlin Integration

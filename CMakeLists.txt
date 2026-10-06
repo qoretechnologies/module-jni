@@ -1192,6 +1192,7 @@ install(PROGRAMS ${JNI_BIN_FILES}
 )
 
 set(JAVA_TEST_JAR_SRC
+    test/JavaMethodAccessTest.java
     test/java/src/org/qore/jni/NativeCleanupLifecycleTest.java
     test/java/src/org/qore/jni/ExceptionConversionFixture.java
     test/java/src/org/qore/jni/test/JdbcCursorTest.java
@@ -1518,6 +1519,14 @@ endif()
 # daemon thread does in native_cleanup_dispatch()) must not crash.  See
 # src/Globals.cpp (QoreForeignThreadHelper).
 enable_testing()
+add_test(NAME java_public_method_access COMMAND ${Java_JAVA_EXECUTABLE}
+    -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+    JavaMethodAccessTest)
+set_tests_properties(java_public_method_access PROPERTIES TIMEOUT 30)
+add_test(NAME qore_public_method_access COMMAND ${CMAKE_COMMAND} -E env
+    QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    ${QORE_EXECUTABLE} -b --enable-debug ${CMAKE_SOURCE_DIR}/test/JniPublicInterfaceMethod.qtest)
+set_tests_properties(qore_public_method_access PROPERTIES TIMEOUT 30)
 add_test(NAME make_inc_reproducibility COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
     ${CMAKE_SOURCE_DIR}/test/test-make-inc.py
     --qore ${QORE_EXECUTABLE} --make-inc ${CMAKE_SOURCE_DIR}/make-inc)

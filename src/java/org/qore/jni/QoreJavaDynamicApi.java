@@ -1,9 +1,9 @@
 /*
-    QoreJavaDynamicApoi.java
+    QoreJavaDynamicApi.java
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.Set;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -106,7 +110,10 @@ public class QoreJavaDynamicApi {
     public static Object invokeMethod(Method m, Object obj, Object... args) throws Throwable {
         ClassLoader savedTccl = pushTccl(m.getDeclaringClass().getClassLoader());
         try {
-            m.trySetAccessible();
+            if (!m.trySetAccessible() && Modifier.isPublic(m.getModifiers())
+                    && !Modifier.isStatic(m.getModifiers()) && obj != null) {
+                m = accessibleVirtualMethod(m, obj);
+            }
             return m.invoke(obj, args);
         } catch (InvocationTargetException e) {
             Throwable e0 = e;
@@ -117,6 +124,43 @@ public class QoreJavaDynamicApi {
         } finally {
             popTccl(savedTccl);
         }
+    }
+
+    /** Finds an accessible declaration of the same public virtual method. JDK
+        collection wrappers often have a non-public implementation class in a
+        closed module, but expose their methods through a public interface.
+        Invoking that declaration preserves virtual dispatch without opening
+        the implementation module or granting access to non-public methods.
+        If no declaration is accessible, return the original method so that
+        reflection reports its original access failure. */
+    private static Method accessibleVirtualMethod(Method original, Object obj) {
+        ArrayDeque<Class<?>> pending = new ArrayDeque<>();
+        Set<Class<?>> visited = new HashSet<>();
+        pending.add(original.getDeclaringClass());
+        while (!pending.isEmpty()) {
+            Class<?> type = pending.removeFirst();
+            if (!visited.add(type)) {
+                continue;
+            }
+            if (Modifier.isPublic(type.getModifiers())) {
+                try {
+                    Method candidate = type.getMethod(original.getName(), original.getParameterTypes());
+                    if (!Modifier.isStatic(candidate.getModifiers()) && candidate.canAccess(obj)) {
+                        return candidate;
+                    }
+                } catch (NoSuchMethodException e) {
+                    // This ancestor need not declare the requested overload.
+                }
+            }
+            for (Class<?> iface : type.getInterfaces()) {
+                pending.addLast(iface);
+            }
+            Class<?> parent = type.getSuperclass();
+            if (parent != null) {
+                pending.addLast(parent);
+            }
+        }
+        return original;
     }
 
     //! invokes the given method on the given object and returns the return value
