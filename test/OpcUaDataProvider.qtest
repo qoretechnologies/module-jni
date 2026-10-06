@@ -1783,8 +1783,11 @@ sub sandboxProbe() {
                 "server runtime bind cannot be sandbox-checked on this qore version");
         }
 
+        # loopback and private ranges are denied: a bind to a loopback address is still allowed, as it can only be
+        # reached from the local host, but connections to loopback and binds to other denied addresses are not
         SandboxManager sm();
         sm.blockLocalhost();
+        sm.blockPrivateNetworks();
         sm.setNetworkDefaultPolicy(True);
 
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
@@ -1817,25 +1820,45 @@ hash<auto> sub sandboxRuntimeSchema() {
     };
 }
 
-sub startSandboxedRuntime(int port) {
+# starts the runtime on loopback and returns the error of a connection to it, if any
+*string sub startSandboxedRuntime(int port) {
     OpcUaServerRuntime runtime({
         \"port\": port,
         \"schema\": sandboxRuntimeSchema(),
     }, NOTHING);
-    on_error runtime.stop();
+    on_exit runtime.stop();
     runtime.start();
-    runtime.stop();
+    try {
+        Socket s();
+        s.connect(\"127.0.0.1:\" + port, 5s);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# binds a socket to an address in a denied private range and returns the error, if any
+*string sub bindDenied(int port) {
+    try {
+        Socket s();
+        s.bindINET(\"10.255.255.1\", string(port));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
 }
 ", "opcua_runtime_sandbox");
 
-        bool threw = False;
+        int port = 57200 + (getpid() % 1000);
+        # the server's bind to loopback is allowed, but a client connection to it is denied
+        *string connect_err;
         try {
-            p.callFunction("startSandboxedRuntime", 57200 + (getpid() % 1000));
+            connect_err = p.callFunction("startSandboxedRuntime", port);
         } catch (hash<ExceptionInfo> ex) {
-            threw = True;
-            assertEq("NETWORK-ACCESS-DENIED", ex.err, "sandboxed runtime bind is denied before listener startup");
+            fail(sprintf("the sandboxed runtime's loopback bind must be allowed: %s: %s", ex.err, ex.desc));
         }
-        assertTrue(threw, "generic runtime honors active network sandbox bind restrictions");
+        assertEq("NETWORK-ACCESS-DENIED", connect_err, "a client connection to loopback is denied in the sandbox");
+        # a bind to another address in a denied range is denied
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("bindDenied", port),
+            "a bind to a non-loopback address in a denied range is denied");
     }
 
     #! A ByteString value reaches Qore as a binary, not a Java object
