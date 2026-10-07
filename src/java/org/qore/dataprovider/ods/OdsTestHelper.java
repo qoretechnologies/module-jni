@@ -676,4 +676,106 @@ public class OdsTestHelper {
             + "<table:table-cell office:value-type=\"time\" office:time-value=\"" + time_value + "\"><text:p>"
             + time_value + "</text:p></table:table-cell></table:table-row>";
     }
+
+    /**
+     * Returns the value type and data style of each cell of a row of the first sheet of a document, read with odfdom
+     *
+     * Each cell is described as "<value type>|<data style XML>", where the data style XML is the data style of the
+     * cell's style followed, for a style with style:map conditions, by " + " and each data style mapped to; a cell
+     * without a data style has nothing after the "|"
+     *
+     * @param path the document file
+     * @param row the 0-based row
+     * @param cells the number of cells to describe
+     * @return the value type and data style of each cell
+     */
+    public static String[] getCellDataStyles(String path, int row, int cells) throws Exception {
+        try (OdfSpreadsheetDocument doc = OdfSpreadsheetDocument.loadDocument(path)) {
+            OdfTable table = doc.getTableList().get(0);
+            org.odftoolkit.odfdom.incubator.doc.office.OdfOfficeAutomaticStyles styles =
+                doc.getContentDom().getAutomaticStyles();
+            String[] result = new String[cells];
+            for (int i = 0; i < cells; ++i) {
+                OdfTableCell cell = table.getCellByPosition(i, row);
+                String desc = cell.getValueType() + "|";
+                String style_name = cell.getOdfElement().getTableStyleNameAttribute();
+                if (style_name != null && !style_name.isEmpty()) {
+                    org.odftoolkit.odfdom.incubator.doc.style.OdfStyle style =
+                        styles.getStyle(style_name, org.odftoolkit.odfdom.dom.style.OdfStyleFamily.TableCell);
+                    String data_style = style == null ? null : style.getStyleDataStyleNameAttribute();
+                    if (data_style != null) {
+                        Element element = findDataStyle(styles, data_style);
+                        desc += toXml(element);
+                        org.w3c.dom.NodeList maps = element.getElementsByTagNameNS(
+                            OdfDocumentNamespace.STYLE.getUri(), "map");
+                        for (int j = 0; j < maps.getLength(); ++j) {
+                            String mapped = ((Element) maps.item(j)).getAttributeNS(
+                                OdfDocumentNamespace.STYLE.getUri(), "apply-style-name");
+                            desc += " + " + toXml(findDataStyle(styles, mapped));
+                        }
+                    }
+                }
+                result[i] = desc;
+            }
+            return result;
+        }
+    }
+
+    /**
+     * Returns the office:date-value of a cell of the first sheet of a document as it is written in the file
+     *
+     * @param path the document file
+     * @param row the 0-based row
+     * @param col the 0-based column
+     * @return the office:date-value attribute of the cell, or null if it has none
+     */
+    public static String getDateValueAttribute(String path, int row, int col) throws Exception {
+        try (OdfSpreadsheetDocument doc = OdfSpreadsheetDocument.loadDocument(path)) {
+            return doc.getTableList().get(0).getCellByPosition(col, row).getOdfElement().getOfficeDateValueAttribute();
+        }
+    }
+
+    /**
+     * Returns the number of data styles in the automatic styles of a document
+     *
+     * @param path the document file
+     * @return the number of number:*-style elements in the automatic styles of the content
+     */
+    public static int getDataStyleCount(String path) throws Exception {
+        try (OdfSpreadsheetDocument doc = OdfSpreadsheetDocument.loadDocument(path)) {
+            org.w3c.dom.NodeList children = doc.getContentDom().getAutomaticStyles().getChildNodes();
+            int count = 0;
+            for (int i = 0; i < children.getLength(); ++i) {
+                org.w3c.dom.Node node = children.item(i);
+                if (OdfDocumentNamespace.NUMBER.getUri().equals(node.getNamespaceURI())
+                        && node.getLocalName().endsWith("-style")) {
+                    ++count;
+                }
+            }
+            return count;
+        }
+    }
+
+    private static Element findDataStyle(org.w3c.dom.Node styles, String name) {
+        org.w3c.dom.NodeList children = styles.getChildNodes();
+        for (int i = 0; i < children.getLength(); ++i) {
+            org.w3c.dom.Node node = children.item(i);
+            if (node instanceof Element
+                    && name.equals(((Element) node).getAttributeNS(OdfDocumentNamespace.STYLE.getUri(), "name"))
+                    && OdfDocumentNamespace.NUMBER.getUri().equals(node.getNamespaceURI())) {
+                return (Element) node;
+            }
+        }
+        throw new IllegalArgumentException("no data style named " + name);
+    }
+
+    private static String toXml(Element element) throws Exception {
+        javax.xml.transform.Transformer transformer =
+            javax.xml.transform.TransformerFactory.newInstance().newTransformer();
+        transformer.setOutputProperty(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION, "yes");
+        java.io.StringWriter out = new java.io.StringWriter();
+        transformer.transform(new javax.xml.transform.dom.DOMSource(element),
+            new javax.xml.transform.stream.StreamResult(out));
+        return out.toString();
+    }
 }

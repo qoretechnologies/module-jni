@@ -30,6 +30,7 @@
 %requires DataProvider
 %requires json
 %requires FsUtil
+%requires CsvUtil
 %requires jni
 %requires ExcelDataProvider
 
@@ -53,6 +54,7 @@
 %module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/curvesapi-1.08.jar
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelTestHelper
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelIterator
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelWriter
 %module-cmd(jni) import java.lang.System
 
 %exec-class ExcelDataProviderTest
@@ -63,6 +65,93 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         const LargeRows = 200000;
         #! the JVM heap of the child process that reads a large workbook
         const ChildHeap = "64m";
+
+        #! the columns of the column format tests
+        const FormatHeaders = ("Name", "Date", "Amount", "Share", "Code", "Plain", "Stamp");
+
+        #! the column formats of the column format tests; Name, Plain and Stamp have none
+        const ColumnFormats = {
+            "Date": "dd.mm.yyyy hh:mm",
+            "Amount": "#,##0.00;(#,##0.00)",
+            "Share": "0.0%",
+            "Code": "@",
+        };
+
+        #! a record of the column format tests
+        const FormatRecord = {
+            "Name": "a",
+            "Date": 2026-10-07T13:45:10,
+            "Amount": -1234.5,
+            "Share": 0.25,
+            "Code": "X1",
+            "Plain": 42,
+            "Stamp": 2026-01-05T08:05:09,
+        };
+
+        #! format codes that are accepted
+        const ValidFormatCodes = (
+            "0", "0.00", "#,##0", "#,##0.00", "#,##0.00;(#,##0.00)", "#,##0.00;#,##0.00-", "0.0%", "0%",
+            "#,##0,", "0.0,,\" M\"", "0.00E+00", "\"€\" #,##0.00", "#,##0.00 [$€-407]", "[Red]#,##0;[Blue]-#,##0",
+            "0.0#", "#.##", "#,##0.00;(#,##0.00);\"-\"", "000000", "#,##0.00_);(#,##0.00)", "\\$#,##0.00", ".00",
+            "€#,##0.00", "#,##0.00 \"EUR\"", "0.0%;(0.0%)", "#,##0.00;\"negative\"", "0,000.00",
+            "dd.mm.yyyy", "yyyy-mm-dd", "d/m/yy", "mmm d, yyyy", "mmmm yyyy", "dddd, d mmmm yyyy", "hh:mm",
+            "h:mm AM/PM", "hh:mm:ss.000", "yyyy-mm-dd\"T\"hh:mm:ss", "DD.MM.YYYY HH:MM:SS", "ddd", "m/d/yyyy h:mm",
+            "mm:ss", "h:mm:ss.0", "[Red]dd.mm.yyyy", "yyyy\\-mm\\-dd", "dd. mmmm yyyy",
+            "@", "\"Text: \"@", "[Blue]@",
+        );
+
+        #! format codes that are refused, with a regular expression matching the reason
+        const InvalidFormatCodes = {
+            "": "empty",
+            "General": "default display",
+            "zz[[q": "\"z\" at position 1, which must be quoted",
+            "0.00[": "unterminated \"\\[\" at position 5",
+            "[x]0": "only colors such as \\[Red\\] and currency symbols",
+            "[]0": "only colors",
+            "\"abc": "unterminated quoted text starting at position 1",
+            "0\\": "needs a character after it",
+            "0_": "needs a character after it",
+            "# ?/?": "\\? digit placeholder and fractions",
+            "*-0": "fill characters",
+            "[>100]0": "only colors",
+            "[h]:mm": "only colors",
+            "0;0;0;@": "4 sections; at most three",
+            "0;;0": "empty section 2",
+            "0;": "empty section 2 at its end",
+            "0.0.0": "second decimal point",
+            "0%%": "2 percent signs in section 1",
+            "0.0%;0.0": "percent sign in one section but not in section 2",
+            "dd.mm.yyyy;0": "date format code, which has one section only",
+            "@;0": "text format code, which has one section only",
+            "#,##0 mm": "\"mm\" at position 7 in a section with digit placeholders",
+            "0.00 dollars": "\"o\" at position 7, which must be quoted",
+            "0 h": "\"h\" at position 3 in a section with digit placeholders",
+            "yyyyy": "year of 5 letters",
+            "mmmmm": "first-letter month names",
+            "hhh": "hour of 3 letters",
+            "sss": "second of 3 letters",
+            "ddddd": "day of 5 letters",
+            "hh:mm:ss.0000": "4 decimal places of a second",
+            "dd.mm.yyyy 0": "\"dd\" at position 1 in a section with digit placeholders; date parts cannot be used",
+            "hh:mm %": "\"hh\" at position 1 in a section with digit placeholders",
+            "dd@": "mixes date parts and the text placeholder",
+            "0.00E-00": "use \"E\\+\" for scientific notation",
+            "0.00E+": "\"E\\+\" without exponent digits",
+            "0.0E+00%": "percent sign together with scientific notation",
+            "0,E+00": "together with scientific notation",
+            "#,##0.00 EUR": "\"E\" at position 10, which must be quoted",
+            "h:mm A/P": "use \"AM/PM\"",
+            "@@": "second @",
+            "@ 0": "not text, in a text format code",
+            "0.": "decimal point without decimal places",
+            "0 0": "second group of digit placeholders",
+            "0.#0": "0 after a # in the decimal places",
+            "0.0,0": "comma between decimal places",
+            ",0": "comma before the first digit placeholder",
+            "\"text\"": "no digit, date or text placeholder",
+            "[Red][Blue]0": "second color in section 1",
+            "0x": "\"x\" at position 2, which must be quoted",
+        };
     }
 
     private {
@@ -129,6 +218,14 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("read: closing an iteration early releases the workbook", \testEarlyClose());
         addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
         addTestCase("read: the input is copied to a file once and deleted with the providers", \testWorkbookFile());
+        addTestCase("write: column display formats", \testWriteColumnFormats());
+        addTestCase("write: a column format shows only values of its kind", \testWriteColumnFormatsOtherValues());
+        addTestCase("write: one cell style per distinct column format", \testWriteColumnFormatStyles());
+        addTestCase("write: column formats with headers from the first record", \testWriteColumnFormatsFirstRecord());
+        addTestCase("write: format codes accepted and refused", \testFormatCodes());
+        addTestCase("write: negative - invalid column formats", \testWriteNegativeColumnFormats());
+        addTestCase("write: the write actions offer column formats", \testColumnFormatsActionOption());
+        addTestCase("write: column formats as LibreOffice shows them", \testWriteColumnFormatsRendered());
         set_return_value(main());
     }
 
@@ -1422,5 +1519,192 @@ printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatche
 
     private static string shellQuote(string arg) {
         return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    testWriteColumnFormats() {
+        # each variant: the writer options and the file extension
+        hash<string, hash<auto>> variants = {
+            "xlsx": {"ext": "xlsx", "opts": {}},
+            "streaming xlsx": {"ext": "xlsx", "opts": {"streaming": True}},
+            "xls": {"ext": "xls", "opts": {"format": "xls"}},
+        };
+        foreach hash<auto> i in (variants.pairIterator()) {
+            string path = sprintf("%s/column-formats.%s", test_data_dir, i.value.ext);
+            on_exit unlink(path);
+            ExcelWriteDataProvider dp(path, i.value.opts + {
+                "headers": FormatHeaders,
+                "column_formats": ColumnFormats,
+            });
+            dp.createRecord(FormatRecord);
+            dp.finishCreate();
+
+            # the format code of each cell, read with POI
+            assertEq((map "General", FormatHeaders), ExcelTestHelper::getCellFormats(path, 0), i.key + ": headers");
+            assertEq(("General", "dd.mm.yyyy hh:mm", "#,##0.00;(#,##0.00)", "0.0%", "@", "General",
+                "yyyy-mm-dd hh:mm:ss"), ExcelTestHelper::getCellFormats(path, 1), i.key + ": formats");
+
+            # the values keep their types
+            ExcelReadDataProvider rdp(path, {"header_names": True});
+            list<hash<auto>> recs = map $1, rdp.searchRecords();
+            assertEq(1, recs.size(), i.key);
+            assertEq(FormatRecord + {"Amount": -1234.5, "Plain": 42.0}, recs[0], i.key + ": values");
+        }
+    }
+
+    testWriteColumnFormatsOtherValues() {
+        string path = test_data_dir + "/column-formats-other.xlsx";
+        on_exit unlink(path);
+        ExcelWriteDataProvider dp(path, {"headers": FormatHeaders, "column_formats": ColumnFormats});
+        # a value of another kind than its column's code is written without the format; no value is a blank cell
+        dp.createRecord({"Name": "b", "Date": 5, "Amount": "n/a", "Share": 2026-10-07T00:00:00, "Code": 3.5,
+            "Plain": NOTHING, "Stamp": True});
+        dp.finishCreate();
+        assertEq(("General", "General", "General", "yyyy-mm-dd hh:mm:ss", "General", "General", "General"),
+            ExcelTestHelper::getCellFormats(path, 1));
+        ExcelReadDataProvider rdp(path, {"header_names": True});
+        assertEq(({"Name": "b", "Date": 5.0, "Amount": "n/a", "Share": 2026-10-07T00:00:00, "Code": 3.5,
+            "Plain": NOTHING, "Stamp": True},), (map $1, rdp.searchRecords()));
+    }
+
+    testWriteColumnFormatStyles() {
+        foreach string format in (("xlsx", "xls")) {
+            # a workbook without column formats, for the number of cell styles a workbook has anyway
+            string base_path = sprintf("%s/styles-base.%s", test_data_dir, format);
+            on_exit unlink(base_path);
+            ExcelWriteDataProvider base(base_path, {"format": format, "headers": ("A", "B", "C")});
+            base.createRecord({"A": 1, "B": 2, "C": 3});
+            base.finishCreate();
+
+            # three columns with two distinct codes and many rows
+            string path = sprintf("%s/styles.%s", test_data_dir, format);
+            on_exit unlink(path);
+            ExcelWriteDataProvider dp(path, {"format": format, "headers": ("A", "B", "C"), "column_formats": {
+                "A": "0.00", "B": "0.00", "C": "0.0%",
+            }});
+            for (int i = 0; i < 500; ++i) {
+                dp.createRecord({"A": i, "B": i * 2, "C": i / 100.0});
+            }
+            dp.finishCreate();
+            assertEq(ExcelTestHelper::getCellStyleCount(base_path) + 2, ExcelTestHelper::getCellStyleCount(path),
+                format + ": one cell style per distinct code");
+            assertEq(("0.00", "0.00", "0.0%"), ExcelTestHelper::getCellFormats(path, 500), format);
+        }
+    }
+
+    testWriteColumnFormatsFirstRecord() {
+        string path = test_data_dir + "/column-formats-first-record.xlsx";
+        on_exit unlink(path);
+        ExcelWriteDataProvider dp(path, {"column_formats": {"Amount": "#,##0.00"}});
+        dp.createRecord({"Name": "a", "Amount": 1234.5});
+        dp.createRecord({"Name": "b", "Amount": 2});
+        dp.finishCreate();
+        assertEq(("General", "#,##0.00"), ExcelTestHelper::getCellFormats(path, 1));
+        assertEq(("General", "#,##0.00"), ExcelTestHelper::getCellFormats(path, 2));
+
+        # a column format for a column that the first record does not have
+        ExcelWriteDataProvider bad({"column_formats": {"Amount": "0.00", "Total": "0.00"}});
+        assertThrows("CREATE-RECORD-ERROR", "EXCEL-WRITE-OPTION-ERROR.*column \"Total\", which is not written",
+            \bad.createRecord(), {"Name": "a", "Amount": 1});
+        assertEq(0, bad.getCreatedCount());
+    }
+
+    testFormatCodes() {
+        foreach string code in (ValidFormatCodes) {
+            assertNothing(ExcelWriter::formatCodeIssue(code), code);
+        }
+        foreach hash<auto> i in (InvalidFormatCodes.pairIterator()) {
+            *string issue = ExcelWriter::formatCodeIssue(i.key);
+            assertNeq(NOTHING, issue, i.key);
+            assertRegex(i.value, issue ?? "", i.key);
+        }
+    }
+
+    testWriteNegativeColumnFormats() {
+        # an invalid code names its column
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", "column \"Amount\": format code \"#,##0.00 EUR\" has \"E\" at "
+            "position 10, which must be quoted", sub () {
+            ExcelWriteDataProvider dp({"column_formats": {"Amount": "#,##0.00 EUR"}});
+        });
+        # each constructor checks the codes
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", "unterminated", sub () {
+            ExcelWriteDataProvider dp(test_data_dir + "/never.xlsx", {"column_formats": {"A": "0.00["}});
+        });
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", "General", sub () {
+            ExcelWriteDataProvider dp(new StringOutputStream(), {"column_formats": {"A": "General"}});
+        });
+        assertFalse(is_file(test_data_dir + "/never.xlsx"));
+        # a column that is not in the headers
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", "columns \\[\"X\", \"Y\"\\], which are not written; the columns "
+            "written are: \\[\"A\"\\]", sub () {
+            ExcelWriteDataProvider dp({"headers": ("A",), "column_formats": {"A": "0", "X": "0", "Y": "0"}});
+        });
+        # a format code must be a string: the option type check refuses other values
+        assertThrows("RUNTIME-TYPE-ERROR", "option \"column_formats\" of type \"hash<string, string>\"", sub () {
+            ExcelWriteDataProvider dp({"column_formats": {"A": 1}});
+        });
+        # the Java writer refuses invalid codes and late formats too
+        ExcelWriter writer("Sheet1", "xlsx", False);
+        on_exit writer.close();
+        assertThrows("JNI-ERROR", "column \"A\": format code \"0.0.0\" has a second decimal point",
+            \writer.setColumnFormats(), {"A": "0.0.0"});
+        writer.writeRow({"A": 1});
+        assertThrows("JNI-ERROR", "before any row is written", \writer.setColumnFormats(), {"A": "0"});
+    }
+
+    testColumnFormatsActionOption() {
+        foreach string action in (("write", "write-data")) {
+            hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("Excel", action);
+            assertTrue(exists info.options.column_formats, action);
+        }
+        hash<DataProviderOptionInfo> opt = ExcelWriteDataProvider::ConstructorOptions.column_formats;
+        assertEq("hash<string, string>", opt.type[0].getName());
+        # the example is a valid option value
+        foreach hash<auto> i in (opt.example_value.pairIterator()) {
+            assertNothing(ExcelWriter::formatCodeIssue(i.value), i.key);
+        }
+    }
+
+    testWriteColumnFormatsRendered() {
+        *string soffice = findLibreOffice();
+        if (!soffice) {
+            testSkip("LibreOffice (soffice) is not installed");
+        }
+        foreach string format in (("xlsx", "xls")) {
+            string path = sprintf("%s/column-formats-rendered.%s", test_data_dir, format);
+            on_exit unlink(path);
+            ExcelWriteDataProvider dp(path, {"format": format, "headers": FormatHeaders,
+                "column_formats": ColumnFormats});
+            dp.createRecord(FormatRecord);
+            dp.createRecord(FormatRecord + {"Amount": 1234567.891, "Share": 1});
+            dp.finishCreate();
+            assertEq((
+                {"Name": "a", "Date": "07.10.2026 13:45", "Amount": "(1,234.50)", "Share": "25.0%", "Code": "X1",
+                    "Plain": "42", "Stamp": "2026-01-05 08:05:09"},
+                {"Name": "a", "Date": "07.10.2026 13:45", "Amount": "1,234,567.89", "Share": "100.0%",
+                    "Code": "X1", "Plain": "42", "Stamp": "2026-01-05 08:05:09"},
+            ), renderWithLibreOffice(soffice, path), format);
+        }
+    }
+
+    #! Returns the path of LibreOffice's soffice program, or NOTHING if it is not installed
+    private static *string findLibreOffice() {
+        foreach string dir in (ENV.PATH.split(":")) {
+            string path = dir + "/soffice";
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+    }
+
+    #! Returns the records of a spreadsheet's first sheet as LibreOffice shows its cells
+    private list<hash<auto>> renderWithLibreOffice(string soffice, string path) {
+        TmpDir dir("render-");
+        # CSV with "save cell contents as shown"; the profile directory keeps a running LibreOffice out of the way
+        string cmd = sprintf("%s -env:UserInstallation=file://%s/profile --headless --convert-to "
+            "'csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,true' --outdir %s %s >/dev/null 2>&1",
+            shellQuote(soffice), dir.path, shellQuote(dir.path), shellQuote(path));
+        assertEq(0, system(cmd), cmd);
+        string csv = sprintf("%s/%s.csv", dir.path, basename(path).split(".")[0]);
+        return map $1, new CsvFileIterator(csv, {"header_names": True});
     }
 }

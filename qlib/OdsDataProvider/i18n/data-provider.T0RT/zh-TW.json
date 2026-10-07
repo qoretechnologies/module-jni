@@ -360,8 +360,8 @@
           "message": "將資料寫入 ODS 試算表檔案"
         },
         "app.T0RT.action.d3JpdGU.desc": {
-          "source": "Write data to an ODS spreadsheet file at a specified path.\n\nUse this action to generate ODS files from structured data for reporting, data export, or integration with LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Key Options**:\n- `path` (required) — the output file location\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
-          "message": "將資料寫入指定路徑的 ODS 試算表檔案。\n\n使用此動作可從結構化資料產生 ODS 檔案，以用於報表製作、資料匯出，或與 LibreOffice Calc 及其他相容 OpenDocument 的應用程式整合。\n\n**主要選項**：\n- `path` (必填) — 輸出檔案位置\n- `worksheet` — 工作表名稱 (預設為 `Sheet1`)\n- `headers` — 明確的欄位標頭名稱；若未提供，標頭將自動從第一筆記錄中偵測"
+          "source": "Write data to an ODS spreadsheet file at a specified path.\n\nUse this action to generate ODS files from structured data for reporting, data export, or integration with LibreOffice Calc and other OpenDocument-compatible applications.\n\n**Key Options**:\n- `path` (required) — the output file location\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record\n- `column_formats` — the display format of columns, such as `dd.mm.yyyy` or `#,##0.00`",
+          "message": "將資料寫入指定路徑的 ODS 試算表檔案。\n\n使用此動作可從結構化資料產生 ODS 檔案，以用於報表製作、資料匯出，或與 LibreOffice Calc 及其他相容 OpenDocument 的應用程式整合。\n\n**主要選項**：\n- `path` (必填) — 輸出檔案位置\n- `worksheet` — 工作表名稱 (預設為 `Sheet1`)\n- `headers` — 明確的欄位標頭名稱；若未提供，標頭將自動從第一筆記錄中偵測\n- `column_formats` — 欄位的顯示格式，例如 `dd.mm.yyyy` 或 `#,##0.00`"
         },
         "app.T0RT.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "ODS Output Path",
@@ -399,6 +399,18 @@
           "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
           "message": "資料的標頭/欄位名稱清單；若未提供，標頭將從第一筆記錄自動偵測"
         },
+        "app.T0RT.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.display_name": {
+          "source": "Column Display Formats",
+          "message": "欄位顯示格式"
+        },
+        "app.T0RT.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.short_desc": {
+          "source": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+          "message": "每個欄位的顯示格式，例如 dd.mm.yyyy 或 #,##0.00"
+        },
+        "app.T0RT.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.desc": {
+          "source": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  Each format is written as an OpenDocument data style, which LibreOffice and Excel show the same way.  A column without a format is written as without this option.\n\nFormat codes are written as in LibreOffice and Excel:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`, and it is written as a percentage cell, which is read back as a number\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `ODS-WRITE-OPTION-ERROR` naming the column and the problem",
+          "message": "依標頭名稱指定的欄位顯示格式，讓開啟檔案的人都能依預期看到每個值：日期顯示為 `dd.mm.yyyy`、金額顯示為 `#,##0.00`，或比例顯示為 `0.0%`。儲存格會保留其實際值（日期仍為日期，數字仍為數字），只有顯示方式會改變。每個格式都會寫入為 OpenDocument 資料樣式，LibreOffice 與 Excel 會以相同方式顯示。未指定格式的欄位會如同未使用此選項時一樣寫入。\n\n格式代碼的寫法與 LibreOffice 和 Excel 相同：\n- **數字**：`0`（一律顯示的位數）、`#`（有效時才顯示的位數）、位數之間的 `,`（千分位分組）、最後一位數之後的 `,`（除以 1000）、`.`（小數點）以及 `E+00`（科學記號）；正值、負值與零值最多可有三個以 `;` 分隔的區段，例如 `#,##0.00;(#,##0.00)` 或 `#,##0.00;#,##0.00-`\n- **百分比**：每個區段中有一個 `%`，例如 `0.0%`；值為小數，因此 `0.25` 會顯示為 `25.0%`，並會寫入為百分比儲存格，讀回時為數字\n- **日期與時間**：`yy` 或 `yyyy`（年）、`m`、`mm`、`mmm` 或 `mmmm`（以數字或名稱表示的月）、`d` 或 `dd`（日）、`ddd` 或 `dddd`（星期名稱）、`h` 或 `hh`（時）、緊接在時之後或秒之前的 `m` 或 `mm`（分）、`s` 或 `ss`（秒）、秒之後的 `.0` 至 `.000`（秒的小數部分），以及 `AM/PM`，例如 `dd.mm.yyyy hh:mm`\n- **文字**：`@`\n\n代碼中的文字可以雙引號括住（`\"EUR\"`）、以反斜線跳脫（`\\x`）、寫成方括號中的貨幣符號（`[$€-407]`），而 `$ - + / ( ) :`、空格及 `€` 等符號則可直接書寫；區段可以用 `[Red]` 等色彩開頭。\n\n欄位代碼無法顯示的值（例如數字欄位中的字串）會以不套用格式的方式寫入。無效或不支援的代碼（`General`、分數、填滿字元、條件或經過時間），或未寫入的欄位，會引發 `ODS-WRITE-OPTION-ERROR`，並指出該欄位與問題"
+        },
         "app.T0RT.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create ODS Spreadsheet Data",
           "message": "建立 ODS 試算表資料"
@@ -408,8 +420,8 @@
           "message": "建立 ODS 試算表資料並以二進位傳回"
         },
         "app.T0RT.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. The action returns the generated spreadsheet in `data` and the number of records in `record_count`.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record",
-          "message": "在記憶體中建立 ODS 試算表資料並將其作為二進位資料傳回。\n\n當您需要產生 ODS 檔案而不寫入磁碟時，請使用此動作，例如將試算表作為 API 回應傳回、儲存至資料庫，或傳遞至其他處理步驟。動作會在 `data` 中傳回產生的試算表，並在 `record_count` 中傳回記錄數。\n\n**主要選項**：\n- `worksheet` — 工作表名稱 (預設為 `Sheet1`)\n- `headers` — 明確的欄位標頭名稱；若未提供，標頭將自動從第一筆記錄中偵測"
+          "source": "Create ODS spreadsheet data in memory and return it as binary data.\n\nUse this action when you need to generate an ODS file without writing to disk — for example, to return the spreadsheet as an API response, store it in a database, or pass it to another processing step. The action returns the generated spreadsheet in `data` and the number of records in `record_count`.\n\n**Key Options**:\n- `worksheet` — the worksheet name (defaults to `Sheet1`)\n- `headers` — explicit column header names; if not provided, headers are auto-detected from the first record\n- `column_formats` — the display format of columns, such as `dd.mm.yyyy` or `#,##0.00`",
+          "message": "在記憶體中建立 ODS 試算表資料並將其作為二進位資料傳回。\n\n當您需要產生 ODS 檔案而不寫入磁碟時，請使用此動作，例如將試算表作為 API 回應傳回、儲存至資料庫，或傳遞至其他處理步驟。動作會在 `data` 中傳回產生的試算表，並在 `record_count` 中傳回記錄數。\n\n**主要選項**：\n- `worksheet` — 工作表名稱 (預設為 `Sheet1`)\n- `headers` — 明確的欄位標頭名稱；若未提供，標頭將自動從第一筆記錄中偵測\n- `column_formats` — 欄位的顯示格式，例如 `dd.mm.yyyy` 或 `#,##0.00`"
         },
         "app.T0RT.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -434,6 +446,18 @@
         "app.T0RT.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
           "message": "資料的標頭/欄位名稱清單；若未提供，標頭將從第一筆記錄自動偵測"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.display_name": {
+          "source": "Column Display Formats",
+          "message": "欄位顯示格式"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.short_desc": {
+          "source": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+          "message": "每個欄位的顯示格式，例如 dd.mm.yyyy 或 #,##0.00"
+        },
+        "app.T0RT.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.desc": {
+          "source": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  Each format is written as an OpenDocument data style, which LibreOffice and Excel show the same way.  A column without a format is written as without this option.\n\nFormat codes are written as in LibreOffice and Excel:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`, and it is written as a percentage cell, which is read back as a number\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `ODS-WRITE-OPTION-ERROR` naming the column and the problem",
+          "message": "依標頭名稱指定的欄位顯示格式，讓開啟檔案的人都能依預期看到每個值：日期顯示為 `dd.mm.yyyy`、金額顯示為 `#,##0.00`，或比例顯示為 `0.0%`。儲存格會保留其實際值（日期仍為日期，數字仍為數字），只有顯示方式會改變。每個格式都會寫入為 OpenDocument 資料樣式，LibreOffice 與 Excel 會以相同方式顯示。未指定格式的欄位會如同未使用此選項時一樣寫入。\n\n格式代碼的寫法與 LibreOffice 和 Excel 相同：\n- **數字**：`0`（一律顯示的位數）、`#`（有效時才顯示的位數）、位數之間的 `,`（千分位分組）、最後一位數之後的 `,`（除以 1000）、`.`（小數點）以及 `E+00`（科學記號）；正值、負值與零值最多可有三個以 `;` 分隔的區段，例如 `#,##0.00;(#,##0.00)` 或 `#,##0.00;#,##0.00-`\n- **百分比**：每個區段中有一個 `%`，例如 `0.0%`；值為小數，因此 `0.25` 會顯示為 `25.0%`，並會寫入為百分比儲存格，讀回時為數字\n- **日期與時間**：`yy` 或 `yyyy`（年）、`m`、`mm`、`mmm` 或 `mmmm`（以數字或名稱表示的月）、`d` 或 `dd`（日）、`ddd` 或 `dddd`（星期名稱）、`h` 或 `hh`（時）、緊接在時之後或秒之前的 `m` 或 `mm`（分）、`s` 或 `ss`（秒）、秒之後的 `.0` 至 `.000`（秒的小數部分），以及 `AM/PM`，例如 `dd.mm.yyyy hh:mm`\n- **文字**：`@`\n\n代碼中的文字可以雙引號括住（`\"EUR\"`）、以反斜線跳脫（`\\x`）、寫成方括號中的貨幣符號（`[$€-407]`），而 `$ - + / ( ) :`、空格及 `€` 等符號則可直接書寫；區段可以用 `[Red]` 等色彩開頭。\n\n欄位代碼無法顯示的值（例如數字欄位中的字串）會以不套用格式的方式寫入。無效或不支援的代碼（`General`、分數、填滿字元、條件或經過時間），或未寫入的欄位，會引發 `ODS-WRITE-OPTION-ERROR`，並指出該欄位與問題"
         }
       }
     }

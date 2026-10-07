@@ -224,7 +224,8 @@ module OdsDataProvider {
                 "- `path` (required) — the output file location\n"
                 "- `worksheet` — the worksheet name (defaults to `Sheet1`)\n"
                 "- `headers` — explicit column header names; if not provided, headers are auto-detected "
-                "from the first record",
+                "from the first record\n"
+                "- `column_formats` — the display format of columns, such as `dd.mm.yyyy` or `#,##0.00`",
             "action_code": DPAT_CREATE,
             "cls": "OdsDataProvider::OdsWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -236,6 +237,10 @@ module OdsDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 OdsWriteDataProvider::ConstructorOptions{"worksheet", "headers"}, {
                     "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsWriteDataProvider::ConstructorOptions - ("path", "worksheet", "headers", "stream"), {
                     "loc": "constructor",
                 }
             ),
@@ -254,7 +259,8 @@ module OdsDataProvider {
                 "**Key Options**:\n"
                 "- `worksheet` — the worksheet name (defaults to `Sheet1`)\n"
                 "- `headers` — explicit column header names; if not provided, headers are auto-detected "
-                "from the first record",
+                "from the first record\n"
+                "- `column_formats` — the display format of columns, such as `dd.mm.yyyy` or `#,##0.00`",
             "action_code": DPAT_CREATE,
             "output_data_type": DPAD_CREATE_OUTPUT,
             "output_type": GeneratedDataOutputDataType,
@@ -262,6 +268,10 @@ module OdsDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OdsWriteDataProvider::ConstructorOptions{"worksheet", "headers"}, {
                     "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsWriteDataProvider::ConstructorOptions - ("path", "worksheet", "headers", "stream"), {
                     "loc": "constructor",
                 }
             ),
@@ -304,6 +314,31 @@ module OdsDataProvider {
     A \c data_cells range without an end column (e.g., \c "b2") ends at the last header column, or, without headers,
     at the last cell with a value in each row.
 
+    The write provider writes numbers as float cells, booleans as boolean cells, dates as date cells with their date
+    and clock time (with no time zone, as read above), no value as an empty cell, and other values as text.  Its
+    \c column_formats option gives columns a display format code, as LibreOffice and Excel write them, which is
+    written as an OpenDocument data style; the cells keep their real values:
+
+    @code{.py}
+    OdsWriteDataProvider dp("invoices.ods", {
+        "headers": ("Invoice", "Date", "Amount", "Discount"),
+        "column_formats": {
+            "Date": "dd.mm.yyyy",
+            "Amount": "#,##0.00;(#,##0.00)",
+            "Discount": "0.0%",
+        },
+    });
+    # the date is shown as 07.10.2026, the amount as (1,234.50) and the discount as 2.5%
+    dp.createRecord({"Invoice": "INV-1", "Date": 2026-10-07, "Amount": -1234.5, "Discount": 0.025});
+    dp.finishCreate();
+    @endcode
+
+    The format codes are those of the @ref ExcelDataProvider_writing_column_formats "ExcelDataProvider writer",
+    and each code is shown the same way in both kinds of file.  A number in a column with a percent code is written
+    as a percentage cell, which holds the fraction and is read back as a number.  An invalid or unsupported code, or
+    a format for a column that is not written, raises \c ODS-WRITE-OPTION-ERROR naming the column and the problem.
+    Each distinct code is one data style in the document, whatever the number of rows.
+
     The following classes are provided by this module:
     - @ref OdsDataProvider::OdsReadDataProvider "OdsReadDataProvider" - for reading ODS files
     - @ref OdsDataProvider::OdsReadDataProviderFactory "OdsReadDataProviderFactory" - factory for read providers
@@ -321,6 +356,10 @@ module OdsDataProvider {
       match; no match raises \c ODS-WORKSHEET-NOT-FOUND and more than one raises \c ODS-WORKSHEET-AMBIGUOUS
     - the \c ignore_empty option declares its default (\c false: reading stops at the first empty row) and that
       behavior in its option metadata
+    - added the \c column_formats write option: a display format code for each column, such as \c dd.mm.yyyy,
+      <tt>#,##0.00</tt> or \c 0.0%, written as an OpenDocument data style while the cells keep their dates and
+      numbers
+    - date cells are written with their clock time; before, only the date was written
 */
 
 #! contains all public definitions in the OdsDataProvider module

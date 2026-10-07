@@ -639,6 +639,37 @@ public class ExcelTestHelper {
         }
     }
 
+    /**
+     * Returns the display format code of each cell of a row of the first sheet of a workbook, read with POI
+     *
+     * @param path the workbook file (.xlsx or .xls)
+     * @param row the 0-based row
+     * @return the format code of each cell in the row, or null for a cell that does not exist
+     */
+    public static String[] getCellFormats(String path, int row) throws IOException {
+        try (Workbook wb = org.apache.poi.ss.usermodel.WorkbookFactory.create(new File(path), null, true)) {
+            Row r = wb.getSheetAt(0).getRow(row);
+            String[] formats = new String[r.getLastCellNum()];
+            for (int i = 0; i < formats.length; ++i) {
+                Cell cell = r.getCell(i);
+                formats[i] = cell == null ? null : cell.getCellStyle().getDataFormatString();
+            }
+            return formats;
+        }
+    }
+
+    /**
+     * Returns the number of cell styles in a workbook
+     *
+     * @param path the workbook file (.xlsx or .xls)
+     * @return the number of cell styles in the workbook
+     */
+    public static int getCellStyleCount(String path) throws IOException {
+        try (Workbook wb = org.apache.poi.ss.usermodel.WorkbookFactory.create(new File(path), null, true)) {
+            return wb.getNumCellStyles();
+        }
+    }
+
     private static void writeEntry(ZipOutputStream zip, String name, String data) throws IOException {
         zip.putNextEntry(new ZipEntry(name));
         zip.write(data.getBytes(StandardCharsets.UTF_8));
