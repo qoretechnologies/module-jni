@@ -41,10 +41,12 @@ import java.io.Closeable;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.qore.jni.Hash;
-import org.qore.jni.QoreException;
+import org.qore.dataprovider.format.SpreadsheetFormatCode;
 
 /**
  * Helper class for writing Excel files from Qore.
@@ -53,6 +55,15 @@ public class ExcelWriter implements Closeable {
     private Workbook workbook;
     private Sheet sheet;
     private CellStyle dateStyle;
+    private DataFormat dataFormat;
+    // the display format of each column by header name
+    private LinkedHashMap<String, SpreadsheetFormatCode> columnFormats =
+        new LinkedHashMap<String, SpreadsheetFormatCode>();
+    // one cell style per distinct format code, because a workbook can hold only a limited number of cell styles
+    private HashMap<String, CellStyle> formatStyles = new HashMap<String, CellStyle>();
+    // the format code and cell style of each column by position, set when the columns are known
+    private SpreadsheetFormatCode[] columnCodes;
+    private CellStyle[] columnStyles;
     private ArrayList<String> headers = new ArrayList<String>();
     private int currentRow = 0;
     private boolean headersWritten = false;
@@ -85,8 +96,86 @@ public class ExcelWriter implements Closeable {
 
         // Create date style
         dateStyle = workbook.createCellStyle();
-        DataFormat df = workbook.createDataFormat();
-        dateStyle.setDataFormat(df.getFormat("yyyy-mm-dd hh:mm:ss"));
+        dataFormat = workbook.createDataFormat();
+        dateStyle.setDataFormat(dataFormat.getFormat("yyyy-mm-dd hh:mm:ss"));
+    }
+
+    /**
+     * Returns why a display format code is not accepted, or null if it is
+     *
+     * @param code the format code, such as {@code dd.mm.yyyy}, {@code #,##0.00} or {@code 0.0%}
+     * @return the reason the format code is not accepted, or null if it is valid
+     */
+    public static String formatCodeIssue(String code) {
+        return SpreadsheetFormatCode.issue(code);
+    }
+
+    /**
+     * Sets the display format of columns
+     *
+     * Each value in a column is written as its type (a number stays a number, a date a date) and shown with the
+     * column's format code; a value that the code does not show (a string in a number column, for example) is
+     * written as it is without the format.  A column without a format code is written as before: a date with the
+     * default date and time format and a number without a format.
+     *
+     * @param formats the format code of each column by its header name; see {@link SpreadsheetFormatCode}
+     * @throws IllegalArgumentException a format code is not valid, or rows have already been written; the message
+     * names the column
+     */
+    public void setColumnFormats(Hash formats) {
+        if (currentRow > 0) {
+            throw new IllegalArgumentException("column formats must be set before any row is written");
+        }
+        LinkedHashMap<String, SpreadsheetFormatCode> codes = new LinkedHashMap<String, SpreadsheetFormatCode>();
+        for (Map.Entry<String, Object> e : formats.entrySet()) {
+            Object value = e.getValue();
+            if (!(value instanceof String)) {
+                throw new IllegalArgumentException(String.format("the format of column \"%s\" is not a string",
+                    e.getKey()));
+            }
+            try {
+                codes.put(e.getKey(), SpreadsheetFormatCode.parse((String) value));
+            } catch (IllegalArgumentException ex) {
+                throw new IllegalArgumentException(String.format("column \"%s\": %s", e.getKey(), ex.getMessage()),
+                    ex);
+            }
+        }
+        columnFormats = codes;
+    }
+
+    /**
+     * Resolves the format code and cell style of each column once the columns are known
+     *
+     * @throws IllegalArgumentException a column format names a column that is not written
+     */
+    private void resolveColumnStyles() {
+        if (columnStyles != null) {
+            return;
+        }
+        for (String column : columnFormats.keySet()) {
+            if (!headers.contains(column)) {
+                throw new IllegalArgumentException(String.format("a format is given for column \"%s\", which is not "
+                    + "one of the columns written: %s", column, headers));
+            }
+        }
+        SpreadsheetFormatCode[] codes = new SpreadsheetFormatCode[headers.size()];
+        CellStyle[] styles = new CellStyle[headers.size()];
+        for (int i = 0; i < headers.size(); ++i) {
+            SpreadsheetFormatCode code = columnFormats.get(headers.get(i));
+            if (code == null) {
+                continue;
+            }
+            CellStyle style = formatStyles.get(code.getCode());
+            if (style == null) {
+                style = workbook.createCellStyle();
+                style.setDataFormat(dataFormat.getFormat(code.getCode()));
+                formatStyles.put(code.getCode(), style);
+            }
+            codes[i] = code;
+            styles[i] = style;
+        }
+        columnCodes = codes;
+        columnStyles = styles;
     }
 
     /**
@@ -146,11 +235,17 @@ public class ExcelWriter implements Closeable {
                 headers.add(key.toString());
             }
         }
+        resolveColumnStyles();
         writeHeaders();
 
         Row row = sheet.createRow(currentRow++);
         for (int i = 0; i < headers.size(); i++) {
-            setCellValue(row.createCell(i), data.get(headers.get(i)));
+            Object value = data.get(headers.get(i));
+            Cell cell = row.createCell(i);
+            setCellValue(cell, value);
+            if (columnCodes[i] != null && columnCodes[i].shows(value)) {
+                cell.setCellStyle(columnStyles[i]);
+            }
         }
     }
 
