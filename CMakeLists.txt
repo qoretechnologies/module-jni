@@ -1022,7 +1022,7 @@ generate_java(org/qore/jni/QoreRelativeTime.java)
 generate_java(org/qore/jni/JdbcColumnarBatch.java)
 generate_java(org/qore/jni/QoreClosureMarker.java)
 generate_java(org/qore/jni/QoreClosureMarkerImpl.java)
-generate_java(org/qore/jni/QoreJavaDynamicApi.java)
+generate_java(org/qore/jni/QoreJavaDynamicApi.java $AccessibleMethods)
 generate_java(org/qore/jni/Hash.java 1 2 3 4 5 6 7 8 9 10)
 generate_java(org/qore/jni/JavaClassBuilder.java 1 2 StaticEntry)
 generate_java(org/qore/jni/QoreClassFileLocator.java)
@@ -1324,9 +1324,13 @@ target_include_directories(${module_name} PRIVATE $<BUILD_INTERFACE:${CMAKE_CURR
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/Globals.cpp
     PROPERTIES OBJECT_DEPENDS "${QORE_INC_FILES}"
 )
-# add include file dependency to QoreJniClassMap.cpp
+# add include file dependencies to QoreJniClassMap.cpp
+set(QORE_DYNAMIC_API_INC_FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/JavaClassQoreJavaDynamicApi.inc
+    ${CMAKE_CURRENT_BINARY_DIR}/JavaClassQoreJavaDynamicApi_AccessibleMethods.inc
+)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/QoreJniClassMap.cpp
-    PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/JavaClassQoreJavaDynamicApi.inc"
+    PROPERTIES OBJECT_DEPENDS "${QORE_DYNAMIC_API_INC_FILES}"
 )
 
 target_link_libraries(${module_name} ${JNI_LIBRARIES} ${BZIP2_LIBRARIES} ${QORE_LIBRARY})

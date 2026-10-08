@@ -31,11 +31,6 @@
       @ref jni_qore_object_lifecycle_managementguide "object lifecycle management" and
       @ref org.qore.jni.QoreObjectBase.release().
 
-    - Public methods on non-public Java implementations now resolve through accessible public interfaces
-      or superclasses when the implementation module is closed. For example, Kafka partition assignments
-      returned as an unmodifiable set support \c size() without \c --add-opens. Private access restrictions,
-      virtual dispatch, target exceptions, and context class-loader restoration are preserved.
-
     @subsection jni_3_0_0_features New Features
 
     @subsubsection jni_3_0_0_kotlin Kotlin Integration
@@ -161,6 +156,15 @@
       @ref exceldataproviderintro "Excel" and @ref odsdataproviderintro "ODS" readers with the
       \c timezone option, which are now the clock time written in the file, in that zone.
 
+    @par Method invocation
+
+    - Fixed \c IllegalAccessException when calling a public method of an object whose implementation class
+      is not public and is in a closed module, such as \c size() on the unmodifiable set of a Kafka
+      consumer's partition assignment; the method is now invoked through its accessible public interface or
+      superclass declaration, without \c --add-opens. Virtual dispatch, private access restrictions, target
+      exceptions, and the context class loader are preserved, and the declaration is resolved once per
+      method.
+
     @par Lifetimes and shutdown
 
     - Fixed crashes from expired Program bindings, callback metadata, and incomplete Java wrapper
@@ -172,6 +176,9 @@
       @ref jni_qore_object_lifecycle_managementguide "object lifecycle management".
     - Fixed hangs and aborts during JVM-owned process shutdown, dynamic-class teardown, and explicit
       %Qore process exit, including the macOS shutdown failure.
+    - Fixed the process aborting when a Program's Java context could not be created, for example because
+      a Java class of the module's dynamic API failed to initialize; loading the module, a
+      <tt>%module-cmd(jni)</tt> command, or a \c jni import now fails with the Java exception instead.
 
     @par JDBC and data providers
 

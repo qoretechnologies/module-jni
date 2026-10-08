@@ -324,7 +324,14 @@ static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exception
     if (!pgm->getExternalData("jni")) {
         QoreNamespace* jnins = qjcm.getJniNs().copy();
         rns->addNamespace(jnins);
-        pgm->setExternalData("jni", new JniExternalProgramData(jnins, pgm));
+        // a Java exception raised while setting up the Program's class loader and dynamic API must be converted
+        // here, while it is still pending in the JVM; left to unwind into the module loader, it terminated the
+        // process instead of failing the module load
+        try {
+            pgm->setExternalData("jni", new JniExternalProgramData(jnins, pgm));
+        } catch (jni::Exception& e) {
+            e.convert(&xsink);
+        }
     }
 }
 
@@ -371,10 +378,11 @@ extern "C" QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg,
 
 // exported function
 extern "C" int jni_module_import(ExceptionSink* xsink, QoreProgram* pgm, const char* import) {
-    JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
-        //printd(5, "jni_module_import '%s' jpc: %p jnins: %p pgm: %p\n", import, jpc, jpc->getJniNamespace(), pgm);
     QoreString arg(import);
     try {
+        // creating the Program's JNI context can raise a Java exception, which must be converted below
+        JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
+        //printd(5, "jni_module_import '%s' jpc: %p jnins: %p pgm: %p\n", import, jpc, jpc->getJniNamespace(), pgm);
         if (arg[-1] != '*') {
             Env env;
             //printd(5, "jni_module_import() non wc lcc arg: '%s' (pgm: %p)\n", arg.c_str(), pgm);
@@ -427,8 +435,9 @@ static void jni_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
 
     // we must use "getProgram()" here for the parse context QoreProgram
     QoreProgram* pgm = getProgram();
-    JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
     try {
+        // creating the Program's JNI context can raise a Java exception, which must be converted below
+        JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
         i->second(arg, pgm, jpc);
     } catch (jni::Exception& e) {
         e.convert(xsink);

@@ -42,6 +42,7 @@
 #include "ModifiedUtf8String.h"
 
 #include "JavaClassQoreJavaDynamicApi.inc"
+#include "JavaClassQoreJavaDynamicApi_AccessibleMethods.inc"
 
 namespace jni {
 static std::string JNI_CK_JAVA_BIN_NAME = "jni_bin_name";
@@ -3763,27 +3764,38 @@ JniExternalProgramData::~JniExternalProgramData() {
     classLoader = nullptr;
 }
 
-void JniExternalProgramData::initDynamicApi(Env& env) {
-    // define the QoreJavaDynamicApi class using our new classloader
-    LocalReference<jstring> jname = env.newString("org.qore.jni.QoreJavaDynamicApi");
+// defines a class built in to the module with the given class loader and returns it
+static LocalReference<jclass> define_built_in_class(Env& env, jobject class_loader, const char* name,
+        const unsigned char* byte_code, unsigned len) {
+    LocalReference<jstring> jname = env.newString(name);
 
     // make byte array
-    LocalReference<jbyteArray> jbyte_code =
-        env.newByteArray(java_org_qore_jni_QoreJavaDynamicApi_class_len).as<jbyteArray>();
-    for (jsize i = 0; (unsigned)i < java_org_qore_jni_QoreJavaDynamicApi_class_len; ++i) {
-        env.setByteArrayElement(jbyte_code, i, java_org_qore_jni_QoreJavaDynamicApi_class[i]);
+    LocalReference<jbyteArray> jbyte_code = env.newByteArray(len).as<jbyteArray>();
+    for (jsize i = 0; (unsigned)i < len; ++i) {
+        env.setByteArrayElement(jbyte_code, i, byte_code[i]);
     }
 
     std::vector<jvalue> jargs(4);
     jargs[0].l = jname;
     jargs[1].l = jbyte_code;
     jargs[2].i = 0;
-    jargs[3].i = java_org_qore_jni_QoreJavaDynamicApi_class_len;
+    jargs[3].i = len;
 
-    printd(5, "JniExternalProgramData::JniExternalProgramData() jname: %p bc: %p cl: %d\n", (jobject)jname,
-        (jobject)jbyte_code, java_org_qore_jni_QoreJavaDynamicApi_class_len);
-    dynamicApi = env.callObjectMethod(classLoader, Globals::methodQoreURLClassLoaderDefineResolveClass,
-        &jargs[0]).as<jclass>().makeGlobal();
+    printd(5, "define_built_in_class() name: %s bc: %p len: %d\n", name, (jobject)jbyte_code, len);
+    return env.callObjectMethod(class_loader, Globals::methodQoreURLClassLoaderDefineResolveClass, &jargs[0])
+        .as<jclass>();
+}
+
+void JniExternalProgramData::initDynamicApi(Env& env) {
+    // define the QoreJavaDynamicApi class using our new classloader
+    dynamicApi = define_built_in_class(env, classLoader, "org.qore.jni.QoreJavaDynamicApi",
+        java_org_qore_jni_QoreJavaDynamicApi_class, java_org_qore_jni_QoreJavaDynamicApi_class_len).makeGlobal();
+    // its nested class must be defined by the same loader: a class loader delegates to its parent first, which
+    // would define the class from the module's built-in classes in another runtime package, where the private
+    // nested class is not accessible to QoreJavaDynamicApi, which then fails to initialize
+    define_built_in_class(env, classLoader, "org.qore.jni.QoreJavaDynamicApi$AccessibleMethods",
+        java_org_qore_jni_QoreJavaDynamicApi_AccessibleMethods_class,
+        java_org_qore_jni_QoreJavaDynamicApi_AccessibleMethods_class_len);
     methodQoreJavaDynamicApiNewInstance = env.getStaticMethod(dynamicApi, "newInstance",
         "(Ljava/lang/reflect/Constructor;[Ljava/lang/Object;)Ljava/lang/Object;");
     methodQoreJavaDynamicApiInvokeMethod = env.getStaticMethod(dynamicApi, "invokeMethod",

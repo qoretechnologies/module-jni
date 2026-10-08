@@ -2402,6 +2402,7 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassQoreRelativeTime.inc"
 #include "JavaClassJdbcColumnarBatch.inc"
 #include "JavaClassQoreJavaDynamicApi.inc"
+#include "JavaClassQoreJavaDynamicApi_AccessibleMethods.inc"
 #include "JavaClassHash.inc"
 #include "JavaClassHash_1.inc"
 #include "JavaClassHash_2.inc"
@@ -2471,6 +2472,7 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreJavaApi", {java_org_qore_jni_QoreJavaApi_class_len, java_org_qore_jni_QoreJavaApi_class}},
     {"org.qore.jni.QoreJavaClassBase", {java_org_qore_jni_QoreJavaClassBase_class_len, java_org_qore_jni_QoreJavaClassBase_class}},
     {"org.qore.jni.QoreJavaDynamicApi", {java_org_qore_jni_QoreJavaDynamicApi_class_len, java_org_qore_jni_QoreJavaDynamicApi_class}},
+    {"org.qore.jni.QoreJavaDynamicApi$AccessibleMethods", {java_org_qore_jni_QoreJavaDynamicApi_AccessibleMethods_class_len, java_org_qore_jni_QoreJavaDynamicApi_AccessibleMethods_class}},
     {"org.qore.jni.QoreJavaFileObject", {java_org_qore_jni_QoreJavaFileObject_class_len, java_org_qore_jni_QoreJavaFileObject_class}},
     {"org.qore.jni.QoreJavaObjectPtr", {java_org_qore_jni_QoreJavaObjectPtr_class_len, java_org_qore_jni_QoreJavaObjectPtr_class}},
     {"org.qore.jni.QoreObject", {java_org_qore_jni_QoreObject_class_len, java_org_qore_jni_QoreObject_class}},

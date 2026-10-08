@@ -79,6 +79,48 @@ public class JavaMethodAccessTest {
         } finally {
             Thread.currentThread().setContextClassLoader(original);
         }
+
+        // The accessible declaration is resolved once per method and does not depend on the first object it was
+        // invoked on: one method object of a hidden class serves every instance of that class.
+        List<String> three = List.of("a", "b", "c");
+        List<String> four = List.of("w", "x", "y", "z");
+        equal(three.getClass(), four.getClass());
+        Method size = three.getClass().getMethod("size");
+        equal(false, size.trySetAccessible());
+        for (int i = 0; i < 1000; ++i) {
+            equal(3, QoreJavaDynamicApi.invokeMethod(size, three));
+            equal(4, QoreJavaDynamicApi.invokeMethod(size, four));
+        }
+        // The resolution is shared safely between threads invoking the same methods at once.
+        equal(false, Collections.unmodifiableList(new ArrayList<>()).getClass().getMethod("size").trySetAccessible());
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(8);
+        try {
+            List<java.util.concurrent.Callable<Integer>> tasks = new ArrayList<>();
+            for (int t = 0; t < 8; ++t) {
+                final List<String> values = Collections.unmodifiableList(new ArrayList<>(List.of("v")));
+                tasks.add(() -> {
+                    Method get = values.getClass().getMethod("get", int.class);
+                    Method count = values.getClass().getMethod("size");
+                    int ok = 0;
+                    try {
+                        for (int i = 0; i < 1000; ++i) {
+                            if (Integer.valueOf(1).equals(QoreJavaDynamicApi.invokeMethod(count, values))
+                                    && "v".equals(QoreJavaDynamicApi.invokeMethod(get, values, 0))) {
+                                ++ok;
+                            }
+                        }
+                    } catch (Throwable e) {
+                        throw new Exception(e);
+                    }
+                    return ok;
+                });
+            }
+            for (java.util.concurrent.Future<Integer> f : pool.invokeAll(tasks)) {
+                equal(1000, f.get());
+            }
+        } finally {
+            pool.shutdownNow();
+        }
         System.out.println(checks + " Java method-access assertions passed");
     }
 }

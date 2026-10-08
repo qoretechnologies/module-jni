@@ -29,6 +29,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayDeque;
 import java.util.HashSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 
 import java.lang.invoke.MethodHandle;
@@ -112,7 +113,8 @@ public class QoreJavaDynamicApi {
         try {
             if (!m.trySetAccessible() && Modifier.isPublic(m.getModifiers())
                     && !Modifier.isStatic(m.getModifiers()) && obj != null) {
-                m = accessibleVirtualMethod(m, obj);
+                m = accessibleVirtualMethods.get(m.getDeclaringClass()).computeIfAbsent(m,
+                    original -> accessibleVirtualMethod(original, obj));
             }
             return m.invoke(obj, args);
         } catch (InvocationTargetException e) {
@@ -123,6 +125,23 @@ public class QoreJavaDynamicApi {
             throw e0;
         } finally {
             popTccl(savedTccl);
+        }
+    }
+
+    /** The accessible declaration of each inaccessible public virtual method that has been invoked, by the
+        method's declaring class, so the hierarchy is searched once per method rather than on every call.
+        A ClassValue does not keep its class, or the class loader of a Program's dynamic classes, from being
+        unloaded, as a static map of methods would.  The declaration found does not depend on the object it is
+        invoked on: a public member's accessibility depends only on the caller and the declaring classes. */
+    private static final AccessibleMethods accessibleVirtualMethods = new AccessibleMethods();
+
+    /** The accessible declarations of a class's inaccessible public virtual methods.  A named nested class
+        rather than an anonymous one, as it is built in to the binary module with this class (see
+        generate_java() in CMakeLists.txt and the internal class table in Globals.cpp). */
+    private static final class AccessibleMethods extends ClassValue<ConcurrentHashMap<Method, Method>> {
+        @Override
+        protected ConcurrentHashMap<Method, Method> computeValue(Class<?> type) {
+            return new ConcurrentHashMap<Method, Method>();
         }
     }
 
