@@ -87,6 +87,18 @@
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "Si `True`, l'objet analysera les noms d'en-tête à partir de la première ligne d'en-tête ; dans ce cas, si `header_cells` n'est pas défini explicitement, il sera supposé qu'il s'agit de la première ligne"
         },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "Champ des formules"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "Renvoyer les formules des cellules de chaque ligne dans un champ portant ce nom"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "Le nom d'un champ supplémentaire ajouté à chaque enregistrement avec les formules des cellules de la ligne, afin que le processus qui lit le fichier distingue les lignes calculées par des formules des lignes de données.  L'usage le plus courant est de reconnaître une **ligne de totaux composée uniquement de formules `SUM`**, sans libellé `Total`, à l'exécution de la même manière que le profil de la feuille au moment de la conception : passez la valeur du champ à `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Valeur :** un hash du texte de la formule (tel qu'Excel l'affiche, sans le `=` initial) par la référence de la cellule dans la feuille de calcul (par exemple `{\"B5\": \"SUM(B2:B4)\"}`), avec une entrée pour chaque cellule de l'enregistrement qui contient une formule ; `NOTHING` si aucune cellule de l'enregistrement ne contient de formule.  Les références sont celles de la feuille de calcul, quelle que soit la plage `data_cells`.\n\nLes valeurs des cellules contenant des formules sont toujours renvoyées comme leurs résultats calculés.  Le nom ne doit pas être celui d'une colonne de la feuille de calcul ; un tel nom lève `EXCEL-FORMULA-FIELD-ERROR`.  S'il n'est pas défini, les enregistrements n'ont pas de champ de formules et les formules ne sont pas lues."
+        },
         "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",
           "message": "En-têtes de sortie"
@@ -290,6 +302,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "Si `True`, l'objet analysera les noms d'en-tête à partir de la première ligne d'en-tête ; dans ce cas, si `header_cells` n'est pas défini explicitement, il sera supposé qu'il s'agit de la première ligne"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "Champ des formules"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "Renvoyer les formules des cellules de chaque ligne dans un champ portant ce nom"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "Le nom d'un champ supplémentaire ajouté à chaque enregistrement avec les formules des cellules de la ligne, afin que le processus qui lit le fichier distingue les lignes calculées par des formules des lignes de données.  L'usage le plus courant est de reconnaître une **ligne de totaux composée uniquement de formules `SUM`**, sans libellé `Total`, à l'exécution de la même manière que le profil de la feuille au moment de la conception : passez la valeur du champ à `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Valeur :** un hash du texte de la formule (tel qu'Excel l'affiche, sans le `=` initial) par la référence de la cellule dans la feuille de calcul (par exemple `{\"B5\": \"SUM(B2:B4)\"}`), avec une entrée pour chaque cellule de l'enregistrement qui contient une formule ; `NOTHING` si aucune cellule de l'enregistrement ne contient de formule.  Les références sont celles de la feuille de calcul, quelle que soit la plage `data_cells`.\n\nLes valeurs des cellules contenant des formules sont toujours renvoyées comme leurs résultats calculés.  Le nom ne doit pas être celui d'une colonne de la feuille de calcul ; un tel nom lève `EXCEL-FORMULA-FIELD-ERROR`.  S'il n'est pas défini, les enregistrements n'ont pas de champ de formules et les formules ne sont pas lues."
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",

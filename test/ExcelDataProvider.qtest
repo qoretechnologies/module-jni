@@ -32,6 +32,7 @@
 %requires FsUtil
 %requires CsvUtil
 %requires jni
+%requires reflection
 %requires ExcelDataProvider
 
 # Add classpaths for the test helper - must come after ExcelDataProvider to share its POI classpath
@@ -234,6 +235,10 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("write: the write actions offer column formats", \testColumnFormatsActionOption());
         addTestCase("write: column formats as LibreOffice shows them", \testWriteColumnFormatsRendered());
         addTestCase("negative: a file that cannot be read as a workbook", \testUnreadableFiles());
+        addTestCase("read: the formulas of each record", \testFormulaField());
+        addTestCase("read: the formulas of a data range", \testFormulaFieldDataRange());
+        addTestCase("read: shared, array and data table formulas", \testFormulaFieldShared());
+        addTestCase("negative: formula field name", \testFormulaFieldNegative());
         set_return_value(main());
     }
 
@@ -256,6 +261,9 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         ExcelTestHelper::createDataTypesExcel(test_data_dir + "/data-types.xlsx");
         ExcelTestHelper::createProfileExcel(test_data_dir + "/profile.xlsx", False);
         ExcelTestHelper::createProfileExcel(test_data_dir + "/profile.xls", True);
+        ExcelTestHelper::createFormulaRowsExcel(test_data_dir + "/formula-rows.xlsx", False);
+        ExcelTestHelper::createFormulaRowsExcel(test_data_dir + "/formula-rows.xls", True);
+        ExcelTestHelper::createSharedFormulaExcel(test_data_dir + "/shared-formulas.xlsx");
 
         assertTrue(is_file(test_data_dir + "/simple.xlsx"), "simple.xlsx created");
     }
@@ -613,6 +621,161 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         # the unencrypted workbook reads
         ExcelReadDataProvider dp({"data": workbook, "header_names": True});
         assertEq(3, (map $1, dp.searchRecords()).size());
+    }
+
+    #! The formulas of the records of the order sheet: line totals in the data rows, a totals row of formulas only
+    const OrderFormulas = (
+        {"D2": "B2*C2"},
+        {"D3": "SUM(B3:C3)"},
+        {"D4": "SUM(B4:C4)"},
+        {"B5": "SUM(B2:B4)", "D5": "SUBTOTAL(9,D2:D4)"},
+        NOTHING,
+    );
+
+    #! Returns TabularProfiler::hasTotalsFormula() if the DataProvider module has it (DataProvider 3.9 with
+    #! qore e2005d254), otherwise NOTHING
+    private static *code<bool(*hash<auto>)> getHasTotalsFormula() {
+        try {
+            hash<MethodAccessInfo> m = Class::forName("DataProvider::TabularProfiler")
+                .findStaticMethod("hasTotalsFormula");
+            StaticMethod method = cast<StaticMethod>(m.method);
+            return bool sub (*hash<auto> formulas) {
+                return method.call(formulas);
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "UNKNOWN-METHOD") {
+                rethrow;
+            }
+        }
+    }
+
+    #! A formula field returns the formulas of each record's cells as the profile gives them (qorus#646)
+    testFormulaField() {
+        *code<bool(*hash<auto>)> has_totals_formula = getHasTotalsFormula();
+        foreach string ext in (("xlsx", "xls")) {
+            string path = test_data_dir + "/formula-rows." + ext;
+            ExcelReadDataProvider dp({"path": path, "header_names": True, "formula_field": "_formulas"});
+            list<hash<auto>> records = map $1, dp.searchRecords();
+            assertEq(5, records.size(), ext);
+            assertEq(OrderFormulas, (map $1._formulas, records), ext);
+            # values of formula cells are still their results
+            assertEq((10.0, 7.0, 8.0, 25.0, 29.0), (map $1.Line, records), ext);
+            assertEq(("Item", "Qty", "Price", "Line", "_formulas"), keys records[0], ext);
+            # the record type declares the field
+            hash<string, AbstractDataField> rec_type = dp.getRecordType();
+            assertEq(("Item", "Qty", "Price", "Line", "_formulas"), keys rec_type, ext);
+            assertEq("hash", rec_type._formulas.getType().getBaseTypeName(), ext);
+
+            # the formulas are those of the profile of the sheet
+            hash<TabularWorkbookGrid> grid = ExcelProfileDataProvider::readWorkbookGrid(
+                ReadOnlyFile::readBinaryFile(path), 1000);
+            hash<auto> all;
+            map all += $1._formulas, records[0..3];
+            assertEq(grid.sheets[0].formulas, all, ext);
+
+            # the shared totals row rule: only the totals row of formulas is a totals row; a line total is not
+            if (has_totals_formula) {
+                assertEq((False, False, False, True, False), (map has_totals_formula($1._formulas), records), ext);
+            }
+
+            # without the option there is no formula field
+            dp = new ExcelReadDataProvider({"path": path, "header_names": True});
+            records = map $1, dp.searchRecords();
+            assertEq(("Item", "Qty", "Price", "Line"), keys records[0], ext);
+            assertEq(("Item", "Qty", "Price", "Line"), keys dp.getRecordType(), ext);
+
+            # the worksheet provider and the read-data input
+            AbstractDataProvider sheet = new ExcelReadDataProvider({"path": path, "header_names": True,
+                "formula_field": "f"}).getChildProvider("Order");
+            assertEq("f", (keys sheet.getRecordType())[4], ext + " worksheet");
+            assertEq(OrderFormulas, (map $1.f, sheet.searchRecords()), ext + " worksheet");
+            dp = new ExcelReadDataProvider({"data": ReadOnlyFile::readBinaryFile(path), "header_names": True,
+                "formula_field": "f"});
+            assertEq(OrderFormulas, (map $1.f, dp.searchRecords()), ext + " data");
+        }
+        if (!has_totals_formula) {
+            printf("skipped: TabularProfiler::hasTotalsFormula() needs DataProvider with qore e2005d254\n");
+        }
+    }
+
+    #! A formula field gives the references of the worksheet when the data range does not start at A1
+    testFormulaFieldDataRange() {
+        foreach string ext in (("xlsx", "xls")) {
+            ExcelReadDataProvider dp(test_data_dir + "/formula-rows." + ext, {
+                "header_cells": "b1:d1",
+                "data_cells": "b3:d5",
+                "formula_field": "_formulas",
+            });
+            list<hash<auto>> records = map $1, dp.searchRecords();
+            assertEq(("Qty", "Price", "Line", "_formulas"), keys records[0], ext);
+            assertEq(OrderFormulas[1..3], (map $1._formulas, records), ext);
+            # only the cells of the record: the range without column D
+            dp = new ExcelReadDataProvider(test_data_dir + "/formula-rows." + ext, {
+                "header_cells": "a1:c1",
+                "data_cells": "a2:c5",
+                "formula_field": "_formulas",
+            });
+            assertEq((NOTHING, NOTHING, NOTHING, {"B5": "SUM(B2:B4)"}), (map $1._formulas, dp.searchRecords()),
+                ext);
+            # without headers
+            dp = new ExcelReadDataProvider(test_data_dir + "/formula-rows." + ext, {
+                "data_cells": "b5:d5",
+                "formula_field": "_formulas",
+            });
+            assertEq(({"B5": "SUM(B2:B4)", "D5": "SUBTOTAL(9,D2:D4)"},), (map $1._formulas, dp.searchRecords()),
+                ext);
+        }
+    }
+
+    #! Shared and array formulas of a streamed worksheet give the formulas that POI's usermodel gives
+    testFormulaFieldShared() {
+        string path = test_data_dir + "/shared-formulas.xlsx";
+        ExcelReadDataProvider dp({"path": path, "worksheet": "Order", "header_names": True,
+            "formula_field": "_formulas"});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(5, records.size());
+        hash<auto> all;
+        map all += $1._formulas, records;
+        # the profile reads the workbook with POI's usermodel
+        hash<TabularWorkbookGrid> grid = ExcelProfileDataProvider::readWorkbookGrid(
+            ReadOnlyFile::readBinaryFile(path), 1000);
+        assertEq(grid.sheets[1].formulas, all);
+        # shared formulas are moved to each cell; absolute references and names are kept; POI renders a moved
+        # reference to another sheet without its sheet name, and the records give the same text as the profile
+        assertEq("SUM(B2:C2)", all.D2);
+        assertEq("SUM(B5:C5)", all.D5);
+        assertEq("D2", all.E2);
+        assertEq("D3*Rate+$B$1+A1+Local", all.E3);
+        assertEq("D4*Rate+$B$1+A2+Local", all.E4);
+        # every cell of an array formula has its formula; a data table cell has no formula
+        assertEq("B2:B3*2", all.F2);
+        assertEq("B2:B3*2", all.F3);
+        assertFalse(all.hasKey("G4"));
+        assertEq({"B6": "SUM(B2:B5)", "D6": "SUM(D2:D5)"}, records[4]._formulas);
+        # a second iteration reads the same formulas
+        assertEq((map $1._formulas, records), (map $1._formulas, dp.searchRecords()));
+    }
+
+    #! A formula field name that is a column of the worksheet is an error
+    testFormulaFieldNegative() {
+        foreach string ext in (("xlsx", "xls")) {
+            string path = test_data_dir + "/formula-rows." + ext;
+            ExcelReadDataProvider dp({"path": path, "header_names": True, "formula_field": "Line"});
+            assertThrows("EXCEL-FORMULA-FIELD-ERROR", "Line", \dp.getRecordType());
+            dp = new ExcelReadDataProvider({"path": path, "header_names": True, "formula_field": "Line"});
+            assertThrows("EXCEL-FORMULA-FIELD-ERROR", "Line", sub () { map $1, dp.searchRecords(); });
+            # without headers, a field name of the record
+            dp = new ExcelReadDataProvider({"path": path, "data_cells": "a2:d2", "formula_field": "A2"});
+            assertThrows("EXCEL-FORMULA-FIELD-ERROR", "A2", sub () { map $1, dp.searchRecords(); });
+            assertThrows("EXCEL-FORMULA-FIELD-ERROR", sub () {
+                ExcelReadDataProvider p({"path": path, "formula_field": ""});
+            });
+        }
+        # the option is offered by the read actions
+        foreach string action in (("read", "read-data")) {
+            hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("Excel", action);
+            assertTrue(info.options.hasKey("formula_field"), action);
+        }
     }
 
     testNegativeInvalidWorksheet() {

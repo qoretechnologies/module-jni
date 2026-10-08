@@ -56,6 +56,14 @@ interface SheetSource extends Closeable {
         boolean isCellDateFormatted();
 
         LocalDateTime getLocalDateTimeCellValue();
+
+        /**
+         * Returns the formula of a formula cell as POI's usermodel Cell.getCellFormula() gives it (without the
+         * leading "="), or null if the cell is not a formula cell
+         *
+         * Formula text is only available after formulas are enabled with SheetSource.enableFormulas()
+         */
+        String getCellFormula();
     }
 
     /**
@@ -84,4 +92,10 @@ interface SheetSource extends Closeable {
      * Starts a new pass over the physical rows of the sheet; the caller must close it
      */
     RowReader openRows() throws IOException;
+
+    /**
+     * Makes the formula text of the cells of the passes started afterwards available from Cell.getCellFormula(); a
+     * source that streams its rows reads formula text only when it is enabled
+     */
+    void enableFormulas();
 }

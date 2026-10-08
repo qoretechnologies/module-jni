@@ -148,10 +148,7 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
 
     #! Returns the description of the record type, if any
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-        return map {
-            $1: new QoreDataField($1, "Excel sheet " + sheet + " column " + $1,
-                AbstractDataProviderType::anyDataType)
-        }, i.getHeaders();
+        return ExcelReadDataProvider::getIteratorRecordType(i, sheet, opts);
     }
 
     #! Returns data provider static info

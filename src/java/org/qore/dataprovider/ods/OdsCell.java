@@ -50,9 +50,11 @@ final class OdsCell {
     private final String display_text;
     // true if the cell's text content as OdfElement.getTextContent() gives it is not only whitespace
     private final boolean has_text;
+    // the table:formula attribute in ODF syntax; null if not set or empty
+    private final String formula;
 
     private OdsCell(String value_type, String value, String boolean_value, String date_value, String time_value,
-            String display_text, boolean has_text) {
+            String display_text, boolean has_text, String formula) {
         this.value_type = value_type;
         this.value = value;
         this.boolean_value = boolean_value;
@@ -60,6 +62,7 @@ final class OdsCell {
         this.time_value = time_value;
         this.display_text = display_text;
         this.has_text = has_text;
+        this.formula = formula;
     }
 
     /**
@@ -80,6 +83,10 @@ final class OdsCell {
         String boolean_value = xr.getAttributeValue(OdsSheetReader.NS_OFFICE, "boolean-value");
         String date_value = xr.getAttributeValue(OdsSheetReader.NS_OFFICE, "date-value");
         String time_value = xr.getAttributeValue(OdsSheetReader.NS_OFFICE, "time-value");
+        String formula = xr.getAttributeValue(OdsSheetReader.NS_TABLE, "formula");
+        if (formula != null && formula.isEmpty()) {
+            formula = null;
+        }
 
         StringBuilder display = new StringBuilder();
         boolean has_text = false;
@@ -151,7 +158,8 @@ final class OdsCell {
                     break;
             }
         }
-        return new OdsCell(value_type, value, boolean_value, date_value, time_value, display.toString(), has_text);
+        return new OdsCell(value_type, value, boolean_value, date_value, time_value, display.toString(), has_text,
+            formula);
     }
 
     /**
@@ -159,6 +167,14 @@ final class OdsCell {
      */
     boolean hasContent() {
         return (value_type != null && !value_type.isEmpty()) || has_text;
+    }
+
+    /**
+     * Returns the cell's formula in ODF syntax as written (for example "of:=SUM([.B2:.B4])"), or null if the cell
+     * has no formula
+     */
+    String getFormula() {
+        return formula;
     }
 
     String getValueType() {

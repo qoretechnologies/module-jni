@@ -209,12 +209,23 @@ public class OdsGridReader {
                 }
                 String formula = cell.getAttributeNS(TABLE_NS, "formula");
                 if (!formula.isEmpty()) {
-                    formulas.put(columnLetter(col) + (row + 1), toA1(formula));
+                    formulas.put(formulaReference(row, col), toA1(formula));
                 }
             }
             col += n;
         }
         return values;
+    }
+
+    /**
+     * Returns the A1 reference of a cell by which its formula is given ("B5"), also used by OdsIterator, so the
+     * formulas of the records match the formulas of the profile
+     *
+     * @param row the 0-based row
+     * @param col the 0-based column
+     */
+    static String formulaReference(int row, int col) {
+        return columnLetter(col) + (row + 1);
     }
 
     /**

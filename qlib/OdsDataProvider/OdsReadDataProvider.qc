@@ -79,6 +79,26 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
                 "desc": "The range of cells for data to process",
                 "example_value": "b2:f10",
             },
+            "formula_field": <DataProviderOptionInfo>{
+                "display_name": "Formula Field",
+                "short_desc": "Return the formulas of each row's cells in a field with this name",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "The name of an extra field added to every record with the formulas of the row's cells, "
+                    "so the process reading the file can tell rows calculated by formulas from rows of data.  The "
+                    "most common use is recognizing a **totals row made only of `SUM` formulas**, with no "
+                    "`Total` label, at run time in the same way as the spreadsheet profile does at design time: "
+                    "pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n"
+                    "**Value:** a hash of the formula text in A1 notation (for example `SUM(B2:B4)` for the ODF "
+                    "formula `of:=SUM([.B2:.B4])`) by the cell's reference in the sheet (for example "
+                    "`{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a "
+                    "formula; `NOTHING` if none of the record's cells holds a formula.  References are those of "
+                    "the sheet, whatever the `data_cells` range; a formula repeated over several columns or rows "
+                    "is given for the first of them, as in the profile.\n\n"
+                    "Values of formula cells are still returned as their calculated results.  The name must not "
+                    "be the name of a column of the sheet; a name that is raises `ODS-FORMULA-FIELD-ERROR`.  If "
+                    "not set, records have no formula field.",
+                "example_value": "_formulas",
+            },
             "header_cells": <DataProviderOptionInfo>{
                 "display_name": "Header Cells",
                 "short_desc": "The range of cells for headers or a row number",
@@ -283,6 +303,7 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
     #! Validates option combinations and parses cell range options
     /** @throw ODS-READ-OPTION-ERROR \c "headers" and \c "header_names" are both given
         @throw ODS-INVALID-LOCATION invalid location or range string
+        @throw ODS-FORMULA-FIELD-ERROR the \c formula_field option is an empty string
     */
     static *hash<auto> processCellOptions(*hash<auto> opts) {
         if (opts) {
@@ -292,6 +313,9 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (opts.worksheet.val() && exists opts.worksheet_pattern) {
             throw "ODS-READ-OPTION-ERROR", "cannot provide both \"worksheet\" and \"worksheet_pattern\" "
                 "options; use either one or the other";
+        }
+        if (exists opts.formula_field && !opts.formula_field.val()) {
+            throw "ODS-FORMULA-FIELD-ERROR", "the \"formula_field\" option must not be empty";
         }
         if (opts.headers && opts.header_names) {
             throw "ODS-READ-OPTION-ERROR", "cannot provide both \"headers\" and \"header_names\" options; use "
@@ -494,6 +518,30 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
         if (opts.ignore_empty) {
             it.setIgnoreEmpty(True);
         }
+        # set last: the name is checked against the headers
+        if (exists opts.formula_field) {
+            it.setFormulaField(opts.formula_field);
+        }
+    }
+
+    #! Returns the record type of an iterator configured from processed options
+    /** @param it the configured iterator
+        @param sheet the name of the sheet
+        @param opts options already processed by processCellOptions()
+
+        @return the fields of the records: the columns, and the formula field if the \c formula_field option is set
+    */
+    static hash<string, AbstractDataField> getIteratorRecordType(OdsIterator it, string sheet, *hash<auto> opts) {
+        hash<string, AbstractDataField> rv = map {
+            $1: new QoreDataField($1, "ODS sheet " + sheet + " column " + $1,
+                AbstractDataProviderType::anyDataType)
+        }, it.getHeaders();
+        if (rv && exists opts.formula_field) {
+            rv{opts.formula_field} = new QoreDataField(opts.formula_field, "The formulas of the cells of the row "
+                "by cell reference, or NOTHING if none of them holds a formula",
+                AbstractDataProviderType::get(AutoHashOrNothingType));
+        }
+        return rv;
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -509,10 +557,7 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
             return {};
         }
         checkIterator();
-        return map {
-            $1: new QoreDataField($1, "ODS sheet " + sheet + " column " + $1,
-                AbstractDataProviderType::anyDataType)
-        }, it.getHeaders();
+        return OdsReadDataProvider::getIteratorRecordType(it, sheet, opts);
     }
 
     #! Returns a list of child data provider names, if any

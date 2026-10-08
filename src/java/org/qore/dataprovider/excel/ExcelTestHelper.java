@@ -670,6 +670,136 @@ public class ExcelTestHelper {
         }
     }
 
+    /**
+     * Creates an order workbook whose rows hold formulas, in the sheet "Order":
+     * - row 1: the headers Item, Qty, Price, Line
+     * - rows 2-4: data rows; D2 = B2*C2 (a product), D3 = SUM(B3:C3) and D4 = SUM(B4:C4) (line totals of their own
+     *   row)
+     * - row 5: a totals row without a label: B5 = SUM(B2:B4), D5 = SUBTOTAL(9,D2:D4)
+     * - row 6: a labelled totals row: "Total", 6, empty, 29 (values)
+     *
+     * The formulas are evaluated, so each formula cell has its result.
+     *
+     * @param path The path to create the file at
+     * @param xls true for an .xls (BIFF8) workbook, false for .xlsx
+     */
+    public static void createFormulaRowsExcel(String path, boolean xls) throws IOException {
+        try (Workbook workbook = xls ? new HSSFWorkbook() : new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Order");
+            String[] headers = {"Item", "Qty", "Price", "Line"};
+            Row header = sheet.createRow(0);
+            for (int i = 0; i < headers.length; ++i) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            Object[][] data = {
+                {"A-1", 2.0, 5.0, "B2*C2"},
+                {"B-2", 3.0, 4.0, "SUM(B3:C3)"},
+                {"C-3", 1.0, 7.0, "SUM(B4:C4)"},
+            };
+            for (int r = 0; r < data.length; ++r) {
+                Row row = sheet.createRow(r + 1);
+                row.createCell(0).setCellValue((String)data[r][0]);
+                row.createCell(1).setCellValue((Double)data[r][1]);
+                row.createCell(2).setCellValue((Double)data[r][2]);
+                row.createCell(3).setCellFormula((String)data[r][3]);
+            }
+            Row totals = sheet.createRow(4);
+            totals.createCell(1).setCellFormula("SUM(B2:B4)");
+            totals.createCell(3).setCellFormula("SUBTOTAL(9,D2:D4)");
+            Row labelled = sheet.createRow(5);
+            labelled.createCell(0).setCellValue("Total");
+            labelled.createCell(1).setCellValue(6.0);
+            labelled.createCell(3).setCellValue(29.0);
+            workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
+            try (FileOutputStream out = new FileOutputStream(new File(path))) {
+                workbook.write(out);
+            }
+        }
+    }
+
+    /**
+     * Creates an .xlsx workbook with shared formulas, as Excel writes a formula filled down a column, in the sheet
+     * "Order" of the sheets "Rates" and "Order", with the workbook-scoped defined name "Rate" and the name "Local"
+     * scoped to "Order":
+     * - row 1: the headers Item, Qty, Price, Line, Gross, Array
+     * - rows 2-5: Item, Qty, Price; D2:D5 hold the shared formula "SUM(B2:C2)" (the master in D2), E2:E5 the shared
+     *   formula "D2*Rate+$B$1+Rates!A1+Local" whose master is in E3 (E2 is a formula of its own: "D2"), F2:F3 an
+     *   array formula "B2:B3*2", and G4 a data table cell
+     * - row 6: a totals row of its own formulas: B6 = SUM(B2:B5), D6 = SUM(D2:D5)
+     *
+     * @param path The path to create the file at
+     */
+    public static void createSharedFormulaExcel(String path) throws IOException {
+        final String main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        final String rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        final String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>";
+        final String ct = "application/vnd.openxmlformats-officedocument.spreadsheetml.";
+
+        String content_types = xml
+            + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+            + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+            + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+            + "<Override PartName=\"/xl/workbook.xml\" ContentType=\"" + ct + "sheet.main+xml\"/>"
+            + "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"" + ct + "worksheet+xml\"/>"
+            + "<Override PartName=\"/xl/worksheets/sheet2.xml\" ContentType=\"" + ct + "worksheet+xml\"/>"
+            + "</Types>";
+        String root_rels = xml
+            + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+            + "<Relationship Id=\"rId1\" Type=\"" + rel + "/officeDocument\" Target=\"xl/workbook.xml\"/>"
+            + "</Relationships>";
+        String workbook = xml + "<workbook xmlns=\"" + main + "\" xmlns:r=\"" + rel + "\"><sheets>"
+            + "<sheet name=\"Rates\" sheetId=\"1\" r:id=\"rId1\"/>"
+            + "<sheet name=\"Order\" sheetId=\"2\" r:id=\"rId2\"/>"
+            + "</sheets><definedNames><definedName name=\"Rate\">Rates!$A$1</definedName>"
+            + "<definedName name=\"Local\" localSheetId=\"1\">Order!$C$2</definedName></definedNames></workbook>";
+        String workbook_rels = xml
+            + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+            + "<Relationship Id=\"rId1\" Type=\"" + rel + "/worksheet\" Target=\"worksheets/sheet1.xml\"/>"
+            + "<Relationship Id=\"rId2\" Type=\"" + rel + "/worksheet\" Target=\"worksheets/sheet2.xml\"/>"
+            + "</Relationships>";
+        String rates = xml + "<worksheet xmlns=\"" + main + "\"><sheetData>"
+            + "<row r=\"1\"><c r=\"A1\"><v>1.5</v></c></row></sheetData></worksheet>";
+        StringBuilder order = new StringBuilder(xml + "<worksheet xmlns=\"" + main + "\"><sheetData><row r=\"1\">");
+        String[] headers = {"Item", "Qty", "Price", "Line", "Gross", "Array", "Table"};
+        for (int i = 0; i < headers.length; ++i) {
+            order.append("<c r=\"" + (char)('A' + i) + "1\" t=\"inlineStr\"><is><t>" + headers[i] + "</t></is></c>");
+        }
+        order.append("</row>");
+        for (int r = 2; r <= 5; ++r) {
+            order.append("<row r=\"" + r + "\"><c r=\"A" + r + "\" t=\"inlineStr\"><is><t>I-" + r + "</t></is></c>"
+                + "<c r=\"B" + r + "\"><v>" + r + "</v></c><c r=\"C" + r + "\"><v>10</v></c>");
+            if (r == 2) {
+                order.append("<c r=\"D2\"><f t=\"shared\" ref=\"D2:D5\" si=\"0\">SUM(B2:C2)</f><v>12</v></c>"
+                    + "<c r=\"E2\"><f>D2</f><v>12</v></c>"
+                    + "<c r=\"F2\"><f t=\"array\" ref=\"F2:F3\">B2:B3*2</f><v>4</v></c>");
+            } else {
+                order.append("<c r=\"D" + r + "\"><f t=\"shared\" si=\"0\"/><v>" + (r + 10) + "</v></c>");
+                if (r == 3) {
+                    order.append("<c r=\"E3\"><f t=\"shared\" ref=\"E3:E5\" si=\"1\">D3*Rate+$B$1+Rates!A1+Local</f>"
+                        + "<v>1</v></c><c r=\"F3\"><v>6</v></c>");
+                } else {
+                    order.append("<c r=\"E" + r + "\"><f t=\"shared\" si=\"1\"/><v>1</v></c>");
+                }
+                if (r == 4) {
+                    order.append("<c r=\"G4\"><f t=\"dataTable\" ref=\"G4\" dt2D=\"0\" dtr=\"0\" r1=\"B2\"/>"
+                        + "<v>3</v></c>");
+                }
+            }
+            order.append("</row>");
+        }
+        order.append("<row r=\"6\"><c r=\"B6\"><f>SUM(B2:B5)</f><v>14</v></c>"
+            + "<c r=\"D6\"><f>SUM(D2:D5)</f><v>54</v></c></row></sheetData></worksheet>");
+
+        try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(new File(path)))) {
+            writeEntry(zip, "[Content_Types].xml", content_types);
+            writeEntry(zip, "_rels/.rels", root_rels);
+            writeEntry(zip, "xl/workbook.xml", workbook);
+            writeEntry(zip, "xl/_rels/workbook.xml.rels", workbook_rels);
+            writeEntry(zip, "xl/worksheets/sheet1.xml", rates);
+            writeEntry(zip, "xl/worksheets/sheet2.xml", order.toString());
+        }
+    }
+
     private static void writeEntry(ZipOutputStream zip, String name, String data) throws IOException {
         zip.putNextEntry(new ZipEntry(name));
         zip.write(data.getBytes(StandardCharsets.UTF_8));

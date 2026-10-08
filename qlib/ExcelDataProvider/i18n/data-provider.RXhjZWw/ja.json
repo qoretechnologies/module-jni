@@ -87,6 +87,18 @@
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "`True` の場合、オブジェクトは最初のヘッダー行からヘッダー名を解析します。この場合、`header_cells` が明示的に設定されていないと、最初の行であるとみなされます"
         },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "数式フィールド"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "各行のセルの数式をこの名前のフィールドで返します"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "行のセルの数式を持つ追加フィールドの名前です。各レコードに追加され、ファイルを読み取る処理が数式で計算された行とデータ行を区別できるようにします。最も一般的な用途は、`Total` ラベルのない **`SUM` 数式だけで構成された合計行** を、設計時のスプレッドシート プロファイルと同じ方法で実行時に認識することです。フィールドの値を `DataProvider::TabularProfiler::hasTotalsFormula()` に渡してください。\n\n**値:** ワークシート内のセル参照をキーとする数式テキスト (Excel の表示どおり、先頭の `=` なし) のハッシュ (例: `{\"B5\": \"SUM(B2:B4)\"}`) で、数式を含むレコードのセルごとに 1 つのエントリがあります。レコードのどのセルにも数式がない場合は `NOTHING` です。参照は `data_cells` の範囲に関係なくワークシートの参照です。\n\n数式セルの値は引き続き計算結果として返されます。名前をワークシートの列の名前にすることはできません。その場合は `EXCEL-FORMULA-FIELD-ERROR` が発生します。設定しない場合、レコードに数式フィールドはなく、数式は読み取られません。"
+        },
         "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",
           "message": "出力ヘッダー"
@@ -290,6 +302,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "`True` の場合、オブジェクトは最初のヘッダー行からヘッダー名を解析します。この場合、`header_cells` が明示的に設定されていないと、最初の行であるとみなされます"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "数式フィールド"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "各行のセルの数式をこの名前のフィールドで返します"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "行のセルの数式を持つ追加フィールドの名前です。各レコードに追加され、ファイルを読み取る処理が数式で計算された行とデータ行を区別できるようにします。最も一般的な用途は、`Total` ラベルのない **`SUM` 数式だけで構成された合計行** を、設計時のスプレッドシート プロファイルと同じ方法で実行時に認識することです。フィールドの値を `DataProvider::TabularProfiler::hasTotalsFormula()` に渡してください。\n\n**値:** ワークシート内のセル参照をキーとする数式テキスト (Excel の表示どおり、先頭の `=` なし) のハッシュ (例: `{\"B5\": \"SUM(B2:B4)\"}`) で、数式を含むレコードのセルごとに 1 つのエントリがあります。レコードのどのセルにも数式がない場合は `NOTHING` です。参照は `data_cells` の範囲に関係なくワークシートの参照です。\n\n数式セルの値は引き続き計算結果として返されます。名前をワークシートの列の名前にすることはできません。その場合は `EXCEL-FORMULA-FIELD-ERROR` が発生します。設定しない場合、レコードに数式フィールドはなく、数式は読み取られません。"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",

@@ -134,10 +134,7 @@ public class OdsWorksheetReadDataProvider inherits DataProvider::AbstractDataPro
 
     #! Returns the description of the record type, if any
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
-        return map {
-            $1: new QoreDataField($1, "ODS sheet " + sheet + " column " + $1,
-                AbstractDataProviderType::anyDataType)
-        }, i.getHeaders();
+        return OdsReadDataProvider::getIteratorRecordType(i, sheet, opts);
     }
 
     #! Returns data provider static info

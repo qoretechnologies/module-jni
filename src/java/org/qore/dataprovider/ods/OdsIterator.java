@@ -62,6 +62,8 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
     private Hash row_data = null;
     private long count = 0;
     private boolean ignore_empty = false;
+    // the name of the field holding the formulas of each record's cells; null if formulas are not returned
+    private String formula_field = null;
     // the number of columns of the table, as ODFDOM gives it
     private final int cachedColCount;
 
@@ -103,6 +105,29 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
      */
     public void setIgnoreEmpty(boolean ignore_empty) {
         this.ignore_empty = ignore_empty;
+    }
+
+    /**
+     * Returns the formulas of the cells of each record in a field with the given name: a hash of the formula text in
+     * A1 notation, as OdsGridReader gives it, by the cell's A1 reference, or null if none of the record's cells has a
+     * formula; a cell repeated over several columns or rows gives its formula for the first of them, as in
+     * OdsGridReader
+     *
+     * Call this after the headers are set; the name must not be one of the headers.
+     *
+     * @param name the name of the field
+     *
+     * @throws QoreException ODS-FORMULA-FIELD-ERROR if the name is empty or one of the headers
+     */
+    public void setFormulaField(String name) throws QoreException {
+        if (name == null || name.isEmpty()) {
+            throw new QoreException("ODS-FORMULA-FIELD-ERROR", "the formula field name must not be empty");
+        }
+        if (headers.contains(name)) {
+            throw new QoreException("ODS-FORMULA-FIELD-ERROR", String.format("the formula field name '%s' is the "
+                + "name of a column of the sheet; choose a name that is not a header: %s", name, headers));
+        }
+        formula_field = name;
     }
 
     public void setZone(String zonestr) throws DateTimeException, ZoneRulesException {
@@ -346,6 +371,8 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
         int col_no = 0;
         boolean found_data = false;
         Hash row_data = null;
+        // the formulas of the record's cells by A1 reference, if formulas are returned
+        Hash formulas = null;
         while (true) {
             if (cell_no >= cachedColCount) {
                 break;
@@ -381,6 +408,15 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             }
             row_data.put(key, val);
 
+            // a cell with content holding a formula; a repeated cell gives it for its first column and row only
+            if (formula_field != null && cell != null && cell.getFormula() != null && row.start == rowIdx
+                    && row.getCellRunStartOf(cell_no) == cell_no) {
+                if (formulas == null) {
+                    formulas = new Hash();
+                }
+                formulas.put(OdsGridReader.formulaReference(rowIdx, cell_no), OdsGridReader.toA1(cell.getFormula()));
+            }
+
             if (end_cell >= 0) {
                 if (cell_no >= end_cell) {
                     break;
@@ -393,6 +429,13 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
         }
         if (!found_data) {
             return null;
+        }
+        if (formula_field != null) {
+            if (row_data.containsKey(formula_field)) {
+                throw new QoreException("ODS-FORMULA-FIELD-ERROR", String.format("the formula field name '%s' is "
+                    + "the name of a field of the record of row %d; choose another name", formula_field, rownum));
+            }
+            row_data.put(formula_field, formulas);
         }
         return row_data;
     }

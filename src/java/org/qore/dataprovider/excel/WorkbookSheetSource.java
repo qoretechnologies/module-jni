@@ -101,6 +101,11 @@ final class WorkbookSheetSource implements SheetSource {
     }
 
     @Override
+    public void enableFormulas() {
+        // the usermodel holds the formulas of the cells
+    }
+
+    @Override
     public void close() throws IOException {
         if (workbook != null) {
             Workbook wb = workbook;
@@ -173,6 +178,12 @@ final class WorkbookSheetSource implements SheetSource {
         @Override
         public LocalDateTime getLocalDateTimeCellValue() {
             return cell.getLocalDateTimeCellValue();
+        }
+
+        @Override
+        public String getCellFormula() {
+            // as ExcelGridReader reads the formulas of a sheet
+            return cell.getCellType() == CellType.FORMULA ? cell.getCellFormula() : null;
         }
     }
 }

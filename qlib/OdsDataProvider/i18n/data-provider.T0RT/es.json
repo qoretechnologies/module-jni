@@ -87,6 +87,18 @@
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "Si `True`, el objeto analizará los nombres de encabezado de la primera fila de encabezado; en este caso, si `header_cells` no se establece explícitamente, se asumirá que es la primera fila"
         },
+        "app.T0RT.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "Campo de fórmulas"
+        },
+        "app.T0RT.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "Devolver las fórmulas de las celdas de cada fila en un campo con este nombre"
+        },
+        "app.T0RT.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text in A1 notation (for example `SUM(B2:B4)` for the ODF formula `of:=SUM([.B2:.B4])`) by the cell's reference in the sheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the sheet, whatever the `data_cells` range; a formula repeated over several columns or rows is given for the first of them, as in the profile.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the sheet; a name that is raises `ODS-FORMULA-FIELD-ERROR`.  If not set, records have no formula field.",
+          "message": "El nombre de un campo adicional que se añade a cada registro con las fórmulas de las celdas de la fila, para que el proceso que lee el archivo distinga las filas calculadas por fórmulas de las filas de datos.  El uso más común es reconocer una **fila de totales formada solo por fórmulas `SUM`**, sin la etiqueta `Total`, en tiempo de ejecución de la misma forma que el perfil de la hoja en tiempo de diseño: pase el valor del campo a `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Valor:** un hash del texto de la fórmula en notación A1 (por ejemplo `SUM(B2:B4)` para la fórmula ODF `of:=SUM([.B2:.B4])`) por la referencia de la celda en la hoja (por ejemplo `{\"B5\": \"SUM(B2:B4)\"}`), con una entrada por cada celda del registro que contiene una fórmula; `NOTHING` si ninguna celda del registro contiene una fórmula.  Las referencias son las de la hoja, sea cual sea el rango `data_cells`; una fórmula repetida en varias columnas o filas se da para la primera de ellas, como en el perfil.\n\nLos valores de las celdas con fórmulas se siguen devolviendo como sus resultados calculados.  El nombre no debe ser el nombre de una columna de la hoja; un nombre así genera `ODS-FORMULA-FIELD-ERROR`.  Si no se establece, los registros no tienen campo de fórmulas."
+        },
         "app.T0RT.action.cmVhZA.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",
           "message": "Encabezados de salida"
@@ -290,6 +302,18 @@
         "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "Si `True`, el objeto analizará los nombres de encabezado de la primera fila de encabezado; en este caso, si `header_cells` no se establece explícitamente, se asumirá que es la primera fila"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "Campo de fórmulas"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "Devolver las fórmulas de las celdas de cada fila en un campo con este nombre"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text in A1 notation (for example `SUM(B2:B4)` for the ODF formula `of:=SUM([.B2:.B4])`) by the cell's reference in the sheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the sheet, whatever the `data_cells` range; a formula repeated over several columns or rows is given for the first of them, as in the profile.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the sheet; a name that is raises `ODS-FORMULA-FIELD-ERROR`.  If not set, records have no formula field.",
+          "message": "El nombre de un campo adicional que se añade a cada registro con las fórmulas de las celdas de la fila, para que el proceso que lee el archivo distinga las filas calculadas por fórmulas de las filas de datos.  El uso más común es reconocer una **fila de totales formada solo por fórmulas `SUM`**, sin la etiqueta `Total`, en tiempo de ejecución de la misma forma que el perfil de la hoja en tiempo de diseño: pase el valor del campo a `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Valor:** un hash del texto de la fórmula en notación A1 (por ejemplo `SUM(B2:B4)` para la fórmula ODF `of:=SUM([.B2:.B4])`) por la referencia de la celda en la hoja (por ejemplo `{\"B5\": \"SUM(B2:B4)\"}`), con una entrada por cada celda del registro que contiene una fórmula; `NOTHING` si ninguna celda del registro contiene una fórmula.  Las referencias son las de la hoja, sea cual sea el rango `data_cells`; una fórmula repetida en varias columnas o filas se da para la primera de ellas, como en el perfil.\n\nLos valores de las celdas con fórmulas se siguen devolviendo como sus resultados calculados.  El nombre no debe ser el nombre de una columna de la hoja; un nombre así genera `ODS-FORMULA-FIELD-ERROR`.  Si no se establece, los registros no tienen campo de fórmulas."
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",

@@ -278,6 +278,12 @@ module ExcelDataProvider {
     - \c timezone: Timezone for date values
     - \c ignore_empty: If \c True, skip empty rows and continue to the end of \c data_cells or the last row of the
       worksheet; by default reading stops at the first empty row
+    - \c formula_field: the name of an extra field of every record holding the formulas of the record's cells: a
+      hash of the formula text, without the leading \c "=", as the \c profile action gives it, by the cell's
+      reference in the worksheet (\c "B5"), or @ref nothing if none of the cells holds a formula; passing the field
+      to @ref DataProvider::TabularProfiler::hasTotalsFormula() "TabularProfiler::hasTotalsFormula()" recognizes a
+      totals row made of \c SUM formulas as the profile does; a name that is a column of the worksheet raises
+      \c EXCEL-FORMULA-FIELD-ERROR
 
     @subsection ExcelDataProvider_reading_multisheet Multi-Sheet Access
 
@@ -392,6 +398,7 @@ module ExcelDataProvider {
     - \c EXCEL-READ-OPTION-ERROR: Invalid read options or option conflicts
     - \c EXCEL-WRITE-OPTION-ERROR: Invalid write options or option conflicts
     - \c EXCEL-INVALID-LOCATION: Invalid cell range format
+    - \c EXCEL-FORMULA-FIELD-ERROR: The \c formula_field option is empty or the name of a column
 
     @section ExcelDataProvider_relnotes Release Notes
 
@@ -440,6 +447,10 @@ module ExcelDataProvider {
       bounded memory instead of loading the workbook in memory
     - the input of the read data provider is copied to a temporary file instead of being read into memory
     - updated copyright to 2026
+    - added the \c formula_field read option, which returns the formulas of each record's cells in a field of the
+      record, as the \c profile action gives them, so a totals row made only of \c SUM formulas is recognized when
+      the file is read as it is when the file is profiled; the formulas of an .xlsx worksheet, including shared
+      formulas, are read as it is streamed
 
     @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0
     - initial release

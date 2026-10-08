@@ -32,6 +32,7 @@
 %requires FsUtil
 %requires CsvUtil
 %requires jni
+%requires reflection
 
 # Add classpaths for ODFDOM and the test helper BEFORE loading OdsDataProvider
 # so they share the same classloader context
@@ -200,6 +201,8 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("write: column formats as LibreOffice shows them", \testWriteColumnFormatsRendered());
         addTestCase("write: ODS data styles show each code as Excel does", \testColumnFormatsLikeExcel());
         addTestCase("negative: a file that cannot be read as a spreadsheet", \testUnreadableFiles());
+        addTestCase("read: the formulas of each record", \testFormulaField());
+        addTestCase("negative: formula field name", \testFormulaFieldNegative());
         set_return_value(main());
     }
 
@@ -222,6 +225,8 @@ public class OdsDataProviderTest inherits QUnit::Test {
         OdsTestHelper::createOffsetDataOds(test_data_dir + "/offset-data.ods");
         OdsTestHelper::createDataTypesOds(test_data_dir + "/data-types.ods");
         OdsTestHelper::createProfileOds(test_data_dir + "/profile.ods");
+        OdsTestHelper::createFormulaRowsOds(test_data_dir + "/formula-rows.ods", False);
+        OdsTestHelper::createFormulaRowsOds(test_data_dir + "/formula-repeated.ods", True);
 
         assertTrue(is_file(test_data_dir + "/simple.ods"), "simple.ods created");
     }
@@ -1729,6 +1734,104 @@ printf(\"RESULT:%%s\\n\", make_json(rv));
     /** A damaged file, another file type or an empty file fails before any record is returned; each raises
         @c JNI-ERROR, its description naming the Java exception.
     */
+    #! Returns TabularProfiler::hasTotalsFormula() if the DataProvider module has it (DataProvider 3.9 with
+    #! qore e2005d254), otherwise NOTHING
+    private static *code<bool(*hash<auto>)> getHasTotalsFormula() {
+        try {
+            hash<MethodAccessInfo> m = Class::forName("DataProvider::TabularProfiler")
+                .findStaticMethod("hasTotalsFormula");
+            StaticMethod method = cast<StaticMethod>(m.method);
+            return bool sub (*hash<auto> formulas) {
+                return method.call(formulas);
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "UNKNOWN-METHOD") {
+                rethrow;
+            }
+        }
+    }
+
+    #! A formula field returns the formulas of each record's cells as the profile gives them (qorus#646)
+    testFormulaField() {
+        *code<bool(*hash<auto>)> has_totals_formula = getHasTotalsFormula();
+        string path = test_data_dir + "/formula-rows.ods";
+        list<*hash<auto>> expected = (
+            {"D2": "B2*C2"},
+            {"D3": "SUM(B3:C3)"},
+            {"D4": "SUM(B4:C4)"},
+            {"B5": "SUM(B2:B4)", "D5": "SUBTOTAL(9;D2:D4)"},
+            NOTHING,
+        );
+        OdsReadDataProvider dp({"path": path, "header_names": True, "formula_field": "_formulas"});
+        hash<string, AbstractDataField> rec_type = dp.getRecordType();
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(5, records.size());
+        assertEq(expected, (map $1._formulas, records));
+        assertEq(("Item", "Qty", "Price", "Line", "Calc", "_formulas"), keys rec_type);
+        assertEq("hash", rec_type._formulas.getType().getBaseTypeName());
+        # values of formula cells are still their results
+        assertEq((10.0, 7.0, 8.0, 25.0, 29.0), (map $1.Line, records));
+
+        # the formulas are those of the profile of the sheet
+        hash<TabularWorkbookGrid> grid = OdsProfileDataProvider::readWorkbookGrid(ReadOnlyFile::readBinaryFile(path),
+            1000);
+        hash<auto> all;
+        map all += $1._formulas, records;
+        assertEq(grid.sheets[0].formulas, all);
+
+        # the shared totals row rule: only the totals row of formulas is a totals row; a line total is not
+        if (has_totals_formula) {
+            assertEq((False, False, False, True, False), (map has_totals_formula($1._formulas), records));
+        } else {
+            printf("skipped: TabularProfiler::hasTotalsFormula() needs DataProvider with qore e2005d254\n");
+        }
+
+        # the worksheet provider and the read-data input
+        AbstractDataProvider sheet = new OdsReadDataProvider({"path": path, "header_names": True,
+            "formula_field": "f"}).getChildProvider("Order");
+        assertEq("f", (keys sheet.getRecordType())[5]);
+        assertEq(expected, (map $1.f, sheet.searchRecords()));
+        dp = new OdsReadDataProvider({"data": ReadOnlyFile::readBinaryFile(path), "header_names": True,
+            "formula_field": "f"});
+        assertEq(expected, (map $1.f, dp.searchRecords()));
+
+        # a formula repeated over two columns and two rows is given for its first column and row, as the profile
+        # gives it
+        dp = new OdsReadDataProvider(test_data_dir + "/formula-repeated.ods", {"header_names": True,
+            "formula_field": "_formulas"});
+        records = map $1, dp.searchRecords();
+        assertEq(7, records.size());
+        assertEq(expected + ({"E7": "SUM(B7:C7)"}, NOTHING), (map $1._formulas, records));
+        assertEq((2.0, 2.0), (map $1.Calc, records[5..6]));
+
+        # a data range not starting at A1 gives the references of the sheet
+        dp = new OdsReadDataProvider(path, {"header_cells": "b1:d1", "data_cells": "b3:d5",
+            "formula_field": "_formulas"});
+        records = map $1, dp.searchRecords();
+        assertEq(("Qty", "Price", "Line", "_formulas"), keys records[0]);
+        assertEq(expected[1..3], (map $1._formulas, records));
+
+        # without the option there is no formula field
+        dp = new OdsReadDataProvider({"path": path, "header_names": True});
+        assertEq(("Item", "Qty", "Price", "Line", "Calc"), keys (map $1, dp.searchRecords())[0]);
+    }
+
+    #! A formula field name that is a column of the sheet is an error
+    testFormulaFieldNegative() {
+        string path = test_data_dir + "/formula-rows.ods";
+        OdsReadDataProvider dp({"path": path, "header_names": True, "formula_field": "Line"});
+        assertThrows("ODS-FORMULA-FIELD-ERROR", "Line", \dp.getRecordType());
+        dp = new OdsReadDataProvider({"path": path, "data_cells": "a2:d2", "formula_field": "A2"});
+        assertThrows("ODS-FORMULA-FIELD-ERROR", "A2", sub () { map $1, dp.searchRecords(); });
+        assertThrows("ODS-FORMULA-FIELD-ERROR", sub () {
+            OdsReadDataProvider p({"path": path, "formula_field": ""});
+        });
+        foreach string action in (("read", "read-data")) {
+            hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("ODS", action);
+            assertTrue(info.options.hasKey("formula_field"), action);
+        }
+    }
+
     testUnreadableFiles() {
         binary spreadsheet = File::readBinaryFile(test_data_dir + "/simple.ods");
         # the input -> the start of the description of the error its read raises

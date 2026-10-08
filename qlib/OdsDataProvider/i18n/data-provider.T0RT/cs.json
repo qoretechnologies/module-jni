@@ -87,6 +87,18 @@
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "Pokud je `True`, objekt naparsuje názvy záhlaví z prvního řádku záhlaví; v tomto případě, pokud není `header_cells` výslovně nastaveno, bude se předpokládat, že jde o první řádek"
         },
+        "app.T0RT.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "Pole vzorců"
+        },
+        "app.T0RT.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "Vrátit vzorce buněk každého řádku v poli s tímto názvem"
+        },
+        "app.T0RT.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text in A1 notation (for example `SUM(B2:B4)` for the ODF formula `of:=SUM([.B2:.B4])`) by the cell's reference in the sheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the sheet, whatever the `data_cells` range; a formula repeated over several columns or rows is given for the first of them, as in the profile.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the sheet; a name that is raises `ODS-FORMULA-FIELD-ERROR`.  If not set, records have no formula field.",
+          "message": "Název dalšího pole, které se přidá ke každému záznamu se vzorci buněk řádku, aby proces čtoucí soubor rozlišil řádky počítané vzorci od řádků s daty.  Nejčastějším použitím je rozpoznání **řádku součtů tvořeného pouze vzorci `SUM`**, bez popisku `Total`, za běhu stejně, jako to dělá profil tabulky při návrhu: předejte hodnotu pole funkci `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Hodnota:** hash textu vzorce v zápisu A1 (například `SUM(B2:B4)` pro vzorec ODF `of:=SUM([.B2:.B4])`) podle odkazu na buňku v listu (například `{\"B5\": \"SUM(B2:B4)\"}`), s jednou položkou pro každou buňku záznamu, která obsahuje vzorec; `NOTHING`, pokud žádná buňka záznamu vzorec neobsahuje.  Odkazy jsou odkazy listu bez ohledu na rozsah `data_cells`; vzorec opakovaný přes několik sloupců nebo řádků se uvádí pro první z nich, stejně jako v profilu.\n\nHodnoty buněk se vzorci se nadále vracejí jako jejich vypočtené výsledky.  Název nesmí být názvem sloupce listu; takový název vyvolá `ODS-FORMULA-FIELD-ERROR`.  Pokud není nastaveno, záznamy nemají pole vzorců."
+        },
         "app.T0RT.action.cmVhZA.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",
           "message": "Výstupní záhlaví"
@@ -290,6 +302,18 @@
         "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "Pokud je `True`, objekt naparsuje názvy záhlaví z prvního řádku záhlaví; v tomto případě, pokud není `header_cells` výslovně nastaveno, bude se předpokládat, že jde o první řádek"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "Pole vzorců"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "Vrátit vzorce buněk každého řádku v poli s tímto názvem"
+        },
+        "app.T0RT.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text in A1 notation (for example `SUM(B2:B4)` for the ODF formula `of:=SUM([.B2:.B4])`) by the cell's reference in the sheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the sheet, whatever the `data_cells` range; a formula repeated over several columns or rows is given for the first of them, as in the profile.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the sheet; a name that is raises `ODS-FORMULA-FIELD-ERROR`.  If not set, records have no formula field.",
+          "message": "Název dalšího pole, které se přidá ke každému záznamu se vzorci buněk řádku, aby proces čtoucí soubor rozlišil řádky počítané vzorci od řádků s daty.  Nejčastějším použitím je rozpoznání **řádku součtů tvořeného pouze vzorci `SUM`**, bez popisku `Total`, za běhu stejně, jako to dělá profil tabulky při návrhu: předejte hodnotu pole funkci `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Hodnota:** hash textu vzorce v zápisu A1 (například `SUM(B2:B4)` pro vzorec ODF `of:=SUM([.B2:.B4])`) podle odkazu na buňku v listu (například `{\"B5\": \"SUM(B2:B4)\"}`), s jednou položkou pro každou buňku záznamu, která obsahuje vzorec; `NOTHING`, pokud žádná buňka záznamu vzorec neobsahuje.  Odkazy jsou odkazy listu bez ohledu na rozsah `data_cells`; vzorec opakovaný přes několik sloupců nebo řádků se uvádí pro první z nich, stejně jako v profilu.\n\nHodnoty buněk se vzorci se nadále vracejí jako jejich vypočtené výsledky.  Název nesmí být názvem sloupce listu; takový název vyvolá `ODS-FORMULA-FIELD-ERROR`.  Pokud není nastaveno, záznamy nemají pole vzorců."
         },
         "app.T0RT.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",

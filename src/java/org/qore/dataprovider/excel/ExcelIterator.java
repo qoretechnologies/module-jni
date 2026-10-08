@@ -77,6 +77,8 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     private Hash row_data = null;
     private long count = 0;
     private boolean ignore_empty = false;
+    // the name of the field holding the formulas of each record's cells; null if formulas are not returned
+    private String formula_field = null;
 
     public ExcelIterator(java.io.InputStream stream, String sheet_name) throws Throwable {
         this(openSource(stream, sheet_name));
@@ -144,6 +146,29 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
      */
     public void setIgnoreEmpty(boolean ignore_empty) {
         this.ignore_empty = ignore_empty;
+    }
+
+    /**
+     * Returns the formulas of the cells of each record in a field with the given name: a hash of the formula text,
+     * as POI's Cell.getCellFormula() gives it, by the cell's A1 reference, or null if none of the record's cells has
+     * a formula
+     *
+     * Call this after the headers are set; the name must not be one of the headers.
+     *
+     * @param name the name of the field
+     *
+     * @throws QoreException EXCEL-FORMULA-FIELD-ERROR if the name is empty or one of the headers
+     */
+    public void setFormulaField(String name) throws QoreException {
+        if (name == null || name.isEmpty()) {
+            throw new QoreException("EXCEL-FORMULA-FIELD-ERROR", "the formula field name must not be empty");
+        }
+        if (headers.contains(name)) {
+            throw new QoreException("EXCEL-FORMULA-FIELD-ERROR", String.format("the formula field name '%s' is "
+                + "the name of a column of the worksheet; choose a name that is not a header: %s", name, headers));
+        }
+        getSource().enableFormulas();
+        formula_field = name;
     }
 
     public void setZone(String zonestr) throws DateTimeException, ZoneRulesException {
@@ -380,6 +405,8 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         int col_no = 0;
         boolean found_data = false;
         Hash row_data = null;
+        // the formulas of the record's cells by A1 reference, if formulas are returned
+        Hash formulas = null;
         while (true) {
             SheetSource.Cell cell = row.getCell(cell_no);
             Object val;
@@ -412,6 +439,17 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
             }
             row_data.put(key, val);
 
+            if (formula_field != null && cell != null) {
+                String formula = cell.getCellFormula();
+                if (formula != null) {
+                    if (formulas == null) {
+                        formulas = new Hash();
+                    }
+                    // the reference as ExcelGridReader gives it, so a record's formulas match the sheet's profile
+                    formulas.put(new CellReference(rownum - 1, cell_no).formatAsString(), formula);
+                }
+            }
+
             if (end_cell >= 0) {
                 if (cell_no >= end_cell) {
                     break;
@@ -424,6 +462,14 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         }
         if (!found_data) {
             return null;
+        }
+        if (formula_field != null) {
+            if (row_data.containsKey(formula_field)) {
+                throw new QoreException("EXCEL-FORMULA-FIELD-ERROR", String.format("the formula field name '%s' "
+                    + "is the name of a field of the record of row %d; choose another name", formula_field,
+                    rownum));
+            }
+            row_data.put(formula_field, formulas);
         }
         return row_data;
     }

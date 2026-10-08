@@ -599,6 +599,49 @@ public class OdsTestHelper {
         });
     }
 
+    /**
+     * Creates an order spreadsheet whose rows hold formulas, in the table "Order":
+     * - row 1: the headers Item, Qty, Price, Line, Calc
+     * - rows 2-4: data rows; D2 = B2*C2 (a product), D3 = SUM(B3:C3) and D4 = SUM(B4:C4) (line totals of their own
+     *   row)
+     * - row 5: a totals row without a label: B5 = SUM(B2:B4), D5 = SUBTOTAL(9,D2:D4)
+     * - row 6: a labelled totals row: "Total", 6, empty, 29 (values)
+     * - with repeated cells, rows 7-8: one row element repeated twice: "R", 1, 1, 2, and E = SUM([.B7:.C7])
+     *   repeated over two columns
+     *
+     * @param path The path to create the file at
+     * @param repeated true to add the repeated rows
+     */
+    public static void createFormulaRowsOds(String path, boolean repeated) throws IOException {
+        writeOds(path, out -> {
+            out.write("<table:table table:name=\"Order\">"
+                + "<table:table-column table:number-columns-repeated=\"6\"/>"
+                + "<table:table-row>" + str("Item") + str("Qty") + str("Price") + str("Line") + str("Calc")
+                + "</table:table-row>"
+                + "<table:table-row>" + str("A-1") + num(2) + num(5) + formula("of:=[.B2]*[.C2]", 10)
+                + "</table:table-row>"
+                + "<table:table-row>" + str("B-2") + num(3) + num(4) + formula("of:=SUM([.B3:.C3])", 7)
+                + "</table:table-row>"
+                + "<table:table-row>" + str("C-3") + num(1) + num(7) + formula("of:=SUM([.B4:.C4])", 8)
+                + "</table:table-row>"
+                + "<table:table-row><table:table-cell/>" + formula("of:=SUM([.B2:.B4])", 6) + "<table:table-cell/>"
+                + formula("of:=SUBTOTAL(9;[.D2:.D4])", 25) + "</table:table-row>"
+                + "<table:table-row>" + str("Total") + num(6) + "<table:table-cell/>" + num(29) + "</table:table-row>"
+                + (repeated
+                    ? "<table:table-row table:number-rows-repeated=\"2\">" + str("R") + num(1) + num(1) + num(2)
+                        + "<table:table-cell table:formula=\"of:=SUM([.B7:.C7])\" office:value-type=\"float\" "
+                        + "office:value=\"2\" table:number-columns-repeated=\"2\"><text:p>2</text:p>"
+                        + "</table:table-cell></table:table-row>"
+                    : "")
+                + "</table:table>");
+        });
+    }
+
+    private static String formula(String formula, int value) {
+        return "<table:table-cell table:formula=\"" + formula + "\" office:value-type=\"float\" office:value=\""
+            + value + "\"><text:p>" + value + "</text:p></table:table-cell>";
+    }
+
     private static String str(String value) {
         return "<table:table-cell office:value-type=\"string\"><text:p>" + value + "</text:p></table:table-cell>";
     }

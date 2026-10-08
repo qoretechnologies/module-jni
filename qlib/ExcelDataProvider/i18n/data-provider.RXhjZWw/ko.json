@@ -87,6 +87,18 @@
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "`True`인 경우 개체가 첫 번째 헤더 행에서 헤더 이름을 구문 분석합니다. 이 경우 `header_cells`이 명시적으로 설정되지 않은 경우 첫 번째 행으로 간주됩니다."
         },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "수식 필드"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "각 행의 셀 수식을 이 이름의 필드로 반환합니다"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "행의 셀 수식을 담아 각 레코드에 추가되는 추가 필드의 이름으로, 파일을 읽는 프로세스가 수식으로 계산된 행과 데이터 행을 구분할 수 있게 합니다.  가장 일반적인 용도는 `Total` 레이블 없이 **`SUM` 수식으로만 이루어진 합계 행**을 설계 시 스프레드시트 프로필과 같은 방식으로 실행 시 인식하는 것입니다. 필드 값을 `DataProvider::TabularProfiler::hasTotalsFormula()`에 전달하십시오.\n\n**값:** 워크시트의 셀 참조를 키로 하는 수식 텍스트(Excel에 표시되는 대로, 앞의 `=` 없이)의 해시(예: `{\"B5\": \"SUM(B2:B4)\"}`)로, 수식이 있는 레코드의 각 셀마다 하나의 항목이 있습니다. 레코드의 어느 셀에도 수식이 없으면 `NOTHING`입니다.  참조는 `data_cells` 범위와 관계없이 워크시트의 참조입니다.\n\n수식 셀의 값은 계속 계산된 결과로 반환됩니다.  이름은 워크시트 열의 이름일 수 없으며, 그런 이름은 `EXCEL-FORMULA-FIELD-ERROR`를 발생시킵니다.  설정하지 않으면 레코드에 수식 필드가 없고 수식을 읽지 않습니다."
+        },
         "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",
           "message": "출력 헤더"
@@ -290,6 +302,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "`True`인 경우 개체가 첫 번째 헤더 행에서 헤더 이름을 구문 분석합니다. 이 경우 `header_cells`이 명시적으로 설정되지 않은 경우 첫 번째 행으로 간주됩니다."
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "수식 필드"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "각 행의 셀 수식을 이 이름의 필드로 반환합니다"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "행의 셀 수식을 담아 각 레코드에 추가되는 추가 필드의 이름으로, 파일을 읽는 프로세스가 수식으로 계산된 행과 데이터 행을 구분할 수 있게 합니다.  가장 일반적인 용도는 `Total` 레이블 없이 **`SUM` 수식으로만 이루어진 합계 행**을 설계 시 스프레드시트 프로필과 같은 방식으로 실행 시 인식하는 것입니다. 필드 값을 `DataProvider::TabularProfiler::hasTotalsFormula()`에 전달하십시오.\n\n**값:** 워크시트의 셀 참조를 키로 하는 수식 텍스트(Excel에 표시되는 대로, 앞의 `=` 없이)의 해시(예: `{\"B5\": \"SUM(B2:B4)\"}`)로, 수식이 있는 레코드의 각 셀마다 하나의 항목이 있습니다. 레코드의 어느 셀에도 수식이 없으면 `NOTHING`입니다.  참조는 `data_cells` 범위와 관계없이 워크시트의 참조입니다.\n\n수식 셀의 값은 계속 계산된 결과로 반환됩니다.  이름은 워크시트 열의 이름일 수 없으며, 그런 이름은 `EXCEL-FORMULA-FIELD-ERROR`를 발생시킵니다.  설정하지 않으면 레코드에 수식 필드가 없고 수식을 읽지 않습니다."
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",

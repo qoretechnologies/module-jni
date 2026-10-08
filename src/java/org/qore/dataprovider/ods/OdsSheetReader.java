@@ -544,9 +544,26 @@ final class OdsSheetReader implements Closeable {
         }
 
         /**
+         * Returns the 0-based first column of the cell run covering the given 0-based column, or -1 if no cell
+         * run covers it
+         */
+        int getCellRunStartOf(int col) {
+            int found = findCellRun(col);
+            return found == -1 ? -1 : col_starts[found];
+        }
+
+        /**
          * Returns the cell in the given 0-based column, or null if the row has no cell with content there
          */
         OdsCell getCell(int col) {
+            int found = findCellRun(col);
+            return found == -1 ? null : cells[found];
+        }
+
+        /**
+         * Returns the index of the cell run covering the given 0-based column, or -1 if no cell run covers it
+         */
+        private int findCellRun(int col) {
             // the last cell run starting at or before the column
             int lo = 0;
             int hi = size - 1;
@@ -561,9 +578,9 @@ final class OdsSheetReader implements Closeable {
                 }
             }
             if (found == -1 || col >= col_starts[found] + col_counts[found]) {
-                return null;
+                return -1;
             }
-            return cells[found];
+            return found;
         }
     }
 

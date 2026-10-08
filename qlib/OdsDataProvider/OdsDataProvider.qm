@@ -314,6 +314,15 @@ module OdsDataProvider {
     A \c data_cells range without an end column (e.g., \c "b2") ends at the last header column, or, without headers,
     at the last cell with a value in each row.
 
+    With the \c formula_field option, every record has an extra field with that name holding the formulas of the
+    record's cells: a hash of the formula text in A1 notation (\c "SUM(B2:B4)" for the ODF formula
+    \c "of:=SUM([.B2:.B4])"), as the \c profile action gives it, by the cell's reference in the sheet (\c "B5"), or
+    @ref nothing if none of the cells holds a formula; a formula repeated over several columns or rows is given for
+    the first of them.  Passing the field to
+    @ref DataProvider::TabularProfiler::hasTotalsFormula() "TabularProfiler::hasTotalsFormula()" recognizes a totals
+    row made of \c SUM formulas as the profile does.  A name that is a column of the sheet raises
+    \c ODS-FORMULA-FIELD-ERROR.
+
     The write provider writes numbers as float cells, booleans as boolean cells, dates as date cells with their date
     and clock time (with no time zone, as read above), no value as an empty cell, and other values as text.  Its
     \c column_formats option gives columns a display format code, as LibreOffice and Excel write them, which is
@@ -360,6 +369,9 @@ module OdsDataProvider {
       <tt>#,##0.00</tt> or \c 0.0%, written as an OpenDocument data style while the cells keep their dates and
       numbers
     - date cells are written with their clock time; before, only the date was written
+    - added the \c formula_field read option, which returns the formulas of each record's cells in a field of the
+      record, as the \c profile action gives them, so a totals row made only of \c SUM formulas is recognized when
+      the file is read as it is when the file is profiled
 */
 
 #! contains all public definitions in the OdsDataProvider module

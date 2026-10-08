@@ -87,6 +87,18 @@
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "若為 `True`，物件將從第一個標頭列解析標頭名稱，在這種情況下，若未明確設定 `header_cells`，則會假定為第一列"
         },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "公式欄位"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "在此名稱的欄位中傳回每一列儲存格的公式"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "加入每筆記錄、包含該列儲存格公式的額外欄位名稱，讓讀取檔案的處理程序能區分由公式計算的列與資料列。最常見的用途是在執行階段以與設計階段試算表剖析相同的方式，辨識**僅由 `SUM` 公式組成的總計列**（沒有 `Total` 標籤）：將欄位值傳給 `DataProvider::TabularProfiler::hasTotalsFormula()`。\n\n**值：**以工作表中儲存格參照為鍵的公式文字（如 Excel 所顯示，不含開頭的 `=`）雜湊（例如 `{\"B5\": \"SUM(B2:B4)\"}`），記錄中每個含有公式的儲存格各有一個項目；若記錄的儲存格都不含公式則為 `NOTHING`。不論 `data_cells` 範圍為何，參照都是工作表的參照。\n\n公式儲存格的值仍會以其計算結果傳回。名稱不得為工作表欄的名稱；此類名稱會引發 `EXCEL-FORMULA-FIELD-ERROR`。若未設定，記錄沒有公式欄位，也不會讀取公式。"
+        },
         "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",
           "message": "輸出標頭"
@@ -290,6 +302,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "若為 `True`，物件將從第一個標頭列解析標頭名稱，在這種情況下，若未明確設定 `header_cells`，則會假定為第一列"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "公式欄位"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "在此名稱的欄位中傳回每一列儲存格的公式"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "加入每筆記錄、包含該列儲存格公式的額外欄位名稱，讓讀取檔案的處理程序能區分由公式計算的列與資料列。最常見的用途是在執行階段以與設計階段試算表剖析相同的方式，辨識**僅由 `SUM` 公式組成的總計列**（沒有 `Total` 標籤）：將欄位值傳給 `DataProvider::TabularProfiler::hasTotalsFormula()`。\n\n**值：**以工作表中儲存格參照為鍵的公式文字（如 Excel 所顯示，不含開頭的 `=`）雜湊（例如 `{\"B5\": \"SUM(B2:B4)\"}`），記錄中每個含有公式的儲存格各有一個項目；若記錄的儲存格都不含公式則為 `NOTHING`。不論 `data_cells` 範圍為何，參照都是工作表的參照。\n\n公式儲存格的值仍會以其計算結果傳回。名稱不得為工作表欄的名稱；此類名稱會引發 `EXCEL-FORMULA-FIELD-ERROR`。若未設定，記錄沒有公式欄位，也不會讀取公式。"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",

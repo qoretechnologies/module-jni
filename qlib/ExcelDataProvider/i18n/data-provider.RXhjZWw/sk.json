@@ -87,6 +87,18 @@
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "Ak `True`, objekt spracuje názvy hlavičiek z prvého riadku hlavičky; v tomto prípade, ak `header_cells` nie je nastavené explicitne, predpokladá sa, že ide o prvý riadok"
         },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "Pole vzorcov"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "Vrátiť vzorce buniek každého riadka v poli s týmto názvom"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "Názov ďalšieho poľa, ktoré sa pridá ku každému záznamu so vzorcami buniek riadka, aby proces čítajúci súbor rozlíšil riadky počítané vzorcami od riadkov s údajmi.  Najčastejším použitím je rozpoznanie **riadka súčtov tvoreného iba vzorcami `SUM`**, bez označenia `Total`, za behu rovnako, ako to robí profil tabuľky pri návrhu: odovzdajte hodnotu poľa funkcii `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Hodnota:** hash textu vzorca (ako ho zobrazuje Excel, bez úvodného `=`) podľa odkazu na bunku v hárku (napríklad `{\"B5\": \"SUM(B2:B4)\"}`), s jednou položkou pre každú bunku záznamu, ktorá obsahuje vzorec; `NOTHING`, ak žiadna bunka záznamu vzorec neobsahuje.  Odkazy sú odkazy hárka bez ohľadu na rozsah `data_cells`.\n\nHodnoty buniek so vzorcami sa naďalej vracajú ako ich vypočítané výsledky.  Názov nesmie byť názvom stĺpca hárka; taký názov vyvolá `EXCEL-FORMULA-FIELD-ERROR`.  Ak nie je nastavené, záznamy nemajú pole vzorcov a vzorce sa nečítajú."
+        },
         "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",
           "message": "Výstupné hlavičky"
@@ -290,6 +302,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
           "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
           "message": "Ak `True`, objekt spracuje názvy hlavičiek z prvého riadku hlavičky; v tomto prípade, ak `header_cells` nie je nastavené explicitne, predpokladá sa, že ide o prvý riadok"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.display_name": {
+          "source": "Formula Field",
+          "message": "Pole vzorcov"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.short_desc": {
+          "source": "Return the formulas of each row's cells in a field with this name",
+          "message": "Vrátiť vzorce buniek každého riadka v poli s týmto názvom"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.Zm9ybXVsYV9maWVsZA.desc": {
+          "source": "The name of an extra field added to every record with the formulas of the row's cells, so the process reading the file can tell rows calculated by formulas from rows of data.  The most common use is recognizing a **totals row made only of `SUM` formulas**, with no `Total` label, at run time in the same way as the spreadsheet profile does at design time: pass the field's value to `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Value:** a hash of the formula text (as Excel shows it, without the leading `=`) by the cell's reference in the worksheet (for example `{\"B5\": \"SUM(B2:B4)\"}`), with one entry for each cell of the record that holds a formula; `NOTHING` if none of the record's cells holds a formula.  References are those of the worksheet, whatever the `data_cells` range.\n\nValues of formula cells are still returned as their calculated results.  The name must not be the name of a column of the worksheet; a name that is raises `EXCEL-FORMULA-FIELD-ERROR`.  If not set, records have no formula field and formulas are not read.",
+          "message": "Názov ďalšieho poľa, ktoré sa pridá ku každému záznamu so vzorcami buniek riadka, aby proces čítajúci súbor rozlíšil riadky počítané vzorcami od riadkov s údajmi.  Najčastejším použitím je rozpoznanie **riadka súčtov tvoreného iba vzorcami `SUM`**, bez označenia `Total`, za behu rovnako, ako to robí profil tabuľky pri návrhu: odovzdajte hodnotu poľa funkcii `DataProvider::TabularProfiler::hasTotalsFormula()`.\n\n**Hodnota:** hash textu vzorca (ako ho zobrazuje Excel, bez úvodného `=`) podľa odkazu na bunku v hárku (napríklad `{\"B5\": \"SUM(B2:B4)\"}`), s jednou položkou pre každú bunku záznamu, ktorá obsahuje vzorec; `NOTHING`, ak žiadna bunka záznamu vzorec neobsahuje.  Odkazy sú odkazy hárka bez ohľadu na rozsah `data_cells`.\n\nHodnoty buniek so vzorcami sa naďalej vracajú ako ich vypočítané výsledky.  Názov nesmie byť názvom stĺpca hárka; taký názov vyvolá `EXCEL-FORMULA-FIELD-ERROR`.  Ak nie je nastavené, záznamy nemajú pole vzorcov a vzorce sa nečítajú."
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
           "source": "Output Headers",

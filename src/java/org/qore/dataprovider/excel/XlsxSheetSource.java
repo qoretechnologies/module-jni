@@ -29,6 +29,12 @@ import org.apache.poi.openxml4j.opc.PackagePart;
 import org.apache.poi.openxml4j.opc.PackageRelationship;
 import org.apache.poi.openxml4j.opc.PackageRelationshipTypes;
 import org.apache.poi.openxml4j.opc.TargetMode;
+import org.apache.poi.ss.SpreadsheetVersion;
+import org.apache.poi.ss.formula.FormulaParser;
+import org.apache.poi.ss.formula.FormulaRenderer;
+import org.apache.poi.ss.formula.FormulaType;
+import org.apache.poi.ss.formula.SharedFormula;
+import org.apache.poi.ss.formula.ptg.Ptg;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.ExcelNumberFormat;
@@ -38,24 +44,32 @@ import org.apache.poi.util.XMLHelper;
 import org.apache.poi.xssf.XLSBUnsupportedException;
 import org.apache.poi.xssf.model.StylesTable;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFEvaluationWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFRichTextString;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Streams the rows of a worksheet of an OOXML (.xlsx) workbook.
@@ -67,6 +81,13 @@ import java.util.Iterator;
  * Cell values have the semantics of the POI usermodel (XSSFCell) that the record reader used before it streamed:
  * cell types, formula cells giving their cached result, shared, inline and rich text strings, date formats from the
  * cell or column style, the 1904 date system, and the cells of array formulas.
+ *
+ * When formulas are enabled (enableFormulas()), the formula text of each cell is read as XSSFCell.getCellFormula()
+ * gives it: the text of a formula as written, the formula of an array formula for each cell of its range, and the
+ * formula of a shared formula parsed, moved to the cell, and rendered by POI's own formula code (SharedFormula), as
+ * XSSFCell does.  Parsing a shared formula needs the names of the worksheets and the defined names of the workbook,
+ * which are given to POI in an empty workbook with the same worksheets and defined names, loaded by POI when the
+ * first shared formula is read.
  *
  * The package is read from a file; an input stream is first copied to a temporary file, which is deleted as soon as
  * the package is open where the platform allows it, and otherwise when the source is closed.
@@ -91,6 +112,17 @@ final class XlsxSheetSource implements SheetSource {
     // whether each cell style has a date format, by style index
     private final HashMap<Integer, Boolean> date_styles = new HashMap<Integer, Boolean>();
     private final XMLInputFactory xml_factory = XMLHelper.newXMLInputFactory();
+    // true if the formula text of the cells is read
+    private boolean read_formulas = false;
+    // the names of the sheets of the workbook in order and the 0-based position of the selected sheet among them
+    private final ArrayList<String> sheet_names = new ArrayList<String>();
+    private int sheet_index = -1;
+    // the defined names of the workbook: {name, 0-based local sheet index or null, function attribute or null,
+    // formula}
+    private ArrayList<String[]> defined_names = new ArrayList<String[]>();
+    // the workbook used to parse and render shared formulas, created on first use; null if not yet created
+    private XSSFWorkbook formula_workbook;
+    private XSSFEvaluationWorkbook formula_eval;
 
     /**
      * A worksheet of the workbook
@@ -113,6 +145,8 @@ final class XlsxSheetSource implements SheetSource {
         PackagePart part;
         boolean date1904;
         ArrayList<SheetInfo> sheets = new ArrayList<SheetInfo>();
+        // the defined names: {name, 0-based local sheet index or null, function attribute or null, formula}
+        ArrayList<String[]> names = new ArrayList<String[]>();
     }
 
     private XlsxSheetSource(OPCPackage pkg, Path temp_file) {
@@ -266,6 +300,13 @@ final class XlsxSheetSource implements SheetSource {
         }
         sheet_part = sheet.part;
         date1904 = info.date1904;
+        for (SheetInfo s : info.sheets) {
+            if (s == sheet) {
+                sheet_index = sheet_names.size();
+            }
+            sheet_names.add(s.name);
+        }
+        defined_names = info.names;
 
         // the shared strings and styles related to the workbook part; as with XSSFWorkbook, the last one wins
         PackagePart sst_part = null;
@@ -339,6 +380,7 @@ final class XlsxSheetSource implements SheetSource {
             try {
                 int depth = 0;
                 boolean in_sheets = false;
+                boolean in_names = false;
                 while (xr.hasNext()) {
                     int ev = xr.next();
                     if (ev == XMLStreamConstants.START_ELEMENT) {
@@ -361,10 +403,21 @@ final class XlsxSheetSource implements SheetSource {
                         } else if (depth == 3 && in_sheets && main && "sheet".equals(ln)) {
                             sheets.add(new String[]{xr.getAttributeValue(null, "name"),
                                 xr.getAttributeValue(NS_REL, "id")});
+                        } else if (depth == 2 && main && "definedNames".equals(ln)) {
+                            in_names = true;
+                        } else if (depth == 3 && in_names && main && "definedName".equals(ln)) {
+                            String name = xr.getAttributeValue(null, "name");
+                            String local = xr.getAttributeValue(null, "localSheetId");
+                            String function = xr.getAttributeValue(null, "function");
+                            // reads up to and including the end tag
+                            String refers_to = xr.getElementText();
+                            --depth;
+                            info.names.add(new String[]{name, local, function, refers_to});
                         }
                     } else if (ev == XMLStreamConstants.END_ELEMENT) {
                         if (depth == 2) {
                             in_sheets = false;
+                            in_names = false;
                         }
                         --depth;
                     }
@@ -515,6 +568,135 @@ final class XlsxSheetSource implements SheetSource {
     }
 
     @Override
+    public void enableFormulas() {
+        read_formulas = true;
+    }
+
+    /**
+     * Returns the formula of a cell of a shared formula as XSSFCell.getCellFormula() gives it: the formula of the
+     * shared formula's master cell, parsed with the workbook's worksheets and names, moved by the cell's offset from
+     * the first cell of the shared formula's range, and rendered
+     *
+     * @param master the formula text of the master cell
+     * @param range the range of the shared formula
+     * @param row the 0-based row of the cell
+     * @param col the 0-based column of the cell
+     */
+    private String getSharedFormula(String master, CellRangeAddress range, int row, int col) {
+        XSSFEvaluationWorkbook eval = getFormulaWorkbook();
+        Ptg[] ptgs = FormulaParser.parse(master, eval, FormulaType.CELL, sheet_index, row);
+        Ptg[] moved = new SharedFormula(SpreadsheetVersion.EXCEL2007).convertSharedFormulas(ptgs,
+            row - range.getFirstRow(), col - range.getFirstColumn());
+        return FormulaRenderer.toFormulaString(eval, moved);
+    }
+
+    /**
+     * Returns the workbook used to parse and render shared formulas, creating it on first use: an empty workbook
+     * with the worksheets and the defined names of this workbook, loaded by POI as it loads this workbook's names
+     */
+    private XSSFEvaluationWorkbook getFormulaWorkbook() {
+        if (formula_eval != null) {
+            return formula_eval;
+        }
+        final String main = NS_MAIN;
+        final String rel = NS_REL;
+        final String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>";
+        final String ct = "application/vnd.openxmlformats-officedocument.spreadsheetml.";
+        StringBuilder types = new StringBuilder(xml
+            + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+            + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+            + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+            + "<Override PartName=\"/xl/workbook.xml\" ContentType=\"" + ct + "sheet.main+xml\"/>");
+        StringBuilder workbook = new StringBuilder(xml + "<workbook xmlns=\"" + main + "\" xmlns:r=\"" + rel
+            + "\"><sheets>");
+        StringBuilder workbook_rels = new StringBuilder(xml
+            + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">");
+        for (int i = 0; i < sheet_names.size(); ++i) {
+            int n = i + 1;
+            types.append("<Override PartName=\"/xl/worksheets/sheet" + n + ".xml\" ContentType=\"" + ct
+                + "worksheet+xml\"/>");
+            workbook.append("<sheet name=\"" + escapeXml(sheet_names.get(i)) + "\" sheetId=\"" + n + "\" r:id=\"rId"
+                + n + "\"/>");
+            workbook_rels.append("<Relationship Id=\"rId" + n + "\" Type=\"" + rel + "/worksheet\" "
+                + "Target=\"worksheets/sheet" + n + ".xml\"/>");
+        }
+        types.append("</Types>");
+        workbook.append("</sheets>");
+        if (!defined_names.isEmpty()) {
+            workbook.append("<definedNames>");
+            for (String[] dn : defined_names) {
+                if (dn[0] == null) {
+                    continue;
+                }
+                workbook.append("<definedName name=\"" + escapeXml(dn[0]) + "\"");
+                if (dn[1] != null) {
+                    workbook.append(" localSheetId=\"" + escapeXml(dn[1]) + "\"");
+                }
+                if (dn[2] != null) {
+                    workbook.append(" function=\"" + escapeXml(dn[2]) + "\"");
+                }
+                workbook.append(">" + escapeXml(dn[3]) + "</definedName>");
+            }
+            workbook.append("</definedNames>");
+        }
+        workbook.append("</workbook>");
+        workbook_rels.append("</Relationships>");
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
+            writeEntry(zip, "[Content_Types].xml", types.toString());
+            writeEntry(zip, "_rels/.rels", xml
+                + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+                + "<Relationship Id=\"rId1\" Type=\"" + rel + "/officeDocument\" Target=\"xl/workbook.xml\"/>"
+                + "</Relationships>");
+            writeEntry(zip, "xl/workbook.xml", workbook.toString());
+            writeEntry(zip, "xl/_rels/workbook.xml.rels", workbook_rels.toString());
+            for (int i = 0; i < sheet_names.size(); ++i) {
+                writeEntry(zip, "xl/worksheets/sheet" + (i + 1) + ".xml", xml + "<worksheet xmlns=\"" + main
+                    + "\"><sheetData/></worksheet>");
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        XSSFWorkbook wb;
+        try {
+            wb = new XSSFWorkbook(new ByteArrayInputStream(bytes.toByteArray()));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        formula_workbook = wb;
+        formula_eval = XSSFEvaluationWorkbook.create(wb);
+        return formula_eval;
+    }
+
+    private static void writeEntry(ZipOutputStream zip, String name, String data) throws IOException {
+        zip.putNextEntry(new ZipEntry(name));
+        zip.write(data.getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
+    }
+
+    /**
+     * Escapes text for an XML attribute value or element content; null gives an empty string
+     */
+    private static String escapeXml(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); ++i) {
+            char c = text.charAt(i);
+            switch (c) {
+                case '&': sb.append("&amp;"); break;
+                case '<': sb.append("&lt;"); break;
+                case '>': sb.append("&gt;"); break;
+                case '"': sb.append("&quot;"); break;
+                default: sb.append(c); break;
+            }
+        }
+        return sb.toString();
+    }
+
+    @Override
     public RowReader openRows() throws IOException {
         if (pkg == null) {
             throw new IOException("the workbook is closed");
@@ -557,6 +739,20 @@ final class XlsxSheetSource implements SheetSource {
                 error.addSuppressed(t);
             }
         }
+        if (formula_workbook != null) {
+            XSSFWorkbook wb = formula_workbook;
+            formula_workbook = null;
+            formula_eval = null;
+            try {
+                wb.close();
+            } catch (Throwable t) {
+                if (error == null) {
+                    error = t;
+                } else {
+                    error.addSuppressed(t);
+                }
+            }
+        }
         strings = null;
         styles = null;
         if (error != null) {
@@ -574,6 +770,32 @@ final class XlsxSheetSource implements SheetSource {
     }
 
     /**
+     * An array formula: its range and its formula text (null if formulas are not read)
+     */
+    private static final class ArrayFormula {
+        final CellRangeAddress range;
+        final String formula;
+
+        ArrayFormula(CellRangeAddress range, String formula) {
+            this.range = range;
+            this.formula = formula;
+        }
+    }
+
+    /**
+     * The master of a shared formula: its range and formula text
+     */
+    private static final class SharedFormulaMaster {
+        final CellRangeAddress range;
+        final String formula;
+
+        SharedFormulaMaster(CellRangeAddress range, String formula) {
+            this.range = range;
+            this.formula = formula;
+        }
+    }
+
+    /**
      * One pass over the rows of the sheet
      */
     private final class XlsxRowReader implements RowReader {
@@ -585,7 +807,11 @@ final class XlsxSheetSource implements SheetSource {
         // column definitions: {min, max, style}, 1-based columns, style -1 if not set
         private final ArrayList<long[]> cols = new ArrayList<long[]>();
         // the ranges of the array formulas of the rows read that may hold the cells of later rows
-        private final ArrayList<CellRangeAddress> array_ranges = new ArrayList<CellRangeAddress>();
+        private final ArrayList<ArrayFormula> array_ranges = new ArrayList<ArrayFormula>();
+        // the masters of the shared formulas read in this pass by shared formula index, as XSSFSheet keeps them
+        private final HashMap<Long, SharedFormulaMaster> shared_formulas = new HashMap<Long, SharedFormulaMaster>();
+        // true if the formula text of the cells is read in this pass
+        private final boolean formulas = read_formulas;
 
         XlsxRowReader() throws IOException {
             in = sheet_part.getInputStream();
@@ -686,8 +912,8 @@ final class XlsxSheetSource implements SheetSource {
             }
             last_row = row;
             // array formulas that end before this row hold no more cells
-            for (Iterator<CellRangeAddress> i = array_ranges.iterator(); i.hasNext(); ) {
-                if (i.next().getLastRow() < row) {
+            for (Iterator<ArrayFormula> i = array_ranges.iterator(); i.hasNext(); ) {
+                if (i.next().range.getLastRow() < row) {
                     i.remove();
                 }
             }
@@ -729,19 +955,7 @@ final class XlsxSheetSource implements SheetSource {
                             continue;
                         }
                         if ("f".equals(ln)) {
-                            String ft = xr.getAttributeValue(null, "t");
-                            if (ft != null) {
-                                ft = ft.trim();
-                            }
-                            // POI does not support data table formulas; their cells are typed by their values
-                            if (!"dataTable".equals(ft)) {
-                                cell.formula = true;
-                            }
-                            String ref = xr.getAttributeValue(null, "ref");
-                            if ("array".equals(ft) && ref != null) {
-                                array_ranges.add(CellRangeAddress.valueOf(ref));
-                            }
-                            skipElement(xr);
+                            readFormula(cell, row);
                             continue;
                         }
                         if ("is".equals(ln)) {
@@ -756,15 +970,62 @@ final class XlsxSheetSource implements SheetSource {
                 }
             }
             if (!cell.formula) {
-                // the cells of an array formula other than the one holding it are formula cells as well
-                for (CellRangeAddress range : array_ranges) {
-                    if (range.isInRange(row, cell.col)) {
+                // the cells of an array formula other than the one holding it are formula cells as well, whose
+                // formula is that of the array formula
+                for (ArrayFormula array : array_ranges) {
+                    if (array.range.isInRange(row, cell.col)) {
                         cell.formula = true;
+                        cell.formula_text = array.formula;
                         break;
                     }
                 }
             }
             return cell;
+        }
+
+        /**
+         * Reads the formula element of a cell, at whose start the reader is, up to and including its end tag
+         */
+        private void readFormula(XlsxCell cell, int row) throws XMLStreamException {
+            String ft = xr.getAttributeValue(null, "t");
+            if (ft != null) {
+                ft = ft.trim();
+            }
+            // POI does not support data table formulas; their cells are typed by their values
+            if (!"dataTable".equals(ft)) {
+                cell.formula = true;
+            }
+            String ref = xr.getAttributeValue(null, "ref");
+            String si = "shared".equals(ft) ? xr.getAttributeValue(null, "si") : null;
+            if (!formulas) {
+                if ("array".equals(ft) && ref != null) {
+                    array_ranges.add(new ArrayFormula(CellRangeAddress.valueOf(ref), null));
+                }
+                skipElement(xr);
+                return;
+            }
+            String text = xr.getElementText();
+            if ("array".equals(ft) && ref != null) {
+                array_ranges.add(new ArrayFormula(CellRangeAddress.valueOf(ref), text));
+            }
+            if (si != null) {
+                long index;
+                try {
+                    index = Long.parseLong(si.trim());
+                } catch (NumberFormatException e) {
+                    throw new IllegalStateException(String.format("cell %s has an invalid shared formula index %s",
+                        new CellReference(row, cell.col).formatAsString(), si), e);
+                }
+                // the master of a shared formula has its range and formula, as XSSFSheet determines it
+                if (ref != null) {
+                    shared_formulas.put(index, new SharedFormulaMaster(CellRangeAddress.valueOf(ref), text));
+                }
+                cell.shared = shared_formulas.get(index);
+                cell.shared_index = index;
+                cell.row = row;
+            } else {
+                cell.formula_text = text;
+            }
         }
 
         @Override
@@ -846,6 +1107,12 @@ final class XlsxSheetSource implements SheetSource {
             // the inline string, if set
             boolean has_is = false;
             String is;
+            // the formula text of a formula that is not shared, if formulas are read
+            String formula_text;
+            // the shared formula of the cell and its index, if the cell has one; the 0-based row of the cell
+            SharedFormulaMaster shared;
+            long shared_index = -1;
+            int row;
 
             XlsxCell(int col, String t, long s) {
                 this.col = col;
@@ -992,6 +1259,26 @@ final class XlsxSheetSource implements SheetSource {
                     return null;
                 }
                 return DateUtil.getLocalDateTime(getNumericCellValue(), date1904);
+            }
+
+            @Override
+            public String getCellFormula() {
+                if (!formula) {
+                    return null;
+                }
+                if (!formulas) {
+                    throw new IllegalStateException("formulas are not read; call enableFormulas() before reading "
+                        + "the rows");
+                }
+                if (shared_index == -1) {
+                    return formula_text;
+                }
+                if (shared == null) {
+                    // as XSSFCell.getCellFormula() reports it
+                    throw new IllegalStateException("Master cell of a shared formula with sid=" + shared_index
+                        + " was not found");
+                }
+                return getSharedFormula(shared.formula, shared.range, row, col);
             }
         }
     }
