@@ -56,6 +56,13 @@
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelIterator
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelWriter
 %module-cmd(jni) import java.lang.System
+%module-cmd(jni) import org.apache.poi.poifs.filesystem.POIFSFileSystem
+%module-cmd(jni) import org.apache.poi.poifs.crypt.EncryptionInfo
+%module-cmd(jni) import org.apache.poi.poifs.crypt.EncryptionMode
+%module-cmd(jni) import org.apache.poi.poifs.crypt.Encryptor
+%module-cmd(jni) import org.apache.poi.openxml4j.opc.OPCPackage
+%module-cmd(jni) import org.apache.poi.openxml4j.opc.PackageAccess
+%module-cmd(jni) import java.io.FileOutputStream
 
 %exec-class ExcelDataProviderTest
 
@@ -226,6 +233,7 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("write: negative - invalid column formats", \testWriteNegativeColumnFormats());
         addTestCase("write: the write actions offer column formats", \testColumnFormatsActionOption());
         addTestCase("write: column formats as LibreOffice shows them", \testWriteColumnFormatsRendered());
+        addTestCase("negative: a file that cannot be read as a workbook", \testUnreadableFiles());
         set_return_value(main());
     }
 
@@ -527,6 +535,84 @@ public class ExcelDataProviderTest inherits QUnit::Test {
                 "should mention file not found");
         }
         assertTrue(threw, "should throw exception for invalid path");
+    }
+
+    #! A file that is not a readable workbook fails the read with the reader's error
+    /** What a design or a user is told about such files is stated from these errors (qorus#646): a password-protected
+        workbook cannot be read (there is no password option), and a damaged file, another file type or an empty file
+        fails before any record is returned.  Each raises @c JNI-ERROR, its description naming the Java exception.
+    */
+    testUnreadableFiles() {
+        string dir = tmp_location() + "/excel-unreadable-" + get_random_string(8);
+        mkdir(dir);
+        on_exit {
+            Dir d();
+            d.chdir(dir);
+            foreach string f in (d.listFiles() ?? ()) {
+                unlink(dir + "/" + f);
+            }
+            rmdir(dir);
+        }
+        string plain = dir + "/plain.xlsx";
+        ExcelTestHelper::createSimpleExcel(plain);
+        # a password-protected workbook, encrypted as Excel does (agile encryption in an OLE2 container)
+        POIFSFileSystem fs();
+        EncryptionInfo info(EncryptionMode::agile);
+        Encryptor encryptor = info.getEncryptor();
+        encryptor.confirmPassword("secret");
+        OPCPackage opc = OPCPackage::open(plain, PackageAccess::READ_WRITE);
+        auto data_stream = encryptor.getDataStream(fs);
+        opc.save(data_stream);
+        data_stream.close();
+        opc.revert();
+        Jni::java::io::FileOutputStream out(dir + "/encrypted.xlsx");
+        fs.writeFilesystem(out);
+        out.close();
+
+        binary workbook = File::readBinaryFile(plain);
+        # the input -> the Java exception its read raises
+        hash<string, hash<auto>> cases = {
+            "password-protected": {
+                "data": File::readBinaryFile(dir + "/encrypted.xlsx"),
+                "exception": "org.apache.poi.EncryptedDocumentException",
+            },
+            "damaged (truncated)": {
+                "data": workbook.substr(0, workbook.size() / 2),
+                "exception": "java.io.IOException",
+            },
+            "a ZIP archive that is not a workbook": {
+                "data": binary("PK\x03\x04not a workbook"),
+                "exception": "org.apache.poi.openxml4j.exceptions.NotOfficeXmlFileException",
+            },
+            "a text file": {
+                "data": binary("PO;SKU;Qty\n1;2;3\n"),
+                "exception": "java.io.IOException",
+            },
+            "a PDF document": {
+                "data": binary("%PDF-1.4\n"),
+                "exception": "java.io.IOException",
+            },
+            "an empty file": {
+                "data": binary(),
+                "exception": "org.apache.poi.EmptyFileException",
+            },
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *hash<ExceptionInfo> ex;
+            int records = 0;
+            try {
+                ExcelReadDataProvider dp({"data": i.value.data, "header_names": True});
+                map ++records, dp.searchRecords();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            assertEq("JNI-ERROR", ex.err, i.key);
+            assertEq(0, ex.desc.find(i.value.exception), sprintf("%s: %s", i.key, ex.desc));
+            assertEq(0, records, i.key + ": no record is returned");
+        }
+        # the unencrypted workbook reads
+        ExcelReadDataProvider dp({"data": workbook, "header_names": True});
+        assertEq(3, (map $1, dp.searchRecords()).size());
     }
 
     testNegativeInvalidWorksheet() {
