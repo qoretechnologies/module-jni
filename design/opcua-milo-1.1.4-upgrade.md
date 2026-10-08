@@ -124,7 +124,7 @@ All confirmed via `javap` against the 1.1.4 jars.
    Produces the same snapshot shape (matching `endpoint_id`s) plus `required_models` /
    `missing_dependencies`. Exposed via `importNodeSet2()`; verified with a minimal NodeSet2 file.
 
-   **Browse path derivation (module v1.10.1).** A node's browse path is the chain of namespace-qualified
+   **Browse path derivation (module v1.10.0).** A node's browse path is the chain of namespace-qualified
    browse names from the top of the model down to the node, walked through `ParentNodeId` and, when that
    attribute is absent, through the node's inverse containment reference (`HasComponent`,
    `HasOrderedComponent`, `HasProperty`, `Organizes`, `HasAddIn`). `HasSubtype` is excluded on purpose: it
@@ -132,13 +132,13 @@ All confirmed via `javap` against the 1.1.4 jars.
    model is browsed at the top of that model. A chain that leaves the model keeps a segment for the
    external parent — its standard browse name for a well-known address-space node (`i=92` → `0:XmlSchema`,
    `i=93` → `0:OPC Binary`, …), its NodeId otherwise — except the Root and Objects folders, which are the
-   browse root and add no segment, matching the live `SchemaResolver` walk. Deriving the path from the
-   browse name alone (the pre-v1.10.1 behavior) both collapsed same-named nodes onto one `endpoint_id`
-   and flattened the model; see qore issue #5450. A method's `InputArguments` / `OutputArguments`
-   properties are folded into the method endpoint's argument lists instead of becoming endpoints, and
-   `Aliases` are resolved for data types and reference types.
+   browse root and add no segment, matching the live `SchemaResolver` walk. The path cannot be derived
+   from the browse name alone: that would collapse same-named nodes onto one `endpoint_id` and flatten
+   the model. A method's `InputArguments` / `OutputArguments` properties are folded into the method
+   endpoint's argument lists instead of becoming endpoints, and `Aliases` are resolved for data types and
+   reference types.
 
-   **Export (module v1.10.1).** `AddressSpaceSchema.exportNodeSet2()` is the inverse: it emits the nodes
+   **Export (module v1.10.0).** `AddressSpaceSchema.exportNodeSet2()` is the inverse: it emits the nodes
    named by each endpoint's browse path (as objects, unless the segment is itself an exported endpoint),
    the `ParentNodeId` / inverse references that hold the hierarchy together, and the argument properties,
    so that export → import is identity on browse paths and `endpoint_id` values. `GenericServer`

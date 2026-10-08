@@ -288,6 +288,11 @@ MACRO(MAKE_QJAR _output _classpath _root)
     )
 ENDMACRO(MAKE_QJAR)
 
+# Shared spreadsheet display format code parser (compiled into the Excel and ODS data provider jars)
+set(SPREADSHEET_FORMAT_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/format/SpreadsheetFormatCode.java
+)
+
 # Shared Qore stream adapter sources (compiled into each data provider jar)
 set(QORE_STREAM_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/jni/QoreInputStreamWrapper.java
@@ -341,11 +346,11 @@ add_custom_command(
     OUTPUT ${EXCEL_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${EXCEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-excel ${EXCEL_JAR} ${EXCEL_SOURCES_DIR}
-        ${QORE_STREAM_SOURCES} -cp ${EXCEL_CLASSPATH}
+        ${SPREADSHEET_FORMAT_SOURCES} ${QORE_STREAM_SOURCES} -cp ${EXCEL_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXCEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/
     COMMAND ${CMAKE_COMMAND} -E make_directory ${QORE_AOT_QMOD_DIR}/ExcelDataProvider/jar
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXCEL_JAR} ${QORE_AOT_QMOD_DIR}/ExcelDataProvider/jar/
-    DEPENDS ${module_name} ${EXCEL_SOURCES} ${QORE_STREAM_SOURCES}
+    DEPENDS ${module_name} ${EXCEL_SOURCES} ${SPREADSHEET_FORMAT_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
@@ -573,11 +578,11 @@ add_custom_command(
     OUTPUT ${ODS_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${ODS_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-ods ${ODS_JAR} ${ODS_SOURCES_DIR}
-        ${QORE_STREAM_SOURCES} -cp ${ODS_CLASSPATH}
+        ${SPREADSHEET_FORMAT_SOURCES} ${QORE_STREAM_SOURCES} -cp ${ODS_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ODS_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/
     COMMAND ${CMAKE_COMMAND} -E make_directory ${QORE_AOT_QMOD_DIR}/OdsDataProvider/jar
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ODS_JAR} ${QORE_AOT_QMOD_DIR}/OdsDataProvider/jar/
-    DEPENDS ${module_name} ${ODS_SOURCES} ${QORE_STREAM_SOURCES}
+    DEPENDS ${module_name} ${ODS_SOURCES} ${SPREADSHEET_FORMAT_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )

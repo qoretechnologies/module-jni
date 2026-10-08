@@ -319,6 +319,52 @@ module ExcelDataProvider {
     - \c headers: List of column headers
     - \c format: Output format - "xlsx" (default) or "xls"
     - \c streaming: Use streaming mode for large files (reduces memory usage)
+    - \c column_formats: The display format of columns by header name (see
+      @ref ExcelDataProvider_writing_column_formats)
+
+    @subsection ExcelDataProvider_writing_column_formats Column Display Formats
+
+    The \c column_formats option gives columns a display format code, as Excel and LibreOffice write them, so
+    that whoever opens the file sees each value as intended.  The cells keep their real values: a date stays a
+    date and a number a number; only the way they are shown changes.
+
+    @code{.py}
+    ExcelWriteDataProvider dp("invoices.xlsx", {
+        "headers": ("Invoice", "Date", "Amount", "Discount"),
+        "column_formats": {
+            "Date": "dd.mm.yyyy",
+            "Amount": "#,##0.00;(#,##0.00)",
+            "Discount": "0.0%",
+        },
+    });
+    # the date is shown as 07.10.2026, the amount as (1,234.50) and the discount as 2.5%
+    dp.createRecord({"Invoice": "INV-1", "Date": 2026-10-07, "Amount": -1234.5, "Discount": 0.025});
+    dp.finishCreate();
+    @endcode
+
+    Format codes are written as in Excel and LibreOffice:
+    - numbers: \c 0 (a digit that is always shown), \c # (a digit shown when significant), \c , between digits
+      (thousands grouping), \c , after the last digit (divide by 1000), \c . (the decimal point), and \c E+00
+      (scientific notation); up to three sections for positive, negative and zero values separated by \c ;,
+      such as <tt>#,##0.00;(#,##0.00)</tt> or <tt>#,##0.00;#,##0.00-</tt>
+    - percentages: a \c % in each section, such as \c 0.0%; the value is a fraction, so \c 0.25 is shown as
+      \c 25.0%
+    - dates and times: \c yy or \c yyyy (year), \c m, \c mm, \c mmm or \c mmmm (month as a number or a name),
+      \c d or \c dd (day), \c ddd or \c dddd (weekday name), \c h or \c hh (hour), \c m or \c mm directly after an
+      hour or before a second (minute), \c s or \c ss (second), \c .0 to \c .000 after the second (fractions of a
+      second), and \c AM/PM
+    - text: \c @
+
+    Text in a code is written in double quotes (<tt>"EUR"</tt>), escaped with a backslash (<tt>\\x</tt>), as a
+    currency symbol in brackets (<tt>[$€-407]</tt>), or as itself for <tt>$ - + / ( ) :</tt>, spaces and symbols
+    such as \c €; a section can start with a color such as <tt>[Red]</tt>.
+
+    Only codes that an Excel cell style and an OpenDocument data style show the same way are accepted, so the
+    same codes can be given to the @ref odsdataproviderintro "OdsDataProvider" writer.  An invalid or unsupported
+    code (\c General, fractions, fill characters, conditions, or elapsed times), or a format for a column that is
+    not written, raises \c EXCEL-WRITE-OPTION-ERROR naming the column and the problem.  A value that its column's
+    code does not show, such as a string in a number column, is written without the format.  Each distinct code
+    is one cell style in the workbook, whatever the number of rows.
 
     @subsection ExcelDataProvider_writing_formats Output Formats
 
@@ -350,6 +396,9 @@ module ExcelDataProvider {
     @section ExcelDataProvider_relnotes Release Notes
 
     @subsection ExcelDataProvider_v1_1 ExcelDataProvider v1.1
+    - added the \c column_formats write option: a display format code for each column, such as \c dd.mm.yyyy,
+      <tt>#,##0.00</tt> or \c 0.0%, written as a cell style while the cells keep their dates and numbers (see
+      @ref ExcelDataProvider_writing_column_formats)
     - an unknown worksheet raises \c EXCEL-WORKSHEET-NOT-FOUND, naming the worksheet and listing the worksheets of
       the file, instead of a Java exception
     - added the \c worksheet_pattern read option: a regular expression that the name of exactly one worksheet must

@@ -30,6 +30,7 @@
 %requires DataProvider
 %requires json
 %requires FsUtil
+%requires CsvUtil
 %requires jni
 
 # Add classpaths for ODFDOM and the test helper BEFORE loading OdsDataProvider
@@ -65,9 +66,11 @@
 %module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/RoaringBitmap-1.0.0.jar
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsTestHelper
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsIterator
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsWriter
 %module-cmd(jni) import java.lang.System
 
 %requires OdsDataProvider
+%requires ExcelDataProvider
 
 %exec-class OdsDataProviderTest
 
@@ -77,6 +80,50 @@ public class OdsDataProviderTest inherits QUnit::Test {
         const LargeRows = 200000;
         #! the JVM heap of the child process that reads a large document
         const ChildHeap = "64m";
+
+        #! the columns of the column format tests
+        const FormatHeaders = ("Name", "Date", "Amount", "Share", "Code", "Plain", "Stamp");
+
+        #! the column formats of the column format tests; Name, Plain and Stamp have none
+        const ColumnFormats = {
+            "Date": "dd.mm.yyyy hh:mm",
+            "Amount": "#,##0.00;(#,##0.00)",
+            "Share": "0.0%",
+            "Code": "@",
+        };
+
+        #! a record of the column format tests
+        const FormatRecord = {
+            "Name": "a",
+            "Date": 2026-10-07T13:45:10,
+            "Amount": -1234.5,
+            "Share": 0.25,
+            "Code": "X1",
+            "Plain": 42,
+            "Stamp": 2026-01-05T08:05:09,
+        };
+
+        #! number codes compared with Excel's display, with the values they are shown with
+        const NumberCodes = (
+            "0", "0.00", "#,##0", "#,##0.00", "#,##0.00;(#,##0.00)", "#,##0.00;#,##0.00-", "0.0%", "0%", "#,##0,",
+            "0.0,,\" M\"", "0.00E+00", "\"€\" #,##0.00", "#,##0.00 [$€-407]", "[Red]#,##0;[Blue]-#,##0", "0.0#",
+            "#.##", "#,##0.00;(#,##0.00);\"-\"", "000000", "#,##0.00_);(#,##0.00)", "\\$#,##0.00", ".00",
+            "0.0%;(0.0%)", "#,##0.00;\"negative\"",
+        );
+        const NumberValues = (1234.5678, -1234.5678, 0, 0.25, 1234567.891, 5n, -0.004);
+
+        #! date codes compared with Excel's display, with the values they are shown with
+        const DateCodes = (
+            "dd.mm.yyyy", "yyyy-mm-dd", "d/m/yy", "mmm d, yyyy", "mmmm yyyy", "dddd, d mmmm yyyy", "hh:mm",
+            "h:mm AM/PM", "hh:mm:ss.000", "yyyy-mm-dd\"T\"hh:mm:ss", "DD.MM.YYYY HH:MM:SS", "ddd", "m/d/yyyy h:mm",
+            "mm:ss", "h:mm:ss.0", "[Red]dd.mm.yyyy", "dd. mmmm yyyy",
+        );
+        const DateValues = (2026-10-07T13:45:10.123, 2026-01-05T08:05:09, 2026-12-31T23:59:59.999,
+            2026-06-01T00:00:00);
+
+        #! text codes compared with Excel's display, with the values they are shown with
+        const TextCodes = ("@", "\"Text: \"@", "[Blue]@");
+        const TextValues = ("abc", "x y");
     }
 
     private {
@@ -143,6 +190,16 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("read: date and time cells across daylight saving time changes", \testDaylightSaving());
         addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
         addTestCase("read: the input is copied to a file once and deleted with the providers", \testWorkbookFile());
+        addTestCase("write: dates keep their time of day", \testWriteDateTimes());
+        addTestCase("write: column display formats", \testWriteColumnFormats());
+        addTestCase("write: a column format shows only values of its kind", \testWriteColumnFormatsOtherValues());
+        addTestCase("write: one data style per distinct column format", \testWriteColumnFormatStyles());
+        addTestCase("write: column formats with headers from the first record", \testWriteColumnFormatsFirstRecord());
+        addTestCase("write: negative - invalid column formats", \testWriteNegativeColumnFormats());
+        addTestCase("write: the write actions offer column formats", \testColumnFormatsActionOption());
+        addTestCase("write: column formats as LibreOffice shows them", \testWriteColumnFormatsRendered());
+        addTestCase("write: ODS data styles show each code as Excel does", \testColumnFormatsLikeExcel());
+        addTestCase("negative: a file that cannot be read as a spreadsheet", \testUnreadableFiles());
         set_return_value(main());
     }
 
@@ -1433,5 +1490,276 @@ printf(\"RESULT:%%s\\n\", make_json(rv));
 
     private static string shellQuote(string arg) {
         return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    testWriteDateTimes() {
+        string path = test_data_dir + "/date-times-write.ods";
+        on_exit unlink(path);
+        list<date> dates = (2025-06-15T10:30:00, 2025-06-15T10:30:45.250, 2025-12-31T23:59:59, 2025-01-01T00:00:00);
+        OdsWriteDataProvider dp(path, {"headers": ("When",)});
+        map dp.createRecord({"When": $1}), dates;
+        dp.finishCreate();
+
+        # the clock time of each date is written with its seconds, as office:date-value is an xsd:dateTime
+        assertEq(("2025-06-15T10:30:00", "2025-06-15T10:30:45.25", "2025-12-31T23:59:59", "2025-01-01T00:00:00"),
+            (map OdsTestHelper::getDateValueAttribute(path, $1 + 1, 0), xrange(dates.size())));
+        OdsReadDataProvider rdp(path, {"header_names": True});
+        assertEq(dates, (map $1.When, rdp.searchRecords()));
+    }
+
+    testWriteColumnFormats() {
+        string path = test_data_dir + "/column-formats.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"headers": FormatHeaders, "column_formats": ColumnFormats});
+        dp.createRecord(FormatRecord);
+        dp.finishCreate();
+
+        # the value type and data style of each cell, read with odfdom
+        list<string> styles = OdsTestHelper::getCellDataStyles(path, 1, FormatHeaders.size());
+        assertEq("string|", styles[0], "Name");
+        assertRegex("^date\\|<number:date-style [^>]*number:format-source=\"fixed\"[^>]*>"
+            "<number:day number:style=\"long\"/><number:text>\\.</number:text>"
+            "<number:month number:style=\"long\"/><number:text>\\.</number:text>"
+            "<number:year number:style=\"long\"/><number:text> </number:text>"
+            "<number:hours number:style=\"long\"/><number:text>:</number:text>"
+            "<number:minutes number:style=\"long\"/></number:date-style>$", styles[1], "Date");
+        # the main style is the negative section, mapping values >= 0 to the positive section
+        assertRegex("^float\\|<number:number-style [^>]*><number:text>\\(</number:text>"
+            "<number:number number:decimal-places=\"2\" number:grouping=\"true\" number:min-decimal-places=\"2\" "
+            "number:min-integer-digits=\"1\"/><number:text>\\)</number:text>"
+            "<style:map style:apply-style-name=\"QoreFmt2P0\" style:condition=\"value\\(\\)&gt;=0\"/>"
+            "</number:number-style> \\+ <number:number-style [^>]*style:name=\"QoreFmt2P0\"[^>]*>"
+            "<number:number number:decimal-places=\"2\" number:grouping=\"true\" number:min-decimal-places=\"2\" "
+            "number:min-integer-digits=\"1\"/></number:number-style>$", styles[2], "Amount");
+        # a percentage cell holds the fraction
+        assertRegex("^percentage\\|<number:percentage-style [^>]*>"
+            "<number:number number:decimal-places=\"1\" number:min-decimal-places=\"1\" "
+            "number:min-integer-digits=\"1\"/><number:text>%</number:text></number:percentage-style>$", styles[3],
+            "Share");
+        assertRegex("^string\\|<number:text-style [^>]*><number:text-content/></number:text-style>$", styles[4],
+            "Code");
+        assertEq("float|", styles[5], "Plain");
+        assertEq("date|", styles[6], "Stamp");
+
+        # the values keep their types: the percentage cell is read as its fraction, and dates keep their time
+        OdsReadDataProvider rdp(path, {"header_names": True});
+        assertEq((FormatRecord + {"Amount": -1234.5, "Plain": 42.0},), (map $1, rdp.searchRecords()));
+    }
+
+    testWriteColumnFormatsOtherValues() {
+        string path = test_data_dir + "/column-formats-other.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"headers": FormatHeaders, "column_formats": ColumnFormats});
+        # a value of another kind than its column's code is written without the format; no value is an empty cell
+        dp.createRecord({"Name": "b", "Date": 5, "Amount": "n/a", "Share": 2026-10-07T00:00:00, "Code": 3.5,
+            "Plain": NOTHING, "Stamp": True});
+        dp.finishCreate();
+        assertEq(("string|", "float|", "string|", "date|", "float|", "null|", "boolean|"),
+            OdsTestHelper::getCellDataStyles(path, 1, FormatHeaders.size()));
+        OdsReadDataProvider rdp(path, {"header_names": True});
+        assertEq(({"Name": "b", "Date": 5.0, "Amount": "n/a", "Share": 2026-10-07T00:00:00, "Code": 3.5,
+            "Plain": NOTHING, "Stamp": True},), (map $1, rdp.searchRecords()));
+    }
+
+    testWriteColumnFormatStyles() {
+        # a document without column formats, for the number of data styles a document has anyway
+        string base_path = test_data_dir + "/styles-base.ods";
+        on_exit unlink(base_path);
+        OdsWriteDataProvider base(base_path, {"headers": ("A", "B", "C")});
+        base.createRecord({"A": 1, "B": 2, "C": 3});
+        base.finishCreate();
+
+        # three columns with two distinct codes, one of them with two sections, and many rows
+        string path = test_data_dir + "/styles.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"headers": ("A", "B", "C"), "column_formats": {
+            "A": "0.00", "B": "0.00", "C": "#,##0;(#,##0)",
+        }});
+        for (int i = 0; i < 500; ++i) {
+            dp.createRecord({"A": i, "B": i * 2, "C": -i});
+        }
+        dp.finishCreate();
+        assertEq(OdsTestHelper::getDataStyleCount(base_path) + 3, OdsTestHelper::getDataStyleCount(path));
+        list<string> styles = OdsTestHelper::getCellDataStyles(path, 500, 3);
+        assertEq(styles[0], styles[1]);
+        assertRegex("^float\\|<number:number-style [^>]*><number:text>\\(</number:text>", styles[2]);
+    }
+
+    testWriteColumnFormatsFirstRecord() {
+        string path = test_data_dir + "/column-formats-first-record.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"column_formats": {"Amount": "#,##0.00"}});
+        dp.createRecord({"Name": "a", "Amount": 1234.5});
+        dp.createRecord({"Name": "b", "Amount": 2});
+        dp.finishCreate();
+        foreach int row in (1, 2) {
+            list<string> styles = OdsTestHelper::getCellDataStyles(path, row, 2);
+            assertEq("string|", styles[0]);
+            assertRegex("^float\\|<number:number-style [^>]*><number:number number:decimal-places=\"2\" "
+                "number:grouping=\"true\"", styles[1]);
+        }
+
+        # a column format for a column that the first record does not have
+        OdsWriteDataProvider bad({"column_formats": {"Amount": "0.00", "Total": "0.00"}});
+        assertThrows("CREATE-RECORD-ERROR", "ODS-WRITE-OPTION-ERROR.*column \"Total\", which is not written",
+            \bad.createRecord(), {"Name": "a", "Amount": 1});
+        assertEq(0, bad.getCreatedCount());
+    }
+
+    testWriteNegativeColumnFormats() {
+        # codes that odfdom's format string parser loops forever on are refused before odfdom sees them
+        foreach string code in ("zz[[q", "[x]0", "0[", "[]0") {
+            assertThrows("ODS-WRITE-OPTION-ERROR", "column \"A\": format code", sub () {
+                OdsWriteDataProvider dp({"column_formats": {"A": code}});
+            }, NOTHING, code);
+        }
+        # each constructor checks the codes
+        assertThrows("ODS-WRITE-OPTION-ERROR", "column \"Amount\": format code \"#,##0.00 EUR\" has \"E\" at "
+            "position 10, which must be quoted", sub () {
+            OdsWriteDataProvider dp(test_data_dir + "/never.ods", {"column_formats": {"Amount": "#,##0.00 EUR"}});
+        });
+        assertThrows("ODS-WRITE-OPTION-ERROR", "General", sub () {
+            OdsWriteDataProvider dp(new StringOutputStream(), {"column_formats": {"A": "General"}});
+        });
+        assertFalse(is_file(test_data_dir + "/never.ods"));
+        # a column that is not in the headers
+        assertThrows("ODS-WRITE-OPTION-ERROR", "column \"X\", which is not written; the columns written are: "
+            "\\[\"A\"\\]", sub () {
+            OdsWriteDataProvider dp({"headers": ("A",), "column_formats": {"A": "0", "X": "0"}});
+        });
+        # a format code must be a string: the option type check refuses other values
+        assertThrows("RUNTIME-TYPE-ERROR", "option \"column_formats\" of type \"hash<string, string>\"", sub () {
+            OdsWriteDataProvider dp({"column_formats": {"A": 1}});
+        });
+        assertNothing(OdsWriter::formatCodeIssue("#,##0.00;(#,##0.00)"));
+        assertRegex("second decimal point", OdsWriter::formatCodeIssue("0.0.0") ?? "");
+        # the Java writer refuses invalid codes and late formats too
+        OdsWriter writer("Sheet1");
+        on_exit writer.close();
+        assertThrows("JNI-ERROR", "column \"A\": format code \"0.0.0\" has a second decimal point",
+            \writer.setColumnFormats(), {"A": "0.0.0"});
+        writer.writeRow({"A": 1});
+        assertThrows("JNI-ERROR", "before any row is written", \writer.setColumnFormats(), {"A": "0"});
+    }
+
+    testColumnFormatsActionOption() {
+        foreach string action in (("write", "write-data")) {
+            hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("ODS", action);
+            assertTrue(exists info.options.column_formats, action);
+        }
+        hash<DataProviderOptionInfo> opt = OdsWriteDataProvider::ConstructorOptions.column_formats;
+        assertEq("hash<string, string>", opt.type[0].getName());
+        # the example is a valid option value
+        foreach hash<auto> i in (opt.example_value.pairIterator()) {
+            assertNothing(OdsWriter::formatCodeIssue(i.value), i.key);
+        }
+    }
+
+    testWriteColumnFormatsRendered() {
+        *string soffice = findLibreOffice();
+        if (!soffice) {
+            testSkip("LibreOffice (soffice) is not installed");
+        }
+        string path = test_data_dir + "/column-formats-rendered.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"headers": FormatHeaders, "column_formats": ColumnFormats});
+        dp.createRecord(FormatRecord);
+        dp.createRecord(FormatRecord + {"Amount": 1234567.891, "Share": 1});
+        dp.finishCreate();
+        # the columns without a format are shown in LibreOffice's default formats, which depend on its locale
+        assertEq((
+            {"Name": "a", "Date": "07.10.2026 13:45", "Amount": "(1,234.50)", "Share": "25.0%", "Code": "X1"},
+            {"Name": "a", "Date": "07.10.2026 13:45", "Amount": "1,234,567.89", "Share": "100.0%", "Code": "X1"},
+        ), (map $1{"Name", "Date", "Amount", "Share", "Code"}, renderWithLibreOffice(soffice, path)));
+    }
+
+    testColumnFormatsLikeExcel() {
+        *string soffice = findLibreOffice();
+        if (!soffice) {
+            testSkip("LibreOffice (soffice) is not installed");
+        }
+        foreach hash<auto> i in ({
+                "numbers": {"codes": NumberCodes, "values": NumberValues},
+                "dates": {"codes": DateCodes, "values": DateValues},
+                "text": {"codes": TextCodes, "values": TextValues},
+            }.pairIterator()) {
+            hash<string, string> formats = map {$1: $1}, i.value.codes;
+            hash<string, list<hash<auto>>> rendered;
+            foreach string ext in ("xlsx", "ods") {
+                string path = sprintf("%s/like-excel-%s.%s", test_data_dir, i.key, ext);
+                on_exit unlink(path);
+                AbstractDataProvider dp = ext == "xlsx"
+                    ? new ExcelWriteDataProvider(path, {"headers": i.value.codes, "column_formats": formats})
+                    : new OdsWriteDataProvider(path, {"headers": i.value.codes, "column_formats": formats});
+                map dp.createRecord(map {$1: i.value.values[$#]}, i.value.codes), xrange(i.value.values.size());
+                dp.finishCreate();
+                rendered{ext} = renderWithLibreOffice(soffice, path);
+            }
+            assertEq(i.value.values.size(), rendered.xlsx.size(), i.key);
+            # each code is shown the same way in the .ods file as in the .xlsx file
+            foreach string code in (i.value.codes) {
+                assertEq((map $1{code}, rendered.xlsx), (map $1{code}, rendered.ods), i.key + ": " + code);
+            }
+        }
+    }
+
+    #! Returns the path of LibreOffice's soffice program, or NOTHING if it is not installed
+    private static *string findLibreOffice() {
+        foreach string dir in (ENV.PATH.split(":")) {
+            string path = dir + "/soffice";
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+    }
+
+    #! Returns the records of a spreadsheet's first sheet as LibreOffice shows its cells
+    private list<hash<auto>> renderWithLibreOffice(string soffice, string path) {
+        TmpDir dir("render-");
+        # CSV with "save cell contents as shown"; the profile directory keeps a running LibreOffice out of the way
+        string cmd = sprintf("%s -env:UserInstallation=file://%s/profile --headless --convert-to "
+            "'csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,true' --outdir %s %s >/dev/null 2>&1",
+            shellQuote(soffice), dir.path, shellQuote(dir.path), shellQuote(path));
+        assertEq(0, system(cmd), cmd);
+        string csv = sprintf("%s/%s.csv", dir.path, basename(path).split(".")[0]);
+        return map $1, new CsvFileIterator(csv, {"header_names": True});
+    }
+
+    #! A file that is not a readable ODS spreadsheet fails the read with the reader's error (qorus#646)
+    /** A damaged file, another file type or an empty file fails before any record is returned; each raises
+        @c JNI-ERROR, its description naming the Java exception.
+    */
+    testUnreadableFiles() {
+        binary spreadsheet = File::readBinaryFile(test_data_dir + "/simple.ods");
+        # the input -> the start of the description of the error its read raises
+        hash<string, hash<auto>> cases = {
+            "damaged (truncated)": {
+                "data": spreadsheet.substr(0, spreadsheet.size() / 2),
+                "exception": "java.util.zip.ZipException",
+            },
+            "a text file": {
+                "data": binary("PO;SKU;Qty\n1;2;3\n"),
+                "exception": "java.util.zip.ZipException",
+            },
+            "an empty file": {
+                "data": binary(),
+                "exception": "java.util.zip.ZipException",
+            },
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *hash<ExceptionInfo> ex;
+            int records = 0;
+            try {
+                OdsReadDataProvider dp({"data": i.value.data, "header_names": True});
+                map ++records, dp.searchRecords();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            assertEq("JNI-ERROR", ex.err, i.key);
+            assertEq(0, ex.desc.find(i.value.exception), sprintf("%s: %s", i.key, ex.desc));
+            assertEq(0, records, i.key + ": no record is returned");
+        }
+        OdsReadDataProvider dp({"data": spreadsheet, "header_names": True});
+        assertTrue((map $1, dp.searchRecords()).size() > 0, "the intact spreadsheet reads");
     }
 }
