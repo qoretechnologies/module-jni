@@ -143,6 +143,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("read: date and time cells across daylight saving time changes", \testDaylightSaving());
         addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
         addTestCase("read: the input is copied to a file once and deleted with the providers", \testWorkbookFile());
+        addTestCase("negative: a file that cannot be read as a spreadsheet", \testUnreadableFiles());
         set_return_value(main());
     }
 
@@ -1433,5 +1434,43 @@ printf(\"RESULT:%%s\\n\", make_json(rv));
 
     private static string shellQuote(string arg) {
         return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! A file that is not a readable ODS spreadsheet fails the read with the reader's error (qorus#646)
+    /** A damaged file, another file type or an empty file fails before any record is returned; each raises
+        @c JNI-ERROR, its description naming the Java exception.
+    */
+    testUnreadableFiles() {
+        binary spreadsheet = File::readBinaryFile(test_data_dir + "/simple.ods");
+        # the input -> the start of the description of the error its read raises
+        hash<string, hash<auto>> cases = {
+            "damaged (truncated)": {
+                "data": spreadsheet.substr(0, spreadsheet.size() / 2),
+                "exception": "java.util.zip.ZipException",
+            },
+            "a text file": {
+                "data": binary("PO;SKU;Qty\n1;2;3\n"),
+                "exception": "java.util.zip.ZipException",
+            },
+            "an empty file": {
+                "data": binary(),
+                "exception": "java.util.zip.ZipException",
+            },
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *hash<ExceptionInfo> ex;
+            int records = 0;
+            try {
+                OdsReadDataProvider dp({"data": i.value.data, "header_names": True});
+                map ++records, dp.searchRecords();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            assertEq("JNI-ERROR", ex.err, i.key);
+            assertEq(0, ex.desc.find(i.value.exception), sprintf("%s: %s", i.key, ex.desc));
+            assertEq(0, records, i.key + ": no record is returned");
+        }
+        OdsReadDataProvider dp({"data": spreadsheet, "header_names": True});
+        assertTrue((map $1, dp.searchRecords()).size() > 0, "the intact spreadsheet reads");
     }
 }
