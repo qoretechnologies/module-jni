@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%requires QUnit
+%requires jni
+%module-cmd(jni) set-compat-types true
+%module-cmd(jni) import java.util.Collections
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import java.util.HashSet
+%module-cmd(jni) import java.util.HashMap
+%exec-class Main
+class Main inherits Test {
+    constructor() : Test("JNI public interface method access", "1.0", \ARGV) {
+        addTestCase("closed JDK implementation classes dispatch through public contracts", \collections());
+        addTestCase("each Program's class loader resolves the declarations", \programs());
+        set_return_value(main());
+    }
+
+    # each Program has its own class loader and copy of the JNI dynamic API, with its own cache of the accessible
+    # declarations; the cache's class must be defined by that loader for the dynamic API to initialize
+    private programs() {
+        for (int i = 0; i < 2; ++i) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+            p.parse("%requires jni
+%module-cmd(jni) import java.util.Collections
+%module-cmd(jni) import java.util.HashSet
+int sub size() {
+    HashSet set();
+    set.add(\"partition-0\");
+    set.add(\"partition-1\");
+    auto read_only = Collections::unmodifiableSet(set);
+    # the second call uses the declaration resolved by the first
+    return read_only.size() + read_only.size();
+}
+", "program-" + i);
+            assertEq(4, p.callFunction("size"), "Program " + i);
+        }
+    }
+    private collections() {
+        ArrayList source();
+        source.add("first");
+        source.add("second");
+        auto values = Collections::unmodifiableList(source);
+        assertEq(2, values.size());
+        assertEq("second", values[1]);
+        assertEq(("first", "second"), values);
+        assertEq(0, Collections::emptyList().size());
+        HashSet set();
+        set.add("partition-0");
+        set.add("partition-1");
+        assertEq(2, Collections::unmodifiableSet(set).size());
+        HashMap mapping();
+        mapping.put("region", "uk-south");
+        auto read_only = Collections::unmodifiableMap(mapping);
+        assertEq(1, read_only.size());
+        assertEq("uk-south", read_only.get("region"));
+        auto it = source.iterator();
+        assertTrue(it.hasNext());
+        assertEq("first", it.next());
+        assertEq("second", it.next());
+        assertFalse(it.hasNext());
+        assertThrows("JNI-ERROR", "java[.]lang[.]IndexOutOfBoundsException", sub() { source.get(99); });
+        assertThrows("JNI-ERROR", "java[.]lang[.]UnsupportedOperationException", sub() { read_only.put("region", "elsewhere"); });
+        assertEq(2, values.size());
+    }
+}

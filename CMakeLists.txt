@@ -1022,7 +1022,7 @@ generate_java(org/qore/jni/QoreRelativeTime.java)
 generate_java(org/qore/jni/JdbcColumnarBatch.java)
 generate_java(org/qore/jni/QoreClosureMarker.java)
 generate_java(org/qore/jni/QoreClosureMarkerImpl.java)
-generate_java(org/qore/jni/QoreJavaDynamicApi.java)
+generate_java(org/qore/jni/QoreJavaDynamicApi.java $AccessibleMethods)
 generate_java(org/qore/jni/Hash.java 1 2 3 4 5 6 7 8 9 10)
 generate_java(org/qore/jni/JavaClassBuilder.java 1 2 StaticEntry)
 generate_java(org/qore/jni/QoreClassFileLocator.java)
@@ -1197,6 +1197,7 @@ install(PROGRAMS ${JNI_BIN_FILES}
 )
 
 set(JAVA_TEST_JAR_SRC
+    test/JavaMethodAccessTest.java
     test/java/src/org/qore/jni/NativeCleanupLifecycleTest.java
     test/java/src/org/qore/jni/ExceptionConversionFixture.java
     test/java/src/org/qore/jni/test/JdbcCursorTest.java
@@ -1323,9 +1324,13 @@ target_include_directories(${module_name} PRIVATE $<BUILD_INTERFACE:${CMAKE_CURR
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/Globals.cpp
     PROPERTIES OBJECT_DEPENDS "${QORE_INC_FILES}"
 )
-# add include file dependency to QoreJniClassMap.cpp
+# add include file dependencies to QoreJniClassMap.cpp
+set(QORE_DYNAMIC_API_INC_FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/JavaClassQoreJavaDynamicApi.inc
+    ${CMAKE_CURRENT_BINARY_DIR}/JavaClassQoreJavaDynamicApi_AccessibleMethods.inc
+)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/QoreJniClassMap.cpp
-    PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/JavaClassQoreJavaDynamicApi.inc"
+    PROPERTIES OBJECT_DEPENDS "${QORE_DYNAMIC_API_INC_FILES}"
 )
 
 target_link_libraries(${module_name} ${JNI_LIBRARIES} ${BZIP2_LIBRARIES} ${QORE_LIBRARY})
@@ -1523,6 +1528,14 @@ endif()
 # daemon thread does in native_cleanup_dispatch()) must not crash.  See
 # src/Globals.cpp (QoreForeignThreadHelper).
 enable_testing()
+add_test(NAME java_public_method_access COMMAND ${Java_JAVA_EXECUTABLE}
+    -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+    JavaMethodAccessTest)
+set_tests_properties(java_public_method_access PROPERTIES TIMEOUT 30)
+add_test(NAME qore_public_method_access COMMAND ${CMAKE_COMMAND} -E env
+    QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    ${QORE_EXECUTABLE} -b --enable-debug ${CMAKE_SOURCE_DIR}/test/JniPublicInterfaceMethod.qtest)
+set_tests_properties(qore_public_method_access PROPERTIES TIMEOUT 30)
 add_test(NAME make_inc_reproducibility COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
     ${CMAKE_SOURCE_DIR}/test/test-make-inc.py
     --qore ${QORE_EXECUTABLE} --make-inc ${CMAKE_SOURCE_DIR}/make-inc)

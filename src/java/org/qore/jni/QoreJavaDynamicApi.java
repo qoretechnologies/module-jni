@@ -1,9 +1,9 @@
 /*
-    QoreJavaDynamicApoi.java
+    QoreJavaDynamicApi.java
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -106,7 +111,11 @@ public class QoreJavaDynamicApi {
     public static Object invokeMethod(Method m, Object obj, Object... args) throws Throwable {
         ClassLoader savedTccl = pushTccl(m.getDeclaringClass().getClassLoader());
         try {
-            m.trySetAccessible();
+            if (!m.trySetAccessible() && Modifier.isPublic(m.getModifiers())
+                    && !Modifier.isStatic(m.getModifiers()) && obj != null) {
+                m = accessibleVirtualMethods.get(m.getDeclaringClass()).computeIfAbsent(m,
+                    original -> accessibleVirtualMethod(original, obj));
+            }
             return m.invoke(obj, args);
         } catch (InvocationTargetException e) {
             Throwable e0 = e;
@@ -117,6 +126,60 @@ public class QoreJavaDynamicApi {
         } finally {
             popTccl(savedTccl);
         }
+    }
+
+    /** The accessible declaration of each inaccessible public virtual method that has been invoked, by the
+        method's declaring class, so the hierarchy is searched once per method rather than on every call.
+        A ClassValue does not keep its class, or the class loader of a Program's dynamic classes, from being
+        unloaded, as a static map of methods would.  The declaration found does not depend on the object it is
+        invoked on: a public member's accessibility depends only on the caller and the declaring classes. */
+    private static final AccessibleMethods accessibleVirtualMethods = new AccessibleMethods();
+
+    /** The accessible declarations of a class's inaccessible public virtual methods.  A named nested class
+        rather than an anonymous one, as it is built in to the binary module with this class (see
+        generate_java() in CMakeLists.txt and the internal class table in Globals.cpp). */
+    private static final class AccessibleMethods extends ClassValue<ConcurrentHashMap<Method, Method>> {
+        @Override
+        protected ConcurrentHashMap<Method, Method> computeValue(Class<?> type) {
+            return new ConcurrentHashMap<Method, Method>();
+        }
+    }
+
+    /** Finds an accessible declaration of the same public virtual method. JDK
+        collection wrappers often have a non-public implementation class in a
+        closed module, but expose their methods through a public interface.
+        Invoking that declaration preserves virtual dispatch without opening
+        the implementation module or granting access to non-public methods.
+        If no declaration is accessible, return the original method so that
+        reflection reports its original access failure. */
+    private static Method accessibleVirtualMethod(Method original, Object obj) {
+        ArrayDeque<Class<?>> pending = new ArrayDeque<>();
+        Set<Class<?>> visited = new HashSet<>();
+        pending.add(original.getDeclaringClass());
+        while (!pending.isEmpty()) {
+            Class<?> type = pending.removeFirst();
+            if (!visited.add(type)) {
+                continue;
+            }
+            if (Modifier.isPublic(type.getModifiers())) {
+                try {
+                    Method candidate = type.getMethod(original.getName(), original.getParameterTypes());
+                    if (!Modifier.isStatic(candidate.getModifiers()) && candidate.canAccess(obj)) {
+                        return candidate;
+                    }
+                } catch (NoSuchMethodException e) {
+                    // This ancestor need not declare the requested overload.
+                }
+            }
+            for (Class<?> iface : type.getInterfaces()) {
+                pending.addLast(iface);
+            }
+            Class<?> parent = type.getSuperclass();
+            if (parent != null) {
+                pending.addLast(parent);
+            }
+        }
+        return original;
     }
 
     //! invokes the given method on the given object and returns the return value
