@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -168,8 +168,11 @@ module VcfDataProvider {
                 "Each record written represents a single contact with the standard vCard fields "
                 "including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, "
                 "`title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\n"
-                "After writing all contacts, use `getData()` to retrieve the binary VCF data.",
+                "The action returns the generated VCF data in `data` and the number of contacts in "
+                "`record_count`.",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "VcfDataProvider::VcfWriteDataProvider",
             "options": {},
         });
@@ -180,7 +183,11 @@ module VcfDataProvider {
 
     @tableofcontents
 
-    @section VcfDataProviderintro Introduction to the VcfDataProvider Module
+    @section vcfdataproviderintro VcfDataProvider Module Introduction
+
+    <img src="vcf-logo.svg" width="96" alt="VcfDataProvider module logo"/>
+
+    @anchor VcfDataProviderintro
 
     The %VcfDataProvider module provides a data provider API for reading and writing vCard (.vcf) contact files
     through the @ref dataproviderintro "DataProvider" API. It supports the vCard 3.0 format using the
@@ -267,12 +274,7 @@ module VcfDataProvider {
     @section VcfDataProvider_relnotes Release Notes
 
     @subsection VcfDataProvider_v1_0 VcfDataProvider v1.0
-    - initial release of the module
-    - support for reading vCard (.vcf) files with single and multiple contacts
-    - support for writing vCard (.vcf) files in vCard 3.0 format
-    - full support for contact fields: name, email, phone, address, organization, title, note, uid
-    - binary data input/output support
-    - stream-based input/output support
+    - initial release
 */
 
 #! contains all public definitions in the VcfDataProvider module

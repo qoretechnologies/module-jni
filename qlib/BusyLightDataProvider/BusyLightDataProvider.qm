@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BusyLightDataProvider module definition
 
-/*  BusyLightDataProvider.qm Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/*  BusyLightDataProvider.qm Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -88,7 +88,11 @@ module BusyLightDataProvider {
 
     @tableofcontents
 
-    @section BusyLightDataProviderintro Introduction to the BusyLightDataProvider Module
+    @section busylightdataproviderintro BusyLightDataProvider Module Introduction
+
+    <img src="busylight-logo.svg" width="96" alt="BusyLightDataProvider module logo"/>
+
+    @anchor BusyLightDataProviderintro
 
     The %BusyLightDataProvider module provides a data provider API for BusyLight devices through MQTT.
 
@@ -106,7 +110,7 @@ module BusyLightDataProvider {
     @section BusyLightDataProvider_relnotes Release Notes
 
     @subsection BusyLightDataProvider_v1_0 BusyLightDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the BusyLightDataProvider module

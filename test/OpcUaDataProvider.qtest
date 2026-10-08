@@ -72,7 +72,9 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         addTestCase("status mapping", \statusMappingTest());
         addTestCase("write type conversion", \writeTypeConversionTest());
         addTestCase("connection detection", \connectionDetectionTest());
+        addTestCase("embedded servers reserve independent ports", \embeddedServerPortsTest());
         addTestCase("embedded server integration", \embeddedServerIntegrationTest());
+        addTestCase("a ByteString value is read as a binary", \byteStringValueTest());
         addTestCase("data change subscription and history", \subscriptionAndHistoryTest());
         addTestCase("nodeset2 import", \nodeSet2ImportTest());
         addTestCase("nodeset2 import robustness", \nodeSet2ImportRobustnessTest());
@@ -93,15 +95,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             \genericServerRuntimeNestedPathTest());
         addTestCase("OPC UA integration test", \opcuaIntegrationTest());
 
-        try {
-            setupConnection();
-        } catch (hash<ExceptionInfo> ex) {
-            if (m_options.verbose > 2) {
-                printf("%s\n", get_exception_string(ex));
-            } else if (m_options.verbose) {
-                printf("%s: %s\n", ex.err, ex.desc);
-            }
-        }
+        # Absent optional fixtures skip; configured setup failures must fail the suite.
+        setupConnection();
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -913,11 +908,34 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             "Good is not a connection loss");
     }
 
+    #! The OS assigns each fixture a port that remains reserved until shutdown, even before startup
+    embeddedServerPortsTest() {
+        auto first = new QoreOpcUaTestServer();
+        on_exit first.stop();
+        auto second = new QoreOpcUaTestServer();
+        on_exit second.stop();
+        assertTrue(first.getPort() > 0, "the OS assigns a concrete port");
+        assertTrue(first.getPort() != second.getPort(), "simultaneous fixtures hold different ports");
+
+        Socket collision();
+        assertThrows("SOCKET-BIND-ERROR", \collision.bindINET(), ("127.0.0.1", first.getPort()),
+            "the port remains reserved before Milo starts");
+
+        first.start();
+        second.start();
+        foreach auto server in ((first, second)) {
+            OpcUaDataProvider prov({"url": server.getEndpointUrl(), "monitored_nodes": ()});
+            hash<auto> endpoints = prov.doRequest({"action": "discover-endpoints"});
+            assertEq(server.getEndpointUrl(), endpoints.endpoints[0].endpoint_url,
+                "discovery advertises the reserved port");
+            assertEq(42, prov.doRequest({"action": "read-value", "node_id": "ns=2;s=Int32Var"}).value,
+                "both simultaneous servers accept client requests");
+        }
+    }
+
     #! Integration test against the in-process Milo 1.1.4 test server (regression baseline)
     embeddedServerIntegrationTest() {
-        # use a per-process port to avoid collisions across parallel runs
-        int port = 54000 + (getpid() % 1500);
-        auto server = new QoreOpcUaTestServer(port);
+        auto server = new QoreOpcUaTestServer();
         server.start();
         on_exit server.stop();
 
@@ -1033,8 +1051,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         safety net) rather than polling, per the deterministic-test requirement.
     */
     subscriptionAndHistoryTest() {
-        int port = 55600 + (getpid() % 1500);
-        auto server = new QoreOpcUaTestServer(port);
+        auto server = new QoreOpcUaTestServer();
         server.start();
         on_exit server.stop();
 
@@ -1766,8 +1783,11 @@ sub sandboxProbe() {
                 "server runtime bind cannot be sandbox-checked on this qore version");
         }
 
+        # loopback and private ranges are denied: a bind to a loopback address is still allowed, as it can only be
+        # reached from the local host, but connections to loopback and binds to other denied addresses are not
         SandboxManager sm();
         sm.blockLocalhost();
+        sm.blockPrivateNetworks();
         sm.setNetworkDefaultPolicy(True);
 
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
@@ -1800,25 +1820,80 @@ hash<auto> sub sandboxRuntimeSchema() {
     };
 }
 
-sub startSandboxedRuntime(int port) {
+# starts the runtime on loopback and returns the error of a connection to it, if any
+*string sub startSandboxedRuntime(int port) {
     OpcUaServerRuntime runtime({
         \"port\": port,
         \"schema\": sandboxRuntimeSchema(),
     }, NOTHING);
-    on_error runtime.stop();
+    on_exit runtime.stop();
     runtime.start();
-    runtime.stop();
+    try {
+        Socket s();
+        s.connect(\"127.0.0.1:\" + port, 5s);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# binds a socket to an address in a denied private range and returns the error, if any
+*string sub bindDenied(int port) {
+    try {
+        Socket s();
+        s.bindINET(\"10.255.255.1\", string(port));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
 }
 ", "opcua_runtime_sandbox");
 
-        bool threw = False;
+        int port = 57200 + (getpid() % 1000);
+        # the server's bind to loopback is allowed, but a client connection to it is denied
+        *string connect_err;
         try {
-            p.callFunction("startSandboxedRuntime", 57200 + (getpid() % 1000));
+            connect_err = p.callFunction("startSandboxedRuntime", port);
         } catch (hash<ExceptionInfo> ex) {
-            threw = True;
-            assertEq("NETWORK-ACCESS-DENIED", ex.err, "sandboxed runtime bind is denied before listener startup");
+            fail(sprintf("the sandboxed runtime's loopback bind must be allowed: %s: %s", ex.err, ex.desc));
         }
-        assertTrue(threw, "generic runtime honors active network sandbox bind restrictions");
+        assertEq("NETWORK-ACCESS-DENIED", connect_err, "a client connection to loopback is denied in the sandbox");
+        # a bind to another address in a denied range is denied
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("bindDenied", port),
+            "a bind to a non-loopback address in a denied range is denied");
+    }
+
+    #! A ByteString value reaches Qore as a binary, not a Java object
+    byteStringValueTest() {
+        string ns = "urn:qore:opcua:bytestring-test";
+        OpcUaServerRuntime runtime({
+            "port": 57200 + (getpid() % 1000),
+            "namespace_uri": ns,
+            "schema": {
+                "contract_version": 1,
+                "source": "test",
+                "namespaces": {"1": ns},
+                "root_node_id": "ns=1;s=Store",
+                "root_browse_path": "/1:Store",
+                "endpoints": ({
+                    "endpoint_id": "blob",
+                    "browse_name": "1:Blob",
+                    "browse_path": "/1:Store/1:Blob",
+                    "kind": "variable",
+                    "data_type": "ByteString",
+                    "value_rank": -1,
+                    "writable": True,
+                },),
+            },
+        }, NOTHING);
+        runtime.start();
+        on_exit runtime.stop();
+        string node_id = (map $1.node_id, runtime.getSchemaSnapshot().endpoints, $1.endpoint_id == "blob")[0];
+
+        OpcUaDataProvider prov({"url": runtime.getEndpointUrl(), "monitored_nodes": ()});
+        binary value = binary("ab\x00cd");
+        prov.sendMessage("write-value", {"node_id": node_id, "value": value, "data_type": "ByteString"});
+        auto read = prov.doRequest({"action": "read-value", "node_id": node_id}).value;
+        assertEq(Type::Binary, read.type(), "a ByteString is read as a binary");
+        assertEq(value, read, "the bytes written are the bytes read");
     }
 
     #! Tests the generic schema-backed OPC UA server runtime (Epic B1)
@@ -2291,7 +2366,7 @@ sub startSandboxedRuntime(int port) {
     private setupConnection() {
         *string conn_name = m_options.conn ?? ENV.OPCUA_CONNECTION;
         if (!conn_name.val()) {
-            error("missing -c,--connection option or OPCUA_CONNECTION environment variable");
+            return;
         }
 
         # try get_connection() first (works in CI with connection providers)

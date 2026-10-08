@@ -88,8 +88,8 @@
           "message": "Genera un report da un modello JasperReports in una posizione file"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "Genera un report dai dati binari inline di un modello JasperReports.\n\nOgni record creato rappresenta una singola riga di dati da includere nel report. Il report viene generato quando il provider viene committato o distrutto.\n\nDopo aver scritto tutti i record, usa `getData()` per recuperare l'output binario del report.\n\nFormati di output supportati: `pdf`, `xlsx`, `html`, `csv`."
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Genera un report dai dati binari inline di un modello JasperReports.\n\nOgni record creato rappresenta una singola riga di dati da includere nel report. Il report viene generato al termine dell'azione.\n\nL'azione restituisce il report generato in `data`, il suo formato in `format` e il numero di righe di dati in `record_count`.\n\nFormati di output supportati: `pdf`, `xlsx`, `html`, `csv`."
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

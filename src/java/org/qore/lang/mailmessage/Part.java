@@ -13,7 +13,7 @@ import org.qore.jni.QoreObjectWrapper;
 import org.qore.jni.QoreJavaApi;
 import org.qore.jni.QoreRelativeTime;
 
-//! Java wrapper for the @ref MailPart::Part class in %Qore
+//! Java wrapper for the @ref MailMessage::Part class in %Qore
 /** @note Loads and initializes the Qore library and the jni module in static initialization if necessary
 
     @deprecated Use @ref jni_dynamic_import_qore_in_java "dynamic imports" instead:

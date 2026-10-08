@@ -479,7 +479,7 @@ public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWith
     }
 
     #! Called by the constructor to set the real URL
-    /** @path the new URL
+    /** @param url the new URL
 
         Sets the real Kafka URL in host:port format
     */

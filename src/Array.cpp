@@ -30,13 +30,14 @@
 namespace jni {
 
 Array::Array(jclass ecls, int size) {
-    LocalReference<jclass> cls(ecls);
     if (size < 1) {
         QoreStringMaker desc("cannot instantiate an array with size %d; must be greater than 0", size);
         throw BasicException(desc.c_str());
     }
 
-    elementClass = cls.makeGlobal();
+    // The caller owns this reference, just as for the array-instance constructor.
+    // Retain a global reference without deleting the caller's local reference.
+    elementClass = GlobalReference<jclass>::fromLocal(ecls);
     elementType = Globals::getType(elementClass);
 
     jobj = GlobalReference<jobject>::fromLocal(Array::getNew(elementType, elementClass, (jsize)size).as<jobject>());
@@ -211,6 +212,9 @@ void Array::set(jarray array, Type elementType, jclass elementClass, int64 index
 }
 
 LocalReference<jclass> Array::getClassForValue(QoreValue v, JniExternalProgramData* jpc) {
+    // the element of a list may be a weak (":=") or opaque ("@=") reference; the Java class has
+    // to be chosen for what it refers to, exactly as QoreToJava::toAnyObject() converts it
+    v = v.resolveIndirect();
     switch (v.getType()) {
         case NT_INT: return Globals::classLong.toLocal();
         case NT_FLOAT: return Globals::classDouble.toLocal();

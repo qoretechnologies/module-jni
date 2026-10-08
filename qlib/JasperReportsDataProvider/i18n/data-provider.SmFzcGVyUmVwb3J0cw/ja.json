@@ -88,8 +88,8 @@
           "message": "ファイル位置にあるJasperReportsテンプレートからレポートを生成します"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "インラインのJasperReportsテンプレートバイナリデータからレポートを生成します。\n\n作成される各レコードは、レポートに含まれる単一のデータ行を表します。レポートは、プロバイダーがコミットまたは破棄されたときに生成されます。\n\nすべてのレコードを書き込んだ後、`getData()`を使用してバイナリレポート出力を取得します。\n\nサポートされている出力形式: `pdf`、`xlsx`、`html`、`csv`。"
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "インラインのJasperReportsテンプレートバイナリデータからレポートを生成します。\n\n作成された各レコードは、レポートに含まれる 1 つのデータ行を表します。レポートはアクションの完了時に生成されます。\n\nアクションは生成されたレポートを `data` に、その形式を `format` に、データ行数を `record_count` に返します。\n\nサポートされている出力形式: `pdf`、`xlsx`、`html`、`csv`。"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

@@ -48,8 +48,13 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
     }
 
     if (env.isInstanceOf(v, Globals::classZonedDateTime)) {
+        // ISO_OFFSET_DATE_TIME always writes the seconds; toString() leaves them out when they are zero
+        // ("2025-01-15T00:00-05:00[America/New_York]"), and the offset after HH:mm was then not parsed, so a
+        // date at a whole minute lost its time zone
+        jvalue arg;
+        arg.l = Globals::isoOffsetDateTimeFormatter;
         LocalReference<jstring> date_str = env.callObjectMethod(v,
-            Globals::methodZonedDateTimeToString, nullptr).as<jstring>();
+            Globals::methodZonedDateTimeFormat, &arg).as<jstring>();
         Env::GetStringUtfChars chars(env, date_str);
         return QoreValue(new DateTimeNode(chars.c_str()));
     }

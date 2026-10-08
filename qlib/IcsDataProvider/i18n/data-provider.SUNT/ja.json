@@ -184,8 +184,8 @@
           "message": "カレンダーイベントまたは ToDo を ICS ファイルに書き込む"
         },
         "app.SUNT.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create iCalendar event or to-do data in memory and return it as binary data.\n\nUse this action when you need to generate an ICS file without writing to disk -- for example, to return the calendar as an API response, attach it to an email, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `content_type` (optional) -- \"events\" (default) or \"todos\"\n- No other required options -- records are added via `createRecord()` and binary data is retrieved via `getData()`",
-          "message": "メモリ内で iCalendar イベントまたは ToDo データを生成し、バイナリデータとして返します。\n\nディスクに書き込まずに ICS ファイルを生成する必要がある場合にこのアクションを使用します (例: カレンダーを API レスポンスとして返す、メールに添付する、または別の処理ステップに渡す場合など)。すべてのレコードを作成した後、プロバイダーで `getData()` を呼び出して結果を取得します。\n\n**主なオプション**:\n- `content_type` (任意) -- \"events\" (デフォルト) または \"todos\"\n- その他の必須オプションはありません -- レコードは `createRecord()` 経由で追加され、バイナリデータは `getData()` 経由で取得されます"
+          "source": "Create iCalendar event or to-do data in memory and return it as binary data.\n\nUse this action when you need to generate an ICS file without writing to disk -- for example, to return the calendar as an API response, attach it to an email, or pass it to another processing step. The action returns the generated ICS data in `data` and the number of records in `record_count`.\n\n**Key Options**:\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "メモリ内で iCalendar イベントまたは ToDo データを生成し、バイナリデータとして返します。\n\nディスクに書き込まずに ICS ファイルを生成する必要がある場合にこのアクションを使用します。たとえば、カレンダーを API レスポンスとして返したり、メールに添付したり、別の処理ステップに渡したりできます。アクションは生成された ICS データを `data` に、レコード数を `record_count` に返します。\n\n**主なオプション**:\n- `content_type` (任意) -- \"events\" (デフォルト) または \"todos\""
         },
         "app.SUNT.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create ICS Calendar Data",

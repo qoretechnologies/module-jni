@@ -32,7 +32,7 @@ import java.lang.reflect.Method;
  * extract metadata about Kotlin-specific features like data classes,
  * companion objects, and sealed classes.
  *
- * The detection is done via reflection, looking for the @kotlin.Metadata
+ * The detection is done via reflection, looking for the <tt>&#64;kotlin.Metadata</tt>
  * annotation that the Kotlin compiler adds to all Kotlin classes.
  */
 public class KotlinMetadataHelper {
@@ -75,7 +75,7 @@ public class KotlinMetadataHelper {
      * Check if the given class is a Kotlin class.
      *
      * @param cls the class to check
-     * @return true if the class has the @kotlin.Metadata annotation
+     * @return true if the class has the <tt>&#64;kotlin.Metadata</tt> annotation
      */
     public static boolean isKotlinClass(Class<?> cls) {
         initialize();

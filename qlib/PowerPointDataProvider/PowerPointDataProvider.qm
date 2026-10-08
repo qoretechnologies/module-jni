@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -164,6 +164,8 @@ module PowerPointDataProvider {
             "desc": "Create PowerPoint presentation data in memory and return it as binary data; useful for "
                 "generating PowerPoint files without writing to disk",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "PowerPointDataProvider::PowerPointWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 PowerPointWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {
@@ -179,7 +181,11 @@ module PowerPointDataProvider {
 
     @tableofcontents
 
-    @section PowerPointDataProviderintro Introduction to the PowerPointDataProvider Module
+    @section powerpointdataproviderintro PowerPointDataProvider Module Introduction
+
+    <img src="powerpoint-logo.svg" width="96" alt="PowerPointDataProvider module logo"/>
+
+    @anchor PowerPointDataProviderintro
 
     The %PowerPointDataProvider module provides a data provider API for reading and writing Microsoft PowerPoint
     presentations through the @ref dataproviderintro "DataProvider" API. It supports the modern .pptx format
@@ -321,14 +327,7 @@ module PowerPointDataProvider {
     @section PowerPointDataProvider_relnotes Release Notes
 
     @subsection PowerPointDataProvider_v1_0 PowerPointDataProvider v1.0
-    - initial release of the module
-    - support for reading PowerPoint presentations (.pptx format)
-    - support for writing PowerPoint presentations (.pptx format)
-    - slides and table read/write modes
-    - speaker notes support
-    - slide layout support
-    - header row detection for tables
-    - binary data input/output support
+    - initial release
 */
 
 #! contains all public definitions in the PowerPointDataProvider module

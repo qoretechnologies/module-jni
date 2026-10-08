@@ -4,6 +4,7 @@
 
 %modern
 
+%prepend-module-path ../build
 %requires jni
 %requires QUnit
 %requires Util
@@ -16,6 +17,10 @@
 %requires FsUtil
 
 %requires reflection
+
+%try-module xml
+%define NO_XML
+%endtry
 
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 # warning: hardcoded build directory
@@ -236,6 +241,7 @@ public class Main inherits QUnit::Test {
 
     constructor() : Test("jni test", "1.0") {
         addTestCase("codegen test", \javaCodegenTest());
+        addTestCase("XML codegen test", \javaXmlCodegenTest());
         addTestCase("arg test", \argTest());
         addTestCase("class compat test", \classCompatTest());
         addTestCase("code test", \testCode());
@@ -294,8 +300,6 @@ public class Main inherits QUnit::Test {
         addTestCase("injected superclass loader test", \injectedSuperclassLoaderTest());
         addTestCase("loader precedence for cached byte code test", \cachedByteCodeLoaderPrecedenceTest());
         addTestCase("registered sibling classloader identity test", \registeredSiblingClassLoaderIdentityTest());
-
-        Qore::exit(main());
     }
 
     #! Returns the path to the qore binary running this test
@@ -459,6 +463,25 @@ Main::run();
             assertEq(0, rc, sprintf("child Program teardown + module teardown (run %d) must not "
                 "crash; rc=%d (-1 means killed by a signal)", i + 1, rc));
         }
+    }
+
+    javaXmlCodegenTest() {
+%ifdef NO_XML
+        testSkip("xml module is not available");
+%else
+        # compile and execute QoreDynamicTest6.java
+        QoreJavaCompiler compiler();
+        compiler::CompilerOutput newClassData = compiler.compile("org.qore.test.QoreDynamicTest6",
+            File::readTextFile(get_script_dir() + "/QoreDynamicTest6.java"));
+        binary fdata = newClassData.file.openInputStream().readAllBytes();
+        assertEq(True, fdata.size() > 0);
+        reflect::Method m = newClassData.cls.getMethod("test0", load_class("org/qore/jni/Hash"));
+        string url = "https://localhost:8001/";
+        auto rc = m.invoke(NOTHING, {"url": url});
+        on_error printf("h: %N\n", rc);
+        assertEq("object<XmlRpcClient>", rc.fullType());
+        assertEq(url, rc.getURL());
+%endif
     }
 
     javaCodegenTest() {
@@ -1064,20 +1087,7 @@ public class GenericIteratorProbe {
                 assertEq(url, rc.getURL());
             }
 
-            {
-                # compile and execute QoreDynamicTest6.java
-                QoreJavaCompiler compiler();
-                compiler::CompilerOutput newClassData = compiler.compile("org.qore.test.QoreDynamicTest6",
-                File::readTextFile(get_script_dir() + "/../test/QoreDynamicTest6.java"));
-                binary fdata = newClassData.file.openInputStream().readAllBytes();
-                assertEq(True, fdata.size() > 0);
-                reflect::Method m = newClassData.cls.getMethod("test0", load_class("org/qore/jni/Hash"));
-                string url = "https://localhost:8001/";
-                auto rc = m.invoke(NOTHING, {"url": url});
-                on_error printf("h: %N\n", rc);
-                assertEq("object<XmlRpcClient>", rc.fullType());
-                assertEq(url, rc.getURL());
-            }
+
         } catch (hash<ExceptionInfo> ex) {
             if (ex.arg.typeCode() == NT_OBJECT) {
                 object arg = ex.arg;
@@ -1935,11 +1945,7 @@ lorem ipsum\r
         if (!connstr) {
             testSkip("no DB connection string available");
         }
-        try {
-            return new DatasourcePool(connstr);
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("failed to open %y: %s: %s", connstr, ex.err, ex.desc));
-        }
+        return new DatasourcePool(connstr);
     }
 
     callStaticMethodTest() {
@@ -2054,6 +2060,14 @@ lorem ipsum\r
         string date_str = now.format("YYYY-MM-DDTHH:mm:SS.xxZ");
         date d = ZonedDateTime::parse(new String(date_str));
         assertEq(now, d);
+
+        # a ZonedDateTime at a whole minute keeps its zone (its toString() leaves out the seconds)
+        d = ZonedDateTime::parse(new String("2025-01-15T00:00-05:00[America/New_York]"));
+        assertEq(2025-01-15T00:00:00-05:00, d);
+        assertEq("00:00:00", d.format("HH:mm:SS"));
+        # nanoseconds are read to the microsecond
+        d = ZonedDateTime::parse(new String("2025-07-01T14:30:05.123456789+09:00[Asia/Tokyo]"));
+        assertEq(2025-07-01T14:30:05.123456+09:00, d);
 
         d = QoreJavaApiTest::dateTest(now);
         # the java API returns a date with the same UTC offset, so we have to use 48h instead of 2D
@@ -3285,4 +3299,7 @@ class AutoParamTest {
     }
 }
 
-new Main();
+# Return through normal program teardown so native objects and the JVM are released.
+# The separate abrupt-exit subprocess regression still exercises exit().
+Main test();
+return test.main();

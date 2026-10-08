@@ -48,8 +48,8 @@
           "message": "The name of the worksheet to iterate"
         },
         "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "The name of the worksheet to iterate; if missing, the first worksheet is processed"
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file"
         },
         "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -99,6 +99,18 @@
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
           "message": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`"
         },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ignore Empty Rows"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Skip empty rows instead of stopping at the first one"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row"
+        },
         "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
           "message": "Timezone Region"
@@ -122,6 +134,90 @@
         "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "Worksheet Name Pattern"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "A regular expression matching the name of the worksheet to iterate"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.display_name": {
+          "source": "Profile Excel Spreadsheet",
+          "message": "Profile Excel Spreadsheet"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.short_desc": {
+          "source": "Describe the layout and columns of every sheet of an Excel spreadsheet",
+          "message": "Describe the layout and columns of every sheet of an Excel spreadsheet"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.desc": {
+          "source": "Describes how every sheet of an Excel spreadsheet (`.xlsx` or `.xls`) is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- hidden sheets, named ranges, merged cells, and formulas\n- the header row, title rows and banners above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself.",
+          "message": "Describes how every sheet of an Excel spreadsheet (`.xlsx` or `.xls`) is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- hidden sheets, named ranges, merged cells, and formulas\n- the header row, title rows and banners above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself."
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.display_name": {
+          "source": "Spreadsheet Location",
+          "message": "Spreadsheet Location"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The location of the spreadsheet to profile",
+          "message": "The location of the spreadsheet to profile"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.desc": {
+          "source": "The location of the spreadsheet to profile, for example `file:///data/stock.xlsx` or an `sftp://` location; conflicts with `data`",
+          "message": "The location of the spreadsheet to profile, for example `file:///data/stock.xlsx` or an `sftp://` location; conflicts with `data`"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.display_name": {
+          "source": "Spreadsheet Data",
+          "message": "Spreadsheet Data"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.short_desc": {
+          "source": "The spreadsheet content to profile",
+          "message": "The spreadsheet content to profile"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.desc": {
+          "source": "The spreadsheet content to profile, as bytes or as a Base64 string; conflicts with `path`",
+          "message": "The spreadsheet content to profile, as bytes or as a Base64 string; conflicts with `path`"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
+          "source": "Maximum Rows",
+          "message": "Maximum Rows"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.short_desc": {
+          "source": "The maximum number of rows read per sheet",
+          "message": "The maximum number of rows read per sheet"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
+          "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
+          "message": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.display_name": {
+          "source": "Sample Rows",
+          "message": "Sample Rows"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.short_desc": {
+          "source": "The number of sample rows returned per sheet",
+          "message": "The number of sample rows returned per sheet"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.desc": {
+          "source": "The number of sample data rows returned per sheet",
+          "message": "The number of sample data rows returned per sheet"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
+          "source": "Redact Samples",
+          "message": "Redact Samples"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.short_desc": {
+          "source": "Return sample values redacted to their shape",
+          "message": "Return sample values redacted to their shape"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.desc": {
+          "source": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data",
+          "message": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.display_name": {
           "source": "Read Excel Spreadsheet Inline Data",
@@ -156,8 +252,8 @@
           "message": "The name of the worksheet to iterate"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "The name of the worksheet to iterate; if missing, the first worksheet is processed"
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
           "source": "Data Cells",
@@ -207,6 +303,18 @@
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
           "message": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`"
         },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "Ignore Empty Rows"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "Skip empty rows instead of stopping at the first one"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row"
+        },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
           "message": "Timezone Region"
@@ -230,6 +338,18 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
           "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
           "message": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "Worksheet Name Pattern"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "A regular expression matching the name of the worksheet to iterate"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`"
         },
         "app.RXhjZWw.action.d3JpdGU.display_name": {
           "source": "Write Excel Spreadsheet File",
@@ -327,6 +447,18 @@
           "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
           "message": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format"
         },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.display_name": {
+          "source": "Column Display Formats",
+          "message": "Column Display Formats"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.short_desc": {
+          "source": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+          "message": "The display format of each column, such as dd.mm.yyyy or #,##0.00"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.desc": {
+          "source": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  A column without a format is written as without this option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\nFormat codes are written as in Excel and LibreOffice:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `EXCEL-WRITE-OPTION-ERROR` naming the column and the problem",
+          "message": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  A column without a format is written as without this option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\nFormat codes are written as in Excel and LibreOffice:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `EXCEL-WRITE-OPTION-ERROR` naming the column and the problem"
+        },
         "app.RXhjZWw.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create Excel Spreadsheet Data",
           "message": "Create Excel Spreadsheet Data"
@@ -410,6 +542,18 @@
         "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.desc": {
           "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
           "message": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.display_name": {
+          "source": "Column Display Formats",
+          "message": "Column Display Formats"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.short_desc": {
+          "source": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+          "message": "The display format of each column, such as dd.mm.yyyy or #,##0.00"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.desc": {
+          "source": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  A column without a format is written as without this option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\nFormat codes are written as in Excel and LibreOffice:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `EXCEL-WRITE-OPTION-ERROR` naming the column and the problem",
+          "message": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  A column without a format is written as without this option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\nFormat codes are written as in Excel and LibreOffice:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `EXCEL-WRITE-OPTION-ERROR` naming the column and the problem"
         }
       }
     }

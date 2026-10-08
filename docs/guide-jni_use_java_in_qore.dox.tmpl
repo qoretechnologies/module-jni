@@ -1,0 +1,184 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jni_use_java_in_qoreguide Using Java APIs in Qore
+
+    @tableofcontents
+
+    @section jniimport Importing Java APIs into Qore
+
+    To import Java APIs into the %Qore program; any of the following jni-module-specific parse directives can be used,
+    each of which also causes the jni module to be loaded and initialized:
+    - @code{.py} %module-cmd(jni) import java.namespace.path.* @endcode imports the given wilcard path or class into
+      the %Qore program
+    - @code{.py} %module-cmd(jni) add-classpath filesystem/path:another/path @endcode adds the given paths to the
+      Program-specific runtime dynamic classpath; supports environment variable substitution
+    - @code{.py} %module-cmd(jni) add-relative-classpath ../relative/path @endcode adds the given paths as relative
+      to the current program to the Program-specific runtime dynamic classpath
+    - @code{.py} %module-cmd(jni) global-add-classpath filesystem/path:another/path @endcode adds the given paths to the
+      global runtime dynamic classpath; supports environment variable substitution
+    - @code{.py} %module-cmd(jni) global-add-relative-classpath ../relative/path @endcode adds the given paths as relative
+      to the current program to the global runtime dynamic classpath
+    - @code{.py} %module-cmd(jni) register-shared-class qore.Namespace.ClassName @endcode gives an exact dynamically
+      projected %Qore class one Java identity across sibling %Program classloaders; the first registering %Program
+      owns the Java class and every later registrant delegates to it
+
+    All classes in \c java.lang.* are imported implicitly.  Referencing an imported class in %Qore code
+    causes a %Qore class to be generated dynamically that presents the Java class.   Instantiating a %Qore class
+    based on a Java class also instantiates an internal Java object that is attached to the %Qore object.  Calling
+    methods on the object will cause the same Java methods to be called with any arguments provided.
+
+    @see @ref jni_class_mapping for more information
+
+    @section jni_define_class_parse_time Defining Java Classes at Parse Time in Qore
+
+    The jni module also supports defining classes at parse time with the following jni-module-specific parse
+    directives:
+    - @code{.py} %module-cmd(jni) define-class <name> <base 64 bytecode> @endcode defines the given class with
+      \c &lt;name&gt; as the Java internal name for the class (ex: \c my/package/MyClassName)
+    - @code{.py} %module-cmd(jni) define-pending-class <name> <base 64 bytecode> @endcode adds the given class and
+      bytecode as a pending class to be defined when required by a \c define-class directive; this should be used for
+      inner classes and has been implemented to allow circular dependencies in such classes to be resolved;
+      \c &lt;name&gt; is the Java internal name for the inner class (ex: \c my/package/MyClassName$1)
+
+    @section jni_set_property_parse_time Setting Java System Properties at Parse Time in Qore
+
+    The jni module also supports setting Java system properties at parse time with the following jni-module-specific
+    parse directive:
+    - @code{.py} %module-cmd(jni) set-property <propname> <value> @endcode sets the given property at parse time
+
+    @section jni_class_mapping Java Class and Package Mapping in Qore
+
+    @subsection jni_package_mapping Java Package to Qore Namespace Mapping
+
+    The \c jni module maps Java packages to %Qore namespaces.  Therefore in Java \c java.lang.String can be referred
+    to as \c java::lang::String in Qore as in the following example:
+    @code{.py}
+    java::lang::String str();
+    @endcode
+
+    The \c jni module attempts to create %Qore classes that match the source Java class as closely as possible to
+    maximize the usefulness of Java APIs in %Qore.
+
+    When creating %Qore class methods from the corresponding Java source method, types are mapped according to
+    @ref jni_java_to_qore.  Because %Qore has fewer types than Java, this can lead to method signature collissions in
+    the generated %Qore class.
+
+    In such cases, only the first method returned by the internal call to \c java.lang.Class.getDeclaredMethods() is
+    mapped.
+
+    To call an unmapped method, use reflection to get a \c java.lang.Method object and make the call using
+    \c java.lang.Method.invoke() as in the folllowing example:
+    @code{.py}
+    StringBuilder stringBuilder("");
+    Method stringBuilderAppendLong = stringBuilderClass.getMethod("append", Long::TYPE);
+    stringBuilderAppendLong.invoke(stringBuilder, 20);
+    printf("%y\n", stringBuilder.toString());
+    @endcode
+
+    @subsection jniclassmapping Java Inner Classes in Qore
+
+    Java inner classes are mapped as %Qore classes by appending \c "__" to the outer class's name and then appending
+    the name of the inner class.
+
+    For example:
+    @code{.java}
+class Outer {
+   public Outer() {
+   }
+
+   public class Inner {
+       public Inner() {
+       }
+   }
+}
+    @endcode
+
+    The inner class would be created as \c "Outer__Inner" in %Qore.
+
+    @subsection jni_class_subclassing Subclassing Java Classes in Qore
+
+    When subclassing Java classes in %Qore, the %Qore class code is not executed by Java when dispatching method calls
+    in Java itself.  This means that overriding Java methods in %Qore is only valid for code executed from %Qore.
+
+    To override a Java method when called from Java, you must subclass the class in Java as well and import the child
+    class into your %Qore program.
+
+    One exception to this limitation is with interfaces; programmers can use the
+    @ref Jni::org::qore::jni::QoreInvocationHandler "QoreInvocationHandler" class to execute %Qore-language callbacks
+    based on Java interfaces; see the documentation for
+    @ref Jni::org::qore::jni::QoreInvocationHandler "QoreInvocationHandler" for more information.
+
+    @subsection jni_class_fields Java Class Fields to Qore Class Mappings
+
+    Java fields are mapped to different %Qore class members according to the Java type according to the following
+    table.
+
+    <b>Java Field to Qore Class Member Mappings</b>
+    |!Java|!Qore|!Qore Example
+    |<tt><b>static final</b></tt>|%Qore class constants|@code{.py}MyClass::myField@endcode
+    |<tt><b>static</b></tt> (non-final)|%Qore static class members|@code{.py}obj.myField@endcode
+    |all others|normal %Qore class members|@code{.py}obj.myField@endcode
+
+    For example:
+    @code{.py}
+System::out.println("testing...");
+    @endcode
+
+    @note Java field values are only stored in Java; they are not mirrored in %Qore.  Java field values are accessed
+    with the class's \c memberGate() method; updating a Java object's field value in Qore will not cause the field
+    value to be updated in Java.  To update the field's value from %Qore in Java, use
+    \c java::lang::reflect::Field::set().
+
+    @subsection jni_access_mapping Java Access Mapping in Qore
+
+    Java access modifiers are mapped directly to Qore access modifiers as in the following table.
+
+    <b>Java to Qore Access Mappings</b>
+    |!Java|!Qore
+    |<b><tt>public</tt></b>|<b><tt>public</tt></b>
+    |<b><tt>protected</tt></b>|<b><tt>private</tt></b> (or <b><tt>private:hierarchy</tt></b>)
+    |<b><tt>private</tt></b>|<b><tt>private:internal</tt></b>
+
+    @section jni_classloader Java Classloader
+
+    There is a global classloader for all Java objects reachable without special classpath.  For all other objects,
+    each %Qore @ref Qore::Program "Program" container has its own custom classloader provided by the \c jni module
+    that supports a dynamic classpath.
+
+    The %Qore @ref Qore::Program "Program"-specific dynamic classpath can be set with the \c import commands as
+    documented in @ref jniimport.
+
+    Explicit class loaders can also be used as in Java as in the following example:
+    @code{.py}
+    softlist<URL> urls = (new URL("file:///my/dir/my-api.jar"));
+    URLClassLoader classLoader(urls);
+    Class myClass = classLoader.loadClass("MyClass");
+    @endcode
+
+    @note The class loader supplied by this module, @ref org.qore.jni.QoreURLClassLoader, supports dynamic bytecode
+    generation from Python and %Qore imports.
+
+    Same-path classes projected as \c qore.<i>Namespace</i>.<i>Class</i> are Program-local by default because separate
+    %Programs can legitimately provide different implementations at the same path.  Applications that pass objects
+    of one semantically identical %Qore API class between sibling Program classloaders must register that exact Java
+    binary name before loading it in any participating Program:
+    @code{.py}
+%module-cmd(jni) register-shared-class qore.MyApi.Request
+    @endcode
+    The first registering Program becomes the process-wide owner for that name, and registration by other Programs is
+    idempotent.  Registering after two loaders have already defined the name raises an error because an existing JVM
+    class-identity split cannot be repaired.  Do not register a name whose Qore definitions differ between Programs.
+
+    @section jni_exceptions Java Exceptions in Qore
+
+    If a @ref org.qore.jni.QoreException exception is thrown, then it is mapped directly to a Qore exception.
+
+    Other Java exceptions are mapped to the %Qore @ref Qore::ExceptionInfo "ExceptionInfo" hash as follows:
+    - \c err: always \c "JNI-ERROR"
+    - \c desc: the full Java class name of the exception class; ex: \c "java.lang.RuntimeException"
+    - \c arg: the exception object itself as a %Qore object wrapping the Java object
+
+    Exception locations including call stack locations reflect the actual Java source location(s), and in such cases
+    the \c lang attribute will be \c "Java". Negative Java source line numbers, including the native-method
+    sentinel \c -2, are exposed as Qore's unknown-location sentinel \c -1. Available source line numbers are preserved.
+*/

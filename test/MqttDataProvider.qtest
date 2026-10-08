@@ -1,5 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
 
 %modern
 %allow-injection
@@ -21,6 +23,9 @@ public class MqttDataProviderTest inherits QUnit::Test {
 
         #! The MQTT broker URL for integration tests
         string mqtt_url;
+
+        #! The error raised when a configured MQTT connection could not be set up
+        *hash<ExceptionInfo> setup_error;
 
         # command-line options
         const MyOpts = Opts + {
@@ -54,6 +59,10 @@ public class MqttDataProviderTest inherits QUnit::Test {
         try {
             setupConnection();
         } catch (hash<ExceptionInfo> ex) {
+            # a configured broker that cannot be used fails the integration test instead of skipping it
+            if ((m_options.conn ?? ENV.MQTT_CONNECTION).val()) {
+                setup_error = ex;
+            }
             if (m_options.verbose > 2) {
                 printf("%s\n", get_exception_string(ex));
             } else if (m_options.verbose) {
@@ -688,8 +697,12 @@ public class MqttDataProviderTest inherits QUnit::Test {
     }
 
     mqttIntegrationTest() {
+        if (setup_error) {
+            throw setup_error.err, sprintf("the configured MQTT connection could not be set up: %s",
+                setup_error.desc), setup_error.arg;
+        }
         if (!mqtt) {
-            testSkip("no connection");
+            testSkip("no MQTT connection configured (set MQTT_CONNECTION or use -c)");
         }
 
         assertEq("mqtt", mqtt.getName());
@@ -729,6 +742,12 @@ public class MqttDataProviderTest inherits QUnit::Test {
         # create a publisher and send a message
         MqttDataProvider publisher({"url": mqtt_url, "subscription_topic": "unused",
             "client_id": "QoreTestPublisher-" + get_random_string(4)});
+        # a consumer of the provider's messages can tell whether their payloads were decoded
+        assertEq("json", subscriber.getMessageFormat(), "payloads are decoded as JSON by default");
+        MqttDataProvider raw_reader({"url": mqtt_url, "subscription_topic": "unused",
+            "client_id": "QoreTestRawReader-" + get_random_string(4), "message_format": "none"});
+        assertEq("none", raw_reader.getMessageFormat(), "the configured message format is returned");
+
         publisher.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
             "topic": test_topic,
             "payload": test_payload,
@@ -744,6 +763,24 @@ public class MqttDataProviderTest inherits QUnit::Test {
         assertEq(42, received.payload.number, "received payload number should match");
         assertEq(1, received.qos, "received qos should match");
         assertEq("application/json", received.content_type, "received content_type should match");
+
+        # MQTT 5 user properties and correlation data arrive with the message; a message carrying user
+        # properties used to be dropped because the properties were read with a Java list method from the Qore
+        # list the jni module delivers
+        publisher.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
+            "topic": test_topic,
+            "payload": test_payload,
+            "qos": 1,
+            "response_topic": test_topic + "/reply",
+            "correlation_data": binary("corr-1"),
+            "user_properties": {"operation": "placeOrder", "tenant": "t1"},
+        });
+        received = msg_queue.get(10s);
+        assertTrue(exists received, "should receive a message with user properties");
+        assertEq({"operation": "placeOrder", "tenant": "t1"}, received.user_properties,
+            "user properties arrive with the message");
+        assertEq(binary("corr-1"), received.correlation_data, "correlation data arrives with the message");
+        assertEq(test_topic + "/reply", received.response_topic, "the response topic arrives with the message");
     }
 
     private usageIntern() {
@@ -758,7 +795,7 @@ public class MqttDataProviderTest inherits QUnit::Test {
     private setupConnection() {
         *string conn_name = m_options.conn ?? ENV.MQTT_CONNECTION;
         if (!conn_name.val()) {
-            error("missing -c,--connection option or MQTT_CONNECTION environment variable");
+            return;
         }
 
         # try get_connection() first (works in CI with connection providers)

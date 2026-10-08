@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BusyLightDataProvider module definition
 
-/** BusyLightConnection.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** BusyLightConnection.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -109,7 +109,7 @@ public class BusyLightConnection inherits MqttDataProvider::MqttConnection {
     }
 
     #! Called by the constructor to set the real URL
-    /** @path the new URL
+    /** @param url the new URL
 
         sets the real HTTP URL for HTTP-based connections
     */

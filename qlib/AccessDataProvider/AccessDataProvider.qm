@@ -115,7 +115,11 @@ module AccessDataProvider {
 
     @tableofcontents
 
-    @section AccessDataProviderintro Introduction to the AccessDataProvider Module
+    @section accessdataproviderintro AccessDataProvider Module Introduction
+
+    <img src="access-logo.svg" width="96" alt="AccessDataProvider module logo"/>
+
+    @anchor AccessDataProviderintro
 
     The %AccessDataProvider module provides a data provider API for reading Microsoft Access databases
     through the @ref dataproviderintro "DataProvider" API. It supports both .mdb (Access 2003 and earlier)
@@ -178,11 +182,7 @@ module AccessDataProvider {
     @section AccessDataProvider_relnotes Release Notes
 
     @subsection AccessDataProvider_v1_0 AccessDataProvider v1.0
-    - initial release of the module
-    - support for reading Access databases (.mdb/.accdb format)
-    - multi-table access via child providers
-    - dynamic record schema based on table columns
-    - binary data input support via temp file
+    - initial release
 */
 
 #! contains all public definitions in the AccessDataProvider module

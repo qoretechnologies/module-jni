@@ -51,13 +51,13 @@ public class QoreClosure implements QoreClosureMarkerImpl {
     //! Calls the closure / call reference with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
     /**
      * This method can be used to save objects in thread-local data that would otherwise go out of scope; see
-     * @ref jni_qore_object_lifecycle_management for more information
+     * @ref jni_qore_object_lifecycle_managementguide for more information
      *
      * @param args argument to the function call
      * @return the result of the call
      * @throws Throwable any Qore-language exception is rethrown here
      *
-     * @see jni_qore_object_lifecycle_management
+     * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callSave(Object... args) throws Throwable {
         return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
@@ -66,13 +66,14 @@ public class QoreClosure implements QoreClosureMarkerImpl {
     //! Calls the closure / call reference with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
     /**
      * This method can be used to save objects in thread-local data that would otherwise go out of scope; see
-     * @ref jni_qore_object_lifecycle_management for more information
+     * @ref jni_qore_object_lifecycle_managementguide for more information
      *
+     * @param name reserved for compatibility; the closure has no method name
      * @param args argument to the function call
      * @return the result of the call
      * @throws Throwable any Qore-language exception is rethrown here
      *
-     * @see jni_qore_object_lifecycle_management
+     * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callArgsSave(String name, Object[] args) throws Throwable {
         return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);

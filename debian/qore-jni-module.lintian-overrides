@@ -1,0 +1,10 @@
+# The complete, unmodified Kotlin upstream third-party license collection is
+# retained. It includes the Apache text and Rhino's dual NPL/GPL terms; retaining
+# the original alternatives and contextual notices avoids rewriting that legal
+# collection. Ordinary standalone licenses use /usr/share/common-licenses.
+qore-jni-module: copyright-file-contains-full-apache-2-license
+qore-jni-module: copyright-file-contains-full-gpl-license
+# The JNI bridge needs OpenJDK's private unversioned libjvm.so. The explicit
+# openjdk-21-jre-headless dependency supplies this directory; no global linker
+# change is made. Qualification checks this exact path and the libjvm NEEDED entry.
+qore-jni-module: custom-library-search-path RUNPATH /usr/lib/jvm/java-21-openjdk-*/lib/server [usr/lib/*/qore-modules/jni-api-*.qmod]

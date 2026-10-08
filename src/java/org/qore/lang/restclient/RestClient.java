@@ -15,7 +15,7 @@ import org.qore.jni.QoreJavaApi;
 // Qore imports
 import org.qore.lang.HTTPClient;
 
-//! Java wrapper for the @ref Qore::RestClient class in %Qore
+//! Java wrapper for the @ref RestClient::RestClient class in %Qore
 /** @note Loads and initializes the Qore library and the jni module in static initialization if necessary
 
     @deprecated Use @ref jni_dynamic_import_qore_in_java "dynamic imports" instead:
@@ -57,8 +57,8 @@ RestClient rest = new RestClient(opts);
 {"additional_methods": {"PROPFIND": true, "MKCOL": true}};
             @endcode
         - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: \c 20s)
-        - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
-        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to \c "auto"
+        - \c content_encoding: for possible values, see @ref RestClient::RestClient::EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c data: a @ref RestClient::RestClient::DataSerializationOptions "data serialization option"; if not present defaults to \c "auto"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c error_passthru: if true then HTTP status codes indicating errors will not cause a
@@ -71,7 +71,7 @@ RestClient rest = new RestClient(opts);
         - \c proxy: The proxy URL for connecting through a proxy
         - \c redirect_passthru: if true then redirect responses will be passed to the caller instead of
           processed
-        - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c send_encoding: a @ref RestClient::RestClient::EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
         - \c swagger: the path to a <a href="https://swagger.io/">Swagger 2.0</a> REST schema file for API validation; only used if \a validator not provided (see the @ref swaggerintro "Swagger" module)
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 30s)
         - \c url: A string giving the URL to connect to; if not given then the target URL will be taken from any \c validator option, if given by calling @ref RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
@@ -103,8 +103,8 @@ RestClient rest = new RestClient(opts);
 {"additional_methods": {"PROPFIND": true, "MKCOL": true}};
             @endcode
         - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: \c 20s)
-        - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
-        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to \c "auto"
+        - \c content_encoding: for possible values, see @ref RestClient::RestClient::EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c data: a @ref RestClient::RestClient::DataSerializationOptions "data serialization option"; if not present defaults to \c "auto"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c error_passthru: if true then HTTP status codes indicating errors will not cause a
@@ -117,7 +117,7 @@ RestClient rest = new RestClient(opts);
         - \c proxy: The proxy URL for connecting through a proxy
         - \c redirect_passthru: if true then redirect responses will be passed to the caller instead of
           processed
-        - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
+        - \c send_encoding: a @ref RestClient::RestClient::EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over @ref RestClient::RestClient::CompressionThreshold "CompressionThreshold" bytes in size)
         - \c swagger: the path to a <a href="https://swagger.io/">Swagger 2.0</a> REST schema file for API validation; only used if \a validator not provided (see the @ref swaggerintro "Swagger" module)
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 30s)
         - \c url: A string giving the URL to connect to; if not given then the target URL will be taken from any \c validator option, if given by calling @ref RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
@@ -140,13 +140,13 @@ RestClient rest = new RestClient();
         super(QoreJavaApi.newObjectSave("RestClient::RestClient"));
     }
 
-    //! change the serialization option for the object; see @ref DataSerializationOptions for valid options
+    //! change the serialization option for the object; see @ref RestClient::RestClient::DataSerializationOptions for valid options
     /** @par Example:
         @code{.java}
 rest.setSerialization("yaml");
         @endcode
 
-        @param data the serialization option for the object; see @ref DataSerializationOptions for valid options
+        @param data the serialization option for the object; see @ref RestClient::RestClient::DataSerializationOptions for valid options
 
         @throw RESTCLIENT-ERROR invalid or unsupported serialization option
 
@@ -156,7 +156,7 @@ rest.setSerialization("yaml");
         obj.callMethod("setSerialization", data);
     }
 
-    //! change the data content encoding (compression) option for the object; see @ref EncodingSupport for valid options
+    //! change the data content encoding (compression) option for the object; see @ref RestClient::RestClient::EncodingSupport for valid options
     /** @par Example:
         @code{.java}
 rest.setSendEncoding("gzip");
@@ -164,7 +164,7 @@ rest.setSendEncoding("gzip");
 
         The default is to send requests unencoded/uncompressed.
 
-        @param enc the data content encoding (compression) option for the object; see @ref EncodingSupport for valid options; if the value \c "auto" is passed then \c "gzip" encoding is used
+        @param enc the data content encoding (compression) option for the object; see @ref RestClient::RestClient::EncodingSupport for valid options; if the value \c "auto" is passed then \c "gzip" encoding is used
 
         @throw RESTCLIENT-ERROR invalid or unsupported data content encoding / compression option
 
@@ -176,13 +176,13 @@ rest.setSendEncoding("gzip");
         obj.callMethod("setSendEncoding", enc);
     }
 
-    //! sets the request and desired response encoding for the object; see @ref EncodingSupport for valid options
+    //! sets the request and desired response encoding for the object; see @ref RestClient::RestClient::EncodingSupport for valid options
     /** @par Example:
         @code{.java}
 rest.setContentEncoding("gzip");
         @endcode
 
-        @param enc the data content encoding (compression) option for requests and the desired response content encoding for the object; see @ref EncodingSupport for valid options; if the value \c "auto" is passed then \c "gzip" encoding is used for outgoing requests and requested for responses
+        @param enc the data content encoding (compression) option for requests and the desired response content encoding for the object; see @ref RestClient::RestClient::EncodingSupport for valid options; if the value \c "auto" is passed then \c "gzip" encoding is used for outgoing requests and requested for responses
 
         @throw RESTCLIENT-ERROR invalid or unsupported data content encoding / compression option
 
@@ -234,13 +234,13 @@ HashMap<String, Object> h = rest.getDefaultHeaders();
         return (HashMap<String, Object>)obj.callMethod("getDefaultHeaders");
     }
 
-    //! returns the current data content encoding (compression) object or null if no encoding option is set; see @ref EncodingSupport for valid options
+    //! returns the current data content encoding (compression) object or null if no encoding option is set; see @ref RestClient::RestClient::EncodingSupport for valid options
     /** @par Example:
         @code{.java}
 String ce = rest.getSendEncoding();
         @endcode
 
-        @return the current data content encoding (compression) object or null if no encoding option is set; see @ref EncodingSupport for valid options
+        @return the current data content encoding (compression) object or null if no encoding option is set; see @ref RestClient::RestClient::EncodingSupport for valid options
 
         @see
         - @ref setContentEncoding()
@@ -252,13 +252,13 @@ String ce = rest.getSendEncoding();
         return (String)obj.callMethod("getSendEncoding");
     }
 
-    //! returns the current data serialization format currently in effect for the object (see @ref DataSerializationOptions for possible values)
+    //! returns the current data serialization format currently in effect for the object (see @ref RestClient::RestClient::DataSerializationOptions for possible values)
     /** @par Example:
         @code{.java}
 String ser = rest.getSerialization();
         @endcode
 
-        @return the current data serialization format currently in effect for the object (see @ref DataSerializationOptions for possible values)
+        @return the current data serialization format currently in effect for the object (see @ref RestClient::RestClient::DataSerializationOptions for possible values)
 
         @see @ref setSerialization()
      */

@@ -88,8 +88,8 @@
           "message": "將記錄寫入指定路徑的 Avro 檔案"
         },
         "app.QXZybw.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nAfter writing all records, use `getData()` to retrieve the binary Avro data.",
-          "message": "在記憶體中建立 Apache Avro 資料並作為二進位資料返回；適用於產生 Avro 資料而無需寫入磁碟。\n\n`schema` 選項為**必填**，且必須是定義記錄結構的有效 Avro JSON schema 字串。\n\n寫入所有記錄後，使用 `getData()` 檢索二進位 Avro 資料。"
+          "source": "Create Apache Avro data in memory and return it as binary data; useful for generating Avro data without writing to disk.\n\nThe `schema` option is **required** and must be a valid Avro JSON schema string that defines the record structure.\n\nThe action returns the generated Avro data in `data` and the number of records in `record_count`.",
+          "message": "在記憶體中建立 Apache Avro 資料並作為二進位資料返回；適用於產生 Avro 資料而無需寫入磁碟。\n\n`schema` 選項為**必填**，且必須是定義記錄結構的有效 Avro JSON schema 字串。\n\n動作會在 `data` 中傳回產生的 Avro 資料，並在 `record_count` 中傳回記錄數。"
         },
         "app.QXZybw.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create Avro Data",

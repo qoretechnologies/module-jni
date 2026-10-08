@@ -3,7 +3,7 @@
 /** Rewrites legacy `qore.<mod>.<rest>` Java imports / fully-qualified references to the
     canonical `qoremod.<mod>.<rest>` form for module-owned classes.
 
-    Background: as of jni 2.7.0, %Qore module classes are exposed in Java under exactly
+    Background: as of jni 3.0.0, %Qore module classes are exposed in Java under exactly
     one canonical binary name, `qoremod.<mod>.<rest>`.  The legacy `qore.<mod>.<rest>`
     shape is no longer accepted at runtime — looking it up raises ClassNotFoundException.
     Built-in `qore.Qore.*` classes (e.g. qore.Qore.SQL.AbstractDatasource) and per-Program
@@ -197,7 +197,7 @@ class QJavaMigrateImports {
         printf("usage: %s [options] <java-source-or-dir> [...]\n"
             "\n"
             "Rewrites legacy qore.<mod>.<rest> Java imports / references to the canonical\n"
-            "qoremod.<mod>.<rest> form (jni 2.7.0+).  Built-in qore.Qore.* and Qorus runtime\n"
+            "qoremod.<mod>.<rest> form (jni 3.0.0+).  Built-in qore.Qore.* and Qorus runtime\n"
             "qore.OMQ.* are kept as-is by default.\n"
             "\n"
             "options:\n"

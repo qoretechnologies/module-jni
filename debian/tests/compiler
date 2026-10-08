@@ -1,0 +1,32 @@
+#!/bin/sh
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+set -eu
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR LD_LIBRARY_PATH LD_PRELOAD
+unset CLASSPATH QORE_CLASSPATH QORE_JNI_CLASSPATH JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS
+cd "$AUTOPKGTEST_TMP"
+cat > jni-smoke.q <<'EOF'
+%modern
+%requires jni
+%requires ExcelDataProvider
+%requires DataProvider
+%module-cmd(jni) import java.lang.StringBuilder
+StringBuilder text();
+text.append("packaged Java");
+if (text.toString() != "packaged Java" || DataProvider::getFactory("excelread").getInfo().name != "excelread") {
+    throw "PACKAGE-TEST-ERROR", "Installed JNI bridge or provider failed";
+}
+EOF
+/usr/bin/qcc -o jni-smoke jni-smoke.q
+./jni-smoke
+mkdir java-source java-classes
+cat > java-source/PackagedBridge.java <<'EOF'
+import org.qore.jni.Hash;
+public class PackagedBridge {
+    public static Hash echo(Hash value) { return value; }
+}
+EOF
+qjavac -d java-classes java-source/PackagedBridge.java
+test -f java-classes/PackagedBridge.class
+qjava2jar --root="$PWD/java-source" -d "$PWD/java-classes" "$PWD/bridge.jar" "$PWD/java-source"
+jar tf bridge.jar | grep -qx PackagedBridge.class

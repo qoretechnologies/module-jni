@@ -45,7 +45,7 @@ QoreCodeDispatcher::QoreCodeDispatcher(const ResolvedCallReferenceNode *callback
     //
     // getProgram() is not usable here: the thread-current Program during construction is not
     // guaranteed to be the callback's Program (it is the JNI global Java-context Program in some
-    // contexts).  The Program reference is taken here, while the callback is known to be alive;
+    // contexts). The Program dependency reference is taken while the callback is known to be alive;
     // callback->getProgram() must not be called later from dispatch(), where it can dangle if the
     // owning Program has been destroyed.
     pgm = this->callback->getProgram();
@@ -55,7 +55,12 @@ QoreCodeDispatcher::QoreCodeDispatcher(const ResolvedCallReferenceNode *callback
         pgm = getProgram();
     }
     assert(pgm);
-    pgm->ref();
+    // A closure can outlive a Program that has already been cleared. Taking a
+    // strong reference then would resurrect its zero reference count without
+    // restoring the dependency reference released by clear(). Pin the Program's
+    // metadata with a dependency reference instead; execution context validation
+    // still rejects callbacks into a closed Program.
+    pgm->depRef();
     printd(LogLevel, "QoreCodeDispatcher::QoreCodeDispatcher(), this: %p pgm: %p\n", this, pgm);
 }
 
@@ -67,21 +72,28 @@ public:
 };
 
 QoreCodeDispatcher::~QoreCodeDispatcher() {
-    try {
-        qoreThreadAttacher.attach();
-    } catch (Exception &e) {
-        printd(LogLevel, "~QoreCodeDispatcher() - unable to attach thread to Qore, this: %p", this);
+    ExceptionSink xsink;
+    destroy(xsink);
+    xsink.clear();
+}
+
+void QoreCodeDispatcher::destroy(ExceptionSink& xsink) {
+    if (!callback) {
         return;
     }
-    QoreThreadDetacher qtd;
-
-    printd(LogLevel, "QoreCodeDispatcher::~QoreCodeDispatcher(), this: %p\n", this);
-    ExceptionSink xsink;
-    callback->deref(&xsink);
-    pgm->deref(&xsink);
-    if (xsink) {
-        QoreToJava::wrapException(xsink);
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception &e) {
+        e.convert(&xsink);
+        return;
     }
+
+    printd(LogLevel, "QoreCodeDispatcher::destroy(), this: %p\n", this);
+    callback->deref(&xsink);
+    callback = nullptr;
+    pgm->depDeref();
+    pgm = nullptr;
 }
 
 jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jobjectArray jargs) {
@@ -105,8 +117,8 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
 
     ExceptionSink xsink;
     try {
-        // Use our ref'd program (this->pgm) — guaranteed alive because we
-        // hold a strong reference from the constructor.
+        // Our dependency reference keeps the Program metadata alive. The context
+        // helper below checks whether the Program still permits execution.
         // callback->getProgram() is unsafe: it can return a dangling pointer
         // when the callback's owning program has been destroyed.
         QoreProgram* pgm = this->pgm;
@@ -127,12 +139,12 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
             args->push(val.release(), &xsink);
         }
 
-        QoreValue qv = callback->execValue(*args, &xsink);
+        ValueHolder qv(callback->execValue(*args, &xsink), &xsink);
         if (xsink) {
             QoreToJava::wrapException(xsink);
             return nullptr;
         }
-        return QoreToJava::toObject(env, qv, nullptr, jpc);
+        return QoreToJava::toObject(env, *qv, nullptr, jpc);
     } catch (jni::Exception& e) {
         e.convert(&xsink);
         QoreToJava::wrapException(xsink);

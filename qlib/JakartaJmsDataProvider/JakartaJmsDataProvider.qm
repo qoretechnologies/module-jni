@@ -172,6 +172,8 @@ module JakartaJmsDataProvider {
 
     @section jakartajmsdataproviderintro Introduction to the JakartaJmsDataProvider Module
 
+    <img src="jms-logo.svg" width="96" alt="JakartaJmsDataProvider module logo"/>
+
     The %JakartaJmsDataProvider module provides a data provider API for Jakarta Messaging (JMS) 3.x
     compliant brokers such as Apache ActiveMQ Artemis, TIBCO EMS, IBM MQ, and Oracle AQ.
 
@@ -182,51 +184,49 @@ module JakartaJmsDataProvider {
 
     JMS is the standard Java messaging API used across enterprise systems. Common use cases include:
 
-    - **Order processing**: send orders to a \c queue://orders queue for reliable, exactly-once
+    - <b>Order processing</b>: send orders to a \c queue://orders queue for reliable, exactly-once
       processing by backend fulfillment systems
-    - **Event-driven microservices**: subscribe to \c topic://events for real-time notifications
+    - <b>Event-driven microservices</b>: subscribe to \c topic://events for real-time notifications
       (e.g., inventory changes, price updates, shipment status)
-    - **Request-reply workflows**: send a pricing request to \c queue://pricing-engine and wait
+    - <b>Request-reply workflows</b>: send a pricing request to \c queue://pricing-engine and wait
       for a synchronous reply with the calculated quote
-    - **Audit and compliance**: browse a \c queue://audit-log queue without consuming messages to
+    - <b>Audit and compliance</b>: browse a \c queue://audit-log queue without consuming messages to
       inspect pending audit records
-    - **Message filtering**: use JMS message selectors (e.g., \c "region = 'us-east' AND
+    - <b>Message filtering</b>: use JMS message selectors (e.g., \c "region = 'us-east' AND
       priority > 5") to receive only relevant messages from a shared topic
-    - **Durable subscriptions**: persist topic subscriptions across client restarts so no messages
+    - <b>Durable subscriptions</b>: persist topic subscriptions across client restarts so no messages
       are lost during maintenance windows
 
     @subsection jakartajmsdataprovider_features Features
 
-    - **Queue and topic messaging**: point-to-point and publish-subscribe patterns
-    - **Message types**: \c TextMessage, \c MapMessage, \c BytesMessage with automatic type mapping
-    - **Message selectors**: SQL-92 based filtering on message properties
-    - **Request-reply**: synchronous request-reply using temporary queues
-    - **Queue browsing**: non-destructive inspection of queue contents
-    - **Durable subscriptions**: persistent topic subscriptions across reconnects
-    - **Event-driven consumption**: asynchronous message reception via \c MessageListener
-    - **Session pooling**: thread-safe pool of JMS sessions for concurrent access
-    - **Provider-agnostic**: works with any Jakarta Messaging 3.x compliant provider
+    - <b>Queue and topic messaging</b>: point-to-point and publish-subscribe patterns
+    - <b>Message types</b>: \c TextMessage, \c MapMessage, \c BytesMessage with automatic type mapping
+    - <b>Message selectors</b>: SQL-92 based filtering on message properties
+    - <b>Request-reply</b>: synchronous request-reply using temporary queues
+    - <b>Queue browsing</b>: non-destructive inspection of queue contents
+    - <b>Durable subscriptions</b>: persistent topic subscriptions across reconnects
+    - <b>Event-driven consumption</b>: asynchronous message reception via \c MessageListener
+    - <b>Session pooling</b>: thread-safe pool of JMS sessions for concurrent access
+    - <b>Provider-agnostic</b>: works with any Jakarta Messaging 3.x compliant provider
 
     @subsection jakartajmsdataprovider_providers Provider Hierarchy
 
     The root \c jms data provider has three child providers:
 
-    |Provider|Path|Purpose|
-    |---|---|---|
-    |@ref JakartaJmsDataProvider::JmsProducerDataProvider "producer"|<tt>/producer</tt>|Send messages (fire-and-forget) and request-reply|
-    |@ref JakartaJmsDataProvider::JmsBrowserDataProvider "browser"|<tt>/browser</tt>|Non-destructive queue browsing|
-    |@ref JakartaJmsDataProvider::JmsPollingDataProvider "polling"|<tt>/polling</tt>|Event-driven message consumption|
+    |!Provider|!Path|!Purpose
+    |@ref JakartaJmsDataProvider::JmsProducerDataProvider "producer"|<tt>/producer</tt>|Send messages (fire-and-forget) and request-reply
+    |@ref JakartaJmsDataProvider::JmsBrowserDataProvider "browser"|<tt>/browser</tt>|Non-destructive queue browsing
+    |@ref JakartaJmsDataProvider::JmsPollingDataProvider "polling"|<tt>/polling</tt>|Event-driven message consumption
 
     @subsection jakartajmsdataprovider_messagetypes Message Type Mapping
 
     Qore values are automatically mapped to JMS message types when sending:
 
-    |Qore Type|JMS Message Type|Notes|
-    |---|---|---|
-    |\c string|\c TextMessage|UTF-8 text|
-    |\c hash|\c MapMessage|Keys mapped to JMS map entries; nested hashes serialized as JSON strings|
-    |\c binary|\c BytesMessage|Raw bytes|
-    |other|\c BytesMessage|Serialized as JSON with \c content_type property set to \c application/json|
+    |!Qore Type|!JMS Message Type|!Notes
+    |\c string|\c TextMessage|UTF-8 text
+    |\c hash|\c MapMessage|Keys mapped to JMS map entries; nested hashes serialized as JSON strings
+    |\c binary|\c BytesMessage|Raw bytes
+    |other|\c BytesMessage|Serialized as JSON with \c content_type property set to \c application/json
 
     When receiving, the reverse mapping is applied automatically.
 
@@ -356,39 +356,29 @@ module JakartaJmsDataProvider {
 
     @section jakartajmsdataprovider_actions App Action Reference
 
-    |Action|Type|Description|
-    |---|---|---|
-    |\c send-jms-message|DPAT_SEND_MESSAGE|Fire-and-forget message send to a queue or topic|
-    |\c jms-request-reply|DPAT_API|Synchronous request-reply using a temporary queue|
-    |\c browse-jms-queue|DPAT_API|Non-destructive queue inspection with optional selector|
-    |\c jms-message-received|DPAT_EVENT|Event-driven message consumption with optional selector and durable subscriptions|
+    |!Action|!Type|!Description
+    |\c send-jms-message|DPAT_SEND_MESSAGE|Fire-and-forget message send to a queue or topic
+    |\c jms-request-reply|DPAT_API|Synchronous request-reply using a temporary queue
+    |\c browse-jms-queue|DPAT_API|Non-destructive queue inspection with optional selector
+    |\c jms-message-received|DPAT_EVENT|Event-driven message consumption with optional selector and durable subscriptions
 
     @section jakartajmsdataprovider_troubleshooting Troubleshooting
 
-    - **ClassNotFoundException**: the JMS provider JARs are not on the classpath; set the
+    - <b>ClassNotFoundException</b>: the JMS provider JARs are not on the classpath; set the
       \c provider_classpath option, the \c QORE_JNI_CLASSPATH environment variable, or use
       \c %%module-cmd(jni) \c add-classpath directives
-    - **Connection refused**: verify the broker URL and that the broker is running
-    - **Security exception**: check \c username and \c password options
-    - **Durable subscription requires client ID**: set the \c client_id option when subscribing
+    - <b>Connection refused</b>: verify the broker URL and that the broker is running
+    - <b>Security exception</b>: check \c username and \c password options
+    - <b>Durable subscription requires client ID</b>: set the \c client_id option when subscribing
       to topics with durable subscriptions
-    - **Message selector syntax error**: selectors use JMS SQL-92 syntax
+    - <b>Message selector syntax error</b>: selectors use JMS SQL-92 syntax
       (e.g., \c "color = 'red' AND priority > 5"); property names must be valid Java identifiers
       (no hyphens — use underscores)
 
     @section JakartaJmsDataProvider_relnotes Release Notes
 
     @subsection JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider v1.0
-    - initial release of the module
-    - support for sending, receiving, request-reply, and queue browsing
-    - automatic Qore-to-JMS type mapping (\c string \u2194 \c TextMessage, \c hash \u2194
-      \c MapMessage, \c binary \u2194 \c BytesMessage)
-    - event-driven message consumption via \c MessageListener with queue-based handoff
-    - thread-safe JMS session pool
-    - JMS SQL-92 message selector support
-    - durable topic subscriptions
-    - 4 app actions: \c send-jms-message, \c jms-request-reply, \c browse-jms-queue,
-      \c jms-message-received
+    - initial release
 */
 
 #! contains all public definitions in the JakartaJmsDataProvider module

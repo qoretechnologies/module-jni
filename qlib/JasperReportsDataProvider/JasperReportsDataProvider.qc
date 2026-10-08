@@ -226,6 +226,24 @@ public class JasperReportsDataProvider inherits DataProvider::AbstractDataProvid
         }
     }
 
+    #! Completes the create operations: generates the report and writes it to \c output_path, if set
+    /** @return the generated report, its format, and the number of data rows in it, if there is no output path;
+        otherwise no value is returned
+    */
+    private *hash<auto> finishCreateImpl() {
+        if (outputPath) {
+            commit();
+            return;
+        }
+        # the report must be generated before commit() releases the generator
+        on_exit commit();
+        return {
+            "data": getData(),
+            "format": outputFormat,
+            "record_count": created,
+        };
+    }
+
     #! Returns the generated report as binary data
     /** @return the report contents as binary data in the configured output format
 

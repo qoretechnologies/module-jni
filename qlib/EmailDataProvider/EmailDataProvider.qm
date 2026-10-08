@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -292,8 +292,11 @@ module EmailDataProvider {
                 "Each record written represents a single email message with the standard email fields "
                 "including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, "
                 "`attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\n"
-                "After writing all messages, use `getData()` to retrieve the binary EML data.",
+                "The action returns the generated EML data in `data` and the number of messages in "
+                "`record_count`.",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "EmailDataProvider::EmlWriteDataProvider",
             "options": {},
         });
@@ -304,7 +307,11 @@ module EmailDataProvider {
 
     @tableofcontents
 
-    @section EmailDataProviderintro Introduction to the EmailDataProvider Module
+    @section emaildataproviderintro EmailDataProvider Module Introduction
+
+    <img src="email-logo.svg" width="96" alt="EmailDataProvider module logo"/>
+
+    @anchor EmailDataProviderintro
 
     The %EmailDataProvider module provides a data provider API for reading and writing email messages in
     multiple formats through the @ref dataproviderintro "DataProvider" API. It supports EML (RFC 822),
@@ -423,13 +430,7 @@ module EmailDataProvider {
     @section EmailDataProvider_relnotes Release Notes
 
     @subsection EmailDataProvider_v1_0 EmailDataProvider v1.0
-    - initial release of the module
-    - support for reading EML (RFC 822 / MIME) email files
-    - support for writing EML (RFC 822 / MIME) email files with text, HTML, and attachments
-    - support for reading MSG (Microsoft Outlook) email files
-    - support for reading MBOX (Unix Mailbox) files with multiple messages
-    - unified record schema across all email formats
-    - binary data and stream input/output support
+    - initial release
 */
 
 #! contains all public definitions in the EmailDataProvider module

@@ -32,11 +32,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/freemarker-2.3.32.jar
 %module-cmd(jni) add-relative-classpath ../qlib/VcfDataProvider/jar/jackson-core-2.15.2.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/VcfDataProvider
+%requires VcfDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.vcard.VcfTestHelper
 
@@ -83,6 +84,7 @@ public class VcfDataProviderTest inherits QUnit::Test {
         addTestCase("new fields: null when absent", \testNewFieldsNullWhenAbsent());
         addTestCase("new fields: categories as list", \testCategoriesAsList());
 
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
         set_return_value(main());
     }
 
@@ -839,5 +841,22 @@ public class VcfDataProviderTest inherits QUnit::Test {
         assertTrue(inlist("beta", records[1].categories), "should have 'beta'");
         assertTrue(inlist("gamma", records[1].categories), "should have 'gamma'");
         assertTrue(inlist("delta", records[1].categories), "should have 'delta'");
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("VCF", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject(NOTHING);
+        prov.createRecordsBulkWithOptions({"recs": {"formatted_name": ("Ann Buyer", "Bob Carrier"), "given_name": ("Ann", "Bob"), "family_name": ("Buyer", "Carrier")}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        assertEq("BEGIN:VCARD", output.data.substr(0, 11).toString());
+        VcfReadDataProvider rdp({"data": output.data});
+        assertEq(("Ann Buyer", "Bob Carrier"), (map $1.formatted_name, rdp.searchRecords()));
     }
 }

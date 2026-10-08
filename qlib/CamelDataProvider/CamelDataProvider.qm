@@ -177,6 +177,8 @@ module CamelDataProvider {
 
     @section cameldataproviderintro Introduction to the CamelDataProvider Module
 
+    <img src="camel-logo.svg" width="96" alt="CamelDataProvider module logo"/>
+
     The %CamelDataProvider module provides a data provider API for enterprise integration
     patterns via Apache Camel.
 
@@ -199,7 +201,7 @@ module CamelDataProvider {
     @section cameldataprovider_relnotes Release Notes
 
     @subsection cameldataprovider_v1_0 CamelDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the CamelDataProvider module

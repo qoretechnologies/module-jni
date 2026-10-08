@@ -288,8 +288,8 @@
           "message": "Загальний обсяг пам'яті у байтах, який продюсер може використовувати для буферизації записів, що очікують на надсилання"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "Ключ повідомлення"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "Ключ повідомлення; повідомлення без ключа продюсер розподіляє між розділами топіка"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Обмін повідомленнями Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Заголовки повідомлення"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "Заголовки запису у вигляді хешу імен заголовків і значень"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "Заголовки запису у вигляді хешу імен заголовків і значень.\n\nПід час надсилання рядкове значення надсилається як його байти UTF-8, двійкове значення — без змін, а будь-яке інше значення — як байти UTF-8 його рядкової форми.\n\nПід час отримання значення, що є коректним UTF-8, повертається як рядок, а будь-яке інше значення — як двійкові дані; заголовок без значення повертається як `NOTHING`, а якщо запис містить заголовок кілька разів, повертається останнє значення"
         }
       }
     }

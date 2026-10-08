@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -62,6 +62,8 @@
 %module-cmd(jni) add-relative-classpath ./jar/RoaringBitmap-1.0.0.jar
 
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsIterator
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsFile
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsGridReader
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsWriter
 
 module OdsDataProvider {
@@ -148,6 +150,33 @@ module OdsDataProvider {
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": OdsDataProvider::AppName,
             "path": "/",
+            "action": "profile",
+            "display_name": "Profile ODS Spreadsheet",
+            "short_desc": "Describe the layout and columns of every sheet of an ODS spreadsheet",
+            "desc": "Describes how every sheet of an OpenDocument spreadsheet (`.ods`) is laid out, so it can be "
+                "read correctly before an integration is built around it.\n\n"
+                "**Detects:**\n"
+                "- hidden sheets, named ranges, merged cells, and formulas\n"
+                "- the header row, title rows and banners above it, and the data region\n"
+                "- totals and subtotal rows and blank-row gaps\n"
+                "- each column's type with a confidence and counter-examples\n"
+                "- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\n"
+                "Sample values are redacted to their shape by default (`redact`), so a profile can be shared "
+                "without the data itself.",
+            "action_code": DPAT_API,
+            "cls": "OdsDataProvider::OdsProfileDataProvider",
+            "output_type": TabularWorkbookProfileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TabularProfileRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TabularProfileRequestDataType::Fields - ("path",)
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OdsDataProvider::AppName,
+            "path": "/",
             "action": "read-data",
             "display_name": "Read ODS Spreadsheet Inline Data",
             "short_desc": "Read ODS spreadsheet inline data",
@@ -195,7 +224,8 @@ module OdsDataProvider {
                 "- `path` (required) — the output file location\n"
                 "- `worksheet` — the worksheet name (defaults to `Sheet1`)\n"
                 "- `headers` — explicit column header names; if not provided, headers are auto-detected "
-                "from the first record",
+                "from the first record\n"
+                "- `column_formats` — the display format of columns, such as `dd.mm.yyyy` or `#,##0.00`",
             "action_code": DPAT_CREATE,
             "cls": "OdsDataProvider::OdsWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -209,6 +239,10 @@ module OdsDataProvider {
                     "preselected": True,
                     "loc": "constructor",
                 }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsWriteDataProvider::ConstructorOptions - ("path", "worksheet", "headers", "stream"), {
+                    "loc": "constructor",
+                }
             ),
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -220,17 +254,24 @@ module OdsDataProvider {
             "desc": "Create ODS spreadsheet data in memory and return it as binary data.\n\n"
                 "Use this action when you need to generate an ODS file without writing to disk — for "
                 "example, to return the spreadsheet as an API response, store it in a database, or pass "
-                "it to another processing step. Retrieve the result by calling `getData()` on the "
-                "provider after creating all records.\n\n"
+                "it to another processing step. The action returns the generated spreadsheet in `data` and "
+                "the number of records in `record_count`.\n\n"
                 "**Key Options**:\n"
                 "- `worksheet` — the worksheet name (defaults to `Sheet1`)\n"
                 "- `headers` — explicit column header names; if not provided, headers are auto-detected "
-                "from the first record",
+                "from the first record\n"
+                "- `column_formats` — the display format of columns, such as `dd.mm.yyyy` or `#,##0.00`",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "OdsDataProvider::OdsWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 OdsWriteDataProvider::ConstructorOptions{"worksheet", "headers"}, {
                     "preselected": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OdsWriteDataProvider::ConstructorOptions - ("path", "worksheet", "headers", "stream"), {
                     "loc": "constructor",
                 }
             ),
@@ -242,12 +283,61 @@ module OdsDataProvider {
 
     @tableofcontents
 
-    @section OdsDataProviderintro Introduction to the OdsDataProvider Module
+    @section odsdataproviderintro OdsDataProvider Module Introduction
+
+    <img src="ods-logo.svg" width="96" alt="OdsDataProvider module logo"/>
+
+    @anchor OdsDataProviderintro
 
     The %OdsDataProvider module provides a data provider API for reading and writing ODS
     (OpenDocument Spreadsheet) files through the @ref dataproviderintro "DataProvider" API.
     ODS is the native spreadsheet format for LibreOffice Calc and other OpenDocument-compatible
     applications.
+
+    Records are read from a sheet one row at a time as they are iterated, so sheets of any size are read in bounded
+    memory; the runs of repeated rows and cells that spreadsheet applications write are not expanded.  The input (a
+    location, a stream, or binary data) is copied once to a temporary file, in bounded memory, which is read for the
+    record type, the records, the worksheet names, and the worksheet providers, and deleted with the last provider
+    using it.
+
+    Float, currency, and percentage cells are read as numbers (a currency cell is its amount, a percentage cell its
+    fraction, such as \c 0.25 for 25%), boolean cells as booleans, date and time cells as dates, and other cells as
+    their text.
+
+    Date cells have no time zone in the file: a date cell is its clock time in the zone given with the \c timezone
+    option (the local zone by default), whatever the zone of the JVM.  A clock time that does not exist in that zone,
+    because clocks are put forward then, is moved later by the length of the gap (02:30 on the day clocks go from
+    02:00 to 03:00 is 03:30); a clock time that occurs twice, when clocks are put back, is the earlier one.  A time
+    cell is its clock time on 1899-12-31, the date that Excel time cells are read with; a time over 24 hours
+    continues on the following days.
+
+    A \c data_cells range without an end column (e.g., \c "b2") ends at the last header column, or, without headers,
+    at the last cell with a value in each row.
+
+    The write provider writes numbers as float cells, booleans as boolean cells, dates as date cells with their date
+    and clock time (with no time zone, as read above), no value as an empty cell, and other values as text.  Its
+    \c column_formats option gives columns a display format code, as LibreOffice and Excel write them, which is
+    written as an OpenDocument data style; the cells keep their real values:
+
+    @code{.py}
+    OdsWriteDataProvider dp("invoices.ods", {
+        "headers": ("Invoice", "Date", "Amount", "Discount"),
+        "column_formats": {
+            "Date": "dd.mm.yyyy",
+            "Amount": "#,##0.00;(#,##0.00)",
+            "Discount": "0.0%",
+        },
+    });
+    # the date is shown as 07.10.2026, the amount as (1,234.50) and the discount as 2.5%
+    dp.createRecord({"Invoice": "INV-1", "Date": 2026-10-07, "Amount": -1234.5, "Discount": 0.025});
+    dp.finishCreate();
+    @endcode
+
+    The format codes are those of the @ref ExcelDataProvider_writing_column_formats "ExcelDataProvider writer",
+    and each code is shown the same way in both kinds of file.  A number in a column with a percent code is written
+    as a percentage cell, which holds the fraction and is read back as a number.  An invalid or unsupported code, or
+    a format for a column that is not written, raises \c ODS-WRITE-OPTION-ERROR naming the column and the problem.
+    Each distinct code is one data style in the document, whatever the number of rows.
 
     The following classes are provided by this module:
     - @ref OdsDataProvider::OdsReadDataProvider "OdsReadDataProvider" - for reading ODS files
@@ -259,7 +349,17 @@ module OdsDataProvider {
     @section OdsDataProvider_relnotes Release Notes
 
     @subsection OdsDataProvider_v1_0 OdsDataProvider v1.0
-    - initial release of the module
+    - initial release
+    - an unknown worksheet raises \c ODS-WORKSHEET-NOT-FOUND, naming the worksheet and listing the worksheets of the
+      file, instead of a Java exception
+    - added the \c worksheet_pattern read option: a regular expression that the name of exactly one worksheet must
+      match; no match raises \c ODS-WORKSHEET-NOT-FOUND and more than one raises \c ODS-WORKSHEET-AMBIGUOUS
+    - the \c ignore_empty option declares its default (\c false: reading stops at the first empty row) and that
+      behavior in its option metadata
+    - added the \c column_formats write option: a display format code for each column, such as \c dd.mm.yyyy,
+      <tt>#,##0.00</tt> or \c 0.0%, written as an OpenDocument data style while the cells keep their dates and
+      numbers
+    - date cells are written with their clock time; before, only the date was written
 */
 
 #! contains all public definitions in the OdsDataProvider module

@@ -393,7 +393,7 @@ set_save_object_callback(save_object_callback: callback);
     The callback set here will be called any time a %Qore object is created from Java code; if no callback is set,
     then the standard thread-local implementation is used where %Qore objects are saved in a thread-local hash.
 
-    @see @ref jni_qore_object_lifecycle_management for more information
+    @see @ref jni_qore_object_lifecycle_managementguide for more information
 */
 set_save_object_callback(*code save_object_callback) [dom=PROCESS;flags=NAMED_ARGS] {
     // NOTE: this must be qore_get_call_program_context() and not jni::jni_get_program_context() or jni_get_context()
@@ -502,7 +502,7 @@ string java_name = get_java_name(class_name: "::Qore::Ocr::TesseractEngine");  #
 
     @throws CLASS-NOT-FOUND the %Qore class could not be found
 
-    @since jni 2.6
+    @since jni 3.0
 */
 string get_java_name(string class_name) [flags=NAMED_ARGS] {
     TempEncodingHelper cn(class_name, QCS_UTF8, xsink);
@@ -557,7 +557,7 @@ auto result = kotlin_eval(script: "1 + 2");  // returns 3
 
     These JARs are typically found in KOTLIN_HOME/lib/
 
-    @since jni 2.6
+    @since jni 3.0
 */
 auto kotlin_eval(string script) [flags=NAMED_ARGS] {
     try {
@@ -629,7 +629,7 @@ if (kotlin_scripting_available()) {
     - kotlin-compiler-embeddable.jar
     - kotlin-script-runtime.jar
 
-    @since jni 2.6
+    @since jni 3.0
 */
 bool kotlin_scripting_available() {
     try {
@@ -668,7 +668,7 @@ if (kotlin_scripting_retry()) {
     @note This function is useful when Kotlin scripting JARs are loaded at runtime
     after the initial availability check returned @ref False.
 
-    @since jni 2.6
+    @since jni 3.0
 */
 bool kotlin_scripting_retry() {
     try {

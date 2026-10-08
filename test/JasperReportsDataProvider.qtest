@@ -43,11 +43,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/stax2-api-4.2.1.jar
 %module-cmd(jni) add-relative-classpath ../qlib/JasperReportsDataProvider/jar/woodstox-core-6.5.1.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/JasperReportsDataProvider
+%requires JasperReportsDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.jasperreports.JasperReportTestHelper
 
@@ -82,6 +83,7 @@ public class JasperReportsDataProviderTest inherits QUnit::Test {
         addTestCase("test helper", \testHelper());
 
         # execute tests and set program return value
+        addTestCase("generate-report-data action returns the generated report", \testGenerateReportDataAction());
         set_return_value(main());
     }
 
@@ -224,5 +226,28 @@ public class JasperReportsDataProviderTest inherits QUnit::Test {
 
         binary jrxmlBytes = JasperReportTestHelper::getSimpleJrxmlBytes();
         assertEq(jrxml.size(), jrxmlBytes.size());
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated report
+    testGenerateReportDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("JasperReports",
+            "generate-report-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        # the report output type extends the generated data output type with the report format
+        assertEq(("data", "record_count", "format"), keys action.output_type.getFields());
+        AbstractDataProvider prov = Class::forName(action.cls).newObject({
+            "template_data": JasperReportTestHelper::getSimpleJrxmlBytes(),
+            "output_format": "csv",
+        });
+        prov.createRecordsBulkWithOptions({"recs": {"name": ("Alice", "Bob"), "age": (40, 35), "email": ("alice@example.com", "bob@example.com")}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq("csv", output.format);
+        assertEq(Type::Binary, output.data.type());
+        string csv = output.data.toString();
+        assertTrue(csv.contains("Alice"), "the report contains the first row");
+        assertTrue(csv.contains("Bob"), "the report contains the second row");
     }
 }

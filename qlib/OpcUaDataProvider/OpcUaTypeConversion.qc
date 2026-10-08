@@ -29,7 +29,7 @@ public namespace OpcUaDataProvider {
     instead of relying on inference from the Qore value type. Scalar built-in types (including the
     narrow signed types \c SByte / \c Int16 / \c Int32 and single-precision \c Float, which cannot be
     typed exactly across the Qore/JNI boundary) are constructed by the compiled Java
-    @ref OpcUaDataProvider::ValueCodec "ValueCodec"; \c DateTime is constructed from a Qore date.
+    <tt>org.qore.dataprovider.opcua.ValueCodec</tt>; \c DateTime is constructed from a Qore date.
 */
 public class OpcUaTypeConversion {
     public {

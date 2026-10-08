@@ -24,11 +24,12 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/OdtDataProvider
+%requires OdtDataProvider
 
 # Add classpaths for the test helper - uses OdsDataProvider jars for shared ODF dependencies
 %module-cmd(jni) add-relative-classpath ../qlib/OdtDataProvider/jar/qore-dataprovider-odt.jar
@@ -105,6 +106,7 @@ public class OdtDataProviderTest inherits QUnit::Test {
         addTestCase("roundtrip: write and read paragraphs", \testRoundtripParagraphs());
         addTestCase("roundtrip: write and read table", \testRoundtripTable());
 
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
         set_return_value(main());
     }
 
@@ -663,5 +665,25 @@ public class OdtDataProviderTest inherits QUnit::Test {
         assertEq("100", records[0].Quantity);
         assertEq("Gadget", records[1].Product);
         assertEq("Gizmo", records[2].Product);
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("ODT", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject({"content_type": "table", "headers": ("Name", "Value")});
+        prov.createRecordsBulkWithOptions({"recs": {"Name": ("item1", "item2"), "Value": ("100", "200")}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        assertEq("PK", output.data.substr(0, 2).toString());
+        OdtReadDataProvider rdp({"data": output.data, "content_type": "table", "table_index": 0, "header_row": True});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("item2", records[1].Name);
+        assertEq("200", records[1].Value);
     }
 }

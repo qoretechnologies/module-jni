@@ -116,6 +116,7 @@ class QKotlinCompilerCmd {
 
         # Try common locations
         list<string> common_paths = (
+            "/usr/share/qore/java/kotlin/bin/kotlinc",
             "/usr/bin/kotlinc",
             "/usr/local/bin/kotlinc",
             "/snap/bin/kotlinc",

@@ -13,6 +13,7 @@
 %modern
 %disable-warning non-existent-method-call
 
+%prepend-module-path ../build
 %requires jni
 %module-cmd(jni) add-relative-classpath ../build/qore-jni.jar
 %module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
@@ -37,6 +38,7 @@
 
     # Common installation paths
     list<string> paths = (
+        "/usr/share/qore/java/kotlin/lib/kotlin-stdlib.jar", # Qore Debian/Ubuntu package
         "/opt/kotlin/lib/kotlin-stdlib.jar",          # Manual install (preferred)
         "/opt/kotlinc/lib/kotlin-stdlib.jar",         # CI/alternate install dir
         "/snap/kotlin/current/lib/kotlin-stdlib.jar",  # Ubuntu snap (current symlink)
@@ -930,6 +932,7 @@ public class KotlinTest inherits QUnit::Test {
 
         # Common locations
         list<string> homes = (
+            "/usr/share/qore/java/kotlin",
             "/opt/kotlin",
             "/opt/kotlinc",
             "/snap/kotlin/current",

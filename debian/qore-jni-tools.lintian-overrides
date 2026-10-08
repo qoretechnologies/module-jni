@@ -1,0 +1,6 @@
+# The complete, unmodified Kotlin upstream third-party license collection is
+# retained. It includes the Apache text and Rhino's dual NPL/GPL terms; retaining
+# the original alternatives and contextual notices avoids rewriting that legal
+# collection. Ordinary standalone licenses use /usr/share/common-licenses.
+qore-jni-tools: copyright-file-contains-full-apache-2-license
+qore-jni-tools: copyright-file-contains-full-gpl-license

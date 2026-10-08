@@ -88,8 +88,8 @@
           "message": "Vygenerovať správu zo šablóny JasperReports v umiestnení súboru"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "Vygenerovať správu z priamych binárnych dát šablóny JasperReports.\n\nKaždý vytvorený záznam predstavuje jeden dátový riadok, ktorý sa má zahrnúť do správy. Správa sa vygeneruje pri potvrdení alebo zničení poskytovateľa.\n\nPo zapísaní všetkých záznamov použite `getData()` na získanie binárneho výstupu správy.\n\nPodporované výstupné formáty: `pdf`, `xlsx`, `html`, `csv`."
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "Vygenerovať správu z priamych binárnych dát šablóny JasperReports.\n\nKaždý vytvorený záznam predstavuje jeden dátový riadok, ktorý bude zahrnutý do zostavy. Zostava sa vygeneruje po dokončení akcie.\n\nAkcia vráti vygenerovanú zostavu v `data`, jej formát v `format` a počet dátových riadkov v `record_count`.\n\nPodporované výstupné formáty: `pdf`, `xlsx`, `html`, `csv`."
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

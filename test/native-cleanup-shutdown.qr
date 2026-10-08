@@ -1,0 +1,29 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path ../build
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.ExceptionConversionFixture
+
+class CleanupError {
+    destructor() {
+        throw "CLEANUP-ERROR", "fixture destructor";
+    }
+
+    ping() {
+    }
+}
+
+object sub retainWrapper() {
+    CleanupError value();
+    return new Jni::org::qore::jni::QoreInvocationHandler(sub(auto method, *list args) { value.ping(); });
+}
+
+# A Java static reference prevents GC from releasing this wrapper early. At
+# process teardown the cleanup drain must release it even though its referent
+# is still live, and must discard destructor errors when no caller can receive them.
+ExceptionConversionFixture::retainForShutdown(retainWrapper());
+printf("native cleanup shutdown fixture ready\n");
+return 0;

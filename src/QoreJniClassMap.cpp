@@ -805,7 +805,7 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
     if (name == "sun.awt.dnd.SunDropTargetEvent") {
         Globals::ensureGraphicsEnvironment();
         Env env;
-        if (env.callBooleanMethod(Globals::classGraphicsEnvironment, Globals::methodGraphicsEnvironmentIsHeadless,
+        if (env.callStaticBooleanMethod(Globals::classGraphicsEnvironment, Globals::methodGraphicsEnvironmentIsHeadless,
             nullptr)) {
             printd(5, "retuning Object for '%s' when running in a headless environment\n", name.c_str());
             return QC_OBJECT;
@@ -3558,7 +3558,7 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     }
 }
 
-static const char* access_str(ClassAccess a) {
+[[maybe_unused]] static const char* access_str(ClassAccess a) {
     switch (a) {
         case Public: return "public";
         case Private: return "private";

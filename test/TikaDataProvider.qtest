@@ -38,11 +38,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/tika-parser-text-module-3.0.0.jar
 %module-cmd(jni) add-relative-classpath ../qlib/TikaDataProvider/jar/tika-parser-xml-module-3.0.0.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/TikaDataProvider
+%requires TikaDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.tika.TikaTestHelper
 

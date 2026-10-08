@@ -88,8 +88,8 @@
           "message": "從檔案位置的 JasperReports 範本產生報表"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.desc": {
-          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the provider is committed or destroyed.\n\nAfter writing all records, use `getData()` to retrieve the binary report output.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
-          "message": "從內嵌 JasperReports 範本二進位資料產生報表。\n\n建立的每筆記錄代表要包含在報表中的單一資料列。當提供者被提交或銷毀時會產生報表。\n\n寫入所有記錄後，使用 `getData()` 擷取二進位報表輸出。\n\n支援的輸出格式：`pdf`、`xlsx`、`html`、`csv`。"
+          "source": "Generate a report from inline JasperReports template binary data.\n\nEach record created represents a single data row to be included in the report. The report is generated when the action completes.\n\nThe action returns the generated report in `data`, its format in `format`, and the number of data rows in `record_count`.\n\nSupported output formats: `pdf`, `xlsx`, `html`, `csv`.",
+          "message": "從內嵌 JasperReports 範本二進位資料產生報表。\n\n每筆建立的記錄代表報表中的一列資料。報表會在動作完成時產生。\n\n動作會在 `data` 中傳回產生的報表，在 `format` 中傳回其格式，並在 `record_count` 中傳回資料列數。\n\n支援的輸出格式：`pdf`、`xlsx`、`html`、`csv`。"
         },
         "app.SmFzcGVyUmVwb3J0cw.action.Z2VuZXJhdGUtcmVwb3J0LWRhdGE.display_name": {
           "source": "Generate Report from Inline Template",

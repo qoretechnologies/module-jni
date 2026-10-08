@@ -184,8 +184,8 @@
           "message": "캘린더 이벤트 또는 할 일을 ICS 파일에 쓰기"
         },
         "app.SUNT.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create iCalendar event or to-do data in memory and return it as binary data.\n\nUse this action when you need to generate an ICS file without writing to disk -- for example, to return the calendar as an API response, attach it to an email, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `content_type` (optional) -- \"events\" (default) or \"todos\"\n- No other required options -- records are added via `createRecord()` and binary data is retrieved via `getData()`",
-          "message": "메모리에 iCalendar 이벤트 또는 할 일 데이터를 생성하고 바이너리 데이터로 반환합니다.\n\n디스크에 쓰지 않고 ICS 파일을 생성해야 하는 경우(예: 캘린더를 API 응답으로 반환하거나, 이메일에 첨부하거나, 다른 처리 단계로 전달하는 경우) 이 작업을 사용하십시오. 모든 레코드를 생성한 후 공급자에서 `getData()`을(를) 호출하여 결과를 가져옵니다.\n\n**주요 옵션**:\n- `content_type` (선택 사항) -- \"events\"(기본값) 또는 \"todos\"\n- 다른 필수 옵션 없음 -- 레코드는 `createRecord()`을(를) 통해 추가되며 바이너리 데이터는 `getData()`을(를) 통해 검색됩니다."
+          "source": "Create iCalendar event or to-do data in memory and return it as binary data.\n\nUse this action when you need to generate an ICS file without writing to disk -- for example, to return the calendar as an API response, attach it to an email, or pass it to another processing step. The action returns the generated ICS data in `data` and the number of records in `record_count`.\n\n**Key Options**:\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "메모리에 iCalendar 이벤트 또는 할 일 데이터를 생성하고 바이너리 데이터로 반환합니다.\n\n디스크에 쓰지 않고 ICS 파일을 생성해야 할 때 이 작업을 사용합니다. 예를 들어 캘린더를 API 응답으로 반환하거나, 이메일에 첨부하거나, 다른 처리 단계로 전달할 수 있습니다. 작업은 생성된 ICS 데이터를 `data`에, 레코드 수를 `record_count`에 반환합니다.\n\n**주요 옵션**:\n- `content_type` (선택 사항) -- \"events\"(기본값) 또는 \"todos\""
         },
         "app.SUNT.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create ICS Calendar Data",

@@ -1,0 +1,197 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path ../build
+%requires jni
+%requires QUnit
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.JdbcTransactionDriver
+%exec-class JdbcTransactionsTest
+
+class JdbcTransactionsTest inherits QUnit::Test {
+    constructor() : Test("JDBC transaction boundaries", "1.0", \ARGV) {
+        addTestCase("pooled reads and transaction boundaries", \boundaries());
+        addTestCase("prepared writes commit and rollback", \prepared());
+        addTestCase("explicit and empty transactions", \explicitTransactions());
+        addTestCase("Qore auto-commit", \autoCommit());
+        addTestCase("failed transaction boundaries discard connection", \failures());
+        addTestCase("failed initial mode closes connection", \openFailure());
+        addTestCase("statement cleanup failures", \cleanupFailures());
+        addTestCase("prepared begin failure does not execute", \preparedBeginFailure());
+        addTestCase("non-query output and invalid fetches", \nonQueryOutput());
+        addTestCase("batch counts, unknown counts and overflow", \batchCounts());
+        addTestCase("repeated execution failures preserve exceptions and release handles", \repeatedFailures());
+        set_return_value(main());
+    }
+
+    private DatasourcePool pool() {
+        JdbcTransactionDriver::reset();
+        return new DatasourcePool({"type": "jdbc", "db": "qore-transaction-test:fixture",
+            "options": {"min": 1, "max": 1}});
+    }
+
+    private boundaries() {
+        DatasourcePool ds = pool();
+        assertEq(1, ds.select("read"));
+        assertFalse(ds.inTransaction());
+        ds.exec("write");
+        assertEq(0, JdbcTransactionDriver::durable());
+        assertEq(1, ds.select("read"));
+        ds.commit();
+        assertEq(1, JdbcTransactionDriver::durable());
+        ds.select("read");
+        ds.execRaw("write");
+        ds.rollback();
+        assertEq(1, JdbcTransactionDriver::durable());
+        ds.select("read");
+        assertEq(("connect", "auto:true", "execute:read:true", "statement.close", "auto:false",
+            "execute:write:false", "statement.close", "execute:read:false", "statement.close", "commit",
+            "auto:true", "execute:read:true", "statement.close", "auto:false", "execute:write:false",
+            "statement.close", "rollback", "auto:true", "execute:read:true", "statement.close"),
+            JdbcTransactionDriver::events());
+    }
+
+    private prepared() {
+        DatasourcePool ds = pool();
+        SQLStatement stmt(ds);
+        stmt.prepare("write");
+        stmt.exec();
+        assertEq(0, JdbcTransactionDriver::durable());
+        stmt.rollback();
+        assertEq(0, JdbcTransactionDriver::durable());
+        stmt.exec();
+        assertEq(0, JdbcTransactionDriver::durable());
+        stmt.commit();
+        assertEq(1, JdbcTransactionDriver::durable());
+        assertEq(1, ds.select("read"));
+        assertFalse(ds.inTransaction());
+    }
+
+    private explicitTransactions() {
+        DatasourcePool ds = pool();
+        ds.beginTransaction();
+        ds.beginTransaction();
+        ds.select("read");
+        ds.commit();
+        ds.commit();
+        ds.rollback();
+        assertEq(("connect", "auto:true", "auto:false", "execute:read:false", "statement.close", "commit",
+            "auto:true", "auto:false", "commit", "auto:true", "auto:false", "rollback", "auto:true"),
+            JdbcTransactionDriver::events());
+    }
+
+    private autoCommit() {
+        JdbcTransactionDriver::reset();
+        Datasource ds("jdbc:@qore-transaction-test:fixture");
+        ds.setAutoCommit(True);
+        ds.exec("write");
+        assertEq(1, JdbcTransactionDriver::durable());
+        SQLStatement stmt(ds);
+        stmt.prepare("write");
+        stmt.exec();
+        stmt.commit();
+        assertEq(2, JdbcTransactionDriver::durable());
+        assertFalse(inlist("auto:false", JdbcTransactionDriver::events()));
+    }
+
+    private failures() {
+        foreach string failure in ("auto:false", "commit", "rollback", "auto:true") {
+            DatasourcePool ds = pool();
+            if (failure != "auto:false") {
+                ds.exec("write");
+            }
+            JdbcTransactionDriver::failNext(failure);
+            assertThrows("JNI-ERROR", "injected " + failure, sub () {
+                if (failure == "auto:false") {
+                    ds.exec("write");
+                } else if (failure == "rollback") {
+                    ds.rollback();
+                } else {
+                    ds.commit();
+                }
+            });
+            list<string> events = JdbcTransactionDriver::events();
+            assertEq("close", events[-1]);
+            assertEq(failure == "auto:true" ? 1 : 0, JdbcTransactionDriver::durable());
+            assertEq(1, ds.select("read"));
+            events = JdbcTransactionDriver::events();
+            assertEq(("connect", "auto:true", "execute:read:true", "statement.close"), events[-4 .. -1]);
+        }
+    }
+
+    private cleanupFailures() {
+        DatasourcePool ds = pool();
+        JdbcTransactionDriver::failNext("statement.close");
+        assertThrows("JNI-ERROR", "injected statement.close", sub () { ds.exec("write"); });
+        ds.rollback();
+        assertEq(0, JdbcTransactionDriver::durable());
+        SQLStatement stmt(ds);
+        stmt.prepare("write");
+        stmt.exec();
+        JdbcTransactionDriver::failNext("statement.close");
+        assertThrows("JNI-ERROR", "injected statement.close", \stmt.close());
+        stmt.rollback();
+        assertEq(0, JdbcTransactionDriver::durable());
+        assertEq(1, ds.select("read"));
+    }
+
+    private preparedBeginFailure() {
+        DatasourcePool ds = pool();
+        SQLStatement stmt(ds);
+        stmt.prepare("write");
+        JdbcTransactionDriver::failNext("auto:false");
+        assertThrows("JNI-ERROR", "injected auto:false", \stmt.exec());
+        assertEq(("connect", "auto:true", "auto:false", "statement.close", "close"),
+            JdbcTransactionDriver::events());
+        assertEq(0, JdbcTransactionDriver::durable());
+        assertEq(1, ds.select("read"));
+    }
+
+    private nonQueryOutput() {
+        DatasourcePool ds = pool();
+        SQLStatement stmt(ds);
+        stmt.prepare("write");
+        stmt.exec();
+        assertEq(NOTHING, stmt.getOutput());
+        assertThrows("JDBC-RESULTSET-ERROR", \stmt.next());
+        assertThrows("JDBC-RESULTSET-ERROR", \stmt.fetchRow());
+        assertThrows("JDBC-RESULTSET-ERROR", \stmt.fetchRows());
+        assertThrows("JDBC-RESULTSET-ERROR", \stmt.fetchColumns());
+        stmt.rollback();
+        assertEq(0, JdbcTransactionDriver::durable());
+    }
+
+    private openFailure() {
+        JdbcTransactionDriver::reset();
+        JdbcTransactionDriver::failNext("auto:true");
+        assertThrows("JNI-ERROR", "injected auto:true", sub () {
+            Datasource ds("jdbc:@qore-transaction-test:fixture");
+            ds.open();
+        });
+        assertEq(("connect", "auto:true", "close"), JdbcTransactionDriver::events());
+    }
+
+    private batchCounts() {
+        DatasourcePool ds = pool();
+        assertEq(3, ds.exec("known %v", (1, 2)));
+        assertEq(20100, ds.exec("known %v", 1 .. 200));
+        assertEq(-1, ds.exec("unknown %v", (1, 2)));
+        assertEq(0, ds.exec("known %v", ()));
+        assertThrows("JDBC-BATCH-COUNT-ERROR", sub () { ds.exec("overflow %v", (1, 2)); });
+        assertThrows("JDBC-BATCH-COUNT-ERROR", sub () { ds.exec("invalid %v", (1, 2)); });
+        ds.rollback();
+    }
+
+    private repeatedFailures() {
+        DatasourcePool ds = pool();
+        for (int i = 0; i < 40; ++i) {
+            JdbcTransactionDriver::failNext("execute:write:false");
+            assertThrows("JNI-ERROR", "injected execute:write:false", sub () { ds.exec("write"); });
+            ds.rollback();
+        }
+        assertEq(0, JdbcTransactionDriver::durable());
+        assertEq(1, ds.select("read"));
+    }
+}

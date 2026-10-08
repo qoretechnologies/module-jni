@@ -1,0 +1,46 @@
+Debian 13 update (2026-10-01)
+----------------------------
+See QUALIFICATION-DEBIAN13 for the native amd64/arm64 package qualification.
+Ubuntu-only scope statements below describe the initial packaging checkpoint.
+
+Qore JNI packages for the testing PPA
+====================================
+
+Qore native code, bridge classes, providers and test fixtures build from source.
+Third-party JARs are pinned upstream binaries. Their URLs, checksums, source
+archives and licensing metadata are recorded in debian/java-dependencies.json.
+Rebuilding those dependencies is not a release gate for this PPA. Debian archive
+admission is a separate project and has stricter bundled-JAR requirements.
+
+Prepare vendor/ before exporting the source package:
+
+  python3 debian/prepare-vendor.py fetch
+
+It downloads only pinned HTTPS inputs and verifies SHA-256. The build uses
+verify and unpack-kotlin, which never access the network. Export vendor/ as
+qore-jni-module_VERSION.orig-vendor.tar.xz alongside the main orig tarball.
+The main tarball excludes the precompiled first-party test fixtures listed
+in Files-Excluded; package tests rebuild them with the configured Java 21 JDK.
+
+Every third-party provider JAR remains byte-for-byte unchanged from the tracked
+input. Xerces has the documented upstream Qore removal of service registrations
+needed to avoid Kotlin conflicts; all remaining members match Maven Central.
+The Paho common JAR is the exact pinned snapshot published by Eclipse, despite
+its shorter checked-in filename. No dependency is resolved from a floating URL.
+
+The source component includes the corresponding source JARs and full LGPL
+project source archives. Users can obtain it alongside this package from the
+PPA source publication. Runtime packages include upstream license and copyright
+notices. The private Kotlin installation is optional and does not replace a
+system compiler. JARs remain replaceable files; no license restriction on
+modification or reverse engineering is added by this package.
+
+Native JNI links to the private OpenJDK 21 lib/server directory using RUNPATH.
+The explicit openjdk-21-jre-headless dependency supplies that unversioned JVM
+library. No global ldconfig setting or environment variable is required.
+Qore compiler metadata, source and AOT providers, resources and translations
+are included. AOT metadata survives stripping and debug symbols are separate.
+
+Only Ubuntu 26.04 amd64 with the matching Qore testing SDK is initially being
+qualified. Other targets, the final Qore ABI and security review remain release
+requirements. Pinned Java/Kotlin dependencies need ongoing security updates.

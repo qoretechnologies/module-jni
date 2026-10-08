@@ -41,6 +41,9 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
         #! the iterator object
         ExcelIterator i;
 
+        #! the workbook file of the parent provider, if the provider was created from it
+        *ExcelFile file;
+
         #! the name of the object
         string name;
 
@@ -63,14 +66,34 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
     }
 
     #! Creates the ExcelReadDataProvider with the input data path, name, sheet name, and optionally an option hash
-    /** @param path the path to the input file
+    /** @param path the location of the input file; resolved with a call to
+        @ref FileLocationHandler::FileLocationHandler::getBinaryStreamFromLocation()
         @param name the name of the object
         @param sheet the name of the current worksheet
         @param opts a hash of optional options, must be already processed for validity
     */
     constructor(string path, string name, string sheet, *hash<auto> opts) {
-        self.i = new ExcelIterator(path, sheet);
+        self.i = new ExcelIterator(FileLocationHandler::getBinaryStreamFromLocation(path), sheet);
         setup(name, sheet, opts);
+    }
+
+    #! Creates the ExcelWorksheetReadDataProvider with the workbook file of a parent provider
+    /** @param file the workbook file; it is retained until this object is destroyed
+        @param name the name of the object
+        @param sheet the name of the current worksheet
+        @param opts a hash of optional options, must be already processed for validity
+    */
+    constructor(ExcelFile file, string name, string sheet, *hash<auto> opts) {
+        self.i = new ExcelIterator(file.getPath(), sheet);
+        self.file = file.retain();
+        setup(name, sheet, opts);
+    }
+
+    #! Releases the workbook file of the parent provider, if any
+    destructor() {
+        if (file) {
+            file.close();
+        }
     }
 
     #! Creates the object from constructor options
@@ -78,16 +101,18 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
         *hash<auto> copts = ExcelReadDataProvider::processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR",
             ExcelReadDataProvider::ConstructorOptions, options));
         sheet = copts.worksheet ?? "";
+        if ((copts.path ? 1 : 0) + (copts.stream ? 1 : 0) + (copts.data ? 1 : 0) > 1) {
+            error("EXCEL-READ-OPTION-ERROR", "only one of the \"path\", \"stream\", and \"data\" options can be "
+                "given");
+        }
         if (copts.path) {
-            if (copts.stream) {
-                error("EXCEL-READ-OPTION-ERROR", "cannot provide both \"stream\" and \"path\" options; use either "
-                    "one or the other");
-            }
-            i = new ExcelIterator(copts.path, sheet);
+            i = new ExcelIterator(FileLocationHandler::getBinaryStreamFromLocation(copts.path), sheet);
         } else if (copts.stream) {
             i = new ExcelIterator(copts.stream, sheet);
+        } else if (copts.data) {
+            i = new ExcelIterator(new BinaryInputStream(copts.data), sheet);
         }
-        self.opts = copts - ("stream", "path", "worksheet");
+        self.opts = copts - ("stream", "path", "worksheet", "data");
         if (!i) {
             # create a dummy interator with no input
             i = new ExcelIterator(new StringInputStream(""), sheet);
@@ -105,25 +130,7 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
 
     #! Common setup code
     private setOptions() {
-        if (opts.header_cells) {
-            i.setHeaderCells(opts.header_cells.start.column, opts.header_cells.start.row,
-                opts.header_cells.end.column, opts.header_cells.end.row);
-        } else if (opts.header_names) {
-            # Default to row 1 for headers when header_names is true and no header_cells specified
-            i.setHeaderCells("-", 1, "-", 1);
-        } else if (opts.headers) {
-            i.setHeaders(opts.headers);
-        }
-        if (opts.tolwr) {
-            i.setHeadersToLower();
-        }
-        if (opts.timezone) {
-            i.setZone(opts.timezone);
-        }
-        if (opts.data_cells) {
-            i.setDataCells(opts.data_cells.start.column, opts.data_cells.start.row, opts.data_cells.end.column,
-                opts.data_cells.end.row);
-        }
+        ExcelReadDataProvider::configureIterator(i, opts);
     }
 
     #! Returns the object name

@@ -248,19 +248,32 @@ def main():
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--reference-root", type=Path)
     parser.add_argument("--checksums", type=Path)
-    parser.add_argument("--require-committed", action="store_true")
+    inventory = parser.add_mutually_exclusive_group()
+    inventory.add_argument("--require-committed", action="store_true")
+    inventory.add_argument("--source-archive", action="store_true",
+                           help="verify all archive dependency JARs against the checksum inventory")
     parser.add_argument("--probe-installed", action="store_true")
     parser.add_argument("--report", type=Path)
     parser.add_argument("--scope", default="java-provider-profiles")
     args = parser.parse_args()
 
+    if args.source_archive and not args.checksums:
+        parser.error("--source-archive requires --checksums")
+    require_inventory = args.require_committed or args.source_archive
     errors = []
     profiles = read_profiles(args.profiles, errors)
     if not profiles:
         fail(errors, f"{args.profiles}: no Java provider profiles declared")
     expected_checksums = read_checksums(args.checksums, errors) if args.checksums else {}
     repo = args.root.parent
-    committed = committed_paths(repo, errors) if args.require_committed else set()
+    if args.source_archive:
+        committed = {
+            (Path("qlib") / path.relative_to(args.root)).as_posix()
+            for path in args.root.glob("*/jar/*.jar")
+            if not path.name.startswith("qore-dataprovider-")
+        }
+    else:
+        committed = committed_paths(repo, errors) if args.require_committed else set()
     seen_committed = set()
     referenced_dependency_paths = set()
 
@@ -280,15 +293,15 @@ def main():
             relative_text = (Path("qlib") / relative).as_posix()
             if not path.name.startswith("qore-dataprovider-"):
                 referenced_dependency_paths.add(relative_text)
-                if args.require_committed:
+                if require_inventory:
                     if relative_text not in committed:
-                        fail(errors, f"{module}: dependency JAR is not committed: {relative_text}")
+                        fail(errors, f"{module}: dependency JAR is not in the source inventory: {relative_text}")
                     else:
                         seen_committed.add(relative_text)
                     expected = expected_checksums.get(relative_text)
                     actual = checked_sha256(path, errors)
                     if expected is None:
-                        fail(errors, f"{module}: dependency JAR has no committed checksum: {relative_text}")
+                        fail(errors, f"{module}: dependency JAR has no source checksum: {relative_text}")
                     elif actual is not None and expected != actual:
                         fail(errors, f"{module}: checksum mismatch for {relative_text}")
             if args.reference_root:
@@ -303,10 +316,10 @@ def main():
                         fail(errors, f"{module}: staged runtime JAR differs from source: {runtime_jar}")
         validate_logging(module, profile["policy"], resolved, errors)
 
-    if args.require_committed:
+    if require_inventory:
         unreferenced = sorted(committed - seen_committed)
         if unreferenced:
-            fail(errors, "committed dependency JARs are not declared by a provider: " + ", ".join(unreferenced))
+            fail(errors, "source dependency JARs are not declared by a provider: " + ", ".join(unreferenced))
         stale_checksums = sorted(set(expected_checksums) - referenced_dependency_paths)
         missing_checksums = sorted(referenced_dependency_paths - set(expected_checksums))
         if stale_checksums:
@@ -344,6 +357,7 @@ def main():
                 "module_count": len(profiles),
                 "runtime_jar_declarations": count,
                 "require_committed": args.require_committed,
+                "source_archive": args.source_archive,
                 "fresh_process_probes": probes,
             },
             "errors": errors,

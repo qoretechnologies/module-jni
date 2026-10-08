@@ -1,0 +1,5 @@
+qlib/*/jar/qore-dataprovider-*.jar
+test/qore-jni-test.jar
+test/kotlin-test.jar
+test/opcua-test-server.jar
+test/java/classes/

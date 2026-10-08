@@ -1,12 +1,15 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
 
 %modern
 %allow-injection
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires Util
 %requires QUnit
-%requires ../qlib/BusyLightDataProvider
+%requires BusyLightDataProvider
 
 %exec-class BusyLightDataProviderTest
 
@@ -25,15 +28,8 @@ public class BusyLightDataProviderTest inherits QUnit::Test {
     constructor() : Test("BusyLightDataProviderTest Test", "1.0", \ARGV, MyOpts) {
         addTestCase("BusyLight test", \busylightTest());
 
-        try {
-            setupConnection();
-        } catch (hash<ExceptionInfo> ex) {
-            if (m_options.verbose > 2) {
-                printf("%s\n", get_exception_string(ex));
-            } else if (m_options.verbose) {
-                printf("%s: %s\n", ex.err, ex.desc);
-            }
-        }
+        # Absent optional fixtures skip; configured setup failures must fail the suite.
+        setupConnection();
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -59,7 +55,7 @@ public class BusyLightDataProviderTest inherits QUnit::Test {
     private setupConnection() {
         *string conn_name = m_options.conn ?? ENV.BUSYLIGHT_CONNECTION;
         if (!conn_name.val()) {
-            error("missing -c,--connection option or BUSYLIGHT_CONNECTION environment variable");
+            return;
         }
 
         AbstractConnection conn = get_connection(conn_name);

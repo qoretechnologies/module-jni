@@ -37,11 +37,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/slf4j-api-2.0.13.jar
 %module-cmd(jni) add-relative-classpath ../qlib/AvroDataProvider/jar/slf4j-nop-2.0.13.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/AvroDataProvider
+%requires AvroDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.avro.AvroTestHelper
 
@@ -112,6 +113,7 @@ public class AvroDataProviderTest inherits QUnit::Test {
         addTestCase("empty data provider", \testEmptyDataProvider());
 
         # execute tests and set program return value
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
         set_return_value(main());
     }
 
@@ -331,5 +333,22 @@ public class AvroDataProviderTest inherits QUnit::Test {
         # Create a read data provider with no options (dummy mode)
         AvroReadDataProvider dp();
         assertEq("avro", dp.getName());
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("Avro", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject({"schema": SimpleSchema});
+        prov.createRecordsBulkWithOptions({"recs": {"name": ("Alice", "Bob"), "age": (30, 25), "email": ("alice@example.com", NOTHING)}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        assertEq("Obj", output.data.substr(0, 3).toString());
+        AvroReadDataProvider rdp({"data": output.data});
+        assertEq(("Alice", "Bob"), (map $1.name, rdp.searchRecords()));
     }
 }

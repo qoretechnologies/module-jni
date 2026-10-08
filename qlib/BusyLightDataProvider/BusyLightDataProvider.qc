@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BusyLightDataProvider module definition
 
-/** BusyLightDataProvider.qc Copyright 2022 - 2025 Qore Technologies, s.r.o.
+/** BusyLightDataProvider.qc Copyright 2022 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -75,6 +75,7 @@ public class BusyLightDataProvider inherits MqttDataProvider::AbstractFunctional
 
     #! Sends a message from message-capable data providers
     /**
+        @param message_id the identifier of the message type to send
         @param msg the message to send
         @param send_message_options the options for sending the message
     */

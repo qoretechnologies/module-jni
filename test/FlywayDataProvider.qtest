@@ -24,12 +24,18 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
-%requires Util
+%requires FsUtil
 %requires DataProvider
 %requires ConnectionProvider
+%requires Util
 %requires jni
-%requires ../qlib/FlywayDataProvider
+%ifdef FLYWAY_TEST_DRIVER_CLASSPATH
+# Flyway's global loader must also see the test database driver.
+%module-cmd(jni) global-add-classpath $JDBC_DB_CLASSPATH
+%endif
+%requires FlywayDataProvider
 
 %exec-class FlywayDataProviderTest
 
@@ -61,6 +67,7 @@ public class FlywayDataProviderTest inherits QUnit::Test {
         addTestCase("negative: missing user", \testNegativeMissingUser());
         addTestCase("migrate and info", \testMigrateAndInfo());
         addTestCase("validate", \testValidate());
+        addTestCase("validation failure response", \testValidationFailure());
         addTestCase("clean and repair", \testCleanAndRepair());
 
         # execute tests and set program return value
@@ -94,6 +101,11 @@ public class FlywayDataProviderTest inherits QUnit::Test {
 
     private testActionRegistration() {
         assertEq(True, DataProviderActionCatalog::getApp("Flyway").val());
+        hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash("Flyway");
+        assertEq(FlywayMigrateDataProvider::ResponseType, actions.migrate.output_type);
+        assertEq(FlywayValidateOutputDataType, actions.validate.output_type);
+        assertEq(FlywaySuccessOutputDataType, actions.clean.output_type);
+        assertEq(FlywaySuccessOutputDataType, actions.repair.output_type);
     }
 
     private testNegativeMissingUrl() {
@@ -126,12 +138,19 @@ public class FlywayDataProviderTest inherits QUnit::Test {
 
         # Clean first to ensure a fresh state
         AbstractDataProvider cleanDp = dp.getChildProvider("clean");
-        cleanDp.doRequest({});
+        cleanDp.doRequest(NOTHING);
 
         # Run migrate
         AbstractDataProvider migrateDp = dp.getChildProvider("migrate");
-        auto result = migrateDp.doRequest({});
-        assertTrue(result instanceof hash);
+        auto result = migrateDp.doRequest(NOTHING);
+        assertTrue(result instanceof list);
+        assertEq(2, result.size());
+        assertEq("1", result[0].version);
+        assertEq("2", result[1].version);
+        assertTrue(result[0].filepath.endsWith("V1__create_test_table.sql"));
+        assertEq(result, migrateDp.getResponseType().acceptsValue(result));
+        assertEq((), migrateDp.doRequest(NOTHING));
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { migrateDp.doRequest({}); });
 
         # Check info
         AbstractDataProvider infoDp = dp.getChildProvider("info");
@@ -155,8 +174,38 @@ public class FlywayDataProviderTest inherits QUnit::Test {
         });
 
         AbstractDataProvider validateDp = dp.getChildProvider("validate");
-        auto result = validateDp.doRequest({});
-        assertTrue(result instanceof hash);
+        auto result = validateDp.doRequest(NOTHING);
+        assertTrue(result.validationSuccessful);
+        assertEq((), result.invalidMigrations);
+        assertEq(NOTHING, result.errorDetails);
+        assertEq(result, validateDp.getResponseType().acceptsValue(result));
+    }
+
+    private testValidationFailure() {
+        if (!jdbc_url) {
+            testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
+        }
+        TmpDir changed();
+        foreach string filename in ("V1__create_test_table.sql", "V2__add_email_column.sql") {
+            string content = File::readTextFile(test_data_dir + DirSep + filename);
+            if (filename.startsWith("V1")) {
+                content += "\nselect 1;\n";
+            }
+            File f();
+            f.open2(changed.path + DirSep + filename, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(content);
+            f.close();
+        }
+        FlywayDataProvider dp({"url": jdbc_url, "user": jdbc_user, "password": jdbc_password,
+            "locations": ("filesystem:" + changed.path,)});
+        AbstractDataProvider provider = dp.getChildProvider("validate");
+        hash<auto> result = provider.doRequest(NOTHING);
+        assertFalse(result.validationSuccessful);
+        assertEq(1, result.invalidMigrations.size());
+        assertEq("1", result.invalidMigrations[0].version);
+        assertTrue(result.invalidMigrations[0].errorDetails.contains("checksum mismatch"));
+        assertTrue(result.errorDetails.val());
+        assertEq(result, provider.getResponseType().acceptsValue(result));
     }
 
     private testCleanAndRepair() {
@@ -172,16 +221,18 @@ public class FlywayDataProviderTest inherits QUnit::Test {
 
         # Clean
         AbstractDataProvider cleanDp = dp.getChildProvider("clean");
-        auto result = cleanDp.doRequest({});
-        assertTrue(result instanceof hash);
+        auto result = cleanDp.doRequest(NOTHING);
+        assertEq({"success": True}, result);
+        assertEq(result, cleanDp.getResponseType().acceptsValue(result));
 
         # Repair
         AbstractDataProvider repairDp = dp.getChildProvider("repair");
-        result = repairDp.doRequest({});
-        assertTrue(result instanceof hash);
+        result = repairDp.doRequest(NOTHING);
+        assertEq({"success": True}, result);
+        assertEq(result, repairDp.getResponseType().acceptsValue(result));
 
         # Final clean to leave the database in a clean state
         cleanDp = dp.getChildProvider("clean");
-        cleanDp.doRequest({});
+        cleanDp.doRequest(NOTHING);
     }
 }

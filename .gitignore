@@ -33,3 +33,19 @@ hs_err_pid*.log
 
 # OPC UA test server build output (jar is committed; classes are intermediate)
 test/java/classes/
+
+# Debian package build output and separately exported pinned inputs
+/obj-*/
+/vendor/
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/*.substvars
+/debian/*.debhelper
+/debian/qore-jni-module/
+/debian/qore-jni-module-doc/
+/debian/qore-jni-tools/
+/debian/qore-jni-kotlin/
+/debian/tmp/
+/debian/__pycache__/
+/debian/tests/__pycache__/

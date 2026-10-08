@@ -16,7 +16,7 @@ import org.qore.jni.QoreRelativeTime;
 // qore imports
 import org.qore.lang.mailmessage.Message;
 
-//! Java wrapper for the @ref Qore::SmtpClient class in %Qore
+//! Java wrapper for the @ref SmtpClient::SmtpClient class in %Qore
 /** @note Loads and initializes the Qore library and the jni module in static initialization if necessary
 
     @deprecated Use @ref jni_dynamic_import_qore_in_java "dynamic imports" instead:
@@ -55,7 +55,7 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         @endcode
 
         @param url the URL of the SMTP server (use \c "[hostname]" or \c "[address]" for ipv6 connections); if no
-        protocol (scheme) and no port is given for non-UNIX sockets, then @ref SmtpPort is used as the default port
+        protocol (scheme) and no port is given for non-UNIX sockets, then @ref SmtpClient::SmtpClient::SmtpPort is used as the default port
         number.  This argument is parsed with parse_url(); see @ref smtpclient_protocols for a description of the
         handling of the protocol (scheme) component of the URL including default ports per protocol (scheme). If an
         unknown protocol (scheme) is given then a \c SMTP-UNKNOWN-PROTOCOL exception is raised
@@ -126,7 +126,7 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         return (boolean)obj.callMethod("test");
     }
 
-    //! Connect to the server with the connection parameters set in the @ref constructor()
+    //! Connect to the server with the connection parameters set in the @ref SmtpClient(String)
     /** @note
         - For possible exceptions, see %Qore's @ref Qore::Socket::connect() "Socket::connect()" method
         - This method is subject to thread serialization

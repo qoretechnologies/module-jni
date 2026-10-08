@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -50,6 +50,8 @@
 %module-cmd(jni) add-relative-classpath ./jar/SparseBitSet-1.3.jar
 
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelIterator
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelFile
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelGridReader
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelWriter
 
 module ExcelDataProvider {
@@ -104,6 +106,33 @@ module ExcelDataProvider {
                     "header_names", "stream", "data"), {
                     "loc": "constructor",
                 }
+            ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ExcelDataProvider::AppName,
+            "path": "/",
+            "action": "profile",
+            "display_name": "Profile Excel Spreadsheet",
+            "short_desc": "Describe the layout and columns of every sheet of an Excel spreadsheet",
+            "desc": "Describes how every sheet of an Excel spreadsheet (`.xlsx` or `.xls`) is laid out, so it can be "
+                "read correctly before an integration is built around it.\n\n"
+                "**Detects:**\n"
+                "- hidden sheets, named ranges, merged cells, and formulas\n"
+                "- the header row, title rows and banners above it, and the data region\n"
+                "- totals and subtotal rows and blank-row gaps\n"
+                "- each column's type with a confidence and counter-examples\n"
+                "- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\n"
+                "Sample values are redacted to their shape by default (`redact`), so a profile can be shared "
+                "without the data itself.",
+            "action_code": DPAT_API,
+            "cls": "ExcelDataProvider::ExcelProfileDataProvider",
+            "output_type": TabularWorkbookProfileDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TabularProfileRequestDataType::Fields{"path",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TabularProfileRequestDataType::Fields - ("path",)
             ),
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -170,6 +199,8 @@ module ExcelDataProvider {
             "desc": "Create Excel spreadsheet data in memory and return it as binary data; useful for generating "
                 "Excel files without writing to disk",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "ExcelDataProvider::ExcelWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 ExcelWriteDataProvider::ConstructorOptions{"worksheet", "headers", "format"}, {
@@ -189,11 +220,21 @@ module ExcelDataProvider {
 
     @tableofcontents
 
-    @section ExcelDataProviderintro Introduction to the ExcelDataProvider Module
+    @section exceldataproviderintro ExcelDataProvider Module Introduction
+
+    <img src="excel-logo.svg" width="96" alt="ExcelDataProvider module logo"/>
+
+    @anchor ExcelDataProviderintro
 
     The %ExcelDataProvider module provides a data provider API for reading and writing Excel spreadsheets
     through the @ref dataproviderintro "DataProvider" API. It supports both modern Excel formats (.xlsx,
     Excel 2007+) and legacy formats (.xls, Excel 97-2003).
+
+    Records are read from an .xlsx worksheet one row at a time as they are iterated, so worksheets of any size, up
+    to Excel's limit of 1048576 rows, are read in bounded memory; only the workbook's shared string table is held
+    in memory.  An .xls workbook, whose format holds at most 65536 rows, is loaded in memory.  The input (a location,
+    a stream, or binary data) is copied once to a temporary file, in bounded memory, which is read for the record
+    type, the records, the worksheet names, and the worksheet providers, and deleted with the last provider using it.
 
     The following classes are provided by this module:
     - @ref ExcelDataProvider::ExcelReadDataProvider "ExcelReadDataProvider" - for reading Excel files
@@ -230,10 +271,13 @@ module ExcelDataProvider {
     - \c worksheet: Name of the worksheet to read (default: first sheet)
     - \c header_names: If \c True, use first row as header names
     - \c header_cells: Cell range for headers (e.g., "a1:e1" or just "1" for row 1)
-    - \c data_cells: Cell range for data (e.g., "a2:e100")
+    - \c data_cells: Cell range for data (e.g., "a2:e100"); a range without an end column (e.g., "b2") ends at the
+      last header column, or, without headers, at the last cell with a value in each row
     - \c headers: List of header names to use
     - \c tolwr: Convert header names to lowercase
     - \c timezone: Timezone for date values
+    - \c ignore_empty: If \c True, skip empty rows and continue to the end of \c data_cells or the last row of the
+      worksheet; by default reading stops at the first empty row
 
     @subsection ExcelDataProvider_reading_multisheet Multi-Sheet Access
 
@@ -275,6 +319,52 @@ module ExcelDataProvider {
     - \c headers: List of column headers
     - \c format: Output format - "xlsx" (default) or "xls"
     - \c streaming: Use streaming mode for large files (reduces memory usage)
+    - \c column_formats: The display format of columns by header name (see
+      @ref ExcelDataProvider_writing_column_formats)
+
+    @subsection ExcelDataProvider_writing_column_formats Column Display Formats
+
+    The \c column_formats option gives columns a display format code, as Excel and LibreOffice write them, so
+    that whoever opens the file sees each value as intended.  The cells keep their real values: a date stays a
+    date and a number a number; only the way they are shown changes.
+
+    @code{.py}
+    ExcelWriteDataProvider dp("invoices.xlsx", {
+        "headers": ("Invoice", "Date", "Amount", "Discount"),
+        "column_formats": {
+            "Date": "dd.mm.yyyy",
+            "Amount": "#,##0.00;(#,##0.00)",
+            "Discount": "0.0%",
+        },
+    });
+    # the date is shown as 07.10.2026, the amount as (1,234.50) and the discount as 2.5%
+    dp.createRecord({"Invoice": "INV-1", "Date": 2026-10-07, "Amount": -1234.5, "Discount": 0.025});
+    dp.finishCreate();
+    @endcode
+
+    Format codes are written as in Excel and LibreOffice:
+    - numbers: \c 0 (a digit that is always shown), \c # (a digit shown when significant), \c , between digits
+      (thousands grouping), \c , after the last digit (divide by 1000), \c . (the decimal point), and \c E+00
+      (scientific notation); up to three sections for positive, negative and zero values separated by \c ;,
+      such as <tt>#,##0.00;(#,##0.00)</tt> or <tt>#,##0.00;#,##0.00-</tt>
+    - percentages: a \c % in each section, such as \c 0.0%; the value is a fraction, so \c 0.25 is shown as
+      \c 25.0%
+    - dates and times: \c yy or \c yyyy (year), \c m, \c mm, \c mmm or \c mmmm (month as a number or a name),
+      \c d or \c dd (day), \c ddd or \c dddd (weekday name), \c h or \c hh (hour), \c m or \c mm directly after an
+      hour or before a second (minute), \c s or \c ss (second), \c .0 to \c .000 after the second (fractions of a
+      second), and \c AM/PM
+    - text: \c @
+
+    Text in a code is written in double quotes (<tt>"EUR"</tt>), escaped with a backslash (<tt>\\x</tt>), as a
+    currency symbol in brackets (<tt>[$€-407]</tt>), or as itself for <tt>$ - + / ( ) :</tt>, spaces and symbols
+    such as \c €; a section can start with a color such as <tt>[Red]</tt>.
+
+    Only codes that an Excel cell style and an OpenDocument data style show the same way are accepted, so the
+    same codes can be given to the @ref odsdataproviderintro "OdsDataProvider" writer.  An invalid or unsupported
+    code (\c General, fractions, fill characters, conditions, or elapsed times), or a format for a column that is
+    not written, raises \c EXCEL-WRITE-OPTION-ERROR naming the column and the problem.  A value that its column's
+    code does not show, such as a string in a number column, is written without the format.  Each distinct code
+    is one cell style in the workbook, whatever the number of rows.
 
     @subsection ExcelDataProvider_writing_formats Output Formats
 
@@ -306,6 +396,16 @@ module ExcelDataProvider {
     @section ExcelDataProvider_relnotes Release Notes
 
     @subsection ExcelDataProvider_v1_1 ExcelDataProvider v1.1
+    - added the \c column_formats write option: a display format code for each column, such as \c dd.mm.yyyy,
+      <tt>#,##0.00</tt> or \c 0.0%, written as a cell style while the cells keep their dates and numbers (see
+      @ref ExcelDataProvider_writing_column_formats)
+    - an unknown worksheet raises \c EXCEL-WORKSHEET-NOT-FOUND, naming the worksheet and listing the worksheets of
+      the file, instead of a Java exception
+    - added the \c worksheet_pattern read option: a regular expression that the name of exactly one worksheet must
+      match, for files whose worksheet name changes from file to file; no match raises
+      \c EXCEL-WORKSHEET-NOT-FOUND and more than one raises \c EXCEL-WORKSHEET-AMBIGUOUS
+    - the \c worksheet option is documented to accept a 0-based position, and the \c ignore_empty option declares
+      its default (\c false: reading stops at the first empty row) and that behavior in its option metadata
     - added @ref ExcelDataProvider::ExcelWriteDataProvider "ExcelWriteDataProvider" for writing Excel files
     - added @ref ExcelDataProvider::ExcelWriteDataProviderFactory "ExcelWriteDataProviderFactory"
     - added support for XLS (Excel 97-2003) format in both read and write operations
@@ -318,10 +418,31 @@ module ExcelDataProvider {
     - fixed typos in option names and comments
     - fixed Java error message for unknown worksheet
     - fixed resource leak in getWorksheets() methods
+    - added the \c ignore_empty read option to continue reading past empty rows
+    - fixed reading with no header options, or with \c headers and no \c data_cells, returning no data; data now
+      starts on the first row
+    - fixed cell ranges past column \c Z being rejected or accepted in the wrong order (ex: \c "z1:aa10")
+    - fixed a \c data_cells range wider than the header range raising a Java index error
+    - fixed the \c headers and \c header_names conflict check being skipped for the path and stream constructors
+    - fixed @ref ExcelDataProvider::ExcelWorksheetReadDataProvider "ExcelWorksheetReadDataProvider" ignoring the
+      \c data option and reading paths directly as local files instead of resolving them as file locations
+    - fixed streaming writes (\c streaming) failing when no \c headers are given
+    - fixed @ref ExcelDataProvider::ExcelReadDataProvider "ExcelReadDataProvider" failing with an empty-file error
+      when the worksheet names or the provider info were requested after the record type or the records, or when
+      the provider was used after acquiring a worksheet provider; this broke the \c read-data application action in
+      Qorus
+    - added @ref ExcelDataProvider::ExcelProfileDataProvider "ExcelProfileDataProvider" and the \c profile
+      application action, which describe the layout and column types of every sheet, including hidden sheets,
+      named ranges, merged cells, and formulas
+    - fixed reading a \c data_cells range without an end column and without headers never ending; each row is read
+      to its last cell with a value
+    - records are read from .xlsx worksheets one row at a time, so worksheets with millions of rows are read in
+      bounded memory instead of loading the workbook in memory
+    - the input of the read data provider is copied to a temporary file instead of being read into memory
     - updated copyright to 2026
 
     @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! contains all public definitions in the ExcelDataProvider module

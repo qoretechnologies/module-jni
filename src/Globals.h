@@ -298,6 +298,8 @@ public:
     DLLLOCAL static GlobalReference<jclass> classZonedDateTime;                   // java.time.ZonedDateTime
     DLLLOCAL static jmethodID methodZonedDateTimeParse;                           // ZonedDateTime.parse()
     DLLLOCAL static jmethodID methodZonedDateTimeToString;                        // ZonedDateTime.toString()
+    DLLLOCAL static jmethodID methodZonedDateTimeFormat;                          // ZonedDateTime.format()
+    DLLLOCAL static GlobalReference<jobject> isoOffsetDateTimeFormatter;          // DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
     DLLLOCAL static GlobalReference<jclass> classLocalDateTime;                   // java.time.LocalDateTime
     DLLLOCAL static jmethodID methodLocalDateTimeToString;                        // LocalDateTime.toString()
@@ -390,6 +392,7 @@ public:
 
     DLLLOCAL static GlobalReference<jclass> classPreparedStatement;               // java.sql.PreparedStatement
     DLLLOCAL static jmethodID methodPreparedStatementAddBatch;                    // void addBatch()
+    DLLLOCAL static jmethodID methodPreparedStatementClearBatch;                  // void clearBatch()
     DLLLOCAL static jmethodID methodPreparedStatementClose;                       // void close()
     DLLLOCAL static jmethodID methodPreparedStatementExecute;                     // boolean execute()
     DLLLOCAL static jmethodID methodPreparedStatementExecuteBatch;                // int[] executeBatch()
@@ -516,8 +519,9 @@ public:
     DLLLOCAL static void startNativeCleanupThread();
 
     //! Stop the NativeCleanup C++ background thread and join it.
-    /** Enqueues a sentinel onto NativeCleanup.queue to wake the thread, then joins.
-        Called from Jvm::destroyVM before DestroyJavaVM. */
+    /** Closes registration, snapshots live handles, wakes and joins the cleanup
+        thread, then releases outstanding native pointers. Native clients must
+        be quiescent. Called from Jvm::destroyVM before DestroyJavaVM. */
     DLLLOCAL static void stopNativeCleanupThread();
 
     DLLLOCAL static jlong getContextProgram(jobject new_syscl, bool& created);

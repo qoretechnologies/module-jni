@@ -76,8 +76,8 @@
           "message": "지정된 경로의 vCard 파일에 연락처 쓰기"
         },
         "app.VkNG.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nAfter writing all contacts, use `getData()` to retrieve the binary VCF data.",
-          "message": "메모리에 vCard(.vcf) 연락처 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 VCF 파일을 생성하는 데 유용합니다.\n\n기록되는 각 레코드는 `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories` 및 `role`을(를) 포함한 표준 vCard 필드가 있는 단일 연락처를 나타냅니다.\n\n모든 연락처를 작성한 후 `getData()`을(를) 사용하여 바이너리 VCF 데이터를 가져옵니다."
+          "source": "Create vCard (.vcf) contact data in memory and return it as binary data; useful for generating VCF files without writing to disk.\n\nEach record written represents a single contact with the standard vCard fields including `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories`, and `role`.\n\nThe action returns the generated VCF data in `data` and the number of contacts in `record_count`.",
+          "message": "메모리에 vCard(.vcf) 연락처 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 VCF 파일을 생성하는 데 유용합니다.\n\n기록되는 각 레코드는 `formatted_name`, `emails`, `phones`, `addresses`, `organization`, `title`, `note`, `uid`, `birthday`, `url`, `nickname`, `categories` 및 `role`을(를) 포함한 표준 vCard 필드가 있는 단일 연락처를 나타냅니다.\n\n작업은 생성된 VCF 데이터를 `data`에, 연락처 수를 `record_count`에 반환합니다."
         },
         "app.VkNG.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create VCF Contact Data",

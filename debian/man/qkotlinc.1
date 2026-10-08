@@ -1,0 +1,15 @@
+.\" Copyright (C) 2026 David Nichols; SPDX-License-Identifier: MIT
+.TH QKOTLINC 1 "September 2026" "Qore JNI"
+.SH NAME
+qkotlinc \- compile Kotlin sources against Qore APIs
+.SH SYNOPSIS
+.B qkotlinc
+[options] source.kt ...
+.SH DESCRIPTION
+Invokes the Kotlin compiler with the Qore JNI bridge on its class path. The private packaged compiler is used if no kotlinc is found in PATH.
+.SH OPTIONS
+Use -d DIRECTORY for output, -cp PATH for additional dependencies, and -q for quiet output.
+.PP
+Run the command with --help for the full option list.
+.SH SEE ALSO
+.BR qore (1)

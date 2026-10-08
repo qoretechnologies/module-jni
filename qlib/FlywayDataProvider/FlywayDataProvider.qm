@@ -91,7 +91,7 @@ module FlywayDataProvider {
                 "in the Flyway schema history table.\n\n**Note**: migrations are one-way — once "
                 "applied, they cannot be undone without using `clean`.",
             "action_code": DPAT_API,
-            "output_type": FlywayMigrateOutputDataType,
+            "output_type": FlywayMigrateDataProvider::ResponseType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
@@ -134,7 +134,7 @@ module FlywayDataProvider {
             "short_desc": "Validate applied migrations against available ones",
             "desc": "Validate applied Flyway migrations against available migration scripts",
             "action_code": DPAT_API,
-            "output_type": FlywayMigrateOutputDataType,
+            "output_type": FlywayValidateOutputDataType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
@@ -154,7 +154,7 @@ module FlywayDataProvider {
             "short_desc": "Drop all objects in the configured schemas",
             "desc": "Drop all objects in the configured schemas; this is a destructive operation",
             "action_code": DPAT_API,
-            "output_type": FlywayMigrateOutputDataType,
+            "output_type": FlywaySuccessOutputDataType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
@@ -175,7 +175,7 @@ module FlywayDataProvider {
             "desc": "Repair the Flyway schema history table by removing failed migration entries "
                 "and aligning checksums",
             "action_code": DPAT_API,
-            "output_type": FlywayMigrateOutputDataType,
+            "output_type": FlywaySuccessOutputDataType,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 FlywayDataProvider::ConstructorOptions{"url", "user", "password",}, {
@@ -194,6 +194,8 @@ module FlywayDataProvider {
     @tableofcontents
 
     @section flywaydataproviderintro Introduction to the FlywayDataProvider Module
+
+    <img src="flyway-logo.svg" width="96" alt="FlywayDataProvider module logo"/>
 
     The %FlywayDataProvider module provides a data provider API for Flyway database schema migration.
 
@@ -216,7 +218,7 @@ module FlywayDataProvider {
     @section flywaydataprovider_relnotes Release Notes
 
     @subsection flywaydataprovider_v1_0 FlywayDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the FlywayDataProvider module

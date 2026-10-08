@@ -24,11 +24,15 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
+%requires json
+%requires FsUtil
+%requires CsvUtil
 %requires jni
-%requires ../qlib/ExcelDataProvider
+%requires ExcelDataProvider
 
 # Add classpaths for the test helper - must come after ExcelDataProvider to share its POI classpath
 %module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/qore-dataprovider-excel.jar
@@ -49,10 +53,114 @@
 %module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/slf4j-nop-2.0.16.jar
 %module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/curvesapi-1.08.jar
 %module-cmd(jni) import org.qore.dataprovider.excel.ExcelTestHelper
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelIterator
+%module-cmd(jni) import org.qore.dataprovider.excel.ExcelWriter
+%module-cmd(jni) import java.lang.System
+%module-cmd(jni) import org.apache.poi.poifs.filesystem.POIFSFileSystem
+%module-cmd(jni) import org.apache.poi.poifs.crypt.EncryptionInfo
+%module-cmd(jni) import org.apache.poi.poifs.crypt.EncryptionMode
+%module-cmd(jni) import org.apache.poi.poifs.crypt.Encryptor
+%module-cmd(jni) import org.apache.poi.openxml4j.opc.OPCPackage
+%module-cmd(jni) import org.apache.poi.openxml4j.opc.PackageAccess
+%module-cmd(jni) import java.io.FileOutputStream
 
 %exec-class ExcelDataProviderTest
 
 public class ExcelDataProviderTest inherits QUnit::Test {
+    public {
+        #! the number of data rows of the large workbooks
+        const LargeRows = 200000;
+        #! the JVM heap of the child process that reads a large workbook
+        const ChildHeap = "64m";
+
+        #! the columns of the column format tests
+        const FormatHeaders = ("Name", "Date", "Amount", "Share", "Code", "Plain", "Stamp");
+
+        #! the column formats of the column format tests; Name, Plain and Stamp have none
+        const ColumnFormats = {
+            "Date": "dd.mm.yyyy hh:mm",
+            "Amount": "#,##0.00;(#,##0.00)",
+            "Share": "0.0%",
+            "Code": "@",
+        };
+
+        #! a record of the column format tests
+        const FormatRecord = {
+            "Name": "a",
+            "Date": 2026-10-07T13:45:10,
+            "Amount": -1234.5,
+            "Share": 0.25,
+            "Code": "X1",
+            "Plain": 42,
+            "Stamp": 2026-01-05T08:05:09,
+        };
+
+        #! format codes that are accepted
+        const ValidFormatCodes = (
+            "0", "0.00", "#,##0", "#,##0.00", "#,##0.00;(#,##0.00)", "#,##0.00;#,##0.00-", "0.0%", "0%",
+            "#,##0,", "0.0,,\" M\"", "0.00E+00", "\"€\" #,##0.00", "#,##0.00 [$€-407]", "[Red]#,##0;[Blue]-#,##0",
+            "0.0#", "#.##", "#,##0.00;(#,##0.00);\"-\"", "000000", "#,##0.00_);(#,##0.00)", "\\$#,##0.00", ".00",
+            "€#,##0.00", "#,##0.00 \"EUR\"", "0.0%;(0.0%)", "#,##0.00;\"negative\"", "0,000.00",
+            "dd.mm.yyyy", "yyyy-mm-dd", "d/m/yy", "mmm d, yyyy", "mmmm yyyy", "dddd, d mmmm yyyy", "hh:mm",
+            "h:mm AM/PM", "hh:mm:ss.000", "yyyy-mm-dd\"T\"hh:mm:ss", "DD.MM.YYYY HH:MM:SS", "ddd", "m/d/yyyy h:mm",
+            "mm:ss", "h:mm:ss.0", "[Red]dd.mm.yyyy", "yyyy\\-mm\\-dd", "dd. mmmm yyyy",
+            "@", "\"Text: \"@", "[Blue]@",
+        );
+
+        #! format codes that are refused, with a regular expression matching the reason
+        const InvalidFormatCodes = {
+            "": "empty",
+            "General": "default display",
+            "zz[[q": "\"z\" at position 1, which must be quoted",
+            "0.00[": "unterminated \"\\[\" at position 5",
+            "[x]0": "only colors such as \\[Red\\] and currency symbols",
+            "[]0": "only colors",
+            "\"abc": "unterminated quoted text starting at position 1",
+            "0\\": "needs a character after it",
+            "0_": "needs a character after it",
+            "# ?/?": "\\? digit placeholder and fractions",
+            "*-0": "fill characters",
+            "[>100]0": "only colors",
+            "[h]:mm": "only colors",
+            "0;0;0;@": "4 sections; at most three",
+            "0;;0": "empty section 2",
+            "0;": "empty section 2 at its end",
+            "0.0.0": "second decimal point",
+            "0%%": "2 percent signs in section 1",
+            "0.0%;0.0": "percent sign in one section but not in section 2",
+            "dd.mm.yyyy;0": "date format code, which has one section only",
+            "@;0": "text format code, which has one section only",
+            "#,##0 mm": "\"mm\" at position 7 in a section with digit placeholders",
+            "0.00 dollars": "\"o\" at position 7, which must be quoted",
+            "0 h": "\"h\" at position 3 in a section with digit placeholders",
+            "yyyyy": "year of 5 letters",
+            "mmmmm": "first-letter month names",
+            "hhh": "hour of 3 letters",
+            "sss": "second of 3 letters",
+            "ddddd": "day of 5 letters",
+            "hh:mm:ss.0000": "4 decimal places of a second",
+            "dd.mm.yyyy 0": "\"dd\" at position 1 in a section with digit placeholders; date parts cannot be used",
+            "hh:mm %": "\"hh\" at position 1 in a section with digit placeholders",
+            "dd@": "mixes date parts and the text placeholder",
+            "0.00E-00": "use \"E\\+\" for scientific notation",
+            "0.00E+": "\"E\\+\" without exponent digits",
+            "0.0E+00%": "percent sign together with scientific notation",
+            "0,E+00": "together with scientific notation",
+            "#,##0.00 EUR": "\"E\" at position 10, which must be quoted",
+            "h:mm A/P": "use \"AM/PM\"",
+            "@@": "second @",
+            "@ 0": "not text, in a text format code",
+            "0.": "decimal point without decimal places",
+            "0 0": "second group of digit placeholders",
+            "0.#0": "0 after a # in the decimal places",
+            "0.0,0": "comma between decimal places",
+            ",0": "comma before the first digit placeholder",
+            "\"text\"": "no digit, date or text placeholder",
+            "[Red][Blue]0": "second color in section 1",
+            "0x": "\"x\" at position 2, which must be quoted",
+        };
+    }
+
     private {
         string test_data_dir;
     }
@@ -83,6 +191,7 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("factory tests", \testFactory());
         addTestCase("negative: invalid path", \testNegativeInvalidPath());
         addTestCase("negative: invalid worksheet", \testNegativeInvalidWorksheet());
+        addTestCase("worksheet selection by name, position and pattern", \testWorksheetSelection());
         addTestCase("negative: invalid cell range", \testNegativeInvalidCellRange());
         addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
         addTestCase("edge case: empty worksheet", \testEdgeCaseEmptyWorksheet());
@@ -98,7 +207,33 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("write: negative - invalid format", \testWriteNegativeInvalidFormat());
         addTestCase("action registration", \testActionRegistration());
         addTestCase("roundtrip: write and read", \testRoundtrip());
+        addTestCase("read: no header options reads from the first row", \testReadFromFirstRow());
+        addTestCase("read: empty rows", \testReadEmptyRows());
+        addTestCase("cell ranges: columns past Z", \testColumnsPastZ());
+        addTestCase("negative: headers + header_names in every constructor", \testHeaderOptionConflictAllCtors());
+        addTestCase("worksheet provider: options constructor", \testWorksheetOptionsCtor());
+        addTestCase("write: streaming without headers", \testWriteStreamingNoHeaders());
+        addTestCase("write: headers from the first record", \testWriteHeadersFromFirstRecord());
 
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
+        addTestCase("writer record type", \testWriterRecordType());
+        addTestCase("profile: raw workbook grid", \testProfileGrid());
+        addTestCase("profile action", \testProfileAction());
+        addTestCase("read: the workbook is reusable in any call order", \testWorkbookReuse());
+        addTestCase("read: cell encodings of a streamed worksheet", \testStreamedCellEncodings());
+        addTestCase("read: a large workbook is read in bounded memory", \testLargeWorkbook());
+        addTestCase("read: closing an iteration early releases the workbook", \testEarlyClose());
+        addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
+        addTestCase("read: the input is copied to a file once and deleted with the providers", \testWorkbookFile());
+        addTestCase("write: column display formats", \testWriteColumnFormats());
+        addTestCase("write: a column format shows only values of its kind", \testWriteColumnFormatsOtherValues());
+        addTestCase("write: one cell style per distinct column format", \testWriteColumnFormatStyles());
+        addTestCase("write: column formats with headers from the first record", \testWriteColumnFormatsFirstRecord());
+        addTestCase("write: format codes accepted and refused", \testFormatCodes());
+        addTestCase("write: negative - invalid column formats", \testWriteNegativeColumnFormats());
+        addTestCase("write: the write actions offer column formats", \testColumnFormatsActionOption());
+        addTestCase("write: column formats as LibreOffice shows them", \testWriteColumnFormatsRendered());
+        addTestCase("negative: a file that cannot be read as a workbook", \testUnreadableFiles());
         set_return_value(main());
     }
 
@@ -119,6 +254,8 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         ExcelTestHelper::createMixedCaseHeadersExcel(test_data_dir + "/mixed-case-headers.xlsx");
         ExcelTestHelper::createOffsetDataExcel(test_data_dir + "/offset-data.xlsx");
         ExcelTestHelper::createDataTypesExcel(test_data_dir + "/data-types.xlsx");
+        ExcelTestHelper::createProfileExcel(test_data_dir + "/profile.xlsx", False);
+        ExcelTestHelper::createProfileExcel(test_data_dir + "/profile.xls", True);
 
         assertTrue(is_file(test_data_dir + "/simple.xlsx"), "simple.xlsx created");
     }
@@ -257,6 +394,14 @@ public class ExcelDataProviderTest inherits QUnit::Test {
 
         assertEq(2, records.size());
         assertTrue(records[0].Date instanceof date, "Date should be a date type");
+
+        # a date cell is its clock time in the zone: midnight in New York, not the JVM's zone
+        foreach string zone in (("America/New_York", "Asia/Tokyo", "UTC")) {
+            ExcelReadDataProvider zdp(test_data_dir + "/dates.xlsx", {"header_names": True, "timezone": zone});
+            hash<auto> r = (map $1, zdp.searchRecords())[0];
+            assertEq(new TimeZone(zone).date("2025-01-15 00:00:00", "YYYY-MM-DD HH:mm:SS"), r.Date, zone);
+            assertEq("00:00:00", r.Date.format("HH:mm:SS"), zone);
+        }
     }
 
     testWorksheet() {
@@ -392,19 +537,152 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         assertTrue(threw, "should throw exception for invalid path");
     }
 
-    testNegativeInvalidWorksheet() {
-        # Invalid worksheet should throw an exception
-        bool threw = False;
-        try {
-            ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", {
-                "worksheet": "NonexistentSheet",
-            });
-            dp.searchRecords();
-        } catch (hash<ExceptionInfo> ex) {
-            threw = True;
-            assertTrue(ex.desc.contains("unknown"), "should mention unknown sheet");
+    #! A file that is not a readable workbook fails the read with the reader's error
+    /** What a design or a user is told about such files is stated from these errors (qorus#646): a password-protected
+        workbook cannot be read (there is no password option), and a damaged file, another file type or an empty file
+        fails before any record is returned.  Each raises @c JNI-ERROR, its description naming the Java exception.
+    */
+    testUnreadableFiles() {
+        string dir = tmp_location() + "/excel-unreadable-" + get_random_string(8);
+        mkdir(dir);
+        on_exit {
+            Dir d();
+            d.chdir(dir);
+            foreach string f in (d.listFiles() ?? ()) {
+                unlink(dir + "/" + f);
+            }
+            rmdir(dir);
         }
-        assertTrue(threw, "should throw exception for invalid worksheet");
+        string plain = dir + "/plain.xlsx";
+        ExcelTestHelper::createSimpleExcel(plain);
+        # a password-protected workbook, encrypted as Excel does (agile encryption in an OLE2 container)
+        POIFSFileSystem fs();
+        EncryptionInfo info(EncryptionMode::agile);
+        Encryptor encryptor = info.getEncryptor();
+        encryptor.confirmPassword("secret");
+        OPCPackage opc = OPCPackage::open(plain, PackageAccess::READ_WRITE);
+        auto data_stream = encryptor.getDataStream(fs);
+        opc.save(data_stream);
+        data_stream.close();
+        opc.revert();
+        Jni::java::io::FileOutputStream out(dir + "/encrypted.xlsx");
+        fs.writeFilesystem(out);
+        out.close();
+
+        binary workbook = File::readBinaryFile(plain);
+        # the input -> the Java exception its read raises
+        hash<string, hash<auto>> cases = {
+            "password-protected": {
+                "data": File::readBinaryFile(dir + "/encrypted.xlsx"),
+                "exception": "org.apache.poi.EncryptedDocumentException",
+            },
+            "damaged (truncated)": {
+                "data": workbook.substr(0, workbook.size() / 2),
+                "exception": "java.io.IOException",
+            },
+            "a ZIP archive that is not a workbook": {
+                "data": binary("PK\x03\x04not a workbook"),
+                "exception": "org.apache.poi.openxml4j.exceptions.NotOfficeXmlFileException",
+            },
+            "a text file": {
+                "data": binary("PO;SKU;Qty\n1;2;3\n"),
+                "exception": "java.io.IOException",
+            },
+            "a PDF document": {
+                "data": binary("%PDF-1.4\n"),
+                "exception": "java.io.IOException",
+            },
+            "an empty file": {
+                "data": binary(),
+                "exception": "org.apache.poi.EmptyFileException",
+            },
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *hash<ExceptionInfo> ex;
+            int records = 0;
+            try {
+                ExcelReadDataProvider dp({"data": i.value.data, "header_names": True});
+                map ++records, dp.searchRecords();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            assertEq("JNI-ERROR", ex.err, i.key);
+            assertEq(0, ex.desc.find(i.value.exception), sprintf("%s: %s", i.key, ex.desc));
+            assertEq(0, records, i.key + ": no record is returned");
+        }
+        # the unencrypted workbook reads
+        ExcelReadDataProvider dp({"data": workbook, "header_names": True});
+        assertEq(3, (map $1, dp.searchRecords()).size());
+    }
+
+    testNegativeInvalidWorksheet() {
+        # an unknown worksheet raises EXCEL-WORKSHEET-NOT-FOUND, naming it and listing the worksheets of the file
+        ExcelReadDataProvider dp(test_data_dir + "/multi-sheet.xlsx", {"worksheet": "NonexistentSheet"});
+        hash<ExceptionInfo> ex;
+        try {
+            dp.searchRecords();
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("EXCEL-WORKSHEET-NOT-FOUND", ex.err);
+        assertRegex("NonexistentSheet", ex.desc);
+        assertRegex("Users.*Products.*Orders", ex.desc);
+        assertEq({"worksheet": "NonexistentSheet", "available": ("Users", "Products", "Orders")}, ex.arg);
+        # the record type raises the same error
+        assertThrows("EXCEL-WORKSHEET-NOT-FOUND", sub () {
+            new ExcelReadDataProvider(test_data_dir + "/multi-sheet.xlsx", {"worksheet": "Nope", "header_names": True})
+                .getRecordType();
+        });
+        # a position after the last worksheet
+        assertThrows("EXCEL-WORKSHEET-NOT-FOUND", sub () {
+            new ExcelReadDataProvider(test_data_dir + "/multi-sheet.xlsx", {"worksheet": "3"}).searchRecords();
+        });
+    }
+
+    #! the worksheet option selects by name (without regard to case) or by 0-based position, and the
+    #! worksheet_pattern option by a regular expression matching exactly one name
+    testWorksheetSelection() {
+        code<list<auto>(hash<auto>)> read = list<auto> sub (hash<auto> opts) {
+            ExcelReadDataProvider dp(test_data_dir + "/multi-sheet.xlsx", {"header_names": True} + opts);
+            return map $1, dp.searchRecords();
+        };
+        list<auto> products = read({"worksheet": "Products"});
+        assertTrue(products.size() > 0);
+        assertEq(products, read({"worksheet": "1"}), "by position");
+        assertEq(products, read({"worksheet_pattern": "^Prod"}), "by pattern");
+        assertEq(products, read({"worksheet_pattern": "(?i)^products$"}), "by pattern without regard to case");
+        assertEq(read({}), read({"worksheet_pattern": "^Users$"}), "the first worksheet");
+        assertEq(products, read({"worksheet": "PRODUCTS"}), "names are matched without regard to case");
+
+        hash<ExceptionInfo> ex;
+        try {
+            read({"worksheet_pattern": "^(Users|Orders)$"});
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("EXCEL-WORKSHEET-AMBIGUOUS", ex.err);
+        assertEq({"worksheet_pattern": "^(Users|Orders)$", "matches": ("Users", "Orders"),
+            "available": ("Users", "Products", "Orders")}, ex.arg);
+        assertThrows("EXCEL-WORKSHEET-NOT-FOUND", "Invoices", read, ({"worksheet_pattern": "Invoices"},));
+
+        # the options conflict, and the pattern must be a valid regular expression
+        assertThrows("EXCEL-READ-OPTION-ERROR", "worksheet_pattern", sub () {
+            new ExcelReadDataProvider(test_data_dir + "/multi-sheet.xlsx", {"worksheet": "Users",
+                "worksheet_pattern": "^U"});
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", "regular expression", sub () {
+            new ExcelReadDataProvider({"path": test_data_dir + "/multi-sheet.xlsx", "worksheet_pattern": "("})
+                .searchRecords();
+        });
+
+        # the option metadata
+        hash<auto> opts = ExcelReadDataProvider::ConstructorOptions;
+        assertEq(OI_Conflicts, AbstractDataProvider::getOptionInteractions(opts.worksheet_pattern)[0].kind);
+        assertEq("worksheet", AbstractDataProvider::getOptionInteractions(opts.worksheet_pattern)[0].option);
+        assertEq("worksheet_pattern", AbstractDataProvider::getOptionInteractions(opts.worksheet)[0].option);
+        # ignore_empty: the default stops at the first empty row
+        assertFalse(opts.ignore_empty.default_value);
+        assertEq({"false": "stop", "true": "skip"}, opts.ignore_empty.metadata.empty_row_handling);
     }
 
     testNegativeInvalidCellRange() {
@@ -786,5 +1064,733 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         assertFalse(records[1].Active);
         assertEq("Item3", records[2].Name);
         assertEq(0.01, records[2].Amount);
+    }
+
+    testReadFromFirstRow() {
+        # with no header options at all, data starts on row 1 and keys are cell references
+        ExcelReadDataProvider dp(test_data_dir + "/no-headers.xlsx");
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+        assertEq({"A1": "value1", "B1": 100.0, "C1": True}, records[0]);
+        assertEq({"A2": "value2", "B2": 200.0, "C2": False}, records[1]);
+
+        # explicit headers without data_cells also start on row 1
+        dp = new ExcelReadDataProvider(test_data_dir + "/no-headers.xlsx", {
+            "headers": ("Col1", "Col2", "Col3"),
+        });
+        records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+        assertEq({"Col1": "value1", "Col2": 100.0, "Col3": True}, records[0]);
+        assertEq({"Col1": "value2", "Col2": 200.0, "Col3": False}, records[1]);
+    }
+
+    # returns an xlsx with a header row, two data rows separated by an empty row, and two trailing empty rows
+    private binary getEmptyRowsData() {
+        ExcelWriteDataProvider dp({"headers": ("Sku", "Qty")});
+        dp.createRecord({"Sku": "A-1", "Qty": 5});
+        dp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        dp.createRecord({"Sku": "B-2", "Qty": 7});
+        dp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        dp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        return dp.getData();
+    }
+
+    testReadEmptyRows() {
+        binary data = getEmptyRowsData();
+
+        # default: reading stops at the first empty row
+        ExcelReadDataProvider dp({"data": data, "header_names": True});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), records);
+
+        # ignore_empty: empty rows are skipped, trailing empty rows end the iteration
+        dp = new ExcelReadDataProvider({"data": data, "header_names": True, "ignore_empty": True});
+        records = map $1, dp.searchRecords();
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), records);
+
+        # ignore_empty stays within data_cells (rows 2-3 hold only the first record and the empty row)
+        dp = new ExcelReadDataProvider({"data": data, "header_names": True, "ignore_empty": True,
+            "data_cells": "a2:b3"});
+        records = map $1, dp.searchRecords();
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), records);
+
+        # the option is also applied to worksheet child providers
+        dp = new ExcelReadDataProvider({"data": data, "header_names": True, "ignore_empty": True});
+        records = map $1, dp.getChildProviderEx("Sheet1").searchRecords();
+        assertEq(2, records.size());
+        assertEq("B-2", records[1].Sku);
+    }
+
+    testColumnsPastZ() {
+        assertEq(0, ExcelReadDataProvider::getColumnIndex("a"));
+        assertEq(0, ExcelReadDataProvider::getColumnIndex("-"));
+        assertEq(25, ExcelReadDataProvider::getColumnIndex("Z"));
+        assertEq(26, ExcelReadDataProvider::getColumnIndex("aa"));
+        assertEq(51, ExcelReadDataProvider::getColumnIndex("AZ"));
+        assertEq(52, ExcelReadDataProvider::getColumnIndex("bA"));
+        assertEq(16383, ExcelReadDataProvider::getColumnIndex("XFD"));
+
+        # "z" < "aa" by column position even though it sorts after it as a string
+        hash<CellRangeInfo> r = ExcelReadDataProvider::parseRange("z1:aa10");
+        assertEq("z", r.start.column);
+        assertEq("aa", r.end.column);
+        assertThrows("EXCEL-INVALID-LOCATION", \ExcelReadDataProvider::parseRange(), "aa1:z10");
+        # case does not affect ordering
+        assertEq("B", ExcelReadDataProvider::parseRange("B1:c2").start.column);
+        assertThrows("EXCEL-INVALID-LOCATION", \ExcelReadDataProvider::parseRange(), "c1:B2");
+
+        # header and data start columns are compared by position as well
+        hash<auto> opts = {"header_cells": "z1", "data_cells": "aa2"};
+        assertEq("aa", ExcelReadDataProvider::processCellOptions(opts).data_cells.start.column);
+        opts = {"header_cells": "aa1", "data_cells": "z2"};
+        assertThrows("EXCEL-INVALID-LOCATION", \ExcelReadDataProvider::processCellOptions(), opts);
+
+        # read a sheet whose headers and data are in columns Y-AB
+        hash<auto> rec = map {sprintf("c%d", $1): $1}, xrange(1, 29);
+        ExcelWriteDataProvider wdp({"headers": keys rec});
+        wdp.createRecord(rec);
+        ExcelReadDataProvider dp({"data": wdp.getData(), "header_cells": "y1:ab1", "data_cells": "y2:ab2"});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(({"c25": 25.0, "c26": 26.0, "c27": 27.0, "c28": 28.0},), records);
+
+        # a data range wider than the header range ends at the last header column
+        dp = new ExcelReadDataProvider({"data": wdp.getData(), "header_cells": "y1:z1", "data_cells": "y2:ab2"});
+        records = map $1, dp.searchRecords();
+        assertEq(({"c25": 25.0, "c26": 26.0},), records);
+    }
+
+    testHeaderOptionConflictAllCtors() {
+        hash<auto> opts = {"headers": ("A", "B"), "header_names": True};
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", opts);
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.xlsx");
+            ExcelReadDataProvider dp(fis, opts);
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelReadDataProvider dp({"path": test_data_dir + "/simple.xlsx"} + opts);
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelWorksheetReadDataProvider dp({"path": test_data_dir + "/simple.xlsx"} + opts);
+        });
+    }
+
+    testWorksheetOptionsCtor() {
+        binary data = ReadOnlyFile::readBinaryFile(test_data_dir + "/multi-sheet.xlsx");
+        string sheet = (new ExcelReadDataProvider({"data": data})).getChildProviderNames()[1];
+
+        # inline data
+        ExcelWorksheetReadDataProvider dp({"data": data, "worksheet": sheet, "header_names": True});
+        list<hash<auto>> from_data = map $1, dp.searchRecords();
+        assertTrue(from_data.size() > 0);
+
+        # path, resolved as a file location
+        dp = new ExcelWorksheetReadDataProvider({"path": "file://" + test_data_dir + "/multi-sheet.xlsx",
+            "worksheet": sheet, "header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # stream
+        dp = new ExcelWorksheetReadDataProvider({"stream": new BinaryInputStream(data), "worksheet": sheet,
+            "header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # path constructor, resolved as a file location (plain path and file:// URL)
+        dp = new ExcelWorksheetReadDataProvider(test_data_dir + "/multi-sheet.xlsx", "name", sheet, {"header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+        dp = new ExcelWorksheetReadDataProvider("file://" + test_data_dir + "/multi-sheet.xlsx", "name", sheet,
+            {"header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # only one input source is allowed
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelWorksheetReadDataProvider wdp({"data": data, "path": test_data_dir + "/multi-sheet.xlsx"});
+        });
+        assertThrows("EXCEL-READ-OPTION-ERROR", sub () {
+            ExcelWorksheetReadDataProvider wdp({"data": data, "stream": new BinaryInputStream(data)});
+        });
+    }
+
+    testWriteStreamingNoHeaders() {
+        # more rows than the 100-row SXSSF window, so rows are flushed while writing; dates are written and read
+        # in the local time zone
+        ExcelWriteDataProvider dp({"streaming": True});
+        date d = 2026-03-04T05:06:07;
+        for (int n = 1; n <= 250; ++n) {
+            dp.createRecord({"Id": n, "Name": sprintf("row-%d", n), "Shipped": d});
+        }
+        assertEq(250, dp.getCreatedCount());
+
+        ExcelReadDataProvider rdp({"data": dp.getData(), "header_names": True});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(250, records.size());
+        assertEq(("Id", "Name", "Shipped"), keys records[0]);
+        assertEq({"Id": 1.0, "Name": "row-1", "Shipped": d}, records[0]);
+        assertEq({"Id": 250.0, "Name": "row-250", "Shipped": d}, records[249]);
+    }
+
+    testWriteHeadersFromFirstRecord() {
+        # the first record defines the columns; later records are written by those columns
+        ExcelWriteDataProvider dp();
+        date d = 2026-01-02T00:00:00;
+        dp.createRecord({"B": 1, "A": d});
+        dp.createRecord({"A": d + 1D, "C": "ignored", "B": 2});
+        dp.createRecord({"B": 3});
+
+        ExcelReadDataProvider rdp({"data": dp.getData(), "header_names": True});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq((
+            {"B": 1.0, "A": d},
+            {"B": 2.0, "A": d + 1D},
+            {"B": 3.0, "A": NOTHING},
+        ), records);
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("Excel", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject({"headers": ("Sku", "Qty")});
+        prov.createRecordsBulkWithOptions({"recs": {"Sku": ("A-1", "B-2"), "Qty": (5, 7)}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        assertEq("PK", output.data.substr(0, 2).toString());
+        ExcelReadDataProvider rdp({"data": output.data, "header_names": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), (map $1, rdp.searchRecords()));
+    }
+
+    testProfileGrid() {
+        foreach string ext in (("xlsx", "xls")) {
+            hash<TabularWorkbookGrid> grid = ExcelProfileDataProvider::readWorkbookGrid(
+                ReadOnlyFile::readBinaryFile(test_data_dir + "/profile." + ext), 1000);
+            assertEq(ext, grid.format);
+            assertEq(("Confirmations", "Lookup"), (map $1.name, grid.sheets));
+            hash<TabularSheetGrid> sheet = grid.sheets[0];
+            assertFalse(sheet.hidden);
+            assertTrue(grid.sheets[1].hidden, ext + ": the lookup sheet is hidden");
+            assertEq(6, sheet.rows.size(), ext + ": every row up to the last is read");
+            assertEq((), sheet.rows[1], ext + ": an empty row is an empty list");
+            assertEq(("PO-1001", "000123", 5.0, "10.10.2026"), sheet.rows[3]);
+            assertEq((<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 3},),
+                sheet.merged);
+            assertEq({"C6": "SUM(C4:C5)"}, sheet.formulas);
+            assertEq(12.0, sheet.rows[5][2], ext + ": a formula cell holds its cached value");
+            assertEq({"Rates": "Lookup!$A$1:$B$2"}, grid.named_ranges);
+            assertNothing(sheet.row_count);
+
+            # a row limit reports the row count
+            grid = ExcelProfileDataProvider::readWorkbookGrid(
+                ReadOnlyFile::readBinaryFile(test_data_dir + "/profile." + ext), 2);
+            assertEq(2, grid.sheets[0].rows.size());
+            assertEq(6, grid.sheets[0].row_count);
+        }
+        assertThrows("JNI-ERROR", \ExcelProfileDataProvider::readWorkbookGrid(), (binary("not a workbook"), 10));
+    }
+
+    testProfileAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("Excel", "profile");
+        assertEq(DPAT_API, action.action_code);
+        assertEq("TabularWorkbookProfile", action.output_type.getName());
+        assertTrue(action.options.path.preselected);
+
+        hash<auto> opts = {"path": test_data_dir + "/profile.xlsx"};
+        AbstractDataProvider prov = DataProviderActionCatalog::getDataProviderForAction(action, \opts);
+        hash<auto> profile = prov.doRequest(opts);
+        assertEq(profile, action.output_type.acceptsValue(profile));
+        assertEq("xlsx", profile.format);
+        hash<auto> sheet = profile.sheets[0];
+        assertEq(3, sheet.header_row);
+        assertEq((1,), sheet.title_rows);
+        assertEq((6,), sheet.totals_rows);
+        assertEq(("PO", "SKU", "Qty", "Ship date"), (map $1.header, sheet.columns));
+        assertEq(("string", "string", "int", "date"), (map $1.type, sheet.columns));
+        assertTrue(sheet.columns[1].leading_zeros);
+        assertEq("DD.MM.YYYY", sheet.columns[3].date_format);
+        assertEq(("SUM",), (select sheet.findings, $1.code == "formulas")[0].detail);
+        assertTrue(profile.sheets[1].hidden);
+        assertEq("hidden_sheet", profile.sheets[1].findings[0].code);
+        assertEq({"Rates": "Lookup!$A$1:$B$2"}, profile.named_ranges);
+        assertEq(("XX-9999", "999999", "9", "99.99.9999"), sheet.samples[0], "samples are redacted by default");
+
+        # inline data and options
+        profile = prov.doRequest({"data": ReadOnlyFile::readBinaryFile(test_data_dir + "/profile.xls"),
+            "redact": False, "sample_rows": 1});
+        assertEq("xls", profile.format);
+        assertEq((("PO-1001", "000123", 5.0, "10.10.2026"),), profile.sheets[0].samples);
+
+        assertThrows("TABULAR-PROFILE-ERROR", "exactly one", \prov.doRequest(), {});
+    }
+
+    testWriterRecordType() {
+        # the headers option defines the columns
+        ExcelWriteDataProvider dp({"headers": ("Sku", "Qty")});
+        assertEq(("Sku", "Qty"), keys dp.getRecordType());
+        assertEq(("Sku", "Qty"), keys dp.getCreateRecordTypeWithOptions());
+        # without headers, the first record's keys define the columns: an open record type
+        dp = new ExcelWriteDataProvider();
+        assertNothing(dp.getRecordType());
+        assertEq({}, dp.getOrNothingRecordTypeWithOptions());
+    }
+
+    #! The record type, the records, the worksheet names, and worksheet providers can be acquired in any order
+    /** Qorus reads the provider info (and with it the worksheet names) after the record type when it executes an
+        action; the worksheet names were then read from the input stream already consumed by the record type
+    */
+    testWorkbookReuse() {
+        string path = test_data_dir + "/multi-sheet.xlsx";
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        hash<auto> opts = {"worksheet": "Users", "header_names": True};
+        hash<string, code> sources = {
+            "data": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(opts + {"data": data});
+            },
+            "stream": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(opts + {"stream": new BinaryInputStream(data)});
+            },
+            "path": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(opts + {"path": path});
+            },
+            "stream constructor": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(new BinaryInputStream(data), opts);
+            },
+            "path constructor": ExcelReadDataProvider sub () {
+                return new ExcelReadDataProvider(path, opts);
+            },
+        };
+        list<string> sheets = ("Users", "Products", "Orders");
+        foreach hash<auto> i in (sources.pairIterator()) {
+            # the record type, then the provider info, as Qorus acquires them when executing an action
+            ExcelReadDataProvider dp = i.value();
+            assertEq(("ID", "Username"), keys dp.getRecordType(), i.key);
+            assertEq(sheets, dp.getInfo().children, i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+            assertEq(sheets, dp.getChildProviderNames(), i.key);
+            assertEq(("Widget",), (map $1.Product, dp.getChildProvider("Products").searchRecords()), i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+
+            # a worksheet provider first, then the parent's own worksheet
+            dp = i.value();
+            assertEq((1001,), (map $1.OrderID.toInt(), dp.getChildProvider("Orders").searchRecords()), i.key);
+            assertEq(sheets, dp.getChildProviderNames(), i.key);
+            assertEq(("ID", "Username"), keys dp.getRecordType(), i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+        }
+
+        # a provider without input has no worksheets, record fields, or records
+        ExcelReadDataProvider empty();
+        assertEq(NOTHING, empty.getChildProviderNames());
+        assertEq({}, empty.getRecordType());
+    }
+
+    testStreamedCellEncodings() {
+        string path = test_data_dir + "/streaming-features.xlsx";
+        ExcelTestHelper::createStreamingFeaturesExcel(path);
+
+        ExcelReadDataProvider dp(path, {"header_names": True, "timezone": "UTC", "ignore_empty": True});
+        assertEq(("Main", "Chart", "Sparse"), dp.getChildProviderNames());
+        assertEq(("Name", "Val", "When", "Inline"), keys dp.getRecordType());
+        list<hash<auto>> expected = (
+            # a rich shared string without its phonetic run, a date from the column's style, and inline rich text
+            {"Name": "rich", "Val": 42.5, "When": 2023-03-15T06:00:00Z, "Inline": "a b"},
+            # escaped characters; the cell's own number style overrides the column's date style
+            {"Name": "escA", "Val": 7.0, "When": 1.0, "Inline": "B"},
+            # a boolean cell is true only for "1"; an error cell has no value
+            {"Name": True, "Val": False, "When": 2023-03-16T00:00:00Z, "Inline": NOTHING},
+            # formula cells give their cached results
+            {"Name": 2.0, "Val": "xyC", "When": True, "Inline": NOTHING},
+            # a cell of an array formula without a cached value is 0; an invalid shared string index is empty
+            {"Name": 1.0, "Val": 0.0, "When": 2023-03-15T12:00:00Z, "Inline": ""},
+        );
+        assertEq(expected, (map $1, dp.searchRecords()));
+        # each iteration reads the worksheet from its first data row
+        assertEq(expected, (map $1, dp.searchRecords()));
+
+        # without ignore_empty, reading stops at the missing row 4
+        dp = new ExcelReadDataProvider(path, {"header_names": True, "timezone": "UTC"});
+        assertEq(expected[0..1], (map $1, dp.searchRecords()));
+
+        # a chart sheet has no cells
+        dp = new ExcelReadDataProvider(path, {"worksheet": "Chart", "ignore_empty": True});
+        assertEq(0, elements (map $1, dp.searchRecords()));
+
+        # rows and cells without references follow the previous ones
+        dp = new ExcelReadDataProvider(path, {"worksheet": "Sparse", "ignore_empty": True});
+        assertEq(({"A1": 1.0, "B1": 2.0}, {"A20": "far"}, {"A21": 5.0}), (map $1, dp.searchRecords()));
+    }
+
+    testLargeWorkbook() {
+        # a worksheet with 200000 rows is read with a JVM heap far smaller than the workbook loaded in memory
+        # needs (about 1 GB); a child process has its own JVM with a 64 MB heap
+        foreach bool shared_strings in ((True, False)) {
+            string path = sprintf("%s/large-%s.xlsx", test_data_dir, shared_strings ? "shared" : "inline");
+            on_exit unlink(path);
+            ExcelTestHelper::createLargeExcel(path, LargeRows, shared_strings);
+
+            string src = sprintf("%%modern
+%%prepend-module-path \"%s/../qlib\"
+%%requires DataProvider
+%%requires json
+%%requires ExcelDataProvider
+
+ExcelReadDataProvider dp({\"path\": ARGV[0], \"header_names\": True, \"timezone\": \"UTC\"});
+AbstractDataProviderRecordIterator i = dp.searchRecords();
+int count = 0;
+int mismatches = 0;
+*hash<auto> last;
+while (i.next()) {
+    hash<auto> r = i.getValue();
+    ++count;
+    if (keys r != (\"Id\", \"Name\", \"Amount\", \"When\", \"Flag\") || r.Id != count.toFloat()
+        || r.Name != (\"name-\" + count) || r.Amount != (count / 4.0)
+        || r.When != (2025-01-01T00:00:00Z + seconds(count)) || r.Flag != (count %% 2 == 0)) {
+        ++mismatches;
+    }
+    last = r;
+}
+printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatches, \"last\": last}));
+", get_script_dir() == "." ? getcwd() : get_script_dir());
+            hash<auto> result = runChild(src, path);
+            string label = shared_strings ? "shared strings" : "inline strings";
+            assertEq(LargeRows, result.count, label);
+            assertEq(0, result.mismatches, label);
+            assertEq("name-" + LargeRows, result.last.Name, label);
+            assertEq(LargeRows / 4.0, result.last.Amount.toFloat(), label);
+        }
+    }
+
+    testEarlyClose() {
+        string path = test_data_dir + "/early-close.xlsx";
+        on_exit unlink(path);
+        ExcelTestHelper::createLargeExcel(path, 20000, True);
+        binary data = ReadOnlyFile::readBinaryFile(path);
+
+        # a complete iteration first, so that later file counts do not include the JVM's class files
+        {
+            ExcelIterator it(new BinaryInputStream(data), "");
+            it.setHeaderCells("-", 1, "-", 1);
+            int count = 0;
+            while (it.next()) {
+                ++count;
+            }
+            assertEq(20000, count);
+            it.close();
+        }
+        list<string> temp_files = getTempFiles("qore-xlsx-");
+        int open_files = countOpenFiles();
+
+        ExcelIterator it(new BinaryInputStream(data), "");
+        it.setHeaderCells("-", 1, "-", 1);
+        for (int i = 1; i <= 10; ++i) {
+            assertTrue(it.next());
+            assertEq(i.toFloat(), it.getValue().Id);
+        }
+        # the workbook is open while the iteration is in progress; its temporary copy is already deleted
+        assertGt(open_files, countOpenFiles());
+        assertEq(temp_files, getTempFiles("qore-xlsx-"));
+
+        # closing the iterator in the middle of the worksheet releases the workbook
+        it.close();
+        assertEq(open_files, countOpenFiles());
+        assertEq(temp_files, getTempFiles("qore-xlsx-"));
+        assertThrows("JNI-ERROR", "the Excel iterator is closed", \it.next());
+    }
+
+    testOpenDataRange() {
+        # without an end column and without headers, each row is read to its last cell with a value; reading such a
+        # range never ended before
+        ExcelReadDataProvider dp(test_data_dir + "/simple.xlsx", {"data_cells": "b2"});
+        assertEq((
+            {"A2": 30.0, "B2": "New York"},
+            {"A3": 25.0, "B3": "Los Angeles"},
+            {"A4": 35.0, "B4": "Chicago"},
+        ), (map $1, dp.searchRecords()));
+
+        # rows end at different columns; a row without a value from the start column is empty
+        string path = test_data_dir + "/streaming-features.xlsx";
+        ExcelTestHelper::createStreamingFeaturesExcel(path);
+        dp = new ExcelReadDataProvider(path, {"worksheet": "Sparse", "data_cells": "b1", "ignore_empty": True});
+        assertEq(({"A1": 2.0}, {"A2": NOTHING, "B2": 3.0, "C2": 4.0}), (map $1, dp.searchRecords()));
+        # without ignore_empty, reading stops at the first row without a value
+        dp = new ExcelReadDataProvider(path, {"worksheet": "Sparse", "data_cells": "c1"});
+        assertEq(0, elements (map $1, dp.searchRecords()));
+
+        # an .xls workbook
+        string xls = test_data_dir + "/open-range.xls";
+        on_exit unlink(xls);
+        ExcelWriteDataProvider w(xls, {"format": "xls"});
+        w.createRecord({"Sku": "A-1", "Qty": 5, "Note": "x"});
+        w.createRecord({"Sku": "B-2", "Qty": 7, "Note": NOTHING});
+        w.commit();
+        dp = new ExcelReadDataProvider(xls, {"data_cells": "b2"});
+        assertEq(({"A2": 5.0, "B2": "x"}, {"A3": 7.0}), (map $1, dp.searchRecords()));
+    }
+
+    testWorkbookFile() {
+        string path = test_data_dir + "/workbook-file.xlsx";
+        on_exit unlink(path);
+        ExcelTestHelper::createMultiSheetExcel(path);
+        list<string> temp_files = getTempFiles("qore-excelfile-");
+
+        # the input stream is copied to a temporary file on first use, not read into memory
+        ExcelReadDataProvider dp(new FileInputStream(path), {"header_names": True});
+        assertEq(temp_files, getTempFiles("qore-excelfile-"), "nothing is copied before the workbook is used");
+        list<string> sheets = dp.getChildProviderNames();
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-excelfile-"), "the input is copied once");
+        int records = elements (map $1, dp.searchRecords());
+        assertGt(0, records);
+
+        # a worksheet provider uses the same file, which is kept until the last provider using it is destroyed
+        AbstractDataProvider ws = dp.getChildProviderEx(sheets[0]);
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-excelfile-"),
+            "worksheet providers use the same file");
+        delete dp;
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-excelfile-"),
+            "the worksheet provider keeps the file");
+        assertEq(records, elements (map $1, ws.searchRecords()));
+        delete ws;
+        assertEq(temp_files, getTempFiles("qore-excelfile-"), "the file is deleted with the last provider");
+
+        # a provider given a path and data in the options works the same way
+        foreach hash<auto> opts in ({"path": path}, {"data": ReadOnlyFile::readBinaryFile(path)}) {
+            dp = new ExcelReadDataProvider(opts + {"header_names": True});
+            assertEq(sheets, dp.getChildProviderNames(), (keys opts)[0]);
+            assertEq(records, elements (map $1, dp.searchRecords()), (keys opts)[0]);
+            delete dp;
+            assertEq(temp_files, getTempFiles("qore-excelfile-"), (keys opts)[0]);
+        }
+    }
+
+    #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints
+    private hash<auto> runChild(string src, string arg) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(src);
+        tmp.file.close();
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "QORE_JNI_MAX_HEAP_SIZE=%s %s --enable-debug %s %s 2>&1; echo CHILD_EXIT=$?", ChildHeap,
+            shellQuote(qoreBin()), shellQuote(tmp.path), shellQuote(arg));
+        string output = trim(backquote(cmd));
+        *string result = (output =~ x/^RESULT:(.*)$/m)[0];
+        if (!result) {
+            fail(sprintf("child process did not complete: %s", output));
+        }
+        assertRegex("CHILD_EXIT=0$", output);
+        return parse_json(result);
+    }
+
+    #! Returns the number of open files of this process
+    private static int countOpenFiles() {
+        Dir dir();
+        if (!dir.chdir("/dev/fd")) {
+            throw "TEST-ERROR", "/dev/fd is not available";
+        }
+        return dir.list().size();
+    }
+
+    #! Returns the files with the given prefix in the JVM's temporary directory
+    private static list<string> getTempFiles(string prefix) {
+        Dir dir();
+        dir.chdir(System::getProperty("java.io.tmpdir"));
+        return sort(dir.list("^" + prefix) ?? ());
+    }
+
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    testWriteColumnFormats() {
+        # each variant: the writer options and the file extension
+        hash<string, hash<auto>> variants = {
+            "xlsx": {"ext": "xlsx", "opts": {}},
+            "streaming xlsx": {"ext": "xlsx", "opts": {"streaming": True}},
+            "xls": {"ext": "xls", "opts": {"format": "xls"}},
+        };
+        foreach hash<auto> i in (variants.pairIterator()) {
+            string path = sprintf("%s/column-formats.%s", test_data_dir, i.value.ext);
+            on_exit unlink(path);
+            ExcelWriteDataProvider dp(path, i.value.opts + {
+                "headers": FormatHeaders,
+                "column_formats": ColumnFormats,
+            });
+            dp.createRecord(FormatRecord);
+            dp.finishCreate();
+
+            # the format code of each cell, read with POI
+            assertEq((map "General", FormatHeaders), ExcelTestHelper::getCellFormats(path, 0), i.key + ": headers");
+            assertEq(("General", "dd.mm.yyyy hh:mm", "#,##0.00;(#,##0.00)", "0.0%", "@", "General",
+                "yyyy-mm-dd hh:mm:ss"), ExcelTestHelper::getCellFormats(path, 1), i.key + ": formats");
+
+            # the values keep their types
+            ExcelReadDataProvider rdp(path, {"header_names": True});
+            list<hash<auto>> recs = map $1, rdp.searchRecords();
+            assertEq(1, recs.size(), i.key);
+            assertEq(FormatRecord + {"Amount": -1234.5, "Plain": 42.0}, recs[0], i.key + ": values");
+        }
+    }
+
+    testWriteColumnFormatsOtherValues() {
+        string path = test_data_dir + "/column-formats-other.xlsx";
+        on_exit unlink(path);
+        ExcelWriteDataProvider dp(path, {"headers": FormatHeaders, "column_formats": ColumnFormats});
+        # a value of another kind than its column's code is written without the format; no value is a blank cell
+        dp.createRecord({"Name": "b", "Date": 5, "Amount": "n/a", "Share": 2026-10-07T00:00:00, "Code": 3.5,
+            "Plain": NOTHING, "Stamp": True});
+        dp.finishCreate();
+        assertEq(("General", "General", "General", "yyyy-mm-dd hh:mm:ss", "General", "General", "General"),
+            ExcelTestHelper::getCellFormats(path, 1));
+        ExcelReadDataProvider rdp(path, {"header_names": True});
+        assertEq(({"Name": "b", "Date": 5.0, "Amount": "n/a", "Share": 2026-10-07T00:00:00, "Code": 3.5,
+            "Plain": NOTHING, "Stamp": True},), (map $1, rdp.searchRecords()));
+    }
+
+    testWriteColumnFormatStyles() {
+        foreach string format in (("xlsx", "xls")) {
+            # a workbook without column formats, for the number of cell styles a workbook has anyway
+            string base_path = sprintf("%s/styles-base.%s", test_data_dir, format);
+            on_exit unlink(base_path);
+            ExcelWriteDataProvider base(base_path, {"format": format, "headers": ("A", "B", "C")});
+            base.createRecord({"A": 1, "B": 2, "C": 3});
+            base.finishCreate();
+
+            # three columns with two distinct codes and many rows
+            string path = sprintf("%s/styles.%s", test_data_dir, format);
+            on_exit unlink(path);
+            ExcelWriteDataProvider dp(path, {"format": format, "headers": ("A", "B", "C"), "column_formats": {
+                "A": "0.00", "B": "0.00", "C": "0.0%",
+            }});
+            for (int i = 0; i < 500; ++i) {
+                dp.createRecord({"A": i, "B": i * 2, "C": i / 100.0});
+            }
+            dp.finishCreate();
+            assertEq(ExcelTestHelper::getCellStyleCount(base_path) + 2, ExcelTestHelper::getCellStyleCount(path),
+                format + ": one cell style per distinct code");
+            assertEq(("0.00", "0.00", "0.0%"), ExcelTestHelper::getCellFormats(path, 500), format);
+        }
+    }
+
+    testWriteColumnFormatsFirstRecord() {
+        string path = test_data_dir + "/column-formats-first-record.xlsx";
+        on_exit unlink(path);
+        ExcelWriteDataProvider dp(path, {"column_formats": {"Amount": "#,##0.00"}});
+        dp.createRecord({"Name": "a", "Amount": 1234.5});
+        dp.createRecord({"Name": "b", "Amount": 2});
+        dp.finishCreate();
+        assertEq(("General", "#,##0.00"), ExcelTestHelper::getCellFormats(path, 1));
+        assertEq(("General", "#,##0.00"), ExcelTestHelper::getCellFormats(path, 2));
+
+        # a column format for a column that the first record does not have
+        ExcelWriteDataProvider bad({"column_formats": {"Amount": "0.00", "Total": "0.00"}});
+        assertThrows("CREATE-RECORD-ERROR", "EXCEL-WRITE-OPTION-ERROR.*column \"Total\", which is not written",
+            \bad.createRecord(), {"Name": "a", "Amount": 1});
+        assertEq(0, bad.getCreatedCount());
+    }
+
+    testFormatCodes() {
+        foreach string code in (ValidFormatCodes) {
+            assertNothing(ExcelWriter::formatCodeIssue(code), code);
+        }
+        foreach hash<auto> i in (InvalidFormatCodes.pairIterator()) {
+            *string issue = ExcelWriter::formatCodeIssue(i.key);
+            assertNeq(NOTHING, issue, i.key);
+            assertRegex(i.value, issue ?? "", i.key);
+        }
+    }
+
+    testWriteNegativeColumnFormats() {
+        # an invalid code names its column
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", "column \"Amount\": format code \"#,##0.00 EUR\" has \"E\" at "
+            "position 10, which must be quoted", sub () {
+            ExcelWriteDataProvider dp({"column_formats": {"Amount": "#,##0.00 EUR"}});
+        });
+        # each constructor checks the codes
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", "unterminated", sub () {
+            ExcelWriteDataProvider dp(test_data_dir + "/never.xlsx", {"column_formats": {"A": "0.00["}});
+        });
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", "General", sub () {
+            ExcelWriteDataProvider dp(new StringOutputStream(), {"column_formats": {"A": "General"}});
+        });
+        assertFalse(is_file(test_data_dir + "/never.xlsx"));
+        # a column that is not in the headers
+        assertThrows("EXCEL-WRITE-OPTION-ERROR", "columns \\[\"X\", \"Y\"\\], which are not written; the columns "
+            "written are: \\[\"A\"\\]", sub () {
+            ExcelWriteDataProvider dp({"headers": ("A",), "column_formats": {"A": "0", "X": "0", "Y": "0"}});
+        });
+        # a format code must be a string: the option type check refuses other values
+        assertThrows("RUNTIME-TYPE-ERROR", "option \"column_formats\" of type \"hash<string, string>\"", sub () {
+            ExcelWriteDataProvider dp({"column_formats": {"A": 1}});
+        });
+        # the Java writer refuses invalid codes and late formats too
+        ExcelWriter writer("Sheet1", "xlsx", False);
+        on_exit writer.close();
+        assertThrows("JNI-ERROR", "column \"A\": format code \"0.0.0\" has a second decimal point",
+            \writer.setColumnFormats(), {"A": "0.0.0"});
+        writer.writeRow({"A": 1});
+        assertThrows("JNI-ERROR", "before any row is written", \writer.setColumnFormats(), {"A": "0"});
+    }
+
+    testColumnFormatsActionOption() {
+        foreach string action in (("write", "write-data")) {
+            hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("Excel", action);
+            assertTrue(exists info.options.column_formats, action);
+        }
+        hash<DataProviderOptionInfo> opt = ExcelWriteDataProvider::ConstructorOptions.column_formats;
+        assertEq("hash<string, string>", opt.type[0].getName());
+        # the example is a valid option value
+        foreach hash<auto> i in (opt.example_value.pairIterator()) {
+            assertNothing(ExcelWriter::formatCodeIssue(i.value), i.key);
+        }
+    }
+
+    testWriteColumnFormatsRendered() {
+        *string soffice = findLibreOffice();
+        if (!soffice) {
+            testSkip("LibreOffice (soffice) is not installed");
+        }
+        foreach string format in (("xlsx", "xls")) {
+            string path = sprintf("%s/column-formats-rendered.%s", test_data_dir, format);
+            on_exit unlink(path);
+            ExcelWriteDataProvider dp(path, {"format": format, "headers": FormatHeaders,
+                "column_formats": ColumnFormats});
+            dp.createRecord(FormatRecord);
+            dp.createRecord(FormatRecord + {"Amount": 1234567.891, "Share": 1});
+            dp.finishCreate();
+            assertEq((
+                {"Name": "a", "Date": "07.10.2026 13:45", "Amount": "(1,234.50)", "Share": "25.0%", "Code": "X1",
+                    "Plain": "42", "Stamp": "2026-01-05 08:05:09"},
+                {"Name": "a", "Date": "07.10.2026 13:45", "Amount": "1,234,567.89", "Share": "100.0%",
+                    "Code": "X1", "Plain": "42", "Stamp": "2026-01-05 08:05:09"},
+            ), renderWithLibreOffice(soffice, path), format);
+        }
+    }
+
+    #! Returns the path of LibreOffice's soffice program, or NOTHING if it is not installed
+    private static *string findLibreOffice() {
+        foreach string dir in (ENV.PATH.split(":")) {
+            string path = dir + "/soffice";
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+    }
+
+    #! Returns the records of a spreadsheet's first sheet as LibreOffice shows its cells
+    private list<hash<auto>> renderWithLibreOffice(string soffice, string path) {
+        TmpDir dir("render-");
+        # CSV with "save cell contents as shown"; the profile directory keeps a running LibreOffice out of the way
+        string cmd = sprintf("%s -env:UserInstallation=file://%s/profile --headless --convert-to "
+            "'csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,true' --outdir %s %s >/dev/null 2>&1",
+            shellQuote(soffice), dir.path, shellQuote(dir.path), shellQuote(path));
+        assertEq(0, system(cmd), cmd);
+        string csv = sprintf("%s/%s.csv", dir.path, basename(path).split(".")[0]);
+        return map $1, new CsvFileIterator(csv, {"header_names": True});
     }
 }

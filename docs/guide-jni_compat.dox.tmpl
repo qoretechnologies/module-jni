@@ -1,0 +1,17 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page jni_compatguide JNI Module Compatibility Options
+
+    @tableofcontents
+
+    This module supports the following compatibility option: \c "compat-types" which, when enabled, will disable the
+    following type conversions:
+    - Java \c byte[] to \c binary; instead this will converted to \c list<int>
+    - Java \c java.util.Map to \c hash; instead this will be converted directly
+
+    This option can be set globally for all Program objects with
+    <tt>set_module_option("jni", "compat-type", True)</tt> or
+    locally for the current Program container with the \c set-compat-type module parse option like:
+    <tt>%module-cmd(jni) set-compat-type true</tt> or <tt>%module-cmd(jni) set-compat-type false</tt> to
+    override the global setting.
+*/

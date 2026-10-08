@@ -62,7 +62,12 @@ static jobject jni_date_to_jobject(const DateTimeNode& qdate) {
     return env.newObject(Globals::classQoreRelativeTime, Globals::ctorQoreRelativeTime, &jargs[0]).release();
 }
 
-jobject QoreToJava::toAnyObject(Env& env, const QoreValue& value, JniExternalProgramData* jpc) {
+jobject QoreToJava::toAnyObject(Env& env, const QoreValue& value_arg, JniExternalProgramData* jpc) {
+    // A member assigned with the weak reference operator ":=" or the opaque reference operator
+    // "@=" is stored in its container as the reference itself, and converting a hash or a list
+    // passes what the container holds back here.  Resolve it, or an ordinary convertible value
+    // reaches the default case and is rejected.
+    const QoreValue value = value_arg.resolveIndirect();
     switch (value.getType()) {
         case NT_BOOLEAN: {
             jvalue arg;

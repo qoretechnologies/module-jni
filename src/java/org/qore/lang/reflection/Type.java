@@ -37,7 +37,7 @@ public class Type extends QoreObjectWrapper {
     }
 
     //! Creates the type from the given string
-    /** @param string the type string
+    /** @param typestr the type string
 
         @throw UNKNOWN-TYPE cannot find the given type
     */
@@ -214,13 +214,13 @@ public class Type extends QoreObjectWrapper {
         return obj.callMethod("getDefaultValue");
     }
 
-    //! Returns @ref true if the type accepts and returns @ref nothing in addition to other values
+    //! Returns \c true if the type accepts and returns @ref nothing in addition to other values
     /** @par Example:
         @code{.java}
     boolean b = type.isOrNothingType();
         @endcode
 
-        @return @ref true if the type accepts and returns @ref nothing in addition to other values
+        @return \c true if the type accepts and returns @ref nothing in addition to other values
     */
     public boolean isOrNothingType() throws Throwable {
         return (boolean)obj.callMethod("isOrNothingType");
@@ -270,25 +270,25 @@ public class Type extends QoreObjectWrapper {
         return null;
     }
 
-    //! Returns @ref true if the type is a TypedHash type, @ref false if not
+    //! Returns \c true if the type is a TypedHash type, \c false if not
     /** @par Example:
         @code{.java}
     boolean b = type.isTypedHash();
         @endcode
 
-        @return @ref true if the type is a TypedHash type, @ref false if not
+        @return \c true if the type is a TypedHash type, \c false if not
     */
     public boolean isTypedHash() throws Throwable {
         return (boolean)obj.callMethod("isTypedHash");
     }
 
-    //! Returns @ref true if the type is not a wildcard type; i.e. has type restrictions
+    //! Returns \c true if the type is not a wildcard type; i.e. has type restrictions
     /** @par Example:
         @code{.java}
     boolean b = type.hasType();
         @endcode
 
-        @return @ref true if the type is not a wildcard type; i.e. has type restrictions
+        @return \c true if the type is not a wildcard type; i.e. has type restrictions
     */
     public boolean hasType() throws Throwable {
         return (boolean)obj.callMethod("hasType");

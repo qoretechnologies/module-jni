@@ -120,6 +120,8 @@ module KafkaDataProvider {
 
     @section kafkadataproviderintro Introduction to the KafkaDataProvider Module
 
+    <img src="kafka-logo.svg" width="96" alt="KafkaDataProvider module logo"/>
+
     The %KafkaDataProvider module provides a data provider API for sending and receiving Kafka messages.
 
     This data provider provides Kafka functionality with the \c Kafka factory and data provider with the same name,
@@ -140,6 +142,11 @@ module KafkaDataProvider {
     @section kafkadataprovider_relnotes Release Notes
 
     @subsection kafkadataprovider_v2_1 KafkaDataProvider v2.1
+    - added record headers: the producer sends the \c headers of a request (a string value as its UTF-8 bytes, a
+      binary value as it is), and the consumer delivers the headers of a record as a hash of header names to values,
+      a value that is valid UTF-8 as a string and any other value as a binary
+    - the \c key of a producer request is optional; a record without a key is distributed over the topic's
+      partitions by the producer, and a \c partition is honored with or without a key
     - fixed the runtime classpath to include the committed \c lz4-java dependency already used by the compile
       classpath, preventing LZ4-compressed records from depending on an unrelated classloader having loaded it first
     - added AsyncAPI 3.0 validation support for producer request values and consumer event values via the
@@ -147,7 +154,7 @@ module KafkaDataProvider {
       a schema location
 
     @subsection kafkadataprovider_v1_0 KafkaDataProvider v1.0
-    - initial release of the module
+    - initial release
 */
 
 #! Contains all public definitions in the KafkaDataProvider module

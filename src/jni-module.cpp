@@ -584,10 +584,12 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
     }
     jni::Env env;
 
-    // XXX DEBUG
-    QoreProgram* ptr = (QoreProgram*)env.callLongMethod(jpc->getClassLoader(),
-        Globals::methodQoreURLClassLoaderGetPtr, nullptr);
+    // The loader ownership probe is only needed for the debug invariant.
+#ifndef NDEBUG
+    QoreProgram* ptr = reinterpret_cast<QoreProgram*>(env.callLongMethod(jpc->getClassLoader(),
+        Globals::methodQoreURLClassLoaderGetPtr, nullptr));
     assert(ptr == pgm);
+#endif
 
     env.callVoidMethod(jpc->getClassLoader(), Globals::methodQoreURLClassLoaderSetContext, nullptr);
     //printd(5, "qore_jni_mc_define_class() jpc: %p name: '%s' class size: %d\n", jpc, java_name.c_str(),

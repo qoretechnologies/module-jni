@@ -750,14 +750,17 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     }
 
     #! Converts Java UserProperty list to a Qore hash
+    /** The jni module delivers the Java list returned by @c MqttProperties.getUserProperties() as a Qore list, so
+        it is iterated as one; indexing it with the Java @c get() method fails for every message that carries user
+        properties, and such a message was never delivered.
+    */
     private static *hash<string, string> getUserPropertiesHash(MqttProperties props) {
         auto user_props = props.getUserProperties();
         if (!user_props) {
             return;
         }
         hash<string, string> rv;
-        for (int i = 0, int size = user_props.size(); i < size; ++i) {
-            UserProperty up = user_props.get(i);
+        foreach UserProperty up in (user_props) {
             rv{up.getKey()} = up.getValue();
         }
         return rv;
@@ -870,6 +873,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
 
     #! Sends a message from message-capable data providers
     /**
+        @param message_id the identifier of the message type to send
         @param msg the message to send
         @param send_message_options the options for sending the message
     */

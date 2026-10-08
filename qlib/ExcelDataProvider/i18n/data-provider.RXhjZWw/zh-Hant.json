@@ -3,65 +3,29 @@
   "locales": {
     "zh-Hant": {
       "messages": {
-        "app.RXhjZWw.action.cmVhZA.desc": {
-          "source": "Read Excel spreadsheet from a specific file location",
-          "message": "從特定的檔案位置讀取 Excel 工作表"
+        "app.RXhjZWw.display_name": {
+          "source": "Excel Spreadsheets",
+          "message": "Excel 試算表"
+        },
+        "app.RXhjZWw.short_desc": {
+          "source": "Read and write Excel spreadsheets",
+          "message": "讀取和寫入 Excel 試算表"
+        },
+        "app.RXhjZWw.desc": {
+          "source": "Read and write Excel spreadsheets",
+          "message": "讀取和寫入 Excel 試算表"
         },
         "app.RXhjZWw.action.cmVhZA.display_name": {
           "source": "Read Excel Spreadsheet File",
           "message": "讀取 Excel 工作表檔案"
         },
-        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
-          "source": "The range of cells for data to process",
-          "message": "要處理的資料儲存格範圍"
+        "app.RXhjZWw.action.cmVhZA.short_desc": {
+          "source": "Read Excel spreadsheet from a specific file location",
+          "message": "從特定的檔案位置讀取 Excel 工作表"
         },
-        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
-          "source": "Data Cells",
-          "message": "資料儲存格"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
-          "source": "The range of cells for data to process",
-          "message": "要處理的資料儲存格範圍"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
-          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
-          "message": "若為 `True`，物件將從第一個標頭列解析標頭名稱，在這種情況下，若未明確設定 `header_cells`，則會假定為第一列"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
-          "source": "Header Names?",
-          "message": "標頭名稱？"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
-          "source": "Should header rows be used as output field names?",
-          "message": "是否將標頭列用作輸出欄位名稱？"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
-          "source": "The range of cells for headers or a row number",
-          "message": "標頭的儲存格範圍或列號"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
-          "source": "Header Cells",
-          "message": "標頭儲存格"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
-          "source": "The range of cells for headers or a row number",
-          "message": "標頭的儲存格範圍或列號"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.desc": {
-          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
-          "message": "迭代資料的標頭 / 欄名稱清單；若存在此項，則 `header_names` 必須為 `False`"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
-          "source": "Output Headers",
-          "message": "輸出標頭"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.short_desc": {
-          "source": "List of header / column names for the data iterated",
-          "message": "迭代資料的標頭 / 欄名稱清單"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
-          "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
-          "message": "Excel 資料的位置；與 `data` 和 `stream` 互斥；透過呼叫 [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 來解析"
+        "app.RXhjZWw.action.cmVhZA.desc": {
+          "source": "Read Excel spreadsheet from a specific file location",
+          "message": "從特定的檔案位置讀取 Excel 工作表"
         },
         "app.RXhjZWw.action.cmVhZA.option.cGF0aA.display_name": {
           "source": "Excel Input Path",
@@ -71,9 +35,9 @@
           "source": "The location of the Excel data",
           "message": "Excel 資料的位置"
         },
-        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "要迭代的工作表名稱；若未提供，則處理第一個工作表"
+        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Excel 資料的位置；與 `data` 和 `stream` 互斥；透過呼叫 [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 來解析"
         },
         "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -83,21 +47,69 @@
           "source": "The name of the worksheet to iterate",
           "message": "要迭代的工作表名稱"
         },
-        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
-          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
-          "message": "若為 `True`（預設為 `False`），所有自動偵測到的標頭名稱都會轉換為小寫字母"
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "要逐一處理的工作表名稱（不區分大小寫比對），或以字串表示、從 0 起算的位置；若省略則處理第一個工作表；與 `worksheet_pattern` 衝突。未知的工作表會引發 `EXCEL-WORKSHEET-NOT-FOUND`，並列出檔案的工作表"
         },
-        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.display_name": {
-          "source": "Convert Headers to Lower Case",
-          "message": "將標頭轉換為小寫"
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "資料儲存格"
         },
-        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.short_desc": {
-          "source": "Convert all header names to lower case",
-          "message": "將所有標頭名稱轉換為小寫"
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "要處理的資料儲存格範圍"
         },
-        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.desc": {
-          "source": "The timezone region to use when parsing dates",
-          "message": "解析日期時使用的時區地區"
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "要處理的資料儲存格範圍"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "標頭儲存格"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "標頭的儲存格範圍或列號"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "標頭的儲存格範圍或列號"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "標頭名稱？"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "是否將標頭列用作輸出欄位名稱？"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "若為 `True`，物件將從第一個標頭列解析標頭名稱，在這種情況下，若未明確設定 `header_cells`，則會假定為第一列"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "輸出標頭"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "迭代資料的標頭 / 欄名稱清單"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "迭代資料的標頭 / 欄名稱清單；若存在此項，則 `header_names` 必須為 `False`"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "忽略空白列"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "略過空白列，而不是在第一個空白列停止"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "若為 `True`，則略過空白列，並繼續讀取至 `data_cells` 的結尾或工作表的最後一列；若為 `False`（預設值），則在第一個空白列停止讀取"
         },
         "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
@@ -107,21 +119,117 @@
           "source": "The timezone region to use when parsing dates",
           "message": "解析日期時使用的時區地區"
         },
-        "app.RXhjZWw.action.cmVhZA.short_desc": {
-          "source": "Read Excel spreadsheet from a specific file location",
-          "message": "從特定的檔案位置讀取 Excel 工作表"
+        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "解析日期時使用的時區地區"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.desc": {
-          "source": "Read Excel spreadsheet inline data",
-          "message": "讀取 Excel 工作表內聯資料"
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "將標頭轉換為小寫"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "將所有標頭名稱轉換為小寫"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "若為 `True`（預設為 `False`），所有自動偵測到的標頭名稱都會轉換為小寫字母"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "工作表名稱模式"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "符合要逐一處理之工作表名稱的正規表示式"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "工作表名稱必須恰好符合一個工作表的正規表示式，適用於工作表名稱隨檔案改變的檔案，例如 `Jan 2026` 與 `Feb 2026`：使用 `^\\w+ \\d{4}$`，或使用 `(?i)^export` 以不區分大小寫比對；模式會在名稱中搜尋，因此請以 `^` 與 `$` 錨定以比對整個名稱。沒有符合時會引發 `EXCEL-WORKSHEET-NOT-FOUND`，有多個符合時會引發 `EXCEL-WORKSHEET-AMBIGUOUS`，兩者都會列出檔案的工作表；與 `worksheet` 衝突"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.display_name": {
+          "source": "Profile Excel Spreadsheet",
+          "message": "分析 Excel 試算表"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.short_desc": {
+          "source": "Describe the layout and columns of every sheet of an Excel spreadsheet",
+          "message": "描述 Excel 試算表每個工作表的版面配置與欄位"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.desc": {
+          "source": "Describes how every sheet of an Excel spreadsheet (`.xlsx` or `.xls`) is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- hidden sheets, named ranges, merged cells, and formulas\n- the header row, title rows and banners above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself.",
+          "message": "描述 Excel 試算表 (`.xlsx` 或 `.xls`) 中每個工作表的版面配置，以便在圍繞其建立整合之前能正確讀取。\n\n**偵測內容：**\n- 隱藏的工作表、具名範圍、合併儲存格與公式\n- 標題列、其上方的標題文字列與橫幅，以及資料區域\n- 合計列與小計列，以及空白列的間隔\n- 每個欄位的類型，附信賴度與反例\n- 以本地格式儲存為文字的日期與數字，以及帶有前導零的識別碼\n\n範例值預設會遮蔽為其形狀 (`redact`)，因此可以在不包含資料本身的情況下分享分析結果。"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.display_name": {
+          "source": "Spreadsheet Location",
+          "message": "試算表位置"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The location of the spreadsheet to profile",
+          "message": "要分析的試算表位置"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.desc": {
+          "source": "The location of the spreadsheet to profile, for example `file:///data/stock.xlsx` or an `sftp://` location; conflicts with `data`",
+          "message": "要分析的試算表位置，例如 `file:///data/stock.xlsx` 或 `sftp://` 位置；不可與 `data` 同時使用"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.display_name": {
+          "source": "Spreadsheet Data",
+          "message": "試算表資料"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.short_desc": {
+          "source": "The spreadsheet content to profile",
+          "message": "要分析的試算表內容"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.desc": {
+          "source": "The spreadsheet content to profile, as bytes or as a Base64 string; conflicts with `path`",
+          "message": "要分析的試算表內容，可為位元組或 Base64 字串；不可與 `path` 同時使用"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
+          "source": "Maximum Rows",
+          "message": "最大列數"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.short_desc": {
+          "source": "The maximum number of rows read per sheet",
+          "message": "每個工作表讀取的最大列數"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
+          "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
+          "message": "每個工作表讀取並分析的最大列數；仍會回報總列數，且 `partial_profile` 發現會指出工作表還有更多列"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.display_name": {
+          "source": "Sample Rows",
+          "message": "範例列"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.short_desc": {
+          "source": "The number of sample rows returned per sheet",
+          "message": "每個工作表傳回的範例列數"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.desc": {
+          "source": "The number of sample data rows returned per sheet",
+          "message": "每個工作表傳回的範例資料列數"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
+          "source": "Redact Samples",
+          "message": "遮蔽範例"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.short_desc": {
+          "source": "Return sample values redacted to their shape",
+          "message": "傳回遮蔽為其形狀的範例值"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.desc": {
+          "source": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data",
+          "message": "若為 `True`（預設），範例值與反例會遮蔽為其形狀：字母變為 `x` 或 `X`，數字變為 `9`，因此可以在不包含資料的情況下分享分析結果"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.display_name": {
           "source": "Read Excel Spreadsheet Inline Data",
           "message": "讀取 Excel 工作表內聯資料"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
-          "source": "Excel data to process; conflicts with `stream` and `path`",
-          "message": "要處理的 Excel 資料；與 `stream` 及 `path` 衝突"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Excel spreadsheet inline data",
+          "message": "讀取 Excel 工作表內聯資料"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Excel spreadsheet inline data",
+          "message": "讀取 Excel 工作表內聯資料"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
           "source": "Input Data",
@@ -131,57 +239,9 @@
           "source": "Excel data to process",
           "message": "要處理的 Excel 資料"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
-          "source": "The range of cells for data to process",
-          "message": "要處理的資料儲存格範圍"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
-          "source": "Data Cells",
-          "message": "資料儲存格"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
-          "source": "The range of cells for data to process",
-          "message": "要處理的資料儲存格範圍"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
-          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
-          "message": "若為 `True`，物件將從第一個標頭列解析標頭名稱，在這種情況下，若未明確設定 `header_cells`，則會假定為第一列"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
-          "source": "Header Names?",
-          "message": "標頭名稱？"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
-          "source": "Should header rows be used as output field names?",
-          "message": "是否將標頭列用作輸出欄位名稱？"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
-          "source": "The range of cells for headers or a row number",
-          "message": "標頭的儲存格範圍或列號"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
-          "source": "Header Cells",
-          "message": "標頭儲存格"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
-          "source": "The range of cells for headers or a row number",
-          "message": "標頭的儲存格範圍或列號"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
-          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
-          "message": "迭代資料的標頭 / 欄名稱清單；若存在此項，則 `header_names` 必須為 `False`"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
-          "source": "Output Headers",
-          "message": "輸出標頭"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
-          "source": "List of header / column names for the data iterated",
-          "message": "迭代資料的標頭 / 欄名稱清單"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "要迭代的工作表名稱；若未提供，則處理第一個工作表"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Excel data to process; conflicts with `stream` and `path`",
+          "message": "要處理的 Excel 資料；與 `stream` 及 `path` 衝突"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -191,21 +251,69 @@
           "source": "The name of the worksheet to iterate",
           "message": "要迭代的工作表名稱"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
-          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
-          "message": "若為 `True`（預設為 `False`），所有自動偵測到的標頭名稱都會轉換為小寫字母"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "要逐一處理的工作表名稱（不區分大小寫比對），或以字串表示、從 0 起算的位置；若省略則處理第一個工作表；與 `worksheet_pattern` 衝突。未知的工作表會引發 `EXCEL-WORKSHEET-NOT-FOUND`，並列出檔案的工作表"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
-          "source": "Convert Headers to Lower Case",
-          "message": "將標頭轉換為小寫"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "資料儲存格"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
-          "source": "Convert all header names to lower case",
-          "message": "將所有標頭名稱轉換為小寫"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "要處理的資料儲存格範圍"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
-          "source": "The timezone region to use when parsing dates",
-          "message": "解析日期時使用的時區地區"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "要處理的資料儲存格範圍"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "標頭儲存格"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "標頭的儲存格範圍或列號"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "標頭的儲存格範圍或列號"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "標頭名稱？"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "是否將標頭列用作輸出欄位名稱？"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "若為 `True`，物件將從第一個標頭列解析標頭名稱，在這種情況下，若未明確設定 `header_cells`，則會假定為第一列"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "輸出標頭"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "迭代資料的標頭 / 欄名稱清單"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "迭代資料的標頭 / 欄名稱清單；若存在此項，則 `header_names` 必須為 `False`"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "忽略空白列"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "略過空白列，而不是在第一個空白列停止"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "若為 `True`，則略過空白列，並繼續讀取至 `data_cells` 的結尾或工作表的最後一列；若為 `False`（預設值），則在第一個空白列停止讀取"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
@@ -215,81 +323,45 @@
           "source": "The timezone region to use when parsing dates",
           "message": "解析日期時使用的時區地區"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.short_desc": {
-          "source": "Read Excel spreadsheet inline data",
-          "message": "讀取 Excel 工作表內聯資料"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "解析日期時使用的時區地區"
         },
-        "app.RXhjZWw.action.d3JpdGU.desc": {
-          "source": "Write data to an Excel spreadsheet file at a specified path",
-          "message": "將資料寫入指定路徑的 Excel 工作表檔案"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "將標頭轉換為小寫"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "將所有標頭名稱轉換為小寫"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "若為 `True`（預設為 `False`），所有自動偵測到的標頭名稱都會轉換為小寫字母"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "工作表名稱模式"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "符合要逐一處理之工作表名稱的正規表示式"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "工作表名稱必須恰好符合一個工作表的正規表示式，適用於工作表名稱隨檔案改變的檔案，例如 `Jan 2026` 與 `Feb 2026`：使用 `^\\w+ \\d{4}$`，或使用 `(?i)^export` 以不區分大小寫比對；模式會在名稱中搜尋，因此請以 `^` 與 `$` 錨定以比對整個名稱。沒有符合時會引發 `EXCEL-WORKSHEET-NOT-FOUND`，有多個符合時會引發 `EXCEL-WORKSHEET-AMBIGUOUS`，兩者都會列出檔案的工作表；與 `worksheet` 衝突"
         },
         "app.RXhjZWw.action.d3JpdGU.display_name": {
           "source": "Write Excel Spreadsheet File",
           "message": "寫入 Excel 工作表檔案"
         },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
-          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
-          "message": "Excel 2007+ 格式 (`.xlsx`)；支援大檔案的串流模式"
+        "app.RXhjZWw.action.d3JpdGU.short_desc": {
+          "source": "Write data to an Excel spreadsheet file",
+          "message": "將資料寫入 Excel 試算表檔案"
         },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
-          "source": "XLSX",
-          "message": "XLSX"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
-          "source": "Excel 2007+ format (.xlsx)",
-          "message": "Excel 2007+ 格式 (.xlsx)"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
-          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
-          "message": "傳統 Excel 97-2003 二進位格式 (`.xls`)；每個工作表限制為 65,536 列和 256 欄"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
-          "source": "XLS",
-          "message": "XLS"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
-          "source": "Excel 97-2003 format (.xls)",
-          "message": "Excel 97-2003 格式 (.xls)"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.desc": {
-          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
-          "message": "要使用的 Excel 格式：`xlsx`（預設，Excel 2007+）或 `xls`（Excel 97-2003）"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.display_name": {
-          "source": "Output Format",
-          "message": "輸出格式"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.short_desc": {
-          "source": "Excel format to use",
-          "message": "要使用的 Excel 格式"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.desc": {
-          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
-          "message": "資料的標頭 / 欄名稱清單；若未提供，將從第一筆記錄自動偵測標頭"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.display_name": {
-          "source": "Column Headers",
-          "message": "欄標頭"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
-          "source": "List of header / column names for the data",
-          "message": "資料的標頭 / 欄名稱清單"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.desc": {
-          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
-          "message": "若為 `True`，則使用 SXSSF 串流模式寫入大檔案以減少記憶體使用量；僅適用於 `xlsx` 格式"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.display_name": {
-          "source": "Streaming Mode",
-          "message": "串流模式"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.short_desc": {
-          "source": "Use streaming mode for large files",
-          "message": "在大檔案中使用串流模式"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.desc": {
-          "source": "The location for the output Excel data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
-          "message": "輸出 Excel 資料檔案的位置；與 `stream` 互斥；透過呼叫 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 來處理輸出位置"
+        "app.RXhjZWw.action.d3JpdGU.desc": {
+          "source": "Write data to an Excel spreadsheet file at a specified path",
+          "message": "將資料寫入指定路徑的 Excel 工作表檔案"
         },
         "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "Excel Output Path",
@@ -299,9 +371,9 @@
           "source": "The location to write the Excel file",
           "message": "寫入 Excel 檔案的位置"
         },
-        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to create; default is `Sheet1`",
-          "message": "要建立的工作表名稱；預設為 `Sheet1`"
+        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Excel data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "輸出 Excel 資料檔案的位置；與 `stream` 互斥；透過呼叫 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 來處理輸出位置"
         },
         "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -311,81 +383,93 @@
           "source": "The name of the worksheet to create",
           "message": "要建立的工作表名稱"
         },
-        "app.RXhjZWw.action.d3JpdGU.short_desc": {
-          "source": "Write data to an Excel spreadsheet file",
-          "message": "將資料寫入 Excel 試算表檔案"
+        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; default is `Sheet1`",
+          "message": "要建立的工作表名稱；預設為 `Sheet1`"
         },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create Excel spreadsheet data in memory and return it as binary data; useful for generating Excel files without writing to disk",
-          "message": "在記憶體中建立 Excel 試算表資料並將其作為二進位資料傳回；適用於生成 Excel 檔案而不寫入磁碟"
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄標頭"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "資料的標頭 / 欄名稱清單"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "資料的標頭 / 欄名稱清單；若未提供，將從第一筆記錄自動偵測標頭"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.display_name": {
+          "source": "Output Format",
+          "message": "輸出格式"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.short_desc": {
+          "source": "Excel format to use",
+          "message": "要使用的 Excel 格式"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.desc": {
+          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
+          "message": "要使用的 Excel 格式：`xlsx`（預設，Excel 2007+）或 `xls`（Excel 97-2003）"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+ 格式 (.xlsx)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
+          "message": "Excel 2007+ 格式 (`.xlsx`)；支援大檔案的串流模式"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
+          "source": "XLS",
+          "message": "XLS"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
+          "source": "Excel 97-2003 format (.xls)",
+          "message": "Excel 97-2003 格式 (.xls)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
+          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
+          "message": "傳統 Excel 97-2003 二進位格式 (`.xls`)；每個工作表限制為 65,536 列和 256 欄"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.display_name": {
+          "source": "Streaming Mode",
+          "message": "串流模式"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.short_desc": {
+          "source": "Use streaming mode for large files",
+          "message": "在大檔案中使用串流模式"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.desc": {
+          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
+          "message": "若為 `True`，則使用 SXSSF 串流模式寫入大檔案以減少記憶體使用量；僅適用於 `xlsx` 格式"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.display_name": {
+          "source": "Column Display Formats",
+          "message": "欄位顯示格式"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.short_desc": {
+          "source": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+          "message": "每個欄位的顯示格式，例如 dd.mm.yyyy 或 #,##0.00"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.desc": {
+          "source": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  A column without a format is written as without this option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\nFormat codes are written as in Excel and LibreOffice:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `EXCEL-WRITE-OPTION-ERROR` naming the column and the problem",
+          "message": "依標題名稱指定的欄位顯示格式，讓開啟檔案的人都能依預期看到每個值：日期顯示為 `dd.mm.yyyy`、金額顯示為 `#,##0.00`，或比例顯示為 `0.0%`。儲存格會保留其實際值（日期仍為日期，數字仍為數字），只有顯示方式會改變。未指定格式的欄位會如同未使用此選項時一樣寫入：日期為 `yyyy-mm-dd hh:mm:ss`，數字則不套用格式。\n\n格式代碼的寫法與 Excel 和 LibreOffice 相同：\n- **數字**：`0`（一律顯示的位數）、`#`（有效時才顯示的位數）、位數之間的 `,`（千分位分組）、最後一位數之後的 `,`（除以 1000）、`.`（小數點）以及 `E+00`（科學記號）；正值、負值與零值最多可有三個以 `;` 分隔的區段，例如 `#,##0.00;(#,##0.00)` 或 `#,##0.00;#,##0.00-`\n- **百分比**：每個區段中有一個 `%`，例如 `0.0%`；值為小數，因此 `0.25` 會顯示為 `25.0%`\n- **日期與時間**：`yy` 或 `yyyy`（年）、`m`、`mm`、`mmm` 或 `mmmm`（以數字或名稱表示的月）、`d` 或 `dd`（日）、`ddd` 或 `dddd`（星期名稱）、`h` 或 `hh`（時）、緊接在時之後或秒之前的 `m` 或 `mm`（分）、`s` 或 `ss`（秒）、秒之後的 `.0` 至 `.000`（秒的小數部分），以及 `AM/PM`，例如 `dd.mm.yyyy hh:mm`\n- **文字**：`@`\n\n代碼中的文字可以雙引號括住（`\"EUR\"`）、以反斜線跳脫（`\\x`）、寫成方括號中的貨幣符號（`[$€-407]`），而 `$ - + / ( ) :`、空格及 `€` 等符號則可直接書寫；區段可以用 `[Red]` 等色彩開頭。\n\n欄位代碼無法顯示的值（例如數字欄位中的字串）會以不套用格式的方式寫入。無效或不支援的代碼（`General`、分數、填滿字元、條件或經過時間），或未寫入的欄位，會引發 `EXCEL-WRITE-OPTION-ERROR`，並指出該欄位與問題"
         },
         "app.RXhjZWw.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create Excel Spreadsheet Data",
           "message": "建立 Excel 試算表資料"
         },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
-          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
-          "message": "Excel 2007+ 格式 (`.xlsx`)；支援大檔案的串流模式"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Excel spreadsheet data and return as binary",
+          "message": "建立 Excel 試算表資料並作為二進位傳回"
         },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
-          "source": "XLSX",
-          "message": "XLSX"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
-          "source": "Excel 2007+ format (.xlsx)",
-          "message": "Excel 2007+ 格式 (.xlsx)"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
-          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
-          "message": "傳統 Excel 97-2003 二進位格式 (`.xls`)；每個工作表限制為 65,536 列和 256 欄"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
-          "source": "XLS",
-          "message": "XLS"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
-          "source": "Excel 97-2003 format (.xls)",
-          "message": "Excel 97-2003 格式 (.xls)"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.desc": {
-          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
-          "message": "要使用的 Excel 格式：`xlsx`（預設，Excel 2007+）或 `xls`（Excel 97-2003）"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.display_name": {
-          "source": "Output Format",
-          "message": "輸出格式"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.short_desc": {
-          "source": "Excel format to use",
-          "message": "要使用的 Excel 格式"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
-          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
-          "message": "資料的標頭 / 欄名稱清單；若未提供，將從第一筆記錄自動偵測標頭"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
-          "source": "Column Headers",
-          "message": "欄標頭"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
-          "source": "List of header / column names for the data",
-          "message": "資料的標頭 / 欄名稱清單"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.desc": {
-          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
-          "message": "若為 `True`，則使用 SXSSF 串流模式寫入大檔案以減少記憶體使用量；僅適用於 `xlsx` 格式"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.display_name": {
-          "source": "Streaming Mode",
-          "message": "串流模式"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.short_desc": {
-          "source": "Use streaming mode for large files",
-          "message": "在大檔案中使用串流模式"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to create; default is `Sheet1`",
-          "message": "要建立的工作表名稱；預設為 `Sheet1`"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Excel spreadsheet data in memory and return it as binary data; useful for generating Excel files without writing to disk",
+          "message": "在記憶體中建立 Excel 試算表資料並將其作為二進位資料傳回；適用於生成 Excel 檔案而不寫入磁碟"
         },
         "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -395,21 +479,81 @@
           "source": "The name of the worksheet to create",
           "message": "要建立的工作表名稱"
         },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Create Excel spreadsheet data and return as binary",
-          "message": "建立 Excel 試算表資料並作為二進位傳回"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; default is `Sheet1`",
+          "message": "要建立的工作表名稱；預設為 `Sheet1`"
         },
-        "app.RXhjZWw.desc": {
-          "source": "Read and write Excel spreadsheets",
-          "message": "讀取和寫入 Excel 試算表"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "欄標頭"
         },
-        "app.RXhjZWw.display_name": {
-          "source": "Excel Spreadsheets",
-          "message": "Excel 試算表"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "資料的標頭 / 欄名稱清單"
         },
-        "app.RXhjZWw.short_desc": {
-          "source": "Read and write Excel spreadsheets",
-          "message": "讀取和寫入 Excel 試算表"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "資料的標頭 / 欄名稱清單；若未提供，將從第一筆記錄自動偵測標頭"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.display_name": {
+          "source": "Output Format",
+          "message": "輸出格式"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.short_desc": {
+          "source": "Excel format to use",
+          "message": "要使用的 Excel 格式"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.desc": {
+          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
+          "message": "要使用的 Excel 格式：`xlsx`（預設，Excel 2007+）或 `xls`（Excel 97-2003）"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+ 格式 (.xlsx)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
+          "message": "Excel 2007+ 格式 (`.xlsx`)；支援大檔案的串流模式"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
+          "source": "XLS",
+          "message": "XLS"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
+          "source": "Excel 97-2003 format (.xls)",
+          "message": "Excel 97-2003 格式 (.xls)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
+          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
+          "message": "傳統 Excel 97-2003 二進位格式 (`.xls`)；每個工作表限制為 65,536 列和 256 欄"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.display_name": {
+          "source": "Streaming Mode",
+          "message": "串流模式"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.short_desc": {
+          "source": "Use streaming mode for large files",
+          "message": "在大檔案中使用串流模式"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.desc": {
+          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
+          "message": "若為 `True`，則使用 SXSSF 串流模式寫入大檔案以減少記憶體使用量；僅適用於 `xlsx` 格式"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.display_name": {
+          "source": "Column Display Formats",
+          "message": "欄位顯示格式"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.short_desc": {
+          "source": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+          "message": "每個欄位的顯示格式，例如 dd.mm.yyyy 或 #,##0.00"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.desc": {
+          "source": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  A column without a format is written as without this option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\nFormat codes are written as in Excel and LibreOffice:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `EXCEL-WRITE-OPTION-ERROR` naming the column and the problem",
+          "message": "依標題名稱指定的欄位顯示格式，讓開啟檔案的人都能依預期看到每個值：日期顯示為 `dd.mm.yyyy`、金額顯示為 `#,##0.00`，或比例顯示為 `0.0%`。儲存格會保留其實際值（日期仍為日期，數字仍為數字），只有顯示方式會改變。未指定格式的欄位會如同未使用此選項時一樣寫入：日期為 `yyyy-mm-dd hh:mm:ss`，數字則不套用格式。\n\n格式代碼的寫法與 Excel 和 LibreOffice 相同：\n- **數字**：`0`（一律顯示的位數）、`#`（有效時才顯示的位數）、位數之間的 `,`（千分位分組）、最後一位數之後的 `,`（除以 1000）、`.`（小數點）以及 `E+00`（科學記號）；正值、負值與零值最多可有三個以 `;` 分隔的區段，例如 `#,##0.00;(#,##0.00)` 或 `#,##0.00;#,##0.00-`\n- **百分比**：每個區段中有一個 `%`，例如 `0.0%`；值為小數，因此 `0.25` 會顯示為 `25.0%`\n- **日期與時間**：`yy` 或 `yyyy`（年）、`m`、`mm`、`mmm` 或 `mmmm`（以數字或名稱表示的月）、`d` 或 `dd`（日）、`ddd` 或 `dddd`（星期名稱）、`h` 或 `hh`（時）、緊接在時之後或秒之前的 `m` 或 `mm`（分）、`s` 或 `ss`（秒）、秒之後的 `.0` 至 `.000`（秒的小數部分），以及 `AM/PM`，例如 `dd.mm.yyyy hh:mm`\n- **文字**：`@`\n\n代碼中的文字可以雙引號括住（`\"EUR\"`）、以反斜線跳脫（`\\x`）、寫成方括號中的貨幣符號（`[$€-407]`），而 `$ - + / ( ) :`、空格及 `€` 等符號則可直接書寫；區段可以用 `[Red]` 等色彩開頭。\n\n欄位代碼無法顯示的值（例如數字欄位中的字串）會以不套用格式的方式寫入。無效或不支援的代碼（`General`、分數、填滿字元、條件或經過時間），或未寫入的欄位，會引發 `EXCEL-WRITE-OPTION-ERROR`，並指出該欄位與問題"
         }
       }
     }

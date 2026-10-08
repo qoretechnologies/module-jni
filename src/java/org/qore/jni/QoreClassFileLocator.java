@@ -32,7 +32,7 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.dynamic.ClassFileLocator;
 import net.bytebuddy.dynamic.scaffold.TypeValidation;
 
-//! A Byte Buddy {@link ClassFileLocator} that supplies class file bytecode from a
+//! A Byte Buddy <tt>ClassFileLocator</tt> that supplies class file bytecode from a
 //! {@link QoreURLClassLoader}.
 /** This is used to describe a class's superclass chain to a Byte Buddy {@code TypePool} from
     bytecode during dynamic class generation, instead of describing it via reflection on loaded

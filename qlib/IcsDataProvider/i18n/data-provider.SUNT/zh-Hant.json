@@ -184,8 +184,8 @@
           "message": "將行事曆事件或待辦事項寫入至 ICS 檔案"
         },
         "app.SUNT.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create iCalendar event or to-do data in memory and return it as binary data.\n\nUse this action when you need to generate an ICS file without writing to disk -- for example, to return the calendar as an API response, attach it to an email, or pass it to another processing step. Retrieve the result by calling `getData()` on the provider after creating all records.\n\n**Key Options**:\n- `content_type` (optional) -- \"events\" (default) or \"todos\"\n- No other required options -- records are added via `createRecord()` and binary data is retrieved via `getData()`",
-          "message": "在記憶體中建立 iCalendar 事件或待辦事項資料，並將其作為二進位資料傳回。\n\n當您需要產生 ICS 檔案而無需寫入磁碟時使用此動作，例如，將行事曆作為 API 回應傳回、將其附加至電子郵件，或將其傳遞給另一個處理步驟。建立所有記錄後，透過在提供者上呼叫 `getData()` 來擷取結果。\n\n**主要選項**：\n- `content_type`（選用）-- \"events\"（預設）或 \"todos\"\n- 無其他必要選項 -- 記錄透過 `createRecord()` 新增，二進位資料透過 `getData()` 擷取"
+          "source": "Create iCalendar event or to-do data in memory and return it as binary data.\n\nUse this action when you need to generate an ICS file without writing to disk -- for example, to return the calendar as an API response, attach it to an email, or pass it to another processing step. The action returns the generated ICS data in `data` and the number of records in `record_count`.\n\n**Key Options**:\n- `content_type` (optional) -- \"events\" (default) or \"todos\"",
+          "message": "在記憶體中建立 iCalendar 事件或待辦事項資料，並將其作為二進位資料傳回。\n\n當您需要產生 ICS 檔案而不寫入磁碟時，請使用此動作，例如將行事曆作為 API 回應傳回、附加至電子郵件，或傳遞至其他處理步驟。動作會在 `data` 中傳回產生的 ICS 資料，並在 `record_count` 中傳回記錄數。\n\n**主要選項**：\n- `content_type`（選用）-- \"events\"（預設）或 \"todos\""
         },
         "app.SUNT.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create ICS Calendar Data",

@@ -90,6 +90,36 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
                 "desc": "If `True`, use SXSSF streaming mode for writing large files with reduced memory "
                     "usage; only applies to `xlsx` format",
             },
+            "column_formats": <DataProviderOptionInfo>{
+                "display_name": "Column Display Formats",
+                "short_desc": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+                "type": AbstractDataProviderType::get(new Type("hash<string, string>")),
+                "desc": "The display format of columns by their header name, so that whoever opens the file sees "
+                    "each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as "
+                    "`0.0%`.  The cells keep their real values (a date stays a date and a number a number); only "
+                    "the way they are shown changes.  A column without a format is written as without this "
+                    "option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\n"
+                    "Format codes are written as in Excel and LibreOffice:\n"
+                    "- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` "
+                    "between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the "
+                    "decimal point), and `E+00` (scientific notation); up to three sections for positive, negative "
+                    "and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n"
+                    "- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` "
+                    "is shown as `25.0%`\n"
+                    "- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number "
+                    "or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or "
+                    "`mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to "
+                    "`.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n"
+                    "- **text**: `@`\n\n"
+                    "Text in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as "
+                    "a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and "
+                    "symbols such as `€`; a section can start with a color such as `[Red]`.\n\n"
+                    "A value that its column's code does not show, such as a string in a number column, is "
+                    "written without the format.  An invalid or unsupported code (`General`, fractions, fill "
+                    "characters, conditions, or elapsed times), or a column that is not written, raises "
+                    "`EXCEL-WRITE-OPTION-ERROR` naming the column and the problem",
+                "example_value": {"Date": "dd.mm.yyyy", "Amount": "#,##0.00;(#,##0.00)", "Share": "0.0%"},
+            },
         };
     }
 
@@ -184,10 +214,49 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Sets up the writer
+    /** @throw EXCEL-WRITE-OPTION-ERROR an invalid format code in \c column_formats, or a format for a column that
+        is not in \c headers
+    */
     private setupWriter() {
+        if (opts.column_formats) {
+            checkColumnFormats();
+        }
         writer = new ExcelWriter(opts.worksheet ?? "Sheet1", opts.format ?? "xlsx", opts.streaming ?? False);
         if (opts.headers) {
             writer.setHeaders(opts.headers);
+        }
+        if (opts.column_formats) {
+            writer.setColumnFormats(opts.column_formats);
+        }
+    }
+
+    #! Checks the \c column_formats option: each format code is valid, and with \c headers, each column is written
+    /** @throw EXCEL-WRITE-OPTION-ERROR an invalid format code, or a format for a column that is not in \c headers
+    */
+    private checkColumnFormats() {
+        foreach hash<auto> i in (opts.column_formats.pairIterator()) {
+            *string issue = ExcelWriter::formatCodeIssue(i.value);
+            if (issue) {
+                error("EXCEL-WRITE-OPTION-ERROR", "invalid \"column_formats\" option: column %y: %s", i.key, issue);
+            }
+        }
+        if (opts.headers) {
+            checkFormatColumns(opts.headers);
+        }
+    }
+
+    #! Checks that each column in the \c column_formats option is written
+    /** @param columns the columns written
+
+        @throw EXCEL-WRITE-OPTION-ERROR a format for a column that is not written
+    */
+    private checkFormatColumns(*list<string> columns) {
+        hash<string, bool> written = map {$1: True}, columns;
+        *list<string> unknown = select keys opts.column_formats, !written{$1};
+        if (unknown) {
+            error("EXCEL-WRITE-OPTION-ERROR", "invalid \"column_formats\" option: a format is given for %s %y, "
+                "which %s not written; the columns written are: %y", unknown.size() == 1 ? "column" : "columns",
+                unknown.size() == 1 ? unknown[0] : unknown, unknown.size() == 1 ? "is" : "are", columns);
         }
     }
 
@@ -206,8 +275,15 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
         @param create_options no options are currently supported
 
         @return the record created (echoes back the input)
+
+        @throw EXCEL-WRITE-OPTION-ERROR without \c headers, the first record has no key for a column in
+        \c column_formats
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
+        # without headers, the first record's keys are the columns
+        if (!created && !opts.headers && opts.column_formats) {
+            checkFormatColumns(keys rec);
+        }
         writer.writeRow(rec);
         ++created;
         return rec;
@@ -237,6 +313,23 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
         }
     }
 
+    #! Completes the create operations: writes the Excel data to its path or stream, if any
+    /** @return the generated Excel data and the number of records in it, if there is no output path or stream;
+        otherwise no value is returned
+    */
+    private *hash<GeneratedDataInfo> finishCreateImpl() {
+        if (path || stream) {
+            commit();
+            return;
+        }
+        # the data must be read before commit() closes the writer
+        on_exit commit();
+        return <GeneratedDataInfo>{
+            "data": getData(),
+            "record_count": created,
+        };
+    }
+
     #! Returns the data as binary
     /** @return the Excel file contents as binary data
 
@@ -252,6 +345,18 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
     #! Returns the number of records created
     int getCreatedCount() {
         return created;
+    }
+
+    #! Returns the record type: the \c headers columns, or an open record type if headers are taken from the first record
+    /** @param search_options ignored
+
+        @return a field for each column in the \c headers option, or @ref NOTHING (an open record shape) if no
+        headers are given, in which case the first record's keys are used as the columns
+    */
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return map {
+            $1: new QoreDataField($1, "Excel column " + $1, AbstractDataProviderType::anyDataType)
+        }, opts.headers;
     }
 
     #! Returns data provider static info

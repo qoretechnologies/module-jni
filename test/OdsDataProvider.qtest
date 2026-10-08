@@ -24,9 +24,13 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
+%requires json
+%requires FsUtil
+%requires CsvUtil
 %requires jni
 
 # Add classpaths for ODFDOM and the test helper BEFORE loading OdsDataProvider
@@ -61,12 +65,67 @@
 %module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/jena-iri-4.10.0.jar
 %module-cmd(jni) add-relative-classpath ../qlib/OdsDataProvider/jar/RoaringBitmap-1.0.0.jar
 %module-cmd(jni) import org.qore.dataprovider.ods.OdsTestHelper
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsIterator
+%module-cmd(jni) import org.qore.dataprovider.ods.OdsWriter
+%module-cmd(jni) import java.lang.System
 
-%requires ../qlib/OdsDataProvider
+%requires OdsDataProvider
+%requires ExcelDataProvider
 
 %exec-class OdsDataProviderTest
 
 public class OdsDataProviderTest inherits QUnit::Test {
+    public {
+        #! the number of data rows of the large document
+        const LargeRows = 200000;
+        #! the JVM heap of the child process that reads a large document
+        const ChildHeap = "64m";
+
+        #! the columns of the column format tests
+        const FormatHeaders = ("Name", "Date", "Amount", "Share", "Code", "Plain", "Stamp");
+
+        #! the column formats of the column format tests; Name, Plain and Stamp have none
+        const ColumnFormats = {
+            "Date": "dd.mm.yyyy hh:mm",
+            "Amount": "#,##0.00;(#,##0.00)",
+            "Share": "0.0%",
+            "Code": "@",
+        };
+
+        #! a record of the column format tests
+        const FormatRecord = {
+            "Name": "a",
+            "Date": 2026-10-07T13:45:10,
+            "Amount": -1234.5,
+            "Share": 0.25,
+            "Code": "X1",
+            "Plain": 42,
+            "Stamp": 2026-01-05T08:05:09,
+        };
+
+        #! number codes compared with Excel's display, with the values they are shown with
+        const NumberCodes = (
+            "0", "0.00", "#,##0", "#,##0.00", "#,##0.00;(#,##0.00)", "#,##0.00;#,##0.00-", "0.0%", "0%", "#,##0,",
+            "0.0,,\" M\"", "0.00E+00", "\"€\" #,##0.00", "#,##0.00 [$€-407]", "[Red]#,##0;[Blue]-#,##0", "0.0#",
+            "#.##", "#,##0.00;(#,##0.00);\"-\"", "000000", "#,##0.00_);(#,##0.00)", "\\$#,##0.00", ".00",
+            "0.0%;(0.0%)", "#,##0.00;\"negative\"",
+        );
+        const NumberValues = (1234.5678, -1234.5678, 0, 0.25, 1234567.891, 5n, -0.004);
+
+        #! date codes compared with Excel's display, with the values they are shown with
+        const DateCodes = (
+            "dd.mm.yyyy", "yyyy-mm-dd", "d/m/yy", "mmm d, yyyy", "mmmm yyyy", "dddd, d mmmm yyyy", "hh:mm",
+            "h:mm AM/PM", "hh:mm:ss.000", "yyyy-mm-dd\"T\"hh:mm:ss", "DD.MM.YYYY HH:MM:SS", "ddd", "m/d/yyyy h:mm",
+            "mm:ss", "h:mm:ss.0", "[Red]dd.mm.yyyy", "dd. mmmm yyyy",
+        );
+        const DateValues = (2026-10-07T13:45:10.123, 2026-01-05T08:05:09, 2026-12-31T23:59:59.999,
+            2026-06-01T00:00:00);
+
+        #! text codes compared with Excel's display, with the values they are shown with
+        const TextCodes = ("@", "\"Text: \"@", "[Blue]@");
+        const TextValues = ("abc", "x y");
+    }
+
     private {
         string test_data_dir;
     }
@@ -89,6 +148,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("header_names option", \testHeaderNames());
         addTestCase("tolwr option", \testTolwr());
         addTestCase("timezone option", \testTimezone());
+        addTestCase("date and time cells are their clock time in the timezone", \testWallClockTimes());
         addTestCase("worksheet option", \testWorksheet());
         addTestCase("cell range parsing", \testCellRangeParsing());
         addTestCase("data types", \testDataTypes());
@@ -96,6 +156,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("factory tests", \testFactory());
         addTestCase("negative: invalid path", \testNegativeInvalidPath());
         addTestCase("negative: invalid worksheet", \testNegativeInvalidWorksheet());
+        addTestCase("worksheet selection by name, position and pattern", \testWorksheetSelection());
         addTestCase("negative: invalid cell range", \testNegativeInvalidCellRange());
         addTestCase("negative: option conflicts", \testNegativeOptionConflicts());
         addTestCase("edge case: empty worksheet", \testEdgeCaseEmptyWorksheet());
@@ -109,7 +170,36 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("write: negative - path+stream conflict", \testWriteNegativePathStreamConflict());
         addTestCase("action registration", \testActionRegistration());
         addTestCase("roundtrip: write and read", \testRoundtrip());
+        addTestCase("read: no header options reads from the first row", \testReadFromFirstRow());
+        addTestCase("cell ranges: columns past Z", \testColumnsPastZ());
+        addTestCase("negative: headers + header_names in every constructor", \testHeaderOptionConflictAllCtors());
+        addTestCase("worksheet provider: options constructor", \testWorksheetOptionsCtor());
+        addTestCase("write: headers from the first record", \testWriteHeadersFromFirstRecord());
 
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
+        addTestCase("writer record type", \testWriterRecordType());
+        addTestCase("read: empty rows", \testReadEmptyRows());
+        addTestCase("read: repeated empty rows", \testReadRepeatedEmptyRows());
+        addTestCase("profile: raw spreadsheet grid", \testProfileGrid());
+        addTestCase("profile action", \testProfileAction());
+        addTestCase("read: the workbook is reusable in any call order", \testWorkbookReuse());
+        addTestCase("read: row groups, header rows, repeated and covered cells", \testStructuredTable());
+        addTestCase("read: a large document is read in bounded memory", \testLargeDocument());
+        addTestCase("read: closing an iteration early releases the document", \testEarlyClose());
+        addTestCase("read: currency and percentage cells are numbers", \testNumberFormats());
+        addTestCase("read: date and time cells across daylight saving time changes", \testDaylightSaving());
+        addTestCase("read: a data range without an end column or headers", \testOpenDataRange());
+        addTestCase("read: the input is copied to a file once and deleted with the providers", \testWorkbookFile());
+        addTestCase("write: dates keep their time of day", \testWriteDateTimes());
+        addTestCase("write: column display formats", \testWriteColumnFormats());
+        addTestCase("write: a column format shows only values of its kind", \testWriteColumnFormatsOtherValues());
+        addTestCase("write: one data style per distinct column format", \testWriteColumnFormatStyles());
+        addTestCase("write: column formats with headers from the first record", \testWriteColumnFormatsFirstRecord());
+        addTestCase("write: negative - invalid column formats", \testWriteNegativeColumnFormats());
+        addTestCase("write: the write actions offer column formats", \testColumnFormatsActionOption());
+        addTestCase("write: column formats as LibreOffice shows them", \testWriteColumnFormatsRendered());
+        addTestCase("write: ODS data styles show each code as Excel does", \testColumnFormatsLikeExcel());
+        addTestCase("negative: a file that cannot be read as a spreadsheet", \testUnreadableFiles());
         set_return_value(main());
     }
 
@@ -123,12 +213,15 @@ public class OdsDataProviderTest inherits QUnit::Test {
         OdsTestHelper::createSimpleOds(test_data_dir + "/simple.ods");
         OdsTestHelper::createMultiSheetOds(test_data_dir + "/multi-sheet.ods");
         OdsTestHelper::createDatesOds(test_data_dir + "/dates.ods");
+        OdsTestHelper::createDateTimesOds(test_data_dir + "/date-times.ods");
         OdsTestHelper::createEmptyOds(test_data_dir + "/empty.ods");
         OdsTestHelper::createNoHeadersOds(test_data_dir + "/no-headers.ods");
+        OdsTestHelper::createRepeatedEmptyRowsOds(test_data_dir + "/repeated-empty-rows.ods");
         OdsTestHelper::createSpecialCharsOds(test_data_dir + "/special-chars.ods");
         OdsTestHelper::createMixedCaseHeadersOds(test_data_dir + "/mixed-case-headers.ods");
         OdsTestHelper::createOffsetDataOds(test_data_dir + "/offset-data.ods");
         OdsTestHelper::createDataTypesOds(test_data_dir + "/data-types.ods");
+        OdsTestHelper::createProfileOds(test_data_dir + "/profile.ods");
 
         assertTrue(is_file(test_data_dir + "/simple.ods"), "simple.ods created");
     }
@@ -269,6 +362,22 @@ public class OdsDataProviderTest inherits QUnit::Test {
         assertTrue(records[0].Date instanceof date, "Date should be a date type");
     }
 
+    testWallClockTimes() {
+        # the file has no zone: each cell is its written clock time in the zone the reader is given, whatever
+        # the zone of the JVM, as for Excel
+        foreach string zone in (("America/New_York", "Europe/Prague", "Asia/Tokyo", "UTC")) {
+            OdsReadDataProvider dp(test_data_dir + "/date-times.ods", {"header_names": True, "timezone": zone});
+            hash<auto> r = (map $1, dp.searchRecords())[0];
+            TimeZone tz(zone);
+            assertEq(tz.date("2025-01-15 00:00:00", "YYYY-MM-DD HH:mm:SS"), r.Date, zone + ": a date");
+            assertEq(tz.date("2025-07-01 14:30:05", "YYYY-MM-DD HH:mm:SS"), r.DateTime, zone + ": a date and time");
+            # a time cell: its clock time, in the zone
+            assertEq("09:45:00", r.Time.format("HH:mm:SS"), zone + ": a time");
+            assertEq(tz.date(r.Time.format("YYYY-MM-DD HH:mm:SS"), "YYYY-MM-DD HH:mm:SS"), r.Time,
+                zone + ": a time in the zone");
+        }
+    }
+
     testWorksheet() {
         OdsReadDataProvider dp(test_data_dir + "/multi-sheet.ods", {
             "worksheet": "Products",
@@ -386,18 +495,74 @@ public class OdsDataProviderTest inherits QUnit::Test {
     }
 
     testNegativeInvalidWorksheet() {
-        # Invalid worksheet should throw an exception
-        bool threw = False;
+        # an unknown worksheet raises ODS-WORKSHEET-NOT-FOUND, naming it and listing the worksheets of the file
+        OdsReadDataProvider dp(test_data_dir + "/multi-sheet.ods", {"worksheet": "NonexistentSheet"});
+        hash<ExceptionInfo> ex;
         try {
-            OdsReadDataProvider dp(test_data_dir + "/simple.ods", {
-                "worksheet": "NonexistentSheet",
-            });
             dp.searchRecords();
-        } catch (hash<ExceptionInfo> ex) {
-            threw = True;
-            assertTrue(ex.desc.contains("unknown"), "should mention unknown sheet");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
         }
-        assertTrue(threw, "should throw exception for invalid worksheet");
+        assertEq("ODS-WORKSHEET-NOT-FOUND", ex.err);
+        assertRegex("NonexistentSheet", ex.desc);
+        assertRegex("Users.*Products.*Orders", ex.desc);
+        assertEq({"worksheet": "NonexistentSheet", "available": ("Users", "Products", "Orders")}, ex.arg);
+        # the record type raises the same error
+        assertThrows("ODS-WORKSHEET-NOT-FOUND", sub () {
+            new OdsReadDataProvider(test_data_dir + "/multi-sheet.ods", {"worksheet": "Nope", "header_names": True})
+                .getRecordType();
+        });
+        # a position after the last worksheet
+        assertThrows("ODS-WORKSHEET-NOT-FOUND", sub () {
+            new OdsReadDataProvider(test_data_dir + "/multi-sheet.ods", {"worksheet": "3"}).searchRecords();
+        });
+    }
+
+    #! the worksheet option selects by name (with case) or by 0-based position, and the
+    #! worksheet_pattern option by a regular expression matching exactly one name
+    testWorksheetSelection() {
+        code<list<auto>(hash<auto>)> read = list<auto> sub (hash<auto> opts) {
+            OdsReadDataProvider dp(test_data_dir + "/multi-sheet.ods", {"header_names": True} + opts);
+            return map $1, dp.searchRecords();
+        };
+        list<auto> products = read({"worksheet": "Products"});
+        assertTrue(products.size() > 0);
+        assertEq(products, read({"worksheet": "1"}), "by position");
+        assertEq(products, read({"worksheet_pattern": "^Prod"}), "by pattern");
+        assertEq(products, read({"worksheet_pattern": "(?i)^products$"}), "by pattern without regard to case");
+        assertEq(read({}), read({"worksheet_pattern": "^Users$"}), "the first worksheet");
+        assertThrows("ODS-WORKSHEET-NOT-FOUND", read, ({"worksheet": "PRODUCTS"},),
+            "names are matched with case");
+
+        hash<ExceptionInfo> ex;
+        try {
+            read({"worksheet_pattern": "^(Users|Orders)$"});
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("ODS-WORKSHEET-AMBIGUOUS", ex.err);
+        assertEq({"worksheet_pattern": "^(Users|Orders)$", "matches": ("Users", "Orders"),
+            "available": ("Users", "Products", "Orders")}, ex.arg);
+        assertThrows("ODS-WORKSHEET-NOT-FOUND", "Invoices", read, ({"worksheet_pattern": "Invoices"},));
+
+        # the options conflict, and the pattern must be a valid regular expression
+        assertThrows("ODS-READ-OPTION-ERROR", "worksheet_pattern", sub () {
+            new OdsReadDataProvider(test_data_dir + "/multi-sheet.ods", {"worksheet": "Users",
+                "worksheet_pattern": "^U"});
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", "regular expression", sub () {
+            new OdsReadDataProvider({"path": test_data_dir + "/multi-sheet.ods", "worksheet_pattern": "("})
+                .searchRecords();
+        });
+
+        # the option metadata
+        hash<auto> opts = OdsReadDataProvider::ConstructorOptions;
+        assertEq(OI_Conflicts, AbstractDataProvider::getOptionInteractions(opts.worksheet_pattern)[0].kind);
+        assertEq("worksheet", AbstractDataProvider::getOptionInteractions(opts.worksheet_pattern)[0].option);
+        assertEq("worksheet_pattern", AbstractDataProvider::getOptionInteractions(opts.worksheet)[0].option);
+        # ignore_empty: the default stops at the first empty row
+        assertFalse(opts.ignore_empty.default_value);
+        assertEq({"false": "stop", "true": "skip"}, opts.ignore_empty.metadata.empty_row_handling);
     }
 
     testNegativeInvalidCellRange() {
@@ -732,5 +897,869 @@ public class OdsDataProviderTest inherits QUnit::Test {
         assertFalse(records[1].Active);
         assertEq("Item3", records[2].Name);
         assertEq(0.01, records[2].Amount);
+    }
+
+    testReadFromFirstRow() {
+        # with no header options at all, data starts on row 1 and keys are cell references
+        OdsReadDataProvider dp(test_data_dir + "/no-headers.ods");
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("value1", records[0].A1);
+        assertEq(100.0, records[0].B1);
+        assertEq("value2", records[1].A2);
+
+        # explicit headers without data_cells also start on row 1
+        dp = new OdsReadDataProvider(test_data_dir + "/no-headers.ods", {
+            "headers": ("Col1", "Col2", "Col3"),
+        });
+        records = map $1, dp.searchRecords();
+        assertEq(2, records.size());
+        assertEq("value1", records[0].Col1);
+        assertEq(100.0, records[0].Col2);
+        assertEq("value2", records[1].Col1);
+    }
+
+    testColumnsPastZ() {
+        assertEq(0, OdsReadDataProvider::getColumnIndex("a"));
+        assertEq(0, OdsReadDataProvider::getColumnIndex("-"));
+        assertEq(25, OdsReadDataProvider::getColumnIndex("Z"));
+        assertEq(26, OdsReadDataProvider::getColumnIndex("aa"));
+        assertEq(52, OdsReadDataProvider::getColumnIndex("bA"));
+
+        # "z" < "aa" by column position even though it sorts after it as a string
+        assertEq("aa", OdsReadDataProvider::parseRange("z1:aa10").end.column);
+        assertThrows("ODS-INVALID-LOCATION", \OdsReadDataProvider::parseRange(), "aa1:z10");
+        assertThrows("ODS-INVALID-LOCATION", \OdsReadDataProvider::parseRange(), "c1:B2");
+
+        hash<auto> opts = {"header_cells": "z1", "data_cells": "aa2"};
+        assertEq("aa", OdsReadDataProvider::processCellOptions(opts).data_cells.start.column);
+        opts = {"header_cells": "aa1", "data_cells": "z2"};
+        assertThrows("ODS-INVALID-LOCATION", \OdsReadDataProvider::processCellOptions(), opts);
+
+        # read a sheet whose headers and data are in columns Y-AB
+        hash<auto> rec = map {sprintf("c%d", $1): $1}, xrange(1, 29);
+        OdsWriteDataProvider wdp({"headers": keys rec});
+        wdp.createRecord(rec);
+        OdsReadDataProvider dp({"data": wdp.getData(), "header_cells": "y1:ab1", "data_cells": "y2:ab2"});
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(({"c25": 25.0, "c26": 26.0, "c27": 27.0, "c28": 28.0},), records);
+    }
+
+    testHeaderOptionConflictAllCtors() {
+        hash<auto> opts = {"headers": ("A", "B"), "header_names": True};
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsReadDataProvider dp(test_data_dir + "/simple.ods", opts);
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            FileInputStream fis(test_data_dir + "/simple.ods");
+            OdsReadDataProvider dp(fis, opts);
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsReadDataProvider dp({"path": test_data_dir + "/simple.ods"} + opts);
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsWorksheetReadDataProvider dp({"path": test_data_dir + "/simple.ods"} + opts);
+        });
+    }
+
+    testWorksheetOptionsCtor() {
+        binary data = ReadOnlyFile::readBinaryFile(test_data_dir + "/multi-sheet.ods");
+        string sheet = (new OdsReadDataProvider({"data": data})).getChildProviderNames()[1];
+
+        # inline data
+        OdsWorksheetReadDataProvider dp({"data": data, "worksheet": sheet, "header_names": True});
+        list<hash<auto>> from_data = map $1, dp.searchRecords();
+        assertTrue(from_data.size() > 0);
+
+        # path, resolved as a file location
+        dp = new OdsWorksheetReadDataProvider({"path": "file://" + test_data_dir + "/multi-sheet.ods",
+            "worksheet": sheet, "header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # stream
+        dp = new OdsWorksheetReadDataProvider({"stream": new BinaryInputStream(data), "worksheet": sheet,
+            "header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # path constructor, resolved as a file location (plain path and file:// URL)
+        dp = new OdsWorksheetReadDataProvider(test_data_dir + "/multi-sheet.ods", "name", sheet, {"header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+        dp = new OdsWorksheetReadDataProvider("file://" + test_data_dir + "/multi-sheet.ods", "name", sheet,
+            {"header_names": True});
+        assertEq(from_data, map $1, dp.searchRecords());
+
+        # only one input source is allowed
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsWorksheetReadDataProvider wdp({"data": data, "path": test_data_dir + "/multi-sheet.ods"});
+        });
+        assertThrows("ODS-READ-OPTION-ERROR", sub () {
+            OdsWorksheetReadDataProvider wdp({"data": data, "stream": new BinaryInputStream(data)});
+        });
+    }
+
+    testWriteHeadersFromFirstRecord() {
+        # the first record defines the columns and keeps its value types (it was previously copied down a row,
+        # which turned its dates into strings); later records are written by those columns
+        OdsWriteDataProvider dp();
+        date d = 2026-01-02T00:00:00;
+        dp.createRecord({"B": 1, "A": d, "F": True});
+        dp.createRecord({"A": d + 1D, "C": "ignored", "B": 2, "F": False});
+        dp.createRecord({"B": 3});
+
+        OdsReadDataProvider rdp({"data": dp.getData(), "header_names": True});
+        list<hash<auto>> records = map $1, rdp.searchRecords();
+        assertEq(3, records.size());
+        assertEq(("B", "A", "F"), keys records[0]);
+        assertEq(1.0, records[0].B);
+        assertEq("date", records[0].A.type());
+        assertEq(d, records[0].A);
+        assertEq(True, records[0].F);
+        assertEq(2.0, records[1].B);
+        assertEq(d + 1D, records[1].A);
+        assertEq(False, records[1].F);
+        assertEq(3.0, records[2].B);
+        assertEq(NOTHING, records[2].A);
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("ODS", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject({"headers": ("Sku", "Qty")});
+        prov.createRecordsBulkWithOptions({"recs": {"Sku": ("A-1", "B-2"), "Qty": (5, 7)}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        assertEq("PK", output.data.substr(0, 2).toString());
+        OdsReadDataProvider rdp({"data": output.data, "header_names": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), (map $1, rdp.searchRecords()));
+    }
+
+    testWriterRecordType() {
+        # the headers option defines the columns
+        OdsWriteDataProvider dp({"headers": ("Sku", "Qty")});
+        assertEq(("Sku", "Qty"), keys dp.getRecordType());
+        assertEq(("Sku", "Qty"), keys dp.getCreateRecordTypeWithOptions());
+        # without headers, the first record's keys define the columns: an open record type
+        dp = new OdsWriteDataProvider();
+        assertNothing(dp.getRecordType());
+        assertEq({}, dp.getOrNothingRecordTypeWithOptions());
+    }
+
+    testReadEmptyRows() {
+        # a header row, two data rows separated by an empty row, and two trailing empty rows
+        OdsWriteDataProvider wdp({"headers": ("Sku", "Qty")});
+        wdp.createRecord({"Sku": "A-1", "Qty": 5});
+        wdp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        wdp.createRecord({"Sku": "B-2", "Qty": 7});
+        wdp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        wdp.createRecord({"Sku": NOTHING, "Qty": NOTHING});
+        binary data = wdp.getData();
+
+        # default: reading stops at the first empty row
+        OdsReadDataProvider dp({"data": data, "header_names": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), (map $1, dp.searchRecords()));
+
+        # ignore_empty: empty rows are skipped, trailing empty rows end the iteration
+        dp = new OdsReadDataProvider({"data": data, "header_names": True, "ignore_empty": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "B-2", "Qty": 7.0}), (map $1, dp.searchRecords()));
+
+        # ignore_empty stays within data_cells
+        dp = new OdsReadDataProvider({"data": data, "header_names": True, "ignore_empty": True,
+            "data_cells": "a2:b3"});
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), (map $1, dp.searchRecords()));
+    }
+
+    testReadRepeatedEmptyRows() {
+        # spreadsheet applications store runs of empty rows as one repeated row element: a million empty rows are
+        # skipped without materializing them
+        string path = test_data_dir + "/repeated-empty-rows.ods";
+        OdsReadDataProvider dp(path, {"header_names": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0},), (map $1, dp.searchRecords()));
+
+        date start = now_us();
+        dp = new OdsReadDataProvider(path, {"header_names": True, "ignore_empty": True});
+        assertEq(({"Sku": "A-1", "Qty": 5.0}, {"Sku": "C-3", "Qty": 9.0}), (map $1, dp.searchRecords()));
+        assertLt(10s, now_us() - start, "the repeated empty rows were not iterated one by one");
+    }
+
+    testProfileGrid() {
+        hash<TabularWorkbookGrid> grid = OdsProfileDataProvider::readWorkbookGrid(
+            ReadOnlyFile::readBinaryFile(test_data_dir + "/profile.ods"), 1000);
+        assertEq("ods", grid.format);
+        assertEq(("Confirmations", "Lookup"), (map $1.name, grid.sheets));
+        hash<TabularSheetGrid> sheet = grid.sheets[0];
+        assertFalse(sheet.hidden);
+        assertTrue(grid.sheets[1].hidden, "the lookup sheet is hidden");
+        assertEq(6, sheet.rows.size(), "rows are read up to the last row with content");
+        assertEq((), sheet.rows[1], "an empty row is an empty list");
+        assertEq(("PO-1001", "000123", 5.0, "10.10.2026"), sheet.rows[3]);
+        assertEq((<TabularCellRange>{"first_row": 0, "last_row": 0, "first_col": 0, "last_col": 3},), sheet.merged);
+        assertEq({"C6": "SUM(C4:C5)"}, sheet.formulas, "the ODF formula is returned in A1 notation");
+        assertEq({"Rates": "$Lookup.$A$1:.$B$2"}, grid.named_ranges);
+
+        grid = OdsProfileDataProvider::readWorkbookGrid(
+            ReadOnlyFile::readBinaryFile(test_data_dir + "/profile.ods"), 2);
+        assertEq(2, grid.sheets[0].rows.size());
+        assertEq(6, grid.sheets[0].row_count);
+
+        # a million repeated empty rows are never expanded
+        date start = now_us();
+        grid = OdsProfileDataProvider::readWorkbookGrid(
+            ReadOnlyFile::readBinaryFile(test_data_dir + "/repeated-empty-rows.ods"), 10);
+        assertEq(10, grid.sheets[0].rows.size());
+        assertEq(1000003, grid.sheets[0].row_count, "the row count ends at the last row with content");
+        assertLt(30s, now_us() - start, "repeated empty rows are counted, not expanded");
+    }
+
+    testProfileAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("ODS", "profile");
+        assertEq(DPAT_API, action.action_code);
+        assertEq("TabularWorkbookProfile", action.output_type.getName());
+
+        hash<auto> opts = {"path": test_data_dir + "/profile.ods"};
+        AbstractDataProvider prov = DataProviderActionCatalog::getDataProviderForAction(action, \opts);
+        hash<auto> profile = prov.doRequest(opts);
+        assertEq(profile, action.output_type.acceptsValue(profile));
+        hash<auto> sheet = profile.sheets[0];
+        assertEq(3, sheet.header_row);
+        assertEq((1,), sheet.title_rows);
+        assertEq((6,), sheet.totals_rows);
+        assertEq(("string", "string", "int", "date"), (map $1.type, sheet.columns));
+        assertEq("DD.MM.YYYY", sheet.columns[3].date_format);
+        assertEq(("XX-9999", "999999", "9", "99.99.9999"), sheet.samples[0]);
+        assertTrue(profile.sheets[1].hidden);
+
+        profile = prov.doRequest({"data": ReadOnlyFile::readBinaryFile(test_data_dir + "/profile.ods"),
+            "redact": False, "sample_rows": 1});
+        assertEq((("PO-1001", "000123", 5.0, "10.10.2026"),), profile.sheets[0].samples);
+        assertThrows("TABULAR-PROFILE-ERROR", "exactly one", \prov.doRequest(), {});
+    }
+
+    #! The record type, the records, the worksheet names, and worksheet providers can be acquired in any order
+    /** Qorus reads the provider info (and with it the worksheet names) after the record type when it executes an
+        action; the worksheet names were then read from the input stream already consumed by the record type
+    */
+    testWorkbookReuse() {
+        string path = test_data_dir + "/multi-sheet.ods";
+        binary data = ReadOnlyFile::readBinaryFile(path);
+        hash<auto> opts = {"worksheet": "Users", "header_names": True};
+        hash<string, code> sources = {
+            "data": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(opts + {"data": data});
+            },
+            "stream": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(opts + {"stream": new BinaryInputStream(data)});
+            },
+            "path": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(opts + {"path": path});
+            },
+            "stream constructor": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(new BinaryInputStream(data), opts);
+            },
+            "path constructor": OdsReadDataProvider sub () {
+                return new OdsReadDataProvider(path, opts);
+            },
+        };
+        list<string> sheets = ("Users", "Products", "Orders");
+        foreach hash<auto> i in (sources.pairIterator()) {
+            # the record type, then the provider info, as Qorus acquires them when executing an action
+            OdsReadDataProvider dp = i.value();
+            assertEq(("ID", "Username"), keys dp.getRecordType(), i.key);
+            assertEq(sheets, dp.getInfo().children, i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+            assertEq(sheets, dp.getChildProviderNames(), i.key);
+            assertEq(("Widget",), (map $1.Product, dp.getChildProvider("Products").searchRecords()), i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+
+            # a worksheet provider first, then the parent's own worksheet
+            dp = i.value();
+            assertEq((1001,), (map $1.OrderID.toInt(), dp.getChildProvider("Orders").searchRecords()), i.key);
+            assertEq(sheets, dp.getChildProviderNames(), i.key);
+            assertEq(("ID", "Username"), keys dp.getRecordType(), i.key);
+            assertEq(("alice", "bob"), (map $1.Username, dp.searchRecords()), i.key);
+        }
+
+        # a provider without input has no worksheets, record fields, or records
+        OdsReadDataProvider empty();
+        assertEq(NOTHING, empty.getChildProviderNames());
+        assertEq({}, empty.getRecordType());
+    }
+
+    testStructuredTable() {
+        string path = test_data_dir + "/structured.ods";
+        OdsTestHelper::createStructuredOds(path);
+
+        list<hash<auto>> expected = (
+            # a row in table:table-header-rows (a row to repeat on printed pages)
+            {"Sku": "A-1", "Qty": 5.0, "Note": "x", "Day": 2025-03-01T00:00:00Z},
+            # rows in a row group; the second row element is repeated for two rows
+            {"Sku": "B-2", "Qty": 6.0, "Note": "y", "Day": 2025-03-02T00:00:00Z},
+            {"Sku": "C-3", "Qty": 7.0, "Note": "z", "Day": 2025-03-03T00:00:00Z},
+            {"Sku": "C-3", "Qty": 7.0, "Note": "z", "Day": 2025-03-03T00:00:00Z},
+            # a cell repeated over two columns and a covered (merged) cell
+            {"Sku": "D-4", "Qty": 8.0, "Note": 8.0, "Day": NOTHING},
+        );
+        OdsReadDataProvider dp(path, {"header_names": True, "timezone": "UTC"});
+        assertEq(("Sku", "Qty", "Note", "Day"), keys dp.getRecordType());
+        # reading stops at the empty row 7
+        assertEq(expected, (map $1, dp.searchRecords()));
+        # each iteration reads the table from its first data row
+        assertEq(expected, (map $1, dp.searchRecords()));
+
+        # spaces, tabs, and line breaks are part of the text
+        dp = new OdsReadDataProvider(path, {"header_names": True, "timezone": "UTC", "ignore_empty": True});
+        assertEq(expected + ({"Sku": "E-5", "Qty": 9.0, "Note": "a   b\tc\nd", "Day": 2025-03-08T00:00:00Z},),
+            (map $1, dp.searchRecords()));
+
+        # data cells within the repeated rows
+        dp = new OdsReadDataProvider(path, {"header_names": True, "timezone": "UTC", "data_cells": "a5:c6"});
+        assertEq(({"Sku": "C-3", "Qty": 7.0, "Note": "z"}, {"Sku": "D-4", "Qty": 8.0, "Note": 8.0}),
+            (map $1, dp.searchRecords()));
+    }
+
+    testLargeDocument() {
+        # a table with 200000 rows is read with a JVM heap far smaller than the document loaded in memory needs;
+        # a child process has its own JVM with a 64 MB heap
+        string path = test_data_dir + "/large.ods";
+        on_exit unlink(path);
+        OdsTestHelper::createLargeOds(path, LargeRows);
+
+        string src = sprintf("%%modern
+%%prepend-module-path \"%s/../qlib\"
+%%requires DataProvider
+%%requires json
+%%requires OdsDataProvider
+
+OdsReadDataProvider dp({\"path\": ARGV[0], \"header_names\": True, \"timezone\": \"UTC\"});
+AbstractDataProviderRecordIterator i = dp.searchRecords();
+int count = 0;
+int mismatches = 0;
+int repeated = 0;
+int rows = ARGV[1].toInt();
+while (i.next()) {
+    hash<auto> r = i.getValue();
+    ++count;
+    if (count > rows) {
+        # the rows of the repeated row element at the end
+        if (r == {\"Id\": -1.0, \"Name\": \"repeated\", \"Amount\": 0.5, \"When\": 2025-06-30T12:00:00Z,
+            \"Flag\": False}) {
+            ++repeated;
+        }
+        continue;
+    }
+    if (keys r != (\"Id\", \"Name\", \"Amount\", \"When\", \"Flag\") || r.Id != count.toFloat()
+        || r.Name != (\"name-\" + count) || r.Amount != (count / 4.0)
+        || r.When != (2025-01-01T00:00:00Z + seconds(count)) || r.Flag != (count %% 2 == 0)) {
+        ++mismatches;
+    }
+}
+printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatches, \"repeated\": repeated}));
+", get_script_dir() == "." ? getcwd() : get_script_dir());
+        hash<auto> result = runChild(src, path, LargeRows.toString());
+        assertEq(LargeRows + 3, result.count);
+        assertEq(0, result.mismatches);
+        assertEq(3, result.repeated);
+    }
+
+    testEarlyClose() {
+        string path = test_data_dir + "/early-close.ods";
+        on_exit unlink(path);
+        OdsTestHelper::createLargeOds(path, 20000);
+        binary data = ReadOnlyFile::readBinaryFile(path);
+
+        # a complete iteration first, so that later file counts do not include the JVM's class files
+        {
+            OdsIterator it(new BinaryInputStream(data), "");
+            it.setHeaderCells("-", 1, "-", 1);
+            int count = 0;
+            while (it.next()) {
+                ++count;
+            }
+            assertEq(20003, count);
+            it.close();
+        }
+        list<string> temp_files = getTempFiles("qore-ods-");
+        int open_files = countOpenFiles();
+
+        OdsIterator it(new BinaryInputStream(data), "");
+        it.setHeaderCells("-", 1, "-", 1);
+        for (int i = 1; i <= 10; ++i) {
+            assertTrue(it.next());
+            assertEq(i.toFloat(), it.getValue().Id);
+        }
+        # the document is open while the iteration is in progress; its temporary copy is already deleted
+        assertGt(open_files, countOpenFiles());
+        assertEq(temp_files, getTempFiles("qore-ods-"));
+
+        # closing the iterator in the middle of the table releases the document
+        it.close();
+        assertEq(open_files, countOpenFiles());
+        assertEq(temp_files, getTempFiles("qore-ods-"));
+        assertThrows("JNI-ERROR", "the ODS iterator is closed", \it.next());
+    }
+
+    testNumberFormats() {
+        string path = test_data_dir + "/number-formats.ods";
+        OdsTestHelper::createNumberFormatsOds(path);
+
+        # a currency cell is its amount and a percentage cell its fraction; a cell without a value is its text
+        OdsReadDataProvider dp(path, {"header_names": True});
+        assertEq((
+            {"Item": "A", "Price": 3.5, "Share": 0.25},
+            {"Item": "B", "Price": -1250.75, "Share": 1.5},
+            {"Item": "C", "Price": "n/a", "Share": 0.0},
+        ), (map $1, dp.searchRecords()));
+
+        # as header cells, the numbers are the header names
+        dp = new OdsReadDataProvider(path, {"header_cells": "a2:c2", "data_cells": "a3:c3"});
+        assertEq(("A", "3.5", "0.25"), keys dp.getRecordType());
+        assertEq(({"A": "B", "3.5": -1250.75, "0.25": 1.5},), (map $1, dp.searchRecords()));
+
+        # the profiler reads them as numbers as well
+        hash<TabularWorkbookGrid> grid = OdsProfileDataProvider::readWorkbookGrid(ReadOnlyFile::readBinaryFile(path),
+            10);
+        assertEq(("A", 3.5, 0.25), grid.sheets[0].rows[1]);
+        assertEq(("B", -1250.75, 1.5), grid.sheets[0].rows[2]);
+        assertEq(("C", NOTHING, 0.0), grid.sheets[0].rows[3]);
+    }
+
+    testDaylightSaving() {
+        string path = test_data_dir + "/daylight-saving.ods";
+        OdsTestHelper::createDaylightSavingOds(path);
+
+        # a date and time is its clock time in the reader's zone; a clock time in a gap of the reader's zone is moved
+        # later by the length of the gap, and one that occurs twice is the earlier one, as java.time resolves them;
+        # a time is its clock time on Excel's day zero, 1899-12-31, as for Excel
+        hash<string, hash<string, string>> expected = {
+            "Europe/Prague": {
+                "prague-gap": "2025-03-30 03:30:00.000 +02:00",
+                "ny-gap": "2025-03-09 02:30:00.000 +01:00",
+                "prague-overlap": "2025-10-26 02:30:00.000 +02:00",
+                "date-only": "2025-03-30 00:00:00.000 +01:00",
+            },
+            "America/New_York": {
+                "prague-gap": "2025-03-30 02:30:00.000 -04:00",
+                "ny-gap": "2025-03-09 03:30:00.000 -04:00",
+                "prague-overlap": "2025-10-26 02:30:00.000 -04:00",
+                "date-only": "2025-03-30 00:00:00.000 -04:00",
+            },
+        };
+        hash<string, string> times = {
+            "prague-gap": "1899-12-31 13:45:00.000",
+            "ny-gap": "1900-01-01 12:00:00.000",
+            "prague-overlap": "1899-12-31 00:00:00.000",
+            "date-only": "1899-12-31 23:59:59.500",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            OdsReadDataProvider dp(path, {"header_names": True, "timezone": i.key});
+            hash<string, string> when;
+            hash<string, string> time;
+            foreach hash<auto> r in (dp.searchRecords()) {
+                when{r.Event} = r.When.format("YYYY-MM-DD HH:mm:SS.ms Z");
+                time{r.Event} = r.Time.format("YYYY-MM-DD HH:mm:SS.ms");
+            }
+            assertEq(i.value, when, i.key);
+            assertEq(times, time, i.key);
+        }
+
+        # the JVM's own zone does not change the clock times: a child process has a JVM in America/New_York and
+        # reads the file in Europe/Prague
+        string src = sprintf("%%modern
+%%prepend-module-path \"%s/../qlib\"
+%%requires DataProvider
+%%requires json
+%%requires OdsDataProvider
+
+OdsReadDataProvider dp({\"path\": ARGV[0], \"header_names\": True, \"timezone\": \"Europe/Prague\"});
+hash<string, string> rv;
+foreach hash<auto> r in (dp.searchRecords()) {
+    rv{r.Event} = r.When.format(\"YYYY-MM-DD HH:mm:SS.ms Z\") + \" \" + r.Time.format(\"YYYY-MM-DD HH:mm:SS.ms\");
+}
+printf(\"RESULT:%%s\\n\", make_json(rv));
+", get_script_dir() == "." ? getcwd() : get_script_dir());
+        hash<auto> result = runChild(src, path, "-", "TZ=America/New_York");
+        assertEq((map {$1.key: $1.value + " " + times{$1.key}}, expected."Europe/Prague".pairIterator()), result);
+
+        # the profiler reads date and time cells as the record reader does, in the JVM's zone
+        hash<TabularWorkbookGrid> grid = OdsProfileDataProvider::readWorkbookGrid(ReadOnlyFile::readBinaryFile(path),
+            10);
+        assertEq("2025-03-30 00:00:00", grid.sheets[0].rows[4][1].format("YYYY-MM-DD HH:mm:SS"),
+            "a date in the profile");
+        assertEq("1899-12-31 13:45:00", grid.sheets[0].rows[1][2].format("YYYY-MM-DD HH:mm:SS"),
+            "a time in the profile");
+    }
+
+    testOpenDataRange() {
+        # without an end column and without headers, each row is read to its last cell with a value, not to the
+        # last column of the table
+        string path = test_data_dir + "/structured.ods";
+        OdsTestHelper::createStructuredOds(path);
+        OdsReadDataProvider dp(path, {"data_cells": "b2", "timezone": "UTC"});
+        assertEq((
+            {"A2": 5.0, "B2": "x", "C2": 2025-03-01T00:00:00Z},
+            {"A3": 6.0, "B3": "y", "C3": 2025-03-02T00:00:00Z},
+            {"A4": 7.0, "B4": "z", "C4": 2025-03-03T00:00:00Z},
+            {"A5": 7.0, "B5": "z", "C5": 2025-03-03T00:00:00Z},
+            # the covered cell after the repeated cell has no value
+            {"A6": 8.0, "B6": 8.0},
+        ), (map $1, dp.searchRecords()));
+
+        # a row without a value from the start column is empty
+        dp = new OdsReadDataProvider(path, {"data_cells": "c6", "ignore_empty": True});
+        assertEq(({"A6": 8.0}, {"A8": "a   b\tc\nd", "B8": 2025-03-08T00:00:00}),
+            (map $1, dp.searchRecords()));
+    }
+
+    testWorkbookFile() {
+        string path = test_data_dir + "/workbook-file.ods";
+        on_exit unlink(path);
+        OdsTestHelper::createMultiSheetOds(path);
+        list<string> temp_files = getTempFiles("qore-odsfile-");
+
+        # the input stream is copied to a temporary file on first use, not read into memory
+        OdsReadDataProvider dp(new FileInputStream(path), {"header_names": True});
+        assertEq(temp_files, getTempFiles("qore-odsfile-"), "nothing is copied before the workbook is used");
+        list<string> sheets = dp.getChildProviderNames();
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-odsfile-"), "the input is copied once");
+        int records = elements (map $1, dp.searchRecords());
+        assertGt(0, records);
+
+        # a worksheet provider uses the same file, which is kept until the last provider using it is destroyed
+        AbstractDataProvider ws = dp.getChildProviderEx(sheets[0]);
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-odsfile-"),
+            "worksheet providers use the same file");
+        delete dp;
+        assertEq(elements temp_files + 1, elements getTempFiles("qore-odsfile-"),
+            "the worksheet provider keeps the file");
+        assertEq(records, elements (map $1, ws.searchRecords()));
+        delete ws;
+        assertEq(temp_files, getTempFiles("qore-odsfile-"), "the file is deleted with the last provider");
+
+        # a provider given a path and data in the options works the same way
+        foreach hash<auto> opts in ({"path": path}, {"data": ReadOnlyFile::readBinaryFile(path)}) {
+            dp = new OdsReadDataProvider(opts + {"header_names": True});
+            assertEq(sheets, dp.getChildProviderNames(), (keys opts)[0]);
+            assertEq(records, elements (map $1, dp.searchRecords()), (keys opts)[0]);
+            delete dp;
+            assertEq(temp_files, getTempFiles("qore-odsfile-"), (keys opts)[0]);
+        }
+    }
+
+    #! Runs a Qore program in a child process with a small JVM heap; returns the result it prints
+    private hash<auto> runChild(string src, string arg1, string arg2, string env = "") {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(src);
+        tmp.file.close();
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "QORE_JNI_MAX_HEAP_SIZE=%s %s %s --enable-debug %s %s %s 2>&1; echo CHILD_EXIT=$?", ChildHeap, env,
+            shellQuote(qoreBin()), shellQuote(tmp.path), shellQuote(arg1), shellQuote(arg2));
+        string output = trim(backquote(cmd));
+        *string result = (output =~ x/^RESULT:(.*)$/m)[0];
+        if (!result) {
+            fail(sprintf("child process did not complete: %s", output));
+        }
+        assertRegex("CHILD_EXIT=0$", output);
+        return parse_json(result);
+    }
+
+    #! Returns the number of open files of this process
+    private static int countOpenFiles() {
+        Dir dir();
+        if (!dir.chdir("/dev/fd")) {
+            throw "TEST-ERROR", "/dev/fd is not available";
+        }
+        return dir.list().size();
+    }
+
+    #! Returns the files with the given prefix in the JVM's temporary directory
+    private static list<string> getTempFiles(string prefix) {
+        Dir dir();
+        dir.chdir(System::getProperty("java.io.tmpdir"));
+        return sort(dir.list("^" + prefix) ?? ());
+    }
+
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    testWriteDateTimes() {
+        string path = test_data_dir + "/date-times-write.ods";
+        on_exit unlink(path);
+        list<date> dates = (2025-06-15T10:30:00, 2025-06-15T10:30:45.250, 2025-12-31T23:59:59, 2025-01-01T00:00:00);
+        OdsWriteDataProvider dp(path, {"headers": ("When",)});
+        map dp.createRecord({"When": $1}), dates;
+        dp.finishCreate();
+
+        # the clock time of each date is written with its seconds, as office:date-value is an xsd:dateTime
+        assertEq(("2025-06-15T10:30:00", "2025-06-15T10:30:45.25", "2025-12-31T23:59:59", "2025-01-01T00:00:00"),
+            (map OdsTestHelper::getDateValueAttribute(path, $1 + 1, 0), xrange(dates.size())));
+        OdsReadDataProvider rdp(path, {"header_names": True});
+        assertEq(dates, (map $1.When, rdp.searchRecords()));
+    }
+
+    testWriteColumnFormats() {
+        string path = test_data_dir + "/column-formats.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"headers": FormatHeaders, "column_formats": ColumnFormats});
+        dp.createRecord(FormatRecord);
+        dp.finishCreate();
+
+        # the value type and data style of each cell, read with odfdom
+        list<string> styles = OdsTestHelper::getCellDataStyles(path, 1, FormatHeaders.size());
+        assertEq("string|", styles[0], "Name");
+        assertRegex("^date\\|<number:date-style [^>]*number:format-source=\"fixed\"[^>]*>"
+            "<number:day number:style=\"long\"/><number:text>\\.</number:text>"
+            "<number:month number:style=\"long\"/><number:text>\\.</number:text>"
+            "<number:year number:style=\"long\"/><number:text> </number:text>"
+            "<number:hours number:style=\"long\"/><number:text>:</number:text>"
+            "<number:minutes number:style=\"long\"/></number:date-style>$", styles[1], "Date");
+        # the main style is the negative section, mapping values >= 0 to the positive section
+        assertRegex("^float\\|<number:number-style [^>]*><number:text>\\(</number:text>"
+            "<number:number number:decimal-places=\"2\" number:grouping=\"true\" number:min-decimal-places=\"2\" "
+            "number:min-integer-digits=\"1\"/><number:text>\\)</number:text>"
+            "<style:map style:apply-style-name=\"QoreFmt2P0\" style:condition=\"value\\(\\)&gt;=0\"/>"
+            "</number:number-style> \\+ <number:number-style [^>]*style:name=\"QoreFmt2P0\"[^>]*>"
+            "<number:number number:decimal-places=\"2\" number:grouping=\"true\" number:min-decimal-places=\"2\" "
+            "number:min-integer-digits=\"1\"/></number:number-style>$", styles[2], "Amount");
+        # a percentage cell holds the fraction
+        assertRegex("^percentage\\|<number:percentage-style [^>]*>"
+            "<number:number number:decimal-places=\"1\" number:min-decimal-places=\"1\" "
+            "number:min-integer-digits=\"1\"/><number:text>%</number:text></number:percentage-style>$", styles[3],
+            "Share");
+        assertRegex("^string\\|<number:text-style [^>]*><number:text-content/></number:text-style>$", styles[4],
+            "Code");
+        assertEq("float|", styles[5], "Plain");
+        assertEq("date|", styles[6], "Stamp");
+
+        # the values keep their types: the percentage cell is read as its fraction, and dates keep their time
+        OdsReadDataProvider rdp(path, {"header_names": True});
+        assertEq((FormatRecord + {"Amount": -1234.5, "Plain": 42.0},), (map $1, rdp.searchRecords()));
+    }
+
+    testWriteColumnFormatsOtherValues() {
+        string path = test_data_dir + "/column-formats-other.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"headers": FormatHeaders, "column_formats": ColumnFormats});
+        # a value of another kind than its column's code is written without the format; no value is an empty cell
+        dp.createRecord({"Name": "b", "Date": 5, "Amount": "n/a", "Share": 2026-10-07T00:00:00, "Code": 3.5,
+            "Plain": NOTHING, "Stamp": True});
+        dp.finishCreate();
+        assertEq(("string|", "float|", "string|", "date|", "float|", "null|", "boolean|"),
+            OdsTestHelper::getCellDataStyles(path, 1, FormatHeaders.size()));
+        OdsReadDataProvider rdp(path, {"header_names": True});
+        assertEq(({"Name": "b", "Date": 5.0, "Amount": "n/a", "Share": 2026-10-07T00:00:00, "Code": 3.5,
+            "Plain": NOTHING, "Stamp": True},), (map $1, rdp.searchRecords()));
+    }
+
+    testWriteColumnFormatStyles() {
+        # a document without column formats, for the number of data styles a document has anyway
+        string base_path = test_data_dir + "/styles-base.ods";
+        on_exit unlink(base_path);
+        OdsWriteDataProvider base(base_path, {"headers": ("A", "B", "C")});
+        base.createRecord({"A": 1, "B": 2, "C": 3});
+        base.finishCreate();
+
+        # three columns with two distinct codes, one of them with two sections, and many rows
+        string path = test_data_dir + "/styles.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"headers": ("A", "B", "C"), "column_formats": {
+            "A": "0.00", "B": "0.00", "C": "#,##0;(#,##0)",
+        }});
+        for (int i = 0; i < 500; ++i) {
+            dp.createRecord({"A": i, "B": i * 2, "C": -i});
+        }
+        dp.finishCreate();
+        assertEq(OdsTestHelper::getDataStyleCount(base_path) + 3, OdsTestHelper::getDataStyleCount(path));
+        list<string> styles = OdsTestHelper::getCellDataStyles(path, 500, 3);
+        assertEq(styles[0], styles[1]);
+        assertRegex("^float\\|<number:number-style [^>]*><number:text>\\(</number:text>", styles[2]);
+    }
+
+    testWriteColumnFormatsFirstRecord() {
+        string path = test_data_dir + "/column-formats-first-record.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"column_formats": {"Amount": "#,##0.00"}});
+        dp.createRecord({"Name": "a", "Amount": 1234.5});
+        dp.createRecord({"Name": "b", "Amount": 2});
+        dp.finishCreate();
+        foreach int row in (1, 2) {
+            list<string> styles = OdsTestHelper::getCellDataStyles(path, row, 2);
+            assertEq("string|", styles[0]);
+            assertRegex("^float\\|<number:number-style [^>]*><number:number number:decimal-places=\"2\" "
+                "number:grouping=\"true\"", styles[1]);
+        }
+
+        # a column format for a column that the first record does not have
+        OdsWriteDataProvider bad({"column_formats": {"Amount": "0.00", "Total": "0.00"}});
+        assertThrows("CREATE-RECORD-ERROR", "ODS-WRITE-OPTION-ERROR.*column \"Total\", which is not written",
+            \bad.createRecord(), {"Name": "a", "Amount": 1});
+        assertEq(0, bad.getCreatedCount());
+    }
+
+    testWriteNegativeColumnFormats() {
+        # codes that odfdom's format string parser loops forever on are refused before odfdom sees them
+        foreach string code in ("zz[[q", "[x]0", "0[", "[]0") {
+            assertThrows("ODS-WRITE-OPTION-ERROR", "column \"A\": format code", sub () {
+                OdsWriteDataProvider dp({"column_formats": {"A": code}});
+            }, NOTHING, code);
+        }
+        # each constructor checks the codes
+        assertThrows("ODS-WRITE-OPTION-ERROR", "column \"Amount\": format code \"#,##0.00 EUR\" has \"E\" at "
+            "position 10, which must be quoted", sub () {
+            OdsWriteDataProvider dp(test_data_dir + "/never.ods", {"column_formats": {"Amount": "#,##0.00 EUR"}});
+        });
+        assertThrows("ODS-WRITE-OPTION-ERROR", "General", sub () {
+            OdsWriteDataProvider dp(new StringOutputStream(), {"column_formats": {"A": "General"}});
+        });
+        assertFalse(is_file(test_data_dir + "/never.ods"));
+        # a column that is not in the headers
+        assertThrows("ODS-WRITE-OPTION-ERROR", "column \"X\", which is not written; the columns written are: "
+            "\\[\"A\"\\]", sub () {
+            OdsWriteDataProvider dp({"headers": ("A",), "column_formats": {"A": "0", "X": "0"}});
+        });
+        # a format code must be a string: the option type check refuses other values
+        assertThrows("RUNTIME-TYPE-ERROR", "option \"column_formats\" of type \"hash<string, string>\"", sub () {
+            OdsWriteDataProvider dp({"column_formats": {"A": 1}});
+        });
+        assertNothing(OdsWriter::formatCodeIssue("#,##0.00;(#,##0.00)"));
+        assertRegex("second decimal point", OdsWriter::formatCodeIssue("0.0.0") ?? "");
+        # the Java writer refuses invalid codes and late formats too
+        OdsWriter writer("Sheet1");
+        on_exit writer.close();
+        assertThrows("JNI-ERROR", "column \"A\": format code \"0.0.0\" has a second decimal point",
+            \writer.setColumnFormats(), {"A": "0.0.0"});
+        writer.writeRow({"A": 1});
+        assertThrows("JNI-ERROR", "before any row is written", \writer.setColumnFormats(), {"A": "0"});
+    }
+
+    testColumnFormatsActionOption() {
+        foreach string action in (("write", "write-data")) {
+            hash<DataProviderActionInfo> info = DataProviderActionCatalog::getAppActionEx("ODS", action);
+            assertTrue(exists info.options.column_formats, action);
+        }
+        hash<DataProviderOptionInfo> opt = OdsWriteDataProvider::ConstructorOptions.column_formats;
+        assertEq("hash<string, string>", opt.type[0].getName());
+        # the example is a valid option value
+        foreach hash<auto> i in (opt.example_value.pairIterator()) {
+            assertNothing(OdsWriter::formatCodeIssue(i.value), i.key);
+        }
+    }
+
+    testWriteColumnFormatsRendered() {
+        *string soffice = findLibreOffice();
+        if (!soffice) {
+            testSkip("LibreOffice (soffice) is not installed");
+        }
+        string path = test_data_dir + "/column-formats-rendered.ods";
+        on_exit unlink(path);
+        OdsWriteDataProvider dp(path, {"headers": FormatHeaders, "column_formats": ColumnFormats});
+        dp.createRecord(FormatRecord);
+        dp.createRecord(FormatRecord + {"Amount": 1234567.891, "Share": 1});
+        dp.finishCreate();
+        # the columns without a format are shown in LibreOffice's default formats, which depend on its locale
+        assertEq((
+            {"Name": "a", "Date": "07.10.2026 13:45", "Amount": "(1,234.50)", "Share": "25.0%", "Code": "X1"},
+            {"Name": "a", "Date": "07.10.2026 13:45", "Amount": "1,234,567.89", "Share": "100.0%", "Code": "X1"},
+        ), (map $1{"Name", "Date", "Amount", "Share", "Code"}, renderWithLibreOffice(soffice, path)));
+    }
+
+    testColumnFormatsLikeExcel() {
+        *string soffice = findLibreOffice();
+        if (!soffice) {
+            testSkip("LibreOffice (soffice) is not installed");
+        }
+        foreach hash<auto> i in ({
+                "numbers": {"codes": NumberCodes, "values": NumberValues},
+                "dates": {"codes": DateCodes, "values": DateValues},
+                "text": {"codes": TextCodes, "values": TextValues},
+            }.pairIterator()) {
+            hash<string, string> formats = map {$1: $1}, i.value.codes;
+            hash<string, list<hash<auto>>> rendered;
+            foreach string ext in ("xlsx", "ods") {
+                string path = sprintf("%s/like-excel-%s.%s", test_data_dir, i.key, ext);
+                on_exit unlink(path);
+                AbstractDataProvider dp = ext == "xlsx"
+                    ? new ExcelWriteDataProvider(path, {"headers": i.value.codes, "column_formats": formats})
+                    : new OdsWriteDataProvider(path, {"headers": i.value.codes, "column_formats": formats});
+                map dp.createRecord(map {$1: i.value.values[$#]}, i.value.codes), xrange(i.value.values.size());
+                dp.finishCreate();
+                rendered{ext} = renderWithLibreOffice(soffice, path);
+            }
+            assertEq(i.value.values.size(), rendered.xlsx.size(), i.key);
+            # each code is shown the same way in the .ods file as in the .xlsx file
+            foreach string code in (i.value.codes) {
+                assertEq((map $1{code}, rendered.xlsx), (map $1{code}, rendered.ods), i.key + ": " + code);
+            }
+        }
+    }
+
+    #! Returns the path of LibreOffice's soffice program, or NOTHING if it is not installed
+    private static *string findLibreOffice() {
+        foreach string dir in (ENV.PATH.split(":")) {
+            string path = dir + "/soffice";
+            if (is_executable(path)) {
+                return path;
+            }
+        }
+    }
+
+    #! Returns the records of a spreadsheet's first sheet as LibreOffice shows its cells
+    private list<hash<auto>> renderWithLibreOffice(string soffice, string path) {
+        TmpDir dir("render-");
+        # CSV with "save cell contents as shown"; the profile directory keeps a running LibreOffice out of the way
+        string cmd = sprintf("%s -env:UserInstallation=file://%s/profile --headless --convert-to "
+            "'csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,true' --outdir %s %s >/dev/null 2>&1",
+            shellQuote(soffice), dir.path, shellQuote(dir.path), shellQuote(path));
+        assertEq(0, system(cmd), cmd);
+        string csv = sprintf("%s/%s.csv", dir.path, basename(path).split(".")[0]);
+        return map $1, new CsvFileIterator(csv, {"header_names": True});
+    }
+
+    #! A file that is not a readable ODS spreadsheet fails the read with the reader's error (qorus#646)
+    /** A damaged file, another file type or an empty file fails before any record is returned; each raises
+        @c JNI-ERROR, its description naming the Java exception.
+    */
+    testUnreadableFiles() {
+        binary spreadsheet = File::readBinaryFile(test_data_dir + "/simple.ods");
+        # the input -> the start of the description of the error its read raises
+        hash<string, hash<auto>> cases = {
+            "damaged (truncated)": {
+                "data": spreadsheet.substr(0, spreadsheet.size() / 2),
+                "exception": "java.util.zip.ZipException",
+            },
+            "a text file": {
+                "data": binary("PO;SKU;Qty\n1;2;3\n"),
+                "exception": "java.util.zip.ZipException",
+            },
+            "an empty file": {
+                "data": binary(),
+                "exception": "java.util.zip.ZipException",
+            },
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            *hash<ExceptionInfo> ex;
+            int records = 0;
+            try {
+                OdsReadDataProvider dp({"data": i.value.data, "header_names": True});
+                map ++records, dp.searchRecords();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+            assertEq("JNI-ERROR", ex.err, i.key);
+            assertEq(0, ex.desc.find(i.value.exception), sprintf("%s: %s", i.key, ex.desc));
+            assertEq(0, records, i.key + ": no record is returned");
+        }
+        OdsReadDataProvider dp({"data": spreadsheet, "header_names": True});
+        assertTrue((map $1, dp.searchRecords()).size() > 0, "the intact spreadsheet reads");
     }
 }

@@ -215,7 +215,10 @@ void JavaException::convert(ExceptionSink* xsink) {
 
     if (env->IsInstanceOf(throwable, Globals::classQoreExceptionWrapper)) {
         jlong l = env->CallLongMethod(throwable, Globals::methodQoreExceptionWrapperGet);
-        if (l != 0) {
+        if (env->ExceptionCheck()) {
+            // Preserve the original exception if extracting the wrapped sink fails.
+            env->ExceptionClear();
+        } else if (l != 0) {
             ExceptionSink* src = reinterpret_cast<ExceptionSink *>(l);
             xsink->assimilate(src);
             return;
@@ -225,26 +228,34 @@ void JavaException::convert(ExceptionSink* xsink) {
     }
 
     if (env->IsInstanceOf(throwable, Globals::classQoreException)) {
-        LocalReference<jstring> err = static_cast<jstring>(env->CallObjectMethod(throwable,
-            Globals::methodQoreExceptionGetErr));
-        LocalReference<jstring> desc = static_cast<jstring>(env->CallObjectMethod(throwable,
-            Globals::methodQoreExceptionGetDesc));
-        LocalReference<jobject> arg = static_cast<jstring>(env->CallObjectMethod(throwable,
-            Globals::methodQoreExceptionGetArg));
+        try {
+            Env jenv(env);
+            LocalReference<jstring> err = jenv.callObjectMethod(throwable,
+                Globals::methodQoreExceptionGetErr, nullptr).as<jstring>();
+            LocalReference<jstring> desc = jenv.callObjectMethod(throwable,
+                Globals::methodQoreExceptionGetDesc, nullptr).as<jstring>();
+            LocalReference<jobject> arg = jenv.callObjectMethod(throwable,
+                Globals::methodQoreExceptionGetArg, nullptr);
 
-        const char* err_str = env->GetStringUTFChars(err, nullptr);
-        const char* desc_str = desc ? env->GetStringUTFChars(desc, nullptr) : "";
+            if (err) {
+                Env::GetStringUtfChars err_str(jenv, err);
+                Env::GetStringUtfChars desc_str(jenv, desc);
+                ValueHolder qore_arg(JavaToQore::convertToQore(std::move(arg),
+                    jni_get_program_context(), false), xsink);
 
-        QoreValue qore_arg;
-        if (arg) {
-            qore_arg = JavaToQore::convertToQore(arg.release(), jni_get_program_context(), false);
+                QoreExternalProgramLocationWrapper loc;
+                JniCallStack callstack(throwable, loc);
+                SimpleRefHolder<QoreStringNode> description(new QoreStringNode(desc_str.c_str(), QCS_UTF8));
+
+                xsink->raiseExceptionArg(loc.get(), err_str.c_str(), qore_arg.release(),
+                    description.release(), callstack);
+                return;
+            }
+        } catch (jni::Exception& e) {
+            // A custom accessor or argument conversion can throw. Report the original
+            // Java exception below instead of recursing into the failing conversion.
+            e.ignore();
         }
-
-        QoreExternalProgramLocationWrapper loc;
-        JniCallStack callstack(throwable, loc);
-
-        xsink->raiseExceptionArg(loc.get(), err_str, qore_arg, new QoreStringNode(desc_str), callstack);
-        return;
     }
 
     jclass raw_throwable_class = env->GetObjectClass(throwable);
@@ -331,7 +342,9 @@ void JavaException::ignoreOrRethrowNoClass() {
 
     if (env->IsInstanceOf(throwable, Globals::classQoreExceptionWrapper)) {
         jlong l = env->CallLongMethod(throwable, Globals::methodQoreExceptionWrapperGet);
-        if (l != 0) {
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+        } else if (l != 0) {
             ExceptionSink *src = reinterpret_cast<ExceptionSink *>(l);
             xsink.assimilate(src);
             return;

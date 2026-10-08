@@ -42,7 +42,7 @@ public class Message extends QoreObjectWrapper {
     }
 
     //! creates a Message object from the arguments given; this variant of the constructor is designed to be used to create a Message object for sending with the SmtpClient class
-    /** Use the @ref addTo() method to add message recipients
+    /** Use the @ref addTO() method to add message recipients
 
         @param n_sender the sender's email address; can be in the format \c "Full Display Name <name@example.com>"
         @param n_subject the subject line for the email; the subject will be encoded with <a href="http://tools.ietf.org/html/rfc2047">"Q" encoding</a>

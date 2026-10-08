@@ -120,7 +120,11 @@ public:
             }
         }
 
-        std::unique_ptr<ExceptionSink> xsink = std::unique_ptr<ExceptionSink>(new ExceptionSink());
+        auto discard_sink = [](ExceptionSink* sink) {
+            sink->clear();
+            delete sink;
+        };
+        std::unique_ptr<ExceptionSink, decltype(discard_sink)> xsink(new ExceptionSink(), discard_sink);
         xsink->assimilate(src);
         xsink->markExternallyManaged();
 

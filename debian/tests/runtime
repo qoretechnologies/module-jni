@@ -1,0 +1,18 @@
+#!/bin/sh
+# Copyright (C) 2026 David Nichols
+# SPDX-License-Identifier: MIT
+set -eu
+export LC_ALL=C.UTF-8
+unset QORE_MODULE_DIR QORE_MODULE_DIR_ONLY QORE_INCLUDE_DIR LD_LIBRARY_PATH LD_PRELOAD
+unset CLASSPATH QORE_CLASSPATH QORE_JNI_CLASSPATH JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS _JAVA_OPTIONS
+export QORE_MODULE_DIR=$(/usr/bin/qore --module-path)
+export QORE_MODULE_DIR_ONLY=1
+export QORE_JNI_CLASSPATH=/usr/share/qore/java/qore-jni.jar:/usr/share/qore/java/qore-jni-compiler.jar
+cp -a test "$AUTOPKGTEST_TMP/"
+cp debian/tests/fixtures.py "$AUTOPKGTEST_TMP/"
+cd "$AUTOPKGTEST_TMP"
+python3 fixtures.py
+for suite in test/*.qtest; do
+    case "$suite" in test/jms.qtest|test/kotlin.qtest) continue ;; esac
+    timeout 240 /usr/bin/qore -l jni "$suite" -v
+done

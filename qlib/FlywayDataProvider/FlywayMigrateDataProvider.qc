@@ -44,39 +44,9 @@ public class FlywayMigrateDataProvider inherits DataProvider::AbstractDataProvid
         #! Request type - no input needed
         const RequestType = AbstractDataProviderTypeMap."nothing";
 
-        #! Response fields
-        const ResponseFields = {
-            "version": {
-                "display_name": "Version",
-                "short_desc": "The migration version",
-                "desc": "The version of the applied migration",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "description": {
-                "display_name": "Description",
-                "short_desc": "The migration description",
-                "desc": "The description of the applied migration",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "type": {
-                "display_name": "Type",
-                "short_desc": "The migration type",
-                "desc": "The type of the migration (e.g. SQL, JDBC)",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "executionTime": {
-                "display_name": "Execution Time",
-                "short_desc": "The execution time in milliseconds",
-                "desc": "The execution time of the migration in milliseconds",
-                "type": AbstractDataProviderTypeMap."*int",
-            },
-            "success": {
-                "display_name": "Success",
-                "short_desc": "Whether the migration was successful",
-                "desc": "Whether the migration was applied successfully",
-                "type": AbstractDataProviderTypeMap."bool",
-            },
-        };
+        #! Applied migrations; empty when there are no pending migrations.
+        const ResponseType = new ListDataType("FlywayMigrateResponse", FlywayMigrateOutputDataType);
+
     }
 
     private {
@@ -103,7 +73,7 @@ public class FlywayMigrateDataProvider inherits DataProvider::AbstractDataProvid
         @param request_options the request options; will be processed by validateRequestOptions()
 
         @return the migration results as a list of hashes with version, description, type,
-        executionTime, and success fields
+        filepath, and executionTime fields
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         return runner.migrate();
@@ -120,7 +90,7 @@ public class FlywayMigrateDataProvider inherits DataProvider::AbstractDataProvid
     /** @return the response type for this response message
     */
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new HashDataType("FlywayMigrateResponse", ResponseFields);
+        return ResponseType;
     }
 }
 }

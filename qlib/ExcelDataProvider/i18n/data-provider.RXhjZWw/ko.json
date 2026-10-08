@@ -3,65 +3,29 @@
   "locales": {
     "ko": {
       "messages": {
-        "app.RXhjZWw.action.cmVhZA.desc": {
-          "source": "Read Excel spreadsheet from a specific file location",
-          "message": "특정 파일 위치에서 Excel 스프레드시트 읽기"
+        "app.RXhjZWw.display_name": {
+          "source": "Excel Spreadsheets",
+          "message": "Excel 스프레드시트"
+        },
+        "app.RXhjZWw.short_desc": {
+          "source": "Read and write Excel spreadsheets",
+          "message": "Excel 스프레드시트 읽기 및 쓰기"
+        },
+        "app.RXhjZWw.desc": {
+          "source": "Read and write Excel spreadsheets",
+          "message": "Excel 스프레드시트 읽기 및 쓰기"
         },
         "app.RXhjZWw.action.cmVhZA.display_name": {
           "source": "Read Excel Spreadsheet File",
           "message": "Excel 스프레드시트 파일 읽기"
         },
-        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
-          "source": "The range of cells for data to process",
-          "message": "처리할 데이터의 셀 범위"
+        "app.RXhjZWw.action.cmVhZA.short_desc": {
+          "source": "Read Excel spreadsheet from a specific file location",
+          "message": "특정 파일 위치에서 Excel 스프레드시트 읽기"
         },
-        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
-          "source": "Data Cells",
-          "message": "데이터 셀"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
-          "source": "The range of cells for data to process",
-          "message": "처리할 데이터의 셀 범위"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
-          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
-          "message": "`True`인 경우 개체가 첫 번째 헤더 행에서 헤더 이름을 구문 분석합니다. 이 경우 `header_cells`이 명시적으로 설정되지 않은 경우 첫 번째 행으로 간주됩니다."
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
-          "source": "Header Names?",
-          "message": "헤더 이름?"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
-          "source": "Should header rows be used as output field names?",
-          "message": "헤더 행을 출력 필드 이름으로 사용하시겠습니까?"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
-          "source": "The range of cells for headers or a row number",
-          "message": "헤더의 셀 범위 또는 행 번호"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
-          "source": "Header Cells",
-          "message": "헤더 셀"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
-          "source": "The range of cells for headers or a row number",
-          "message": "헤더의 셀 범위 또는 행 번호"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.desc": {
-          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
-          "message": "반복되는 데이터의 헤더/열 이름 목록입니다. 이 항목이 있는 경우 `header_names`은 `False`이어야 합니다."
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
-          "source": "Output Headers",
-          "message": "출력 헤더"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.short_desc": {
-          "source": "List of header / column names for the data iterated",
-          "message": "반복되는 데이터의 헤더/열 이름 목록"
-        },
-        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
-          "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
-          "message": "Excel 데이터의 위치입니다. `data` 및 `stream`과 상호 배타적입니다. [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출을 통해 해석됩니다."
+        "app.RXhjZWw.action.cmVhZA.desc": {
+          "source": "Read Excel spreadsheet from a specific file location",
+          "message": "특정 파일 위치에서 Excel 스프레드시트 읽기"
         },
         "app.RXhjZWw.action.cmVhZA.option.cGF0aA.display_name": {
           "source": "Excel Input Path",
@@ -71,9 +35,9 @@
           "source": "The location of the Excel data",
           "message": "Excel 데이터의 위치"
         },
-        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "반복할 워크시트의 이름입니다. 생략된 경우 첫 번째 워크시트가 처리됩니다."
+        "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Excel 데이터의 위치입니다. `data` 및 `stream`과 상호 배타적입니다. [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출을 통해 해석됩니다."
         },
         "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -83,21 +47,69 @@
           "source": "The name of the worksheet to iterate",
           "message": "반복할 워크시트의 이름"
         },
-        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
-          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
-          "message": "`True`인 경우 (기본값 `False`), 자동으로 감지된 모든 헤더 이름이 소문자로 변환됩니다."
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "반복할 워크시트의 이름(대소문자를 구분하지 않고 일치) 또는 문자열로 된 0부터 시작하는 위치입니다. 생략하면 첫 번째 워크시트를 처리합니다. `worksheet_pattern`과 충돌합니다. 알 수 없는 워크시트는 파일의 워크시트를 나열하는 `EXCEL-WORKSHEET-NOT-FOUND`을 발생시킵니다"
         },
-        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.display_name": {
-          "source": "Convert Headers to Lower Case",
-          "message": "헤더를 소문자로 변환"
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "데이터 셀"
         },
-        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.short_desc": {
-          "source": "Convert all header names to lower case",
-          "message": "모든 헤더 이름을 소문자로 변환"
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "처리할 데이터의 셀 범위"
         },
-        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.desc": {
-          "source": "The timezone region to use when parsing dates",
-          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
+        "app.RXhjZWw.action.cmVhZA.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "처리할 데이터의 셀 범위"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "헤더 셀"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "헤더의 셀 범위 또는 행 번호"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "헤더의 셀 범위 또는 행 번호"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "헤더 이름?"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "헤더 행을 출력 필드 이름으로 사용하시겠습니까?"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "`True`인 경우 개체가 첫 번째 헤더 행에서 헤더 이름을 구문 분석합니다. 이 경우 `header_cells`이 명시적으로 설정되지 않은 경우 첫 번째 행으로 간주됩니다."
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "출력 헤더"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "반복되는 데이터의 헤더/열 이름 목록"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "반복되는 데이터의 헤더/열 이름 목록입니다. 이 항목이 있는 경우 `header_names`은 `False`이어야 합니다."
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "빈 행 무시"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "첫 번째 빈 행에서 멈추지 않고 빈 행 건너뛰기"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "`True`이면 빈 행을 건너뛰고 `data_cells`의 끝 또는 워크시트의 마지막 행까지 계속 읽습니다. `False`(기본값)이면 첫 번째 빈 행에서 읽기를 중지합니다"
         },
         "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
@@ -107,21 +119,117 @@
           "source": "The timezone region to use when parsing dates",
           "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
         },
-        "app.RXhjZWw.action.cmVhZA.short_desc": {
-          "source": "Read Excel spreadsheet from a specific file location",
-          "message": "특정 파일 위치에서 Excel 스프레드시트 읽기"
+        "app.RXhjZWw.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.desc": {
-          "source": "Read Excel spreadsheet inline data",
-          "message": "Excel 스프레드시트 인라인 데이터 읽기"
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "헤더를 소문자로 변환"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "모든 헤더 이름을 소문자로 변환"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "`True`인 경우 (기본값 `False`), 자동으로 감지된 모든 헤더 이름이 소문자로 변환됩니다."
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "워크시트 이름 패턴"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "반복할 워크시트의 이름과 일치하는 정규식"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "파일마다 워크시트 이름이 바뀌는 파일(예: `Jan 2026`과 `Feb 2026`)에서 정확히 하나의 워크시트 이름이 일치해야 하는 정규식입니다. `^\\w+ \\d{4}$`를 사용하고, 대소문자를 구분하지 않으려면 `(?i)^export`를 사용합니다. 패턴은 이름 안에서 검색되므로 전체 이름과 일치시키려면 `^`와 `$`로 고정하세요. 일치하는 항목이 없으면 `EXCEL-WORKSHEET-NOT-FOUND`, 둘 이상 일치하면 `EXCEL-WORKSHEET-AMBIGUOUS`이 발생하며 둘 다 파일의 워크시트를 나열합니다. `worksheet`와 충돌합니다"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.display_name": {
+          "source": "Profile Excel Spreadsheet",
+          "message": "Excel 스프레드시트 프로파일링"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.short_desc": {
+          "source": "Describe the layout and columns of every sheet of an Excel spreadsheet",
+          "message": "Excel 스프레드시트의 모든 시트 레이아웃과 열을 설명합니다"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.desc": {
+          "source": "Describes how every sheet of an Excel spreadsheet (`.xlsx` or `.xls`) is laid out, so it can be read correctly before an integration is built around it.\n\n**Detects:**\n- hidden sheets, named ranges, merged cells, and formulas\n- the header row, title rows and banners above it, and the data region\n- totals and subtotal rows and blank-row gaps\n- each column's type with a confidence and counter-examples\n- dates and numbers stored as text in a local format, and identifiers with leading zeros\n\nSample values are redacted to their shape by default (`redact`), so a profile can be shared without the data itself.",
+          "message": "Excel 스프레드시트(`.xlsx` 또는 `.xls`)의 모든 시트 레이아웃을 설명하여, 통합을 구축하기 전에 올바르게 읽을 수 있도록 합니다.\n\n**감지 항목:**\n- 숨겨진 시트, 이름 있는 범위, 병합된 셀, 수식\n- 헤더 행, 그 위의 제목 행과 배너, 데이터 영역\n- 합계 행과 소계 행, 빈 행 간격\n- 각 열의 유형과 신뢰도 및 반례\n- 로컬 형식의 텍스트로 저장된 날짜와 숫자, 앞에 0이 붙은 식별자\n\n샘플 값은 기본적으로 형태만 남기고 가려지므로(`redact`), 데이터 자체 없이 프로필을 공유할 수 있습니다."
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.display_name": {
+          "source": "Spreadsheet Location",
+          "message": "스프레드시트 위치"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The location of the spreadsheet to profile",
+          "message": "프로파일링할 스프레드시트의 위치"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cGF0aA.desc": {
+          "source": "The location of the spreadsheet to profile, for example `file:///data/stock.xlsx` or an `sftp://` location; conflicts with `data`",
+          "message": "프로파일링할 스프레드시트의 위치(예: `file:///data/stock.xlsx` 또는 `sftp://` 위치), `data`와 함께 사용할 수 없음"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.display_name": {
+          "source": "Spreadsheet Data",
+          "message": "스프레드시트 데이터"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.short_desc": {
+          "source": "The spreadsheet content to profile",
+          "message": "프로파일링할 스프레드시트 내용"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.ZGF0YQ.desc": {
+          "source": "The spreadsheet content to profile, as bytes or as a Base64 string; conflicts with `path`",
+          "message": "프로파일링할 스프레드시트 내용(바이트 또는 Base64 문자열), `path`와 함께 사용할 수 없음"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.display_name": {
+          "source": "Maximum Rows",
+          "message": "최대 행 수"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.short_desc": {
+          "source": "The maximum number of rows read per sheet",
+          "message": "시트당 읽을 최대 행 수"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
+          "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
+          "message": "시트당 읽고 프로파일링할 최대 행 수, 전체 행 수는 그래도 보고되며 `partial_profile` 결과로 시트에 행이 더 있음을 알림"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.display_name": {
+          "source": "Sample Rows",
+          "message": "샘플 행"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.short_desc": {
+          "source": "The number of sample rows returned per sheet",
+          "message": "시트당 반환할 샘플 행 수"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.desc": {
+          "source": "The number of sample data rows returned per sheet",
+          "message": "시트당 반환할 샘플 데이터 행 수"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
+          "source": "Redact Samples",
+          "message": "샘플 가리기"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.short_desc": {
+          "source": "Return sample values redacted to their shape",
+          "message": "샘플 값을 형태만 남기고 가려서 반환"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.desc": {
+          "source": "If `True` (the default), sample values and counter-examples are redacted to their shape: letters become `x` or `X` and digits `9`, so a profile can be shared without the data",
+          "message": "`True`(기본값)이면 샘플 값과 반례를 형태만 남기고 가림: 문자는 `x` 또는 `X`, 숫자는 `9`가 되므로 데이터 없이 프로필을 공유할 수 있음"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.display_name": {
           "source": "Read Excel Spreadsheet Inline Data",
           "message": "Excel 스프레드시트 인라인 데이터 읽기"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
-          "source": "Excel data to process; conflicts with `stream` and `path`",
-          "message": "처리할 Excel 데이터입니다. `stream` 및 `path`과 충돌합니다."
+        "app.RXhjZWw.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read Excel spreadsheet inline data",
+          "message": "Excel 스프레드시트 인라인 데이터 읽기"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.desc": {
+          "source": "Read Excel spreadsheet inline data",
+          "message": "Excel 스프레드시트 인라인 데이터 읽기"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
           "source": "Input Data",
@@ -131,57 +239,9 @@
           "source": "Excel data to process",
           "message": "처리할 Excel 데이터"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
-          "source": "The range of cells for data to process",
-          "message": "처리할 데이터의 셀 범위"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
-          "source": "Data Cells",
-          "message": "데이터 셀"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
-          "source": "The range of cells for data to process",
-          "message": "처리할 데이터의 셀 범위"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
-          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
-          "message": "`True`인 경우 개체가 첫 번째 헤더 행에서 헤더 이름을 구문 분석합니다. 이 경우 `header_cells`이 명시적으로 설정되지 않은 경우 첫 번째 행으로 간주됩니다."
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
-          "source": "Header Names?",
-          "message": "헤더 이름?"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
-          "source": "Should header rows be used as output field names?",
-          "message": "헤더 행을 출력 필드 이름으로 사용하시겠습니까?"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
-          "source": "The range of cells for headers or a row number",
-          "message": "헤더의 셀 범위 또는 행 번호"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
-          "source": "Header Cells",
-          "message": "헤더 셀"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
-          "source": "The range of cells for headers or a row number",
-          "message": "헤더의 셀 범위 또는 행 번호"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
-          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
-          "message": "반복되는 데이터의 헤더/열 이름 목록입니다. 이 항목이 있는 경우 `header_names`은 `False`이어야 합니다."
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
-          "source": "Output Headers",
-          "message": "출력 헤더"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
-          "source": "List of header / column names for the data iterated",
-          "message": "반복되는 데이터의 헤더/열 이름 목록"
-        },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to iterate; if missing, the first worksheet is processed",
-          "message": "반복할 워크시트의 이름입니다. 생략된 경우 첫 번째 워크시트가 처리됩니다."
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Excel data to process; conflicts with `stream` and `path`",
+          "message": "처리할 Excel 데이터입니다. `stream` 및 `path`과 충돌합니다."
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -191,21 +251,69 @@
           "source": "The name of the worksheet to iterate",
           "message": "반복할 워크시트의 이름"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
-          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
-          "message": "`True`인 경우 (기본값 `False`), 자동으로 감지된 모든 헤더 이름이 소문자로 변환됩니다."
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to iterate, matched without regard to case, or its 0-based position as a string; if missing, the first worksheet is processed; conflicts with `worksheet_pattern`.  An unknown worksheet raises `EXCEL-WORKSHEET-NOT-FOUND`, which lists the worksheets of the file",
+          "message": "반복할 워크시트의 이름(대소문자를 구분하지 않고 일치) 또는 문자열로 된 0부터 시작하는 위치입니다. 생략하면 첫 번째 워크시트를 처리합니다. `worksheet_pattern`과 충돌합니다. 알 수 없는 워크시트는 파일의 워크시트를 나열하는 `EXCEL-WORKSHEET-NOT-FOUND`을 발생시킵니다"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
-          "source": "Convert Headers to Lower Case",
-          "message": "헤더를 소문자로 변환"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.display_name": {
+          "source": "Data Cells",
+          "message": "데이터 셀"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
-          "source": "Convert all header names to lower case",
-          "message": "모든 헤더 이름을 소문자로 변환"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.short_desc": {
+          "source": "The range of cells for data to process",
+          "message": "처리할 데이터의 셀 범위"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
-          "source": "The timezone region to use when parsing dates",
-          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZGF0YV9jZWxscw.desc": {
+          "source": "The range of cells for data to process",
+          "message": "처리할 데이터의 셀 범위"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.display_name": {
+          "source": "Header Cells",
+          "message": "헤더 셀"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.short_desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "헤더의 셀 범위 또는 행 번호"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX2NlbGxz.desc": {
+          "source": "The range of cells for headers or a row number",
+          "message": "헤더의 셀 범위 또는 행 번호"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Header Names?",
+          "message": "헤더 이름?"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "Should header rows be used as output field names?",
+          "message": "헤더 행을 출력 필드 이름으로 사용하시겠습니까?"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "If `True` then the object will parse the header names from the first header row, in this case if `header_cells` is not set explicitly, it will be assumed to be the first row",
+          "message": "`True`인 경우 개체가 첫 번째 헤더 행에서 헤더 이름을 구문 분석합니다. 이 경우 `header_cells`이 명시적으로 설정되지 않은 경우 첫 번째 행으로 간주됩니다."
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "출력 헤더"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "반복되는 데이터의 헤더/열 이름 목록"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `False`",
+          "message": "반복되는 데이터의 헤더/열 이름 목록입니다. 이 항목이 있는 경우 `header_names`은 `False`이어야 합니다."
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Rows",
+          "message": "빈 행 무시"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "Skip empty rows instead of stopping at the first one",
+          "message": "첫 번째 빈 행에서 멈추지 않고 빈 행 건너뛰기"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `True`, empty rows are skipped and reading continues to the end of `data_cells` or the last row of the worksheet; if `False` (the default), reading stops at the first empty row",
+          "message": "`True`이면 빈 행을 건너뛰고 `data_cells`의 끝 또는 워크시트의 마지막 행까지 계속 읽습니다. `False`(기본값)이면 첫 번째 빈 행에서 읽기를 중지합니다"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
           "source": "Timezone Region",
@@ -215,81 +323,45 @@
           "source": "The timezone region to use when parsing dates",
           "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
         },
-        "app.RXhjZWw.action.cmVhZC1kYXRh.short_desc": {
-          "source": "Read Excel spreadsheet inline data",
-          "message": "Excel 스프레드시트 인라인 데이터 읽기"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
         },
-        "app.RXhjZWw.action.d3JpdGU.desc": {
-          "source": "Write data to an Excel spreadsheet file at a specified path",
-          "message": "지정된 경로의 Excel 스프레드시트 파일에 데이터 쓰기"
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "헤더를 소문자로 변환"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "모든 헤더 이름을 소문자로 변환"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `True` (default `False`), all automatically-detected header names will be converted to lower case letters",
+          "message": "`True`인 경우 (기본값 `False`), 자동으로 감지된 모든 헤더 이름이 소문자로 변환됩니다."
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.display_name": {
+          "source": "Worksheet Name Pattern",
+          "message": "워크시트 이름 패턴"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.short_desc": {
+          "source": "A regular expression matching the name of the worksheet to iterate",
+          "message": "반복할 워크시트의 이름과 일치하는 정규식"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.d29ya3NoZWV0X3BhdHRlcm4.desc": {
+          "source": "A regular expression that the name of exactly one worksheet must match, for files whose worksheet name changes from file to file, such as `Jan 2026` and `Feb 2026`: use `^\\w+ \\d{4}$`, or `(?i)^export` to match without regard to case; the pattern is searched in the name, so anchor it with `^` and `$` to match the whole name.  No match raises `EXCEL-WORKSHEET-NOT-FOUND` and more than one match raises `EXCEL-WORKSHEET-AMBIGUOUS`, both listing the worksheets of the file; conflicts with `worksheet`",
+          "message": "파일마다 워크시트 이름이 바뀌는 파일(예: `Jan 2026`과 `Feb 2026`)에서 정확히 하나의 워크시트 이름이 일치해야 하는 정규식입니다. `^\\w+ \\d{4}$`를 사용하고, 대소문자를 구분하지 않으려면 `(?i)^export`를 사용합니다. 패턴은 이름 안에서 검색되므로 전체 이름과 일치시키려면 `^`와 `$`로 고정하세요. 일치하는 항목이 없으면 `EXCEL-WORKSHEET-NOT-FOUND`, 둘 이상 일치하면 `EXCEL-WORKSHEET-AMBIGUOUS`이 발생하며 둘 다 파일의 워크시트를 나열합니다. `worksheet`와 충돌합니다"
         },
         "app.RXhjZWw.action.d3JpdGU.display_name": {
           "source": "Write Excel Spreadsheet File",
           "message": "Excel 스프레드시트 파일 쓰기"
         },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
-          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
-          "message": "Excel 2007+ 형식 (`.xlsx`). 대용량 파일에 대한 스트리밍 모드를 지원합니다."
+        "app.RXhjZWw.action.d3JpdGU.short_desc": {
+          "source": "Write data to an Excel spreadsheet file",
+          "message": "Excel 스프레드시트 파일에 데이터 쓰기"
         },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
-          "source": "XLSX",
-          "message": "XLSX"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
-          "source": "Excel 2007+ format (.xlsx)",
-          "message": "Excel 2007+ 형식 (.xlsx)"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
-          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
-          "message": "기존 Excel 97-2003 바이너리 형식 (`.xls`). 시트당 65,536행 및 256열로 제한됩니다."
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
-          "source": "XLS",
-          "message": "XLS"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
-          "source": "Excel 97-2003 format (.xls)",
-          "message": "Excel 97-2003 형식 (.xls)"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.desc": {
-          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
-          "message": "사용할 Excel 형식: `xlsx` (기본값, Excel 2007+) 또는 `xls` (Excel 97-2003)"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.display_name": {
-          "source": "Output Format",
-          "message": "출력 형식"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.short_desc": {
-          "source": "Excel format to use",
-          "message": "사용할 Excel 형식"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.desc": {
-          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
-          "message": "데이터의 헤더/열 이름 목록입니다. 제공되지 않는 경우 첫 번째 레코드에서 헤더가 자동으로 감지됩니다."
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.display_name": {
-          "source": "Column Headers",
-          "message": "열 헤더"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
-          "source": "List of header / column names for the data",
-          "message": "데이터의 헤더/열 이름 목록"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.desc": {
-          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
-          "message": "`True`인 경우 메모리 사용량을 줄이면서 대용량 파일을 쓰기 위해 SXSSF 스트리밍 모드를 사용합니다. `xlsx` 형식에만 적용됩니다."
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.display_name": {
-          "source": "Streaming Mode",
-          "message": "스트리밍 모드"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.short_desc": {
-          "source": "Use streaming mode for large files",
-          "message": "대용량 파일에 스트리밍 모드 사용"
-        },
-        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.desc": {
-          "source": "The location for the output Excel data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
-          "message": "출력 Excel 데이터 파일의 위치입니다. `stream`과 상호 배타적입니다. 출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 호출에 의해 처리됩니다."
+        "app.RXhjZWw.action.d3JpdGU.desc": {
+          "source": "Write data to an Excel spreadsheet file at a specified path",
+          "message": "지정된 경로의 Excel 스프레드시트 파일에 데이터 쓰기"
         },
         "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.display_name": {
           "source": "Excel Output Path",
@@ -299,9 +371,9 @@
           "source": "The location to write the Excel file",
           "message": "Excel 파일을 작성할 위치"
         },
-        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to create; default is `Sheet1`",
-          "message": "생성할 워크시트의 이름입니다. 기본값은 `Sheet1`입니다."
+        "app.RXhjZWw.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output Excel data file; mutually exclusive with `stream`; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35)",
+          "message": "출력 Excel 데이터 파일의 위치입니다. `stream`과 상호 배타적입니다. 출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a46f7e9cc0e76e0d7e30cae79513cd35) 호출에 의해 처리됩니다."
         },
         "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -311,81 +383,93 @@
           "source": "The name of the worksheet to create",
           "message": "생성할 워크시트의 이름"
         },
-        "app.RXhjZWw.action.d3JpdGU.short_desc": {
-          "source": "Write data to an Excel spreadsheet file",
-          "message": "Excel 스프레드시트 파일에 데이터 쓰기"
+        "app.RXhjZWw.action.d3JpdGU.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; default is `Sheet1`",
+          "message": "생성할 워크시트의 이름입니다. 기본값은 `Sheet1`입니다."
         },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.desc": {
-          "source": "Create Excel spreadsheet data in memory and return it as binary data; useful for generating Excel files without writing to disk",
-          "message": "메모리에 Excel 스프레드시트 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 Excel 파일을 생성할 때 유용합니다."
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "데이터의 헤더/열 이름 목록"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "데이터의 헤더/열 이름 목록입니다. 제공되지 않는 경우 첫 번째 레코드에서 헤더가 자동으로 감지됩니다."
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.display_name": {
+          "source": "Output Format",
+          "message": "출력 형식"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.short_desc": {
+          "source": "Excel format to use",
+          "message": "사용할 Excel 형식"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.desc": {
+          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
+          "message": "사용할 Excel 형식: `xlsx` (기본값, Excel 2007+) 또는 `xls` (Excel 97-2003)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+ 형식 (.xlsx)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
+          "message": "Excel 2007+ 형식 (`.xlsx`). 대용량 파일에 대한 스트리밍 모드를 지원합니다."
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
+          "source": "XLS",
+          "message": "XLS"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
+          "source": "Excel 97-2003 format (.xls)",
+          "message": "Excel 97-2003 형식 (.xls)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
+          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
+          "message": "기존 Excel 97-2003 바이너리 형식 (`.xls`). 시트당 65,536행 및 256열로 제한됩니다."
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.display_name": {
+          "source": "Streaming Mode",
+          "message": "스트리밍 모드"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.short_desc": {
+          "source": "Use streaming mode for large files",
+          "message": "대용량 파일에 스트리밍 모드 사용"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.c3RyZWFtaW5n.desc": {
+          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
+          "message": "`True`인 경우 메모리 사용량을 줄이면서 대용량 파일을 쓰기 위해 SXSSF 스트리밍 모드를 사용합니다. `xlsx` 형식에만 적용됩니다."
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.display_name": {
+          "source": "Column Display Formats",
+          "message": "열 표시 형식"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.short_desc": {
+          "source": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+          "message": "각 열의 표시 형식(예: dd.mm.yyyy 또는 #,##0.00)"
+        },
+        "app.RXhjZWw.action.d3JpdGU.option.Y29sdW1uX2Zvcm1hdHM.desc": {
+          "source": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  A column without a format is written as without this option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\nFormat codes are written as in Excel and LibreOffice:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `EXCEL-WRITE-OPTION-ERROR` naming the column and the problem",
+          "message": "파일을 여는 사람이 각 값을 의도한 대로 볼 수 있도록 헤더 이름으로 지정하는 열의 표시 형식입니다. 예를 들어 날짜는 `dd.mm.yyyy`, 금액은 `#,##0.00`, 비율은 `0.0%`로 표시됩니다. 셀은 실제 값을 유지하며(날짜는 날짜로, 숫자는 숫자로 유지됨) 표시 방식만 바뀝니다. 형식이 없는 열은 이 옵션이 없을 때와 같이 기록됩니다. 즉, 날짜는 `yyyy-mm-dd hh:mm:ss`로, 숫자는 형식 없이 기록됩니다.\n\n형식 코드는 Excel 및 LibreOffice에서와 같이 작성합니다.\n- **숫자**: `0`(항상 표시되는 자릿수), `#`(유효할 때 표시되는 자릿수), 숫자 사이의 `,`(천 단위 구분), 마지막 숫자 뒤의 `,`(1000으로 나누기), `.`(소수점), `E+00`(지수 표기). 양수, 음수, 0 값에 대해 `;`로 구분된 최대 세 개의 섹션을 사용할 수 있습니다(예: `#,##0.00;(#,##0.00)` 또는 `#,##0.00;#,##0.00-`)\n- **백분율**: 각 섹션에 `%`를 포함합니다(예: `0.0%`). 값은 분수이므로 `0.25`는 `25.0%`로 표시됩니다\n- **날짜 및 시간**: `yy` 또는 `yyyy`(연도), `m`, `mm`, `mmm` 또는 `mmmm`(숫자 또는 이름으로 나타낸 월), `d` 또는 `dd`(일), `ddd` 또는 `dddd`(요일 이름), `h` 또는 `hh`(시), 시 바로 뒤 또는 초 바로 앞의 `m` 또는 `mm`(분), `s` 또는 `ss`(초), 초 뒤의 `.0`~`.000`(초의 소수 부분), `AM/PM`(예: `dd.mm.yyyy hh:mm`)\n- **텍스트**: `@`\n\n코드 안의 텍스트는 큰따옴표로 묶거나(`\"EUR\"`), 백슬래시로 이스케이프하거나(`\\x`), 대괄호 안의 통화 기호로 작성하며(`[$€-407]`), `$ - + / ( ) :`, 공백 및 `€` 같은 기호는 그대로 작성합니다. 섹션은 `[Red]` 같은 색으로 시작할 수 있습니다.\n\n열의 코드로 표시할 수 없는 값(예: 숫자 열의 문자열)은 형식 없이 기록됩니다. 유효하지 않거나 지원되지 않는 코드(`General`, 분수, 채우기 문자, 조건 또는 경과 시간)나 기록되지 않는 열은 해당 열과 문제를 명시하는 `EXCEL-WRITE-OPTION-ERROR`를 발생시킵니다"
         },
         "app.RXhjZWw.action.d3JpdGUtZGF0YQ.display_name": {
           "source": "Create Excel Spreadsheet Data",
           "message": "Excel 스프레드시트 데이터 생성"
         },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
-          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
-          "message": "Excel 2007+ 형식 (`.xlsx`). 대용량 파일에 대한 스트리밍 모드를 지원합니다."
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Create Excel spreadsheet data and return as binary",
+          "message": "Excel 스프레드시트 데이터를 생성하고 바이너리로 반환"
         },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
-          "source": "XLSX",
-          "message": "XLSX"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
-          "source": "Excel 2007+ format (.xlsx)",
-          "message": "Excel 2007+ 형식 (.xlsx)"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
-          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
-          "message": "기존 Excel 97-2003 바이너리 형식 (`.xls`). 시트당 65,536행 및 256열로 제한됩니다."
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
-          "source": "XLS",
-          "message": "XLS"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
-          "source": "Excel 97-2003 format (.xls)",
-          "message": "Excel 97-2003 형식 (.xls)"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.desc": {
-          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
-          "message": "사용할 Excel 형식: `xlsx` (기본값, Excel 2007+) 또는 `xls` (Excel 97-2003)"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.display_name": {
-          "source": "Output Format",
-          "message": "출력 형식"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.short_desc": {
-          "source": "Excel format to use",
-          "message": "사용할 Excel 형식"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
-          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
-          "message": "데이터의 헤더/열 이름 목록입니다. 제공되지 않는 경우 첫 번째 레코드에서 헤더가 자동으로 감지됩니다."
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
-          "source": "Column Headers",
-          "message": "열 헤더"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
-          "source": "List of header / column names for the data",
-          "message": "데이터의 헤더/열 이름 목록"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.desc": {
-          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
-          "message": "`True`인 경우 메모리 사용량을 줄이면서 대용량 파일을 쓰기 위해 SXSSF 스트리밍 모드를 사용합니다. `xlsx` 형식에만 적용됩니다."
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.display_name": {
-          "source": "Streaming Mode",
-          "message": "스트리밍 모드"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.short_desc": {
-          "source": "Use streaming mode for large files",
-          "message": "대용량 파일에 스트리밍 모드 사용"
-        },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
-          "source": "The name of the worksheet to create; default is `Sheet1`",
-          "message": "생성할 워크시트의 이름입니다. 기본값은 `Sheet1`입니다."
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Create Excel spreadsheet data in memory and return it as binary data; useful for generating Excel files without writing to disk",
+          "message": "메모리에 Excel 스프레드시트 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 Excel 파일을 생성할 때 유용합니다."
         },
         "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.display_name": {
           "source": "Worksheet Name",
@@ -395,21 +479,81 @@
           "source": "The name of the worksheet to create",
           "message": "생성할 워크시트의 이름"
         },
-        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.short_desc": {
-          "source": "Create Excel spreadsheet data and return as binary",
-          "message": "Excel 스프레드시트 데이터를 생성하고 바이너리로 반환"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.d29ya3NoZWV0.desc": {
+          "source": "The name of the worksheet to create; default is `Sheet1`",
+          "message": "생성할 워크시트의 이름입니다. 기본값은 `Sheet1`입니다."
         },
-        "app.RXhjZWw.desc": {
-          "source": "Read and write Excel spreadsheets",
-          "message": "Excel 스프레드시트 읽기 및 쓰기"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.display_name": {
+          "source": "Column Headers",
+          "message": "열 헤더"
         },
-        "app.RXhjZWw.display_name": {
-          "source": "Excel Spreadsheets",
-          "message": "Excel 스프레드시트"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data",
+          "message": "데이터의 헤더/열 이름 목록"
         },
-        "app.RXhjZWw.short_desc": {
-          "source": "Read and write Excel spreadsheets",
-          "message": "Excel 스프레드시트 읽기 및 쓰기"
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data; if not provided, headers will be auto-detected from the first record",
+          "message": "데이터의 헤더/열 이름 목록입니다. 제공되지 않는 경우 첫 번째 레코드에서 헤더가 자동으로 감지됩니다."
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.display_name": {
+          "source": "Output Format",
+          "message": "출력 형식"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.short_desc": {
+          "source": "Excel format to use",
+          "message": "사용할 Excel 형식"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.desc": {
+          "source": "Excel format to use: `xlsx` (default, Excel 2007+) or `xls` (Excel 97-2003)",
+          "message": "사용할 Excel 형식: `xlsx` (기본값, Excel 2007+) 또는 `xls` (Excel 97-2003)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.display_name": {
+          "source": "XLSX",
+          "message": "XLSX"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.short_desc": {
+          "source": "Excel 2007+ format (.xlsx)",
+          "message": "Excel 2007+ 형식 (.xlsx)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhsc3g.desc": {
+          "source": "Excel 2007+ format (`.xlsx`); supports streaming mode for large files",
+          "message": "Excel 2007+ 형식 (`.xlsx`). 대용량 파일에 대한 스트리밍 모드를 지원합니다."
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.display_name": {
+          "source": "XLS",
+          "message": "XLS"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.short_desc": {
+          "source": "Excel 97-2003 format (.xls)",
+          "message": "Excel 97-2003 형식 (.xls)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Zm9ybWF0.allowed-value.c3RyaW5nOnhscw.desc": {
+          "source": "Legacy Excel 97-2003 binary format (`.xls`); limited to 65,536 rows and 256 columns per sheet",
+          "message": "기존 Excel 97-2003 바이너리 형식 (`.xls`). 시트당 65,536행 및 256열로 제한됩니다."
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.display_name": {
+          "source": "Streaming Mode",
+          "message": "스트리밍 모드"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.short_desc": {
+          "source": "Use streaming mode for large files",
+          "message": "대용량 파일에 스트리밍 모드 사용"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.c3RyZWFtaW5n.desc": {
+          "source": "If `True`, use SXSSF streaming mode for writing large files with reduced memory usage; only applies to `xlsx` format",
+          "message": "`True`인 경우 메모리 사용량을 줄이면서 대용량 파일을 쓰기 위해 SXSSF 스트리밍 모드를 사용합니다. `xlsx` 형식에만 적용됩니다."
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.display_name": {
+          "source": "Column Display Formats",
+          "message": "열 표시 형식"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.short_desc": {
+          "source": "The display format of each column, such as dd.mm.yyyy or #,##0.00",
+          "message": "각 열의 표시 형식(예: dd.mm.yyyy 또는 #,##0.00)"
+        },
+        "app.RXhjZWw.action.d3JpdGUtZGF0YQ.option.Y29sdW1uX2Zvcm1hdHM.desc": {
+          "source": "The display format of columns by their header name, so that whoever opens the file sees each value as intended: a date as `dd.mm.yyyy`, an amount as `#,##0.00`, or a share as `0.0%`.  The cells keep their real values (a date stays a date and a number a number); only the way they are shown changes.  A column without a format is written as without this option: dates as `yyyy-mm-dd hh:mm:ss` and numbers without a format.\n\nFormat codes are written as in Excel and LibreOffice:\n- **numbers**: `0` (a digit that is always shown), `#` (a digit shown when significant), `,` between digits (thousands grouping), `,` after the last digit (divide by 1000), `.` (the decimal point), and `E+00` (scientific notation); up to three sections for positive, negative and zero values separated by `;`, such as `#,##0.00;(#,##0.00)` or `#,##0.00;#,##0.00-`\n- **percentages**: a `%` in each section, such as `0.0%`; the value is a fraction, so `0.25` is shown as `25.0%`\n- **dates and times**: `yy` or `yyyy` (year), `m`, `mm`, `mmm` or `mmmm` (month as a number or a name), `d` or `dd` (day), `ddd` or `dddd` (weekday name), `h` or `hh` (hour), `m` or `mm` directly after an hour or before a second (minute), `s` or `ss` (second), `.0` to `.000` after the second (fractions of a second), and `AM/PM`, such as `dd.mm.yyyy hh:mm`\n- **text**: `@`\n\nText in a code is written in double quotes (`\"EUR\"`), escaped with a backslash (`\\x`), as a currency symbol in brackets (`[$€-407]`), or as itself for `$ - + / ( ) :`, spaces and symbols such as `€`; a section can start with a color such as `[Red]`.\n\nA value that its column's code does not show, such as a string in a number column, is written without the format.  An invalid or unsupported code (`General`, fractions, fill characters, conditions, or elapsed times), or a column that is not written, raises `EXCEL-WRITE-OPTION-ERROR` naming the column and the problem",
+          "message": "파일을 여는 사람이 각 값을 의도한 대로 볼 수 있도록 헤더 이름으로 지정하는 열의 표시 형식입니다. 예를 들어 날짜는 `dd.mm.yyyy`, 금액은 `#,##0.00`, 비율은 `0.0%`로 표시됩니다. 셀은 실제 값을 유지하며(날짜는 날짜로, 숫자는 숫자로 유지됨) 표시 방식만 바뀝니다. 형식이 없는 열은 이 옵션이 없을 때와 같이 기록됩니다. 즉, 날짜는 `yyyy-mm-dd hh:mm:ss`로, 숫자는 형식 없이 기록됩니다.\n\n형식 코드는 Excel 및 LibreOffice에서와 같이 작성합니다.\n- **숫자**: `0`(항상 표시되는 자릿수), `#`(유효할 때 표시되는 자릿수), 숫자 사이의 `,`(천 단위 구분), 마지막 숫자 뒤의 `,`(1000으로 나누기), `.`(소수점), `E+00`(지수 표기). 양수, 음수, 0 값에 대해 `;`로 구분된 최대 세 개의 섹션을 사용할 수 있습니다(예: `#,##0.00;(#,##0.00)` 또는 `#,##0.00;#,##0.00-`)\n- **백분율**: 각 섹션에 `%`를 포함합니다(예: `0.0%`). 값은 분수이므로 `0.25`는 `25.0%`로 표시됩니다\n- **날짜 및 시간**: `yy` 또는 `yyyy`(연도), `m`, `mm`, `mmm` 또는 `mmmm`(숫자 또는 이름으로 나타낸 월), `d` 또는 `dd`(일), `ddd` 또는 `dddd`(요일 이름), `h` 또는 `hh`(시), 시 바로 뒤 또는 초 바로 앞의 `m` 또는 `mm`(분), `s` 또는 `ss`(초), 초 뒤의 `.0`~`.000`(초의 소수 부분), `AM/PM`(예: `dd.mm.yyyy hh:mm`)\n- **텍스트**: `@`\n\n코드 안의 텍스트는 큰따옴표로 묶거나(`\"EUR\"`), 백슬래시로 이스케이프하거나(`\\x`), 대괄호 안의 통화 기호로 작성하며(`[$€-407]`), `$ - + / ( ) :`, 공백 및 `€` 같은 기호는 그대로 작성합니다. 섹션은 `[Red]` 같은 색으로 시작할 수 있습니다.\n\n열의 코드로 표시할 수 없는 값(예: 숫자 열의 문자열)은 형식 없이 기록됩니다. 유효하지 않거나 지원되지 않는 코드(`General`, 분수, 채우기 문자, 조건 또는 경과 시간)나 기록되지 않는 열은 해당 열과 문제를 명시하는 `EXCEL-WRITE-OPTION-ERROR`를 발생시킵니다"
         }
       }
     }

@@ -8,8 +8,8 @@ set(module_name "jni")
 
 project(qore-jni-module)
 
-set (VERSION_MAJOR 2)
-set (VERSION_MINOR 7)
+set (VERSION_MAJOR 3)
+set (VERSION_MINOR 0)
 set (VERSION_PATCH 0)
 
 set (BYTE_BUDDY_JAR ${CMAKE_SOURCE_DIR}/byte-buddy/byte-buddy-1.18.10.jar)
@@ -31,7 +31,18 @@ endif()
 # accessor-backed static class variables (QoreClass::addBuiltinStaticVarWithAccessors()) and union types are
 # required to mirror mutable Java static fields
 find_package(Qore 3.0 REQUIRED)
-find_package(JNI REQUIRED)
+# Public Qore indexes used by the Java wrappers and provider documentation.
+list(APPEND QORE_DOXYGEN_MODULES AsyncApi ConnectionProvider DataProvider FileLocationHandler
+    HttpClientIo MailMessage Mapper Mime RestClient RestSchemaValidator SmtpClient SqlUtil
+    Swagger TableMapper Util reflection)
+option(QORE_JNI_STRICT_DOCS "Fail JNI documentation builds on warnings" OFF)
+# The bridge uses JNI's JVM API, not the native AWT drawing interface.
+# Older CMake releases do not support FindJNI components.
+if(CMAKE_VERSION VERSION_LESS 3.24)
+    find_package(JNI REQUIRED)
+else()
+    find_package(JNI REQUIRED COMPONENTS JVM)
+endif()
 find_package(Java REQUIRED)
 if (${Java_VERSION_MAJOR} LESS 21)
     message(FATAL_ERROR "This module requires Java 21+; the current Java version is ${Java_VERSION}.")
@@ -47,7 +58,7 @@ set(_kotlin_candidates "")
 if (KOTLIN_HOME)
     list(APPEND _kotlin_candidates "${KOTLIN_HOME}")
 else()
-    list(APPEND _kotlin_candidates "/opt/kotlin" "/opt/kotlinc")
+    list(APPEND _kotlin_candidates "/opt/kotlin" "/opt/kotlinc" "/usr/share/qore/java/kotlin")
 endif()
 foreach (_kotlin_dir IN LISTS _kotlin_candidates)
     if (EXISTS "${_kotlin_dir}/lib/kotlin-compiler.jar")
@@ -277,6 +288,11 @@ MACRO(MAKE_QJAR _output _classpath _root)
     )
 ENDMACRO(MAKE_QJAR)
 
+# Shared spreadsheet display format code parser (compiled into the Excel and ODS data provider jars)
+set(SPREADSHEET_FORMAT_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/format/SpreadsheetFormatCode.java
+)
+
 # Shared Qore stream adapter sources (compiled into each data provider jar)
 set(QORE_STREAM_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/jni/QoreInputStreamWrapper.java
@@ -312,8 +328,13 @@ set(EXCEL_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(EXCEL_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/)
 set(EXCEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelGridReader.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelWriter.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelTestHelper.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/SheetSource.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/WorkbookSheetSource.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/XlsxSheetSource.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelFile.java
 )
 
 # Each data provider jar uses its own output subdirectory (-d jar-<name>) so that the shared
@@ -325,11 +346,11 @@ add_custom_command(
     OUTPUT ${EXCEL_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${EXCEL_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-excel ${EXCEL_JAR} ${EXCEL_SOURCES_DIR}
-        ${QORE_STREAM_SOURCES} -cp ${EXCEL_CLASSPATH}
+        ${SPREADSHEET_FORMAT_SOURCES} ${QORE_STREAM_SOURCES} -cp ${EXCEL_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXCEL_JAR} ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/
     COMMAND ${CMAKE_COMMAND} -E make_directory ${QORE_AOT_QMOD_DIR}/ExcelDataProvider/jar
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXCEL_JAR} ${QORE_AOT_QMOD_DIR}/ExcelDataProvider/jar/
-    DEPENDS ${module_name} ${EXCEL_SOURCES} ${QORE_STREAM_SOURCES}
+    DEPENDS ${module_name} ${EXCEL_SOURCES} ${SPREADSHEET_FORMAT_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
@@ -545,19 +566,23 @@ set(ODS_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(ODS_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/)
 set(ODS_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsIterator.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsGridReader.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsWriter.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsTestHelper.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsSheetReader.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsCell.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/ods/OdsFile.java
 )
 
 add_custom_command(
     OUTPUT ${ODS_JAR}
     COMMAND ${CMAKE_COMMAND} -E env QORE_MODULE_DIR=${QORE_JNI_BUILD_MODULE_DIR} ${QORE_EXECUTABLE} -l jni ${CMAKE_SOURCE_DIR}/bin/qjava2jar
         --root=${ODS_ROOT} -d ${CMAKE_CURRENT_BINARY_DIR}/jar-ods ${ODS_JAR} ${ODS_SOURCES_DIR}
-        ${QORE_STREAM_SOURCES} -cp ${ODS_CLASSPATH}
+        ${SPREADSHEET_FORMAT_SOURCES} ${QORE_STREAM_SOURCES} -cp ${ODS_CLASSPATH}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ODS_JAR} ${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/jar/
     COMMAND ${CMAKE_COMMAND} -E make_directory ${QORE_AOT_QMOD_DIR}/OdsDataProvider/jar
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ODS_JAR} ${QORE_AOT_QMOD_DIR}/OdsDataProvider/jar/
-    DEPENDS ${module_name} ${ODS_SOURCES} ${QORE_STREAM_SOURCES}
+    DEPENDS ${module_name} ${ODS_SOURCES} ${SPREADSHEET_FORMAT_SOURCES} ${QORE_STREAM_SOURCES}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     VERBATIM
 )
@@ -1172,6 +1197,10 @@ install(PROGRAMS ${JNI_BIN_FILES}
 )
 
 set(JAVA_TEST_JAR_SRC
+    test/java/src/org/qore/jni/NativeCleanupLifecycleTest.java
+    test/java/src/org/qore/jni/ExceptionConversionFixture.java
+    test/java/src/org/qore/jni/test/JdbcCursorTest.java
+    test/java/src/org/qore/jni/test/JdbcTransactionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
     test/java/src/org/qore/jni/test/ExceptionLocations.java
     test/java/src/org/qore/jni/test/Fields.java
@@ -1273,6 +1302,16 @@ endforeach()
 
 set(QORE_DOX_TMPL_SRC
     docs/mainpage.dox.tmpl
+    docs/guide-jdbc_driver.dox.tmpl
+    docs/guide-jni_compat.dox.tmpl
+    docs/guide-jni_examples.dox.tmpl
+    docs/guide-jni_from_java.dox.tmpl
+    docs/guide-jni_qore_object_lifecycle_management.dox.tmpl
+    docs/guide-jni_thread_stacks.dox.tmpl
+    docs/guide-jni_types.dox.tmpl
+    docs/guide-jni_use_java_in_qore.dox.tmpl
+    docs/guide-jniinit.dox.tmpl
+    docs/guide-jnireleasenotes.dox.tmpl
 )
 
 add_library(${module_name} MODULE ${CPP_SRC} ${QPP_SOURCES})
@@ -1291,17 +1330,66 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/src/QoreJniClassMap.cpp
 
 target_link_libraries(${module_name} ${JNI_LIBRARIES} ${BZIP2_LIBRARIES} ${QORE_LIBRARY})
 
-set(MODULE_DOX_INPUT ${CMAKE_CURRENT_BINARY_DIR}/mainpage.dox ${JAVA_JAR_SRC_STR} ${QPP_DOX})
-string(REPLACE ";" " " MODULE_DOX_INPUT "${MODULE_DOX_INPUT}")
-#message(STATUS mdi: ${MODULE_DOX_INPUT})
+# Use generated QPP documentation, not the generated C++ implementation files.
+set(MODULE_DOX_INPUT ${CMAKE_CURRENT_BINARY_DIR}/mainpage.dox ${JAVA_JAR_SRC}
+    ${JAVA_JAR_COMPILER_SRC} ${QPP_DOX})
 
 if (DEFINED ENV{DOXYGEN_EXECUTABLE})
     set(DOXYGEN_EXECUTABLE $ENV{DOXYGEN_EXECUTABLE})
 endif()
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR} ${JAVA_JAR_SRC} ${JAVA_JAR_COMPILER_SRC})
+list(APPEND MODULE_DOX_INPUT
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jdbc_driver.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_compat.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_examples.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_from_java.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_qore_object_lifecycle_management.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_thread_stacks.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_types.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jni_use_java_in_qore.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jniinit.dox
+    ${CMAKE_CURRENT_BINARY_DIR}/guide-jnireleasenotes.dox
+)
+set(QORE_DOXYGEN_IMAGES
+    "${CMAKE_SOURCE_DIR}/docs/java_horizontal_logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/AccessDataProvider/access-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/AvroDataProvider/avro-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/BusyLightDataProvider/busylight-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/CamelDataProvider/camel-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/EmailDataProvider/email-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/excel-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/FlywayDataProvider/flyway-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/IcsDataProvider/ics-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/JakartaJmsDataProvider/jms-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/JasperReportsDataProvider/jasperreports-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/JdbcDataProvider/jdbc-dp-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/KafkaDataProvider/kafka-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/MqttDataProvider/mqtt-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/OdpDataProvider/odp-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/OdsDataProvider/ods-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/OdtDataProvider/odt-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/opc-ua-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/PowerPointDataProvider/powerpoint-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/TikaDataProvider/tika-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/VcfDataProvider/vcf-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/VisioDataProvider/visio-logo.svg"
+    "${CMAKE_SOURCE_DIR}/qlib/WordDataProvider/word-logo.svg"
+)
 qore_external_binary_module(${module_name} ${PROJECT_VERSION})
-qore_user_modules("${QMOD}")
+
+# Qore's AOT rules decide at configure time whether to stage a provider's jar/
+# directory. For providers with only generated JARs, creating that directory
+# during the build changes the rule on the next configure. CMake then removes
+# the old qmod because its command changed; a docs-only target will not rebuild
+# it. Establish declared generated-JAR directories before registering modules.
+foreach(_provider IN LISTS QMOD)
+    get_filename_component(_provider_name "${_provider}" NAME)
+    file(STRINGS "${CMAKE_SOURCE_DIR}/${_provider}/${_provider_name}.qm" _generated_provider_jars
+        REGEX "^[ \t]*%module-cmd\\(jni\\).*add-relative-classpath[ \t]+(\\./)?jar/qore-dataprovider-")
+    if(_generated_provider_jars)
+        file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/${_provider}/jar")
+    endif()
+endforeach()
 
 qore_external_user_module("qlib/MqttDataProvider" "")
 qore_external_user_module("qlib/OpcUaDataProvider" "")
@@ -1409,6 +1497,25 @@ if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_SRC ${QORE_DOX_TMPL_SRC})
     add_custom_target(QORE_MOD_DOX_FILES DEPENDS ${QORE_DOX_SRC})
     add_dependencies(docs-module QORE_MOD_DOX_FILES)
+    if (COMMAND qore_binary_module_two_phase_docs)
+        set(_jni_doc_modules "")
+        foreach(_jni_module IN LISTS QMOD)
+            get_filename_component(_jni_module_name "${_jni_module}" NAME)
+            list(APPEND _jni_doc_modules "${_jni_module_name}")
+        endforeach()
+        qore_binary_module_two_phase_docs(${module_name} "${_jni_doc_modules}")
+    endif()
+    if (QORE_JNI_STRICT_DOCS)
+        file(GLOB _jni_doxyfiles "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.*")
+        if (EXISTS "${CMAKE_BINARY_DIR}/Doxyfile.final")
+            list(APPEND _jni_doxyfiles "${CMAKE_BINARY_DIR}/Doxyfile.final")
+        else()
+            list(APPEND _jni_doxyfiles "${CMAKE_BINARY_DIR}/Doxyfile")
+        endif()
+        foreach(_jni_doxyfile IN LISTS _jni_doxyfiles)
+            file(APPEND "${_jni_doxyfile}" "\nWARN_AS_ERROR = FAIL_ON_WARNINGS\n")
+        endforeach()
+    endif()
 endif()
 
 # C++ regression test for the NativeCleanup foreign-thread deref crash: a Qore
@@ -1416,6 +1523,24 @@ endif()
 # daemon thread does in native_cleanup_dispatch()) must not crash.  See
 # src/Globals.cpp (QoreForeignThreadHelper).
 enable_testing()
+add_test(NAME make_inc_reproducibility COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
+    ${CMAKE_SOURCE_DIR}/test/test-make-inc.py
+    --qore ${QORE_EXECUTABLE} --make-inc ${CMAKE_SOURCE_DIR}/make-inc)
+set_tests_properties(make_inc_reproducibility PROPERTIES TIMEOUT 120)
+add_test(NAME headless_class_import COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
+    ${CMAKE_SOURCE_DIR}/test/test-headless-class-import.py
+    --qore ${QORE_EXECUTABLE} --module $<TARGET_FILE:jni>)
+set_tests_properties(headless_class_import PROPERTIES TIMEOUT 40)
+add_test(NAME native_cleanup_shutdown COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
+    ${CMAKE_SOURCE_DIR}/test/test-native-cleanup-shutdown.py
+    --qore ${QORE_EXECUTABLE} --module $<TARGET_FILE:jni>)
+set_tests_properties(native_cleanup_shutdown PROPERTIES TIMEOUT 40)
+foreach(_cleanup_case IN ITEMS empty live claim_race registration_race)
+    add_test(NAME native_cleanup_${_cleanup_case} COMMAND ${Java_JAVA_EXECUTABLE}
+        -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+        org.qore.jni.NativeCleanupLifecycleTest ${_cleanup_case})
+    set_tests_properties(native_cleanup_${_cleanup_case} PROPERTIES TIMEOUT 30)
+endforeach()
 find_package(Threads REQUIRED)
 add_executable(generated_binding_registry test/generated_binding_registry.cpp src/GeneratedBinding.cpp)
 target_include_directories(generated_binding_registry PRIVATE ${QORE_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/src)

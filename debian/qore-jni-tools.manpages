@@ -1,0 +1,3 @@
+debian/man/qjavac.1
+debian/man/qjava2jar.1
+debian/man/qjava-migrate-imports.1

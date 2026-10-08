@@ -288,8 +288,8 @@
           "message": "Le nombre total d'octets de mémoire que le producteur peut utiliser pour mettre en mémoire tampon les enregistrements en attente d'envoi"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "La clé du message"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "La clé du message ; un message sans clé est réparti par le producteur entre les partitions du topic"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Messagerie Kafka"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "En-têtes du message"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "Les en-têtes de l'enregistrement, sous forme de hash associant les noms d'en-tête à leurs valeurs"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "Les en-têtes de l'enregistrement, sous forme de hash associant les noms d'en-tête à leurs valeurs.\n\nÀ l'envoi, une valeur chaîne est envoyée sous forme de ses octets UTF-8, une valeur binaire telle quelle et toute autre valeur sous forme des octets UTF-8 de sa représentation en chaîne.\n\nÀ la réception, une valeur en UTF-8 valide est renvoyée sous forme de chaîne et toute autre valeur sous forme binaire ; un en-tête sans valeur est renvoyé comme `NOTHING`, et lorsqu'un enregistrement porte un en-tête plusieurs fois, la dernière valeur est renvoyée"
         }
       }
     }

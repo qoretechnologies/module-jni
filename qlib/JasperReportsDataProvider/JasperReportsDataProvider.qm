@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -112,10 +112,12 @@ module JasperReportsDataProvider {
             "short_desc": "Generate a report from inline JasperReports template data",
             "desc": "Generate a report from inline JasperReports template binary data.\n\n"
                 "Each record created represents a single data row to be included in the report. "
-                "The report is generated when the provider is committed or destroyed.\n\n"
-                "After writing all records, use `getData()` to retrieve the binary report output.\n\n"
+                "The report is generated when the action completes.\n\n"
+                "The action returns the generated report in `data`, its format in `format`, and the number "
+                "of data rows in `record_count`.\n\n"
                 "Supported output formats: `pdf`, `xlsx`, `html`, `csv`.",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
             "output_type": JasperReportsOutputDataType,
             "cls": "JasperReportsDataProvider::JasperReportsDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -134,6 +136,8 @@ module JasperReportsDataProvider {
     @tableofcontents
 
     @section jasperreportsdataproviderintro Introduction to the JasperReportsDataProvider Module
+
+    <img src="jasperreports-logo.svg" width="96" alt="JasperReportsDataProvider module logo"/>
 
     The %JasperReportsDataProvider module provides a data provider API for generating reports from
     JasperReports templates through the @ref dataproviderintro "DataProvider" API. It supports
@@ -234,12 +238,7 @@ module JasperReportsDataProvider {
     @section JasperReportsDataProvider_relnotes Release Notes
 
     @subsection JasperReportsDataProvider_v1_0 JasperReportsDataProvider v1.0
-    - initial release of the module
-    - support for generating reports from JasperReports (.jrxml / .jasper) templates
-    - support for PDF, XLSX, HTML, and CSV output formats
-    - data-driven report generation via the DataProvider create record API
-    - binary data output support
-    - file location handler support for template input and report output
+    - initial release
 */
 
 #! contains all public definitions in the JasperReportsDataProvider module

@@ -25,6 +25,11 @@ import java.util.TimeZone;
 import java.time.ZonedDateTime;
 import java.time.Instant;
 import java.time.Duration;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 
 /** Creates a KafkaConsumer object based on configuration
  */
@@ -217,16 +222,35 @@ class QoreKafkaConsumer {
         return event;
     }
 
-    /** Returns a hash of Headers
+    /** Returns the headers of a record as a hash of header names to values
+
+        A value that is valid UTF-8 is returned as a string, any other value as the bytes it is (a Qore binary), and a
+        header without a value as null.  When a record carries a header more than once, the last value is returned,
+        as Headers.lastHeader() returns it.
      */
-    private Hash headerToHash(Headers hdrs) {
+    public static Hash headerToHash(Headers hdrs) {
         Hash rv = new Hash();
         Iterator<Header> i = hdrs.iterator();
         while (i.hasNext()) {
             Header hdr = i.next();
-            rv.put(hdr.key(), hdr.value());
+            rv.put(hdr.key(), decodeHeaderValue(hdr.value()));
         }
         return rv;
     }
 
+    /** Returns a header value as a string when it is valid UTF-8, else as the bytes it is
+     */
+    public static Object decodeHeaderValue(byte[] value) {
+        if (value == null) {
+            return null;
+        }
+        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT);
+        try {
+            return decoder.decode(ByteBuffer.wrap(value)).toString();
+        } catch (CharacterCodingException e) {
+            return value;
+        }
+    }
 }

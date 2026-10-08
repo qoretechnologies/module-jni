@@ -1,0 +1,7 @@
+usr/lib/*/qore-modules/
+usr/share/qore-modules/
+usr/share/qore/metadata/
+usr/share/qore/i18n/
+usr/share/qore-jni/
+usr/share/qore/java/qore-jni.jar
+usr/share/qore/java/qore-jni-compiler.jar

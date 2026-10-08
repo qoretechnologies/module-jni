@@ -76,8 +76,8 @@
           "message": "파일 위치에 EML 이메일 메시지 쓰기"
         },
         "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.desc": {
-          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nAfter writing all messages, use `getData()` to retrieve the binary EML data.",
-          "message": "메모리에 EML(RFC 822 / MIME) 이메일 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 EML 파일을 생성할 때 유용합니다.\n\n작성된 각 레코드는 `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to` 및 `references`를 포함하는 표준 이메일 필드가 포함된 단일 이메일 메시지를 나타냅니다.\n\n모든 메시지를 작성한 후 `getData()`을 사용하여 바이너리 EML 데이터를 검색하십시오."
+          "source": "Create EML (RFC 822 / MIME) email data in memory and return it as binary data; useful for generating EML files without writing to disk.\n\nEach record written represents a single email message with the standard email fields including `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to`, and `references`.\n\nThe action returns the generated EML data in `data` and the number of messages in `record_count`.",
+          "message": "메모리에 EML(RFC 822 / MIME) 이메일 데이터를 생성하고 바이너리 데이터로 반환합니다. 디스크에 쓰지 않고 EML 파일을 생성할 때 유용합니다.\n\n작성된 각 레코드는 `from`, `to`, `cc`, `bcc`, `subject`, `date`, `body_text`, `body_html`, `attachments`, `message_id`, `in_reply_to`, `reply_to` 및 `references`를 포함하는 표준 이메일 필드가 포함된 단일 이메일 메시지를 나타냅니다.\n\n작업은 생성된 EML 데이터를 `data`에, 메시지 수를 `record_count`에 반환합니다."
         },
         "app.RW1haWw.action.ZW1sLXdyaXRlLWRhdGE.display_name": {
           "source": "Create EML Email Data",

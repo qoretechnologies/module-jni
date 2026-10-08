@@ -1,2 +1,2 @@
-See the Doxygen documentation for release notes:
-docs/mainpage.dox.tmpl
+See the jni module release notes in the generated Doxygen documentation.
+The authoritative source is docs/guide-jnireleasenotes.dox.tmpl.

@@ -43,11 +43,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/ExcelDataProvider/jar/curvesapi-1.08.jar
 %module-cmd(jni) add-relative-classpath ../qlib/VisioDataProvider/jar/qore-dataprovider-visio.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/VisioDataProvider
+%requires VisioDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.visio.VisioTestHelper
 %module-cmd(jni) import org.qore.dataprovider.visio.VisioIterator

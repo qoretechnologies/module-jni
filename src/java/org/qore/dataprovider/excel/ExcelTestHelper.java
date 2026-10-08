@@ -25,13 +25,24 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFCell;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Name;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.ss.usermodel.DataFormat;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import java.time.LocalDateTime;
 
 /**
@@ -418,5 +429,250 @@ public class ExcelTestHelper {
                 workbook.write(out);
             }
         }
+    }
+
+    /**
+     * Creates a workbook laid out the way supplier PO confirmations are maintained by hand: a merged title banner,
+     * a blank row, the header, identifiers with leading zeros, dates stored as text, a totals row with a SUM
+     * formula, a hidden lookup sheet, and a named range on it.
+     *
+     * @param path The path to create the file at
+     * @param xls true for the Excel 97-2003 (.xls) format, false for .xlsx
+     */
+    public static void createProfileExcel(String path, boolean xls) throws IOException {
+        try (Workbook workbook = xls ? new HSSFWorkbook() : new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Confirmations");
+            sheet.createRow(0).createCell(0).setCellValue("Supplier PO confirmations - week 41");
+            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 3));
+            Row header = sheet.createRow(2);
+            String[] headers = {"PO", "SKU", "Qty", "Ship date"};
+            for (int i = 0; i < headers.length; ++i) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            Object[][] data = {
+                {"PO-1001", "000123", 5.0, "10.10.2026"},
+                {"PO-1002", "000456", 7.0, "24.10.2026"},
+            };
+            for (int r = 0; r < data.length; ++r) {
+                Row row = sheet.createRow(3 + r);
+                for (int c = 0; c < data[r].length; ++c) {
+                    if (data[r][c] instanceof Double) {
+                        row.createCell(c).setCellValue((Double)data[r][c]);
+                    } else {
+                        row.createCell(c).setCellValue((String)data[r][c]);
+                    }
+                }
+            }
+            Row total = sheet.createRow(5);
+            total.createCell(0).setCellValue("Total");
+            total.createCell(2).setCellFormula("SUM(C4:C5)");
+
+            Sheet lookup = workbook.createSheet("Lookup");
+            Row lh = lookup.createRow(0);
+            lh.createCell(0).setCellValue("Code");
+            lh.createCell(1).setCellValue("Rate");
+            Row lr = lookup.createRow(1);
+            lr.createCell(0).setCellValue("X");
+            lr.createCell(1).setCellValue(1.5);
+            workbook.setSheetHidden(1, true);
+
+            Name name = workbook.createName();
+            name.setNameName("Rates");
+            name.setRefersToFormula("Lookup!$A$1:$B$2");
+
+            workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
+            try (FileOutputStream out = new FileOutputStream(new File(path))) {
+                workbook.write(out);
+            }
+        }
+    }
+
+    /**
+     * Creates a large .xlsx workbook, written with SXSSF in bounded memory.
+     *
+     * The worksheet "Large" has a header row (Id, Name, Amount, When, Flag) and the given number of data rows; data
+     * row i (1-based) has Id i, Name "name-i", Amount i / 4, When 2025-01-01 00:00 plus i seconds in a cell with a
+     * date format, and Flag true for even i.
+     *
+     * @param path The path to create the file at
+     * @param rows The number of data rows
+     * @param shared_strings true to write the strings to the shared strings table, false to write them inline
+     */
+    public static void createLargeExcel(String path, int rows, boolean shared_strings) throws IOException {
+        try (SXSSFWorkbook workbook = new SXSSFWorkbook(null, 100, true, shared_strings)) {
+            CellStyle date_style = workbook.createCellStyle();
+            date_style.setDataFormat(workbook.createDataFormat().getFormat("yyyy-mm-dd hh:mm:ss"));
+            Sheet sheet = workbook.createSheet("Large");
+            Row header = sheet.createRow(0);
+            String[] headers = {"Id", "Name", "Amount", "When", "Flag"};
+            for (int i = 0; i < headers.length; ++i) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            LocalDateTime base = LocalDateTime.of(2025, 1, 1, 0, 0);
+            for (int i = 1; i <= rows; ++i) {
+                Row row = sheet.createRow(i);
+                row.createCell(0).setCellValue(i);
+                row.createCell(1).setCellValue("name-" + i);
+                row.createCell(2).setCellValue(i / 4.0);
+                Cell when = row.createCell(3);
+                when.setCellValue(base.plusSeconds(i));
+                when.setCellStyle(date_style);
+                row.createCell(4).setCellValue(i % 2 == 0);
+            }
+            try (FileOutputStream out = new FileOutputStream(new File(path))) {
+                workbook.write(out);
+            }
+        }
+    }
+
+    /**
+     * Creates an .xlsx workbook from raw SpreadsheetML with the cell encodings that the streaming reader decodes
+     * itself.
+     *
+     * The worksheet "Main" has:
+     * - row 1 (headers): shared strings "Name" and " Val " (with spaces), "When", and the inline string "Inline"
+     * - row 2: a rich shared string with a phonetic run ("rich"), 42.5, 45000.25 in column C, which has a date
+     *   column style (2023-03-15 06:00), and an inline rich string with a phonetic run ("a b")
+     * - row 3, whose cells have no references: a shared string with an _xHHHH_ escape ("escA"), 7, 1 with an
+     *   explicit non-date style in the date column (1.0), and an inline string with an escape ("B")
+     * - row 4 is missing
+     * - row 5: boolean cells "1" (true) and "true" (false, as POI reads it), 45001 (2023-03-16), and an error cell
+     * - row 6, without a row number: formulas with cached results: 2, "xy_x0043_" ("xyC"), TRUE, and an error
+     * - row 7: an array formula over A7:B8 (1), a cell of the array without a cached value (0.0), 45000.5 with a
+     *   built-in date and time style (2023-03-15 12:00), and an invalid shared string index ("")
+     *
+     * The second sheet, "Chart", is a chart sheet, which has no cells; the third, "Sparse", has rows and cells
+     * without references: row 1: 1, 2; row 2: C2 = 3, D2 = 4; row 20: A20 = "far"; row 21: A21 = 5.
+     *
+     * @param path The path to create the file at
+     */
+    public static void createStreamingFeaturesExcel(String path) throws IOException {
+        final String main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        final String rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        final String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>";
+        final String ct = "application/vnd.openxmlformats-officedocument.spreadsheetml.";
+
+        String content_types = xml
+            + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+            + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+            + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+            + "<Override PartName=\"/xl/workbook.xml\" ContentType=\"" + ct + "sheet.main+xml\"/>"
+            + "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"" + ct + "worksheet+xml\"/>"
+            + "<Override PartName=\"/xl/chartsheets/sheet2.xml\" ContentType=\"" + ct + "chartsheet+xml\"/>"
+            + "<Override PartName=\"/xl/worksheets/sheet3.xml\" ContentType=\"" + ct + "worksheet+xml\"/>"
+            + "<Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"" + ct + "sharedStrings+xml\"/>"
+            + "<Override PartName=\"/xl/styles.xml\" ContentType=\"" + ct + "styles+xml\"/>"
+            + "</Types>";
+        String root_rels = xml
+            + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+            + "<Relationship Id=\"rId1\" Type=\"" + rel + "/officeDocument\" Target=\"xl/workbook.xml\"/>"
+            + "</Relationships>";
+        String workbook = xml + "<workbook xmlns=\"" + main + "\" xmlns:r=\"" + rel + "\"><workbookPr/><sheets>"
+            + "<sheet name=\"Main\" sheetId=\"1\" r:id=\"rId1\"/>"
+            + "<sheet name=\"Chart\" sheetId=\"2\" r:id=\"rId2\"/>"
+            + "<sheet name=\"Sparse\" sheetId=\"3\" r:id=\"rId3\"/>"
+            + "</sheets></workbook>";
+        String workbook_rels = xml
+            + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+            + "<Relationship Id=\"rId1\" Type=\"" + rel + "/worksheet\" Target=\"worksheets/sheet1.xml\"/>"
+            + "<Relationship Id=\"rId2\" Type=\"" + rel + "/chartsheet\" Target=\"chartsheets/sheet2.xml\"/>"
+            + "<Relationship Id=\"rId3\" Type=\"" + rel + "/worksheet\" Target=\"worksheets/sheet3.xml\"/>"
+            + "<Relationship Id=\"rId4\" Type=\"" + rel + "/sharedStrings\" Target=\"sharedStrings.xml\"/>"
+            + "<Relationship Id=\"rId5\" Type=\"" + rel + "/styles\" Target=\"styles.xml\"/>"
+            + "</Relationships>";
+        String shared_strings = xml + "<sst xmlns=\"" + main + "\" count=\"5\" uniqueCount=\"5\">"
+            + "<si><t>Name</t></si>"
+            + "<si><t xml:space=\"preserve\"> Val </t></si>"
+            + "<si><r><t>ri</t></r><r><rPr><b/></rPr><t>ch</t></r><rPh sb=\"0\" eb=\"1\"><t>PH</t></rPh></si>"
+            + "<si><t>esc_x0041_</t></si>"
+            + "<si><t>When</t></si>"
+            + "</sst>";
+        String styles = xml + "<styleSheet xmlns=\"" + main + "\">"
+            + "<numFmts count=\"2\"><numFmt numFmtId=\"164\" formatCode=\"yyyy\\-mm\\-dd\"/>"
+            + "<numFmt numFmtId=\"165\" formatCode=\"0.000\"/></numFmts>"
+            + "<fonts count=\"1\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>"
+            + "<fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill>"
+            + "<fill><patternFill patternType=\"gray125\"/></fill></fills>"
+            + "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>"
+            + "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>"
+            + "<cellXfs count=\"4\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
+            + "<xf numFmtId=\"164\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/>"
+            + "<xf numFmtId=\"165\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/>"
+            + "<xf numFmtId=\"22\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyNumberFormat=\"1\"/>"
+            + "</cellXfs><cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles>"
+            + "</styleSheet>";
+        String sheet1 = xml + "<worksheet xmlns=\"" + main + "\" xmlns:r=\"" + rel + "\">"
+            + "<cols><col min=\"3\" max=\"3\" width=\"20\" style=\"1\" customWidth=\"1\"/></cols><sheetData>"
+            + "<row r=\"1\"><c r=\"A1\" t=\"s\"><v>0</v></c><c r=\"B1\" t=\"s\"><v>1</v></c>"
+            + "<c r=\"C1\" t=\"s\"><v>4</v></c><c r=\"D1\" t=\"inlineStr\"><is><t>Inline</t></is></c></row>"
+            + "<row r=\"2\"><c r=\"A2\" t=\"s\"><v>2</v></c><c r=\"B2\"><v>42.5</v></c><c r=\"C2\"><v>45000.25</v></c>"
+            + "<c r=\"D2\" t=\"inlineStr\"><is><r><t>a</t></r><r><t xml:space=\"preserve\"> b</t></r>"
+            + "<rPh sb=\"0\" eb=\"1\"><t>x</t></rPh></is></c></row>"
+            + "<row r=\"3\"><c t=\"s\"><v>3</v></c><c><v>7</v></c><c s=\"2\"><v>1</v></c>"
+            + "<c t=\"inlineStr\"><is><t>_x0042_</t></is></c></row>"
+            + "<row r=\"5\"><c r=\"A5\" t=\"b\"><v>1</v></c><c r=\"B5\" t=\"b\"><v>true</v></c>"
+            + "<c r=\"C5\"><v>45001</v></c><c r=\"D5\" t=\"e\"><v>#N/A</v></c></row>"
+            + "<row><c r=\"A6\"><f>1+1</f><v>2</v></c><c r=\"B6\" t=\"str\"><f>\"xy\"</f><v>xy_x0043_</v></c>"
+            + "<c r=\"C6\" t=\"b\"><f>TRUE()</f><v>1</v></c><c r=\"D6\" t=\"e\"><f>1/0</f><v>#DIV/0!</v></c></row>"
+            + "<row r=\"7\"><c r=\"A7\"><f t=\"array\" ref=\"A7:B8\">1</f><v>1</v></c><c r=\"B7\"/>"
+            + "<c r=\"C7\" s=\"3\"><v>45000.5</v></c><c r=\"D7\" t=\"s\"><v>99</v></c></row>"
+            + "</sheetData></worksheet>";
+        String sheet2 = xml + "<chartsheet xmlns=\"" + main + "\" xmlns:r=\"" + rel + "\">"
+            + "<sheetViews><sheetView workbookViewId=\"0\"/></sheetViews></chartsheet>";
+        String sheet3 = xml + "<worksheet xmlns=\"" + main + "\" xmlns:r=\"" + rel + "\"><sheetData>"
+            + "<row><c><v>1</v></c><c><v>2</v></c></row>"
+            + "<row><c r=\"C2\"><v>3</v></c><c><v>4</v></c></row>"
+            + "<row r=\"20\"><c r=\"A20\" t=\"inlineStr\"><is><t>far</t></is></c></row>"
+            + "<row><c><v>5</v></c></row>"
+            + "</sheetData></worksheet>";
+
+        try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(new File(path)))) {
+            writeEntry(zip, "[Content_Types].xml", content_types);
+            writeEntry(zip, "_rels/.rels", root_rels);
+            writeEntry(zip, "xl/workbook.xml", workbook);
+            writeEntry(zip, "xl/_rels/workbook.xml.rels", workbook_rels);
+            writeEntry(zip, "xl/sharedStrings.xml", shared_strings);
+            writeEntry(zip, "xl/styles.xml", styles);
+            writeEntry(zip, "xl/worksheets/sheet1.xml", sheet1);
+            writeEntry(zip, "xl/chartsheets/sheet2.xml", sheet2);
+            writeEntry(zip, "xl/worksheets/sheet3.xml", sheet3);
+        }
+    }
+
+    /**
+     * Returns the display format code of each cell of a row of the first sheet of a workbook, read with POI
+     *
+     * @param path the workbook file (.xlsx or .xls)
+     * @param row the 0-based row
+     * @return the format code of each cell in the row, or null for a cell that does not exist
+     */
+    public static String[] getCellFormats(String path, int row) throws IOException {
+        try (Workbook wb = org.apache.poi.ss.usermodel.WorkbookFactory.create(new File(path), null, true)) {
+            Row r = wb.getSheetAt(0).getRow(row);
+            String[] formats = new String[r.getLastCellNum()];
+            for (int i = 0; i < formats.length; ++i) {
+                Cell cell = r.getCell(i);
+                formats[i] = cell == null ? null : cell.getCellStyle().getDataFormatString();
+            }
+            return formats;
+        }
+    }
+
+    /**
+     * Returns the number of cell styles in a workbook
+     *
+     * @param path the workbook file (.xlsx or .xls)
+     * @return the number of cell styles in the workbook
+     */
+    public static int getCellStyleCount(String path) throws IOException {
+        try (Workbook wb = org.apache.poi.ss.usermodel.WorkbookFactory.create(new File(path), null, true)) {
+            return wb.getNumCellStyles();
+        }
+    }
+
+    private static void writeEntry(ZipOutputStream zip, String name, String data) throws IOException {
+        zip.putNextEntry(new ZipEntry(name));
+        zip.write(data.getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
     }
 }

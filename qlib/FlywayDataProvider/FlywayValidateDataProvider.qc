@@ -44,29 +44,9 @@ public class FlywayValidateDataProvider inherits DataProvider::AbstractDataProvi
         #! Request type - no input needed
         const RequestType = AbstractDataProviderTypeMap."nothing";
 
-        #! Response fields
-        const ResponseFields = {
-            "validationSuccessful": {
-                "display_name": "Validation Successful",
-                "short_desc": "Whether validation was successful",
-                "desc": "Whether the validation of applied migrations against available scripts "
-                    "was successful",
-                "type": AbstractDataProviderTypeMap."bool",
-            },
-            "invalidMigrations": {
-                "display_name": "Invalid Migrations",
-                "short_desc": "A list of invalid migrations",
-                "desc": "A list of invalid migrations, each with version, description, and "
-                    "errorDetails fields",
-                "type": AbstractDataProviderTypeMap."list",
-            },
-            "errorMessage": {
-                "display_name": "Error Message",
-                "short_desc": "The validation error message",
-                "desc": "The overall validation error message, if validation failed",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-        };
+        #! Typed action response
+        const ResponseType = FlywayValidateOutputDataType;
+
     }
 
     private {
@@ -93,7 +73,7 @@ public class FlywayValidateDataProvider inherits DataProvider::AbstractDataProvi
         @param request_options the request options; will be processed by validateRequestOptions()
 
         @return the validation result with validationSuccessful, invalidMigrations, and
-        errorMessage fields
+        errorDetails fields
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         return runner.validate();
@@ -110,7 +90,7 @@ public class FlywayValidateDataProvider inherits DataProvider::AbstractDataProvi
     /** @return the response type for this response message
     */
     private *AbstractDataProviderType getResponseTypeImpl() {
-        return new HashDataType("FlywayValidateResponse", ResponseFields);
+        return ResponseType;
     }
 }
 }

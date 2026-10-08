@@ -19,21 +19,24 @@
     DEALINGS IN THE SOFTWARE.
 */
 
+
 package org.qore.dataprovider.excel;
 
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
+import org.apache.poi.poifs.filesystem.FileMagic;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.util.CellReference;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.FileNotFoundException;
+import java.io.UncheckedIOException;
+
+import java.lang.ref.Cleaner;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -48,11 +51,21 @@ import org.qore.jni.QoreException;
 
 /**
  * Iterator for reading Excel files (both .xlsx and .xls formats).
- * Implements Closeable to ensure proper resource cleanup.
+ *
+ * Rows are read from the file as they are iterated, so a worksheet of any number of rows is read in bounded memory:
+ * an .xlsx worksheet is streamed (see XlsxSheetSource); an .xls workbook, whose format holds at most 65536 rows, is
+ * loaded with the POI usermodel (see WorkbookSheetSource).  Each iteration (and reading the header row) is a pass over
+ * the worksheet from its first row; when an iteration ends, the next one starts again from the first data row.
+ *
+ * Implements Closeable to release the workbook; an iterator that is not closed releases it when it is garbage
+ * collected.
  */
 public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io.Closeable {
-    private Workbook workbook;
-    private Sheet sheet;
+    // closes the workbooks of iterators that are garbage collected without being closed
+    private static final Cleaner CLEANER = Cleaner.create();
+
+    private final Resources res;
+    private final Cleaner.Cleanable cleanable;
     private ArrayList<String> headers = new ArrayList<String>();
     private ZoneId zone = ZoneId.systemDefault();
     private int header_row_end = -1;
@@ -63,34 +76,10 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     private String end_column = "-";
     private Hash row_data = null;
     private long count = 0;
+    private boolean ignore_empty = false;
 
     public ExcelIterator(java.io.InputStream stream, String sheet_name) throws Throwable {
-        try {
-            // WorkbookFactory.create() auto-detects the format (XSSF for .xlsx, HSSF for .xls)
-            workbook = WorkbookFactory.create(stream);
-        } catch (Throwable t) {
-            stream.close();
-            throw t;
-        }
-        if (sheet_name == null || sheet_name.isEmpty()) {
-            sheet = workbook.getSheetAt(0);
-            if (sheet == null) {
-                throw new RuntimeException("the spreadsheet has no worksheets");
-            }
-        } else {
-            sheet = workbook.getSheet(sheet_name);
-            if (sheet == null) {
-                try {
-                    int sheet_no = Integer.parseInt(sheet_name);
-                    sheet = workbook.getSheetAt(sheet_no);
-                } catch (NumberFormatException e) {
-                    // ignore exception
-                }
-            }
-            if (sheet == null) {
-                throw new RuntimeException(String.format("sheet %s is unknown", sheet_name));
-            }
-        }
+        this(openSource(stream, sheet_name));
     }
 
     public ExcelIterator(qore.Qore.InputStream stream, String sheet_name) throws Throwable {
@@ -98,7 +87,63 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     }
 
     public ExcelIterator(String path, String sheet_name) throws Throwable {
-        this(new FileInputStream(new File(path)), sheet_name);
+        this(openSource(new File(path), sheet_name));
+    }
+
+    private ExcelIterator(SheetSource source) throws Throwable {
+        res = new Resources(source);
+        Cleaner.Cleanable c;
+        try {
+            c = CLEANER.register(this, res);
+        } catch (RuntimeException | Error t) {
+            res.run();
+            throw t;
+        }
+        cleanable = c;
+    }
+
+    /**
+     * Opens the worksheet of a workbook in an input stream; the stream is closed if this fails
+     */
+    private static SheetSource openSource(java.io.InputStream stream, String sheet_name) throws Throwable {
+        try {
+            InputStream is = FileMagic.prepareToCheckMagic(stream);
+            if (FileMagic.valueOf(is) == FileMagic.OOXML) {
+                return XlsxSheetSource.open(is, sheet_name);
+            }
+            // WorkbookFactory.create() auto-detects the binary formats (HSSF for .xls)
+            return new WorkbookSheetSource(WorkbookFactory.create(is), sheet_name);
+        } catch (Throwable t) {
+            try {
+                stream.close();
+            } catch (Throwable t1) {
+                t.addSuppressed(t1);
+            }
+            throw t;
+        }
+    }
+
+    /**
+     * Opens the worksheet of a workbook file
+     */
+    private static SheetSource openSource(File file, String sheet_name) throws Throwable {
+        FileMagic magic;
+        try (FileInputStream fis = new FileInputStream(file)) {
+            magic = FileMagic.valueOf(FileMagic.prepareToCheckMagic(fis));
+        }
+        if (magic == FileMagic.OOXML) {
+            return XlsxSheetSource.open(file, sheet_name);
+        }
+        try (FileInputStream fis = new FileInputStream(file)) {
+            return new WorkbookSheetSource(WorkbookFactory.create(fis), sheet_name);
+        }
+    }
+
+    /**
+     * Sets whether empty rows are skipped; if false (the default), iteration stops at the first empty row.
+     */
+    public void setIgnoreEmpty(boolean ignore_empty) {
+        this.ignore_empty = ignore_empty;
     }
 
     public void setZone(String zonestr) throws DateTimeException, ZoneRulesException {
@@ -125,60 +170,65 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
 
     public void setHeaderCells(String col_start, int row_start, String col_end, int row_end) {
         header_row_end = row_end == -1 ? row_start : row_end;
-        Row row = sheet.getRow(row_start - 1);
-        if (row == null) {
-            return;
-        }
-
-        // get start cell
-        int cell_no = 0;
-        if (!col_start.equals("-")) {
-            cell_no = CellReference.convertColStringToIndex(col_start);
-        }
-        int end_cell = -1;
-        if (!col_end.equals("-")) {
-            end_cell = CellReference.convertColStringToIndex(col_end);
-        }
-        while (true) {
-            Cell cell = row.getCell(cell_no);
-            if (cell == null) {
-                break;
+        // the header row is read in a pass of its own
+        try (RowSeeker rows = new RowSeeker(getSource().openRows())) {
+            SheetSource.Row row = rows.getRow(row_start - 1);
+            if (row == null) {
+                return;
             }
-            CellType type = cell.getCellType();
-            if (type == CellType.BLANK) {
-                headers.add("BLANK");
-            } else {
-                if (type == CellType.FORMULA) {
-                    type = cell.getCachedFormulaResultType();
+
+            // get start cell
+            int cell_no = 0;
+            if (!col_start.equals("-")) {
+                cell_no = CellReference.convertColStringToIndex(col_start);
+            }
+            int end_cell = -1;
+            if (!col_end.equals("-")) {
+                end_cell = CellReference.convertColStringToIndex(col_end);
+            }
+            while (true) {
+                SheetSource.Cell cell = row.getCell(cell_no);
+                if (cell == null) {
+                    break;
                 }
-                switch (type) {
-                    case BOOLEAN:
-                        headers.add(cell.getBooleanCellValue() ? "true" : "false");
-                        break;
-
-                    case ERROR:
-                        headers.add("ERROR");
-                        break;
-
-                    case NUMERIC:
-                        headers.add(String.format("%s", cell.getNumericCellValue()));
-                        break;
-
-                    case STRING: {
-                        headers.add(cell.getStringCellValue().trim());
-                        break;
+                CellType type = cell.getCellType();
+                if (type == CellType.BLANK) {
+                    headers.add("BLANK");
+                } else {
+                    if (type == CellType.FORMULA) {
+                        type = cell.getCachedFormulaResultType();
                     }
+                    switch (type) {
+                        case BOOLEAN:
+                            headers.add(cell.getBooleanCellValue() ? "true" : "false");
+                            break;
 
-                    default:
-                        headers.add(String.format("column-%d-unknown", cell_no + 1));
-                        break;
+                        case ERROR:
+                            headers.add("ERROR");
+                            break;
+
+                        case NUMERIC:
+                            headers.add(String.format("%s", cell.getNumericCellValue()));
+                            break;
+
+                        case STRING: {
+                            headers.add(cell.getStringCellValue().trim());
+                            break;
+                        }
+
+                        default:
+                            headers.add(String.format("column-%d-unknown", cell_no + 1));
+                            break;
+                    }
                 }
-            }
 
-            if (end_cell >= 0 && (cell_no >= end_cell)) {
-                break;
+                if (end_cell >= 0 && (cell_no >= end_cell)) {
+                    break;
+                }
+                ++cell_no;
             }
-            ++cell_no;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -194,13 +244,13 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     }
 
     public boolean next() {
+        getSource();
         if (current_row == -1) {
+            // each iteration is a new pass from the first data row
+            closeRows();
             if (start_row == -1) {
-                if (header_row_end != -1) {
-                    current_row = header_row_end + 1;
-                } else {
-                    ++current_row;
-                }
+                // rows are 1-based; with no header row, data starts on the first row
+                current_row = header_row_end != -1 ? header_row_end + 1 : 1;
             } else {
                 current_row = start_row;
             }
@@ -212,6 +262,22 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         }
         if (current_row != -1) {
             row_data = getRowData(current_row);
+            if (row_data == null && ignore_empty) {
+                // skip empty rows up to the end of the data range or the last physical row of the sheet; the rows
+                // between two physical rows are empty, so the search continues at the next physical row
+                while (row_data == null) {
+                    SheetSource.Row next = getNextRow(current_row);
+                    if (next == null) {
+                        break;
+                    }
+                    int next_row = next.getRowNum() + 1;
+                    if (end_row != -1 && next_row > end_row) {
+                        break;
+                    }
+                    current_row = next_row;
+                    row_data = getRowData(current_row);
+                }
+            }
             if (row_data == null) {
                 current_row = -1;
             } else {
@@ -219,6 +285,10 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
             }
         } else if (row_data != null) {
             row_data = null;
+        }
+        if (current_row == -1) {
+            // release the pass as soon as the iteration ends
+            closeRows();
         }
         return current_row != -1;
     }
@@ -235,8 +305,55 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         return row_data != null;
     }
 
+    /**
+     * Returns the source of the rows; throws an exception if the iterator is closed
+     */
+    private SheetSource getSource() {
+        SheetSource source = res.source;
+        if (source == null) {
+            throw new IllegalStateException("the Excel iterator is closed");
+        }
+        return source;
+    }
+
+    /**
+     * Returns the physical row with the given 1-based number in the current pass, starting a new pass if necessary,
+     * or null if the row is not in the file
+     */
+    private SheetSource.Row getRow(int rownum) {
+        try {
+            if (res.rows == null || rownum - 1 < res.rows.getLastIndex()) {
+                closeRows();
+                res.rows = new RowSeeker(getSource().openRows());
+            }
+            return res.rows.getRow(rownum - 1);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Returns the first physical row after the given 1-based row number in the current pass, or null if there are
+     * no more rows
+     */
+    private SheetSource.Row getNextRow(int rownum) {
+        try {
+            return res.rows.getNextRow(rownum - 1);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private void closeRows() {
+        try {
+            res.closeRows();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private Hash getRowData(int rownum) {
-        Row row = sheet.getRow(rownum - 1);
+        SheetSource.Row row = getRow(rownum);
         if (row == null) {
             return null;
         }
@@ -253,12 +370,18 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         int end_cell = -1;
         if (!end_column.equals("-")) {
             end_cell = CellReference.convertColStringToIndex(end_column);
+        } else if (!auto_detect_data && headers.isEmpty()) {
+            // a data range without an end column and without headers ends at the last cell with a value in the row
+            end_cell = getLastValueColumn(row, cell_no);
+            if (end_cell == -1) {
+                return null;
+            }
         }
         int col_no = 0;
         boolean found_data = false;
         Hash row_data = null;
         while (true) {
-            Cell cell = row.getCell(cell_no);
+            SheetSource.Cell cell = row.getCell(cell_no);
             Object val;
 
             if (cell == null) {
@@ -275,6 +398,10 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
 
             String key;
             if (!headers.isEmpty()) {
+                // a data range wider than the headers ends at the last header column
+                if (col_no >= headers.size()) {
+                    break;
+                }
                 key = headers.get(col_no);
             } else {
                 key = String.format("%s%d", CellReference.convertNumToColString(col_no), rownum);
@@ -301,7 +428,21 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         return row_data;
     }
 
-    private Object cellToValue(Cell cell) {
+    /**
+     * Returns the last 0-based column from the given column with a cell with a value in the row, or -1 if there is
+     * none
+     */
+    private int getLastValueColumn(SheetSource.Row row, int first_col) {
+        for (int col = row.getLastCellNum() - 1; col >= first_col; --col) {
+            SheetSource.Cell cell = row.getCell(col);
+            if (cell != null && cellToValue(cell) != null) {
+                return col;
+            }
+        }
+        return -1;
+    }
+
+    private Object cellToValue(SheetSource.Cell cell) {
         CellType type = cell.getCellType();
         if (type == CellType.BLANK) {
             return null;
@@ -315,7 +456,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
                 return cell.getBooleanCellValue();
 
             case NUMERIC:
-                if (DateUtil.isCellDateFormatted(cell)) {
+                if (cell.isCellDateFormatted()) {
                     return ZonedDateTime.of(cell.getLocalDateTimeCellValue(), zone);
                 }
                 return cell.getNumericCellValue();
@@ -336,7 +477,15 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
     }
 
     public static ArrayList<String> getWorksheets(java.io.InputStream stream) throws IOException {
-        try (Workbook wb = WorkbookFactory.create(stream)) {
+        InputStream is = FileMagic.prepareToCheckMagic(stream);
+        if (FileMagic.valueOf(is) == FileMagic.OOXML) {
+            try {
+                return XlsxSheetSource.getSheetNames(is);
+            } catch (InvalidFormatException e) {
+                throw new IOException(e.getMessage(), e);
+            }
+        }
+        try (Workbook wb = WorkbookFactory.create(is)) {
             ArrayList<String> rv = new ArrayList<String>();
             for (int i = 0; i < wb.getNumberOfSheets(); ++i) {
                 rv.add(wb.getSheetName(i));
@@ -356,10 +505,149 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
      */
     @Override
     public void close() throws IOException {
-        if (workbook != null) {
-            workbook.close();
-            workbook = null;
+        try {
+            res.close();
+        } finally {
+            cleanable.clean();
+        }
+    }
+
+    /**
+     * The resources of an iterator: the workbook and the current pass over its rows.
+     *
+     * This does not refer to the iterator, so it can close the resources of an iterator that is garbage collected
+     * without being closed.
+     */
+    private static final class Resources implements Runnable {
+        SheetSource source;
+        // the current data pass, if any
+        RowSeeker rows;
+
+        Resources(SheetSource source) {
+            this.source = source;
+        }
+
+        void closeRows() throws IOException {
+            if (rows != null) {
+                RowSeeker r = rows;
+                rows = null;
+                r.close();
+            }
+        }
+
+        void close() throws IOException {
+            Throwable error = null;
+            try {
+                closeRows();
+            } catch (Throwable t) {
+                error = t;
+            }
+            if (source != null) {
+                SheetSource s = source;
+                source = null;
+                try {
+                    s.close();
+                } catch (Throwable t) {
+                    if (error == null) {
+                        error = t;
+                    } else {
+                        error.addSuppressed(t);
+                    }
+                }
+            }
+            if (error != null) {
+                if (error instanceof IOException) {
+                    throw (IOException)error;
+                }
+                if (error instanceof RuntimeException) {
+                    throw (RuntimeException)error;
+                }
+                if (error instanceof Error) {
+                    throw (Error)error;
+                }
+                throw new IOException(error);
+            }
+        }
+
+        /**
+         * Closes the resources of an iterator that was garbage collected without being closed; there is no caller
+         * to report an error to
+         */
+        @Override
+        public void run() {
+            try {
+                close();
+            } catch (Throwable t) {
+                // ignored: the iterator is no longer reachable
+            }
+        }
+    }
+
+    /**
+     * Locates the physical rows of one pass by their 0-based row numbers, which must not decrease
+     */
+    private static final class RowSeeker implements java.io.Closeable {
+        private final SheetSource.RowReader reader;
+        // the next row of the pass that has been read but not passed
+        private SheetSource.Row next_row = null;
+        private boolean end = false;
+        // the last row number requested
+        private int last_index = -1;
+
+        RowSeeker(SheetSource.RowReader reader) {
+            this.reader = reader;
+        }
+
+        int getLastIndex() {
+            return last_index;
+        }
+
+        private SheetSource.Row peek() throws IOException {
+            if (next_row == null && !end) {
+                next_row = reader.next();
+                if (next_row == null) {
+                    end = true;
+                }
+            }
+            return next_row;
+        }
+
+        /**
+         * Returns the physical row with the given 0-based number, or null if the row is not in the file
+         */
+        SheetSource.Row getRow(int idx) throws IOException {
+            if (idx < 0) {
+                return null;
+            }
+            last_index = idx;
+            while (true) {
+                SheetSource.Row row = peek();
+                if (row == null || row.getRowNum() > idx) {
+                    return null;
+                }
+                if (row.getRowNum() == idx) {
+                    return row;
+                }
+                next_row = null;
+            }
+        }
+
+        /**
+         * Returns the first physical row after the given 0-based row number, or null if there are no more rows
+         */
+        SheetSource.Row getNextRow(int idx) throws IOException {
+            while (true) {
+                SheetSource.Row row = peek();
+                if (row == null || row.getRowNum() > idx) {
+                    return row;
+                }
+                next_row = null;
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            reader.close();
         }
     }
 }
-

@@ -1,3 +1,4 @@
+// Copyright (C) 2026 Qore Technologies, s.r.o.
 package org.qore.jni;
 
 //! wrapper class for a %Qore object; this class holds a weak reference to the %Qore object
@@ -24,8 +25,13 @@ public class QoreObjectBase {
         // Register first with ptr=0 so phantom dispatch is safe even if create0 throws.
         this.ref = NativeCleanup.register(this, 0, NativeCleanup.KIND_OBJECT_BASE_WEAK);
         long ptr = create0(qcptr, mptr, vptr, this, args);
+        if (!this.ref.publish(ptr)) {
+            if (ptr != 0) {
+                release0(ptr);
+            }
+            throw new IllegalStateException("Native cleanup ended during object construction");
+        }
         this.obj = ptr;
-        this.ref.ptr = ptr;
     }
 
     //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here

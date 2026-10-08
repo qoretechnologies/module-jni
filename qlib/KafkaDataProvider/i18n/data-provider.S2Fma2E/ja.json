@@ -288,8 +288,8 @@
           "message": "送信待ちレコードのバッファリング用にプロデューサーが使用できるメモリの総バイト数"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "メッセージキー"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "メッセージキー。キーのないメッセージはプロデューサーによってトピックのパーティションに分散されます"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Kafka メッセージング"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "メッセージヘッダー"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "ヘッダー名から値へのハッシュとしてのレコードヘッダー"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "ヘッダー名から値へのハッシュとしてのレコードヘッダー。\n\n送信時、文字列値はその UTF-8 バイトとして、バイナリ値はそのまま、その他の値は文字列形式の UTF-8 バイトとして送信されます。\n\n受信時、有効な UTF-8 である値は文字列として、その他の値はバイナリとして返されます。値のないヘッダーは `NOTHING` として返され、レコードが同じヘッダーを複数回含む場合は最後の値が返されます"
         }
       }
     }

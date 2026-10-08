@@ -30,11 +30,12 @@
 %module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/commons-logging-1.2.jar
 %module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/qore-dataprovider-access.jar
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/AccessDataProvider
+%requires AccessDataProvider
 
 %module-cmd(jni) import org.qore.dataprovider.access.AccessTestHelper
 %module-cmd(jni) import org.qore.dataprovider.access.AccessIterator

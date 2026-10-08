@@ -288,8 +288,8 @@
           "message": "Die Gesamtzahl der Speicher-Bytes, die der Producer zum Puffern von zu sendenden Datensätzen verwenden kann"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.desc": {
-          "source": "The message key",
-          "message": "Der Nachrichtenschlüssel"
+          "source": "The message key; a message without a key is distributed over the topic's partitions by the producer",
+          "message": "Der Nachrichtenschlüssel; eine Nachricht ohne Schlüssel wird vom Producer auf die Partitionen des Topics verteilt"
         },
         "app.S2Fma2E.action.c2VuZC1tc2c.option.a2V5.display_name": {
           "source": "Message Key",
@@ -398,6 +398,18 @@
         "app.S2Fma2E.short_desc": {
           "source": "Kafka messaging",
           "message": "Kafka-Messaging"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.display_name": {
+          "source": "Message Headers",
+          "message": "Nachrichten-Header"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.short_desc": {
+          "source": "The record headers, as a hash of header names to values",
+          "message": "Die Header des Datensatzes als Hash von Header-Namen zu Werten"
+        },
+        "app.S2Fma2E.action.c2VuZC1tc2c.option.aGVhZGVycw.desc": {
+          "source": "The record headers, as a hash of header names to values.\n\nWhen sending, a string value is sent as its UTF-8 bytes, a binary value as it is, and any other value as the UTF-8 bytes of its string form.\n\nWhen receiving, a value that is valid UTF-8 is returned as a string and any other value as a binary; a header without a value is returned as `NOTHING`, and when a record carries a header more than once, the last value is returned",
+          "message": "Die Header des Datensatzes als Hash von Header-Namen zu Werten.\n\nBeim Senden wird ein String-Wert als seine UTF-8-Bytes gesendet, ein binärer Wert unverändert und jeder andere Wert als die UTF-8-Bytes seiner String-Form.\n\nBeim Empfangen wird ein Wert, der gültiges UTF-8 ist, als String zurückgegeben und jeder andere Wert als Binärwert; ein Header ohne Wert wird als `NOTHING` zurückgegeben, und wenn ein Datensatz einen Header mehrfach enthält, wird der letzte Wert zurückgegeben"
         }
       }
     }

@@ -102,6 +102,17 @@ public class AbstractMqttDataProvider inherits DataProvider::AbstractDataProvide
         delete client;
     }
 
+    #! Returns how the payload of a received message is decoded
+    /** @return the \c message_format option: \c "json" or \c "yaml" (the payload is parsed; a payload that cannot
+        be parsed is delivered as the binary it was received as), \c "string" (the payload is converted to a
+        string in the \c encoding option) or \c "none" (the payload is delivered as binary)
+
+        @since MqttDataProvider 3.0
+    */
+    string getMessageFormat() {
+        return message_format;
+    }
+
     #! Returns a client for the given options
     static hash<auto> getClient(hash<auto> copts, *LoggerInterface logger) {
         @debug {

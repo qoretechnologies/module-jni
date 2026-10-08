@@ -24,11 +24,12 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires QUnit
 %requires Util
 %requires DataProvider
 %requires jni
-%requires ../qlib/PowerPointDataProvider
+%requires PowerPointDataProvider
 
 # Add classpaths for the test helper - uses ExcelDataProvider jars for shared POI dependencies
 %module-cmd(jni) add-relative-classpath ../qlib/PowerPointDataProvider/jar/qore-dataprovider-powerpoint.jar
@@ -98,6 +99,7 @@ public class PowerPointDataProviderTest inherits QUnit::Test {
         addTestCase("roundtrip: write and read slides", \testRoundtripSlides());
         addTestCase("roundtrip: write and read table", \testRoundtripTable());
 
+        addTestCase("write-data action returns the generated data", \testWriteDataAction());
         set_return_value(main());
     }
 
@@ -759,5 +761,22 @@ public class PowerPointDataProviderTest inherits QUnit::Test {
         assertEq("100", records[0].Quantity);
         assertEq("Gadget", records[1].Product);
         assertEq("Gizmo", records[2].Product);
+    }
+
+    # runs the action the way an action runner does: the provider is built from the action's class and constructor
+    # options, the records are created, and finishCreate() completes the action and returns the generated data
+    testWriteDataAction() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("PowerPoint", "write-data");
+        assertEq(DPAD_CREATE_OUTPUT, action.output_data_type);
+        assertFalse(exists action.options.stream);
+        AbstractDataProvider prov = Class::forName(action.cls).newObject({"content_type": "slides"});
+        prov.createRecordsBulkWithOptions({"recs": {"title": ("First", "Second"), "body": ("One", "Two")}});
+        hash<auto> output = prov.finishCreate();
+        assertEq(output, action.output_type.acceptsValue(output));
+        assertEq(2, output.record_count);
+        assertEq(Type::Binary, output.data.type());
+        assertEq("PK", output.data.substr(0, 2).toString());
+        PowerPointReadDataProvider rdp({"data": output.data, "content_type": "slides"});
+        assertEq(("First", "Second"), (map $1.title, rdp.searchRecords()));
     }
 }

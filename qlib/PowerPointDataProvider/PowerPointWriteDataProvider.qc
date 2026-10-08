@@ -247,6 +247,23 @@ public class PowerPointWriteDataProvider inherits DataProvider::AbstractDataProv
         }
     }
 
+    #! Completes the create operations: writes the PowerPoint data to its path or stream, if any
+    /** @return the generated PowerPoint data and the number of records in it, if there is no output path or stream;
+        otherwise no value is returned
+    */
+    private *hash<GeneratedDataInfo> finishCreateImpl() {
+        if (path || stream) {
+            commit();
+            return;
+        }
+        # the data must be read before commit() closes the writer
+        on_exit commit();
+        return <GeneratedDataInfo>{
+            "data": getData(),
+            "record_count": created,
+        };
+    }
+
     #! Returns the data as binary
     /** @return the PowerPoint presentation contents as binary data
 
@@ -262,6 +279,15 @@ public class PowerPointWriteDataProvider inherits DataProvider::AbstractDataProv
     #! Returns the number of records created
     int getCreatedCount() {
         return created;
+    }
+
+    #! Returns an open record type because the record fields depend on the PowerPoint presentation content type
+    /** @param search_options ignored
+
+        @return @ref NOTHING to represent an open record shape
+    */
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return NOTHING;
     }
 
     #! Returns data provider static info

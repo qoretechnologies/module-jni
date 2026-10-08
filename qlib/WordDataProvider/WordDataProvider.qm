@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.9
 %requires FileLocationHandler
 %requires Util
 
@@ -162,6 +162,8 @@ module WordDataProvider {
             "desc": "Create Word document data in memory and return it as binary data; useful for generating "
                 "Word files without writing to disk",
             "action_code": DPAT_CREATE,
+            "output_data_type": DPAD_CREATE_OUTPUT,
+            "output_type": GeneratedDataOutputDataType,
             "cls": "WordDataProvider::WordWriteDataProvider",
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 WordWriteDataProvider::ConstructorOptions{"content_type", "headers", "title"}, {
@@ -177,7 +179,11 @@ module WordDataProvider {
 
     @tableofcontents
 
-    @section WordDataProviderintro Introduction to the WordDataProvider Module
+    @section worddataproviderintro WordDataProvider Module Introduction
+
+    <img src="word-logo.svg" width="96" alt="WordDataProvider module logo"/>
+
+    @anchor WordDataProviderintro
 
     The %WordDataProvider module provides a data provider API for reading and writing Microsoft Word documents
     through the @ref dataproviderintro "DataProvider" API. It supports the modern .docx format (Word 2007+)
@@ -315,12 +321,7 @@ module WordDataProvider {
     @section WordDataProvider_relnotes Release Notes
 
     @subsection WordDataProvider_v1_0 WordDataProvider v1.0
-    - initial release of the module
-    - support for reading Word documents (.docx format)
-    - support for writing Word documents (.docx format)
-    - paragraph and table read/write modes
-    - header row detection for tables
-    - binary data input/output support
+    - initial release
 */
 
 #! contains all public definitions in the WordDataProvider module

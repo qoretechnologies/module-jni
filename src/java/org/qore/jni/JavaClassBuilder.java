@@ -410,6 +410,7 @@ public class JavaClassBuilder {
 
     /** makes a static method call
      *
+     * @param pgm the registered program binding handle
      * @param methodName the name of the method
      * @param qclsptr the registered class binding handle
      * @param mptr the registered method binding handle
@@ -448,6 +449,7 @@ public class JavaClassBuilder {
 
     /** makes a function call
      *
+     * @param pgm the registered program binding handle
      * @param fptr the registered function binding handle
      * @param vptr reserved; must be zero
      * @param args the arguments to the call, if any, can be null
@@ -486,10 +488,10 @@ public class JavaClassBuilder {
 
     /** Returns a bytecode-backed (non-loaded) TypeDescription for the given class.
      *
-     * Unlike {@link #getTypeDescription(Class)} (which returns a {@code ForLoadedType} whose
+     * Unlike @ref getTypeDescription() (which returns a {@code ForLoadedType} whose
      * {@code getDeclaredMethods()} reflects via {@code Class.getDeclaredMethods0} and thereby
      * forces the JVM to eagerly resolve every parameter/return type in the class's method
-     * table), this reads the class file through a {@link TypePool}.  Method param/return types
+     * table), this reads the class file through a <tt>TypePool</tt>.  Method param/return types
      * are returned as name-based ({@code Latent}) descriptions and are NOT resolved.  This is
      * used for the superclass when generating a subclass so that Byte Buddy can compute the
      * method graph and super-constructor invocation without recursively loading types that may
