@@ -1464,9 +1464,14 @@ public class QoreArgTest extends ArgTest {
         }
     }
 
+    #! a Java object is an instance of the Java interfaces that its class implements
+    /** The interface is given with its namespace: this test imports Python's \c os module, so a Python class named
+        \c Iterable (\c collections.abc.Iterable, a base class of \c os._Environ) is also available.
+    */
     classCompatTest() {
-        ArrayList l();;
-        assertTrue(l instanceof Iterable);
+        ArrayList l();
+        assertTrue(l instanceof Jni::java::lang::Iterable);
+        assertFalse(l instanceof Jni::java::util::Map);
     }
 
     testCode() {
