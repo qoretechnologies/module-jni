@@ -28,6 +28,14 @@
 #include <qore/Qore.h>
 
 #include <dlfcn.h>
+#include <unistd.h>
+#include <sys/resource.h>
+
+#include <cctype>
+#include <cerrno>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 
 #include "defs.h"
 #include "GeneratedBinding.h"
@@ -48,6 +56,151 @@ static bool hasLibjsig() {
 }
 
 namespace jni {
+
+#ifdef _QORE_HAS_ENFORCE_STACK_SIZE_ON_PRIMARY_THREAD
+namespace {
+//! The JVM options that determine the stack of the primary thread
+/** The stack zones are given in units of 4 KB, as in HotSpot; their defaults are HotSpot's defaults on 64-bit Linux
+    and macOS
+*/
+struct JvmStackOptions {
+    //! the stack size of Java threads in bytes; 0 if not set
+    size_t stack_size = 0;
+    //! the size of the red zone
+    size_t red_pages = 1;
+    //! the size of the yellow zone
+    size_t yellow_pages = 2;
+    //! the size of the reserved zone
+    size_t reserved_pages = 1;
+};
+
+//! Parses a JVM size value with an optional k, m or g suffix
+/** @return 0 if OK, -1 if the value is not a size
+*/
+int parse_jvm_size(const char* str, size_t& size) {
+    if (!isdigit(static_cast<unsigned char>(*str))) {
+        return -1;
+    }
+    char* end;
+    errno = 0;
+    unsigned long long val = strtoull(str, &end, 10);
+    if (errno) {
+        return -1;
+    }
+    unsigned long long mult = 1;
+    switch (*end) {
+        case '\0': break;
+        case 'k': case 'K': mult = 1024; ++end; break;
+        case 'm': case 'M': mult = 1024 * 1024; ++end; break;
+        case 'g': case 'G': mult = 1024 * 1024 * 1024; ++end; break;
+        default: return -1;
+    }
+    if (*end || val > SIZE_MAX / mult) {
+        return -1;
+    }
+    size = static_cast<size_t>(val * mult);
+    return 0;
+}
+
+//! Applies one JVM option to the stack options; options that do not affect the stack and invalid values are ignored
+void apply_jvm_stack_option(const char* opt, JvmStackOptions& sopts) {
+    size_t val;
+    if (!strncmp(opt, "-Xss", 4)) {
+        if (!parse_jvm_size(opt + 4, val)) {
+            sopts.stack_size = val;
+        }
+        return;
+    }
+    if (strncmp(opt, "-XX:", 4)) {
+        return;
+    }
+    opt += 4;
+    const char* eq = strchr(opt, '=');
+    if (!eq || parse_jvm_size(eq + 1, val)) {
+        return;
+    }
+    size_t len = eq - opt;
+    auto is = [opt, len] (const char* name) -> bool {
+        return strlen(name) == len && !strncmp(opt, name, len);
+    };
+    if (is("ThreadStackSize")) {
+        // given in KB
+        if (val <= SIZE_MAX / 1024) {
+            sopts.stack_size = val * 1024;
+        }
+    } else if (is("StackRedPages")) {
+        sopts.red_pages = val;
+    } else if (is("StackYellowPages")) {
+        sopts.yellow_pages = val;
+    } else if (is("StackReservedPages")) {
+        sopts.reserved_pages = val;
+    }
+}
+
+//! Returns the size of a stack zone in bytes: its size in units of 4 KB, rounded up to the page size, as in HotSpot
+size_t get_stack_zone_size(size_t pages, size_t page_size) {
+    size_t size = pages * 4096;
+    return (size + page_size - 1) / page_size * page_size;
+}
+
+//! Sets the stack limit of the primary thread to the end of its stack as the JVM sees it
+/** The JVM protects zones at the end of the stack of every thread attached to it, including the primary thread, and
+    on Linux it limits the primary thread's stack to the smaller of \c -Xss and its stack resource limit less two
+    pages.  Qore's stack guard must lie above those zones, or a thread can overflow into them between two stack
+    checks instead of raising \c STACK-LIMIT-EXCEEDED.
+
+    The options are taken from \c JAVA_TOOL_OPTIONS, which the JVM reads before the options passed to
+    \c JNI_CreateJavaVM(), and then from \a vm_args, so the last occurrence of an option is used, as in the JVM.
+*/
+void enforce_jvm_stack_on_primary_thread(const JavaVMInitArgs& vm_args) {
+    JvmStackOptions sopts;
+    {
+        QoreString val;
+        if (!SystemEnvironment::get("JAVA_TOOL_OPTIONS", val)) {
+            // options are separated by white space
+            const char* p = val.c_str();
+            while (*p) {
+                while (*p && isspace(static_cast<unsigned char>(*p))) {
+                    ++p;
+                }
+                const char* start = p;
+                while (*p && !isspace(static_cast<unsigned char>(*p))) {
+                    ++p;
+                }
+                if (p > start) {
+                    std::string opt(start, p - start);
+                    apply_jvm_stack_option(opt.c_str(), sopts);
+                }
+            }
+        }
+    }
+    for (jint i = 0; i < vm_args.nOptions; ++i) {
+        apply_jvm_stack_option(vm_args.options[i].optionString, sopts);
+    }
+
+    long page_size_val = sysconf(_SC_PAGESIZE);
+    size_t page_size = page_size_val > 0 ? static_cast<size_t>(page_size_val) : 4096;
+    size_t protected_size = get_stack_zone_size(sopts.red_pages, page_size)
+        + get_stack_zone_size(sopts.yellow_pages, page_size)
+        + get_stack_zone_size(sopts.reserved_pages, page_size);
+
+    size_t max_size = sopts.stack_size;
+#ifdef __linux__
+    // HotSpot limits the stack of the primary thread to its stack resource limit less two pages (see
+    // os::Linux::capture_initial_stack())
+    rlimit rl;
+    if (!getrlimit(RLIMIT_STACK, &rl) && rl.rlim_cur != RLIM_INFINITY && rl.rlim_cur >= 3 * page_size) {
+        size_t rlimit_size = static_cast<size_t>(rl.rlim_cur) - 2 * page_size;
+        if (!max_size || rlimit_size < max_size) {
+            max_size = rlimit_size;
+        }
+    }
+#endif
+    printd(LogLevel, "jni module: primary thread stack max: %lu protected: %lu\n", max_size, protected_size);
+    q_enforce_stack_size_on_primary_thread(max_size, protected_size);
+}
+}
+#endif
 
 JavaVM* Jvm::vm = nullptr;
 thread_local JNIEnv* Jvm::env;
@@ -272,7 +425,9 @@ QoreStringNode* Jvm::createVM() {
         return new QoreStringNodeMaker("JNI_CreateJavaVM() failed with error code %d", rc);
     }
     // now the JVM will also enforce the thread size on the primary thread
-#ifdef _QORE_HAS_ENFORCE_THREAD_SIZE_ON_PRIMARY_THREAD
+#ifdef _QORE_HAS_ENFORCE_STACK_SIZE_ON_PRIMARY_THREAD
+    enforce_jvm_stack_on_primary_thread(vm_args);
+#elif defined(_QORE_HAS_ENFORCE_THREAD_SIZE_ON_PRIMARY_THREAD)
     q_enforce_thread_size_on_primary_thread();
 #endif
     return 0;

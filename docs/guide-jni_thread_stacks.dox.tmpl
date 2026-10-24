@@ -14,6 +14,23 @@
     Therefore if the %Qore thread stack size is set to 512KB (for example), the Java thread stack size limit as well
     as the primary thread's stack size limit is set to 512KB when the \c jni module is initialized.
 
+    @section jni_primary_thread_stack The Primary Thread's Stack
+
+    When the JVM is created, the \c jni module sets the primary thread's stack limit to the end of its stack as the
+    JVM sees it, so that deep recursion on the primary thread raises \c STACK-LIMIT-EXCEEDED like on any other
+    thread, instead of overflowing into the zones that the JVM protects at the end of the stack:
+    - the stack size is the smaller of the primary thread's real stack size and the JVM's thread stack size (\c -Xss
+      or \c -XX:ThreadStackSize); on Linux, the JVM limits the primary thread's stack to its stack resource limit
+      (<tt>ulimit -s</tt>) less two pages
+    - the JVM's red, yellow and reserved zones (\c -XX:StackRedPages, \c -XX:StackYellowPages and
+      \c -XX:StackReservedPages, in units of 4KB, each rounded up to the page size) at the end of the stack are not
+      usable by the thread
+    - the primary thread's stack guard is kept above the end of that stack
+
+    These options are read from the \c JAVA_TOOL_OPTIONS and \c QORE_JNI_JVM_ARGS environment variables; options
+    given in another way, such as in a file named with \c -XX:Flags or \c -XX:VMOptionsFile, are not taken into
+    account.
+
     The %Qore library's default thread stack size is 8MB.  This is much larger than the standard 1MB stack size for
     the JVM, however, since thread stacks are generally allocated from overcommitted memory, meaning that they start
     small and only grow on demand, a larger thread stack size does not imply a larger memory footprint for programs

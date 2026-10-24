@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The stack limit of the primary thread after the JVM has been created (qoretechnologies/qore#5518).  The JVM
+# protects zones at the end of the stack of every thread attached to it, and on Linux it limits the primary thread's
+# stack to the smaller of -Xss and the stack resource limit; Qore's stack guard must lie above the end of the stack
+# that the thread can use, so that deep recursion raises STACK-LIMIT-EXCEEDED instead of crashing the process.
+#
+# Each case runs in its own process, as the JVM options must be set before the JVM is created and a stack overflow
+# ends the process.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires jni
+%requires QUnit
+%requires FsUtil
+
+%exec-class JniPrimaryStackTest
+
+class JniPrimaryStackTest inherits QUnit::Test {
+    private {
+        #! the size of the largest stack zones the JVM accepts, in bytes: StackRedPages=3, StackYellowPages=7 and
+        #! StackReservedPages=11, in units of 4 KB
+        const MaxZoneSize = (3 + 7 + 11) * 4096;
+
+        #! the JVM options for the largest stack zones
+        const MaxZoneArgs = "-XX:StackRedPages=3 -XX:StackYellowPages=7 -XX:StackReservedPages=11";
+
+        #! the child script: prints the primary thread's stack size, then recurses until the stack limit is reached
+        #! on a thread created by Qore and on the primary thread
+        const ChildSource = "%modern
+%requires jni
+%module-cmd(jni) import java.lang.StringBuilder
+
+int sub recurse(int n) {
+    return recurse(n + 1) + 1;
+}
+
+string sub run() {
+    try {
+        recurse(0);
+        return \"no error\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# the primary thread is attached to the JVM
+StringBuilder sb(\"primary\");
+@assert(sb.toString() == \"primary\");
+printf(\"size: %d\\n\", get_stack_size());
+Counter c(1);
+background sub () {
+    on_exit c.dec();
+    printf(\"thread: %s\\n\", run());
+}();
+c.waitForZero();
+printf(\"primary: %s\\n\", run());
+";
+    }
+
+    constructor() : Test("jni primary thread stack test", "1.0", \ARGV) {
+        addTestCase("default JVM options", \defaultTest());
+        addTestCase("-Xss smaller than the default thread stack size", \xssTest());
+        addTestCase("-XX:ThreadStackSize smaller than the default thread stack size", \threadStackSizeTest());
+        addTestCase("the largest stack zones", \maxZoneTest());
+        addTestCase("stack zones set in JAVA_TOOL_OPTIONS", \javaToolOptionsZoneTest());
+        addTestCase("-Xss in JAVA_TOOL_OPTIONS is overridden by the module's -Xss", \javaToolOptionsXssTest());
+        addTestCase("a stack resource limit smaller than the default thread stack size", \rlimitTest());
+        addTestCase("options that do not affect the stack", \unrelatedOptionsTest());
+        set_return_value(main());
+    }
+
+    #! with the default options, the primary thread's stack is smaller than the default by at least the default
+    #! stack zones (16 KB with 4 KB pages)
+    defaultTest() {
+        hash<auto> h = runChild();
+        assertLe(get_default_thread_stack_size() - 16 * 1024, h.size);
+        assertGt(get_default_thread_stack_size() / 2, h.size);
+    }
+
+    #! the JVM limits the primary thread's stack to -Xss on Linux; the stack limit was set for the default thread
+    #! stack size, so the primary thread overflowed its stack
+    xssTest() {
+        hash<auto> h = runChild("-Xss2m");
+        assertLe(2 * 1024 * 1024 - 16 * 1024, h.size);
+        assertGt(1024 * 1024, h.size);
+    }
+
+    #! -XX:ThreadStackSize is given in KB
+    threadStackSizeTest() {
+        hash<auto> h = runChild("-XX:ThreadStackSize=2048");
+        assertLe(2 * 1024 * 1024 - 16 * 1024, h.size);
+    }
+
+    #! the stack zones are not usable by the primary thread
+    maxZoneTest() {
+        hash<auto> h = runChild(MaxZoneArgs);
+        assertLe(get_default_thread_stack_size() - MaxZoneSize, h.size);
+    }
+
+    #! the JVM reads JAVA_TOOL_OPTIONS before the options the module passes
+    javaToolOptionsZoneTest() {
+        hash<auto> h = runChild(NOTHING, MaxZoneArgs);
+        assertLe(get_default_thread_stack_size() - MaxZoneSize, h.size);
+    }
+
+    #! the module's -Xss is passed after JAVA_TOOL_OPTIONS, so it is used
+    javaToolOptionsXssTest() {
+        hash<auto> h = runChild(NOTHING, "-Xss2m");
+        assertGt(2 * 1024 * 1024, h.size);
+    }
+
+    #! the stack size is the smaller of the resource limit and -Xss
+    rlimitTest() {
+        hash<auto> h = runChild(NOTHING, NOTHING, 4096);
+        assertLe(4 * 1024 * 1024 - 16 * 1024, h.size);
+    }
+
+    #! options that do not affect the stack, and invalid stack sizes in options the JVM ignores, leave the stack size
+    #! as it is with the default options
+    unrelatedOptionsTest() {
+        int size = runChild().size;
+        assertEq(size, runChild("-XX:+UseSerialGC -Dqore.Xss=1m -Dqore.test=-Xss1m").size);
+    }
+
+    #! Runs the child script with the given JVM options and stack resource limit in KB
+    /** Asserts that the child raised \c STACK-LIMIT-EXCEEDED on both threads and exited normally
+
+        @return a hash with the key \c size: the primary thread's stack size in the child
+    */
+    private hash<auto> runChild(*string jvm_args, *string java_tool_options, *int stack_kb) {
+        if (!Qore::Option::HAVE_SYSTEM) {
+            testSkip("system() is not available on this platform");
+        }
+        if (!Qore::Option::HAVE_MANAGE_STACK) {
+            testSkip("this version of the Qore library does not manage the stack");
+        }
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(sprintf("%%prepend-module-path \"%s\"\n", dirname(get_module_hash().jni.filename))
+            + ChildSource);
+        tmp.file.close();
+        string cmd = "env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS -u QORE_JNI_JVM_ARGS";
+        if (jvm_args) {
+            cmd += " QORE_JNI_JVM_ARGS=" + shellQuote(jvm_args);
+        }
+        if (java_tool_options) {
+            cmd += " JAVA_TOOL_OPTIONS=" + shellQuote(java_tool_options);
+        }
+        cmd += sprintf(" %s -b %s 2>/dev/null; echo exit: $?", shellQuote(qoreBin()), shellQuote(tmp.path));
+        if (stack_kb) {
+            cmd = sprintf("ulimit -s %d && %s", stack_kb, cmd);
+        }
+        string desc = sprintf("QORE_JNI_JVM_ARGS: %y JAVA_TOOL_OPTIONS: %y stack: %y", jvm_args,
+            java_tool_options, stack_kb);
+        string output = trim(backquote(cmd));
+        *list<*string> m = (output =~ x/^size: ([0-9]+)\nthread: (.*)\nprimary: (.*)\nexit: ([0-9]+)$/);
+        assertEq(4, m.size(), desc + ": " + output);
+        assertEq("STACK-LIMIT-EXCEEDED", m[1], desc);
+        assertEq("STACK-LIMIT-EXCEEDED", m[2], desc);
+        assertEq("0", m[3], desc);
+        int size = m[0].toInt();
+        assertGt(0, size, desc);
+        return {"size": size};
+    }
+
+    #! Returns the path to the qore binary running this test
+    private string qoreBin() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
+        assertTrue(exists qore_bin, "no qore binary path available");
+        return qore_bin;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

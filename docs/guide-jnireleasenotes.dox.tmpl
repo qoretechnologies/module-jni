@@ -26,6 +26,11 @@
       \c org.qore.jni.QoreClosure objects; the conversion raised \c JNI-ERROR ("cannot create a Java array from a
       list that contains values of type 'binary'"), and defining the Java class of a %Qore class with such a
       constant failed with \c java.lang.ExceptionInInitializerError
+    - fixed deep recursion on the primary thread after the JVM was created overflowing the stack instead of raising
+      \c STACK-LIMIT-EXCEEDED: the primary thread's stack limit was set for the default thread stack size, from the
+      position of the stack when %Qore started, without the primary thread's extra stack guard and without the zones
+      that the JVM protects at the end of the stack; it is now set to the end of the stack as the JVM sees it (see
+      @ref jni_primary_thread_stack)
     - made Java socket-based JDBC connection establishment cancellable using a joined virtual thread
     - fixed a native abort while converting a Java exception with Qore cancellation pending
     - closed connections after failed metadata/session initialization and cancellation races
