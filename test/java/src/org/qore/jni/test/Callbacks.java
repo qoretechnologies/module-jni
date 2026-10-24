@@ -3,9 +3,27 @@ package org.qore.jni.test;
 import java.lang.reflect.*;
 
 import org.qore.jni.QoreClosure;
+import org.qore.jni.QoreClosureMarker;
 import org.qore.jni.QoreObjectBase;
 
 public class Callbacks {
+    // A Java-owned callback returned to Qore; its wrapper must retain the caller's provenance.
+    public static QoreClosureMarker readingClosure(QoreClosure reader) {
+        return new ReadingClosure(reader);
+    }
+
+    public static class ReadingClosure implements QoreClosureMarker {
+        private final QoreClosure reader;
+
+        public ReadingClosure(QoreClosure reader) {
+            this.reader = reader;
+        }
+
+        public Object call() throws Throwable {
+            return reader.call();
+        }
+    }
+
     public static void callNow(Runnable r) {
         r.run();
     }

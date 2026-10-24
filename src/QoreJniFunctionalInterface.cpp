@@ -24,6 +24,7 @@
 //
 //------------------------------------------------------------------------------
 
+#include <qore/QoreSandboxManager.h>
 #include "QoreJniFunctionalInterface.h"
 #include "QoreToJava.h"
 
@@ -60,6 +61,7 @@ QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj) : obj(Global
 }
 
 QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     try {
         ReferenceHolder<QoreListNode> evaluated_args(args ? args->evalList(xsink) : nullptr, xsink);
         if (*xsink) {

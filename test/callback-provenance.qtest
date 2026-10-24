@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.Callbacks
+%requires QUnit
+
+%exec-class ProvenanceTest
+
+class ProvenanceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI callback provenance", "1.0", \ARGV) {
+        addTestCase("a returned foreign callback retains its creation policy", \testProvenance());
+        set_return_value(main());
+    }
+
+    testProvenance() {
+        string path = get_script_path();
+        code reader = string sub () {
+            try { ReadOnlyFile::readTextFile(path); return "allowed"; }
+            catch (hash<ExceptionInfo> ex) { return ex.err; }
+        };
+        Program sandbox(PO_NEW_STYLE);
+        sandbox.parse("code sub make(code reader) { return Callbacks::readingClosure(reader); }", "foreign-callback-factory");
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sandbox.setSandboxManager(sm);
+        code trusted = Callbacks::readingClosure(reader);
+        code restricted = sandbox.callFunction("make", reader);
+        assertEq("allowed", trusted());
+        assertEq("FILESYSTEM-ACCESS-DENIED", restricted());
+        Queue results();
+        ThreadPool pool(1);
+        on_exit pool.stopWait();
+        pool.submit(sub () { results.push(restricted()); });
+        assertEq("FILESYSTEM-ACCESS-DENIED", results.get(10s));
+        pool.submit(sub () { results.push(trusted()); });
+        assertEq("allowed", results.get(10s), "worker reuse restores the previous context");
+    }
+}
