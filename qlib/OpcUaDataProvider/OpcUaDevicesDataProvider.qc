@@ -39,7 +39,7 @@ public class OpcUaDevicesDataProvider inherits AbstractOpcUaDataProvider {
 
     private {
         #! Child data provider classes
-        static hash<string, Reflection::Class> childMap;
+        static hash<string, Reflection::Class> childMap = {};
     }
 
     #! Creates the object from another object of the same class
