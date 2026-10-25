@@ -1182,6 +1182,11 @@ public class GenericIteratorProbe {
                     }
                 }
                 printf("%s\n", arg.toString());
+                if (arg.hasCallableMethod("getDiagnosticMessages")) {
+                    foreach string diagnostic in (arg.getDiagnosticMessages()) {
+                        printf("%s\n", diagnostic);
+                    }
+                }
                 arg.printStackTrace();
             }
             printf("%s\n", get_exception_string(ex));

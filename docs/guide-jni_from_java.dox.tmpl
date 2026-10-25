@@ -73,7 +73,8 @@ java.lang.reflect.Method[] methods = api.getDeclaredMethods();
     - <b><tt>pythonmod.</tt></b><i>mod</i><b><tt>.</tt></b><i>[path...]</i>: indicates that the given %Python module
       should be loaded and imported into %Qore and the given symbols should be imported into Java.  %Python symbols
       provided by modules should be referenced with import statements using \c pythonmod as the symbols imported into
-      Java will use such package names as well.
+      Java will use such package names as well. For classes, use the defining module given by \c __module__,
+      even when another %Python module re-exports the class.
     - \c \b qore: indicates that the given path should be mapped to %Qore namespaces and/or classes; the Java package
       segments after <tt><b>qore.</b></tt> are then converted to the equivalent %Qore namespace path; cannot be used
       for %Qore symbols provided by modules
@@ -83,8 +84,8 @@ java.lang.reflect.Method[] methods = api.getDeclaredMethods();
       into Java will use such package names as well.
 
     For example:
-    - <b><tt>import pythonmod.json.JSONEncoder;</tt></b> would cause the \c json Python module to be loaded and imported
-      into %Qore and the \c JSONEncoder class to be imported into Java
+    - <b><tt>import pythonmod.json.encoder.JSONEncoder;</tt></b> would cause the \c json.encoder Python module to be
+      loaded and imported into %Qore and the \c JSONEncoder class to be imported into Java
     - <b><tt>import qore.Qore.Thread.ThreadPool;</tt></b> would cause the %Qore <tt>::Qore::Thread::ThreadPool</tt>
       class to be imported automatically into Java
     - <b><tt>import qoremod.RestClient.RestClient;</tt></b> would cause the \c RestClient %Qore module to be loaded
