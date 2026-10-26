@@ -56,6 +56,10 @@ fi
 
 cd /home/qore
 
+# the tests write below test/ as the qore user: own the tree explicitly instead of relying on the runner's
+# checkout being writable for every user
+chown -R qore:qore ${MODULE_SRC_DIR} /home/qore
+
 if [ -n "$do_jms_test" ]; then
     # download glassfish
     git clone -b master --single-branch --depth 1 https://${GLASSFISH_REPO_AUTH}@git.qoretechnologies.com/infrastructure/glassfish4.git
@@ -135,6 +139,14 @@ fi
 # run the tests
 export QORE_MODULE_DIR=${MODULE_SRC_DIR}/qlib:${MODULE_SRC_DIR}/test/JakartaJms/lib:${QORE_MODULE_DIR}
 cd ${MODULE_SRC_DIR}
+# the tests must load the module that this job built and installed, not one that the image already has
+loaded=$(qore -l jni -e 'printf("%s", get_module_hash().jni.filename);')
+if ! grep -qxF "${loaded}" ${MODULE_SRC_DIR}/build/install_manifest.txt; then
+    echo "ERROR: the tests would load '${loaded}', which this job did not install" >&2
+    exit 1
+fi
+echo "-- the tests load ${loaded}"
+
 for test in test/*.qtest; do
     # skip legacy jms test
     if [[ -z "$do_jms_test" && "$test" == test/jms.qtest ]]; then
