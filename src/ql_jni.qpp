@@ -139,12 +139,13 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
     // Resolve the active sandbox across the thread's program-context (call) stack so that
     // this check works when invoked from module/library code: a Qore-language module
     // executes in the module's own QoreProgram (which has no sandbox manager of its own),
-    // so resolving from a single program would silently bypass the sandbox.  The default
+    // so resolving from a single program would silently bypass the sandbox.  A Policy
     // QoreSandboxManagerHelper walks the program-context stack and finds the caller's
-    // sandbox.  The \a owner parameter is retained for backwards compatibility but is no
-    // longer required for sandbox resolution.
+    // sandbox, and stops at a policy barrier, so that code run with the system policy is
+    // checked against the system policy.  The \a owner parameter is retained for backwards
+    // compatibility but is no longer required for sandbox resolution.
     (void)owner;
-    QoreSandboxManagerHelper smh;
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return QoreValue();
     }

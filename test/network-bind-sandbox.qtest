@@ -1,0 +1,60 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires QUnit
+
+%exec-class NetworkBindSandboxTest
+
+#! check_network_bind() checks the network policy of the code that calls it
+/** Java libraries that open sockets outside QoreSocket call check_network_bind() first; it must follow the sandbox
+    of the code that calls it, and the system policy in a system-policy capability (SandboxManager::createSystemPolicyCall())
+*/
+class NetworkBindSandboxTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI network bind sandbox", "1.0", \ARGV) {
+        addTestCase("a bind is checked against the sandbox of its caller", \testSandbox());
+        addTestCase("a bind in a system-policy capability follows the system policy", \testCapability());
+        set_return_value(main());
+    }
+
+    #! returns a Program whose sandbox denies the network
+    private Program getSandboxed() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("auto sub through(code c) { return c(); }", "network-bind-sandbox");
+        return p;
+    }
+
+    testSandbox() {
+        # without a sandbox, the bind is allowed
+        check_network_bind("127.0.0.1", 8080);
+        check_network_bind("localhost", 8080);
+        Program p = getSandboxed();
+        assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("through", sub () {
+            check_network_bind("127.0.0.1", 8080);
+        }), "a bind called from the sandbox is denied");
+        assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("through", sub () {
+            check_network_bind("localhost", 8080);
+        }), "a bind of localhost called from the sandbox is denied");
+    }
+
+    testCapability() {
+        Program p = getSandboxed();
+        code bind = bool sub () {
+            check_network_bind("127.0.0.1", 8080);
+            check_network_bind("localhost", 8080);
+            return True;
+        };
+        # the same code called directly from the sandbox inherits the sandbox's policy
+        assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("through", bind),
+            "the bind called directly from the sandbox is denied");
+        # a system-policy capability called from the sandbox is subject to the system policy, not the sandbox's
+        assertTrue(p.callFunction("through", SandboxManager::createSystemPolicyCall(bind)),
+            "the bind is allowed in a system-policy capability");
+    }
+}
