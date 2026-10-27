@@ -1,0 +1,56 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# Tests the "compat-types" module option of the jni module, which is read when the module is loaded: a value that is
+# True in a boolean context enables it; False and NULL leave it disabled.  The option is read once per process, so
+# each case runs compat-types/load-with-option.q in its own process; the NULL cases run in each execution mode, as the
+# AST interpreter and the IR and JIT engines pass a literal NULL to a builtin differently.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+
+%exec-class JniCompatTypesOptionTest
+
+class JniCompatTypesOptionTest inherits QUnit::Test {
+    public {
+        #! the execution modes that the NULL cases run in
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    constructor() : Test("JniCompatTypesOptionTest", "1.0") {
+        addTestCase("True and False", \boolTest());
+        addTestCase("NULL in each execution mode", \nullTest());
+        set_return_value(main());
+    }
+
+    boolTest() {
+        assertEq("list", run("ast", "true"));
+        assertEq("binary", run("ast", "false"));
+    }
+
+    nullTest() {
+        foreach string mode in (Modes) {
+            foreach string arg in ("null-literal", "null-variable") {
+                assertEq("binary", run(mode, arg), mode + " " + arg);
+            }
+        }
+    }
+
+    #! runs the script in the given execution mode and returns its output: the type of a Java byte[] value
+    private string run(string mode, string arg) {
+        string script = get_script_dir() + "compat-types/load-with-option.q";
+        string cmd = sprintf("qore --exec-mode=%s %s %s 2>&1", mode, script, arg);
+        int rc;
+        string out = backquote(cmd, \rc);
+        # the JVM can print to stderr, so the result is taken from its line
+        *string result = (out =~ x/^RESULT: (.*)$/m)[0];
+        if (rc || !exists result) {
+            throw "CHILD-ERROR", sprintf("%s: exit code %d: %s", cmd, rc, out);
+        }
+        return result;
+    }
+}

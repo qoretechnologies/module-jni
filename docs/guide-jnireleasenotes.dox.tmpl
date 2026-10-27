@@ -11,6 +11,8 @@
       method of a %Qore object passed to Java - now runs under the sandbox of the code that handed it to Java, and is
       released or destroyed under it; previously it ran with no sandbox on a Java thread that %Qore did not start
       (see @ref jni_callback_sandbox)
+    - fixed the \c "compat-types" module option being enabled by any value: it is enabled by a value that is
+      @ref True in a boolean context, so @ref False and \c NULL leave it disabled (see @ref jni_compatguide)
     - fixed a crash when a %Qore callback on a Java thread made a Java call that called back into %Qore on the same
       thread: the inner callback detached the thread from %Qore while the outer one was still running
     - fixed a data race when a child Program was created while another thread imported a Java class into its

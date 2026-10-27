@@ -189,8 +189,10 @@ QoreStringNode* jni_module_init_finalize(bool system) {
     }
 
     ExceptionSink xsink;
+    // the option is set by a value that is True in a boolean context, as documented; False, NULL and NOTHING leave
+    // it off
     ValueHolder v(qore_get_module_option("jni", "compat-types"), &xsink);
-    if (v) {
+    if (v->getAsBool()) {
         jni_compat_types = true;
     }
 
