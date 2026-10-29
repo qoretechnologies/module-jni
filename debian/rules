@@ -105,7 +105,8 @@ override_dh_dwz:
 	dh_dwz -Nqore-jni-module
 
 override_dh_strip:
-	# Keep Qore's dependency, source-location and optional-module trailers.
+	# strip and objcopy keep the AOT module metadata note of each module; check
+	# that every dh_strip edit kept it, since the loader refuses a module without it.
 	python3 debian/preserve-aot-metadata.py debian/qore-jni-module dh_strip
 
 override_dh_gencontrol:
