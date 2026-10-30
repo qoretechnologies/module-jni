@@ -234,8 +234,25 @@ public:
         return getQoreType(cls, altType, pgm, literal, use, member);
     }
 
-    DLLLOCAL QoreNamespace& getJniNs() {
-        return *default_jns;
+    //! Returns a new copy of the \c Jni namespace that a Program gets when the module is loaded into it
+    /** The copy holds only the classes the module creates when it is initialized (\c java.lang.Object,
+        \c java.lang.Class, the other bootstrap classes and the \c org::qore::jni API), and none of the classes that
+        any Program imported afterwards: an import is visible only in the Program that made it (and in the
+        child Programs that inherit that Program's classes).
+
+        The classes that Programs import are created in \c default_jns, which owns them for every Program that
+        imports them; it is therefore never copied into a Program after initialization.  Before initialization is
+        complete, the copy is made from \c default_jns, which then only holds the bootstrap classes.
+
+        @return a new namespace owned by the caller
+    */
+    DLLLOCAL QoreNamespace* copyProgramJniNs() {
+        // the template is immutable once it is set, so it can be copied without the class-map lock
+        if (program_jns) {
+            return program_jns->copy();
+        }
+        // before initialization is complete, the classes are created by the initializing thread only
+        return default_jns->copy();
     }
 
     DLLLOCAL jobject getJavaObject(const QoreObject* o);
@@ -300,8 +317,15 @@ protected:
     typedef std::map<qore_type_t, GlobalReference<jclass>> qt2jmap_t;
     static qt2jmap_t qt2jmap;
 
-    // parent namespace for jni module functionality
+    // parent namespace for jni module functionality; the global owner of every class loaded by the base class
+    // loader, which every Program that imports such a class gets a copy of; never copied into a Program after
+    // initialization (see program_jns)
     QoreNamespace* default_jns = new QoreNamespace("Jni");
+
+    // the Jni namespace as it is after initialization, which every new Program gets a copy of; set once at the
+    // end of initIntern() and never changed afterwards, so that a class imported by one Program is not visible in
+    // Programs created afterwards
+    QoreNamespace* program_jns = nullptr;
 
     // class loader
     GlobalReference<jobject> baseClassLoader;

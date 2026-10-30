@@ -27,6 +27,11 @@
     based on a Java class also instantiates an internal Java object that is attached to the %Qore object.  Calling
     methods on the object will cause the same Java methods to be called with any arguments provided.
 
+    An import is visible only in the @ref Qore::Program "Program" that made it, and in the child Programs that
+    inherit that Program's classes when they are created.  Another Program that loads the jni module, whether it is
+    created before or after the import, does not see the class until it imports the class itself; code must therefore
+    import every Java class that it names outside \c java.lang.*, even if another Program has already imported it.
+
     @see @ref jni_class_mapping for more information
 
     @section jni_define_class_parse_time Defining Java Classes at Parse Time in Qore

@@ -1,0 +1,218 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A Java class imported with the "import" module command, or whose Qore class a Program gets for a Java object, is
+# visible in that Program and in the child Programs that inherit that Program's classes, and nowhere else.
+#
+# The classes that the base class loader loads are created once, in the module's global Jni namespace, and every
+# Program loading the module got a copy of that namespace.  A class that one Program imported was therefore visible in
+# every Program that loaded the module afterwards, but not in the Programs that had loaded it before: whether code
+# that names a class it never imported worked depended on what other Programs had done first.
+#
+# This script does not load the jni module itself, so that the Programs it creates do not inherit its classes; each
+# one loads the module on its own, as an unrelated Program (a Qorus interface, a sandboxed Program) does.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires QUnit
+
+%exec-class JniImportProgramScopeTest
+
+class JniImportProgramScopeTest inherits QUnit::Test {
+    public {
+        #! the Java class that the tests import; no Program imports it unless a test does
+        const ImportedClass = "java.util.ArrayList";
+
+        #! another Java class that no Program imports unless a test does
+        const OtherClass = "java.util.LinkedList";
+
+        #! the Qore name of the Java class (as found by its short name)
+        const ImportedShortName = "ArrayList";
+
+        #! the code that a Program evaluates to look up the class by its short name and instantiate it
+        const ForNameExpression = "Reflection::Class::forName('%s').newObject().className()";
+
+        #! the code that a Program parses to use the class by its full Qore name
+        const ParseSource = "string sub get() { Jni::java::util::%s l(); return l.className(); }";
+    }
+
+    constructor() : Test("jni import Program scope test", "1.0", \ARGV) {
+        addTestCase("a Program created after an import does not see it", \laterProgramTest());
+        addTestCase("a Program created before an import does not see it", \earlierProgramTest());
+        addTestCase("a class imported by two Programs", \twoProgramsTest());
+        addTestCase("a Program created after another imports the class itself", \importAfterOtherProgramTest());
+        addTestCase("a child Program inherits its parent's imports", \childProgramTest());
+        addTestCase("a sandboxed Program", \sandboxedProgramTest());
+        addTestCase("the importing Program is destroyed", \destroyedProgramTest());
+        addTestCase("a wildcard import", \wildcardImportTest());
+        set_return_value(main());
+    }
+
+    laterProgramTest() {
+        Program b = getProgram();
+        importClass(b, ImportedClass);
+        assertEq(ImportedShortName, lookup(b, ImportedShortName), "the importing Program");
+
+        Program c = getProgram();
+        assertEq("UNKNOWN-CLASS", lookup(c, ImportedShortName), "a later Program, by short name");
+        assertEq("PARSE-EXCEPTION", parseUse(c, ImportedShortName), "a later Program, by full name");
+    }
+
+    earlierProgramTest() {
+        Program a = getProgram();
+        assertEq("UNKNOWN-CLASS", lookup(a, ImportedShortName), "before the import");
+
+        Program b = getProgram();
+        importClass(b, ImportedClass);
+        assertEq(ImportedShortName, lookup(b, ImportedShortName), "the importing Program");
+
+        assertEq("UNKNOWN-CLASS", lookup(a, ImportedShortName), "an earlier Program, by short name");
+        assertEq("PARSE-EXCEPTION", parseUse(a, ImportedShortName), "an earlier Program, by full name");
+    }
+
+    twoProgramsTest() {
+        Program b1 = getProgram();
+        Program b2 = getProgram();
+        importClass(b1, ImportedClass);
+        importClass(b2, ImportedClass);
+        assertEq(ImportedShortName, lookup(b1, ImportedShortName), "the first importing Program");
+        assertEq(ImportedShortName, lookup(b2, ImportedShortName), "the second importing Program");
+        assertEq(ImportedShortName, parseUse(b2, ImportedShortName), "the second importing Program, by full name");
+        # both Programs use the same Java class: an object made in one is an instance of the class in the other
+        assertTrue(b2.callFunction("is_instance", b1.callFunction("make")), "the same class in both Programs");
+
+        Program c = getProgram();
+        assertEq("UNKNOWN-CLASS", lookup(c, ImportedShortName), "a Program that imported nothing");
+    }
+
+    importAfterOtherProgramTest() {
+        Program b = getProgram();
+        importClass(b, ImportedClass);
+
+        Program c = getProgram();
+        assertEq("UNKNOWN-CLASS", lookup(c, ImportedShortName), "before its own import");
+        importClass(c, ImportedClass);
+        assertEq(ImportedShortName, lookup(c, ImportedShortName), "after its own import");
+        assertEq(ImportedShortName, parseUse(c, ImportedShortName), "after its own import, by full name");
+
+        # a Java object returned to Qore gets the Qore class of its Java class in the calling Program only
+        Program d = getProgram();
+        # (a Java list is converted to a Qore list, so a class that is not a collection is used)
+        assertEq("UNKNOWN-CLASS", lookup(d, "BitSet"), "before a Java object");
+        assertEq("BitSet", d.callFunction("make_by_java", "java/util/BitSet"), "a Java object");
+        assertEq("BitSet", lookup(d, "BitSet"), "after a Java object");
+        Program e = getProgram();
+        assertEq("UNKNOWN-CLASS", lookup(e, "BitSet"), "after another Program got a Java object");
+    }
+
+    childProgramTest() {
+        Program b = getProgram();
+        importClass(b, ImportedClass);
+        # a child Program of the importing Program inherits its classes
+        assertEq(ImportedShortName, b.callFunction("child_lookup", ImportedShortName), "the importing Program's child");
+
+        # the child of a Program that imported nothing does not
+        Program c = getProgram();
+        assertEq("UNKNOWN-CLASS", c.callFunction("child_lookup", ImportedShortName), "another Program's child");
+    }
+
+    sandboxedProgramTest() {
+        Program b = getProgram();
+        importClass(b, ImportedClass);
+
+        # a sandboxed Program does not see the class that another Program imported
+        Program s = getProgram();
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        s.setSandboxManager(sm);
+        assertEq("UNKNOWN-CLASS", lookup(s, ImportedShortName), "a sandboxed Program");
+        assertEq("UNKNOWN-CLASS", lookup(s, "LinkedList"), "a sandboxed Program, a class not imported");
+
+        # nor does another Program see the class that a sandboxed Program imported
+        importClass(s, OtherClass);
+        assertEq("LinkedList", lookup(s, "LinkedList"), "the sandboxed Program's own import");
+        Program c = getProgram();
+        assertEq("UNKNOWN-CLASS", lookup(c, "LinkedList"), "the sandboxed Program's import in another Program");
+    }
+
+    destroyedProgramTest() {
+        {
+            Program b = getProgram();
+            importClass(b, ImportedClass);
+            assertEq(ImportedShortName, lookup(b, ImportedShortName), "the importing Program");
+            delete b;
+        }
+        Program c = getProgram();
+        assertEq("UNKNOWN-CLASS", lookup(c, ImportedShortName), "a Program created after the importer is gone");
+        # the class can still be imported and used after the first Program that imported it is gone
+        importClass(c, ImportedClass);
+        assertEq(ImportedShortName, lookup(c, ImportedShortName), "imported again");
+        assertEq(ImportedShortName, parseUse(c, ImportedShortName), "imported again, by full name");
+    }
+
+    wildcardImportTest() {
+        Program b = getProgram();
+        importClass(b, "java.util.*");
+        # a wildcard import creates the class when it is used
+        assertEq(ImportedShortName, parseUse(b, ImportedShortName), "the importing Program");
+
+        Program c = getProgram();
+        assertEq("UNKNOWN-CLASS", lookup(c, ImportedShortName), "a later Program");
+        assertEq("PARSE-EXCEPTION", parseUse(c, ImportedShortName), "a later Program, by full name");
+    }
+
+    #! returns a new Program that loads the jni module itself
+    private Program getProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        p.loadModule("reflection");
+        p.parse("auto sub make() { return Reflection::Class::forName('ArrayList').newObject(); }\n"
+            "bool sub is_instance(object o) { return Reflection::Class::forName('ArrayList').instanceOf(o).toBool(); }\n"
+            "string sub make_by_java(string n) { return load_class(n).newInstance().className(); }\n"
+            "string sub child_lookup(string n) {\n"
+            "    Program c(PO_NEW_STYLE);\n"
+            "    c.loadModule(\"reflection\");\n"
+            "    try {\n"
+            "        Expression e(c, sprintf(\"Reflection::Class::forName('%s').newObject().className()\", n), \"c\");\n"
+            "        return e.eval();\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        return ex.err;\n"
+            "    }\n"
+            "}\n"
+            "string sub parse_use(string src) {\n"
+            "    Program c(PO_NEW_STYLE);\n"
+            "    c.parse(src, \"use\");\n"
+            "    return c.callFunction(\"get\");\n"
+            "}\n", "helpers");
+        return p;
+    }
+
+    #! imports a class into the Program with the module command
+    private importClass(Program p, string cname) {
+        p.issueModuleCmd("jni", "import " + cname);
+    }
+
+    #! returns the class name of a new object of the class found by its short name, or the error code
+    private string lookup(Program p, string short_name) {
+        try {
+            Expression e(p, sprintf(ForNameExpression, short_name), "lookup");
+            return e.eval();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns the class name of a new object of the class used by its full name in a new child Program, or the error
+    /** The code is parsed in a new child Program of \a p, so that a parse error does not leave \a p unusable
+    */
+    private string parseUse(Program p, string short_name) {
+        try {
+            return p.callFunction("parse_use", sprintf(ParseSource, short_name));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}

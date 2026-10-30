@@ -417,9 +417,23 @@ void QoreJniClassMap::initIntern(QoreProgram* pgm) {
 
     // issu #4593: https://github.com/qorelanguage/qore/issues/4593
     qt2jmap[NT_RUNTIME_CLOSURE] = GlobalReference<jclass>((jclass)Globals::classQoreClosureMarkerImpl);
+
+    // take the template that new Programs get a copy of: the bootstrap classes only.  Classes that Programs
+    // import from now on are added to default_jns, which owns them, but not to the template, so that an import
+    // is not visible in Programs created after it
+    {
+        JniClassMapLocker al;
+        assert(!program_jns);
+        program_jns = default_jns->copy();
+    }
 }
 
 void QoreJniClassMap::destroy(ExceptionSink& xsink) {
+    if (program_jns) {
+        program_jns->clear(&xsink);
+        delete program_jns;
+        program_jns = nullptr;
+    }
     default_jns->clear(&xsink);
     delete default_jns;
     default_jns = nullptr;
@@ -4094,7 +4108,7 @@ JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& par
     // find Jni namespace in new Program if present
     jni = pgm->findNamespace("Jni");
     if (!jni) {
-        jni = qjcm.getJniNs().copy();
+        jni = qjcm.copyProgramJniNs();
         pgm->getRootNS()->addNamespace(jni);
     }
 }
@@ -4259,7 +4273,7 @@ JniExternalProgramData* JniExternalProgramData::getCreateJniProgramData(QoreProg
 #endif
         QoreNamespace* jnins = pgm->findNamespace("::Jni");
         if (!jnins) {
-            jnins = qjcm.getJniNs().copy();
+            jnins = qjcm.copyProgramJniNs();
             pgm->getRootNS()->addNamespace(jnins);
         }
         jpc = new JniExternalProgramData(jnins, pgm);

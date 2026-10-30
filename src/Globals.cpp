@@ -4622,7 +4622,7 @@ QoreProgram* Globals::createJavaContextProgram() {
             // create global QoreProgram object
             qph.reset(new QoreProgramHelper(PO_NEW_STYLE, global_xsink));
 
-            QoreNamespace* jnins = qjcm.getJniNs().copy();
+            QoreNamespace* jnins = qjcm.copyProgramJniNs();
             RootQoreNamespace* rns = (*qph)->getRootNS();
             rns->addNamespace(jnins);
             (*qph)->setExternalData("jni", new JniExternalProgramData(jnins, **qph));

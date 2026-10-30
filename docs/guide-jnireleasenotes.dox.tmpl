@@ -17,6 +17,12 @@
       thread: the inner callback detached the thread from %Qore while the outer one was still running
     - fixed a data race when a child Program was created while another thread imported a Java class into its
       parent: the child copied the parent's class map without the lock that protects it
+    - <b>Security</b>: fixed a Java class imported into one Program becoming visible in every Program that loaded the
+      jni module afterwards, but not in the Programs that had loaded it before, so that code naming a Java class it
+      never imported worked or failed depending on what other Programs had imported first, and a sandboxed Program
+      could see classes imported by other Programs; an import is now visible only in the Program that made it and in
+      the child Programs that inherit its classes, and code must import every Java class it names outside
+      \c java.lang.* (see @ref jniimport)
     - fixed a Java method call ending the process when its thread could not be attached to the JVM, as when the
       thread's cancellation was pending; the call now raises the exception (ex: \c THREAD-CANCELLED)
     - fixed a child process created with \c fork() after the JVM was started waiting forever when it exited or ended

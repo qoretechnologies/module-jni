@@ -341,7 +341,8 @@ static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exception
     }
     assert(pgm->getRootNS() == rns);
     if (!pgm->getExternalData("jni")) {
-        QoreNamespace* jnins = qjcm.getJniNs().copy();
+        // the namespace as it is after the module's initialization, without the classes other Programs imported
+        QoreNamespace* jnins = qjcm.copyProgramJniNs();
         rns->addNamespace(jnins);
         // a Java exception raised while setting up the Program's class loader and dynamic API must be converted
         // here, while it is still pending in the JVM; left to unwind into the module loader, it terminated the
