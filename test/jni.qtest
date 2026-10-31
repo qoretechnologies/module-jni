@@ -294,6 +294,7 @@ public class Main inherits QUnit::Test {
         addTestCase("container field types test", \testContainerFieldTypes());
         addTestCase("live static fields test", \testLiveStaticFields());
         addTestCase("instance fields access test", \testInstanceFields());
+        addTestCase("live instance fields test", \testLiveInstanceFields());
         addTestCase("callback test", \testCallback());
         addTestCase("foreign-thread thread resource cleanup test", \testForeignThreadResourceCleanup());
         addTestCase("nested callback in a Java thread test", \testNestedCallbackInJavaThread());
@@ -2729,6 +2730,57 @@ string sub javaName() {
 
         MyFields mf();
         assertEq(1, mf.pi);
+    }
+
+    #! a Java instance field is read from and written to the Java object, also for an object made by a constructor
+    /** the field is a member of the Qore class whose value is held only by the Java object: a Qore object made by the
+        Qore constructor reads the field as an object made in Java does, and a write in either language is visible in
+        the other
+    */
+    testLiveInstanceFields() {
+        lang::Class clazz = load_class("org/qore/jni/test/Fields");
+        Field i = clazz.getDeclaredField("i");
+        Field o = clazz.getDeclaredField("o");
+
+        # an object made by the Qore constructor
+        Fields constructed();
+        assertEq(0, constructed.i, "the initial value of the Java field");
+        # the member holds no value in the Qore object
+        assertFalse(inlist("i", keys constructed), "the field is not copied into the object");
+        constructed.i = 5;
+        assertEq(5, i.get(constructed), "a Qore write reaches the Java field");
+        i.set(constructed, new Integer(7));
+        assertEq(7, constructed.i, "a Java write is visible in Qore");
+        constructed.i += 2;
+        ++constructed.i;
+        assertEq(10, i.get(constructed), "a compound assignment reads and writes the Java field");
+        constructed.o = "str";
+        assertEq("str", o.get(constructed), "a Qore write of a reference field reaches the Java field");
+        remove constructed.o;
+        assertEq(NOTHING, o.get(constructed), "removing the member sets the Java field to null");
+        # a byte[] field can be null
+        constructed.ba = NOTHING;
+        assertEq(NOTHING, constructed.ba, "a null byte[] field is read as no value");
+        constructed.ba = <0102>;
+        assertEq(<0102>, constructed.ba, "a byte[] field is read as a binary");
+        # the declared type of the field applies to an assignment
+        auto untyped = constructed;
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { untyped.i = "not an int"; });
+        assertEq(10, i.get(constructed), "a rejected value does not reach the Java field");
+
+        # an object made in Java
+        object created = clazz.newInstance();
+        assertEq("Fields", created.className());
+        i.set(created, new Integer(3));
+        assertEq(3, created.i, "a Java write to an object made in Java is visible in Qore");
+        created.i = 4;
+        assertEq(4, i.get(created), "a Qore write to an object made in Java reaches the Java field");
+        assertEq(10, constructed.i, "each object has its own field");
+
+        # a Qore subclass reads the field of its Java object
+        MyFields mf();
+        mf.i = 12;
+        assertEq(12, i.get(mf), "a Qore write through a Qore subclass reaches the Java field");
     }
 
     testCallback() {

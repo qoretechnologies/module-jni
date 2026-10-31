@@ -156,10 +156,12 @@ class Outer {
 System::out.println("testing...");
     @endcode
 
-    @note Java field values are only stored in Java; they are not mirrored in %Qore.  Java field values are accessed
-    with the class's \c memberGate() method; updating a Java object's field value in Qore will not cause the field
-    value to be updated in Java.  To update the field's value from %Qore in Java, use
-    \c java::lang::reflect::Field::set().
+    @note Java field values are only stored in Java; they are not copied into the %Qore object.  Reading a field's
+    member reads the field of the Java object, and assigning it (including compound assignments such as
+    <tt>obj.count += 1</tt>) writes the field of the Java object, whether the object was created with a %Qore
+    constructor or in Java; removing or deleting the member sets the field to \c null (or zero for a primitive
+    field).  A field's member is not returned by the object's keys or hash conversions.  An access from outside the
+    class to a field that %Qore code cannot access goes to the class's \c memberGate() method.
 
     @subsection jni_access_mapping Java Access Mapping in Qore
 

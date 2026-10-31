@@ -3988,6 +3988,37 @@ static void jni_static_field_del(const QoreClass& cls, const void* ptr) {
     const_cast<BaseField*>(static_cast<const BaseField*>(ptr))->deref();
 }
 
+#ifdef _QORE_HAS_BUILTIN_MEMBER_ACCESSORS
+//! Reads a Java instance field of the Java object of a %Qore object for the member mirroring it
+static QoreValue jni_field_get(QoreObject* self, AbstractPrivateData* data, const char* member, const void* ptr,
+        ExceptionSink* xsink) {
+    BaseField* field = const_cast<BaseField*>(static_cast<const BaseField*>(ptr));
+    try {
+        return field->get(static_cast<QoreJniPrivateData*>(data)->getObject(), getProgram(),
+            JniExternalProgramData::compatTypes());
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+        return QoreValue();
+    }
+}
+
+//! Writes a Java instance field of the Java object of a %Qore object for the member mirroring it
+static void jni_field_set(QoreObject* self, AbstractPrivateData* data, const char* member, const void* ptr,
+        QoreValue val, ExceptionSink* xsink) {
+    BaseField* field = const_cast<BaseField*>(static_cast<const BaseField*>(ptr));
+    try {
+        field->set(static_cast<QoreJniPrivateData*>(data)->getObject(), val, jni_get_context());
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+    }
+}
+
+//! Releases the field held for a %Qore member mirroring a Java instance field
+static void jni_field_del(const void* ptr) {
+    const_cast<BaseField*>(static_cast<const BaseField*>(ptr))->deref();
+}
+#endif
+
 void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm) {
     Env env;
 
@@ -4019,6 +4050,13 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
             if (const QoreTypeInfo* union_type = qore_get_union_or_nothing_type(field_types)) {
                 fieldTypeInfo = union_type;
             }
+        } else if (fieldTypeInfo == binaryTypeInfo) {
+            // a byte[] is converted to a binary, or to a list of integers when compatibility types are in effect,
+            // and the field can be null; the field's value is checked against its declared type when it is read
+            type_vec_t field_types = {binaryOrNothingTypeInfo, autoListOrNothingTypeInfo};
+            if (const QoreTypeInfo* union_type = qore_get_union_or_nothing_type(field_types)) {
+                fieldTypeInfo = union_type;
+            }
         }
 
         if (field->isStatic()) {
@@ -4040,7 +4078,15 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
         } else if (!qc.findLocalMember(fname.c_str())) {
             printd(LogLevel, "+ adding field %s %s %s.%s\n", access_str(field->getAccess()),
                 typeInfoGetName(fieldTypeInfo), qc.getName(), fname.c_str());
+#ifdef _QORE_HAS_BUILTIN_MEMBER_ACCESSORS
+            // the value is held only by the Java object: every read and write of the member goes to the Java field,
+            // so the member never holds a copy that diverges from the field
+            field->ref();
+            qc.addBuiltinMemberWithAccessors(fname.c_str(), field->getAccess(), fieldTypeInfo, jni_field_get,
+                jni_field_set, *field, jni_field_del);
+#else
             qc.addMember(fname.c_str(), field->getAccess(), fieldTypeInfo);
+#endif
         }
     }
 }
