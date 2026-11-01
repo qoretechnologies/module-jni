@@ -211,6 +211,35 @@ static void jni_program_cleanup(QoreProgram* pgm) {
     jni::purge_module_root_ns_cache(pgm);
 }
 
+//! Undoes what a failed jni_module_init() set up
+/** libqore unloads a module whose initialization fails without calling its del function, so everything the
+    initialization registered with libqore or created must be released here: a callback, a handler, or a JVM left
+    behind would refer to the module's code after it is unmapped (ex: the program cleanup callback was called for
+    every Program destroyed afterwards, which crashed the process), and memory the module allocated would be lost.
+    Steps are undone in the reverse order of jni_module_init(), as in jni_module_delete().
+
+    @param vm_created true if the initialization created the JVM, which is then destroyed, as its native methods and
+    threads run the module's code; a JVM passed in with the \c jvm-ptr option is left to its owner
+*/
+static void jni_module_init_rollback(bool vm_created) {
+    clear_generated_bindings();
+    // the Program created for the Java context, if any, is destroyed while the program cleanup callback is still
+    // registered, so its cached entries are purged
+    Globals::clearGlobalContext();
+    {
+        // the class map's namespaces exist from the module's load on, also if they were never initialized
+        ExceptionSink xsink;
+        qjcm.destroy(xsink);
+        // a failure to release them cannot be reported, as the module initialization already failed
+        xsink.clear();
+    }
+    if (vm_created) {
+        // stops the NativeCleanup thread, releases the global references, and destroys the JVM; the atexit handler
+        // registered for the JVM then has nothing to do
+        jni::Jvm::destroyVM();
+    }
+}
+
 static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     if (jni_init_failed) {
         xsink.raiseException("MODULE-INIT-ERROR", "jni module initialization failed");
@@ -225,6 +254,28 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // go before the namespaces do or a later Program inherits pointers to freed memory
     qore_register_program_cleanup_callback(jni_program_cleanup);
 
+    // everything set up below is undone if the initialization fails, also when an exception propagates, as the
+    // module is then unloaded without its del function being called (see jni_module_init_rollback())
+    bool init_done = false;
+    bool signals_assigned = false;
+    bool fork_handler_registered = false;
+    bool vm_created = false;
+    ON_BLOCK_EXIT([&]() {
+        if (init_done) {
+            return;
+        }
+        jni_init_failed = true;
+        jni_module_init_rollback(vm_created);
+        if (fork_handler_registered) {
+            jni::Jvm::unregisterForkHandler();
+        }
+        if (signals_assigned) {
+            // jni_module_init_finalize() releases them itself when it fails, in which case this has no effect
+            qore_release_signals(sig_vec, QORE_JNI_MODULE_NAME);
+        }
+        qore_deregister_program_cleanup_callback(jni_program_cleanup);
+    });
+
     qore_set_module_option("jni", "jni-version", JNI_VERSION_21);
 
     QoreStringNode* err = qore_reassign_signals(sig_vec, QORE_JNI_MODULE_NAME, true);
@@ -232,6 +283,7 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         xsink.raiseException("MODULE-INIT-ERROR", err);
         return;
     }
+    signals_assigned = true;
 
     // marks a child process created with fork() after the JVM is started, which cannot use the JVM (see
     // jni::Jvm::isForkedChild()); registered before the JVM is started, so that no fork() is missed, and removed
@@ -240,12 +292,7 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         xsink.outOfMemory();
         return;
     }
-    bool init_done = false;
-    ON_BLOCK_EXIT([&init_done]() {
-        if (!init_done) {
-            jni::Jvm::unregisterForkHandler();
-        }
-    });
+    fork_handler_registered = true;
 
     ValueHolder jvm_ptr(qore_get_module_option("jni", "jvm-ptr"), nullptr);
     if (jvm_ptr->getType() == NT_INT) {
@@ -268,11 +315,11 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
             }
         }
         if (err) {
-            jni_init_failed = true;
             err->prepend("Could not create the Java Virtual Machine: ");
             xsink.raiseException("MODULE-INIT-ERROR", err);
             return;
         }
+        vm_created = true;
 
         // We created the VM, so we own its teardown: register an atexit handler to
         // quiesce the JVM before C exit() runs static destructors, covering exit
@@ -290,11 +337,9 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     } catch (QoreStandardException &e) {
         throw;
     } catch (JavaException& e) {
-        jni_init_failed = true;
         xsink.raiseException("MODULE-INIT-ERROR", e.toString());
         return;
     } catch (Exception &e) {
-        jni_init_failed = true;
         xsink.raiseException("MODULE-INIT-ERROR", "JVM initialization failed due to an unknown error");
         return;
     }
@@ -305,16 +350,12 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     try {
         Globals::startNativeCleanupThread();
     } catch (JavaException& e) {
-        jni_init_failed = true;
         xsink.raiseException("MODULE-INIT-ERROR", e.toString());
         return;
     } catch (Exception& e) {
-        jni_init_failed = true;
         xsink.raiseException("MODULE-INIT-ERROR", "Failed to start native cleanup thread");
         return;
     }
-
-    jni::setup_jdbc_driver();
 
     printd(5, "jni_module_init() initialized JVM\n");
 
@@ -324,11 +365,13 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
             xsink.raiseException("MODULE-INIT-ERROR", finalize_err);
             return;
         }
-        init_done = true;
-        return;
+    } else {
+        jni::jni_qore_init_done = true;
     }
 
-    jni::jni_qore_init_done = true;
+    // the jdbc DBI driver is registered last, as libqore has no API to deregister a driver: registered before a
+    // step that fails, it would be left pointing to the code of the unloaded module
+    jni::setup_jdbc_driver();
     init_done = true;
 }
 

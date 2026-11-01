@@ -32,6 +32,9 @@
       (see @ref jni_class_fields)
     - fixed a Java method call ending the process when its thread could not be attached to the JVM, as when the
       thread's cancellation was pending; the call now raises the exception (ex: \c THREAD-CANCELLED)
+    - fixed the process crashing after the module failed to initialize after the JVM was started (ex: when the JVM
+      lacks a Java module that the jni module needs); a failed initialization now releases everything it set up,
+      including the JVM, and reports \c MODULE-INIT-ERROR
     - fixed a child process created with \c fork() after the JVM was started waiting forever when it exited or ended
       its script, or when it deleted a Program whose %Qore code a Java thread was running; Java cannot be used in
       such a child, and a use of Java there now raises \c JNI-FORK-ERROR (see @ref jni_fork)

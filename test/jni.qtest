@@ -329,6 +329,7 @@ public class Main inherits QUnit::Test {
         addTestCase("checked JNI string reference lifetime test", \checkedJniStringReferenceLifetimeTest());
         addTestCase("import builtin-class collision test", \importBuiltinClassCollisionTest());
         addTestCase("blank QORE_JNI_JVM_ARGS values add no JVM option", \blankJvmArgsTest());
+        addTestCase("failed module initialization leaves no state behind", \failedInitRollbackTest());
         addTestCase("a thread's first call into Java can be load_class() or new_array()",
             \threadFirstJavaCallTest());
         addTestCase("injected superclass loader test", \injectedSuperclassLoaderTest());
@@ -409,6 +410,43 @@ System::gc();
                 shellQuote(qoreBin()), shellQuote(tmp.path));
             assertEq("QORE_JNI_EXIT=0", trim(backquote(cmd)), sprintf("QORE_JNI_JVM_ARGS=%y", args));
         }
+    }
+
+    #! A failed initialization of the module leaves nothing behind that refers to the module's code
+    /** Regression test: libqore unloads a module whose initialization fails without calling its del function, and
+        the module left its program cleanup callback registered and the JVM it created running; the next Program
+        destroyed, at the latest the main Program when the process exited, called the callback in the unmapped code
+        and crashed the process (on Linux).  The JVM is started without the java.sql module, so the module's
+        initialization fails after the JVM is created.  The child runs in its own process, as the failure ends the
+        process. */
+    failedInitRollbackTest() {
+        if (!Qore::Option::HAVE_SYSTEM) {
+            testSkip("system() is not available on this platform");
+        }
+        string src = "%modern
+string sub load() {
+    try {
+        load_module(\"jni\");
+        return \"loaded\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+printf(\"%s\\n\", load());
+# destroying a Program calls the program cleanup callbacks
+Program p();
+delete p;
+# a second attempt fails as well, without a crash
+printf(\"%s\\n\", load());
+";
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(jniModulePath() + src);
+        tmp.file.close();
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "QORE_JNI_JVM_ARGS=--limit-modules=java.base %s -b --enable-debug %s 2>&1; echo QORE_JNI_EXIT=$?",
+            shellQuote(qoreBin()), shellQuote(tmp.path));
+        assertEq("MODULE-INIT-ERROR\nMODULE-INIT-ERROR\nQORE_JNI_EXIT=0", trim(backquote(cmd)),
+            "the failed initialization is reported, and the process exits cleanly");
     }
 
     #! A new thread's first call into Java can be load_class() for a class already imported, or new_array()
