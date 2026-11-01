@@ -170,10 +170,26 @@
     value to the type it has at parse time (ex: <tt>string s = obj.getCharSequence()</tt> when the method returns a
     \c String).
 
-    The types of parameters do not follow this rule yet: a \c java.lang.String parameter is declared as \c string,
-    a boxed parameter as \c int, \c float or \c bool, and an array parameter as a soft list, which converts no
-    value to an empty list; a \c null is passed for a \c String or a boxed parameter by the variant taking the Java
-    object (ex: <tt>*object&lt;String&gt;</tt>), which is selected for no value.
+    @subsection jni_declared_param_types Declared Types of Java Parameters
+
+    Parameters follow the same rule: a parameter of a reference type takes no value, which is passed to Java as
+    \c null (ex: \c *string for a \c java.lang.String parameter, <tt>*softlist&lt;int&gt;</tt> for an \c int[]
+    parameter), and only a parameter of a primitive type does not.  The variable arguments of a varargs method are the
+    exception: they are a <tt>softlist&lt;T&gt;</tt>, which passes no value as an empty array, as Java passes when there
+    are no variable arguments.
+
+    A %Qore argument selects the variant Java would select for the value it is converted to.  A string, an integer
+    (passed as a \c java.lang.Long), a float (\c java.lang.Double), a boolean (\c java.lang.Boolean), a number
+    (\c java.math.BigDecimal), a date (\c java.time.ZonedDateTime), a binary (\c byte[]), a list
+    (\c java.util.ArrayList) or a hash (@ref org.qore.jni.Hash) is passed for a parameter of any class that the
+    converted value's class implements or extends, and such a parameter is preferred over a \c java.lang.Object
+    parameter, as in Java: for example, a string calls <tt>m(CharSequence)</tt> instead of <tt>m(Object)</tt>, and a
+    list calls <tt>m(java.io.Serializable)</tt> instead of <tt>m(Object)</tt>.  As in Java, an integer is not passed for
+    a \c java.lang.Character parameter.  For overloads that all take no value, a call passing no value selects the
+    variant of the most specific class (ex: <tt>m(String)</tt> over <tt>m(String[])</tt> or <tt>m(Object)</tt>).
+
+    A %Qore integer matches every Java integer class, so an integer selects <tt>m(Integer)</tt> over
+    <tt>m(Number)</tt>, while Java selects <tt>m(Number)</tt> for a \c Long.
 
     @section jni_collection_types Declared Types of Java Lists and Maps
 

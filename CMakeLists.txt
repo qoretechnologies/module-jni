@@ -1240,6 +1240,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/ConvertedValueReturns.java
     test/java/src/org/qore/jni/test/Methods.java
     test/java/src/org/qore/jni/test/NullableFields.java
+    test/java/src/org/qore/jni/test/OverloadChoices.java
     test/java/src/org/qore/jni/test/A.java
     test/java/src/org/qore/jni/test/B.java
     test/java/src/org/qore/jni/test/C.java

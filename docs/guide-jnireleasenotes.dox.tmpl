@@ -33,6 +33,22 @@
       \c *int for a \c java.lang.Character, \c auto for a \c java.lang.Number or \c java.lang.CharSequence, a list or
       the Java object for a list return value); this fixes \c RUNTIME-TYPE-ERROR when reading a \c null field and
       parse-time type errors when assigning a return value to the type it has (see @ref jni_declared_value_types)
+    - <b>Migration</b>: the declared types of Java parameters of reference types accept no value, which is passed to
+      Java as \c null (ex: \c *string for a \c java.lang.String parameter), and a %Qore argument selects the variant
+      Java would select for the value it is converted to (see @ref jni_declared_param_types):
+      - a %Qore class implementing or overriding a Java method must declare the new parameter types (ex:
+        <tt>messageArrived(*string topic, ...)</tt> instead of <tt>messageArrived(string topic, ...)</tt>), or the
+        class has unimplemented abstract variants (\c ABSTRACT-CLASS-ERROR)
+      - a string, a list, a binary or another converted value now selects the variant of the more specific class:
+        for example a string now calls <tt>m(CharSequence)</tt> instead of <tt>m(Object)</tt>, and a string, a list
+        or a binary now calls <tt>m(java.io.Serializable)</tt> instead of <tt>m(Object)</tt>
+      - no value passed for an array parameter is \c null instead of an empty array; the variable arguments of a
+        varargs method are still an empty array when none are given
+      - a parameter of a class that converted values implement or extend (ex: \c java.lang.CharSequence,
+        \c java.lang.Comparable, \c java.time.temporal.Temporal, \c java.lang.Iterable) takes the %Qore value (ex:
+        a string for a \c CharSequence), which it rejected before
+      - a call passing no value for overloads that all take it selects the same variant at parse time and at run
+        time, which needs %Qore 3.0 with the fix for such calls
     - fixed a Java method call ending the process when its thread could not be attached to the JVM, as when the
       thread's cancellation was pending; the call now raises the exception (ex: \c THREAD-CANCELLED)
     - fixed the process crashing at exit (\c SIGSEGV, then the JVM aborted) when a destructor raised an exception as

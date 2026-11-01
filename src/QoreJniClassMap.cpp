@@ -118,46 +118,43 @@ JniClassMapLocker::JniClassMapLocker() : al_map(QoreJniClassMap::m) {
     type 'string', but got no value") and narrowed wrongly at parse time.  Only Java primitives (see jpmap) have types
     that do not accept no value.
 
-    <b>The exception for parameters</b> (\c param_type): \c String and the boxed types are declared as types that do
-    not accept no value, and a \c null is passed with the variant taking the Java object (\c altType, ex:
-    <tt>*object<String></tt>).  An "or nothing" parameter type changes which variant a call passing no value selects
-    among overloads like <tt>m(String)</tt> and <tt>m(String[])</tt> (a soft list parameter also accepts no value),
-    and differently at parse time and at run time, and %Qore classes overriding Java methods would no longer
-    implement them; this is an open decision, see design/java-qore-type-mapping.md.  A \c nullptr \c param_type
-    declares a parameter with the type of the Java class.
+    The rule applies to parameters as well: a parameter of a reference type takes no value, which is passed as
+    \c null.  A parameter of a class listed here also has a variant taking the Java object (\c altType, ex:
+    <tt>*object<String></tt>), and a parameter of a class that the classes listed here implement or extend also takes
+    the %Qore values converted to them (see jni_get_converted_param_type()).  See design/java-qore-type-mapping.md.
 
     Java lists and maps are not mapped here; see jni_get_collection_type()
 */
 QoreJniClassMap::jtmap_t QoreJniClassMap::jtmap = {
-    {"java.lang.Object", {autoTypeInfo, autoTypeInfo}},
-    {"java.lang.String", {stringOrNothingTypeInfo, stringTypeInfo}},
-    {"java.lang.Float", {floatOrNothingTypeInfo, floatTypeInfo}},
-    {"java.lang.Double", {floatOrNothingTypeInfo, floatTypeInfo}},
-    {"java.lang.Boolean", {boolOrNothingTypeInfo, boolTypeInfo}},
-    {"java.lang.Byte", {bigIntOrNothingTypeInfo, bigIntTypeInfo}},
-    {"java.lang.Short", {bigIntOrNothingTypeInfo, bigIntTypeInfo}},
-    {"java.lang.Integer", {bigIntOrNothingTypeInfo, bigIntTypeInfo}},
-    {"java.lang.Long", {bigIntOrNothingTypeInfo, bigIntTypeInfo}},
-    // a Character is converted to an integer; a parameter is declared with the class's type
-    {"java.lang.Character", {bigIntOrNothingTypeInfo, nullptr}},
-    {"java.lang.Void", {nothingTypeInfo, nothingTypeInfo}},
+    {"java.lang.Object", autoTypeInfo},
+    {"java.lang.String", stringOrNothingTypeInfo},
+    {"java.lang.Float", floatOrNothingTypeInfo},
+    {"java.lang.Double", floatOrNothingTypeInfo},
+    {"java.lang.Boolean", boolOrNothingTypeInfo},
+    {"java.lang.Byte", bigIntOrNothingTypeInfo},
+    {"java.lang.Short", bigIntOrNothingTypeInfo},
+    {"java.lang.Integer", bigIntOrNothingTypeInfo},
+    {"java.lang.Long", bigIntOrNothingTypeInfo},
+    // a Character is converted to an integer; a Character parameter takes a Character, not an integer, as in Java
+    {"java.lang.Character", bigIntOrNothingTypeInfo},
+    {"java.lang.Void", nothingTypeInfo},
     // the date and time classes whose values are converted to dates (see JavaToQore::convertToQore()); a date
     // passed for one of them is converted to it (see QoreToJava::toObject()), and the Java object is accepted as well
-    {"java.time.ZonedDateTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.time.OffsetDateTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.time.OffsetTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.time.LocalDateTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.time.LocalDate", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.time.LocalTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.time.Instant", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.sql.Timestamp", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.sql.Date", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.sql.Time", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"org.qore.jni.QoreRelativeTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
-    {"java.math.BigDecimal", {numberOrNothingTypeInfo, numberOrNothingTypeInfo}},
-    {"org.qore.jni.QoreObject", {objectOrNothingTypeInfo, objectOrNothingTypeInfo}},
-    {"org.qore.jni.QoreClosureMarker", {codeOrNothingTypeInfo, codeOrNothingTypeInfo}},
-    {"org.qore.jni.QoreClosure", {codeOrNothingTypeInfo, codeOrNothingTypeInfo}},
+    {"java.time.ZonedDateTime", dateOrNothingTypeInfo},
+    {"java.time.OffsetDateTime", dateOrNothingTypeInfo},
+    {"java.time.OffsetTime", dateOrNothingTypeInfo},
+    {"java.time.LocalDateTime", dateOrNothingTypeInfo},
+    {"java.time.LocalDate", dateOrNothingTypeInfo},
+    {"java.time.LocalTime", dateOrNothingTypeInfo},
+    {"java.time.Instant", dateOrNothingTypeInfo},
+    {"java.sql.Timestamp", dateOrNothingTypeInfo},
+    {"java.sql.Date", dateOrNothingTypeInfo},
+    {"java.sql.Time", dateOrNothingTypeInfo},
+    {"org.qore.jni.QoreRelativeTime", dateOrNothingTypeInfo},
+    {"java.math.BigDecimal", numberOrNothingTypeInfo},
+    {"org.qore.jni.QoreObject", objectOrNothingTypeInfo},
+    {"org.qore.jni.QoreClosureMarker", codeOrNothingTypeInfo},
+    {"org.qore.jni.QoreClosure", codeOrNothingTypeInfo},
 };
 
 QoreJniClassMap::qt2jmap_t QoreJniClassMap::qt2jmap;
@@ -1806,18 +1803,24 @@ static bool jni_value_conversion_is_conditional(const QoreTypeInfo* ti) {
 }
 
 // The single source of the declared Qore types of Java types (see QoreJniClassMap.h and
-// design/java-qore-type-mapping.md).  The nullability rule: the type of a value of a Java reference type converted to
-// Qore (a return value, a field or a constant) accepts no value, as Java null is converted to no value and Qore
-// checks the value read from a field against its declared type and uses the types of return values and constants at
-// parse time; it is applied here last, so no mapping can bypass it.  Parameters are the documented exception (see
-// jtmap).
+// design/java-qore-type-mapping.md).  The nullability rule: the type of a Java reference type accepts no value in
+// every use (a parameter, a return value, a field or a constant), as Java null is converted to and from no value and
+// Qore checks the value read from a field against its declared type and uses the types of return values and
+// constants at parse time; it is applied here last, so no mapping can bypass it.
 const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*& altType, QoreProgram* pgm,
         JavaTypeUse use, jobject member) {
     assert(!altType);
     Env env;
+    if (use == JavaTypeUse::VarargsParam) {
+        // the array of variable arguments: a soft list, which converts no value to an empty array, as Java passes
+        // when there are no variable arguments; its elements follow the nullability rule
+        return getQoreTypeIntern(env, cls, altType, pgm, JavaTypeUse::Param, member);
+    }
     const QoreTypeInfo* ti = getQoreTypeIntern(env, cls, altType, pgm, use, member);
     if (use == JavaTypeUse::Param) {
-        return ti;
+        // the nullability rule: a parameter of a reference type takes no value, which is passed as null
+        return env.callBooleanMethod(cls, Globals::methodClassIsPrimitive, nullptr) ? ti
+            : qore_get_or_nothing_type(ti);
     }
 
     // the type of a value accepts every value the conversion yields: a container that is converted only
@@ -1842,6 +1845,51 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
         ti = qore_get_or_nothing_type(ti);
     }
     return ti;
+}
+
+//! Returns the declared type of a parameter of a Java class that %Qore values other than objects are converted to,
+//! or nullptr if no such value is converted to an object of the class
+/** A %Qore argument selects the variant Java would select for the converted value: QoreToJava::toObject() converts
+    a string to a \c java.lang.String, an integer to a \c java.lang.Long, a float to a \c java.lang.Double, a
+    boolean to a \c java.lang.Boolean, a number to a \c java.math.BigDecimal, a date to a
+    \c java.time.ZonedDateTime, a binary to a \c byte[], a list to a \c java.util.ArrayList, and a hash to an
+    \c org.qore.jni.Hash for a parameter of a class that the converted value's class implements or extends (ex: a
+    string for a \c java.lang.CharSequence, an integer for a \c java.lang.Number, a list for a
+    \c java.lang.Iterable), as for \c java.lang.Object, so the parameter takes the %Qore value as well as an object of
+    the class, and its declared type ranks above the \c auto of an \c Object parameter, as Java prefers the more
+    specific class (ex: <tt>m(CharSequence)</tt> over <tt>m(Object)</tt> for a string).  An integer is not passed
+    for a \c java.lang.Character, as Java does not convert an \c int to a \c Character.  The classes of the values
+    themselves, lists and maps are handled before (see jtmap and jni_get_collection_type()), and \c java.lang.Object
+    is \c auto.
+*/
+static const QoreTypeInfo* jni_get_converted_param_type(Env& env, jclass cls, JniQoreClass* qc) {
+    LocalReference<jclass> byte_array_class = env.findClass("[B");
+    // an integer is listed before a number, so that an integer argument is passed as a Long
+    const std::pair<jclass, const QoreTypeInfo*> conversions[] = {
+        {Globals::classString, stringOrNothingTypeInfo},
+        {Globals::classLong, bigIntOrNothingTypeInfo},
+        {Globals::classDouble, floatOrNothingTypeInfo},
+        {Globals::classBoolean, boolOrNothingTypeInfo},
+        {Globals::classBigDecimal, numberOrNothingTypeInfo},
+        {Globals::classZonedDateTime, dateOrNothingTypeInfo},
+        {byte_array_class, binaryOrNothingTypeInfo},
+        {Globals::classArrayList, autoListOrNothingTypeInfo},
+        {Globals::classHash, autoHashOrNothingTypeInfo},
+    };
+    type_vec_t types;
+    for (const auto& i : conversions) {
+        assert(i.first);
+        jvalue jarg;
+        jarg.l = i.first;
+        if (env.callBooleanMethod(cls, Globals::methodClassIsAssignableFrom, &jarg)) {
+            types.push_back(i.second);
+        }
+    }
+    if (types.empty()) {
+        return nullptr;
+    }
+    types.push_back(qc->getOrNothingTypeInfo());
+    return qore_get_union_or_nothing_type(types);
 }
 
 const QoreTypeInfo* QoreJniClassMap::getQoreTypeIntern(Env& env, jclass cls, const QoreTypeInfo*& altType,
@@ -1971,15 +2019,16 @@ const QoreTypeInfo* QoreJniClassMap::getQoreTypeIntern(Env& env, jclass cls, con
     // find static mapping
     jtmap_t::const_iterator i = jtmap.find(tname.c_str());
     if (i != jtmap.end()) {
-        if (use == JavaTypeUse::Value) {
-            return i->second.value_type;
-        }
-        if (i->second.param_type) {
+        if (use == JavaTypeUse::Param) {
+            if (!strcmp(tname.c_str(), "java.lang.Character")) {
+                // an integer is not converted to a Character parameter, as Java does not convert an int to a
+                // Character, so that a call selects the variant Java would select
+                return qc->getOrNothingTypeInfo();
+            }
+            // a parameter takes the Java object as well, with an alternative variant
             altType = qc->getOrNothingTypeInfo();
-            return i->second.param_type;
         }
-        // the parameter is declared with the class's type
-        return qc->getOrNothingTypeInfo();
+        return i->second;
     }
 
     // try all parents to see if a static mapping matches
@@ -1999,22 +2048,24 @@ const QoreTypeInfo* QoreJniClassMap::getQoreTypeIntern(Env& env, jclass cls, con
         if (i != jtmap.end()) {
             // add to jtmap
             jtmap.insert(jtmap_t::value_type(tname.c_str(), i->second));
-            if (use == JavaTypeUse::Value) {
-                return i->second.value_type;
-            }
-            if (i->second.param_type) {
+            if (use == JavaTypeUse::Param) {
                 altType = qc->getOrNothingTypeInfo();
-                return i->second.param_type;
             }
-            return qc->getOrNothingTypeInfo();
+            return i->second;
         }
     }
 
     // a value of a class that the classes of converted values implement or extend (ex: Number, CharSequence,
     // Comparable) is converted to a Qore value that is not an object of the class when it is a converted value (ex: a
     // String returned for a CharSequence is a Qore string)
-    if (use == JavaTypeUse::Value && jni_may_be_converted_value(env, cls)) {
-        return autoTypeInfo;
+    if (use == JavaTypeUse::Value) {
+        if (jni_may_be_converted_value(env, cls)) {
+            return autoTypeInfo;
+        }
+    } else if (const QoreTypeInfo* ti = jni_get_converted_param_type(env, cls, qc)) {
+        // a parameter of a class that the classes of converted values implement or extend takes the Qore values
+        // converted to them (ex: a string for a CharSequence) as well as an object of the class
+        return ti;
     }
 
     return qc->getOrNothingTypeInfo();

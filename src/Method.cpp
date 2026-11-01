@@ -434,7 +434,10 @@ int BaseMethod::getParamTypes(Env& env, type_vec_t& paramTypeInfo, type_vec_t& a
         std::pair<Type, GlobalReference<jclass>>& i = paramTypes[j];
         const QoreTypeInfo* altType = nullptr;
 
-        const QoreTypeInfo* ti = clsmap.getQoreType(i.second, altType, pgm);
+        // the variable arguments of a varargs method are an array that Java passes empty when there are none, so the
+        // parameter takes no value as an empty array (a soft list, as in Java, not null)
+        const QoreTypeInfo* ti = clsmap.getQoreType(i.second, altType, pgm, (varargs && j == e - 1)
+            ? QoreJniClassMap::JavaTypeUse::VarargsParam : QoreJniClassMap::JavaTypeUse::Param);
         paramTypeInfo.push_back(ti);
 
         //paramTypeInfo.push_back(clsmap.getQoreType(i.second, altType, pgm));

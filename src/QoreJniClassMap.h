@@ -201,29 +201,36 @@ public:
     enum class JavaTypeUse {
         //! the type of a parameter: a %Qore value is converted to the Java type
         Param,
+        //! the type of the variable arguments parameter of a varargs method: as for \c Param, except that no value
+        //! is an empty array, as Java passes when there are no variable arguments, not null
+        VarargsParam,
         //! the type of a value converted to %Qore: a return value, a field, or a constant
         Value,
     };
 
     //! Returns the %Qore type declared for a Java type
     /** <b>The nullability rule</b>: a Java value of a reference type (an object, including a \c String or a boxed
-        value, or an array) can be \c null, which is converted to no value, so the type declared for a value of a
-        reference type converted to %Qore (\c JavaTypeUse::Value: a return value, a field or a constant) always
-        accepts no value (ex: \c *string for \c java.lang.String, <tt>*softlist<int></tt> for \c int[]); only a value
-        of a primitive type (ex: \c int, \c boolean) has a type that does not.  %Qore checks the value read from a
+        value, or an array) can be \c null, which is converted to and from no value, so the type declared for a
+        parameter, a return value, a field or a constant of a reference type always accepts no value (ex:
+        \c *string for \c java.lang.String, <tt>*softlist<int></tt> for \c int[]); only a primitive type (ex: \c int,
+        \c boolean) has a type that does not.  %Qore checks the value read from a
         field against the field's declared type at run time, and uses the declared types of return values and
         constants at parse time, so a type that does not accept no value raised \c RUNTIME-TYPE-ERROR for a
         \c null field and narrows wrongly at parse time.  The declared type of a value also accepts every value the
         conversion yields (ex: \c *int for \c java.lang.Character, \c auto for \c java.lang.Number, a byte array
         is a binary or a list of integers when compatibility types are in effect).
 
-        <b>The exception for parameters</b> (\c JavaTypeUse::Param): the parameter types of \c java.lang.String and
-        of the boxed types do not accept no value (ex: \c string), and arrays are soft lists that convert no value to
-        an empty list; a \c null is passed with the alternative variant taking the Java object (ex:
-        <tt>*object<String></tt>).  Applying the rule to parameters changes which variant a call passing no value
-        selects among overloads such as <tt>m(String)</tt> and <tt>m(String[])</tt>, and differently at parse time
-        and at run time, and breaks %Qore classes that override Java methods with the current parameter types; the
-        decision is open.  See design/java-qore-type-mapping.md.
+        <b>Parameters: a %Qore argument selects the variant Java would select for the converted value.</b>  A
+        parameter takes every %Qore value that QoreToJava converts to an object of its class (ex: a string for a
+        \c java.lang.CharSequence, an integer, converted to a \c java.lang.Long, for a \c java.lang.Number; see
+        jni_get_converted_param_type() in QoreJniClassMap.cpp), and its declared type ranks above the \c auto of an
+        \c Object parameter, as Java prefers the more specific class; an integer is not taken for a
+        \c java.lang.Character, as Java does not convert an \c int to a \c Character.  A parameter of a class with a
+        mapped %Qore type also has an alternative variant taking the Java object (\a altType).  A call passing no
+        value for overloads that all accept it selects the first variant added (see jni_get_variants()), which is the
+        variant of the most specific class, as in Java (ex: <tt>m(String)</tt> before <tt>m(Object)</tt>).  The
+        variable arguments array of a varargs method takes no value as an empty array, as
+        Java passes when there are no variable arguments.  See design/java-qore-type-mapping.md.
 
         A Java list (a class implementing \c java.util.List) is declared as a %Qore list, as every Java list is
         converted to one.  A Java map (a class implementing \c java.util.Map) is converted to a %Qore hash when all its
@@ -322,20 +329,12 @@ public:
     DLLLOCAL static LocalReference<jclass> getPrimitiveType(qore_type_t t);
 
 protected:
-    //! The declared %Qore types of a Java class whose values are converted to %Qore values; see jtmap
-    struct JavaTypeMapping {
-        //! the type of a value of the class converted to %Qore; accepts no value (the nullability rule)
-        const QoreTypeInfo* value_type;
-        //! the type of a parameter of the class, or nullptr if a parameter is declared with the class's type
-        const QoreTypeInfo* param_type;
-    };
-
     //! returns the declared %Qore type of a Java class; called by getQoreType(), which completes a value's type
     DLLLOCAL const QoreTypeInfo* getQoreTypeIntern(Env& env, jclass cls, const QoreTypeInfo*& altType,
             QoreProgram* pgm, JavaTypeUse use, jobject member);
 
-    // map of java class names to their declared Qore types
-    typedef std::map<const std::string, JavaTypeMapping> jtmap_t;
+    // map of java class names to their declared Qore types; see jtmap in QoreJniClassMap.cpp
+    typedef std::map<const std::string, const QoreTypeInfo*> jtmap_t;
     // map for Qore types from Java classes
     static jtmap_t jtmap;
 

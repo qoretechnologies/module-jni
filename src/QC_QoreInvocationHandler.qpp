@@ -76,7 +76,7 @@ nothing QoreInvocationHandler::destroy() {
 /** @throw ERROR-UNSUPPORTED when called from Qore; currently this can only be invoked from Java
  */
 auto QoreInvocationHandler::invoke(auto[doc] object, *Jni::java::lang::reflect::Method[QoreJniPrivateData] method, 
-        softlist<auto>[doc] vargs) {
+        *softlist<auto>[doc] vargs) {
     xsink->raiseException("ERROR-UNSUPPORTED", "cannot call QoreInvocationHandler::invoke() from Qore yet; not yet " \
         "implemented (can only be called from Java at the moment)");
     return QoreValue();

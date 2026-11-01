@@ -33,6 +33,7 @@
 %module-cmd(jni) import org.qore.jni.test.NullableFields
 %module-cmd(jni) import org.qore.jni.test.FinalFields
 %module-cmd(jni) import org.qore.jni.test.ValueTypeMapping
+%module-cmd(jni) import org.qore.jni.test.OverloadChoices
 %module-cmd(jni) import org.qore.jni.test.ConvertedValueReturns
 %module-cmd(jni) import org.qore.jni.test.ConvertedValueFields
 %module-cmd(jni) import org.qore.jni.test.QoreJavaApiTest
@@ -309,6 +310,7 @@ public class Main inherits QUnit::Test {
         addTestCase("final static fields test", \testFinalStaticFields());
         addTestCase("value type mapping guard test", \testValueTypeMappingGuard());
         addTestCase("converted return values test", \testConvertedReturnValues());
+        addTestCase("parameter overload choices test", \testParameterOverloadChoices());
         addTestCase("callback test", \testCallback());
         addTestCase("foreign-thread thread resource cleanup test", \testForeignThreadResourceCleanup());
         addTestCase("nested callback in a Java thread test", \testNestedCallbackInJavaThread());
@@ -891,9 +893,10 @@ int sub test() {
                 p.parse("
 class X inherits QoreDynamicTest16 {
     public {
-        static string topic;
+        static *string topic;
     }
-    nothing messageArrived(string topic, *Jni::java::lang::Class c) {
+    # a Java String parameter takes no value, as Java null is no value
+    nothing messageArrived(*string topic, *Jni::java::lang::Class c) {
         X::topic = topic;
     }
 }
@@ -3182,6 +3185,30 @@ string sub javaName() {
             assertEq(NOTHING, cls.getStaticMember("static" + i.key).getValue(), i.key + " static field");
             assertEq(NOTHING, cls.getConstant("CONST_" + i.key.upr()).getValue(), i.key + " constant");
         }
+        # parameters: every variant of a parameter of a reference type takes no value, which reaches Java as null
+        auto none;
+        foreach string key in (keys refs) {
+            list<string> param_types = map cast<AbstractMethodVariant>($1).getParamTypes()[0].getName(),
+                cls.getMethod("param" + key).getVariants();
+            foreach string type_name in (param_types) {
+                assertTrue(acceptsNoValueUnconverted(type_name), sprintf("%s parameter: %y accepts no value", key,
+                    type_name));
+            }
+            assertEq("null", call_static_method("ValueTypeMapping", "param" + key, none), key + " parameter");
+        }
+        # a primitive parameter does not take no value
+        foreach string key in (keys prims) {
+            string type_name = cast<AbstractMethodVariant>(cls.getMethod("paramPrim" + key).getVariants()[0])
+                .getParamTypes()[0].getName();
+            assertFalse(acceptsNoValueUnconverted(type_name), sprintf("primitive %s parameter: %y", key, type_name));
+            assertEq(prims{key}, type_name, "primitive " + key + " parameter");
+        }
+        # the variable arguments of a varargs method are an empty array when there are none, as Java passes
+        assertEq("softlist<*string>", cast<AbstractMethodVariant>(cls.getMethod("paramVarargs").getVariants()[0])
+            .getParamTypes()[0].getName(), "varargs parameter");
+        assertEq("0", ValueTypeMapping::paramVarargs(), "no variable arguments");
+        assertEq("0", ValueTypeMapping::paramVarargs(none), "no value for the variable arguments");
+
         foreach hash<auto> i in (prims.pairIterator()) {
             hash<string, string> uses = {
                 "return": cast<AbstractMethodVariant>(cls.getMethod("returnPrim" + i.key).getVariants()[0])
@@ -3209,6 +3236,78 @@ string sub javaName() {
         }
         # every member of a union declared for a value is an "or nothing" type
         return (select members[0].split(", "), $1 !~ /^\*/) ? False : True;
+    }
+
+    #! A Qore argument selects the variant Java selects for the converted value
+    /** Each call passes a Qore value for overloads of OverloadChoices; javaChoices() makes the same calls from Java
+        with the values the Qore arguments are converted to, and the variants must be the same.  See
+        design/java-qore-type-mapping.md.
+    */
+    testParameterOverloadChoices() {
+        auto s = "x";
+        auto i = 1;
+        auto f = 1.5;
+        auto b = True;
+        auto n = 1.5n;
+        auto d = now_us();
+        auto bin = <01>;
+        auto l = (1, 2);
+        auto h = {"a": 1};
+        auto sb = new Jni::java::lang::StringBuilder("sb");
+        auto none;
+        hash<string, string> qore = {
+            "objOrCs:string": OverloadChoices::objOrCs(s),
+            "objOrCs:int": OverloadChoices::objOrCs(i),
+            "objOrCs:float": OverloadChoices::objOrCs(f),
+            "objOrCs:bool": OverloadChoices::objOrCs(b),
+            "objOrCs:object": OverloadChoices::objOrCs(sb),
+            "objOrCs:null": OverloadChoices::objOrCs(none),
+            "serOrObj:string": OverloadChoices::serOrObj(s),
+            "serOrObj:int": OverloadChoices::serOrObj(i),
+            "serOrObj:float": OverloadChoices::serOrObj(f),
+            "serOrObj:bool": OverloadChoices::serOrObj(b),
+            "serOrObj:number": OverloadChoices::serOrObj(n),
+            "serOrObj:date": OverloadChoices::serOrObj(d),
+            "serOrObj:binary": OverloadChoices::serOrObj(bin),
+            "serOrObj:list": OverloadChoices::serOrObj(l),
+            "serOrObj:hash": OverloadChoices::serOrObj(h),
+            "serOrObj:null": OverloadChoices::serOrObj(none),
+            "numOrObj:int": OverloadChoices::numOrObj(i),
+            "numOrObj:float": OverloadChoices::numOrObj(f),
+            "numOrObj:number": OverloadChoices::numOrObj(n),
+            "numOrObj:string": OverloadChoices::numOrObj(s),
+            "numOrObj:null": OverloadChoices::numOrObj(none),
+            "cmpOrObj:string": OverloadChoices::cmpOrObj(s),
+            "cmpOrObj:int": OverloadChoices::cmpOrObj(i),
+            "cmpOrObj:float": OverloadChoices::cmpOrObj(f),
+            "cmpOrObj:bool": OverloadChoices::cmpOrObj(b),
+            "cmpOrObj:number": OverloadChoices::cmpOrObj(n),
+            "cmpOrObj:date": OverloadChoices::cmpOrObj(d),
+            "cmpOrObj:list": OverloadChoices::cmpOrObj(l),
+            "cmpOrObj:null": OverloadChoices::cmpOrObj(none),
+            "temporalOrObj:date": OverloadChoices::temporalOrObj(d),
+            "temporalOrObj:string": OverloadChoices::temporalOrObj(s),
+            "temporalOrObj:null": OverloadChoices::temporalOrObj(none),
+            "iterOrObj:list": OverloadChoices::iterOrObj(l),
+            "iterOrObj:string": OverloadChoices::iterOrObj(s),
+            "iterOrObj:null": OverloadChoices::iterOrObj(none),
+            "charOrObj:int": OverloadChoices::charOrObj(i),
+            "charOrObj:null": OverloadChoices::charOrObj(none),
+            "charOrLong:int": OverloadChoices::charOrLong(i),
+            "charOrLong:null": OverloadChoices::charOrLong(none),
+            "strOrCs:string": OverloadChoices::strOrCs(s),
+            "strOrCs:object": OverloadChoices::strOrCs(sb),
+            "strOrCs:null": OverloadChoices::strOrCs(none),
+            "strOrObj:string": OverloadChoices::strOrObj(s),
+            "strOrObj:int": OverloadChoices::strOrObj(i),
+            "strOrObj:null": OverloadChoices::strOrObj(none),
+            "strOrArr:string": OverloadChoices::strOrArr(s),
+            "strOrArr:list": OverloadChoices::strOrArr(("a",)),
+        };
+        hash<auto> java = OverloadChoices::javaChoices();
+        assertEq(java, qore, "the variants Qore selects are those Java selects");
+        # as in Java, an integer is not converted to a Character
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { OverloadChoices::charOnly(i); });
     }
 
     #! A return value converted to a Qore value of another type than its class is declared with a type that accepts

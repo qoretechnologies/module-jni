@@ -20,8 +20,8 @@
 
 package org.qore.jni.test;
 
-//! Values of reference and primitive types in each use converted to %Qore (return values, fields, static fields
-//! and constants), for checking their declared %Qore types (see test/jni.qtest "value type mapping guard test")
+//! Values of reference and primitive types in each use (parameters, return values, fields, static fields and
+//! constants), for checking their declared %Qore types (see test/jni.qtest "value type mapping guard test")
 public class ValueTypeMapping {
     public String fieldString;
     public static String staticString;
@@ -239,5 +239,119 @@ public class ValueTypeMapping {
     public static double staticPrimDouble;
     public static double returnPrimDouble() {
         return 0;
+    }
+    public static String paramString(String x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramInteger(Integer x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramLong(Long x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramShort(Short x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramByte(Byte x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramBoolean(Boolean x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramDouble(Double x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramFloat(Float x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramCharacter(Character x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramBigDecimal(java.math.BigDecimal x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramZonedDateTime(java.time.ZonedDateTime x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramLocalDate(java.time.LocalDate x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramTimestamp(java.sql.Timestamp x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramObject(Object x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramNumber(Number x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramCharSequence(CharSequence x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramComparable(Comparable<String> x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramTemporal(java.time.temporal.Temporal x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramUtilDate(java.util.Date x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramSerializable(java.io.Serializable x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramCollection(java.util.Collection<String> x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramArrayList(java.util.ArrayList<String> x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramStringMap(java.util.Map<String, String> x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramIntegerMap(java.util.Map<Integer, String> x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramIntArray(int[] x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramStringArray(String[] x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramIntegerArray2(Integer[][] x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramCharacterArray(Character[] x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramByteArray(byte[] x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramSelf(ValueTypeMapping x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramRunnable(Runnable x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramBigInteger(java.math.BigInteger x) {
+        return x == null ? "null" : "value";
+    }
+    public static String paramPrimInt(int x) {
+        return "value";
+    }
+    public static String paramPrimLong(long x) {
+        return "value";
+    }
+    public static String paramPrimChar(char x) {
+        return "value";
+    }
+    public static String paramPrimBoolean(boolean x) {
+        return "value";
+    }
+    public static String paramPrimDouble(double x) {
+        return "value";
+    }
+    public static String paramVarargs(String... x) {
+        return x == null ? "null" : String.valueOf(x.length);
     }
 }

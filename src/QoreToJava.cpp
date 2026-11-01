@@ -178,6 +178,13 @@ jobject QoreToJava::toAnyObject(Env& env, const QoreValue& value_arg, JniExterna
     throw BasicException(desc.c_str());
 }
 
+//! Returns true if a value of the class \a value_cls can be passed for a parameter of the class \a cls
+static bool jni_param_accepts_class(Env& env, jclass cls, jclass value_cls) {
+    jvalue jarg;
+    jarg.l = value_cls;
+    return env.callBooleanMethod(cls, Globals::methodClassIsAssignableFrom, &jarg);
+}
+
 jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniExternalProgramData* jpc) {
     if (value.isNullOrNothing())
         return nullptr;
@@ -192,6 +199,10 @@ jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniEx
             case NT_BOOLEAN: {
                 if (env.isSameObject(cls, Globals::classBoolean)
                     || env.isSameObject(cls, Globals::classPrimitiveBoolean)) {
+                    return toAnyObject(env, value, jpc);
+                }
+                // a class that Boolean implements (ex: Serializable, Comparable) takes a Boolean, as in Java
+                if (jni_param_accepts_class(env, cls, Globals::classBoolean)) {
                     return toAnyObject(env, value, jpc);
                 }
                 break;
@@ -228,6 +239,11 @@ jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniEx
                     arg.s = (jbyte)v;
                     return env.newObject(Globals::classByte, Globals::ctorByte, &arg).release();
                 }
+                // a class that Long implements or extends (ex: Number, Serializable, Comparable) takes a Long, as an
+                // integer is passed for java.lang.Object
+                if (jni_param_accepts_class(env, cls, Globals::classLong)) {
+                    return toAnyObject(env, value, jpc);
+                }
                 break;
             }
 
@@ -245,6 +261,11 @@ jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniEx
                     double v = value.getAsFloat();
                     arg.f = (float)v;
                     return env.newObject(Globals::classFloat, Globals::ctorFloat, &arg).release();
+                }
+                // a class that Double implements or extends (ex: Number, Serializable, Comparable) takes a Double, as a
+                // float is passed for java.lang.Object
+                if (jni_param_accepts_class(env, cls, Globals::classDouble)) {
+                    return toAnyObject(env, value, jpc);
                 }
                 break;
             }

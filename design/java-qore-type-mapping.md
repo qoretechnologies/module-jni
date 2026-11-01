@@ -16,10 +16,12 @@ No caller adjusts the type it gets.
 
 ## Uses
 
-`QoreJniClassMap::JavaTypeUse` has two values:
+`QoreJniClassMap::JavaTypeUse` has three values:
 
 - `Param`: a parameter; a Qore value is converted to the Java type
   (`QoreToJava::toObject()`).
+- `VarargsParam`: the variable-arguments array of a varargs method (see
+  Parameters).
 - `Value`: a value converted to Qore (`JavaToQore::convertToQore()`): a return
   value, a field, a static field or a constant.
 
@@ -29,12 +31,15 @@ A Java reference (an object, including a `String`, a boxed value such as an
 `Integer`, or an array) can be `null`, which is converted to `NOTHING`.
 Therefore:
 
-> The declared type of a value of a Java reference type always accepts
-> `NOTHING`, without converting it. Only Java primitives (`int`, `boolean`,
+> The declared type of a Java reference type always accepts `NOTHING`,
+> without converting it, in every use: parameters, return values, fields,
+> static fields and constants. Only Java primitives (`int`, `boolean`,
 > `char`, ...) have types that do not.
 
-`getQoreType()` applies the rule last for every `Value` of a non-primitive
-class (`qore_get_or_nothing_type()`), so no mapping can bypass it. A soft list
+`getQoreType()` applies the rule last for every non-primitive class
+(`qore_get_or_nothing_type()`), so no mapping can bypass it; the
+variable-arguments array of a varargs method is the one exception (see
+Parameters). A soft list
 (`softlist<T>`), which is what a Java array maps to, converts `NOTHING` to an
 empty list; the rule makes it `*softlist<T>`, so a `null` array is `NOTHING`.
 
@@ -70,34 +75,63 @@ The declared type of a value also accepts every value the conversion yields:
 A `static final` field is a constant. A constant holding a value has the type of
 its value. A `null` constant has no value and is declared with the field's type.
 
-## Parameters: an open decision
+## Parameters
 
-Parameter types are unchanged. Here `String` and the boxed types map to types
-that do not accept `NOTHING` (`string`, `int`, ...), and an array maps to a
-`softlist<E>`. A `null` reaches Java through the alternative variant that takes
-the Java object (`*object<String>`), which every parameter mapped in `jtmap`
-has. `Character` and the converted supertypes are declared with their class
-type.
+Parameters follow the nullability rule as well: a parameter of a reference
+type takes `NOTHING`, which reaches Java as `null` (`*string`, `*int`,
+`*softlist<E>`, `*object<C>`, ...), and a primitive parameter does not. A
+parameter of a class mapped in `jtmap` also has an alternative variant taking
+the Java object (ex: `*object<String>`), except `Character` (see below).
 
-Applying the rule to parameters conflicts with two existing behaviours:
+The one exception is the variable-arguments array of a Java varargs method
+(`JavaTypeUse::VarargsParam`): it stays `softlist<E>`, which converts
+`NOTHING` to an empty array, because Java passes an empty array when there are
+no variable arguments (ex: `cls.getMethod("f")`, `Method.invoke(obj)`).
 
-1. **Overloads with `NOTHING`.** For `m(String)` and `m(String[])`, a call
-   passing `NOTHING` selects `m(String)` with `null` today, whether the argument
-   is the literal `NOTHING` or a variable holding it. With `*string` and
-   `softlist<*string>`, a literal `NOTHING` selects `m(String[])` with an empty
-   array at parse time, and a variable holding `NOTHING` selects `m(String)` at
-   run time. With `*string` and `*softlist<*string>`, the literal selects
-   `m(String[])` with `null`, and the variable selects `m(String)`. This is what
-   the 2019 comment in `jtmap` ("because of automatic array conversions",
-   67a1c32) protected.
-2. **Overrides.** A Qore class that implements a Java method with the current
-   parameter types (ex: `messageArrived(string topic, ...)` in jni.qtest's
-   codegen test, or `QoreInvocationHandler::invoke(auto, *Method, softlist<auto>)`
-   in `qlib/MqttDataProvider`) no longer implements the abstract variant
-   (`ABSTRACT-CLASS-ERROR`).
+**The overload rule: a Qore argument selects the variant Java would select for
+the converted value.** `QoreToJava::toObject()` converts the following Qore
+values for a parameter of any class that the converted value's class
+implements or extends, as it does for `Object`:
 
-Until the decision is made, the exception is limited to `JavaTypeUse::Param`
-and to the `param_type` column of `jtmap`.
+| Qore value | Java value |
+|---|---|
+| string | `String` |
+| int | `Long` |
+| float | `Double` |
+| bool | `Boolean` |
+| number | `BigDecimal` |
+| date | `ZonedDateTime` |
+| binary | `byte[]` |
+| list | `ArrayList` |
+| hash | `org.qore.jni.Hash` |
+
+The declared type of such a parameter is a union of those Qore types and the
+object type (`jni_get_converted_param_type()`): for example,
+`union<*string, *object<CharSequence>>` for a `CharSequence`, and
+`union<*string, *int, *float, *bool, *number, *date, *binary, *list<auto>,
+*hash<auto>, *object<Serializable>>` for a `Serializable`. The union ranks
+above the `auto` of an `Object` parameter, as Java prefers the more specific
+method. So `m(Object)`/`m(CharSequence)` with a string calls
+`m(CharSequence)`, as Java does for a `String`.
+
+An integer is not passed for a `Character` parameter, because Java does not
+convert an `int` to a `Character`: `m(Character)`/`m(Object)` with an integer
+calls `m(Object)`, and a lone `m(Character)` rejects an integer, as in Java.
+
+For overloads that all accept `NOTHING`, the first variant added is called
+(Qore issue #1897 rules, Qore a68e534ee5). `jni_get_variants()` adds them
+deepest class first, then by signature, so `m(String)` comes before
+`m(String[])` and `m(Object)`, as Java's most specific method does for a
+`null` argument where Java is not ambiguous.
+
+A Qore integer matches every Java integer class (`int`, `long`, `Integer`,
+`Long`, ...), so between `m(Integer)` and `m(Number)` an integer selects
+`m(Integer)`, while Java, with a `Long` argument, selects `m(Number)`. This is
+a known difference that predates this mapping.
+
+`test/jni.qtest` "parameter overload choices test" compares the variant Qore
+selects for each Qore argument with the variant Java selects for the
+converted value (`OverloadChoices.javaChoices()`).
 
 ## Where types are checked
 
@@ -117,9 +151,12 @@ yields does not fail at run time. It causes wrong parse-time narrowing or a
 ## Tests
 
 - `test/jni.qtest` "value type mapping guard test" enumerates the reference
-  types of `ValueTypeMapping` as return values, fields, static fields and
-  constants. It fails if any of them has a type that does not accept `NOTHING`
-  without converting it, or if a primitive has one that does.
+  types of `ValueTypeMapping` as parameters, return values, fields, static
+  fields and constants. It fails if any of them has a type that does not
+  accept `NOTHING` without converting it, or if a primitive has one that does,
+  and checks the varargs exception.
+- `test/jni.qtest` "parameter overload choices test" checks that Qore
+  arguments select the variants Java selects.
 - `test/jni.qtest` "converted return values test", "nullable field types test",
   "nullable instance fields test", "nullable static fields test", "converted
   value fields test" and "final static fields test".

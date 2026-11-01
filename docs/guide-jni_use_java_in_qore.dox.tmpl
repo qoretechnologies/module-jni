@@ -217,7 +217,9 @@ System::out.println("testing...");
 
     The types of return values, fields and constants follow the rules in @ref jni_declared_value_types "Declared Types
     of Java Values": a value of a reference type can be \c null, so its type accepts no value (ex: \c *string for a
-    \c java.lang.String return value).
+    \c java.lang.String return value).  The types of parameters follow the rules in @ref jni_declared_param_types
+    "Declared Types of Java Parameters": a %Qore argument selects the variant Java would select for the value it is
+    converted to.
 
     The parameter, return value and field types of \c private Java members are always declared as \c auto, and the
     classes they name are not imported for them: a private member cannot be called from %Qore code, only through the
