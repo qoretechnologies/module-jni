@@ -1255,6 +1255,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/OverloadedMethods.java
     test/java/src/org/qore/jni/test/JvmPrimaryReaperExit.java
     test/java/src/org/qore/jni/test/GeneratedBindings.java
+    test/java/src/org/qore/jni/test/GlobalContextTeardownFixture.java
     test/java/src/org/qore/lang/test/QoreJavaLangApiTest.java
 )
 
@@ -1581,6 +1582,10 @@ add_test(NAME native_cleanup_shutdown COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
     ${CMAKE_SOURCE_DIR}/test/test-native-cleanup-shutdown.py
     --qore ${QORE_EXECUTABLE} --module $<TARGET_FILE:jni>)
 set_tests_properties(native_cleanup_shutdown PROPERTIES TIMEOUT 40)
+add_test(NAME global_context_teardown COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
+    ${CMAKE_SOURCE_DIR}/test/test-global-context-teardown.py
+    --qore ${QORE_EXECUTABLE} --module $<TARGET_FILE:jni>)
+set_tests_properties(global_context_teardown PROPERTIES TIMEOUT 70)
 foreach(_cleanup_case IN ITEMS empty live claim_race registration_race)
     add_test(NAME native_cleanup_${_cleanup_case} COMMAND ${Java_JAVA_EXECUTABLE}
         -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar

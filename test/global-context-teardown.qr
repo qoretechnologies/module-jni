@@ -1,0 +1,14 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Child program of test-global-context-teardown.py: the jni module's global context Program holds an object whose
+# destructor raises an exception when the Program is deleted, at process exit
+
+%modern
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.GlobalContextTeardownFixture
+
+GlobalContextTeardownFixture::holdInGlobalContext("TdJniContextHolder", "TdJniContextHolder::hold");
+printf("global context teardown fixture ready\n");
+return 0;

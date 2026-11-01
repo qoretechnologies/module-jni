@@ -1,0 +1,37 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdJniContextHolder.qm - test module whose object the jni module's global context Program holds until it is deleted
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module TdJniContextHolder {
+    version = "1.0";
+    desc = "test module for the teardown of the jni module's global context Program";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdJniContextHolder {
+    #! an object whose destructor raises an exception
+    public class Holder {
+        private {
+            #! the holder kept by hold(); the Programs importing this class share it, the last one releases it
+            static *Holder held;
+        }
+
+        destructor() {
+            throw "TD-JNI-HOLDER-ERROR", "raised by the destructor of the object held by the global context Program";
+        }
+
+        #! keeps a holder in the class static variable
+        static hold() {
+            held = new Holder();
+        }
+    }
+
+    #! keeps a holder in the class static variable
+    public sub hold() {
+        Holder::hold();
+    }
+}

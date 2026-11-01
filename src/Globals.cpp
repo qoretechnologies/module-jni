@@ -57,8 +57,13 @@ namespace jni {
 bool jni_qore_init = false;
 bool jni_qore_init_done = false;
 
-ExceptionSink Globals::global_xsink;
 std::unique_ptr<QoreProgramHelper> Globals::qph;
+
+ExceptionSink& Globals::getGlobalXsink() {
+    // deliberately never destroyed (see the declaration)
+    static ExceptionSink* xsink = new ExceptionSink;
+    return *xsink;
+}
 
 bool Globals::already_initialized = false;
 std::atomic<bool> Globals::jni_shutting_down{false};
@@ -4620,7 +4625,7 @@ QoreProgram* Globals::createJavaContextProgram() {
     if (!qph) {
         try {
             // create global QoreProgram object
-            qph.reset(new QoreProgramHelper(PO_NEW_STYLE, global_xsink));
+            qph.reset(new QoreProgramHelper(PO_NEW_STYLE, getGlobalXsink()));
 
             QoreNamespace* jnins = qjcm.copyProgramJniNs();
             RootQoreNamespace* rns = (*qph)->getRootNS();

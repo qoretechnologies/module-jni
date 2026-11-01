@@ -35,6 +35,9 @@
       parse-time type errors when assigning a return value to the type it has (see @ref jni_declared_value_types)
     - fixed a Java method call ending the process when its thread could not be attached to the JVM, as when the
       thread's cancellation was pending; the call now raises the exception (ex: \c THREAD-CANCELLED)
+    - fixed the process crashing at exit (\c SIGSEGV, then the JVM aborted) when a destructor raised an exception as
+      the module's global context %Qore Program was deleted (ex: a \c PROGRAM-ERROR exception); the exception is now
+      reported as an unhandled exception at teardown, which makes the exit status non-zero
     - fixed the process crashing after the module failed to initialize after the JVM was started (ex: when the JVM
       lacks a Java module that the jni module needs); a failed initialization now releases everything it set up,
       including the JVM, and reports \c MODULE-INIT-ERROR

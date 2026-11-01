@@ -558,11 +558,18 @@ public:
     DLLLOCAL static QoreProgram* createJavaContextProgram();
     DLLLOCAL static QoreProgram* getJavaContextProgram();
 
+    //! Deletes the global context Program and reports the exceptions raised by its creation and deletion
+    /** The exceptions are reported here, while the library is still initialized: the destructors of the objects in
+        the Program run when it is deleted, and they can raise exceptions (ex: \c PROGRAM-ERROR if the Program of
+        their class is gone).  An exception left in the sink would otherwise be reported only when the process exits,
+        after qore_cleanup() has destroyed the thread data that reporting it uses.
+    */
     DLLLOCAL static void clearGlobalContext() {
         jni_shutting_down.store(true, std::memory_order_release);
         if (qph) {
             qph.reset();
         }
+        getGlobalXsink().handleExceptions();
     }
 
     //! Abandons the global context during process exit without running Qore destructors
@@ -640,7 +647,15 @@ public:
     DLLLOCAL static void removeCanonicalLoaderCacheEntries(jobject loader);
 
 private:
-    DLLLOCAL static ExceptionSink global_xsink;
+    //! Returns the exception sink of the global context Program, which receives the exceptions raised when it is
+    //! created and deleted
+    /** The sink is allocated once and never destroyed: an ExceptionSink with static storage duration reports the
+        exceptions that it holds when static objects are destroyed at process exit, after qore_cleanup() has freed the
+        thread data that reporting them needs, which crashed the process (currentTZ() with no thread data);
+        clearGlobalContext() reports and clears them while the library is initialized
+    */
+    DLLLOCAL static ExceptionSink& getGlobalXsink();
+
     DLLLOCAL static std::unique_ptr<QoreProgramHelper> qph;
 
     DLLLOCAL static bool already_initialized;
