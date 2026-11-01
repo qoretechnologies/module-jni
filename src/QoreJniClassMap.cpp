@@ -110,37 +110,54 @@ QoreCondition QoreJniClassMap::class_create_cond;
 JniClassMapLocker::JniClassMapLocker() : al_map(QoreJniClassMap::m) {
 }
 
+//! The declared %Qore types of the Java classes whose values are converted to %Qore values other than objects
+/** <b>The nullability rule</b>: every Java reference type can hold \c null, which is converted to no value, so the
+    type of a value of the class (\c value_type: a return value, a field or a constant) always accepts no value.
+    %Qore checks the value read from a field against its declared type at run time, and uses the types of return
+    values and constants at parse time, so a type that did not accept no value failed for a \c null field ("expects
+    type 'string', but got no value") and narrowed wrongly at parse time.  Only Java primitives (see jpmap) have types
+    that do not accept no value.
+
+    <b>The exception for parameters</b> (\c param_type): \c String and the boxed types are declared as types that do
+    not accept no value, and a \c null is passed with the variant taking the Java object (\c altType, ex:
+    <tt>*object<String></tt>).  An "or nothing" parameter type changes which variant a call passing no value selects
+    among overloads like <tt>m(String)</tt> and <tt>m(String[])</tt> (a soft list parameter also accepts no value),
+    and differently at parse time and at run time, and %Qore classes overriding Java methods would no longer
+    implement them; this is an open decision, see design/java-qore-type-mapping.md.  A \c nullptr \c param_type
+    declares a parameter with the type of the Java class.
+
+    Java lists and maps are not mapped here; see jni_get_collection_type()
+*/
 QoreJniClassMap::jtmap_t QoreJniClassMap::jtmap = {
-    {"java.lang.Object", autoTypeInfo},
-    // because of automatic array conversions, we do not use "or nothing" types for simple types
-    {"java.lang.String", stringTypeInfo},
-    {"java.lang.Float", floatTypeInfo},
-    {"java.lang.Double", floatTypeInfo},
-    {"java.lang.Boolean", boolTypeInfo},
-    {"java.lang.Byte", bigIntTypeInfo},
-    {"java.lang.Short", bigIntTypeInfo},
-    {"java.lang.Integer", bigIntTypeInfo},
-    {"java.lang.Long", bigIntTypeInfo},
-    {"java.lang.Void", nothingTypeInfo},
-    // for complex types, we use "or nothing" types to allow NULL to be passed explicitly
+    {"java.lang.Object", {autoTypeInfo, autoTypeInfo}},
+    {"java.lang.String", {stringOrNothingTypeInfo, stringTypeInfo}},
+    {"java.lang.Float", {floatOrNothingTypeInfo, floatTypeInfo}},
+    {"java.lang.Double", {floatOrNothingTypeInfo, floatTypeInfo}},
+    {"java.lang.Boolean", {boolOrNothingTypeInfo, boolTypeInfo}},
+    {"java.lang.Byte", {bigIntOrNothingTypeInfo, bigIntTypeInfo}},
+    {"java.lang.Short", {bigIntOrNothingTypeInfo, bigIntTypeInfo}},
+    {"java.lang.Integer", {bigIntOrNothingTypeInfo, bigIntTypeInfo}},
+    {"java.lang.Long", {bigIntOrNothingTypeInfo, bigIntTypeInfo}},
+    // a Character is converted to an integer; a parameter is declared with the class's type
+    {"java.lang.Character", {bigIntOrNothingTypeInfo, nullptr}},
+    {"java.lang.Void", {nothingTypeInfo, nothingTypeInfo}},
     // the date and time classes whose values are converted to dates (see JavaToQore::convertToQore()); a date
     // passed for one of them is converted to it (see QoreToJava::toObject()), and the Java object is accepted as well
-    {"java.time.ZonedDateTime", dateOrNothingTypeInfo},
-    {"java.time.OffsetDateTime", dateOrNothingTypeInfo},
-    {"java.time.OffsetTime", dateOrNothingTypeInfo},
-    {"java.time.LocalDateTime", dateOrNothingTypeInfo},
-    {"java.time.LocalDate", dateOrNothingTypeInfo},
-    {"java.time.LocalTime", dateOrNothingTypeInfo},
-    {"java.time.Instant", dateOrNothingTypeInfo},
-    {"java.sql.Timestamp", dateOrNothingTypeInfo},
-    {"java.sql.Date", dateOrNothingTypeInfo},
-    {"java.sql.Time", dateOrNothingTypeInfo},
-    {"org.qore.jni.QoreRelativeTime", dateOrNothingTypeInfo},
-    {"java.math.BigDecimal", numberOrNothingTypeInfo},
-    // Java lists and maps are not mapped here; see jni_get_collection_type()
-    {"org.qore.jni.QoreObject", objectOrNothingTypeInfo},
-    {"org.qore.jni.QoreClosureMarker", codeOrNothingTypeInfo},
-    {"org.qore.jni.QoreClosure", codeOrNothingTypeInfo},
+    {"java.time.ZonedDateTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.time.OffsetDateTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.time.OffsetTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.time.LocalDateTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.time.LocalDate", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.time.LocalTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.time.Instant", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.sql.Timestamp", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.sql.Date", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.sql.Time", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"org.qore.jni.QoreRelativeTime", {dateOrNothingTypeInfo, dateOrNothingTypeInfo}},
+    {"java.math.BigDecimal", {numberOrNothingTypeInfo, numberOrNothingTypeInfo}},
+    {"org.qore.jni.QoreObject", {objectOrNothingTypeInfo, objectOrNothingTypeInfo}},
+    {"org.qore.jni.QoreClosureMarker", {codeOrNothingTypeInfo, codeOrNothingTypeInfo}},
+    {"org.qore.jni.QoreClosure", {codeOrNothingTypeInfo, codeOrNothingTypeInfo}},
 };
 
 QoreJniClassMap::qt2jmap_t QoreJniClassMap::qt2jmap;
@@ -1702,24 +1719,24 @@ static void reportClassLoadRelaxation(const char* jpath, const char* err, const 
 /** @see QoreJniClassMap::getQoreType()
 */
 static const QoreTypeInfo* jni_get_collection_type(Env& env, jclass cls, JniQoreClass* qc,
-        const QoreTypeInfo*& altType, bool literal, QoreJniClassMap::JavaTypeUse use, jobject member) {
+        const QoreTypeInfo*& altType, QoreJniClassMap::JavaTypeUse use, jobject member) {
     jvalue jarg;
     jarg.l = cls;
     if (env.callBooleanMethod(Globals::classList, Globals::methodClassIsAssignableFrom, &jarg)) {
         // every Java list is converted to a Qore list
-        altType = literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
-        return literal ? autoListTypeInfo : autoListOrNothingTypeInfo;
+        altType = qc->getOrNothingTypeInfo();
+        return autoListOrNothingTypeInfo;
     }
     if (!env.callBooleanMethod(Globals::classMap, Globals::methodClassIsAssignableFrom, &jarg)) {
         // a value of a class that lists or maps implement or extend (ex: Collection, Iterable, Serializable) is a
         // Qore list or hash when it is a list or a map
-        if (use != QoreJniClassMap::JavaTypeUse::Param && env.callStaticBooleanMethod(Globals::classJavaCollectionTypes,
+        if (use == QoreJniClassMap::JavaTypeUse::Value && env.callStaticBooleanMethod(Globals::classJavaCollectionTypes,
                 Globals::methodJavaCollectionTypesMayBeListOrMap, &jarg)) {
             return autoTypeInfo;
         }
         return nullptr;
     }
-    if (use != QoreJniClassMap::JavaTypeUse::Param) {
+    if (use == QoreJniClassMap::JavaTypeUse::Value) {
         // a map is converted to a hash when all its keys are strings
         jarg.l = member ? member : cls;
         if (!env.callStaticBooleanMethod(Globals::classJavaCollectionTypes,
@@ -1727,8 +1744,8 @@ static const QoreTypeInfo* jni_get_collection_type(Env& env, jclass cls, JniQore
             return autoTypeInfo;
         }
     }
-    altType = literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
-    return literal ? autoHashTypeInfo : autoHashOrNothingTypeInfo;
+    altType = qc->getOrNothingTypeInfo();
+    return autoHashOrNothingTypeInfo;
 }
 
 //! Returns true if a value of a Java class can be a value that is converted to a %Qore value that is not an object,
@@ -1779,10 +1796,56 @@ static bool jni_may_be_converted_value(Env& env, jclass cls) {
     return false;
 }
 
+//! Returns true if a value of the given declared type is a container that is converted to a %Qore container only
+//! conditionally, so that it is the Java object otherwise
+/** A Java map is converted to a hash only when its keys are strings, and neither a list nor a map is converted when
+    compatibility types are in effect (see JavaToQore::convertToQore())
+*/
+static bool jni_value_conversion_is_conditional(const QoreTypeInfo* ti) {
+    return ti == autoHashOrNothingTypeInfo || ti == autoListOrNothingTypeInfo;
+}
+
+// The single source of the declared Qore types of Java types (see QoreJniClassMap.h and
+// design/java-qore-type-mapping.md).  The nullability rule: the type of a value of a Java reference type converted to
+// Qore (a return value, a field or a constant) accepts no value, as Java null is converted to no value and Qore
+// checks the value read from a field against its declared type and uses the types of return values and constants at
+// parse time; it is applied here last, so no mapping can bypass it.  Parameters are the documented exception (see
+// jtmap).
 const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*& altType, QoreProgram* pgm,
-        bool literal, JavaTypeUse use, jobject member) {
+        JavaTypeUse use, jobject member) {
     assert(!altType);
     Env env;
+    const QoreTypeInfo* ti = getQoreTypeIntern(env, cls, altType, pgm, use, member);
+    if (use == JavaTypeUse::Param) {
+        return ti;
+    }
+
+    // the type of a value accepts every value the conversion yields: a container that is converted only
+    // conditionally is the Java object otherwise, and a byte[] is a list of integers when compatibility types are in
+    // effect
+    const QoreTypeInfo* java_type = altType;
+    altType = nullptr;
+    if (java_type && jni_value_conversion_is_conditional(ti)) {
+        type_vec_t types = {ti, java_type};
+        if (const QoreTypeInfo* union_type = qore_get_union_or_nothing_type(types)) {
+            ti = union_type;
+        }
+    } else if (ti == binaryTypeInfo) {
+        type_vec_t types = {binaryOrNothingTypeInfo, autoListOrNothingTypeInfo};
+        if (const QoreTypeInfo* union_type = qore_get_union_or_nothing_type(types)) {
+            ti = union_type;
+        }
+    }
+
+    // the nullability rule: a value of a reference type can be null, which is converted to no value
+    if (!env.callBooleanMethod(cls, Globals::methodClassIsPrimitive, nullptr)) {
+        ti = qore_get_or_nothing_type(ti);
+    }
+    return ti;
+}
+
+const QoreTypeInfo* QoreJniClassMap::getQoreTypeIntern(Env& env, jclass cls, const QoreTypeInfo*& altType,
+        QoreProgram* pgm, JavaTypeUse use, jobject member) {
 
     // get class name
     LocalReference<jstring> clsName = env.callObjectMethod(cls, Globals::methodClassGetName, nullptr).as<jstring>();
@@ -1809,9 +1872,10 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
             return softAutoListTypeInfo;
         }
         const QoreTypeInfo* elemAltType = nullptr;
-        const QoreTypeInfo* elem_type = getQoreType(elem_cls, elemAltType, pgm, literal, use);
+        // an element of a value has the complete type of a value (see getQoreType())
+        const QoreTypeInfo* elem_type = getQoreType(elem_cls, elemAltType, pgm, use);
 
-        if (elem_type == objectTypeInfo) {
+        if (elem_type == objectTypeInfo || elem_type == objectOrNothingTypeInfo) {
             return softAutoListTypeInfo;
         } else {
             // Java object arrays (e.g. Integer[]) can contain null elements, so use or-nothing element type;
@@ -1838,7 +1902,7 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
             auto binding = JniExternalProgramData::tryGetQoreClass(env, cls);
             if (binding) {
                 const QoreClass* qc = (*binding)->cls;
-                return literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
+                return qc->getOrNothingTypeInfo();
             }
             // dead canonical owner — fall through to standard Java type
             // resolution below
@@ -1900,40 +1964,22 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
     }
 
     // Java lists and maps
-    if (const QoreTypeInfo* ti = jni_get_collection_type(env, cls, qc, altType, literal, use, member)) {
+    if (const QoreTypeInfo* ti = jni_get_collection_type(env, cls, qc, altType, use, member)) {
         return ti;
-    }
-
-    if (use == JavaTypeUse::Field && !strcmp(tname.c_str(), "java.lang.Character")) {
-        // a Character is converted to an integer, and the value read from a field is checked against its declared type
-        return literal ? bigIntTypeInfo : bigIntOrNothingTypeInfo;
     }
 
     // find static mapping
     jtmap_t::const_iterator i = jtmap.find(tname.c_str());
     if (i != jtmap.end()) {
-        altType = literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
-        const QoreTypeInfo* rv = i->second;
-        if (literal && qore_type_is_assignable_from(rv, nothingTypeInfo)) {
-            // get type string
-            QoreString typestr(qore_type_get_name(rv));
-            if (typestr[0] != '*') {
-                return rv;
-            }
-            ExceptionSink xsink;
-            typestr.splice(0, 1, &xsink);
-            if (xsink) {
-                xsink.clear();
-                return rv;
-            }
-            const QoreTypeInfo* new_type = qore_get_type_from_string(typestr.c_str(), xsink);
-            if (xsink) {
-                xsink.clear();
-                return rv;
-            }
-            return new_type;
+        if (use == JavaTypeUse::Value) {
+            return i->second.value_type;
         }
-        return rv;
+        if (i->second.param_type) {
+            altType = qc->getOrNothingTypeInfo();
+            return i->second.param_type;
+        }
+        // the parameter is declared with the class's type
+        return qc->getOrNothingTypeInfo();
     }
 
     // try all parents to see if a static mapping matches
@@ -1953,22 +1999,25 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
         if (i != jtmap.end()) {
             // add to jtmap
             jtmap.insert(jtmap_t::value_type(tname.c_str(), i->second));
-            //printd(LogLevel, "returning %s (%s) -> %s\n", tname.c_str(), jcname.c_str(),
-            //  typeInfoGetName(i->second));
-            altType = literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
-            return i->second;
+            if (use == JavaTypeUse::Value) {
+                return i->second.value_type;
+            }
+            if (i->second.param_type) {
+                altType = qc->getOrNothingTypeInfo();
+                return i->second.param_type;
+            }
+            return qc->getOrNothingTypeInfo();
         }
     }
 
     // a value of a class that the classes of converted values implement or extend (ex: Number, CharSequence,
     // Comparable) is converted to a Qore value that is not an object of the class when it is a converted value (ex: a
-    // String in a CharSequence field is a Qore string), and the value read from a field is checked against its
-    // declared type
-    if (use == JavaTypeUse::Field && jni_may_be_converted_value(env, cls)) {
+    // String returned for a CharSequence is a Qore string)
+    if (use == JavaTypeUse::Value && jni_may_be_converted_value(env, cls)) {
         return autoTypeInfo;
     }
 
-    return literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
+    return qc->getOrNothingTypeInfo();
 }
 
 void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm, Env& env,
@@ -4014,14 +4063,6 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     }
 }
 
-//! Returns true if the Java-to-Qore conversion of a value of this type depends on the value itself
-/** A Java map or list is converted to a Qore hash or list only when its contents allow it (a map needs string keys)
-    and compatibility types are not in effect; every other mapping in jtmap is unconditional.
-*/
-static bool jniFieldConversionIsConditional(const QoreTypeInfo* ti) {
-    return ti == autoHashOrNothingTypeInfo || ti == autoListOrNothingTypeInfo;
-}
-
 //! Reads a Java static field for the %Qore static variable mirroring it
 static QoreValue jni_static_field_get(const QoreClass& cls, const void* ptr, ExceptionSink* xsink) {
     BaseField* field = const_cast<BaseField*>(static_cast<const BaseField*>(ptr));
@@ -4101,32 +4142,9 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
             continue;
         }
 
-        // a Java container is converted to a Qore container only when the conversion applies to its contents (a
-        // map needs string keys) and compatibility types are not in effect; otherwise the value stays a Java object
-        // wrapper.  A field has a single declared type, so it must accept both forms
-        const QoreTypeInfo* altFieldTypeInfo = nullptr;
-        const QoreTypeInfo* fieldTypeInfo = field->getQoreTypeInfo(*this, altFieldTypeInfo, pgm);
-        if (altFieldTypeInfo && jniFieldConversionIsConditional(fieldTypeInfo)) {
-            type_vec_t field_types = {fieldTypeInfo, altFieldTypeInfo};
-            if (const QoreTypeInfo* union_type = qore_get_union_or_nothing_type(field_types)) {
-                fieldTypeInfo = union_type;
-            }
-        } else if (fieldTypeInfo == binaryTypeInfo) {
-            // a byte[] is converted to a binary, or to a list of integers when compatibility types are in effect,
-            // and the field can be null; the field's value is checked against its declared type when it is read
-            type_vec_t field_types = {binaryOrNothingTypeInfo, autoListOrNothingTypeInfo};
-            if (const QoreTypeInfo* union_type = qore_get_union_or_nothing_type(field_types)) {
-                fieldTypeInfo = union_type;
-            }
-        }
-        // a field of a reference type can be null, which is read as no value, and the value read from the field and
-        // the value assigned to it are checked against the declared type; the type of a value of a reference type
-        // does not always accept no value (ex: java.lang.String -> string, java.lang.Integer -> int, and a Java
-        // array -> softlist<T>, which converts no value to an empty list), so the field's declared type must; a
-        // field of a primitive type cannot be null, so its declared type does not accept no value
-        if (field->isReference()) {
-            fieldTypeInfo = qore_get_or_nothing_type(fieldTypeInfo);
-        }
+        // the declared type accepts every value read from the field, including no value for a field of a reference
+        // type (see getQoreType()), as Qore checks the value read from a field against its declared type
+        const QoreTypeInfo* fieldTypeInfo = field->getQoreTypeInfo(*this, pgm);
 
         if (field->isStatic()) {
             printd(LogLevel, "+ adding static field %s %s %s.%s (%s)\n", access_str(field->getAccess()),

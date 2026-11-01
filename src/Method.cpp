@@ -415,7 +415,7 @@ void BaseMethod::getName(QoreString& str) const {
 }
 
 int BaseMethod::getParamTypes(Env& env, type_vec_t& paramTypeInfo, type_vec_t& altParamTypeInfo,
-        QoreJniClassMap& clsmap, QoreProgram* pgm, bool literal) {
+        QoreJniClassMap& clsmap, QoreProgram* pgm) {
     unsigned len = paramTypes.size();
     if (isPrivate()) {
         // A private Java method or constructor can only be called through reflection, so its parameter types are
@@ -434,7 +434,7 @@ int BaseMethod::getParamTypes(Env& env, type_vec_t& paramTypeInfo, type_vec_t& a
         std::pair<Type, GlobalReference<jclass>>& i = paramTypes[j];
         const QoreTypeInfo* altType = nullptr;
 
-        const QoreTypeInfo* ti = clsmap.getQoreType(i.second, altType, pgm, literal);
+        const QoreTypeInfo* ti = clsmap.getQoreType(i.second, altType, pgm);
         paramTypeInfo.push_back(ti);
 
         //paramTypeInfo.push_back(clsmap.getQoreType(i.second, altType, pgm));
@@ -464,7 +464,7 @@ const QoreTypeInfo* BaseMethod::getReturnTypeInfo(QoreJniClassMap& clsmap, QoreP
         return autoTypeInfo;
     }
     // the generic return type of the method gives the key type of a map
-    return clsmap.getQoreType(retValClass, pgm, false, QoreJniClassMap::JavaTypeUse::Value,
+    return clsmap.getQoreType(retValClass, pgm, QoreJniClassMap::JavaTypeUse::Value,
         kind == Kind::Method ? (jobject)method : nullptr);
 }
 

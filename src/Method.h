@@ -223,7 +223,7 @@ public:
     }
 
     DLLLOCAL int getParamTypes(Env& env, type_vec_t& paramTypeInfo, type_vec_t& altParamTypeInfo,
-            QoreJniClassMap& clsmap, QoreProgram* pgm = nullptr, bool literal = false);
+            QoreJniClassMap& clsmap, QoreProgram* pgm = nullptr);
 
     DLLLOCAL const QoreTypeInfo* getReturnTypeInfo(QoreJniClassMap& clsmap, QoreProgram* pgm = nullptr);
 

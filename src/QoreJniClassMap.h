@@ -197,19 +197,35 @@ public:
 
     DLLLOCAL QoreValue getValue(LocalReference<jobject>& jobj, QoreProgram* pgm, bool compat_types);
 
-    //! How a Java type is used, which decides the declared %Qore type of a Java map; see getQoreType()
+    //! How a Java type is used, which decides its declared %Qore type; see getQoreType()
     enum class JavaTypeUse {
         //! the type of a parameter: a %Qore value is converted to the Java type
         Param,
-        //! the type of a return value: a value of the Java type is converted to %Qore
+        //! the type of a value converted to %Qore: a return value, a field, or a constant
         Value,
-        //! the type of a field: as for \c Value, and the value read from the field is checked against the declared
-        //! type, so the declared type accepts every value that the conversion yields
-        Field,
     };
 
     //! Returns the %Qore type declared for a Java type
-    /** A Java list (a class implementing \c java.util.List) is declared as a %Qore list, as every Java list is
+    /** <b>The nullability rule</b>: a Java value of a reference type (an object, including a \c String or a boxed
+        value, or an array) can be \c null, which is converted to no value, so the type declared for a value of a
+        reference type converted to %Qore (\c JavaTypeUse::Value: a return value, a field or a constant) always
+        accepts no value (ex: \c *string for \c java.lang.String, <tt>*softlist<int></tt> for \c int[]); only a value
+        of a primitive type (ex: \c int, \c boolean) has a type that does not.  %Qore checks the value read from a
+        field against the field's declared type at run time, and uses the declared types of return values and
+        constants at parse time, so a type that does not accept no value raised \c RUNTIME-TYPE-ERROR for a
+        \c null field and narrows wrongly at parse time.  The declared type of a value also accepts every value the
+        conversion yields (ex: \c *int for \c java.lang.Character, \c auto for \c java.lang.Number, a byte array
+        is a binary or a list of integers when compatibility types are in effect).
+
+        <b>The exception for parameters</b> (\c JavaTypeUse::Param): the parameter types of \c java.lang.String and
+        of the boxed types do not accept no value (ex: \c string), and arrays are soft lists that convert no value to
+        an empty list; a \c null is passed with the alternative variant taking the Java object (ex:
+        <tt>*object<String></tt>).  Applying the rule to parameters changes which variant a call passing no value
+        selects among overloads such as <tt>m(String)</tt> and <tt>m(String[])</tt>, and differently at parse time
+        and at run time, and breaks %Qore classes that override Java methods with the current parameter types; the
+        decision is open.  See design/java-qore-type-mapping.md.
+
+        A Java list (a class implementing \c java.util.List) is declared as a %Qore list, as every Java list is
         converted to one.  A Java map (a class implementing \c java.util.Map) is converted to a %Qore hash when all its
         keys are strings, so a parameter that takes a map is declared as a hash, and a return value or field is
         declared as a hash only if its declared key type is \c String (see org.qore.jni.JavaCollectionTypes),
@@ -218,29 +234,27 @@ public:
         declared as \c auto, as it is a %Qore list or hash when it is a list or a map.  For a list or a map parameter,
         \a altType is set to the type of the Java class, so that a Java object is accepted as well.
 
-        The value read from a field is checked against the field's declared type, so a field of \c java.lang.Character
-        is declared as an integer, which its value is converted to, and a field of a class that the classes of values
-        converted to %Qore values that are not objects implement or extend (ex: \c java.lang.Number,
-        \c java.lang.CharSequence, \c java.lang.Comparable, \c java.time.temporal.Temporal, \c java.util.Date) is
-        declared as \c auto (see jni_may_be_converted_value() in QoreJniClassMap.cpp).
+        A value of a class that the classes of values converted to %Qore values that are not objects implement or
+        extend (ex: \c java.lang.Number, \c java.lang.CharSequence, \c java.lang.Comparable,
+        \c java.time.temporal.Temporal, \c java.util.Date) is declared as \c auto (see jni_may_be_converted_value()
+        in QoreJniClassMap.cpp).
 
         @param cls the Java class
-        @param altType set to the type of the Java class when a variant taking the Java object is needed
+        @param altType for a parameter: set to the type of the Java class when a variant taking the Java object is
+        needed; not set for a value, whose declared type accepts the Java object if it can be one
         @param pgm the program the type is resolved in
-        @param literal true for types without "or nothing"
         @param use how the type is used
         @param member for a value: the java.lang.reflect.Method returning it or the java.lang.reflect.Field holding
         it, whose generic type gives the key type of a map; if null, the class gives it
     */
     DLLLOCAL const QoreTypeInfo* getQoreType(jclass cls, const QoreTypeInfo*& altType,
-            QoreProgram* pgm = nullptr, bool literal = false, JavaTypeUse use = JavaTypeUse::Param,
-            jobject member = nullptr);
+            QoreProgram* pgm = nullptr, JavaTypeUse use = JavaTypeUse::Param, jobject member = nullptr);
 
     //! Returns the %Qore type declared for a Java value; see getQoreType(jclass, const QoreTypeInfo*&, ...)
-    DLLLOCAL const QoreTypeInfo* getQoreType(jclass cls, QoreProgram* pgm = nullptr, bool literal = false,
+    DLLLOCAL const QoreTypeInfo* getQoreType(jclass cls, QoreProgram* pgm = nullptr,
             JavaTypeUse use = JavaTypeUse::Value, jobject member = nullptr) {
         const QoreTypeInfo* altType = nullptr;
-        return getQoreType(cls, altType, pgm, literal, use, member);
+        return getQoreType(cls, altType, pgm, use, member);
     }
 
     //! Returns a new copy of the \c Jni namespace that a Program gets when the module is loaded into it
@@ -308,8 +322,20 @@ public:
     DLLLOCAL static LocalReference<jclass> getPrimitiveType(qore_type_t t);
 
 protected:
-    // map of java class names to const QoreTypeInfo ptrs
-    typedef std::map<const std::string, const QoreTypeInfo*> jtmap_t;
+    //! The declared %Qore types of a Java class whose values are converted to %Qore values; see jtmap
+    struct JavaTypeMapping {
+        //! the type of a value of the class converted to %Qore; accepts no value (the nullability rule)
+        const QoreTypeInfo* value_type;
+        //! the type of a parameter of the class, or nullptr if a parameter is declared with the class's type
+        const QoreTypeInfo* param_type;
+    };
+
+    //! returns the declared %Qore type of a Java class; called by getQoreType(), which completes a value's type
+    DLLLOCAL const QoreTypeInfo* getQoreTypeIntern(Env& env, jclass cls, const QoreTypeInfo*& altType,
+            QoreProgram* pgm, JavaTypeUse use, jobject member);
+
+    // map of java class names to their declared Qore types
+    typedef std::map<const std::string, JavaTypeMapping> jtmap_t;
     // map for Qore types from Java classes
     static jtmap_t jtmap;
 

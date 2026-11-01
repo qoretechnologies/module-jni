@@ -118,16 +118,16 @@ public:
     DLLLOCAL void getName(QoreString& str);
 
     //! Returns the declared %Qore type of the field's value; the field's generic type gives the key type of a map
-    /** \a altType is set to the Java class type when the field's value is not always converted to the %Qore type
+    /** The type accepts every value that reading the field yields, including no value for a field of a reference
+        type; see QoreJniClassMap::getQoreType()
     */
-    DLLLOCAL const QoreTypeInfo* getQoreTypeInfo(QoreJniClassMap& clsmap, const QoreTypeInfo*& altType,
-            QoreProgram* pgm) {
+    DLLLOCAL const QoreTypeInfo* getQoreTypeInfo(QoreJniClassMap& clsmap, QoreProgram* pgm) {
         if (mods & JVM_ACC_PRIVATE) {
             // a private Java field is declared as auto instead of importing the class of its type, as for private
             // methods (see BaseMethod::getParamTypes())
             return autoTypeInfo;
         }
-        return clsmap.getQoreType(typeClass, altType, pgm, false, QoreJniClassMap::JavaTypeUse::Field, field);
+        return clsmap.getQoreType(typeClass, pgm, QoreJniClassMap::JavaTypeUse::Value, field);
     }
 
     DLLLOCAL int isStatic() const {
@@ -140,12 +140,6 @@ public:
 
     DLLLOCAL bool isSynthetic() const {
         return mods & ACC_SYNTHETIC;
-    }
-
-    //! Returns true if the field holds a reference (an object or an array), which can be null, or false if the field
-    //! has a primitive type, which cannot be null
-    DLLLOCAL bool isReference() const {
-        return type == Type::Reference;
     }
 
     ClassAccess getAccess() const {

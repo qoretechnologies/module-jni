@@ -175,10 +175,10 @@ public class PublicPath {
         assertEq(("auto",), twice.params);
         assertEq("auto", twice.ret);
 
-        # a public method keeps its types
+        # a public method keeps its types; a String return value can be null, which is no value
         hash<auto> hello = variant(cls, "hello");
         assertEq("public", hello.access);
-        assertEq("string", hello.ret);
+        assertEq("*string", hello.ret);
 
         # the private constructor, and the private fields
         list<hash<auto>> constructors = map (
@@ -216,7 +216,7 @@ public class PublicPath {
         Class cls = Class::forName(p, "PrivatePath");
         hash<auto> internal = variant(cls, "internal");
         assertEq("public", internal.access);
-        assertEq("string", internal.ret);
+        assertEq("*string", internal.ret);
         # the packages of a class loaded from the classpath are open, so the method can be called
         assertEq("internal", call_object_method(cls.newObject(), "internal"));
     }

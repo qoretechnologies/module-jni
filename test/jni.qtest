@@ -32,6 +32,8 @@
 %module-cmd(jni) import org.qore.jni.test.Fields
 %module-cmd(jni) import org.qore.jni.test.NullableFields
 %module-cmd(jni) import org.qore.jni.test.FinalFields
+%module-cmd(jni) import org.qore.jni.test.ValueTypeMapping
+%module-cmd(jni) import org.qore.jni.test.ConvertedValueReturns
 %module-cmd(jni) import org.qore.jni.test.ConvertedValueFields
 %module-cmd(jni) import org.qore.jni.test.QoreJavaApiTest
 %module-cmd(jni) import org.qore.jni.test.OverloadedMethods
@@ -305,6 +307,8 @@ public class Main inherits QUnit::Test {
         addTestCase("nullable static fields test", \testNullableStaticFields());
         addTestCase("converted value fields test", \testConvertedValueFields());
         addTestCase("final static fields test", \testFinalStaticFields());
+        addTestCase("value type mapping guard test", \testValueTypeMappingGuard());
+        addTestCase("converted return values test", \testConvertedReturnValues());
         addTestCase("callback test", \testCallback());
         addTestCase("foreign-thread thread resource cleanup test", \testForeignThreadResourceCleanup());
         addTestCase("nested callback in a Java thread test", \testNestedCallbackInJavaThread());
@@ -3106,6 +3110,141 @@ string sub javaName() {
         assertEq(4, ConvertedValueFields::staticNum, "a Long in a static Number field is read as an integer");
         assertEq("z", ConvertedValueFields::staticChars, "a String in a static CharSequence field is read as a string");
         assertEq(ord("c"), ConvertedValueFields::staticCh, "a static Character is read as an integer");
+    }
+
+    #! Guard: every Java reference type has a declared type that accepts no value in every use converted to Qore
+    /** A Java reference (an object, a String, a boxed value, an array) can be null, which is converted to no value, so
+        the declared type of a return value, a field, a static field and a constant of a reference type must accept
+        no value without converting it (a soft list would convert it to an empty list), and accept the value the
+        conversion yields (ex: an integer for a Character); only primitive types do not accept no value.  See
+        design/java-qore-type-mapping.md.  Parameters are the documented exception and are not checked here.
+    */
+    testValueTypeMappingGuard() {
+        load_class("org/qore/jni/test/ValueTypeMapping");
+        Reflection::Class cls = Reflection::Class::forName("Jni::org::qore::jni::test::ValueTypeMapping");
+        hash<string, string> refs = {
+            "String": "*string",
+            "Integer": "*int",
+            "Long": "*int",
+            "Short": "*int",
+            "Byte": "*int",
+            "Boolean": "*bool",
+            "Double": "*float",
+            "Float": "*float",
+            "Character": "*int",
+            "BigDecimal": "*number",
+            "ZonedDateTime": "*date",
+            "LocalDate": "*date",
+            "Timestamp": "*date",
+            "Object": "auto",
+            "Number": "auto",
+            "CharSequence": "auto",
+            "Comparable": "auto",
+            "Temporal": "auto",
+            "UtilDate": "auto",
+            "Serializable": "auto",
+            "Collection": "auto",
+            "ArrayList": "union<*list<auto>, *object<ArrayList>>",
+            "StringMap": "union<*hash<auto>, *object<Map>>",
+            "IntegerMap": "auto",
+            "IntArray": "*softlist<int>",
+            "StringArray": "*softlist<*string>",
+            "IntegerArray2": "*softlist<*softlist<*int>>",
+            "CharacterArray": "*softlist<*int>",
+            "ByteArray": "union<*binary, *list<auto>>",
+            "Self": "*object<ValueTypeMapping>",
+            "Runnable": "*object<Runnable>",
+            "BigInteger": "*object<BigInteger>",
+        };
+        hash<string, string> prims = {
+            "Int": "int",
+            "Long": "int",
+            "Char": "int",
+            "Boolean": "bool",
+            "Double": "float",
+        };
+
+        foreach hash<auto> i in (refs.pairIterator()) {
+            hash<string, string> uses = {
+                "return": cast<AbstractMethodVariant>(cls.getMethod("return" + i.key).getVariants()[0])
+                    .getReturnType().getName(),
+                "field": cls.getMember("field" + i.key).getType().getName(),
+                "static field": cls.getMember("static" + i.key).getType().getName(),
+                "constant": cls.getConstant("CONST_" + i.key.upr()).getType().getName(),
+            };
+            foreach hash<auto> u in (uses.pairIterator()) {
+                string label = sprintf("%s %s", i.key, u.key);
+                assertTrue(acceptsNoValueUnconverted(u.value), sprintf("%s: %y accepts no value", label, u.value));
+                assertEq(i.value, u.value, label);
+            }
+            # the value read from a null field and returned by a null method is no value
+            assertEq(NOTHING, call_static_method("ValueTypeMapping", "return" + i.key), i.key + " return value");
+            assertEq(NOTHING, cls.getStaticMember("static" + i.key).getValue(), i.key + " static field");
+            assertEq(NOTHING, cls.getConstant("CONST_" + i.key.upr()).getValue(), i.key + " constant");
+        }
+        foreach hash<auto> i in (prims.pairIterator()) {
+            hash<string, string> uses = {
+                "return": cast<AbstractMethodVariant>(cls.getMethod("returnPrim" + i.key).getVariants()[0])
+                    .getReturnType().getName(),
+                "field": cls.getMember("prim" + i.key).getType().getName(),
+                "static field": cls.getMember("staticPrim" + i.key).getType().getName(),
+            };
+            foreach hash<auto> u in (uses.pairIterator()) {
+                string label = sprintf("primitive %s %s", i.key, u.key);
+                assertFalse(acceptsNoValueUnconverted(u.value), sprintf("%s: %y does not accept no value", label,
+                    u.value));
+                assertEq(i.value, u.value, label);
+            }
+        }
+    }
+
+    #! Returns True if a type accepts no value without converting it
+    private static bool acceptsNoValueUnconverted(string type_name) {
+        if (type_name == "auto" || type_name =~ /^\*/) {
+            return True;
+        }
+        *list<*string> members = (type_name =~ x/^union<(.*)>$/);
+        if (!members) {
+            return False;
+        }
+        # every member of a union declared for a value is an "or nothing" type
+        return (select members[0].split(", "), $1 !~ /^\*/) ? False : True;
+    }
+
+    #! A return value converted to a Qore value of another type than its class is declared with a type that accepts
+    #! the converted value, so code assigning it to the type the value has parses and runs
+    testConvertedReturnValues() {
+        # the values are those the methods return
+        string cs = ConvertedValueReturns::charSequence();
+        assertEq("cs", cs, "a String returned for a CharSequence is a string");
+        string comparable = ConvertedValueReturns::comparable();
+        assertEq("c", comparable);
+        int num = ConvertedValueReturns::number();
+        assertEq(3, num, "an Integer returned for a Number is an integer");
+        int ch = ConvertedValueReturns::character();
+        assertEq(ord("a"), ch, "a Character is an integer");
+        date temporal = ConvertedValueReturns::temporal();
+        assertEq(2026-01-02, temporal, "a LocalDate returned for a Temporal is a date");
+        date d = ConvertedValueReturns::timestampInDate();
+        assertEq(Type::Date, d.type());
+        list<auto> chars = ConvertedValueReturns::characters();
+        assertEq((ord("a"), NOTHING), chars, "a Character[] is a list of integers");
+        # a null return value is no value, also where the declared type of the value without null is a plain type
+        *string s = ConvertedValueReturns::nullString();
+        *int i = ConvertedValueReturns::nullInteger();
+        *softlist<int> l = ConvertedValueReturns::nullIntArray();
+        *int c = ConvertedValueReturns::nullCharacter();
+        assertEq(NOTHING, s);
+        assertEq(NOTHING, i);
+        assertEq(NOTHING, l, "a null array is no value, not an empty list");
+        assertEq(NOTHING, c);
+        assertFalse(exists ConvertedValueReturns::nullString(), "a null return value does not exist");
+        assertEq("dflt", ConvertedValueReturns::nullString() ?? "dflt");
+        # a non-null return value of an exact type keeps it
+        string str = ConvertedValueReturns::string();
+        int prim = ConvertedValueReturns::prim();
+        assertEq("s", str);
+        assertEq(1, prim);
     }
 
     #! a Java static final field is mirrored by a Qore class constant with the field's value; a null field is a

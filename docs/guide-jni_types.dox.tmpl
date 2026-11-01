@@ -136,6 +136,45 @@
 
     @note see @ref jni_arrays for more information about conversions between %Qore lists and Java arrays
 
+    @section jni_declared_value_types Declared Types of Java Values
+
+    A Java value of a reference type (an object, including a \c java.lang.String or a boxed value such as a
+    \c java.lang.Integer, or an array) can be \c null, which is converted to no value.  Therefore the declared
+    %Qore type of a return value, a field, a static field or a constant of a reference type always accepts no value,
+    and only the types of Java primitives do not.  The declared type also accepts every value the conversion yields:
+
+    Declared %Qore Types of Java Values
+    |!Java Type|!Declared %Qore Type
+    |\c boolean|@ref bool_type "bool"
+    |\c byte, \c char, \c short, \c int, \c long|@ref int_type "int"
+    |\c float, \c double|@ref float_type "float"
+    |\c java.lang.String|<tt>*string</tt>
+    |\c java.lang.Boolean|<tt>*bool</tt>
+    |\c java.lang.Byte, \c java.lang.Short, \c java.lang.Integer, \c java.lang.Long, \c java.lang.Character|\
+        <tt>*int</tt>
+    |\c java.lang.Float, \c java.lang.Double|<tt>*float</tt>
+    |\c java.math.BigDecimal|<tt>*number</tt>
+    |the date and time classes converted to dates|<tt>*date</tt>
+    |\c java.lang.Object|\c auto
+    |a class that the classes above implement or extend (ex: \c java.lang.Number, \c java.lang.CharSequence, \
+        \c java.lang.Comparable, \c java.time.temporal.Temporal, \c java.util.Date)|\c auto, as the value is the \
+        %Qore value of its own class (ex: an \c Integer returned for a \c Number is an integer)
+    |a list|<tt>*list&lt;auto&gt;</tt> or the Java object (see @ref jni_collection_types)
+    |a map|<tt>*hash&lt;auto&gt;</tt> or the Java object, or \c auto (see @ref jni_collection_types)
+    |\c byte[]|<tt>*binary</tt>, or a list of integers when compatibility types are in effect
+    |an array of \c T|<tt>*softlist&lt;E&gt;</tt>, where \c E is the declared type of a \c T value (ex: \
+        <tt>*softlist&lt;int&gt;</tt> for \c int[], <tt>*softlist&lt;*string&gt;</tt> for \c String[])
+    |any other class \c C|<tt>*object&lt;C&gt;</tt>
+
+    A \c null value is therefore no value, also for an array, which is not an empty list, and code can assign a
+    value to the type it has at parse time (ex: <tt>string s = obj.getCharSequence()</tt> when the method returns a
+    \c String).
+
+    The types of parameters do not follow this rule yet: a \c java.lang.String parameter is declared as \c string,
+    a boxed parameter as \c int, \c float or \c bool, and an array parameter as a soft list, which converts no
+    value to an empty list; a \c null is passed for a \c String or a boxed parameter by the variant taking the Java
+    object (ex: <tt>*object&lt;String&gt;</tt>), which is selected for no value.
+
     @section jni_collection_types Declared Types of Java Lists and Maps
 
     The %Qore types declared for Java methods and fields match the values that the conversions above produce, so

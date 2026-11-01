@@ -164,15 +164,16 @@ System::out.println("testing...");
     class to a field that %Qore code cannot access goes to the class's \c memberGate() method.
 
     A field's member, or the static class member of a mutable static field, is declared with the %Qore type of the
-    field's Java type, and the value read from the field is checked against it.  A field of a reference type (an
-    object or an array) can be \c null, so its type accepts no value: a \c java.lang.String field is declared as
-    \c *string, a \c java.lang.Integer field as \c *int, and an \c int[] field as <tt>*softlist<int></tt>; a \c null
-    field is read as no value, and assigning no value sets the field to \c null.  A field of a primitive type cannot
-    be \c null, so its type does not accept no value.  A \c java.lang.Character field is declared as \c *int, as a
-    \c Character is converted to an integer, and a field of a class that the classes of values converted to %Qore
-    values implement or extend (ex: \c java.lang.Number, \c java.lang.CharSequence, \c java.lang.Comparable,
-    \c java.time.temporal.Temporal, \c java.util.Date) is declared as \c auto, as a value of such a class (ex: an
-    \c Integer in a \c Number field) is converted to the %Qore value of its own class.
+    field's Java type (see @ref jni_declared_value_types "Declared Types of Java Values"), and the value read from the
+    field is checked against it.  A field of a reference type (an object or an array) can be \c null, so its type
+    accepts no value: a \c java.lang.String field is declared as \c *string, a \c java.lang.Integer field as \c *int,
+    and an \c int[] field as <tt>*softlist&lt;int&gt;</tt>; a \c null field is read as no value, and assigning no
+    value sets the field to \c null.  A field of a primitive type cannot be \c null, so its type does not accept no
+    value.  A \c java.lang.Character field is declared as \c *int, as a \c Character is converted to an integer, and a
+    field of a class that the classes of values converted to %Qore values implement or extend (ex:
+    \c java.lang.Number, \c java.lang.CharSequence, \c java.lang.Comparable, \c java.time.temporal.Temporal,
+    \c java.util.Date) is declared as \c auto, as a value of such a class (ex: an \c Integer in a \c Number field) is
+    converted to the %Qore value of its own class.
 
     A \c static \c final field is mirrored by a class constant holding the field's value, whose type is the type of
     the value; a \c null field is a constant with no value, declared with the field's type (ex: \c *string for a
@@ -213,6 +214,10 @@ System::out.println("testing...");
     classpath, is declared as \c auto; this is reported once per process on \c stderr, naming the class and the
     Java exception, because a %Qore class built with such a type does not match the same class built where the
     dependency is available.
+
+    The types of return values, fields and constants follow the rules in @ref jni_declared_value_types "Declared Types
+    of Java Values": a value of a reference type can be \c null, so its type accepts no value (ex: \c *string for a
+    \c java.lang.String return value).
 
     The parameter, return value and field types of \c private Java members are always declared as \c auto, and the
     classes they name are not imported for them: a private member cannot be called from %Qore code, only through the

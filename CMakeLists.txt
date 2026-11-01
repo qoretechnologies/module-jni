@@ -1237,6 +1237,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/ListConversions.java
     test/java/src/org/qore/jni/test/CollectionTypes.java
     test/java/src/org/qore/jni/test/ConvertedValueFields.java
+    test/java/src/org/qore/jni/test/ConvertedValueReturns.java
     test/java/src/org/qore/jni/test/Methods.java
     test/java/src/org/qore/jni/test/NullableFields.java
     test/java/src/org/qore/jni/test/A.java
@@ -1248,6 +1249,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/ClosureTest3.java
     test/java/src/org/qore/jni/test/StaticFields.java
     test/java/src/org/qore/jni/test/StaticMethods.java
+    test/java/src/org/qore/jni/test/ValueTypeMapping.java
     test/java/src/org/qore/jni/test/StringFactory.java
     test/java/src/org/qore/jni/test/QoreCallback.java
     test/java/src/org/qore/jni/test/OverloadedMethods.java

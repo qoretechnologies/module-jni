@@ -91,14 +91,28 @@ class JniCollectionTypesTest inherits QUnit::Test {
     }
 
     returnTypes() {
-        # every Java list is a Qore list
-        foreach string m in ("arrayList", "linkedList", "list", "stringList", "fixedList") {
-            assertEq("*list<auto>", getReturnType(m), m);
+        # every Java list is a Qore list, or the Java object when compatibility types are in effect, as for a field
+        hash<string, string> lists = {
+            "arrayList": "ArrayList",
+            "linkedList": "LinkedList",
+            "list": "List",
+            "stringList": "CollectionTypes__StringList",
+            "fixedList": "CollectionTypes__FixedList",
+        };
+        foreach hash<auto> i in (lists.pairIterator()) {
+            assertEq(sprintf("union<*list<auto>, *object<%s>>", i.value), getReturnType(i.key), i.key);
         }
-        # a map whose key type is String is a hash
-        foreach string m in ("stringTreeMap", "concurrentMap", "wildcardMap", "boundedKeyMap", "stringMap",
-                "keyedStringMap") {
-            assertEq("*hash<auto>", getReturnType(m), m);
+        # a map whose key type is String is a hash, or the Java object when compatibility types are in effect
+        hash<string, string> maps = {
+            "stringTreeMap": "TreeMap",
+            "concurrentMap": "ConcurrentHashMap",
+            "wildcardMap": "Map",
+            "boundedKeyMap": "Map",
+            "stringMap": "CollectionTypes__StringMap",
+            "keyedStringMap": "CollectionTypes__KeyedMap",
+        };
+        foreach hash<auto> i in (maps.pairIterator()) {
+            assertEq(sprintf("union<*hash<auto>, *object<%s>>", i.value), getReturnType(i.key), i.key);
         }
         # any other map is a hash or a Java object, as its keys are
         foreach string m in ("integerTreeMap", "emptyIntegerTreeMap", "properties", "rawHashMap", "objectKeyMap",
