@@ -174,6 +174,10 @@ System::out.println("testing...");
     \c java.time.temporal.Temporal, \c java.util.Date) is declared as \c auto, as a value of such a class (ex: an
     \c Integer in a \c Number field) is converted to the %Qore value of its own class.
 
+    A \c static \c final field is mirrored by a class constant holding the field's value, whose type is the type of
+    the value; a \c null field is a constant with no value, declared with the field's type (ex: \c *string for a
+    \c java.lang.String field).
+
     @subsection jni_access_mapping Java Access Mapping in Qore
 
     Java access modifiers are mapped directly to Qore access modifiers as in the following table.

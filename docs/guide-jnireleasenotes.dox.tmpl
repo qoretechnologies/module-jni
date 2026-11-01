@@ -35,6 +35,9 @@
     - fixed the process crashing after the module failed to initialize after the JVM was started (ex: when the JVM
       lacks a Java module that the jni module needs); a failed initialization now releases everything it set up,
       including the JVM, and reports \c MODULE-INIT-ERROR
+    - fixed a Java \c static \c final field holding \c null being mirrored by a class constant with the value \c 0; it
+      is now a constant with no value, declared with the field's type (ex: \c *string for a \c java.lang.String
+      field)
     - fixed a child process created with \c fork() after the JVM was started waiting forever when it exited or ended
       its script, or when it deleted a Program whose %Qore code a Java thread was running; Java cannot be used in
       such a child, and a use of Java there now raises \c JNI-FORK-ERROR (see @ref jni_fork)

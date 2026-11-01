@@ -4134,9 +4134,10 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
 
             if (field->isFinal()) {
                 QoreValue v(field->getStatic(pgm, false));
-                if (v.isNothing())
-                    v.assign(0ll);
-                qc.addBuiltinConstant(fname.c_str(), v, field->getAccess());
+                // a null field is a constant with no value; as its type cannot be derived from its value, it is
+                // declared with the field's type, which accepts no value for a field of a reference type, while the
+                // type of a constant holding a value is the type of the value
+                qc.addBuiltinConstant(fname.c_str(), v, field->getAccess(), v.isNothing() ? fieldTypeInfo : nullptr);
             } else {
                 // a mutable Java field is read and written through accessors: a copy of its value taken here would
                 // diverge from the field as soon as either side changed it

@@ -31,6 +31,7 @@
 %module-cmd(jni) import java.lang.invoke.*
 %module-cmd(jni) import org.qore.jni.test.Fields
 %module-cmd(jni) import org.qore.jni.test.NullableFields
+%module-cmd(jni) import org.qore.jni.test.FinalFields
 %module-cmd(jni) import org.qore.jni.test.ConvertedValueFields
 %module-cmd(jni) import org.qore.jni.test.QoreJavaApiTest
 %module-cmd(jni) import org.qore.jni.test.OverloadedMethods
@@ -303,6 +304,7 @@ public class Main inherits QUnit::Test {
         addTestCase("nullable instance fields test", \testNullableInstanceFields());
         addTestCase("nullable static fields test", \testNullableStaticFields());
         addTestCase("converted value fields test", \testConvertedValueFields());
+        addTestCase("final static fields test", \testFinalStaticFields());
         addTestCase("callback test", \testCallback());
         addTestCase("foreign-thread thread resource cleanup test", \testForeignThreadResourceCleanup());
         addTestCase("nested callback in a Java thread test", \testNestedCallbackInJavaThread());
@@ -3104,6 +3106,61 @@ string sub javaName() {
         assertEq(4, ConvertedValueFields::staticNum, "a Long in a static Number field is read as an integer");
         assertEq("z", ConvertedValueFields::staticChars, "a String in a static CharSequence field is read as a string");
         assertEq(ord("c"), ConvertedValueFields::staticCh, "a static Character is read as an integer");
+    }
+
+    #! a Java static final field is mirrored by a Qore class constant with the field's value; a null field is a
+    #! constant with no value, whose type is the field's declared type
+    testFinalStaticFields() {
+        load_class("org/qore/jni/test/FinalFields");
+        Reflection::Class cls = Reflection::Class::forName("Jni::org::qore::jni::test::FinalFields");
+
+        # a null field is a constant with no value, declared with the field's type, which accepts no value
+        hash<string, string> null_types = {
+            "NULL_STR": "*string",
+            "NULL_BOXED_INT": "*int",
+            "NULL_BOXED_BOOL": "*bool",
+            "NULL_CHAR": "*int",
+            "NULL_NUM": "auto",
+            "NULL_OBJ": "auto",
+            "NULL_SELF": "*object<FinalFields>",
+            "NULL_INT_ARRAY": "*softlist<int>",
+            "NULL_STR_ARRAY": "*softlist<*string>",
+        };
+        foreach hash<auto> i in (null_types.pairIterator()) {
+            AbstractConstant c = cls.getConstant(i.key);
+            assertEq(NOTHING, c.getValue(), i.key + ": a null field is a constant with no value");
+            assertEq(i.value, c.getType().getName(), i.key + ": the constant's type is the field's type");
+        }
+        assertEq(NOTHING, FinalFields::NULL_STR, "a null String constant");
+        assertEq(NOTHING, FinalFields::NULL_BOXED_INT, "a null Integer constant");
+        assertEq(NOTHING, FinalFields::NULL_SELF, "a null object constant");
+        assertEq(NOTHING, FinalFields::NULL_INT_ARRAY, "a null array constant");
+        # a null constant is accepted where its type is
+        *string s = FinalFields::NULL_STR;
+        *int n = FinalFields::NULL_BOXED_INT;
+        *softlist<int> l = FinalFields::NULL_INT_ARRAY;
+        assertEq(NOTHING, s);
+        assertEq(NOTHING, n);
+        assertEq(NOTHING, l);
+
+        # a field holding a value is a constant with the value
+        assertEq("s", FinalFields::STR);
+        assertEq(5, FinalFields::BOXED_INT);
+        assertEq(False, FinalFields::BOXED_BOOL, "a false Boolean is not changed");
+        assertEq(ord("a"), FinalFields::CHAR);
+        assertEq(3, FinalFields::NUM);
+        assertEq(7, FinalFields::PRIM);
+        assertEq(False, FinalFields::PRIM_BOOL);
+        assertEq(0, FinalFields::ZERO);
+        assertEq((1, 2), FinalFields::INT_ARRAY);
+        assertEq("FinalFields", FinalFields::SELF.className());
+        # the type of a constant holding a value is the type of the value
+        assertEq("string", cls.getConstant("STR").getType().getName());
+        assertEq("int", cls.getConstant("PRIM").getType().getName());
+        string str = FinalFields::STR;
+        int prim = FinalFields::PRIM;
+        assertEq("s", str);
+        assertEq(7, prim);
     }
 
     private checkNullStaticFieldReads(string label) {
