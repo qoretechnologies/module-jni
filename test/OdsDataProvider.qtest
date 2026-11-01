@@ -2868,7 +2868,8 @@ printf(\"RESULT:%%s\\n\", make_json(rv));
         foreach int i in (xrange(2)) {
             reader = new OdsReadDataProvider({"data": dp.getData(), "headers": ("Id", "Amount"),
                 "preserve_empty_rows": True});
-            assertEq((), (map $1, reader.searchRecords()), "reading the unfinished empty writer is repeatable");
+            assertEq((), (map $1, reader.searchRecords()), "reading the unfinished empty writer is repeatable: read "
+                + (i + 1));
         }
         dp.createRecord({"Id": 9, "Amount": 12});
         reader = new OdsReadDataProvider({"data": dp.getData(), "headers": ("Id", "Amount"),

@@ -127,7 +127,7 @@ public:
             // methods (see BaseMethod::getParamTypes())
             return autoTypeInfo;
         }
-        return clsmap.getQoreType(typeClass, altType, pgm, false, QoreJniClassMap::JavaTypeUse::Value, field);
+        return clsmap.getQoreType(typeClass, altType, pgm, false, QoreJniClassMap::JavaTypeUse::Field, field);
     }
 
     DLLLOCAL int isStatic() const {
@@ -140,6 +140,12 @@ public:
 
     DLLLOCAL bool isSynthetic() const {
         return mods & ACC_SYNTHETIC;
+    }
+
+    //! Returns true if the field holds a reference (an object or an array), which can be null, or false if the field
+    //! has a primitive type, which cannot be null
+    DLLLOCAL bool isReference() const {
+        return type == Type::Reference;
     }
 
     ClassAccess getAccess() const {

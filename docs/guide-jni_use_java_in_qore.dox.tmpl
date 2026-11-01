@@ -163,6 +163,17 @@ System::out.println("testing...");
     field).  A field's member is not returned by the object's keys or hash conversions.  An access from outside the
     class to a field that %Qore code cannot access goes to the class's \c memberGate() method.
 
+    A field's member, or the static class member of a mutable static field, is declared with the %Qore type of the
+    field's Java type, and the value read from the field is checked against it.  A field of a reference type (an
+    object or an array) can be \c null, so its type accepts no value: a \c java.lang.String field is declared as
+    \c *string, a \c java.lang.Integer field as \c *int, and an \c int[] field as <tt>*softlist<int></tt>; a \c null
+    field is read as no value, and assigning no value sets the field to \c null.  A field of a primitive type cannot
+    be \c null, so its type does not accept no value.  A \c java.lang.Character field is declared as \c *int, as a
+    \c Character is converted to an integer, and a field of a class that the classes of values converted to %Qore
+    values implement or extend (ex: \c java.lang.Number, \c java.lang.CharSequence, \c java.lang.Comparable,
+    \c java.time.temporal.Temporal, \c java.util.Date) is declared as \c auto, as a value of such a class (ex: an
+    \c Integer in a \c Number field) is converted to the %Qore value of its own class.
+
     @subsection jni_access_mapping Java Access Mapping in Qore
 
     Java access modifiers are mapped directly to Qore access modifiers as in the following table.

@@ -201,8 +201,11 @@ public:
     enum class JavaTypeUse {
         //! the type of a parameter: a %Qore value is converted to the Java type
         Param,
-        //! the type of a return value or of a field: a value of the Java type is converted to %Qore
+        //! the type of a return value: a value of the Java type is converted to %Qore
         Value,
+        //! the type of a field: as for \c Value, and the value read from the field is checked against the declared
+        //! type, so the declared type accepts every value that the conversion yields
+        Field,
     };
 
     //! Returns the %Qore type declared for a Java type
@@ -214,6 +217,12 @@ public:
         class that lists or maps implement or extend (ex: \c java.util.Collection, \c java.io.Serializable) is
         declared as \c auto, as it is a %Qore list or hash when it is a list or a map.  For a list or a map parameter,
         \a altType is set to the type of the Java class, so that a Java object is accepted as well.
+
+        The value read from a field is checked against the field's declared type, so a field of \c java.lang.Character
+        is declared as an integer, which its value is converted to, and a field of a class that the classes of values
+        converted to %Qore values that are not objects implement or extend (ex: \c java.lang.Number,
+        \c java.lang.CharSequence, \c java.lang.Comparable, \c java.time.temporal.Temporal, \c java.util.Date) is
+        declared as \c auto (see jni_may_be_converted_value() in QoreJniClassMap.cpp).
 
         @param cls the Java class
         @param altType set to the type of the Java class when a variant taking the Java object is needed

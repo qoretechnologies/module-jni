@@ -30,6 +30,8 @@
 %module-cmd(jni) import java.lang.reflect.*
 %module-cmd(jni) import java.lang.invoke.*
 %module-cmd(jni) import org.qore.jni.test.Fields
+%module-cmd(jni) import org.qore.jni.test.NullableFields
+%module-cmd(jni) import org.qore.jni.test.ConvertedValueFields
 %module-cmd(jni) import org.qore.jni.test.QoreJavaApiTest
 %module-cmd(jni) import org.qore.jni.test.OverloadedMethods
 
@@ -223,7 +225,9 @@ hash<auto> sub caller_capability_masks() {
     list<hash<CallStackInfo>> cs = get_thread_call_stack();
     int read = 0;
     for (int n = 0; n < cs.size(); ++n) {
-        Program::getCallerCapabilityMask(n);
+        # only the read is tested, which must not throw
+        auto mask = Program::getCallerCapabilityMask(n);
+        delete mask;
         ++read;
     }
     return {
@@ -295,6 +299,10 @@ public class Main inherits QUnit::Test {
         addTestCase("live static fields test", \testLiveStaticFields());
         addTestCase("instance fields access test", \testInstanceFields());
         addTestCase("live instance fields test", \testLiveInstanceFields());
+        addTestCase("nullable field types test", \testNullableFieldTypes());
+        addTestCase("nullable instance fields test", \testNullableInstanceFields());
+        addTestCase("nullable static fields test", \testNullableStaticFields());
+        addTestCase("converted value fields test", \testConvertedValueFields());
         addTestCase("callback test", \testCallback());
         addTestCase("foreign-thread thread resource cleanup test", \testForeignThreadResourceCleanup());
         addTestCase("nested callback in a Java thread test", \testNestedCallbackInJavaThread());
@@ -2781,6 +2789,291 @@ string sub javaName() {
         MyFields mf();
         mf.i = 12;
         assertEq(12, i.get(mf), "a Qore write through a Qore subclass reaches the Java field");
+    }
+
+    #! the declared type of a Java field of a reference type accepts no value, as the field can be null
+    /** the value read from a field is checked against its declared type, so a null field of a type whose values are
+        converted to a %Qore type that does not accept no value (ex: java.lang.String -> string) needs an "or nothing"
+        type; a Java array is declared as an "or nothing" soft list, as a soft list would convert no value to an empty
+        list; a field of a primitive type cannot be null, so its declared type does not accept no value
+    */
+    testNullableFieldTypes() {
+        load_class("org/qore/jni/test/NullableFields");
+        Reflection::Class cls = Reflection::Class::forName("Jni::org::qore::jni::test::NullableFields");
+        hash<string, string> expected = {
+            # instance fields of reference types
+            "str": "*string",
+            "boxedInt": "*int",
+            "boxedLong": "*int",
+            "boxedBool": "*bool",
+            "boxedDouble": "*float",
+            "dec": "*number",
+            "self": "*object<NullableFields>",
+            "task": "*object<Runnable>",
+            "strArray": "*softlist<*string>",
+            "boxedArray": "*softlist<*int>",
+            "intArray": "*softlist<int>",
+            "bytes": "union<*binary, *list<auto>>",
+            "nestedArray": "*softlist<*softlist<*string>>",
+            "strList": "union<*list<auto>, *object<List>>",
+            "strMap": "union<*hash<auto>, *object<Map>>",
+            # instance fields of primitive types
+            "prim": "int",
+            "primBool": "bool",
+            "primDouble": "float",
+            # static fields of reference types
+            "staticStr": "*string",
+            "staticBoxedInt": "*int",
+            "staticSelf": "*object<NullableFields>",
+            "staticStrArray": "*softlist<*string>",
+            "staticIntArray": "*softlist<int>",
+            # static fields of primitive types
+            "staticPrim": "int",
+            "staticPrimBool": "bool",
+        };
+        hash<string, string> actual = map {$1: cls.getMember($1).getType().getName()}, keys expected;
+        assertEq(expected, actual, "declared field types");
+    }
+
+    #! a null Java instance field of a reference type is read as no value, and no value written to it sets it to null
+    testNullableInstanceFields() {
+        lang::Class clazz = load_class("org/qore/jni/test/NullableFields");
+        # an object made by the Qore constructor and one made in Java
+        checkNullableInstanceFields(new NullableFields(), "Qore-made object");
+        checkNullableInstanceFields(clazz.newInstance(), "Java-made object");
+
+        # a field of a primitive type cannot be null
+        NullableFields obj();
+        obj.prim = 1;
+        obj.primBool = True;
+        obj.primDouble = 1.5;
+        auto untyped = obj;
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { untyped.prim = NOTHING; });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { untyped.primBool = NOTHING; });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { untyped.primDouble = NOTHING; });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { untyped.prim = "not an int"; });
+        assertEq(1, obj.prim, "a rejected value does not reach the primitive field");
+        assertEq(True, obj.primBool, "a rejected value does not reach the primitive field");
+        assertEq(1.5, obj.primDouble, "a rejected value does not reach the primitive field");
+        # a value of the wrong type is still rejected for a field of a reference type
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { untyped.boxedInt = "not an int"; });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { untyped.str = {}; });
+        assertEq(NOTHING, obj.boxedInt, "a rejected value does not reach the reference field");
+        assertEq(NOTHING, obj.str, "a rejected value does not reach the reference field");
+    }
+
+    private checkNullableInstanceFields(NullableFields obj, string label) {
+        Field strField = obj.getClass().getDeclaredField("str");
+        Field strArrayField = obj.getClass().getDeclaredField("strArray");
+
+        assertTrue(obj.allNull(), label + ": all fields are null in Java");
+        checkNullInstanceFieldReads(obj, label + ": initial");
+
+        # a value written in Qore reaches the Java field and is read back
+        obj.str = "s";
+        assertEq("s", obj.str, label);
+        assertEq("s", strField.get(obj), label + ": a Qore write reaches the Java field");
+        obj.boxedInt = 1;
+        obj.boxedInt += 2;
+        assertEq(3, obj.boxedInt, label);
+        obj.boxedLong = 0x123456789;
+        assertEq(0x123456789, obj.boxedLong, label);
+        obj.boxedBool = True;
+        assertEq(True, obj.boxedBool, label);
+        obj.boxedDouble = 1.5;
+        assertEq(1.5, obj.boxedDouble, label);
+        obj.dec = 1.5n;
+        assertEq(1.5n, obj.dec, label);
+        NullableFields other();
+        other.str = "other";
+        obj.self = other;
+        assertEq("other", obj.self.str, label);
+        obj.strArray = ("a", NOTHING);
+        assertEq(("a", NOTHING), obj.strArray, label);
+        obj.boxedArray = (1, NOTHING);
+        assertEq((1, NOTHING), obj.boxedArray, label);
+        obj.intArray = (1, 2);
+        assertEq((1, 2), obj.intArray, label);
+        obj.bytes = <0102>;
+        assertEq(<0102>, obj.bytes, label);
+        obj.nestedArray = (("a",), NOTHING);
+        assertEq((("a",), NOTHING), obj.nestedArray, label);
+        obj.strList = ("a",);
+        assertEq(("a",), obj.strList, label);
+        obj.strMap = {"a": "b"};
+        assertEq({"a": "b"}, obj.strMap, label);
+        assertFalse(obj.allNull(), label + ": the Qore writes reach the Java fields");
+
+        # an empty array is not null, and it is read as an empty list
+        obj.intArray = ();
+        assertEq((), obj.intArray, label + ": an empty array");
+        assertFalse(obj.allNull(), label + ": an empty array is not null");
+
+        # a value that the Java code sets is read back
+        strField.set(obj, "java");
+        assertEq("java", obj.str, label + ": a Java write is visible in Qore");
+        strArrayField.set(obj, NOTHING);
+        assertEq(NOTHING, obj.strArray, label + ": a null array set in Java is read as no value");
+
+        # no value written in Qore sets the Java field to null: by assignment, by remove, and by delete
+        obj.str = NOTHING;
+        assertEq(NOTHING, strField.get(obj), label + ": no value sets the Java field to null");
+        remove obj.boxedInt;
+        delete obj.boxedLong;
+        obj.boxedBool = NOTHING;
+        obj.boxedDouble = NOTHING;
+        obj.dec = NOTHING;
+        obj.self = NOTHING;
+        obj.task = NOTHING;
+        obj.strArray = NOTHING;
+        obj.boxedArray = NOTHING;
+        remove obj.intArray;
+        obj.bytes = NOTHING;
+        obj.nestedArray = NOTHING;
+        obj.strList = NOTHING;
+        obj.strMap = NOTHING;
+        assertTrue(obj.allNull(), label + ": no value written in Qore sets every Java field to null");
+        checkNullInstanceFieldReads(obj, label + ": after the fields are set to null");
+
+        # a field read through an untyped value is read as no value as well
+        auto untyped = obj;
+        assertEq(NOTHING, untyped.str, label + ": untyped read");
+        untyped.str = "t";
+        assertEq("t", untyped.str, label + ": untyped write");
+        untyped.str = NOTHING;
+        assertEq(NOTHING, untyped.str, label + ": untyped write of no value");
+    }
+
+    private checkNullInstanceFieldReads(NullableFields obj, string label) {
+        assertEq(NOTHING, obj.str, label + ": String");
+        assertEq(NOTHING, obj.boxedInt, label + ": Integer");
+        assertEq(NOTHING, obj.boxedLong, label + ": Long");
+        assertEq(NOTHING, obj.boxedBool, label + ": Boolean");
+        assertEq(NOTHING, obj.boxedDouble, label + ": Double");
+        assertEq(NOTHING, obj.boxedChar, label + ": Character");
+        assertEq(NOTHING, obj.num, label + ": Number");
+        assertEq(NOTHING, obj.dec, label + ": BigDecimal");
+        assertEq(NOTHING, obj.self, label + ": object");
+        assertEq(NOTHING, obj.task, label + ": interface");
+        assertEq(NOTHING, obj.strArray, label + ": String[]");
+        assertEq(NOTHING, obj.boxedArray, label + ": Integer[]");
+        assertEq(NOTHING, obj.intArray, label + ": int[]");
+        assertEq(NOTHING, obj.bytes, label + ": byte[]");
+        assertEq(NOTHING, obj.nestedArray, label + ": String[][]");
+        assertEq(NOTHING, obj.strList, label + ": List<String>");
+        assertEq(NOTHING, obj.strMap, label + ": Map<String, String>");
+    }
+
+    #! a null Java static field of a reference type is read as no value, and no value written to it sets it to null
+    testNullableStaticFields() {
+        lang::Class clazz = load_class("org/qore/jni/test/NullableFields");
+        Reflection::Class cls = Reflection::Class::forName("Jni::org::qore::jni::test::NullableFields");
+        Field strField = clazz.getDeclaredField("staticStr");
+        Field intArrayField = clazz.getDeclaredField("staticIntArray");
+
+        assertTrue(NullableFields::allStaticNull(), "all static fields are null in Java");
+        checkNullStaticFieldReads("initial");
+        assertEq(NOTHING, cls.getStaticMember("staticStr").getValue(), "a null static field read by reflection");
+
+        NullableFields::staticStr = "s";
+        assertEq("s", NullableFields::staticStr);
+        assertEq("s", strField.get(), "a Qore write reaches the static Java field");
+        NullableFields::staticBoxedInt = 1;
+        NullableFields::staticBoxedInt += 2;
+        assertEq(3, NullableFields::staticBoxedInt);
+        NullableFields::staticSelf = new NullableFields();
+        assertEq("NullableFields", NullableFields::staticSelf.className());
+        NullableFields::staticStrArray = ("a", NOTHING);
+        assertEq(("a", NOTHING), NullableFields::staticStrArray);
+        NullableFields::staticIntArray = ();
+        assertEq((), NullableFields::staticIntArray, "an empty array is read as an empty list");
+        assertFalse(NullableFields::allStaticNull(), "the Qore writes reach the static Java fields");
+        intArrayField.set(NOTHING, NOTHING);
+        assertEq(NOTHING, NullableFields::staticIntArray, "a null array set in Java is read as no value");
+
+        # no value written in Qore sets the Java field to null
+        NullableFields::staticStr = NOTHING;
+        remove NullableFields::staticBoxedInt;
+        delete NullableFields::staticSelf;
+        cls.getStaticMember("staticStrArray").setValue(NOTHING);
+        assertTrue(NullableFields::allStaticNull(), "no value written in Qore sets every static Java field to null");
+        checkNullStaticFieldReads("after the fields are set to null");
+
+        # a static field of a primitive type cannot be null
+        NullableFields::staticPrim = 2;
+        assertThrows("RUNTIME-TYPE-ERROR", \cls.getStaticMember("staticPrim").setValue(), NOTHING);
+        assertThrows("RUNTIME-TYPE-ERROR", \cls.getStaticMember("staticPrimBool").setValue(), NOTHING);
+        assertEq(2, NullableFields::staticPrim, "a rejected value does not reach the primitive static field");
+    }
+
+    #! a Java field whose value is converted to a Qore value of another type than its class is declared with a type
+    #! that accepts the converted value, as the value read from a field is checked against its declared type
+    testConvertedValueFields() {
+        lang::Class clazz = load_class("org/qore/jni/test/ConvertedValueFields");
+        Reflection::Class cls = Reflection::Class::forName("Jni::org::qore::jni::test::ConvertedValueFields");
+        hash<string, string> expected = {
+            "ch": "*int",
+            "num": "auto",
+            "chars": "auto",
+            "comparable": "auto",
+            "utilDate": "auto",
+            "timestampInDate": "auto",
+            "temporal": "auto",
+            "charArray": "*softlist<*int>",
+            "cloneable": "auto",
+            "big": "*object<BigInteger>",
+            "staticNum": "auto",
+            "staticChars": "auto",
+            "staticCh": "*int",
+        };
+        hash<string, string> actual = map {$1: cls.getMember($1).getType().getName()}, keys expected;
+        assertEq(expected, actual, "declared field types");
+
+        ConvertedValueFields obj();
+        assertEq(ord("a"), obj.ch, "a Character is read as an integer");
+        assertEq(3, obj.num, "an Integer in a Number field is read as an integer");
+        assertEq("x", obj.chars, "a String in a CharSequence field is read as a string");
+        assertEq("y", obj.comparable, "a String in a Comparable field is read as a string");
+        assertEq("Date", obj.utilDate.className(), "a java.util.Date is read as a Java object");
+        assertEq(Type::Date, obj.timestampInDate.type(), "a Timestamp in a java.util.Date field is read as a date");
+        assertEq(2026-01-02, obj.temporal, "a LocalDate in a Temporal field is read as a date");
+        assertEq((ord("a"), ord("b")), obj.charArray, "a Character[] is read as a list of integers");
+        assertEq((1, 2), obj.cloneable, "an int[] in a Cloneable field is read as a list");
+        assertEq("BigInteger", obj.big.className(), "a Number that is not converted is read as a Java object");
+
+        # a converted value written in Qore reaches the Java field and is read back
+        obj.ch = ord("b");
+        assertEq(ord("b"), obj.ch);
+        assertEq(ord("b"), clazz.getDeclaredField("ch").get(obj), "a Qore write reaches the Character field");
+        obj.chars = "w";
+        assertEq("w", obj.chars);
+        # an integer is converted to a Java object only for a parameter or field of a class of integers
+        obj.num = new Integer(5);
+        assertEq(5, obj.num, "an Integer written to a Number field is read as an integer");
+        obj.charArray = (ord("c"), NOTHING);
+        assertEq((ord("c"), NOTHING), obj.charArray);
+        obj.ch = NOTHING;
+        obj.num = NOTHING;
+        obj.chars = NOTHING;
+        assertEq(NOTHING, obj.ch);
+        assertEq(NOTHING, obj.num);
+        assertEq(NOTHING, obj.chars);
+        assertEq(NOTHING, clazz.getDeclaredField("chars").get(obj), "no value sets the CharSequence field to null");
+        # a value of the wrong type is rejected
+        auto untyped = obj;
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { untyped.ch = "not an int"; });
+
+        assertEq(4, ConvertedValueFields::staticNum, "a Long in a static Number field is read as an integer");
+        assertEq("z", ConvertedValueFields::staticChars, "a String in a static CharSequence field is read as a string");
+        assertEq(ord("c"), ConvertedValueFields::staticCh, "a static Character is read as an integer");
+    }
+
+    private checkNullStaticFieldReads(string label) {
+        assertEq(NOTHING, NullableFields::staticStr, label + ": String");
+        assertEq(NOTHING, NullableFields::staticBoxedInt, label + ": Integer");
+        assertEq(NOTHING, NullableFields::staticSelf, label + ": object");
+        assertEq(NOTHING, NullableFields::staticStrArray, label + ": String[]");
+        assertEq(NOTHING, NullableFields::staticIntArray, label + ": int[]");
     }
 
     testCallback() {

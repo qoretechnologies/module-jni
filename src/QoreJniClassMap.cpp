@@ -1713,13 +1713,13 @@ static const QoreTypeInfo* jni_get_collection_type(Env& env, jclass cls, JniQore
     if (!env.callBooleanMethod(Globals::classMap, Globals::methodClassIsAssignableFrom, &jarg)) {
         // a value of a class that lists or maps implement or extend (ex: Collection, Iterable, Serializable) is a
         // Qore list or hash when it is a list or a map
-        if (use == QoreJniClassMap::JavaTypeUse::Value && env.callStaticBooleanMethod(Globals::classJavaCollectionTypes,
+        if (use != QoreJniClassMap::JavaTypeUse::Param && env.callStaticBooleanMethod(Globals::classJavaCollectionTypes,
                 Globals::methodJavaCollectionTypesMayBeListOrMap, &jarg)) {
             return autoTypeInfo;
         }
         return nullptr;
     }
-    if (use == QoreJniClassMap::JavaTypeUse::Value) {
+    if (use != QoreJniClassMap::JavaTypeUse::Param) {
         // a map is converted to a hash when all its keys are strings
         jarg.l = member ? member : cls;
         if (!env.callStaticBooleanMethod(Globals::classJavaCollectionTypes,
@@ -1729,6 +1729,54 @@ static const QoreTypeInfo* jni_get_collection_type(Env& env, jclass cls, JniQore
     }
     altType = literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
     return literal ? autoHashTypeInfo : autoHashOrNothingTypeInfo;
+}
+
+//! Returns true if a value of a Java class can be a value that is converted to a %Qore value that is not an object,
+//! without the class being the class of such values
+/** The classes are those whose values JavaToQore::convertToQore() and QoreJniClassMap::getValue() convert to strings,
+    numbers, booleans, and dates; this must be kept in sync with those conversions.  A class that one of them
+    implements or extends (ex: \c java.lang.Number, \c java.lang.CharSequence, \c java.lang.Comparable,
+    \c java.time.temporal.Temporal, \c java.util.Date) returns true.  \c org.qore.jni.QoreRelativeTime, whose values
+    are converted to dates as well, extends only \c java.lang.Object, and arrays, lists, and maps are handled by
+    jni_get_collection_type().
+*/
+static bool jni_may_be_converted_value(Env& env, jclass cls) {
+    const jclass converted_classes[] = {
+        Globals::classString,
+        Globals::classInteger,
+        Globals::classLong,
+        Globals::classShort,
+        Globals::classByte,
+        Globals::classBoolean,
+        Globals::classDouble,
+        Globals::classFloat,
+        Globals::classCharacter,
+        Globals::classBigDecimal,
+        Globals::classZonedDateTime,
+        Globals::classOffsetDateTime,
+        Globals::classOffsetTime,
+        Globals::classLocalDateTime,
+        Globals::classLocalDate,
+        Globals::classLocalTime,
+        Globals::classInstant,
+        Globals::classTimestamp,
+        Globals::classDate,
+        Globals::classTime,
+    };
+    for (jclass converted : converted_classes) {
+        assert(converted);
+        if (env.isSameObject(cls, converted)) {
+            return false;
+        }
+    }
+    for (jclass converted : converted_classes) {
+        jvalue jarg;
+        jarg.l = converted;
+        if (env.callBooleanMethod(cls, Globals::methodClassIsAssignableFrom, &jarg)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*& altType, QoreProgram* pgm,
@@ -1856,6 +1904,11 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
         return ti;
     }
 
+    if (use == JavaTypeUse::Field && !strcmp(tname.c_str(), "java.lang.Character")) {
+        // a Character is converted to an integer, and the value read from a field is checked against its declared type
+        return literal ? bigIntTypeInfo : bigIntOrNothingTypeInfo;
+    }
+
     // find static mapping
     jtmap_t::const_iterator i = jtmap.find(tname.c_str());
     if (i != jtmap.end()) {
@@ -1905,6 +1958,14 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
             altType = literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
             return i->second;
         }
+    }
+
+    // a value of a class that the classes of converted values implement or extend (ex: Number, CharSequence,
+    // Comparable) is converted to a Qore value that is not an object of the class when it is a converted value (ex: a
+    // String in a CharSequence field is a Qore string), and the value read from a field is checked against its
+    // declared type
+    if (use == JavaTypeUse::Field && jni_may_be_converted_value(env, cls)) {
+        return autoTypeInfo;
     }
 
     return literal ? qc->getTypeInfo() : qc->getOrNothingTypeInfo();
@@ -4057,6 +4118,14 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
             if (const QoreTypeInfo* union_type = qore_get_union_or_nothing_type(field_types)) {
                 fieldTypeInfo = union_type;
             }
+        }
+        // a field of a reference type can be null, which is read as no value, and the value read from the field and
+        // the value assigned to it are checked against the declared type; the type of a value of a reference type
+        // does not always accept no value (ex: java.lang.String -> string, java.lang.Integer -> int, and a Java
+        // array -> softlist<T>, which converts no value to an empty list), so the field's declared type must; a
+        // field of a primitive type cannot be null, so its declared type does not accept no value
+        if (field->isReference()) {
+            fieldTypeInfo = qore_get_or_nothing_type(fieldTypeInfo);
         }
 
         if (field->isStatic()) {

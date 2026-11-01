@@ -25,7 +25,11 @@
       \c java.lang.* (see @ref jniimport)
     - fixed reading a Java instance field of an object created with a %Qore constructor returning no value instead
       of the field's value; reading or assigning a Java instance field now reads or writes the field of the Java
-      object for every object, and an assignment in %Qore is visible in Java (see @ref jni_class_fields)
+      object for every object, and an assignment in %Qore is visible in Java; a field of a reference type (an object
+      or an array) is declared with a type that accepts no value, as it can be \c null, and a field whose value is
+      converted to a %Qore value of another type than its class (ex: a \c java.lang.Number or
+      \c java.lang.CharSequence field) is declared with a type that accepts the converted value
+      (see @ref jni_class_fields)
     - fixed a Java method call ending the process when its thread could not be attached to the JVM, as when the
       thread's cancellation was pending; the call now raises the exception (ex: \c THREAD-CANCELLED)
     - fixed a child process created with \c fork() after the JVM was started waiting forever when it exited or ended
