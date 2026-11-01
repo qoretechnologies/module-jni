@@ -5,6 +5,7 @@
 # destructor raises an exception when the Program is deleted, at process exit
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.GlobalContextTeardownFixture
