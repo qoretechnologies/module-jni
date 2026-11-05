@@ -131,15 +131,10 @@ if [[ "${QORE_DB_CONNSTR}" == pgsql:* ]]; then
 fi
 
 # run the tests
-export QORE_MODULE_DIR=${MODULE_SRC_DIR}/qlib:${MODULE_SRC_DIR}/test/JakartaJms/lib:${QORE_MODULE_DIR}
+export QORE_MODULE_DIR=${MODULE_SRC_DIR}/qlib:${MODULE_SRC_DIR}/build:${MODULE_SRC_DIR}/test/JakartaJms/lib:${QORE_MODULE_DIR}
 cd ${MODULE_SRC_DIR}
-# the tests must load the module that this job built and installed, not one that the image already has
-loaded=$(qore -l jni -e 'printf("%s", get_module_hash().jni.filename);')
-if ! grep -qxF "${loaded}" ${MODULE_SRC_DIR}/build/install_manifest.txt; then
-    echo "ERROR: the tests would load '${loaded}', which this job did not install" >&2
-    exit 1
-fi
-echo "-- the tests load ${loaded}"
+# the tests must load the modules that this job built, not the copies that the image already has
+${MODULE_SRC_DIR}/test/docker_test/check-loaded-modules.sh ${MODULE_SRC_DIR}/build gosu qore:qore
 
 for test in test/*.qtest; do
     # skip legacy jms test
@@ -151,6 +146,9 @@ for test in test/*.qtest; do
     RESULTS="$RESULTS $?"
     date
 done
+
+# ... and they still do once the tests have run
+${MODULE_SRC_DIR}/test/docker_test/check-loaded-modules.sh ${MODULE_SRC_DIR}/build gosu qore:qore
 
 # run Jakarta JMS unit tests (no broker needed)
 echo && echo "-- running Jakarta JMS unit tests --"
