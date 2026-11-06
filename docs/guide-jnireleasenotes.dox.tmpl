@@ -7,7 +7,7 @@
     @section jni_3_0_0 jni Module Version 3.0.0
 
     - fixed a deadlock when a module failed to load while another thread generated the Java class of a %Qore class:
-      after it, every thread loading a module or generating a Java class waited forever
+      once the two threads had deadlocked, every thread loading a module or generating a Java class waited forever
     - <b>Security</b>: %Qore code that Java calls on a Java thread - a
       @ref Jni::org::qore::jni::QoreInvocationHandler "QoreInvocationHandler" proxy, a closure passed to Java, or a
       method of a %Qore object passed to Java - now runs under the sandbox of the code that handed it to Java, and is
