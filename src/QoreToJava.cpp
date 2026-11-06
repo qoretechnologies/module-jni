@@ -375,7 +375,7 @@ jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniEx
             if (!strcmp(cname.c_str(), ocname.c_str())) {
                 QoreStringMaker str("ClassLoader error; expected a Java object of class '%s'; object has same "
                     "class name but a different classloader and is therefore incompatible",
-                    cname.c_str(), ocname.c_str());
+                    cname.c_str());
                 throw BasicException(str.c_str());
             }
 

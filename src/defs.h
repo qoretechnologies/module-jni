@@ -180,7 +180,7 @@ public:
    }
 
    DLLLOCAL void convert(ExceptionSink *xsink) override {
-      xsink->raiseException("JNI-ERROR", message.c_str());
+      xsink->raiseException("JNI-ERROR", "%s", message.c_str());
    }
 
 private:
@@ -215,7 +215,7 @@ public:
     }
 
     DLLLOCAL void convert(ExceptionSink *xsink) override {
-        xsink->raiseException(err.c_str(), desc.c_str());
+        xsink->raiseException(err.c_str(), "%s", desc.c_str());
     }
 
 

@@ -151,7 +151,7 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
     }
 
     if (port < 0 || port > 65535) {
-        xsink->raiseException("JNI-NETWORK-BIND-ERROR", "TCP bind port %d is outside the valid range 0..65535", port);
+        xsink->raiseException("JNI-NETWORK-BIND-ERROR", "TCP bind port %lld is outside the valid range 0..65535", port);
         return QoreValue();
     }
 
