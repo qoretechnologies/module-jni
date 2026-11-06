@@ -540,6 +540,38 @@ static qmnpc_t& qmnc_ref() {
     return *m;
 }
 
+// how many times the current thread holds the module namespace cache lock
+static thread_local unsigned qmnc_lock_depth = 0;
+
+//! Holds the module namespace cache lock; the lock is never held while calling the module manager
+/** libqore holds its module manager mutex while it destroys a module that failed to load, which runs
+    purge_module_root_ns_cache() and so takes this lock: calling the module manager with this lock held would be a
+    lock-order inversion.
+*/
+class QmncLocker {
+public:
+    DLLLOCAL QmncLocker() {
+        qmnc_lock_ref().lock();
+        ++qmnc_lock_depth;
+    }
+
+    DLLLOCAL ~QmncLocker() {
+        --qmnc_lock_depth;
+        qmnc_lock_ref().unlock();
+    }
+
+private:
+    QmncLocker(const QmncLocker&) = delete;
+    QmncLocker& operator=(const QmncLocker&) = delete;
+};
+
+#ifdef DEBUG
+// module root namespace searches made, and those made while the cache lock was held by the searching thread (see
+// dbg_jni_module_root_ns_search_count())
+static std::atomic<size_t> qmnc_searches(0);
+static std::atomic<size_t> qmnc_locked_searches(0);
+#endif
+
 static void JNICALL invocation_handler_finalize(JNIEnv* jenv, jclass, jlong ptr) {
     std::unique_ptr<Dispatcher> dispatcher(reinterpret_cast<Dispatcher*>(ptr));
     ExceptionSink xsink;
@@ -1680,20 +1712,35 @@ const QoreNamespace* get_class_module_root_ns(const QoreClass& qc, const char* n
     return ns;
 }
 
+// count of teardown notifications received for Programs; also tells get_module_root_ns() whether a Program was torn
+// down while it searched without the cache lock
+static size_t qmnc_purge_count = 0;
+
 const QoreNamespace* get_module_root_ns(const char* name, QoreProgram* mod_pgm) {
-    AutoLocker al(qmnc_lock_ref());
-    qmnpc_t::iterator pi = qmnc_ref().lower_bound(mod_pgm);
-    qmnc_t::iterator i;
-    if (pi == qmnc_ref().end() || pi->first != mod_pgm) {
-        pi = qmnc_ref().insert(pi, qmnpc_t::value_type(mod_pgm, qmnc_t()));
-        i = pi->second.end();
-    } else {
-        i = pi->second.lower_bound(name);
-        if (i != pi->second.end() && i->first == name) {
-            return i->second;
+    size_t purges;
+    {
+        QmncLocker al;
+        purges = qmnc_purge_count;
+        qmnpc_t::const_iterator pi = qmnc_ref().find(mod_pgm);
+        if (pi != qmnc_ref().end()) {
+            qmnc_t::const_iterator i = pi->second.find(name);
+            if (i != pi->second.end()) {
+                return i->second;
+            }
         }
     }
 
+    // The namespace is searched without the cache lock, as the search calls the module manager, which takes its own
+    // mutex: libqore holds that mutex while it destroys a module that failed to load, which runs this module's
+    // program cleanup callback and so purge_module_root_ns_cache(), which takes the cache lock.  Holding the cache
+    // lock here made a lock-order inversion that deadlocked both threads (qorus-core: a service's module that failed
+    // to load against a service's Java class being generated) and then every thread that loaded a module.
+#ifdef DEBUG
+    ++qmnc_searches;
+    if (qmnc_lock_depth) {
+        ++qmnc_locked_searches;
+    }
+#endif
     ReferenceHolder<QoreHashNode> all_mod_info(MM.getModuleHash(), nullptr);
     mod_dep_map_t mod_dep_map;
 
@@ -1728,13 +1775,16 @@ const QoreNamespace* get_module_root_ns(const char* name, QoreProgram* mod_pgm) 
         }
     }
     if (rv) {
-        pi->second.insert(i, qmnc_t::value_type(name, rv));
+        QmncLocker al;
+        // a Program torn down during the search can be mod_pgm or the Program owning rv, whose entries are gone: the
+        // answer is not cached then, as an entry added now would outlive its Program; another thread can also have
+        // cached the same answer in the meantime, and the first one is kept
+        if (qmnc_purge_count == purges) {
+            qmnc_ref()[mod_pgm].emplace(name, rv);
+        }
     }
     return rv;
 }
-
-// count of teardown notifications received for Programs (diagnostics only)
-static size_t qmnc_purge_count = 0;
 
 void purge_module_root_ns_cache(QoreProgram* mod_pgm) {
     if (jni::Jvm::isForkedChild()) {
@@ -1742,18 +1792,24 @@ void purge_module_root_ns_cache(QoreProgram* mod_pgm) {
         // cannot be used here, and a thread of the parent can have held its lock when the process was created
         return;
     }
-    AutoLocker al(qmnc_lock_ref());
+    QmncLocker al;
     ++qmnc_purge_count;
     qmnc_ref().erase(mod_pgm);
 }
 
 size_t get_module_root_ns_cache_purge_count() {
-    AutoLocker al(qmnc_lock_ref());
+    QmncLocker al;
     return qmnc_purge_count;
 }
 
+#ifdef DEBUG
+size_t get_module_root_ns_search_count(bool locked) {
+    return locked ? qmnc_locked_searches.load() : qmnc_searches.load();
+}
+#endif
+
 size_t get_module_root_ns_cache_program_count() {
-    AutoLocker al(qmnc_lock_ref());
+    QmncLocker al;
     return qmnc_ref().size();
 }
 
