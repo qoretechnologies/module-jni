@@ -159,7 +159,7 @@ public class GenericServer {
             this.namespace = new RuntimeNamespace(server);
             this.namespace.startup();
         } catch (Exception | Error e) {
-            releasePort();
+            releasePort(e);
             throw e;
         }
     }
@@ -190,7 +190,11 @@ public class GenericServer {
         try {
             rv.bind(new InetSocketAddress(address, port));
         } catch (Exception | Error e) {
-            rv.close();
+            try {
+                rv.close();
+            } catch (Exception closeError) {
+                e.addSuppressed(closeError);
+            }
             throw e;
         }
         return rv;
@@ -201,6 +205,15 @@ public class GenericServer {
         if (l != null) {
             listener = null;
             l.close();
+        }
+    }
+
+    // releases the port while the given failure is raised, which a failure to release it does not replace
+    private void releasePort(Throwable failure) {
+        try {
+            releasePort();
+        } catch (Exception releaseError) {
+            failure.addSuppressed(releaseError);
         }
     }
 
@@ -279,10 +292,12 @@ public class GenericServer {
                 server.shutdown().get();
                 started = false;
             }
-        } finally {
-            // the server's channel closed the listener; a server that was never started still holds it
-            releasePort();
+        } catch (Exception | Error e) {
+            releasePort(e);
+            throw e;
         }
+        // the server's channel closed the listener; a server that was never started still holds it
+        releasePort();
     }
 
     /** Returns the configured endpoint URL. */
