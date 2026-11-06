@@ -764,6 +764,12 @@ DLLLOCAL size_t get_module_root_ns_cache_program_count();
 // returns how many Programs have had cache entries purged (diagnostics only)
 DLLLOCAL size_t get_module_root_ns_cache_purge_count();
 
+#ifdef DEBUG
+// returns how many module root namespace searches were made, or, with \a locked, how many of them were made while
+// the searching thread held the cache lock (diagnostics only)
+DLLLOCAL size_t get_module_root_ns_search_count(bool locked);
+#endif
+
 // find a subnamespace with "::" delimited paths; returns nullptr if not found
 DLLLOCAL const QoreNamespace* find_ns_path(const QoreNamespace* ns, const char* ns_path);
 

@@ -49,7 +49,27 @@ static QoreValue f_dbg_jni_module_root_ns_cache_purge_count(const QoreListNode* 
     return (int64)jni::get_module_root_ns_cache_purge_count();
 }
 
+//! Returns how many module root namespace searches were made
+static QoreValue f_dbg_jni_module_root_ns_search_count(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    return (int64)jni::get_module_root_ns_search_count(false);
+}
+
+//! Returns how many module root namespace searches were made while the searching thread held the cache lock
+/** The search calls the module manager, whose mutex libqore holds while the cache lock is taken to purge the entries
+    of a destroyed module Program; a search made with the cache lock held is a lock-order inversion that can deadlock
+    - see test/JniModuleRootNsCache.qtest.
+*/
+static QoreValue f_dbg_jni_module_root_ns_locked_search_count(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    return (int64)jni::get_module_root_ns_search_count(true);
+}
+
 void init_jni_debug_functions(QoreNamespace& ns) {
+    ns.addBuiltinVariant("dbg_jni_module_root_ns_search_count", f_dbg_jni_module_root_ns_search_count,
+        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_module_root_ns_locked_search_count",
+        f_dbg_jni_module_root_ns_locked_search_count, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     ns.addBuiltinVariant("dbg_jni_module_root_ns_cache_size", f_dbg_jni_module_root_ns_cache_size,
         QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     ns.addBuiltinVariant("dbg_jni_module_root_ns_cache_purge_count",

@@ -52,11 +52,22 @@ class JniModuleRootNsCacheTest inherits QUnit::Test {
             "string sub go() {\n"
             "    return Jni::org::qore::jni::get_java_name(\"::Util::TerminalColor\");\n"
             "}\n";
+
+        #! Resolves a class of a module that no other test case uses
+        /** A module's root namespace is cached for the Program owning the class, which for a user module is the
+            module's own Program, so only the first lookup for each module searches
+        */
+        const SearchSrc = "%requires jni\n"
+            "%requires Mime\n"
+            "string sub go() {\n"
+            "    return Jni::org::qore::jni::get_java_name(\"::Mime::MultiPartMessage\");\n"
+            "}\n";
     }
 
     constructor() : Test("JniModuleRootNsCacheTest", "1.0") {
         addTestCase("each destroyed Program is announced to the jni module", \teardownNotifiedTest());
         addTestCase("Program churn does not grow the cache", \noGrowthTest());
+        addTestCase("module root namespaces are searched without the cache lock", \unlockedSearchTest());
         set_return_value(main());
     }
 
@@ -81,9 +92,9 @@ class JniModuleRootNsCacheTest inherits QUnit::Test {
     /** get_java_name() is the entry point that crashed: it reaches getJavaNameForClass(), which
         calls get_module_root_ns() and so exercises the cache.
     */
-    private runAndDestroyChild() {
+    private runAndDestroyChild(string src = ChildSrc) {
         Program p(PO_NEW_STYLE);
-        p.parse(ChildSrc, "child");
+        p.parse(src, "child");
         p.callFunction("go");
         # destroy explicitly: the assertions below are only meaningful if teardown is deterministic
         delete p;
@@ -102,6 +113,28 @@ class JniModuleRootNsCacheTest inherits QUnit::Test {
         # cache entries behind as dangling pointers for whatever is allocated at its address next
         assertEq(before + 1, teardownCount(),
             "destroying one Program delivered exactly one cleanup notification");
+    }
+
+    #! The search calls the module manager, so it must run without the cache lock
+    /** libqore holds its module manager mutex while it destroys a module that failed to load, and the cleanup
+        notification asserted above then takes the cache lock to purge that Program's entries; a search made with the
+        cache lock held calls the module manager in the opposite order.  qorus-core deadlocked on that: a service's
+        module failing to load against another service's Java class being generated, and then every thread that
+        loaded a module.  Which thread wins is a matter of timing, so the lock order is asserted instead.
+    */
+    private unlockedSearchTest() {
+        int searches = dbgCounter("dbg_jni_module_root_ns_search_count");
+        if (searches == -1) {
+            testSkip("the jni module's debug diagnostics require a debug build");
+        }
+        int locked = dbgCounter("dbg_jni_module_root_ns_locked_search_count");
+
+        runAndDestroyChild(SearchSrc);
+
+        assertGt(searches, dbgCounter("dbg_jni_module_root_ns_search_count"),
+            "generating a class name searched for its module's root namespace");
+        assertEq(locked, dbgCounter("dbg_jni_module_root_ns_locked_search_count"),
+            "no search was made with the cache lock held");
     }
 
     private noGrowthTest() {
