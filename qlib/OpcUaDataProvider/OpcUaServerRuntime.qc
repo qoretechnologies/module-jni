@@ -34,8 +34,18 @@ public class OpcUaServerRuntime {
             loopback \c bind_address and \c hostname values.
         @note \c max_history_values bounds implicit in-memory history retained per historizing variable; the
             default is 1024 and 0 disables implicit history retention.
+        @note a \c port of 0 lets the OS assign a free port, which getPort() and getEndpointUrl() then return; the
+            port is held from the runtime's creation until it is stopped, so no other socket can take it in between
+
+        @throw NETWORK-ACCESS-DENIED if the port is 0 and an active Qore network sandbox denies the bind, which is
+            made when the runtime is created
     */
     constructor(hash<auto> options, *code<hash<auto>(string, hash<auto>)> runtime_callback) {
+        hash<auto> target = GenericServer::getBindTarget(options);
+        if (!target.port) {
+            # an OS-assigned port is bound when the server is created, not when it is started
+            Jni::org::qore::jni::check_network_bind(target.bind_address, 0, self);
+        }
         callback = runtime_callback;
         if (callback) {
             server = new GenericServer(options, callback);
@@ -70,6 +80,11 @@ public class OpcUaServerRuntime {
     #! Returns the OPC TCP endpoint URL
     string getEndpointUrl() {
         return server.getEndpointUrl();
+    }
+
+    #! Returns the TCP port of the endpoint; an OS-assigned port (a \c port option of 0) is returned as assigned
+    int getPort() {
+        return server.getPort();
     }
 
     #! Returns the materialized schema snapshot with actual server node ids

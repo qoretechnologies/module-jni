@@ -525,6 +525,9 @@ module OpcUaDataProvider {
     @section opcuadataproviderrelnotes Release Notes
 
     @subsection opcuadataproviderv110 OpcUaDataProvider v1.10.0
+    - @ref OpcUaDataProvider::OpcUaServerRuntime "OpcUaServerRuntime": a \c port of 0 lets the OS assign a free port,
+      which is held from the runtime's creation until it is stopped and returned by the new
+      @ref OpcUaDataProvider::OpcUaServerRuntime::getPort() "getPort()" method
     - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
       presentation keeps its original producer identity, including HTTP/REST options and allowed values
     - added the parse-only @ref OpcUaDataProvider::describeAddressSpace() entry point for validating and

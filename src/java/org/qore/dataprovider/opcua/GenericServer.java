@@ -13,6 +13,8 @@
 
 package org.qore.dataprovider.opcua;
 
+import java.net.InetSocketAddress;
+import java.nio.channels.ServerSocketChannel;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -24,6 +26,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.util.concurrent.GlobalEventExecutor;
 
 import org.qore.jni.Hash;
 import org.qore.jni.QoreClosure;
@@ -80,8 +90,12 @@ import org.eclipse.milo.opcua.stack.core.types.structured.HistoryReadValueId;
 import org.eclipse.milo.opcua.stack.core.types.structured.ReadValueId;
 import org.eclipse.milo.opcua.stack.core.types.structured.ViewDescription;
 import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue;
+import org.eclipse.milo.opcua.stack.core.transport.TransportProfile;
+import org.eclipse.milo.opcua.stack.transport.server.OpcServerTransport;
+import org.eclipse.milo.opcua.stack.transport.server.ServerApplicationContext;
 import org.eclipse.milo.opcua.stack.transport.server.tcp.OpcTcpServerTransport;
 import org.eclipse.milo.opcua.stack.transport.server.tcp.OpcTcpServerTransportConfig;
+import org.eclipse.milo.opcua.stack.transport.server.uasc.UascServerHelloHandler;
 
 /** Generic Milo OPC UA server materialized from a Qore OPC UA schema snapshot. */
 public class GenericServer {
@@ -98,6 +112,8 @@ public class GenericServer {
     private final String bindAddress;
     private final String hostname;
     private final int port;
+    // the listener holding an OS-assigned port (a port option of 0), or null for a configured port
+    private volatile ServerSocketChannel listener;
     private final String path;
     private final String namespaceUri;
     private final int maxHistoryValues;
@@ -115,10 +131,10 @@ public class GenericServer {
     public GenericServer(Map<String, Object> options, QoreClosure callback) throws Exception {
         this.options = normalizeOptions(options);
         this.callback = callback;
-        this.bindAddress = stringOption("bind_address", "127.0.0.1");
+        this.bindAddress = bindAddressOption(this.options);
         this.hostname = stringOption("hostname", bindAddress);
-        this.port = intOption("port", 48400);
-        if (port < 0 || port > 65535) {
+        int requestedPort = portOption(this.options);
+        if (requestedPort < 0 || requestedPort > 65535) {
             throw new IllegalArgumentException("port must be between 0 and 65535");
         }
         this.path = normalizePath(stringOption("path", "/qore"));
@@ -129,6 +145,79 @@ public class GenericServer {
         }
         validateLoopbackOnlyEndpoint();
 
+        // A port of 0 lets the OS assign a free port.  The port is reserved now, as the endpoint configuration, which
+        // discovery returns to clients, needs it, and is held until the server is stopped: a port chosen in advance can
+        // be taken by another socket before the server binds it.
+        if (requestedPort == 0) {
+            listener = reservePort(bindAddress, 0);
+            this.port = ((InetSocketAddress) listener.getLocalAddress()).getPort();
+        } else {
+            this.port = requestedPort;
+        }
+        try {
+            this.server = createServer();
+            this.namespace = new RuntimeNamespace(server);
+            this.namespace.startup();
+        } catch (Exception | Error e) {
+            releasePort(e);
+            throw e;
+        }
+    }
+
+    /** Returns the bind address and port, as {@code bind_address} and {@code port}, that the given options
+        configure; a port of 0 means a port that the OS assigns when the server is created.
+    */
+    public static Hash getBindTarget(Map<String, Object> options) {
+        Map<String, Object> opts = options != null ? options : Collections.emptyMap();
+        Hash rv = new Hash();
+        rv.put("bind_address", bindAddressOption(opts));
+        rv.put("port", (long) portOption(opts));
+        return rv;
+    }
+
+    private static String bindAddressOption(Map<String, Object> options) {
+        Object value = options.get("bind_address");
+        return value != null ? String.valueOf(value) : "127.0.0.1";
+    }
+
+    private static int portOption(Map<String, Object> options) {
+        Object value = options.get("port");
+        return value instanceof Number ? ((Number) value).intValue() : 48400;
+    }
+
+    private static ServerSocketChannel reservePort(String address, int port) throws Exception {
+        ServerSocketChannel rv = ServerSocketChannel.open();
+        try {
+            rv.bind(new InetSocketAddress(address, port));
+        } catch (Exception | Error e) {
+            try {
+                rv.close();
+            } catch (Exception closeError) {
+                e.addSuppressed(closeError);
+            }
+            throw e;
+        }
+        return rv;
+    }
+
+    private void releasePort() throws Exception {
+        ServerSocketChannel l = listener;
+        if (l != null) {
+            listener = null;
+            l.close();
+        }
+    }
+
+    // releases the port while the given failure is raised, which a failure to release it does not replace
+    private void releasePort(Throwable failure) {
+        try {
+            releasePort();
+        } catch (Exception releaseError) {
+            failure.addSuppressed(releaseError);
+        }
+    }
+
+    private OpcUaServer createServer() {
         MemoryCertificateQuarantine quarantine = new MemoryCertificateQuarantine();
         DefaultCertificateManager certificateManager = new DefaultCertificateManager(quarantine);
 
@@ -151,10 +240,41 @@ public class GenericServer {
             .setIdentityValidator(AnonymousIdentityValidator.INSTANCE)
             .build();
 
-        this.server = new OpcUaServer(config, transportProfile ->
-            new OpcTcpServerTransport(OpcTcpServerTransportConfig.newBuilder().build()));
-        this.namespace = new RuntimeNamespace(server);
-        this.namespace.startup();
+        if (listener == null) {
+            return new OpcUaServer(config, transportProfile ->
+                new OpcTcpServerTransport(OpcTcpServerTransportConfig.newBuilder().build()));
+        }
+        // Milo's TCP transport cannot adopt a bound socket: the reserved listener is registered with Netty, with
+        // Milo's protocol handler, so the port is never released between its reservation and the server's start
+        return new OpcUaServer(config, transportProfile -> new OpcServerTransport() {
+            private final ChannelGroup channels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+
+            @Override
+            public void bind(ServerApplicationContext context, InetSocketAddress address) throws Exception {
+                ServerSocketChannel l = listener;
+                if (l == null) {
+                    throw new IllegalStateException("the reserved port " + port + " was released");
+                }
+                OpcTcpServerTransportConfig transportConfig = OpcTcpServerTransportConfig.newBuilder().build();
+                channels.add(new ServerBootstrap()
+                    .channelFactory(() -> new NioServerSocketChannel(l))
+                    .group(transportConfig.getEventLoop())
+                    .childHandler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel channel) {
+                            channels.add(channel);
+                            channel.pipeline().addLast(new UascServerHelloHandler(
+                                transportConfig, context, TransportProfile.TCP_UASC_UABINARY));
+                        }
+                    })
+                    .register().sync().channel());
+            }
+
+            @Override
+            public void unbind() {
+                channels.close().awaitUninterruptibly();
+            }
+        });
     }
 
     /** Starts the server and blocks until the endpoint is listening. */
@@ -165,12 +285,19 @@ public class GenericServer {
         }
     }
 
-    /** Stops the server and blocks until shutdown is complete. */
+    /** Stops the server and blocks until shutdown is complete; releases an OS-assigned port. */
     public synchronized void stop() throws Exception {
-        if (started) {
-            server.shutdown().get();
-            started = false;
+        try {
+            if (started) {
+                server.shutdown().get();
+                started = false;
+            }
+        } catch (Exception | Error e) {
+            releasePort(e);
+            throw e;
         }
+        // the server's channel closed the listener; a server that was never started still holds it
+        releasePort();
     }
 
     /** Returns the configured endpoint URL. */

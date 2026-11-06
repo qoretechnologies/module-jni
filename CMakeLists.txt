@@ -493,9 +493,10 @@ add_custom_target(qore-email-jar
 # install the Email jar file manually
 install(FILES ${EMAIL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/EmailDataProvider/jar)
 
-# OPC UA data provider jar (first-party schema resolver compiled against the bundled Milo jars)
+# OPC UA data provider jar (first-party schema resolver and server runtime compiled against the bundled Milo and
+# Netty jars; GenericServer serves an OS-assigned port through a Netty channel)
 set(OPCUA_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-opcua.jar)
-set(OPCUA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-client-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-core-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-server-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-stack-core-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-transport-1.1.4.jar)
+set(OPCUA_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-client-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-core-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-sdk-server-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-stack-core-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/milo-transport-1.1.4.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/netty-buffer-4.1.133.Final.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/netty-codec-4.1.133.Final.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/netty-common-4.1.133.Final.jar:${CMAKE_SOURCE_DIR}/qlib/OpcUaDataProvider/jar/netty-transport-4.1.133.Final.jar)
 set(OPCUA_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(OPCUA_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/opcua/)
 set(OPCUA_SOURCES

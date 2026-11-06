@@ -91,6 +91,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             \genericServerRuntimeLoopbackOnlyTest());
         addTestCase("generic OPC UA server runtime honors network sandbox",
             \genericServerRuntimeNetworkSandboxTest());
+        addTestCase("generic OPC UA server runtime holds an OS-assigned port",
+            \genericServerRuntimeAssignedPortTest());
         addTestCase("generic OPC UA server runtime", \genericServerRuntimeTest());
         addTestCase("generic OPC UA server runtime materializes nested browse paths",
             \genericServerRuntimeNestedPathTest());
@@ -1728,7 +1730,7 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         bool threw = False;
         try {
             OpcUaServerRuntime runtime({
-                "port": 57200 + (getpid() % 1000),
+                "port": 0,
                 "bind_address": bind_address,
                 "hostname": hostname,
                 "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-loopback-test"),
@@ -1777,6 +1779,48 @@ sub sandboxProbe() {
         return False;
     }
 
+    #! A port of 0 is assigned by the OS when the runtime is created and held until the runtime is stopped
+    /** A port chosen in advance (ex: derived from the PID) can be taken by another socket before the server binds it,
+        which made the runtime tests fail now and then with "No endpoints bound"
+    */
+    genericServerRuntimeAssignedPortTest() {
+        OpcUaServerRuntime runtime({
+            "port": 0,
+            "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-port-test"),
+        }, NOTHING);
+        on_exit runtime.stop();
+
+        int port = runtime.getPort();
+        assertTrue(port > 0, "the OS assigns a concrete port");
+        assertEq("opc.tcp://127.0.0.1:" + port + "/qore", runtime.getEndpointUrl(),
+            "the endpoint URL carries the assigned port");
+        assertEq("SOCKET-BIND-ERROR", bindLoopbackError(port), "the port is held before the runtime is started");
+
+        runtime.start();
+        hash<string, hash<auto>> by_id = map {$1.endpoint_id: $1}, runtime.getSchemaSnapshot().endpoints;
+        {
+            OpcUaDataProvider prov({"url": runtime.getEndpointUrl(), "monitored_nodes": ()});
+            assertEq("fixed", prov.doRequest({"action": "read-value", "node_id": by_id{"readonly"}.node_id}).value,
+                "the runtime serves on the assigned port");
+        }
+
+        runtime.stop();
+        assertEq(NOTHING, bindLoopbackError(port), "the port is released when the runtime is stopped");
+    }
+
+    #! Returns the error of a bind to the given loopback port, if any; the socket is closed at once
+    /** The bind uses SO_REUSEADDR, so connections in TIME_WAIT do not count, but a listening socket does
+    */
+    private *string bindLoopbackError(int port) {
+        try {
+            Socket s();
+            s.bindINET("127.0.0.1", string(port), True);
+            s.close();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
     genericServerRuntimeNetworkSandboxTest() {
         if (!networkSandboxPropagatesAcrossPrograms()) {
             testSkip("the running qore runtime does not propagate an active network SandboxManager "
@@ -1821,44 +1865,59 @@ hash<auto> sub sandboxRuntimeSchema() {
     };
 }
 
-# starts the runtime on loopback and returns the error of a connection to it, if any
-*string sub startSandboxedRuntime(int port) {
+# starts the runtime on an OS-assigned loopback port and returns the error of a connection to it, if any
+*string sub startSandboxedRuntime() {
     OpcUaServerRuntime runtime({
-        \"port\": port,
+        \"port\": 0,
         \"schema\": sandboxRuntimeSchema(),
     }, NOTHING);
     on_exit runtime.stop();
     runtime.start();
     try {
         Socket s();
-        s.connect(\"127.0.0.1:\" + port, 5s);
+        s.connect(\"127.0.0.1:\" + runtime.getPort(), 5s);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+# creates a runtime on an OS-assigned port of an address in a denied range and returns the error, if any; the port
+# is bound when the runtime is created, so the sandbox must deny it then
+*string sub createDeniedRuntime() {
+    try {
+        OpcUaServerRuntime runtime({
+            \"port\": 0,
+            \"bind_address\": \"10.255.255.1\",
+            \"schema\": sandboxRuntimeSchema(),
+        }, NOTHING);
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
 }
 
 # binds a socket to an address in a denied private range and returns the error, if any
-*string sub bindDenied(int port) {
+*string sub bindDenied() {
     try {
         Socket s();
-        s.bindINET(\"10.255.255.1\", string(port));
+        s.bindINET(\"10.255.255.1\", \"0\");
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
     }
 }
 ", "opcua_runtime_sandbox");
 
-        int port = 57200 + (getpid() % 1000);
         # the server's bind to loopback is allowed, but a client connection to it is denied
         *string connect_err;
         try {
-            connect_err = p.callFunction("startSandboxedRuntime", port);
+            connect_err = p.callFunction("startSandboxedRuntime");
         } catch (hash<ExceptionInfo> ex) {
             fail(sprintf("the sandboxed runtime's loopback bind must be allowed: %s: %s", ex.err, ex.desc));
         }
         assertEq("NETWORK-ACCESS-DENIED", connect_err, "a client connection to loopback is denied in the sandbox");
         # a bind to another address in a denied range is denied
-        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("bindDenied", port),
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("createDeniedRuntime"),
+            "an OS-assigned port of a denied address is denied when the runtime is created");
+        assertEq("NETWORK-ACCESS-DENIED", p.callFunction("bindDenied"),
             "a bind to a non-loopback address in a denied range is denied");
     }
 
@@ -1866,7 +1925,7 @@ hash<auto> sub sandboxRuntimeSchema() {
     byteStringValueTest() {
         string ns = "urn:qore:opcua:bytestring-test";
         OpcUaServerRuntime runtime({
-            "port": 57200 + (getpid() % 1000),
+            "port": 0,
             "namespace_uri": ns,
             "schema": {
                 "contract_version": 1,
@@ -1909,9 +1968,8 @@ hash<auto> sub sandboxRuntimeSchema() {
 
         hash<auto> schema = genericServerRuntimeSchema(ns);
 
-        int port = 57200 + (getpid() % 1000);
         OpcUaServerRuntime runtime({
-            "port": port,
+            "port": 0,
             "namespace_uri": ns,
             "schema": schema,
             "application_name": "Qore Generic OPC UA Runtime Test",
@@ -2208,7 +2266,7 @@ hash<auto> sub sandboxRuntimeSchema() {
         hash<auto> schema = OpcUaDataProvider::nodeSet2ToAddressSpace(ReadOnlyFile::readTextFile(file));
 
         OpcUaServerRuntime runtime({
-            "port": 58500 + (getpid() % 500),
+            "port": 0,
             "namespace_uri": ns,
             "schema": schema,
             "application_name": "Qore Nested OPC UA Runtime Test",
