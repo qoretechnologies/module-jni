@@ -76,6 +76,7 @@ default:
       variables:
         HEALTHCHECK_TCP_PORT: "9092"
   before_script:
+    - . test/docker_test/tree-tested-skip.sh
     - |
         curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
@@ -94,8 +95,28 @@ variables:
   TZ: Europe/Prague
   PGTZ: Europe/Prague
 
+# A develop commit whose tree already passed CI (a merged pull request that was up to date with develop) is not tested
+# again: tree-already-tested.sh finds the pipeline that passed the tree, and every job sources tree-tested-skip.sh
+# first, which then ends the job with success.  Without such a pipeline, or when the pipelines cannot be read, the
+# whole pipeline runs.  The same job runs in qore's pipelines.
+tree-already-tested:
+  stage: .pre
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  services: []
+  before_script: []
+  variables:
+    GIT_DEPTH: "3"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+  script:
+    - sh test/docker_test/tree-already-tested.sh
+  artifacts:
+    reports:
+      dotenv: tree-tested.env
+
 test-ubuntu:
   stage: test
+  needs: [{job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   script:
     - |
@@ -118,6 +139,7 @@ test-ubuntu:
 
 test-alpine:
   stage: test
+  needs: [{job: tree-already-tested, optional: true}]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   script:
     - |
