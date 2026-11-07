@@ -378,8 +378,6 @@ module JakartaJmsDataProvider {
     @section JakartaJmsDataProvider_relnotes Release Notes
 
     @subsection JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider v1.0
-    - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
-      presentation keeps its original producer identity, including HTTP/REST options and allowed values
     - initial release
 */
 
