@@ -530,7 +530,7 @@ public class MqttDataProviderTest inherits QUnit::Test {
         assertThrows("CONSTRUCTOR-ERROR", sub () {
             new MqttDataProvider({"url": "tcp://localhost:1883", "asyncapi_channel": AsyncApiChannel});
         });
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+        assertThrows("OPTION-VALUE-ERROR", "option \"validator\" of type \"string\"", sub () {
             new MqttDataProvider({
                 "url": "tcp://localhost:1883",
                 "validator": {},

@@ -565,7 +565,9 @@ public class OdsWriteDataProvider inherits DataProvider::AbstractDataProvider {
             try {
                 rv{key} = type.acceptsValue(sheet{key});
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err != "RUNTIME-TYPE-ERROR") {
+                # only a value that the type refuses is an invalid option; any other error, including a
+                # RUNTIME-TYPE-ERROR, means that the check itself failed and is not reported as the user's error
+                if (ex.err != "TYPE-VALUE-ERROR") {
                     rethrow;
                 }
                 error("ODS-WRITE-OPTION-ERROR", "invalid \"sheets\" option: %s: %y must be a value of type %y, not "

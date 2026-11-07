@@ -333,7 +333,7 @@ public class KafkaDataProviderTest inherits QUnit::Test {
         });
         assertEq({"correlation_id": "c-1", "raw": <0001ff>}, req.headers, "headers are accepted as given");
         assertFalse(req.hasKey("key"), "a message without a key is accepted without one");
-        assertThrows("RUNTIME-TYPE-ERROR", \KafkaEventDataType.acceptsValue(),
+        assertThrows("TYPE-VALUE-ERROR", \KafkaEventDataType.acceptsValue(),
             {"topic": "t", "value": "v", "headers": "not a hash"});
 
         # a received message has headers too

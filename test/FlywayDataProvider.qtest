@@ -172,7 +172,7 @@ public class FlywayDataProviderTest inherits QUnit::Test {
         assertTrue(result[0].filepath.endsWith("V1__create_test_table.sql"));
         assertEq(result, migrateDp.getResponseType().acceptsValue(result));
         assertEq((), migrateDp.doRequest(NOTHING));
-        assertThrows("RUNTIME-TYPE-ERROR", sub () { migrateDp.doRequest({}); });
+        assertThrows("TYPE-VALUE-ERROR", sub () { migrateDp.doRequest({}); });
 
         # Check info: when Flyway creates the schema it manages, it records the creation before the migrations
         # ("<< Flyway Schema Creation >>", without a version)
