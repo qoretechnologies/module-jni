@@ -492,60 +492,7 @@ module OdsDataProvider {
     @section OdsDataProvider_relnotes Release Notes
 
     @subsection OdsDataProvider_v1_0 OdsDataProvider v1.0
-    - Headerless exports with no records now contain no placeholder data row
-    - `preserve_empty_rows` lets the reader keep empty records, including trailing empty rows, when checking exports
-    - added the \c header_row write option to place column headers after blank leading rows, including in
-      individual worksheets of a multi-sheet workbook
     - initial release
-    - an unknown worksheet raises \c ODS-WORKSHEET-NOT-FOUND, naming the worksheet and listing the worksheets of the
-      file, instead of a Java exception
-    - added the \c worksheet_pattern read option: a regular expression that the name of exactly one worksheet must
-      match; no match raises \c ODS-WORKSHEET-NOT-FOUND and more than one raises \c ODS-WORKSHEET-AMBIGUOUS
-    - the \c ignore_empty option declares its default (\c false: reading stops at the first empty row) and that
-      behavior in its option metadata
-    - added the \c column_formats write option: a display format code for each column, such as \c dd.mm.yyyy,
-      <tt>#,##0.00</tt> or \c 0.0%, written as an OpenDocument data style while the cells keep their dates and
-      numbers
-    - date cells are written with their clock time; before, only the date was written
-    - added the \c column_masks write option: the display format of each column as a mask of the
-      @ref valuemaskintro "ValueMask" module, such as \c DD.MM.YYYY or <tt>#.##0,00 €</tt>, the masks that CSV
-      files and Qorus sheet contracts are read and written with
-    - added the \c column_headers write option, for header text that is not the column name, the
-      \c write_headers write option, to write no header row, and the \c timezone write option, whose wall-clock
-      time dates are written in
-    - added the \c formula_field read option, which returns the formulas of each record's cells in a field of the
-      record, as the \c profile action gives them, so a totals row made only of \c SUM formulas is recognized when
-      the file is read as it is when the file is profiled
-    - added the \c list-worksheets action and
-      @ref OdsDataProvider::OdsListWorksheetsDataProvider "OdsListWorksheetsDataProvider": the worksheets of a
-      spreadsheet in order, each with its 0-based index, which the \c worksheet read option accepts, and whether it
-      is hidden
-    - <b>columns are typed</b>: when a sheet has headers, the type of each column is inferred from its first 100 data
-      rows, as the spreadsheet profile infers it, and the record type and the values have it, so a whole number in a
-      column of whole numbers is read as an integer instead of a float; a later value of another type fails the read
-      with \c ODS-COLUMN-TYPE-ERROR, naming the remedies; the new \c type_sample_rows read option sets the number of
-      rows sampled (\c 0 reads every value as stored, as before), and the new \c column_types option gives the type
-      of columns
-    - <b>error cells fail the read</b>: a formula whose result is an error, such as \c \#DIV/0!, raises
-      \c ODS-CELL-ERROR instead of being read silently as the error's text; the new \c error_cells read option reads
-      error cells as no value or as the error's text, and the new \c error_field option returns the errors of each
-      record in a field of their own
-    - fixed the record type of a worksheet provider failing after a search of the worksheet
-    - fixed a worksheet provider (@ref OdsDataProvider::OdsWorksheetReadDataProvider "OdsWorksheetReadDataProvider")
-      returning no records when searched a second time; each search now reads the worksheet with an iterator of its
-      own, and a provider created from its own input (a location, a stream, or data) copies it once to a temporary
-      file, deleted with the provider
-    - fixed a worksheet provider created without input failing with a Java exception; it has no records
-    - the \c profile action reads a document in one pass over its content as it is streamed, keeping the rows up
-      to \c max_rows and counting the others, so a document of any size is profiled in bounded memory; before, the
-      document was loaded in memory
-    - fixed the \c profile action failing with a Java \c NullPointerException for a document with header rows to
-      repeat on printed pages or with row groups
-    - added the \c sheets write option, to write records to several worksheets, each with its own columns and
-      column options, chosen for each record by a DPQL condition, and the \c route and \c unmatched options, for
-      records that match several worksheets or none; the \c write-data action returns the number of records written
-      to each worksheet (see @ref OdsDataProvider_writing_sheets)
-    - a worksheet written with its columns and no records has its header row; before, it was empty
 */
 
 #! contains all public definitions in the OdsDataProvider module

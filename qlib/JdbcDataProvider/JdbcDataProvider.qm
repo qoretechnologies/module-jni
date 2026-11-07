@@ -170,8 +170,6 @@ module JdbcDataProvider {
     @section jdbcdataprovider_relnotes Release Notes
 
     @subsection jdbcdataprovider_v1_0 JdbcDataProvider v1.0
-    - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
-      presentation keeps its original producer identity, including HTTP/REST options and allowed values
     - initial release
 */
 

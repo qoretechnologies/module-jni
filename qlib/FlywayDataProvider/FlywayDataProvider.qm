@@ -218,8 +218,6 @@ module FlywayDataProvider {
     @section flywaydataprovider_relnotes Release Notes
 
     @subsection flywaydataprovider_v1_0 FlywayDataProvider v1.0
-    - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
-      presentation keeps its original producer identity, including HTTP/REST options and allowed values
     - initial release
 */
 

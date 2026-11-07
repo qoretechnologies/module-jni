@@ -33,7 +33,7 @@
 %requires json
 
 module BusyLightDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "User module providing a data provider API for BusyLight devices through MQTT";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -109,9 +109,11 @@ module BusyLightDataProvider {
 
     @section BusyLightDataProvider_relnotes Release Notes
 
-    @subsection BusyLightDataProvider_v1_0 BusyLightDataProvider v1.0
+    @subsection BusyLightDataProvider_v1_1 BusyLightDataProvider v1.1
     - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
       presentation keeps its original producer identity, including HTTP/REST options and allowed values
+
+    @subsection BusyLightDataProvider_v1_0 BusyLightDataProvider v1.0
     - initial release
 */
 
