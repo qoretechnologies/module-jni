@@ -2412,7 +2412,7 @@ printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatche
             ExcelWriteDataProvider dp({"headers": ("A",), "column_formats": {"A": "0", "X": "0", "Y": "0"}});
         });
         # a format code must be a string: the option type check refuses other values
-        assertThrows("RUNTIME-TYPE-ERROR", "option \"column_formats\" of type \"hash<string, string>\"", sub () {
+        assertThrows("OPTION-VALUE-ERROR", "option \"column_formats\" of type \"hash<string, string>\"", sub () {
             ExcelWriteDataProvider dp({"column_formats": {"A": 1}});
         });
         # the Java writer refuses invalid codes and late formats too

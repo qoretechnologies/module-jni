@@ -1900,7 +1900,7 @@ printf(\"RESULT:%%s\\n\", make_json(rv));
             OdsWriteDataProvider dp({"headers": ("A",), "column_formats": {"A": "0", "X": "0"}});
         });
         # a format code must be a string: the option type check refuses other values
-        assertThrows("RUNTIME-TYPE-ERROR", "option \"column_formats\" of type \"hash<string, string>\"", sub () {
+        assertThrows("OPTION-VALUE-ERROR", "option \"column_formats\" of type \"hash<string, string>\"", sub () {
             OdsWriteDataProvider dp({"column_formats": {"A": 1}});
         });
         assertNothing(OdsWriter::formatCodeIssue("#,##0.00;(#,##0.00)"));
