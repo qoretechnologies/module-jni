@@ -122,9 +122,13 @@ foreach hash<auto> col in (stmt.describe().iterator()) {
     - the trailing spaces of a \c CHAR value are removed: a \c CHAR(20) value \c "hello" is returned as
       \c "hello" on every database, where a native %Qore driver such as \c oracle returns it padded to the size of
       the column
-    - Oracle's \c TIMESTAMP, \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE and \c DATE values, for which
-      Oracle's driver returns its own classes, are read with \c ResultSet.getTimestamp() and converted from the time
-      since the epoch, so that a time in the hour repeated when daylight saving time ends is the right one of the two
+    - Oracle's \c TIMESTAMP and \c DATE values, for which Oracle's driver returns its own classes, are read as a
+      \c java.time.LocalDateTime: a local date and time, whose wall clock is kept whatever the time zones of %Qore,
+      of the JVM and of the session (with a driver that cannot read one, as the \c java.sql.Timestamp of
+      \c getObject(), which has the same local time)
+    - Oracle's \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE values, points in time, are read with
+      \c ResultSet.getTimestamp() and converted from the time since the epoch, so that a time in the hour repeated
+      when daylight saving time ends is the right one of the two
     - Oracle's \c TIMESTAMP \c WITH \c TIME \c ZONE values are read as a \c java.time.OffsetDateTime and keep
       their offset; with a driver that cannot read one (older than the JDBC 4.2 support of Oracle's driver), the
       value is read from its string, which has the offset, or, for a value with a time zone region instead of an
@@ -151,9 +155,11 @@ foreach hash<auto> col in (stmt.describe().iterator()) {
     point in time that the JDBC driver gives for it.
 
     The memory that a large object takes while it is read is its value and one chunk: a \c BLOB of \c n bytes takes
-    up to twice \c n bytes beyond the first 16 MiB (the buffer doubles as it grows) and 64 KiB for the chunk; a
-    \c CLOB of \c n characters takes up to 3 \c n bytes of UTF-8 (4 bytes for each pair of UTF-16 units of a
-    character outside the Basic Multilingual Plane) plus the growth of the string, and 128 KiB for the chunk.
+    \c n bytes, or up to twice \c n bytes beyond the first 16 MiB when the length is unknown or the buffer grows
+    (it doubles), and 64 KiB for the chunk; a \c CLOB of \c n characters takes its UTF-8 (up to 3 \c n bytes, 4
+    bytes for each pair of UTF-16 units of a character outside the Basic Multilingual Plane) plus the growth of the
+    string, and up to 320 KiB for the chunk (its UTF-16 and its UTF-8).  A large object whose length is 0 is not read;
+    one whose length the driver does not give (a negative length) is read until a chunk is shorter than requested.
 
     @subsection jdbc_sql_errors SQL Errors
 

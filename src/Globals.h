@@ -500,6 +500,9 @@ public:
     DLLLOCAL static jmethodID methodClobLength;                                   // long length()
     DLLLOCAL static jmethodID methodClobGetSubString;                             // String getSubString(long, int)
     DLLLOCAL static jmethodID methodClobFree;                                     // void free()
+    DLLLOCAL static GlobalReference<jclass> classSQLFeatureNotSupportedException; // java.sql.SQLFeatureNotSupportedException
+    DLLLOCAL static GlobalReference<jclass> classAbstractMethodError;             // java.lang.AbstractMethodError
+    DLLLOCAL static jmethodID methodSQLExceptionGetSQLState;                      // String getSQLState()
     DLLLOCAL static GlobalReference<jclass> classUtilDate;                        // java.util.Date
     DLLLOCAL static jmethodID methodUtilDateGetTime;                              // long getTime()
     DLLLOCAL static jmethodID methodTimestampGetNanos;                            // int getNanos()

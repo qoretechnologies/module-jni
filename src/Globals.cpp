@@ -485,6 +485,9 @@ GlobalReference<jclass> Globals::classClob;
 jmethodID Globals::methodClobLength;
 jmethodID Globals::methodClobGetSubString;
 jmethodID Globals::methodClobFree;
+GlobalReference<jclass> Globals::classSQLFeatureNotSupportedException;
+GlobalReference<jclass> Globals::classAbstractMethodError;
+jmethodID Globals::methodSQLExceptionGetSQLState;
 GlobalReference<jclass> Globals::classUtilDate;
 jmethodID Globals::methodUtilDateGetTime;
 jmethodID Globals::methodTimestampGetNanos;
@@ -2423,8 +2426,23 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
         if (!jenv->ExceptionCheck()) {
             jenv->ThrowNew(jenv->FindClass("java/lang/OutOfMemoryError"), "getModuleLoader()");
         }
+    } catch (jni::Exception& e) {
+        // a Java exception raised by a JNI call is already pending; any other error (ex: a Qore exception) is raised
+        // as a Java exception with its description
+        if (!jenv->ExceptionCheck()) {
+            ExceptionSink xsink;
+            e.convert(&xsink);
+            QoreStringMaker msg("getModuleLoader() failed");
+            if (xsink) {
+                QoreValue err = xsink.getExceptionErr();
+                QoreValue desc = xsink.getExceptionDesc();
+                msg.sprintf(": %s: %s", err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "",
+                    desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "");
+                xsink.clear();
+            }
+            jenv->ThrowNew(jenv->FindClass("java/lang/RuntimeException"), msg.c_str());
+        }
     } catch (...) {
-        // a Java exception raised by a JNI call is already pending
         if (!jenv->ExceptionCheck()) {
             jenv->ThrowNew(jenv->FindClass("java/lang/RuntimeException"), "getModuleLoader() failed");
         }
@@ -4182,6 +4200,9 @@ bool Globals::init() {
     methodClobLength = env.getMethod(classClob, "length", "()J");
     methodClobGetSubString = env.getMethod(classClob, "getSubString", "(JI)Ljava/lang/String;");
     methodClobFree = env.getMethod(classClob, "free", "()V");
+    classSQLFeatureNotSupportedException = env.findClass("java/sql/SQLFeatureNotSupportedException").makeGlobal();
+    classAbstractMethodError = env.findClass("java/lang/AbstractMethodError").makeGlobal();
+    methodSQLExceptionGetSQLState = env.getMethod(classSQLException, "getSQLState", "()Ljava/lang/String;");
     classUtilDate = env.findClass("java/util/Date").makeGlobal();
     methodUtilDateGetTime = env.getMethod(classUtilDate, "getTime", "()J");
     methodTimestampGetNanos = env.getMethod(classTimestamp, "getNanos", "()I");
@@ -4672,6 +4693,8 @@ void Globals::cleanup() {
     classJdbcColumnarBatch = nullptr;
     classBlob = nullptr;
     classClob = nullptr;
+    classSQLFeatureNotSupportedException = nullptr;
+    classAbstractMethodError = nullptr;
     classUtilDate = nullptr;
     classArray = nullptr;
     classSQLException = nullptr;

@@ -1036,10 +1036,12 @@ public:
         invalid byte, a truncated or overlong sequence, an encoded surrogate (CESU-8) and a value beyond U+10FFFF
         each become U+FFFD.
 
-        @param utf8 the string in UTF-8
+        @param utf8 the string in UTF-8; it must have a NUL at \a len (a Qore string's buffer has one), which the
+        ASCII fast path (NewStringUTF()) needs
         @param len the length of the string in bytes; it may have NUL characters
     */
     DLLLOCAL LocalReference<jstring> newString(const char* utf8, size_t len) {
+        assert(!utf8[len]);
         jstring s;
         if (isAscii(utf8, len)) {
             s = env->NewStringUTF(utf8);

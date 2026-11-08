@@ -22,6 +22,10 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         addTestCase("a failing read raises its error and the large object is freed", \lobReadFails());
         addTestCase("a read is cancelled between chunks and the large object is freed", \lobCancel());
         addTestCase("TIMESTAMP WITH TIME ZONE without getObject(int, Class)", \timestampTzFallback());
+        addTestCase("large objects of an unknown length, and a CLOB read one character at a time", \lobUnknown());
+        addTestCase("a CLOB read is cancelled between chunks and the CLOB is freed", \lobCancelClob());
+        addTestCase("an SQL error of getObject(int, Class) is raised and the column is not read otherwise",
+            \getObjectAsError());
         set_return_value(main());
     }
 
@@ -85,11 +89,11 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         }
         # an empty large object is not read
         assertEq(0, JdbcTransactionDriver::count("lob.read:Empty:1"));
-        # the CLOB is read in chunks of 64 KiB characters; the first chunk ends with the high surrogate of a pair,
-        # which is read with the second one
+        # the CLOB is read in chunks of 64 Ki characters; the first chunk ends with the high surrogate of a pair, which
+        # is converted with the second one
         assertEq(4, JdbcTransactionDriver::count("lob.read:Split:1"));
-        assertEq(4, JdbcTransactionDriver::count("lob.read:Split:65536"));
-        assertEq(4, JdbcTransactionDriver::count("lob.read:Split:131072"));
+        assertEq(4, JdbcTransactionDriver::count("lob.read:Split:65537"));
+        assertEq(4, JdbcTransactionDriver::count("lob.read:Split:131073"));
     }
 
     private lobReadFails() {
@@ -98,6 +102,59 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         assertThrows("JNI-ERROR", "injected read error", \ds.selectRow(), "multi:typed=lobfail");
         # freed, although free() fails too
         assertEq(1, JdbcTransactionDriver::count("lob.free:ReadFails"));
+    }
+
+    private lobUnknown() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        hash<auto> row = ds.selectRow("multi:typed=lobunknown");
+        # length() < 0: the value is read until a chunk is shorter than requested
+        binary b = binary();
+        for (int i = 0; i < 150000; ++i) {
+            b += chr(i % 251);
+        }
+        assertEq(150000, row.unknownblob.size());
+        assertTrue(b == row.unknownblob);
+        string split = splitString();
+        assertEq(split.size(), row.unknownclob.size());
+        assertTrue(split == row.unknownclob);
+        # a surrogate pair read one UTF-16 unit at a time is one character (it was U+FFFD twice)
+        assertEq("😀", row.oneunit);
+    }
+
+    private lobCancelClob() {
+        Datasource ds = datasource();
+        JdbcTransactionDriver::resetLobLatches();
+        Queue result();
+        int tid = background sub () {
+            try {
+                ds.selectRow("multi:typed=lobcancelclob");
+                result.push("no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+        JdbcTransactionDriver::awaitLobEntered();
+        assertTrue(cancel_thread(tid, "the test cancels the read"));
+        JdbcTransactionDriver::releaseLob();
+        assertEq("THREAD-CANCELLED", result.get(ResultTimeout));
+        assertEq(1, JdbcTransactionDriver::count("lob.read:BlockingClob:65537"));
+        assertEq(0, JdbcTransactionDriver::count("lob.read:BlockingClob:131073"));
+        assertEq(1, JdbcTransactionDriver::count("lob.free:BlockingClob"));
+    }
+
+    # getObject(int, LocalTime.class) raises a lost connection: it is raised, each time; it was taken for an
+    # unsupported conversion, and the column was then read with getObject(int) for good
+    private getObjectAsError() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        SQLStatement stmt(ds);
+        on_exit stmt.close();
+        stmt.prepare("multi:typed=asfail");
+        stmt.exec();
+        assertTrue(stmt.next());
+        assertThrows("JNI-ERROR", "injected connection reset", \stmt.fetchRow());
+        assertThrows("JNI-ERROR", "injected connection reset", \ds.selectRow(), "multi:typed=asfail");
     }
 
     # the thread waits in the read of the second chunk while it is cancelled: the read ends with THREAD-CANCELLED

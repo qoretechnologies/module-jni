@@ -41,6 +41,7 @@ public class Main inherits QUnit::Test {
             \oracleLtzDstTest());
         addTestCase("SQL Server's datetimeoffset, time and datetime2", \mssqlTemporalTest());
         addTestCase("PostgreSQL's time, timetz and infinite timestamps", \pgsqlTemporalTest());
+        addTestCase("NUL characters in column values", \nulValueTest());
 
         # execute tests and set program return value
         set_return_value(main());
@@ -655,7 +656,7 @@ printf(\"imported\\n\");
     #! a BLOB, CLOB or NCLOB was returned as a java.sql.Blob or java.sql.Clob object and described as an object; it is
     #! read as binary or a string in chunks, and freed; other servers' large types are unchanged
     private lobTest() {
-        # more than one chunk (org.qore.jni.JdbcLob.Chunk: 65536 bytes or characters)
+        # more than one chunk (the jdbc driver reads 65536 bytes or characters at a time)
         binary big_bin = binary(strmul("0123456789abcdef", 12500)) + binary("x");
         string big_str = strmul("abcdefghij", 15000) + "z";
         # multibyte characters and characters outside the BMP (surrogate pairs in Java) across chunk boundaries
@@ -758,8 +759,9 @@ printf(\"imported\\n\");
     }
 
     #! TIMESTAMP WITH LOCAL TIME ZONE was converted from its local time, which is ambiguous in the hour repeated when
-    #! daylight saving time ends: one of the two points in time was an hour off; the time zone of Qore, of the JVM
-    #! and of the session is set to one with DST, so that a UTC time zone cannot hide it
+    #! daylight saving time ends: one of the two points in time was an hour off; TIMESTAMP (a local date and time)
+    #! keeps its wall clock; the time zones of Qore, of the JVM and of the session differ and have DST, so that
+    #! neither a UTC time zone nor equal time zones can hide a conversion
     private oracleLtzDstTest() {
         *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_ORACLE");
         if (!ds) {
@@ -771,8 +773,8 @@ printf(\"imported\\n\");
             set_thread_tz();
         }
         java::util::TimeZone::setDefault(java::util::TimeZone::getTimeZone("Europe/Prague"));
-        set_thread_tz(new Qore::TimeZone("Europe/Prague"));
-        ds.execRaw("alter session set time_zone = 'Europe/Prague'");
+        set_thread_tz(new Qore::TimeZone("America/New_York"));
+        ds.execRaw("alter session set time_zone = 'Asia/Tokyo'");
 
         string table = sprintf("jdbc_ltz_%d_%d", getpid(), now_us().getEpochSeconds());
         ds.execRaw(sprintf("create table %s (id number(2), ltz timestamp(6) with local time zone, "
@@ -791,12 +793,17 @@ printf(\"imported\\n\");
                 d.format("YYYY-MM-DD HH:mm:SS.xx")));
         }
         ds.commit();
-        list<hash<auto>> rows = ds.selectRows(sprintf("select ltz, tz from %s order by id", table));
+        list<hash<auto>> rows = ds.selectRows(sprintf("select ltz, tz, ts from %s order by id", table));
         assertEq(utc.size(), rows.size());
         foreach hash<auto> row in (rows) {
+            # points in time
             assertEq(utc[$#].getEpochSeconds(), row.ltz.getEpochSeconds(), sprintf("ltz %d", $#));
             assertEq(utc[$#].microseconds(), row.ltz.microseconds(), sprintf("ltz %d", $#));
             assertEq(utc[$#].getEpochSeconds(), row.tz.getEpochSeconds(), sprintf("tz %d", $#));
+            # a local date and time: the wall clock as it was inserted (it was shifted by the difference between
+            # the time zones of Qore and of the JVM)
+            assertEq(utc[$#].format("YYYY-MM-DD HH:mm:SS.xx"), row.ts.format("YYYY-MM-DD HH:mm:SS.xx"),
+                sprintf("ts %d", $#));
         }
     }
 
@@ -879,6 +886,33 @@ printf(\"imported\\n\");
             inf.d.format("YYYY-MM-DD HH:mm:SS"));
         assertEq(gmtime((-2147483648 + 10957) * 86400).format("YYYY-MM-DD HH:mm:SS"),
             inf.nd.format("YYYY-MM-DD HH:mm:SS"));
+    }
+
+    #! a NUL character of a column value is kept by select(), selectRows() and selectColumnar(), whose string columns
+    #! ended it there
+    private nulValueTest() {
+        int found = 0;
+        foreach hash<auto> i in ({
+                "QORE_DB_CONNSTR_JDBC_MSSQL": "select cast('a' + char(0) + 'b' as varchar(10)) as s",
+                "QORE_DB_CONNSTR_JDBC_ORACLE": "select 'a' || chr(0) || 'b' as s from dual",
+            }.pairIterator()) {
+            *Datasource ds = getConnection(i.key);
+            if (!ds) {
+                continue;
+            }
+            ++found;
+            on_exit ds.rollback();
+            string label = ds.getDriverRealName();
+            assertEq(<610062>, binary(ds.selectRow(i.value).s), label + ": selectRow");
+            assertEq(<610062>, binary(ds.select(i.value).s[0]), label + ": select");
+            if (hasColumnar(ds)) {
+                assertEq(<610062>, binary(asList(getColumn(ds.selectColumnar(i.value), "s"))[0]),
+                    label + ": selectColumnar");
+            }
+        }
+        if (!found) {
+            testSkip("no jdbc connection available");
+        }
     }
 
     # returns the local date of a number of microseconds since the epoch

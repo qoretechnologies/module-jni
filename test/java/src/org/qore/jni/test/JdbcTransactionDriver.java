@@ -204,6 +204,8 @@ public final class JdbcTransactionDriver implements Driver {
         // the values of getString(int) and getTimestamp(int)
         final String stringValue;
         final Timestamp timestampValue;
+        // getObject(int, Class) raises this error for the column (ex: a lost connection)
+        SQLException getObjectAsError;
 
         Column(String label, int type, String typeName, int precision, int scale, int nullable, String className,
                 Object value) {
@@ -265,11 +267,20 @@ public final class JdbcTransactionDriver implements Driver {
         thrown by free(); {@code readError} by any read; with {@code block}, the read of the second chunk waits for
         releaseLob() */
     private static Object lob(String name, Object data, Throwable freeError, SQLException readError, boolean block) {
+        return lob(name, data, freeError, readError, block, null);
+    }
+
+    /** A large object as above whose length() returns {@code length} instead of its length (null: its length) */
+    private static Object lob(String name, Object data, Throwable freeError, SQLException readError, boolean block,
+            Long length) {
         boolean blob = data instanceof byte[];
         return Proxy.newProxyInstance(JdbcTransactionDriver.class.getClassLoader(),
             new Class<?>[] {blob ? Blob.class : Clob.class}, (proxy, method, args) -> {
                 switch (method.getName()) {
                     case "length":
+                        if (length != null) {
+                            return length;
+                        }
                         return blob ? (long) ((byte[]) data).length : (long) ((String) data).length();
                     case "getBytes":
                     case "getSubString": {
@@ -285,10 +296,11 @@ public final class JdbcTransactionDriver implements Driver {
                         }
                         if (blob) {
                             byte[] b = (byte[]) data;
-                            return java.util.Arrays.copyOfRange(b, pos, Math.min(b.length, pos + n));
+                            return java.util.Arrays.copyOfRange(b, Math.min(b.length, pos),
+                                Math.min(b.length, pos + n));
                         }
                         String str = (String) data;
-                        return str.substring(pos, Math.min(str.length(), pos + n));
+                        return str.substring(Math.min(str.length(), pos), Math.min(str.length(), pos + n));
                     }
                     case "free":
                         lobEvent("lob.free:" + name);
@@ -302,6 +314,43 @@ public final class JdbcTransactionDriver implements Driver {
                     default: throw new SQLFeatureNotSupportedException(method.getName());
                 }
             });
+    }
+
+    // the bytes of a BLOB of an unknown length: more than two chunks
+    private static byte[] unknownBytes() {
+        byte[] b = new byte[150000];
+        for (int i = 0; i < b.length; ++i) {
+            b[i] = (byte) (i % 251);
+        }
+        return b;
+    }
+
+    // a CLOB of a surrogate pair whose getSubString() gives one character at a time
+    private static Object oneUnitClob() {
+        String data = new StringBuilder().appendCodePoint(0x1f600).toString();
+        return Proxy.newProxyInstance(JdbcTransactionDriver.class.getClassLoader(), new Class<?>[] {Clob.class},
+            (proxy, method, args) -> {
+                switch (method.getName()) {
+                    case "length": return (long) data.length();
+                    case "getSubString": {
+                        int pos = (int) (long) (Long) args[0] - 1;
+                        return data.substring(pos, pos + 1);
+                    }
+                    case "free": return null;
+                    case "hashCode":
+                    case "equals":
+                    case "toString": return objectMethod(proxy, method, args, "test one-unit CLOB");
+                    default: throw new SQLFeatureNotSupportedException(method.getName());
+                }
+            });
+    }
+
+    // a TIME column whose getObject(int, LocalTime.class) raises a lost connection
+    private static Column asFailColumn() {
+        Column col = new Column("T", Types.TIME, "time", 8, 0, ResultSetMetaData.columnNullable, "java.sql.Time",
+            java.sql.Time.valueOf("10:15:30"));
+        col.getObjectAsError = new SQLException("injected connection reset", "08006");
+        return col;
     }
 
     // a string of the given length whose character at index 65535 (the last of the first 64 KiB chunk) is the high
@@ -391,6 +440,25 @@ public final class JdbcTransactionDriver implements Driver {
                 (Supplier<Object>) () -> lob("ReadFails", new byte[] {1}, new AbstractMethodError("free"),
                     new SQLException("injected read error"), false)),
         });
+        // large objects of an unknown length (length() < 0), which are read until a chunk is shorter than requested
+        typedResultSets.put("lobunknown", new Column[] {
+            new Column("UnknownBlob", Types.BLOB, "blob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Blob",
+                (Supplier<Object>) () -> lob("UnknownBlob", unknownBytes(), null, null, false, -1L)),
+            new Column("UnknownClob", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Clob",
+                (Supplier<Object>) () -> lob("UnknownClob", splitSurrogates(), null, null, false, -1L)),
+            // a chunk of one character, the high surrogate of a pair: the length is 2, read as 1 + 1
+            new Column("OneUnit", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Clob",
+                (Supplier<Object>) () -> oneUnitClob()),
+        });
+        // a CLOB whose second chunk waits for releaseLob(), to cancel the reader
+        typedResultSets.put("lobcancelclob", new Column[] {
+            new Column("BlockingClob", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Clob",
+                (Supplier<Object>) () -> lob("BlockingClob", "x".repeat(140000), null, null, true)),
+        });
+        // getObject(int, LocalTime.class) raises an SQL error that is not an unsupported conversion: it is raised
+        typedResultSets.put("asfail", new Column[] {
+            asFailColumn(),
+        });
         // a large object whose second chunk waits for releaseLob(), to cancel the reader
         typedResultSets.put("lobcancel", new Column[] {
             new Column("Blocking", Types.BLOB, "blob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Blob",
@@ -469,6 +537,9 @@ public final class JdbcTransactionDriver implements Driver {
                                 throw new SQLException("no current row");
                             }
                             Column col = columns[(Integer) args[0] - 1];
+                            if (args.length == 2 && col.getObjectAsError != null) {
+                                throw col.getObjectAsError;
+                            }
                             if (args.length == 2 && col.noGetObjectAs) {
                                 throw new SQLFeatureNotSupportedException("getObject(int, Class)");
                             }

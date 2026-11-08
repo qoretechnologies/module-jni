@@ -75,9 +75,12 @@ struct QoreJdbcColumn {
     enum class Fetch {
         //! ResultSet.getObject(int)
         Object,
-        //! ResultSet.getTimestamp(int), converted from the time since the epoch: Oracle's TIMESTAMP, TIMESTAMP WITH
-        //! LOCAL TIME ZONE and DATE
+        //! ResultSet.getTimestamp(int), converted from the time since the epoch: Oracle's TIMESTAMP WITH LOCAL TIME
+        //! ZONE, a point in time
         Timestamp,
+        //! ResultSet.getObject(int, LocalDateTime.class): Oracle's TIMESTAMP and DATE, a local date and time; with a
+        //! driver without it, the java.sql.Timestamp of getObject(int), which has the same local time
+        LocalDateTime,
         //! ResultSet.getObject(int, OffsetDateTime.class): Oracle's TIMESTAMP WITH TIME ZONE; with a driver without
         //! it, the string of the value, which has its offset
         OffsetDateTime,
