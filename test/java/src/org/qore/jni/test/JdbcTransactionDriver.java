@@ -206,6 +206,8 @@ public final class JdbcTransactionDriver implements Driver {
         final Timestamp timestampValue;
         // getObject(int, Class) raises this error for the column (ex: a lost connection)
         SQLException getObjectAsError;
+        // getObject(int, Class) raises an IllegalArgumentException for the column
+        boolean getObjectAsRuntimeError;
 
         Column(String label, int type, String typeName, int precision, int scale, int nullable, String className,
                 Object value) {
@@ -345,11 +347,13 @@ public final class JdbcTransactionDriver implements Driver {
             });
     }
 
-    // a TIME column whose getObject(int, LocalTime.class) raises a lost connection
-    private static Column asFailColumn() {
-        Column col = new Column("T", Types.TIME, "time", 8, 0, ResultSetMetaData.columnNullable, "java.sql.Time",
+    // a TIME column whose getObject(int, LocalTime.class) raises the given error (null: an IllegalArgumentException,
+    // which is not an SQLException)
+    private static Column asFailColumn(String label, SQLException error) {
+        Column col = new Column(label, Types.TIME, "time", 8, 0, ResultSetMetaData.columnNullable, "java.sql.Time",
             java.sql.Time.valueOf("10:15:30"));
-        col.getObjectAsError = new SQLException("injected connection reset", "08006");
+        col.getObjectAsError = error;
+        col.getObjectAsRuntimeError = error == null;
         return col;
     }
 
@@ -457,7 +461,15 @@ public final class JdbcTransactionDriver implements Driver {
         });
         // getObject(int, LocalTime.class) raises an SQL error that is not an unsupported conversion: it is raised
         typedResultSets.put("asfail", new Column[] {
-            asFailColumn(),
+            asFailColumn("T", new SQLException("injected connection reset", "08006")),
+        });
+        // getObject(int, LocalTime.class) raises other errors: a type mismatch (Derby), a message in another language;
+        // the column is read with getObject(int)
+        typedResultSets.put("asfallback", new Column[] {
+            asFailColumn("Mismatch", new SQLException("An attempt was made to get a data value of type "
+                + "'java.time.LocalTime' from a data value of type 'TIME'.", "22005")),
+            asFailColumn("Localized", new SQLException("Type de colonne non valide", "99999")),
+            asFailColumn("Runtime", null),
         });
         // a large object whose second chunk waits for releaseLob(), to cancel the reader
         typedResultSets.put("lobcancel", new Column[] {
@@ -476,6 +488,11 @@ public final class JdbcTransactionDriver implements Driver {
                 "oracle.sql.TIMESTAMPTZ", "unexpected getObject()", true,
                 "2026-03-04 05:06:07.123456 Europe/Prague",
                 Timestamp.from(Instant.parse("2026-03-04T04:06:07.123456Z"))),
+            // Oracle's TIMESTAMP with a driver without getObject(int, LocalDateTime.class): getObject() gives
+            // Oracle's own class, getTimestamp() a java.sql.Timestamp
+            new Column("Ts", Types.TIMESTAMP, "TIMESTAMP", 29, 6, ResultSetMetaData.columnNullable,
+                "oracle.sql.TIMESTAMP", "unexpected getObject()", true, null,
+                Timestamp.valueOf("2026-07-04 12:00:00.123456")),
         });
         // duplicate column labels, in another case than the first
         typedResultSets.put("duplicates", new Column[] {
@@ -539,6 +556,9 @@ public final class JdbcTransactionDriver implements Driver {
                             Column col = columns[(Integer) args[0] - 1];
                             if (args.length == 2 && col.getObjectAsError != null) {
                                 throw col.getObjectAsError;
+                            }
+                            if (args.length == 2 && col.getObjectAsRuntimeError) {
+                                throw new IllegalArgumentException("unsupported class: " + args[1]);
                             }
                             if (args.length == 2 && col.noGetObjectAs) {
                                 throw new SQLFeatureNotSupportedException("getObject(int, Class)");

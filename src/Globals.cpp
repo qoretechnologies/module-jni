@@ -485,8 +485,10 @@ GlobalReference<jclass> Globals::classClob;
 jmethodID Globals::methodClobLength;
 jmethodID Globals::methodClobGetSubString;
 jmethodID Globals::methodClobFree;
-GlobalReference<jclass> Globals::classSQLFeatureNotSupportedException;
-GlobalReference<jclass> Globals::classAbstractMethodError;
+GlobalReference<jclass> Globals::classSQLRecoverableException;
+GlobalReference<jclass> Globals::classSQLNonTransientConnectionException;
+GlobalReference<jclass> Globals::classSQLTransientConnectionException;
+GlobalReference<jclass> Globals::classSQLTimeoutException;
 jmethodID Globals::methodSQLExceptionGetSQLState;
 GlobalReference<jclass> Globals::classUtilDate;
 jmethodID Globals::methodUtilDateGetTime;
@@ -2411,6 +2413,43 @@ static jobject JNICALL qore_url_classloader_get_syscl(JNIEnv* jenv, jclass jcls)
 // module command) to route every reference to `qoremod.<mod>.*` through a single loader so
 // all consumer Programs see the same Class object.  Returns null for unknown modules and
 // for binary modules that don't have an owning user Program — callers fall back to syscl.
+// raises the error of getModuleLoader0() as a java.lang.RuntimeException with the error's code and description, if
+// any; it raises no C++ exception (a failure to make the message gives a fixed one)
+static void jni_throw_module_loader_error(JNIEnv* jenv, jni::Exception* e) {
+    if (jenv->ExceptionCheck()) {
+        return;
+    }
+    static const char* fixed = "getModuleLoader() failed";
+    jclass cls = jenv->FindClass("java/lang/RuntimeException");
+    if (!cls) {
+        // FindClass() raised the error
+        return;
+    }
+    try {
+        std::string msg = fixed;
+        if (e) {
+            ExceptionSink xsink;
+            e->convert(&xsink);
+            if (xsink) {
+                QoreValue err = xsink.getExceptionErr();
+                QoreValue desc = xsink.getExceptionDesc();
+                if (err.getType() == NT_STRING) {
+                    msg += ": ";
+                    msg += err.get<const QoreStringNode>()->c_str();
+                }
+                if (desc.getType() == NT_STRING) {
+                    msg += ": ";
+                    msg += desc.get<const QoreStringNode>()->c_str();
+                }
+                xsink.clear();
+            }
+        }
+        jenv->ThrowNew(cls, msg.c_str());
+    } catch (...) {
+        jenv->ThrowNew(cls, fixed);
+    }
+}
+
 static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jclass jcls, jstring jname) {
     if (!jname) {
         return nullptr;
@@ -2422,30 +2461,14 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
             return nullptr;
         }
         return Globals::getModuleClassLoader(Env::ModifiedUtf8(utf.get()).c_str());
-    } catch (std::bad_alloc&) {
-        if (!jenv->ExceptionCheck()) {
-            jenv->ThrowNew(jenv->FindClass("java/lang/OutOfMemoryError"), "getModuleLoader()");
-        }
+    } catch (JavaException&) {
+        // the Java exception of a JNI call is pending: it is raised to the caller
+        assert(jenv->ExceptionCheck());
     } catch (jni::Exception& e) {
-        // a Java exception raised by a JNI call is already pending; any other error (ex: a Qore exception) is raised
-        // as a Java exception with its description
-        if (!jenv->ExceptionCheck()) {
-            ExceptionSink xsink;
-            e.convert(&xsink);
-            QoreStringMaker msg("getModuleLoader() failed");
-            if (xsink) {
-                QoreValue err = xsink.getExceptionErr();
-                QoreValue desc = xsink.getExceptionDesc();
-                msg.sprintf(": %s: %s", err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "",
-                    desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "");
-                xsink.clear();
-            }
-            jenv->ThrowNew(jenv->FindClass("java/lang/RuntimeException"), msg.c_str());
-        }
+        // any other error (ex: a Qore exception) is raised as a Java exception with its description
+        jni_throw_module_loader_error(jenv, &e);
     } catch (...) {
-        if (!jenv->ExceptionCheck()) {
-            jenv->ThrowNew(jenv->FindClass("java/lang/RuntimeException"), "getModuleLoader() failed");
-        }
+        jni_throw_module_loader_error(jenv, nullptr);
     }
     return nullptr;
 }
@@ -3364,6 +3387,16 @@ jobject Globals::getModuleClassLoader(const char* name) {
     if (!name || !*name) {
         return nullptr;
     }
+#ifdef DEBUG
+    // a test hook (debug builds): a failure of the named module's lookup, raised as a Qore exception
+    if (const char* fail = getenv("QORE_JNI_TEST_MODULE_LOADER_FAIL")) {
+        if (!strcmp(fail, name)) {
+            ExceptionSink xsink;
+            xsink.raiseException("JNI-TEST-ERROR", "injected module loader failure for module '%s'", name);
+            throw XsinkException(xsink);
+        }
+    }
+#endif
     QoreProgram* pgm = ModuleManager::findUserModuleProgram(name);
     if (!pgm) {
         return nullptr;
@@ -4200,8 +4233,11 @@ bool Globals::init() {
     methodClobLength = env.getMethod(classClob, "length", "()J");
     methodClobGetSubString = env.getMethod(classClob, "getSubString", "(JI)Ljava/lang/String;");
     methodClobFree = env.getMethod(classClob, "free", "()V");
-    classSQLFeatureNotSupportedException = env.findClass("java/sql/SQLFeatureNotSupportedException").makeGlobal();
-    classAbstractMethodError = env.findClass("java/lang/AbstractMethodError").makeGlobal();
+    classSQLRecoverableException = env.findClass("java/sql/SQLRecoverableException").makeGlobal();
+    classSQLNonTransientConnectionException = env.findClass("java/sql/SQLNonTransientConnectionException")
+        .makeGlobal();
+    classSQLTransientConnectionException = env.findClass("java/sql/SQLTransientConnectionException").makeGlobal();
+    classSQLTimeoutException = env.findClass("java/sql/SQLTimeoutException").makeGlobal();
     methodSQLExceptionGetSQLState = env.getMethod(classSQLException, "getSQLState", "()Ljava/lang/String;");
     classUtilDate = env.findClass("java/util/Date").makeGlobal();
     methodUtilDateGetTime = env.getMethod(classUtilDate, "getTime", "()J");
@@ -4693,8 +4729,10 @@ void Globals::cleanup() {
     classJdbcColumnarBatch = nullptr;
     classBlob = nullptr;
     classClob = nullptr;
-    classSQLFeatureNotSupportedException = nullptr;
-    classAbstractMethodError = nullptr;
+    classSQLRecoverableException = nullptr;
+    classSQLNonTransientConnectionException = nullptr;
+    classSQLTransientConnectionException = nullptr;
+    classSQLTimeoutException = nullptr;
     classUtilDate = nullptr;
     classArray = nullptr;
     classSQLException = nullptr;

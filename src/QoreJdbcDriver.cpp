@@ -393,6 +393,8 @@ void setup_jdbc_driver() {
         "'string-numbers' and 'optimal-numbers'");
     methods.registerOption(JDBC_OPT_CLASSPATH, "set the classpath before loading the driver", stringTypeInfo);
     methods.registerOption(JDBC_OPT_URL, "override the database string with the jdbc driver URL", stringTypeInfo);
+    methods.registerOption(JDBC_OPT_LOB_MAX_SIZE, "the most bytes or characters read from a large object whose "
+        "length the driver does not give (default: 2 GiB); a larger one raises JDBC-LOB-SIZE-ERROR", bigIntTypeInfo);
 
     DBID_JDBC = DBI.registerDriver("jdbc", methods, jdbc_caps);
 }

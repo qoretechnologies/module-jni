@@ -109,12 +109,22 @@ static QoreValue jdbc_timestamp_to_qore(Env& env, jobject ts) {
     return DateTimeNode::makeAbsolute(currentTZ(), secs, nanos / 1000);
 }
 
-// returns true if a Java exception means that the driver does not read the column as the requested class: a feature
-// that it does not support (SQLFeatureNotSupportedException, SQLState class 0A), a method that it does not implement
-// (AbstractMethodError: a JDBC 4.1 driver) or a conversion that it does not make
-static bool jdbc_is_unsupported(Env& env, jthrowable t) {
-    if (env.isInstanceOf(t, Globals::classSQLFeatureNotSupportedException)
-            || env.isInstanceOf(t, Globals::classAbstractMethodError)) {
+// the SQLState classes and codes of errors that are raised by getObject(int, Class) rather than taken for a
+// conversion that the driver does not make: a connection (08), a transaction rollback (40), an intervention (57,
+// ex: a cancelled statement), a timeout (HYT00) and a cancellation (HY008)
+static bool jdbc_is_connection_state(const char* state) {
+    return !strncmp(state, "08", 2) || !strncmp(state, "40", 2) || !strncmp(state, "57", 2)
+        || !strcmp(state, "HYT00") || !strcmp(state, "HY008");
+}
+
+// returns true if a Java exception of getObject(int, Class) is to be raised: a connection, transaction, timeout or
+// cancellation error; any other error (ex: SQLFeatureNotSupportedException, AbstractMethodError, a type mismatch,
+// or a driver's message in any language) means that the driver does not read the column as the class
+static bool jdbc_is_raised_error(Env& env, jthrowable t) {
+    if (env.isInstanceOf(t, Globals::classSQLRecoverableException)
+            || env.isInstanceOf(t, Globals::classSQLNonTransientConnectionException)
+            || env.isInstanceOf(t, Globals::classSQLTransientConnectionException)
+            || env.isInstanceOf(t, Globals::classSQLTimeoutException)) {
         return true;
     }
     if (!env.isInstanceOf(t, Globals::classSQLException)) {
@@ -122,30 +132,15 @@ static bool jdbc_is_unsupported(Env& env, jthrowable t) {
     }
     LocalReference<jstring> state = env.callObjectMethod(t, Globals::methodSQLExceptionGetSQLState, nullptr)
         .as<jstring>();
-    if (state) {
-        Env::GetStringUtfChars chars(env, state);
-        if (!strncmp(chars.c_str(), "0A", 2)) {
-            return true;
-        }
-    }
-    // the drivers' messages for a conversion they do not make: pgjdbc "conversion to class ... not supported",
-    // Oracle "Invalid column type" / "Unsupported feature", mssql-jdbc "The conversion from ... is unsupported"
-    LocalReference<jstring> msg = env.callObjectMethod(t, Globals::methodThrowableGetMessage, nullptr)
-        .as<jstring>();
-    if (!msg) {
+    if (!state) {
         return false;
     }
-    Env::GetStringUtfChars chars(env, msg);
-    std::string m = chars.c_str();
-    for (char& c : m) {
-        c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-    }
-    return m.find("conversion") != std::string::npos || m.find("unsupported") != std::string::npos
-        || m.find("not supported") != std::string::npos || m.find("invalid column type") != std::string::npos;
+    Env::GetStringUtfChars chars(env, state);
+    return jdbc_is_connection_state(chars.c_str());
 }
 
 // returns the value of a column read with getObject(int, Class), or false if the driver does not read the column as
-// the class (the exception is cleared); any other error (ex: a lost connection) is raised
+// the class (the exception is cleared); a connection, transaction, timeout or cancellation error is raised
 static bool jdbc_get_object_as(Env& env, jobject rs, int column, jclass cls, LocalReference<jobject>& val) {
     jvalue jargs[2];
     jargs[0].i = column;
@@ -155,7 +150,7 @@ static bool jdbc_get_object_as(Env& env, jobject rs, int column, jclass cls, Loc
         return true;
     } catch (JavaException& e) {
         LocalReference<jthrowable> t = e.save();
-        if (jdbc_is_unsupported(env, t)) {
+        if (!jdbc_is_raised_error(env, t)) {
             return false;
         }
         e.restore(t);
@@ -236,7 +231,7 @@ static jint jdbc_lob_request(int64 len, int64 pos) {
 
 // reads a BLOB in chunks, checking for cancellation before each chunk, and frees it; a BLOB of length 0 is not read,
 // and one of a negative length (a driver that does not know it) is read until a chunk is shorter than requested
-static QoreValue jdbc_read_blob(Env& env, jobject blob, ExceptionSink* xsink) {
+static QoreValue jdbc_read_blob(Env& env, jobject blob, int64 max_size, ExceptionSink* xsink) {
     JdbcLobFreeHelper free_lob(env, blob, Globals::methodBlobFree);
     int64 len = env.callLongMethod(blob, Globals::methodBlobLength, nullptr);
     SimpleRefHolder<BinaryNode> rv(new BinaryNode);
@@ -267,6 +262,12 @@ static QoreValue jdbc_read_blob(Env& env, jobject blob, ExceptionSink* xsink) {
         if (!n) {
             break;
         }
+        // a value of an unknown length is read up to the lob-max-size option
+        if (len < 0 && static_cast<int64>(size + n) > max_size) {
+            xsink->raiseException("JDBC-LOB-SIZE-ERROR", "a BLOB of an unknown length has more than %lld bytes (the "
+                "lob-max-size option)", static_cast<long long>(max_size));
+            return QoreValue();
+        }
         if (size + n > cap) {
             cap = std::max(size + n, cap * 2);
             if (len > 0) {
@@ -293,7 +294,7 @@ static QoreValue jdbc_read_blob(Env& env, jobject blob, ExceptionSink* xsink) {
 
 // reads a CLOB or an NCLOB in chunks, checking for cancellation before each chunk, and frees it; the lengths are as
 // for jdbc_read_blob(); the value is built in a Qore string, from each chunk's UTF-16 converted to UTF-8
-static QoreValue jdbc_read_clob(Env& env, jobject clob, ExceptionSink* xsink) {
+static QoreValue jdbc_read_clob(Env& env, jobject clob, int64 max_size, ExceptionSink* xsink) {
     JdbcLobFreeHelper free_lob(env, clob, Globals::methodClobFree);
     int64 len = env.callLongMethod(clob, Globals::methodClobLength, nullptr);
     try {
@@ -329,6 +330,12 @@ static QoreValue jdbc_read_clob(Env& env, jobject clob, ExceptionSink* xsink) {
             }
             env.getStringRegion(chunk, 0, n, units.data() + (carry ? 1 : 0));
             pos += n;
+            // a value of an unknown length is read up to the lob-max-size option
+            if (len < 0 && pos - 1 > max_size) {
+                xsink->raiseException("JDBC-LOB-SIZE-ERROR", "a CLOB of an unknown length has more than %lld "
+                    "characters (the lob-max-size option)", static_cast<long long>(max_size));
+                return QoreValue();
+            }
             bool last = (len > 0 && pos > len) || (len < 0 && n < jargs[1].i);
             size_t take = units.size();
             // a surrogate pair split by the chunk (also a chunk of one unit) is converted with the next chunk
@@ -359,13 +366,13 @@ static QoreValue jdbc_read_clob(Env& env, jobject clob, ExceptionSink* xsink) {
 // the value of a LOB column: a large object is read and freed; a driver may return another value for the column
 // (ex: SQLite's byte[] for a BLOB column), which is converted as any other value
 static QoreValue jdbc_lob_value(Env& env, LocalReference<jobject>& val, QoreProgram* pgm, NumericOption numeric,
-        ExceptionSink* xsink) {
+        int64 max_size, ExceptionSink* xsink) {
     if (env.isInstanceOf(val, Globals::classBlob)) {
-        return jdbc_read_blob(env, val, xsink);
+        return jdbc_read_blob(env, val, max_size, xsink);
     }
     // java.sql.NClob extends java.sql.Clob
     if (env.isInstanceOf(val, Globals::classClob)) {
-        return jdbc_read_clob(env, val, xsink);
+        return jdbc_read_clob(env, val, max_size, xsink);
     }
     return JavaToQore::convertToQore(val.release(), pgm, false, numeric);
 }
@@ -2593,8 +2600,10 @@ QoreValue QoreJdbcStatement::getColumnValue(Env& env, int column, QoreJdbcColumn
                 }
                 col.no_get_object_as = true;
             }
-            // the java.sql.Timestamp of the value, whose local time (toString()) is the value's
-            val = env.callObjectMethod(rs, Globals::methodResultSetGetObject, &jarg);
+            // a driver without it: the java.sql.Timestamp of getTimestamp() (getObject() gives Oracle's own class),
+            // whose local time (toString()) is the value's in the JVM's time zone; a time in the hour skipped when
+            // daylight saving time starts in that time zone is moved forward by the driver
+            val = env.callObjectMethod(rs, Globals::methodResultSetGetTimestamp, &jarg);
             break;
         case QoreJdbcColumn::Fetch::LocalTime:
         case QoreJdbcColumn::Fetch::OffsetTime:
@@ -2627,7 +2636,8 @@ QoreValue QoreJdbcStatement::getColumnValue(Env& env, int column, QoreJdbcColumn
             if (!val) {
                 return &Null;
             }
-            return jdbc_lob_value(env, val, conn->getProgram(), conn->getNumericOption(), xsink);
+            return jdbc_lob_value(env, val, conn->getProgram(), conn->getNumericOption(), conn->getLobMaxSize(),
+                xsink);
     }
     if (!val) {
         return &Null;

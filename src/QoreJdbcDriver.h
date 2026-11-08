@@ -29,6 +29,9 @@
 
 constexpr const char* JDBC_OPT_CLASSPATH = "classpath";
 constexpr const char* JDBC_OPT_URL = "url";
+constexpr const char* JDBC_OPT_LOB_MAX_SIZE = "lob-max-size";
+//! the default of the lob-max-size option: 2 GiB
+constexpr int64 JDBC_LOB_MAX_SIZE_DEFAULT = 2LL * 1024 * 1024 * 1024;
 
 namespace jni {
 DLLLOCAL void setup_jdbc_driver();

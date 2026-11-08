@@ -21,6 +21,8 @@
       which a cancelled thread or an interrupted program stops (see @ref jdbc_column_values); <b>behaviour
       change:</b> they were returned as \c java.sql.Blob and \c java.sql.Clob objects, which code that read them as
       Java objects must no longer do; the whole value is read into memory
+    - added the \c jdbc driver's \c lob-max-size option: the most bytes or characters read from a large object whose
+      length the driver does not give (see @ref jdbc_option_lob_max_size)
     - fixed the \c jdbc driver dropping the fraction of a second of \c TIME values (ex: SQL Server's \c time(7)) and
       the offset of \c TIME \c WITH \c TIME \c ZONE values, and returning PostgreSQL's \c 'infinity' as a date in
       the year 292278994: it is the date that the \c pgsql driver returns (see @ref jdbc_column_values)

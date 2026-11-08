@@ -26,6 +26,7 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         addTestCase("a CLOB read is cancelled between chunks and the CLOB is freed", \lobCancelClob());
         addTestCase("an SQL error of getObject(int, Class) is raised and the column is not read otherwise",
             \getObjectAsError());
+        addTestCase("the lob-max-size option", \lobMaxSize());
         set_return_value(main());
     }
 
@@ -155,6 +156,29 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         assertTrue(stmt.next());
         assertThrows("JNI-ERROR", "injected connection reset", \stmt.fetchRow());
         assertThrows("JNI-ERROR", "injected connection reset", \ds.selectRow(), "multi:typed=asfail");
+        # any other error: the column is read with getObject(int) (a java.sql.Time)
+        hash<auto> row = ds.selectRow("multi:typed=asfallback");
+        foreach string col in (("mismatch", "localized", "runtime")) {
+            assertEq(Type::Date, row{col}.type(), col);
+            assertEq("10:15:30", row{col}.format("HH:mm:SS"), col);
+        }
+    }
+
+    #! a large object of an unknown length is read up to the lob-max-size option
+    private lobMaxSize() {
+        JdbcTransactionDriver::reset();
+        Datasource ds("jdbc:@qore-transaction-test:fixture{lob-max-size=100000}");
+        ds.open();
+        on_exit ds.rollback();
+        assertEq(100000, ds.getOption("lob-max-size"));
+        assertThrows("JDBC-LOB-SIZE-ERROR", "more than 100000 bytes", \ds.selectRow(), "multi:typed=lobunknown");
+        # freed
+        assertEq(1, JdbcTransactionDriver::count("lob.free:UnknownBlob"));
+        # the default is 2 GiB
+        Datasource ds2("jdbc:@qore-transaction-test:fixture");
+        ds2.open();
+        assertEq(2147483648, ds2.getOption("lob-max-size"));
+        assertThrows("JDBC-OPTION-ERROR", \ds2.setOption(), ("lob-max-size", 0));
     }
 
     # the thread waits in the read of the second chunk while it is cancelled: the read ends with THREAD-CANCELLED
@@ -197,6 +221,9 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         assertEq("+02:00", row.tstz.format("Z"));
         assertEq(2026-03-04T05:06:07-05:30, row.tstznegative);
         assertEq("-05:30", row.tstznegative.format("Z"));
+        # Oracle's TIMESTAMP: the local time of getTimestamp() (getObject() gives Oracle's own class)
+        assertEq(Type::Date, row.ts.type());
+        assertEq("2026-07-04 12:00:00.123456", row.ts.format("YYYY-MM-DD HH:mm:SS.xx"));
         assertEq(Type::Date, row.tstzregion.type());
         assertEq(2026-03-04T04:06:07.123456Z.getEpochSeconds(), row.tstzregion.getEpochSeconds());
         assertEq(123456, row.tstzregion.microseconds());

@@ -125,7 +125,8 @@ foreach hash<auto> col in (stmt.describe().iterator()) {
     - Oracle's \c TIMESTAMP and \c DATE values, for which Oracle's driver returns its own classes, are read as a
       \c java.time.LocalDateTime: a local date and time, whose wall clock is kept whatever the time zones of %Qore,
       of the JVM and of the session (with a driver that cannot read one, as the \c java.sql.Timestamp of
-      \c getObject(), which has the same local time)
+      \c getTimestamp(), whose local time is the value's in the JVM's time zone: a time in the hour skipped when
+      daylight saving time starts in that time zone is moved forward by the driver)
     - Oracle's \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE values, points in time, are read with
       \c ResultSet.getTimestamp() and converted from the time since the epoch, so that a time in the hour repeated
       when daylight saving time ends is the right one of the two
@@ -159,7 +160,9 @@ foreach hash<auto> col in (stmt.describe().iterator()) {
     (it doubles), and 64 KiB for the chunk; a \c CLOB of \c n characters takes its UTF-8 (up to 3 \c n bytes, 4
     bytes for each pair of UTF-16 units of a character outside the Basic Multilingual Plane) plus the growth of the
     string, and up to 320 KiB for the chunk (its UTF-16 and its UTF-8).  A large object whose length is 0 is not read;
-    one whose length the driver does not give (a negative length) is read until a chunk is shorter than requested.
+    one whose length the driver does not give (a negative length) is read until a chunk is shorter than requested, up
+    to the @ref jdbc_option_lob_max_size "lob-max-size option" (a larger value raises \c JDBC-LOB-SIZE-ERROR); a
+    driver that returns a short or an empty chunk ends the value there.
 
     @subsection jdbc_sql_errors SQL Errors
 
@@ -351,6 +354,8 @@ foreach hash<auto> column in (result.schemaV2()) {
     The jdbc driver supports the following DBI options:
     - \c "classpath": @ref jdbc_option_classpath "sets the classpath" with jar or class files providing the \c jdbc
       driver
+    - \c "lob-max-size": @ref jdbc_option_lob_max_size "the most bytes or characters" read from a large object whose
+      length the driver does not give
     - \c "numeric-numbers": return received \c SQL_NUMERIC and \c SQL_DECIMAL values as arbitrary-precision numbers
       (Qore number values)
     - \c "optimal-numbers": return received \c SQL_NUMERIC and \c SQL_DECIMAL values as integers if possible, if not
@@ -371,6 +376,13 @@ foreach hash<auto> column in (result.schemaV2()) {
     after updating the classpath, to ensure that any new drivers are loaded and available to drivers loaded after the
     initial driver is loaded, otherwise the \c java.sql.DriverManager will not see the new drivers as they were not
     present in the classpath during on-demand static initialization).
+
+    @subsection jdbc_option_lob_max_size jdbc lob-max-size Option
+
+    The \c lob-max-size option is the most bytes (\c BLOB) or characters (\c CLOB, \c NCLOB) read from a large object
+    whose length the driver does not give (\c length() is negative); a larger one raises \c JDBC-LOB-SIZE-ERROR, so
+    that a misbehaving driver cannot make a read take all the memory.  The default is 2 GiB; the value must be a
+    positive integer.
 
     @subsection jdbc_option_url jdbc url Option
 

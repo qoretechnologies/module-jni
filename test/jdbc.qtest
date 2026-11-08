@@ -805,6 +805,20 @@ printf(\"imported\\n\");
             assertEq(utc[$#].format("YYYY-MM-DD HH:mm:SS.xx"), row.ts.format("YYYY-MM-DD HH:mm:SS.xx"),
                 sprintf("ts %d", $#));
         }
+        if (hasColumnar(ds)) {
+            # a timestamp column holds the microseconds since the epoch, a list column dates
+            auto r = ds.selectColumnar(sprintf("select ltz, tz, ts from %s order by id", table));
+            foreach date d in (utc) {
+                int i = $#;
+                # a copy that takes values of any type (the map gives a hash of the type of its first value)
+                hash<auto> row = {} + (map {$1: getColumn(r, $1)[i]}, ("ltz", "tz", "ts"));
+                map row{$1} = row{$1}.typeCode() == NT_INT ? toDate(row{$1}) : row{$1}, ("ltz", "tz", "ts");
+                assertEq(d.getEpochSeconds(), row.ltz.getEpochSeconds(), sprintf("columnar ltz %d", i));
+                assertEq(d.getEpochSeconds(), row.tz.getEpochSeconds(), sprintf("columnar tz %d", i));
+                assertEq(d.format("YYYY-MM-DD HH:mm:SS.xx"), row.ts.format("YYYY-MM-DD HH:mm:SS.xx"),
+                    sprintf("columnar ts %d", i));
+            }
+        }
     }
 
     #! datetimeoffset keeps its offset, also in and out of daylight saving time; time(7) came back without its

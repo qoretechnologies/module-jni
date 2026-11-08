@@ -266,6 +266,14 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
         }
         QoreStringValueHelper db_str(val);
         db.assign(db_str->c_str(), db_str->size());
+    } else if (!strcasecmp(opt, JDBC_OPT_LOB_MAX_SIZE)) {
+        int64 v = val.getAsBigInt();
+        if (v <= 0) {
+            xsink->raiseException("JDBC-OPTION-ERROR", "option '%s' must be a positive number of bytes or characters; "
+                "got %lld", opt, static_cast<long long>(v));
+            return -1;
+        }
+        lob_max_size = v;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_OPT)) {
         numeric = ENO_OPTIMAL;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_STRING)) {
@@ -284,6 +292,8 @@ QoreValue QoreJdbcConnection::getOption(const char* opt) {
         return classpath.empty() ? QoreValue() : new QoreStringNode(classpath);
     } else if (!strcasecmp(opt, JDBC_OPT_URL)) {
         return db.empty() ? QoreValue() : new QoreStringNode(db);
+    } else if (!strcasecmp(opt, JDBC_OPT_LOB_MAX_SIZE)) {
+        return lob_max_size;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_OPT)) {
         return numeric == ENO_OPTIMAL;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_STRING)) {

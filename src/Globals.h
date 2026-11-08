@@ -500,8 +500,10 @@ public:
     DLLLOCAL static jmethodID methodClobLength;                                   // long length()
     DLLLOCAL static jmethodID methodClobGetSubString;                             // String getSubString(long, int)
     DLLLOCAL static jmethodID methodClobFree;                                     // void free()
-    DLLLOCAL static GlobalReference<jclass> classSQLFeatureNotSupportedException; // java.sql.SQLFeatureNotSupportedException
-    DLLLOCAL static GlobalReference<jclass> classAbstractMethodError;             // java.lang.AbstractMethodError
+    DLLLOCAL static GlobalReference<jclass> classSQLRecoverableException;          // java.sql.SQLRecoverableException
+    DLLLOCAL static GlobalReference<jclass> classSQLNonTransientConnectionException; // java.sql.SQLNonTransientConnectionException
+    DLLLOCAL static GlobalReference<jclass> classSQLTransientConnectionException; // java.sql.SQLTransientConnectionException
+    DLLLOCAL static GlobalReference<jclass> classSQLTimeoutException;             // java.sql.SQLTimeoutException
     DLLLOCAL static jmethodID methodSQLExceptionGetSQLState;                      // String getSQLState()
     DLLLOCAL static GlobalReference<jclass> classUtilDate;                        // java.util.Date
     DLLLOCAL static jmethodID methodUtilDateGetTime;                              // long getTime()

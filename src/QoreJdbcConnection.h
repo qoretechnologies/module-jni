@@ -33,6 +33,7 @@
 #include "GlobalReference.h"
 #include "QoreJniClassMap.h"
 #include "JavaToQore.h"
+#include "QoreJdbcDriver.h"
 
 #include <string>
 
@@ -178,6 +179,11 @@ public:
         return jpc;
     }
 
+    //! Returns the most bytes or characters read from a large object of an unknown length
+    DLLLOCAL int64 getLobMaxSize() const {
+        return lob_max_size;
+    }
+
     DLLLOCAL NumericOption getNumericOption() const {
         return numeric;
     }
@@ -229,6 +235,9 @@ private:
 
     //! Option for numeric values
     NumericOption numeric = ENO_OPTIMAL;
+
+    //! the most bytes or characters read from a large object of an unknown length
+    int64 lob_max_size = JDBC_LOB_MAX_SIZE_DEFAULT;
 
 #if 0
     //! DB type
