@@ -1228,6 +1228,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/ExceptionConversionFixture.java
     test/java/src/org/qore/jni/test/JavaTimeTypes.java
     test/java/src/org/qore/jni/test/JdbcCursorTest.java
+    test/java/src/org/qore/jni/test/ObjectHolder.java
     test/java/src/org/qore/jni/test/JdbcTransactionDriver.java
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java

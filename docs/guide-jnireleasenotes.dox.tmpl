@@ -26,6 +26,8 @@
       the year 292278994: it is the date that the \c pgsql driver returns (see @ref jdbc_column_values)
     - fixed a crash of the \c jdbc driver (an exception that terminated the process) when a cancelled thread used a
       connection or closed a statement
+    - fixed a %Qore Program destroyed on a cancelled thread leaving its Java class loader with a pointer to the
+      destroyed Program
     - fixed the \c jdbc driver binding an integer of -128 to 127 as a \c TINYINT and one of -32768 to 32767 as a
       \c SMALLINT: SQL Server stores a \c TINYINT unsigned, so a negative value was stored as another one (-1 as
       255) when a statement prepared with a small positive value was run again; an integer is bound as an \c INTEGER

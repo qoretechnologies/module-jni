@@ -16,6 +16,9 @@
 
 %module-cmd(jni) import java.lang.StringBuilder
 %module-cmd(jni) import java.util.concurrent.CountDownLatch
+# the classpath of every Program: the class of the holder is the same in the child Program
+%module-cmd(jni) global-add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.ObjectHolder
 
 %exec-class JniCancelTest
 
@@ -27,6 +30,7 @@ class JniCancelTest inherits QUnit::Test {
 
     constructor() : Test("jni cancel test", "1.0", \ARGV) {
         addTestCase("a thread cancelled during a Java call calls a Java instance method", \instanceMethodTest());
+        addTestCase("a Program destroyed on a cancelled thread clears its class loader's Program", \programOnCancelledThread());
         set_return_value(main());
     }
 
@@ -53,5 +57,37 @@ class JniCancelTest inherits QUnit::Test {
         assertEq("THREAD-CANCELLED", result.get(ResultTimeout));
         # the thread that created the object still uses it
         assertEq("x", sb.toString());
+    }
+
+    #! the class loader of a Program keeps a pointer to the Program, which the Program clears when it is destroyed;
+    #! on a cancelled thread the clearing raised the cancellation instead, and the class loader kept a pointer to the
+    #! destroyed Program
+    programOnCancelledThread() {
+        ObjectHolder::reset();
+        Queue result();
+        int tid = background sub () {
+            try {
+                Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+                # the Program's class loader is held by a Java class, which outlives the Program
+                p.parse("%new-style\n%requires jni\n%module-cmd(jni) import org.qore.jni.test.ObjectHolder\n"
+                    "ObjectHolder::set(get_class_loader());\n", "child");
+                p.run();
+                # the thread is in this Java call when it is cancelled
+                ObjectHolder::block();
+                # the Program is destroyed on the cancelled thread
+                delete p;
+                result.push("deleted");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err + ": " + ex.desc);
+                ObjectHolder::release();
+            }
+        }();
+        ObjectHolder::awaitEntered();
+        assertTrue(cancel_thread(tid, "the test cancels the thread"));
+        ObjectHolder::release();
+        assertEq("deleted", result.get(ResultTimeout));
+        auto loader = ObjectHolder::take();
+        # the class loader has no Program: it gives no internal classes (it used the destroyed Program)
+        assertEq((), loader.getInternalClassesForPackage("qore"));
     }
 }
