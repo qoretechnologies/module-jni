@@ -402,6 +402,7 @@ public:
     DLLLOCAL static jmethodID methodConnectionRollback;                           // void Connection.rollback()
     DLLLOCAL static jmethodID methodConnectionCreateArrayOf;                      // Array createArrayOf(String, Object[])
     DLLLOCAL static jmethodID methodConnectionGetMetaData;                        // DatabaseMetaData getMetaData()
+    DLLLOCAL static jmethodID methodConnectionCreateStatement;                    // Statement createStatement()
     DLLLOCAL static jmethodID methodConnectionPrepareStatement;                   // PreparedStatement prepareStatement(String)
     DLLLOCAL static jmethodID methodConnectionPrepareStatementArray;              // PreparedStatement prepareStatement(String, String[])
     DLLLOCAL static jmethodID methodConnectionSetAutoCommit;                      // void setAutoCommit(boolean)
@@ -417,15 +418,19 @@ public:
     DLLLOCAL static jmethodID methodDatabaseMetaDataGetDriverName;                // String getDriverName()
     DLLLOCAL static jmethodID methodDatabaseMetaDataGetDriverVersion;             // String getDriverVersion()
 
+    // the methods of java.sql.Statement, which java.sql.PreparedStatement extends, are called on both
+    DLLLOCAL static GlobalReference<jclass> classStatement;                       // java.sql.Statement
+    DLLLOCAL static jmethodID methodStatementClose;                               // void close()
+    DLLLOCAL static jmethodID methodStatementExecute;                             // boolean execute(String)
+    DLLLOCAL static jmethodID methodStatementGetResultSet;                        // ResultSet getResultSet()
+    DLLLOCAL static jmethodID methodStatementGetMoreResults;                      // boolean getMoreResults()
+    DLLLOCAL static jmethodID methodStatementGetUpdateCount;                      // int getUpdateCount()
+
     DLLLOCAL static GlobalReference<jclass> classPreparedStatement;               // java.sql.PreparedStatement
     DLLLOCAL static jmethodID methodPreparedStatementAddBatch;                    // void addBatch()
     DLLLOCAL static jmethodID methodPreparedStatementClearBatch;                  // void clearBatch()
-    DLLLOCAL static jmethodID methodPreparedStatementClose;                       // void close()
     DLLLOCAL static jmethodID methodPreparedStatementExecute;                     // boolean execute()
     DLLLOCAL static jmethodID methodPreparedStatementExecuteBatch;                // int[] executeBatch()
-    DLLLOCAL static jmethodID methodPreparedStatementGetResultSet;                // ResultSet getResultSet()
-    DLLLOCAL static jmethodID methodPreparedStatementGetMoreResults;              // boolean getMoreResults()
-    DLLLOCAL static jmethodID methodPreparedStatementGetUpdateCount;              // int getUpdateCount()
     DLLLOCAL static jmethodID methodPreparedStatementSetArray;                    // void setArray(int, Array)
     DLLLOCAL static jmethodID methodPreparedStatementSetBigDecimal;               // void setBigDecimal(int, BigDecimal)
     DLLLOCAL static jmethodID methodPreparedStatementSetBoolean;                  // void setBoolean(int, boolean)

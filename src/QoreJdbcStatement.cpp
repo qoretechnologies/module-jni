@@ -71,6 +71,31 @@ bool QoreJdbcStatement::exec(Env& env, ExceptionSink* xsink, const QoreString& q
     return execIntern(env, **str, xsink);
 }
 
+bool QoreJdbcStatement::execRaw(Env& env, ExceptionSink* xsink, const QoreString& qstr) {
+    assert(!stmt);
+
+    // Convert string to required character encoding.
+    TempEncodingHelper str(qstr, QCS_UTF8, xsink);
+    if (*xsink) {
+        return false;
+    }
+    // the SQL is executed as given: it has no placeholders to parse and no arguments to bind
+    params = nullptr;
+    bind_size = 0;
+    raw = true;
+    raw_sql = str->c_str();
+
+    createStatement(env);
+    return execIntern(env, **str, xsink);
+}
+
+void QoreJdbcStatement::createStatement(Env& env) {
+    assert(!stmt);
+    // no exception handling needed; calls must be wrapped in a try/catch block
+    stmt = env.callObjectMethod(conn->getConnectionObject(), Globals::methodConnectionCreateStatement, nullptr)
+        .makeGlobal();
+}
+
 void QoreJdbcStatement::prepareAndBindStatement(Env& env, ExceptionSink* xsink, const QoreString& str) {
     prepareStatement(env, str);
     bindQueryArguments(env, xsink);
@@ -146,6 +171,12 @@ bool QoreJdbcStatement::executeOnce(Env& env, ExceptionSink* xsink) {
         batch_rows_affected = unknown ? -1 : total;
         return false;
     }
+    if (raw) {
+        std::vector<jvalue> jargs(1);
+        LocalReference<jstring> jstr = env.newString(raw_sql.c_str());
+        jargs[0].l = jstr;
+        return env.callBooleanMethod(stmt, Globals::methodStatementExecute, &jargs[0]);
+    }
     return env.callBooleanMethod(stmt, Globals::methodPreparedStatementExecute, nullptr);
 }
 
@@ -172,7 +203,11 @@ bool QoreJdbcStatement::execIntern(Env& env, const QoreString& qstr, ExceptionSi
                 && replay_safe) {
                 assert(!*xsink);
                 // execute the statement again on the new connection
-                prepareAndBindStatement(env, xsink, qstr);
+                if (raw) {
+                    createStatement(env);
+                } else {
+                    prepareAndBindStatement(env, xsink, qstr);
+                }
                 if (*xsink) {
                     return false;
                 }
@@ -207,7 +242,7 @@ void QoreJdbcStatement::close(Env& env, ExceptionSink* xsink) {
     if (stmt) {
         GlobalReference<jobject> closing = std::move(stmt);
         try {
-            env.callVoidMethod(closing, Globals::methodPreparedStatementClose, nullptr);
+            env.callVoidMethod(closing, Globals::methodStatementClose, nullptr);
         } catch (jni::Exception& e) {
             e.convert(xsink);
         }
@@ -224,6 +259,8 @@ void QoreJdbcStatement::reset(Env& env, ExceptionSink* xsink) {
     update_count_total = -1;
     results_done = false;
     params = nullptr;
+    raw = false;
+    raw_sql.clear();
     cvec.clear();
 }
 
@@ -550,11 +587,11 @@ bool QoreJdbcStatement::moreResults(Env& env) {
         GlobalReference<jobject> closing = std::move(rs);
         env.callVoidMethod(closing, Globals::methodResultSetClose, nullptr);
     }
-    return env.callBooleanMethod(stmt, Globals::methodPreparedStatementGetMoreResults, nullptr);
+    return env.callBooleanMethod(stmt, Globals::methodStatementGetMoreResults, nullptr);
 }
 
 int QoreJdbcStatement::getUpdateCount(Env& env, ExceptionSink* xsink) {
-    jint count = env.callIntMethod(stmt, Globals::methodPreparedStatementGetUpdateCount, nullptr);
+    jint count = env.callIntMethod(stmt, Globals::methodStatementGetUpdateCount, nullptr);
     if (count < -1) {
         xsink->raiseException("JDBC-UPDATE-COUNT-ERROR", "JDBC driver returned invalid update count %d", count);
     }
@@ -723,7 +760,7 @@ int QoreJdbcStatement::acquireOnlyResultSet(Env& env, bool result_set, const cha
 int QoreJdbcStatement::acquireResultSet(Env& env, ExceptionSink* xsink) {
     assert(!rs);
     LocalReference<jobject> result_set = env.callObjectMethod(stmt,
-        Globals::methodPreparedStatementGetResultSet, nullptr);
+        Globals::methodStatementGetResultSet, nullptr);
     if (!result_set) {
         xsink->raiseException("JDBC-RESULTSET-ERROR", "no result set available from query");
         return -1;

@@ -32,6 +32,7 @@ public class Main inherits QUnit::Test {
         addTestCase("mssqlClassLoadReportTest", \mssqlClassLoadReportTest());
         addTestCase("mssqlDescribeTest", \mssqlDescribeTest());
         addTestCase("integers keep their value and sign on every server", \integerBindTest());
+        addTestCase("execRaw() executes the SQL as given, and its effects last for the session", \execRawTest());
 
         # execute tests and set program return value
         set_return_value(main());
@@ -141,6 +142,13 @@ public class Main inherits QUnit::Test {
             "update jdbc_multi_test set id = id where id < 0"));
         # a single statement is unchanged
         assertEq(0, ds.exec("update jdbc_multi_test set id = id where id < 0"));
+        # execRaw() (a plain java.sql.Statement) returns the same results as exec() (a prepared statement)
+        compareExecRaw(ds, ("select 1 as a; select 2 as b",
+            "update jdbc_multi_test set id = id where id < 0; update jdbc_multi_test set id = id where id < 4",
+            "update jdbc_multi_test set id = id where id < 0; update jdbc_multi_test set id = id where id < 0",
+            "set local search_path = public; select 1 as a",
+            "update jdbc_multi_test set id = id where id < 3; select count(*) as count from jdbc_multi_test",
+            "update jdbc_multi_test set id = id where id < 0"));
 
         # selectRows(), selectRow() and selectColumnar() skip update counts and require one result set
         assertEq(({"id": 1}, {"id": 2}), ds.selectRows("update jdbc_multi_test set id = id; "
@@ -209,6 +217,12 @@ public class Main inherits QUnit::Test {
             "update jdbc_multi_test set id = id where id < 2"));
         # a procedure returning two result sets
         assertEq({"query0": {"a": (1,)}, "query1": {"b": (2,)}}, ds.select("exec jdbc_multi_proc"));
+        # execRaw() (a plain java.sql.Statement) returns the same results as exec() (a prepared statement)
+        compareExecRaw(ds, ("select 1 as a; select 2 as b",
+            "update jdbc_multi_test set id = id where id < 0; update jdbc_multi_test set id = id where id < 2",
+            "exec jdbc_multi_proc",
+            "update jdbc_multi_test set id = id; select count(*) as c from jdbc_multi_test",
+            "update jdbc_multi_test set id = id where id < 0"));
         # set nocount on: no result at all
         assertEq(-1, ds.exec("set nocount on; update jdbc_multi_test set id = id"));
 
@@ -517,6 +531,63 @@ printf(\"imported\\n\");
         }
         if (!found) {
             testSkip("no jdbc connection available");
+        }
+    }
+
+    #! execRaw() runs the SQL with a plain java.sql.Statement: SQL Server ran it as a prepared statement in a scope of
+    #! its own (sp_prepexec), which dropped a #temp table and reset SET options when it ended, and the SQL was parsed
+    #! for placeholders, so that a "%" outside a string raised JDBC-PARSE-ERROR
+    private execRawTest() {
+        int found = 0;
+        {
+            *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_MSSQL");
+            if (ds) {
+                ++found;
+                on_exit ds.rollback();
+                ds.execRaw("create table #jdbc_raw_test (id int)");
+                # the #temp table is used by prepared statements and is dropped when the session ends
+                assertEq(1, ds.exec("insert into #jdbc_raw_test values (%v)", 7));
+                assertEq({"id": 7}, ds.selectRow("select id from #jdbc_raw_test where id = %v", 7));
+                {
+                    SQLStatement stmt(ds);
+                    stmt.prepare("select count(*) as c from #jdbc_raw_test");
+                    stmt.exec();
+                    assertEq({"c": (1,)}, stmt.getOutput());
+                }
+                ds.execRaw("drop table #jdbc_raw_test");
+                # a SET option lasts for the session
+                ds.execRaw("set lock_timeout 4321");
+                assertEq(4321, ds.selectRow("select @@lock_timeout as t").t);
+                ds.execRaw("set lock_timeout -1");
+                # the SQL is not parsed for placeholders
+                assertEq({"r": (3,)}, ds.execRaw("select 7 % 4 as r"));
+            }
+        }
+        {
+            *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_PGSQL");
+            if (ds) {
+                ++found;
+                on_exit ds.rollback();
+                assertEq({"r": (3,)}, ds.execRaw("select 7 % 4 as r"));
+            }
+        }
+        {
+            *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_ORACLE");
+            if (ds) {
+                ++found;
+                on_exit ds.rollback();
+                compareExecRaw(ds, ("select 1 as a from dual", "begin null; end;"));
+            }
+        }
+        if (!found) {
+            testSkip("no jdbc connection available");
+        }
+    }
+
+    #! asserts that execRaw() returns the same results as exec() for each SQL string, which must not change the data
+    private compareExecRaw(AbstractDatasource ds, list<string> sqls) {
+        foreach string sql in (sqls) {
+            assertEq(ds.exec(sql), ds.execRaw(sql), sql);
         }
     }
 

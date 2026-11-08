@@ -85,6 +85,15 @@ public:
 
     DLLLOCAL bool exec(Env& env, ExceptionSink* xsink, const QoreString& qstr, const QoreListNode* args);
 
+    //! Executes SQL without binding, as given, with a plain java.sql.Statement
+    /** The SQL is not parsed for placeholders and is not prepared: a driver may run prepared SQL in a scope of its
+        own (the SQL Server driver runs it with \c sp_prepexec, which drops a \c \#temp table and resets \c SET
+        options when the statement ends), while the effects of SQL executed directly last for the session.
+
+        @return true if the first result is a result set
+    */
+    DLLLOCAL bool execRaw(Env& env, ExceptionSink* xsink, const QoreString& qstr);
+
     //! Return how many rows were affected by the executed statement
     /** @return the total of the update counts reported for the statement (or for the batch of an array bind);
         -1 if no count was reported
@@ -202,8 +211,14 @@ protected:
     //! Connection
     QoreJdbcConnection* conn;
 
-    //! PreparedStatement object
+    //! The java.sql.PreparedStatement, or, for execRaw(), the java.sql.Statement
     GlobalReference<jobject> stmt;
+
+    //! True if the statement is executed by execRaw(), with a plain java.sql.Statement
+    bool raw = false;
+
+    //! The SQL of execRaw(); a plain java.sql.Statement receives its SQL when executed
+    std::string raw_sql;
 
     //! Count of bind parameters for the SQL command
     size_t bind_size = 0;
@@ -284,6 +299,9 @@ protected:
     DLLLOCAL void prepareAndBindStatement(Env& env, ExceptionSink* xsink, const QoreString& str);
 
     DLLLOCAL void prepareStatement(Env& env, const QoreString& str);
+
+    //! Creates the plain java.sql.Statement of execRaw()
+    DLLLOCAL void createStatement(Env& env);
 
     //! Reset statement
     /**
