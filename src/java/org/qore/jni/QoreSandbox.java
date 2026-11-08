@@ -94,11 +94,10 @@ public final class QoreSandbox {
         checks can run concurrently.  Close it when the work it governs is finished; a policy that is not closed is
         released when it is garbage-collected.  A check made with a closed policy raises \c JNI-SANDBOX-ERROR.
 
-        @note Known limitation (qore#5644): the captured policy governs a check only on a thread that has no %Qore
-        context of its own, such as a Java worker thread, which is the use it is made for.  On a %Qore thread that
-        runs other sandboxed code, that code's policy applies instead, and inside a system-policy capability
-        (\c SandboxManager::createSystemPolicyCall()) no sandbox applies; use a Policy only on Java threads until
-        this is fixed
+        The captured policy applies to every check made through it, on any thread: also on a %Qore thread that runs
+        other sandboxed code, and inside a system-policy capability (\c SandboxManager::createSystemPolicyCall()).
+        The policy of the %Qore code that runs on the thread, if any, applies as well, so that the stricter one wins.
+        A policy captured inside run(), call() or wrap() is the policy of the run.
     */
     public static final class Policy implements AutoCloseable {
         //! the native capture; released by close() or by NativeCleanup
@@ -110,7 +109,10 @@ public final class QoreSandbox {
             ref = NativeCleanup.register(this, ptr, NativeCleanup.KIND_SANDBOX_POLICY);
         }
 
-        //! Returns true if the captured policy is that of sandboxed %Qore code
+        //! Returns true if a check made with the policy on the current thread is restricted
+        /** That is if the captured policy is that of sandboxed %Qore code, or if the %Qore code that runs on the
+            current thread is sandboxed, as its policy applies as well
+        */
         public boolean isSandboxed() {
             lock.readLock().lock();
             try {

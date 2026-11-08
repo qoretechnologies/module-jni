@@ -39,6 +39,7 @@ class JniSandboxIoTest inherits QUnit::Test {
         addTestCase("invalid arguments are rejected", \testInvalidArguments());
         addTestCase("a Java thread without a captured policy is refused", \testUncapturedThread());
         addTestCase("a captured policy governs Java threads", \testCapturedPolicy());
+        addTestCase("a captured policy governs Qore threads that run other code", \testPolicyOnQoreThread());
         addTestCase("a task's policy is scoped to the task", \testPolicyScope());
         addTestCase("a closed policy refuses checks", \testClosedPolicy());
         addTestCase("a policy is shared between Java threads", \testConcurrent());
@@ -320,6 +321,61 @@ class JniSandboxIoTest inherits QUnit::Test {
             fp.callFunction("through", sub () { SandboxIo::checkFileWrappedRunnable(other_dir, QoreSandbox::READ); });
         });
         fp.callFunction("through", sub () { SandboxIo::checkFileWrappedRunnable(file, QoreSandbox::READ); });
+    }
+
+    #! a policy captured in tenant A's sandbox decides checks on Qore threads that run other code (qore#5644)
+    testPolicyOnQoreThread() {
+        Program a = getPrivateBlocked();
+        object policy = a.callFunction("through", \SandboxIo::capture());
+        on_exit policy.close();
+        # tenant B: a looser sandbox, whose Program runs on the thread
+        SandboxManager sm_b();
+        sm_b.setNetworkDefaultPolicy(True);
+        Program b = getSandboxed(sm_b);
+        # a system-policy capability, which runs with no sandbox but the system policy
+        code capability = SandboxManager::createSystemPolicyCall(list<string> sub (string host) {
+            return SandboxIo::checkWithPolicyOnThisThread(policy, host, 80);
+        });
+        hash<string, code> calls = {
+            "tenant B's thread": list<string> sub (string host) {
+                return b.callFunction("through", list<string> sub () {
+                    return SandboxIo::checkWithPolicyOnThisThread(policy, host, 80);
+                });
+            },
+            "a system-policy capability called from tenant A": list<string> sub (string host) {
+                return a.callFunction("through", list<string> sub () { return capability(host); });
+            },
+            "a system-policy capability called by trusted code": list<string> sub (string host) {
+                return capability(host);
+            },
+        };
+        list<string> labels = ("the Policy object", "a static check in Policy.call()", "a nested capture()");
+        foreach hash<auto> i in (calls.pairIterator()) {
+            list<string> rv = i.value("127.0.0.1");
+            foreach string label in (labels) {
+                assertRegex("NETWORK-ACCESS-DENIED", rv[$#], sprintf("%s: %s denies a private address", i.key,
+                    label));
+            }
+            assertEq("true", rv[3], i.key + ": isSandboxed()");
+            rv = i.value("8.8.8.8");
+            foreach string label in (labels) {
+                assertEq("8.8.8.8", rv[$#], sprintf("%s: %s allows a public address", i.key, label));
+            }
+        }
+        # tenant B's own static checks on its thread still use its own sandbox
+        assertEq(("127.0.0.1",), b.callFunction("through", auto sub () { return SandboxIo::checkNetwork("127.0.0.1", 80); }));
+        # a trusted policy does not lower the sandbox of the code that uses it: tenant A's policy applies on its thread
+        object trusted = SandboxIo::capture();
+        on_exit trusted.close();
+        list<string> rv = a.callFunction("through", list<string> sub () {
+            return SandboxIo::checkWithPolicyOnThisThread(trusted, "127.0.0.1", 80);
+        });
+        foreach string label in (labels) {
+            assertRegex("NETWORK-ACCESS-DENIED", rv[$#], "a trusted policy on tenant A's thread: " + label);
+        }
+        assertEq("true", rv[3], "a trusted policy on tenant A's thread: isSandboxed()");
+        assertEq(("127.0.0.1",), SandboxIo::checkWithPolicyOnThisThread(trusted, "127.0.0.1", 80)[0..0],
+            "a trusted policy on a trusted thread");
     }
 
     testPolicyScope() {
