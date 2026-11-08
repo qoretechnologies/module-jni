@@ -120,7 +120,7 @@ static bool jdbc_is_connection_state(const char* state) {
 // returns true if a Java exception of getObject(int, Class) is to be raised: a connection, transaction, timeout or
 // cancellation error; any other error (ex: SQLFeatureNotSupportedException, AbstractMethodError, a type mismatch,
 // or a driver's message in any language) means that the driver does not read the column as the class
-static bool jdbc_is_raised_error(Env& env, jthrowable t) {
+static bool jdbc_is_raised_error_intern(Env& env, jthrowable t) {
     if (env.isInstanceOf(t, Globals::classSQLRecoverableException)
             || env.isInstanceOf(t, Globals::classSQLNonTransientConnectionException)
             || env.isInstanceOf(t, Globals::classSQLTransientConnectionException)
@@ -137,6 +137,34 @@ static bool jdbc_is_raised_error(Env& env, jthrowable t) {
     }
     Env::GetStringUtfChars chars(env, state);
     return jdbc_is_connection_state(chars.c_str());
+}
+
+//! the most causes of an exception that are examined
+static constexpr int JDBC_MAX_CAUSES = 16;
+
+// the error or any of its causes (ex: a connection error wrapped by a driver or a pool's proxy); the chain is
+// followed for up to JDBC_MAX_CAUSES causes, and a cause that repeats an earlier one ends it
+static bool jdbc_is_raised_error(Env& env, jthrowable t) {
+    std::vector<LocalReference<jthrowable>> chain;
+    chain.emplace_back(static_cast<jthrowable>(env.newLocalRef(t)));
+    for (int i = 0; i <= JDBC_MAX_CAUSES; ++i) {
+        jthrowable current = chain.back();
+        if (jdbc_is_raised_error_intern(env, current)) {
+            return true;
+        }
+        LocalReference<jthrowable> cause = env.callObjectMethod(current, Globals::methodThrowableGetCause, nullptr)
+            .as<jthrowable>();
+        if (!cause) {
+            return false;
+        }
+        for (const auto& e : chain) {
+            if (env.isSameObject(e, cause)) {
+                return false;
+            }
+        }
+        chain.push_back(std::move(cause));
+    }
+    return false;
 }
 
 // returns the value of a column read with getObject(int, Class), or false if the driver does not read the column as

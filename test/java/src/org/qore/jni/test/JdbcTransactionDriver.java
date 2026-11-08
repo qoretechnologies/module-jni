@@ -347,6 +347,15 @@ public final class JdbcTransactionDriver implements Driver {
             });
     }
 
+    // an SQLException whose cause's cause is itself
+    private static SQLException cyclicError() {
+        SQLException a = new SQLException("cycle a", "22005");
+        SQLException b = new SQLException("cycle b", "22005");
+        a.initCause(b);
+        b.initCause(a);
+        return a;
+    }
+
     // a TIME column whose getObject(int, LocalTime.class) raises the given error (null: an IllegalArgumentException,
     // which is not an SQLException)
     private static Column asFailColumn(String label, SQLException error) {
@@ -470,6 +479,13 @@ public final class JdbcTransactionDriver implements Driver {
                 + "'java.time.LocalTime' from a data value of type 'TIME'.", "22005")),
             asFailColumn("Localized", new SQLException("Type de colonne non valide", "99999")),
             asFailColumn("Runtime", null),
+            // a cycle of causes, none of them a connection error
+            asFailColumn("Cycle", cyclicError()),
+        });
+        // a connection error wrapped by a driver or a pool's proxy: it is raised
+        typedResultSets.put("aswrapped", new Column[] {
+            asFailColumn("Wrapped", new SQLException("proxy failure", "HY000",
+                new RuntimeException("wrapper", new SQLException("injected connection reset", "08006")))),
         });
         // a large object whose second chunk waits for releaseLob(), to cancel the reader
         typedResultSets.put("lobcancel", new Column[] {

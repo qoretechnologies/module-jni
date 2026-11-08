@@ -27,6 +27,8 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         addTestCase("an SQL error of getObject(int, Class) is raised and the column is not read otherwise",
             \getObjectAsError());
         addTestCase("the lob-max-size option", \lobMaxSize());
+        addTestCase("a connection error that is the cause of the error of getObject(int, Class) is raised",
+            \getObjectAsWrappedError());
         set_return_value(main());
     }
 
@@ -158,10 +160,19 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         assertThrows("JNI-ERROR", "injected connection reset", \ds.selectRow(), "multi:typed=asfail");
         # any other error: the column is read with getObject(int) (a java.sql.Time)
         hash<auto> row = ds.selectRow("multi:typed=asfallback");
-        foreach string col in (("mismatch", "localized", "runtime")) {
+        foreach string col in (("mismatch", "localized", "runtime", "cycle")) {
             assertEq(Type::Date, row{col}.type(), col);
             assertEq("10:15:30", row{col}.format("HH:mm:SS"), col);
         }
+    }
+
+    #! a connection error that is the cause of the error (ex: wrapped by a pool's proxy) is raised; it was taken for an
+    #! unsupported conversion
+    private getObjectAsWrappedError() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        # the error of the driver is raised as it is, with its causes in its argument
+        assertThrows("JNI-ERROR", "proxy failure", \ds.selectRow(), "multi:typed=aswrapped");
     }
 
     #! a large object of an unknown length is read up to the lob-max-size option
@@ -179,6 +190,17 @@ class JdbcLargeObjectsTest inherits QUnit::Test {
         ds2.open();
         assertEq(2147483648, ds2.getOption("lob-max-size"));
         assertThrows("JDBC-OPTION-ERROR", \ds2.setOption(), ("lob-max-size", 0));
+        # an integer, or a string of digits only
+        ds2.setOption("lob-max-size", "123456");
+        assertEq(123456, ds2.getOption("lob-max-size"));
+        ds2.setOption("lob-max-size", 654321);
+        assertEq(654321, ds2.getOption("lob-max-size"));
+        foreach auto v in (("2G", "1e9x", "", "-5", " 5", "5 ", 1.5, 99999999999999999999n)) {
+            assertThrows("JDBC-OPTION-ERROR", "positive integer", \ds2.setOption(), ("lob-max-size", v),
+                sprintf("%y", v));
+        }
+        # the value is unchanged
+        assertEq(654321, ds2.getOption("lob-max-size"));
     }
 
     # the thread waits in the read of the second chunk while it is cancelled: the read ends with THREAD-CANCELLED

@@ -267,10 +267,22 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
         QoreStringValueHelper db_str(val);
         db.assign(db_str->c_str(), db_str->size());
     } else if (!strcasecmp(opt, JDBC_OPT_LOB_MAX_SIZE)) {
-        int64 v = val.getAsBigInt();
+        // an integer, or a string of digits only (ex: from a datasource string); "2G" or "1e9x" is refused
+        int64 v = -1;
+        if (val.getType() == NT_INT) {
+            v = val.getAsBigInt();
+        } else if (val.getType() == NT_STRING) {
+            const QoreStringNode* str = val.get<const QoreStringNode>();
+            const char* p = str->c_str();
+            size_t len = str->size();
+            if (len && len <= 18 && strspn(p, "0123456789") == len) {
+                v = strtoll(p, nullptr, 10);
+            }
+        }
         if (v <= 0) {
-            xsink->raiseException("JDBC-OPTION-ERROR", "option '%s' must be a positive number of bytes or characters; "
-                "got %lld", opt, static_cast<long long>(v));
+            QoreStringValueHelper text(val);
+            xsink->raiseException("JDBC-OPTION-ERROR", "option '%s' must be a positive integer number of bytes or "
+                "characters; got %s '%s'", opt, val.getTypeName(), text->c_str());
             return -1;
         }
         lob_max_size = v;

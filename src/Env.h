@@ -1364,6 +1364,15 @@ public:
         return id;
     }
 
+    //! Returns a new local reference to the object
+    DLLLOCAL jobject newLocalRef(jobject obj) {
+        jobject rv = env->NewLocalRef(obj);
+        if (obj && !rv) {
+            throw JavaException();
+        }
+        return rv;
+    }
+
     DLLLOCAL bool isSameObject(jobject obj1, jobject obj2) {
         return env->IsSameObject(obj1, obj2) == JNI_TRUE;
     }
