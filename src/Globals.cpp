@@ -418,11 +418,9 @@ jmethodID Globals::methodPreparedStatementGetUpdateCount;
 jmethodID Globals::methodPreparedStatementSetArray;
 jmethodID Globals::methodPreparedStatementSetBigDecimal;
 jmethodID Globals::methodPreparedStatementSetBoolean;
-jmethodID Globals::methodPreparedStatementSetByte;
 jmethodID Globals::methodPreparedStatementSetBytes;
 jmethodID Globals::methodPreparedStatementSetDouble;
 jmethodID Globals::methodPreparedStatementSetInt;
-jmethodID Globals::methodPreparedStatementSetShort;
 jmethodID Globals::methodPreparedStatementSetLong;
 jmethodID Globals::methodPreparedStatementSetNull;
 jmethodID Globals::methodPreparedStatementSetString;
@@ -3924,12 +3922,10 @@ bool Globals::init() {
     methodPreparedStatementSetBigDecimal = env.getMethod(classPreparedStatement, "setBigDecimal",
         "(ILjava/math/BigDecimal;)V");
     methodPreparedStatementSetBoolean = env.getMethod(classPreparedStatement, "setBoolean", "(IZ)V");
-    methodPreparedStatementSetByte = env.getMethod(classPreparedStatement, "setByte", "(IB)V");
     methodPreparedStatementSetBytes = env.getMethod(classPreparedStatement, "setBytes", "(I[B)V");
     methodPreparedStatementSetDouble = env.getMethod(classPreparedStatement, "setDouble", "(ID)V");
     methodPreparedStatementSetInt = env.getMethod(classPreparedStatement, "setInt", "(II)V");
     methodPreparedStatementSetLong = env.getMethod(classPreparedStatement, "setLong", "(IJ)V");
-    methodPreparedStatementSetShort = env.getMethod(classPreparedStatement, "setShort", "(IS)V");
     methodPreparedStatementSetNull = env.getMethod(classPreparedStatement, "setNull", "(II)V");
     methodPreparedStatementSetString = env.getMethod(classPreparedStatement, "setString", "(ILjava/lang/String;)V");
     methodPreparedStatementSetTimestamp = env.getMethod(classPreparedStatement, "setTimestamp",
