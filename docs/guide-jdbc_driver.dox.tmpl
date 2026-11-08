@@ -115,6 +115,33 @@ foreach hash<auto> col in (stmt.describe().iterator()) {
 }
     @endcode
 
+    @subsection jdbc_column_values Column Values
+
+    A column value is the value that \c ResultSet.getObject() returns, converted to a %Qore value, with this
+    exception:
+    - the trailing spaces of a \c CHAR value are removed: a \c CHAR(20) value \c "hello" is returned as
+      \c "hello" on every database, where a native %Qore driver such as \c oracle returns it padded to the size of
+      the column
+
+    @subsection jdbc_sql_errors SQL Errors
+
+    An error that the database reports is raised as a \c JNI-ERROR exception whose argument is the
+    \c java.sql.SQLException of the JDBC driver; its \c getSQLState() and \c getErrorCode() methods give the error's
+    SQLState and the vendor's error code.
+
+    @par Example
+    @code{.py}
+try {
+    ds.commit();
+} catch (hash<ExceptionInfo> ex) {
+    # 23503: a foreign key constraint is violated
+    if (ex.err == "JNI-ERROR" && ex.arg.getSQLState() == "23503") {
+        # ...
+    }
+    rethrow;
+}
+    @endcode
+
     @section jdbc_transaction_boundaries JDBC Transaction Boundaries
 
     Ordinary selects outside a transaction use JDBC auto-commit mode, so a connection returned to a
