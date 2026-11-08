@@ -6,6 +6,14 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: added @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the sandbox
+      network and filesystem policy of the %Qore code that called into Java to the I/O that Java code makes itself,
+      which %Qore does not see: \c checkNetworkAccess() resolves a host name once with the %Qore resolver, checks
+      every address with the policy of %Qore sockets, raises \c NETWORK-ACCESS-DENIED naming a denied address, and
+      returns the checked addresses to connect to; \c checkFileAccess() checks a path with the policy of %Qore file
+      operations; \c capture() captures the policy for work that Java runs on its own threads, and a check on a Java
+      thread with no %Qore caller and no captured policy raises \c JNI-SANDBOX-ERROR instead of allowing the
+      operation (see @ref jni_sandbox)
     - fixed the conversion of strings with characters outside the Basic Multilingual Plane (ex: emoji) between %Qore
       and Java, which garbled them in both directions: \c "😀" became \c "ð" in Java, and a Java string with one
       became invalid UTF-8 in %Qore, including in the messages of Java exceptions; such a character is a 4-byte

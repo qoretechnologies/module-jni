@@ -1178,6 +1178,13 @@ public:
         }
     }
 
+    DLLLOCAL void setByteArrayRegion(jbyteArray array, jsize start, jsize len, const jbyte* buf) {
+        env->SetByteArrayRegion(array, start, len, buf);
+        if (env->ExceptionCheck()) {
+            throw JavaException();
+        }
+    }
+
     DLLLOCAL jsize getStringLength(jstring str) {
         return env->GetStringLength(str);
     }

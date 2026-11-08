@@ -1031,6 +1031,7 @@ set (JNI_BIN_FILES
 
 # Java sources built in to the binary module with an indication of inner classes, if any
 generate_java(org/qore/jni/QoreJavaApi.java)
+generate_java(org/qore/jni/QoreSandbox.java $Policy)
 generate_java(org/qore/jni/JavaCollectionTypes.java)
 generate_java(org/qore/jni/QoreExceptionWrapper.java)
 generate_java(org/qore/jni/QoreException.java)
@@ -1232,6 +1233,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JdbcTransactionDriver.java
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
+    test/java/src/org/qore/jni/test/SandboxIo.java
     test/java/src/org/qore/jni/test/ExceptionLocations.java
     test/java/src/org/qore/jni/test/Fields.java
     test/java/src/org/qore/jni/test/FinalFields.java
@@ -1292,6 +1294,7 @@ set(CPP_SRC
     src/Dispatcher.cpp
     src/Field.cpp
     src/Globals.cpp
+    src/JavaSandbox.cpp
     src/GeneratedBinding.cpp
     src/ql_jni_debug.cpp
     src/InvocationHandler.cpp

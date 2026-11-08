@@ -127,6 +127,94 @@ class Outer {
     under the same sandbox.  A callback can therefore never do more than the code that registered it, whatever
     thread Java calls it on.
 
+    @subsection jni_sandbox Sandboxing Java I/O
+
+    %Qore enforces the network and filesystem policy of a sandbox (\c Qore::SandboxManager, ex:
+    \c SandboxManager::blockPrivateNetworks()) for the I/O that goes through %Qore: sockets, QUIC and file
+    operations.  Java code called through this module does its own I/O through the JVM - \c java.net, \c java.nio,
+    \c java.io, JDBC drivers and other Java libraries - which %Qore never sees, and the JDK has no in-process
+    replacement for the Security Manager (deprecated by JEP 411 and disabled by JEP 486).  A sandboxed caller can
+    therefore reach a private network or the filesystem through any Java code path that does not check its I/O
+    itself.  Java classes imported through this module are tagged with the \c QDOM_UNCONTROLLED_API functional
+    domain for this reason, so that a Program with \c PO_NO_UNCONTROLLED_APIS cannot use them directly.
+
+    Java code that sandboxed %Qore code may call - for example the actions of a data provider implemented in Java,
+    which connect to destinations taken from a tenant's connection - checks every network destination and every
+    path it uses with @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the policy of the
+    %Qore code that called into Java:
+    - <tt>QoreSandbox.checkNetworkAccess(host, port)</tt> resolves the host name once with the %Qore resolver and
+      checks every address with the network policy of %Qore sockets (denied ranges, allowed host patterns, ports and
+      ranges, the default policy); it raises \c NETWORK-ACCESS-DENIED naming the denied address, and returns the
+      checked addresses as \c java.net.InetAddress objects that carry the host name; the Java code connects to one of
+      them, never to the host name, so that a second lookup cannot return an address that was not checked (DNS
+      rebinding)
+    - <tt>QoreSandbox.checkFileAccess(path, write)</tt> and <tt>QoreSandbox.checkFileAccess(path, mode)</tt> check
+      a path with the filesystem policy of %Qore \c File and \c Dir operations, and raise
+      \c FILESYSTEM-ACCESS-DENIED
+    - <tt>QoreSandbox.isSandboxed()</tt> tells whether a sandbox governs the caller
+
+    The exceptions are thrown in Java as \c org.qore.jni.QoreExceptionWrapper (a \c RuntimeException), which becomes
+    the original %Qore exception when it reaches %Qore code.  Trusted callers pass every check; the host name is
+    resolved for them as well, so the code is the same in both cases.  In a system-policy capability
+    (\c SandboxManager::createSystemPolicyCall()) the checks apply the system policy, as they do for %Qore sockets.
+
+    <b>Java threads:</b> the static methods apply the policy of the %Qore caller of the current thread.  Work that
+    Java runs on threads of its own (an executor, a connection pool, the I/O threads of a client library) has no
+    %Qore caller: Java code captures the policy with <tt>QoreSandbox.capture()</tt> in the call from %Qore, before
+    the work is handed over, and makes the checks through the returned \c QoreSandbox.Policy object, or runs the work
+    with <tt>Policy.run()</tt>, <tt>Policy.call()</tt> or <tt>Policy.wrap()</tt>, which make the static methods use
+    the captured policy on that thread.  A check made on a thread with no %Qore caller and no captured policy raises
+    \c JNI-SANDBOX-ERROR instead of allowing the operation, so that a missing capture is an error and never a silent
+    bypass.  %Qore code that Java calls back on a Java thread already runs under the sandbox of the code that handed
+    it to Java (see @ref jni_callback_sandbox), so the checks it makes through Java use that sandbox.
+
+    @note Known limitation (qore#5644): a captured \c QoreSandbox.Policy governs a check only on a thread with no
+    %Qore context of its own, such as a Java worker thread.  On a %Qore thread that runs other sandboxed code, that
+    code's policy applies instead, and inside a system-policy capability (\c SandboxManager::createSystemPolicyCall())
+    no sandbox applies; until this is fixed, use a captured policy only on Java threads, and the static methods on
+    the thread of the %Qore caller.
+
+    @par Example:
+    @code{.java}
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.util.concurrent.ExecutorService;
+import org.qore.jni.QoreSandbox;
+
+public class Fetcher {
+    // called from Qore
+    public static void fetch(ExecutorService executor, String host, int port) {
+        // captured on the calling thread: the policy of the Qore code that called fetch()
+        QoreSandbox.Policy policy = QoreSandbox.capture();
+        executor.submit(policy.wrap(() -> {
+            try (QoreSandbox.Policy p = policy; Socket s = new Socket()) {
+                // on the executor thread: checked with the captured policy
+                InetAddress[] addrs = QoreSandbox.checkNetworkAccess(host, port);
+                // connect to the checked address, not to the host name
+                s.connect(new InetSocketAddress(addrs[0], port));
+                // ...
+            }
+            return null;
+        }));
+    }
+}
+    @endcode
+
+    <b>Sandbox-aware Java code:</b> Java code may be declared to be sandbox-aware - safe to call from sandboxed
+    %Qore code - only if it has been audited to follow these rules:
+    - every network destination is checked with \c checkNetworkAccess() before it is used, and the connection is made
+      to a returned address; a library that connects by host name (and resolves it again) or that connects to
+      destinations it discovers itself (ex: the brokers that a Kafka bootstrap server returns, or redirects followed
+      by an HTTP client) is configured not to, or each such destination is checked as well
+    - every path is checked with \c checkFileAccess() with the access mode of the operation, as passed to the
+      operation, before the file or directory is used
+    - work run on other threads is checked with a policy captured in the call from %Qore
+    - no I/O is made before the check; an operation that cannot be checked is not made
+
+    A Java-backed data provider or module that has not been audited is not sandbox-aware, and must not be made
+    available to sandboxed callers.
+
     @subsection jni_fork Child Processes Created with fork()
 
     Java cannot be used in a child process created with \c fork() after the JVM has been started (when the module
