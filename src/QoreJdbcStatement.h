@@ -81,6 +81,10 @@ struct QoreJdbcColumn {
         OffsetDateTime,
         //! ResultSet.getString(int): ROWID
         String,
+        //! the bytes of the java.sql.Blob that ResultSet.getObject(int) returns, which is freed: BLOB
+        Blob,
+        //! the characters of the java.sql.Clob that ResultSet.getObject(int) returns, which is freed: CLOB, NCLOB
+        Clob,
     };
 
     //! How the values of the column are read

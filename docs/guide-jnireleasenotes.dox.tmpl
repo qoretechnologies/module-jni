@@ -14,6 +14,11 @@
       \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE and \c ROWID values as Java objects of Oracle's driver
       (\c oracle.sql.TIMESTAMP and the like), and \c describe() giving these columns as objects: they are dates and
       strings (see @ref jdbc_column_values)
+    - the \c jdbc driver returns the value of a \c BLOB, \c CLOB or \c NCLOB as binary or a string, as the native
+      %Qore drivers do, and \c describe() gives these columns as binary and strings
+      (see @ref jdbc_column_values); <b>behaviour change:</b> they were returned as \c java.sql.Blob and
+      \c java.sql.Clob objects, which code that read them as Java objects must no longer do; the whole value is
+      read into memory
     - fixed the \c jdbc driver binding an integer of -128 to 127 as a \c TINYINT and one of -32768 to 32767 as a
       \c SMALLINT: SQL Server stores a \c TINYINT unsigned, so a negative value was stored as another one (-1 as
       255) when a statement prepared with a small positive value was run again; an integer is bound as an \c INTEGER

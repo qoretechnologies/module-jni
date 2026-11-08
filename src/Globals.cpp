@@ -477,6 +477,10 @@ jfieldID Globals::fieldJdbcColumnarBatchData;
 jfieldID Globals::fieldJdbcColumnarBatchValidity;
 jfieldID Globals::fieldJdbcColumnarBatchNullCounts;
 
+GlobalReference<jclass> Globals::classJdbcLob;
+jmethodID Globals::methodJdbcLobReadBlob;
+jmethodID Globals::methodJdbcLobReadClob;
+
 GlobalReference<jclass> Globals::classArray;
 jmethodID Globals::methodArrayGetArray;
 
@@ -514,6 +518,9 @@ int Globals::typeTinyInt;
 int Globals::typeVarbinary;
 int Globals::typeVarchar;
 int Globals::typeRowId;
+int Globals::typeBlob;
+int Globals::typeClob;
+int Globals::typeNClob;
 
 GlobalReference<jstring> Globals::javaQoreClassField;
 GlobalReference<jstring> Globals::javaQoreClassPgmIdField;
@@ -2581,6 +2588,7 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassJavaCollectionTypes.inc"
 #include "JavaClassQoreRelativeTime.inc"
 #include "JavaClassJdbcColumnarBatch.inc"
+#include "JavaClassJdbcLob.inc"
 #include "JavaClassQoreJavaDynamicApi.inc"
 #include "JavaClassQoreJavaDynamicApi_AccessibleMethods.inc"
 #include "JavaClassHash.inc"
@@ -2637,6 +2645,7 @@ static ucmap_t ucmap = {
     {"org.qore.jni.JavaClassBuilder$1", {java_org_qore_jni_JavaClassBuilder_1_class_len, java_org_qore_jni_JavaClassBuilder_1_class}},
     {"org.qore.jni.JavaClassBuilder$2", {java_org_qore_jni_JavaClassBuilder_2_class_len, java_org_qore_jni_JavaClassBuilder_2_class}},
     {"org.qore.jni.JdbcColumnarBatch", {java_org_qore_jni_JdbcColumnarBatch_class_len, java_org_qore_jni_JdbcColumnarBatch_class}},
+    {"org.qore.jni.JdbcLob", {java_org_qore_jni_JdbcLob_class_len, java_org_qore_jni_JdbcLob_class}},
     {"org.qore.jni.StaticEntry", {java_org_qore_jni_StaticEntry_class_len, java_org_qore_jni_StaticEntry_class}},
     {"org.qore.jni.QoreClassFileLocator", {java_org_qore_jni_QoreClassFileLocator_class_len,
         java_org_qore_jni_QoreClassFileLocator_class}},
@@ -4056,6 +4065,12 @@ bool Globals::init() {
         typeVarchar = env.getStaticIntField(classTypes, field);
         field = env.getStaticField(classTypes, "ROWID", "I");
         typeRowId = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "BLOB", "I");
+        typeBlob = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "CLOB", "I");
+        typeClob = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "NCLOB", "I");
+        typeNClob = env.getStaticIntField(classTypes, field);
     }
 
     assert(!classQoreURLClassLoader);
@@ -4142,6 +4157,11 @@ bool Globals::init() {
     fieldJdbcColumnarBatchData = env.getField(classJdbcColumnarBatch, "data", "[Ljava/lang/Object;");
     fieldJdbcColumnarBatchValidity = env.getField(classJdbcColumnarBatch, "validity", "[[B");
     fieldJdbcColumnarBatchNullCounts = env.getField(classJdbcColumnarBatch, "nullCounts", "[J");
+
+    classJdbcLob = findDefineClass(env, "org.qore.jni.JdbcLob", syscl, java_org_qore_jni_JdbcLob_class,
+        java_org_qore_jni_JdbcLob_class_len).makeGlobal();
+    methodJdbcLobReadBlob = env.getStaticMethod(classJdbcLob, "readBlob", "(Ljava/sql/Blob;)[B");
+    methodJdbcLobReadClob = env.getStaticMethod(classJdbcLob, "readClob", "(Ljava/sql/Clob;)Ljava/lang/String;");
 
     env.registerNatives(classJavaClassBuilder, javaClassBuilderNativeMethods,
         sizeof(javaClassBuilderNativeMethods) / sizeof(JNINativeMethod));
@@ -4627,6 +4647,7 @@ void Globals::cleanup() {
     classResultSet = nullptr;
     classResultSetMetaData = nullptr;
     classJdbcColumnarBatch = nullptr;
+    classJdbcLob = nullptr;
     classArray = nullptr;
     classSQLException = nullptr;
     classServiceLoader = nullptr;

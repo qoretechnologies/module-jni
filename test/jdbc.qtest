@@ -34,6 +34,7 @@ public class Main inherits QUnit::Test {
         addTestCase("integers keep their value and sign on every server", \integerBindTest());
         addTestCase("execRaw() executes the SQL as given, and its effects last for the session", \execRawTest());
         addTestCase("Oracle date and time values and row ids are Qore values", \oracleDateTimeTest());
+        addTestCase("large objects are read as values", \lobTest());
 
         # execute tests and set program return value
         set_return_value(main());
@@ -642,6 +643,87 @@ printf(\"imported\\n\");
             checkDateTimeRow(row, tz, "selectColumnar");
             # NULL values
             assertEq(NULL, getColumn(r, "ts")[1] ?? NULL, "selectColumnar NULL");
+        }
+    }
+
+    #! a BLOB, CLOB or NCLOB was returned as a java.sql.Blob or java.sql.Clob object and described as an object; it is
+    #! read as binary or a string in chunks, and freed; other servers' large types are unchanged
+    private lobTest() {
+        # more than one chunk (org.qore.jni.JdbcLob.Chunk: 65536 bytes or characters)
+        binary big_bin = binary(strmul("0123456789abcdef", 12500)) + binary("x");
+        string big_str = strmul("abcdefghij", 15000) + "z";
+        # multibyte characters and characters outside the BMP (surrogate pairs in Java) across chunk boundaries
+        string big_nstr = strmul("ř€😀", 30000) + "ž";
+        int found = 0;
+        foreach hash<auto> i in ({
+                "QORE_DB_CONNSTR_JDBC_ORACLE": ("blob", "clob", "nclob", "empty_blob()", "empty_clob()"),
+                "QORE_DB_CONNSTR_JDBC_PGSQL": ("bytea", "text", "text", "''::bytea", "''"),
+                "QORE_DB_CONNSTR_JDBC_MSSQL": ("varbinary(max)", "varchar(max)", "nvarchar(max)", "0x", "''"),
+            }.pairIterator()) {
+            *Datasource ds = getConnection(i.key);
+            if (!ds) {
+                continue;
+            }
+            ++found;
+            list<string> types = i.value;
+            string label = ds.getDriverRealName();
+            string table = sprintf("jdbc_lob_%d_%d", getpid(), now_us().getEpochSeconds());
+            ds.execRaw(sprintf("create table %s (id int, b %s, c %s, nc %s)", table, types[0], types[1], types[2]));
+            ds.commit();
+            on_exit {
+                ds.rollback();
+                ds.execRaw("drop table " + table);
+                ds.commit();
+            }
+            ds.exec(sprintf("insert into %s (id) values (1)", table));
+            ds.execRaw(sprintf("insert into %s values (2, %s, %s, %s)", table, types[3], types[4], types[4]));
+            ds.exec(sprintf("insert into %s values (3, %%v, %%v, %%v)", table), big_bin, big_str, big_nstr);
+            ds.commit();
+
+            # Oracle: an empty large object is empty; PostgreSQL and SQL Server: an empty value
+            hash<auto> empty = {"id": 2, "b": binary(), "c": "", "nc": ""};
+            hash<auto> big = {"id": 3, "b": big_bin, "c": big_str, "nc": big_nstr};
+            string sql = sprintf("select id, b, c, nc from %s order by id", table);
+
+            list<hash<auto>> rows = ds.selectRows(sql);
+            assertEq(3, rows.size(), label);
+            assertEq({"id": 1, "b": NULL, "c": NULL, "nc": NULL}, rows[0], label + ": selectRows NULL");
+            checkLobRow(empty, rows[1], label + ": selectRows empty");
+            checkLobRow(big, rows[2], label + ": selectRows");
+
+            hash<auto> h = ds.select(sql);
+            checkLobRow(big, (map {$1.key: $1.value[2]}, h.pairIterator()), label + ": select");
+            checkLobRow(big, ds.selectRow(sprintf("select id, b, c, nc from %s where id = 3", table)),
+                label + ": selectRow");
+            {
+                SQLStatement stmt(ds);
+                stmt.prepare(sql);
+                stmt.exec();
+                hash<auto> desc = stmt.describe();
+                assertEq(NT_BINARY, desc.b.type, label + ": describe b");
+                assertEq(NT_STRING, desc.c.type, label + ": describe c");
+                assertEq(NT_STRING, desc.nc.type, label + ": describe nc");
+                list<hash<auto>> l = stmt.fetchRows();
+                assertEq(3, l.size(), label);
+                checkLobRow(big, l[2], label + ": SQLStatement");
+            }
+            if (hasColumnar(ds)) {
+                auto r = ds.selectColumnar(sql);
+                checkLobRow(big, (map {$1: asList(getColumn(r, $1))[2]}, ("id", "b", "c", "nc")),
+                    label + ": selectColumnar");
+            }
+        }
+        if (!found) {
+            testSkip("no jdbc connection available");
+        }
+    }
+
+    private checkLobRow(hash<auto> expected, hash<auto> row, string label) {
+        assertEq(expected.id, int(row.id), label + ": id");
+        foreach string col in (("b", "c", "nc")) {
+            assertEq(expected{col}.type(), row{col}.type(), label + ": " + col + " type");
+            assertEq(expected{col}.size(), row{col}.size(), label + ": " + col + " size");
+            assertTrue(expected{col} == row{col}, label + ": " + col + " value");
         }
     }
 

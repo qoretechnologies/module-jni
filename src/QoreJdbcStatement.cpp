@@ -49,6 +49,10 @@ QoreJdbcColumn::QoreJdbcColumn(std::string&& name, std::string&& qname, jint cty
         fetch = Fetch::OffsetDateTime;
     } else if (ctype == Globals::typeRowId || cn == "oracle.sql.ROWID") {
         fetch = Fetch::String;
+    } else if (ctype == Globals::typeBlob) {
+        fetch = Fetch::Blob;
+    } else if (ctype == Globals::typeClob || ctype == Globals::typeNClob) {
+        fetch = Fetch::Clob;
     }
 }
 
@@ -463,7 +467,7 @@ static qore_type_t jdbc_sql_type_code(const QoreJdbcColumn& col, NumericOption n
     if (t == Globals::typeNull) {
         return NT_NULL;
     }
-    // ex: CLOB and BLOB (java.sql.Clob and java.sql.Blob)
+    // ex: ARRAY and STRUCT; BLOB, CLOB and NCLOB values are read as values (see QoreJdbcColumn::Fetch)
     return NT_OBJECT;
 }
 
@@ -474,7 +478,10 @@ qore_type_t QoreJdbcStatement::getColumnTypeCode(Env& env, const QoreJdbcColumn&
         case QoreJdbcColumn::Fetch::OffsetDateTime:
             return NT_DATE;
         case QoreJdbcColumn::Fetch::String:
+        case QoreJdbcColumn::Fetch::Clob:
             return NT_STRING;
+        case QoreJdbcColumn::Fetch::Blob:
+            return NT_BINARY;
         case QoreJdbcColumn::Fetch::Object:
             break;
     }
@@ -2229,6 +2236,19 @@ QoreValue QoreJdbcStatement::getColumnValue(Env& env, int column, QoreJdbcColumn
         case QoreJdbcColumn::Fetch::Object:
             val = env.callObjectMethod(rs, Globals::methodResultSetGetObject, &jarg);
             break;
+        case QoreJdbcColumn::Fetch::Blob:
+        case QoreJdbcColumn::Fetch::Clob: {
+            LocalReference<jobject> lob = env.callObjectMethod(rs, Globals::methodResultSetGetObject, &jarg);
+            if (!lob) {
+                break;
+            }
+            // the large object is read in chunks and freed
+            jvalue jlob;
+            jlob.l = lob;
+            val = env.callStaticObjectMethod(Globals::classJdbcLob, col.fetch == QoreJdbcColumn::Fetch::Blob
+                ? Globals::methodJdbcLobReadBlob : Globals::methodJdbcLobReadClob, &jlob);
+            break;
+        }
     }
     if (!val) {
         return &Null;

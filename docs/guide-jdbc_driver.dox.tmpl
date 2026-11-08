@@ -126,6 +126,9 @@ foreach hash<auto> col in (stmt.describe().iterator()) {
       returns its own classes, are read with \c ResultSet.getTimestamp(), and \c TIMESTAMP \c WITH \c TIME
       \c ZONE values as a \c java.time.OffsetDateTime, so that they are dates; a row id (\c ROWID) is read as a
       string; \c describe() gives these columns as dates and strings
+    - a large object is read as its value: a \c BLOB as binary, a \c CLOB or \c NCLOB as a string (in chunks of
+      64 KiB or characters), and the \c java.sql.Blob or \c java.sql.Clob object is freed; the whole value is in
+      memory, as with the native %Qore drivers; \c describe() gives these columns as binary and strings
 
     @subsection jdbc_sql_errors SQL Errors
 

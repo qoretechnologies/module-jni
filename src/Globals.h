@@ -492,6 +492,10 @@ public:
     DLLLOCAL static jfieldID fieldJdbcColumnarBatchValidity;                      // byte[][] validity
     DLLLOCAL static jfieldID fieldJdbcColumnarBatchNullCounts;                    // long[] nullCounts
 
+    DLLLOCAL static GlobalReference<jclass> classJdbcLob;                         // org.qore.jni.JdbcLob
+    DLLLOCAL static jmethodID methodJdbcLobReadBlob;                              // static byte[] readBlob(Blob)
+    DLLLOCAL static jmethodID methodJdbcLobReadClob;                              // static String readClob(Clob)
+
     DLLLOCAL static GlobalReference<jclass> classArray;                           // java.sql.Array
     DLLLOCAL static jmethodID methodArrayGetArray;                                // Object getArray()
 
@@ -529,6 +533,9 @@ public:
     DLLLOCAL static int typeVarbinary;              // java.sql.Type.VARBINARY value
     DLLLOCAL static int typeVarchar;                // java.sql.Type.VARCHAR value
     DLLLOCAL static int typeRowId;                  // java.sql.Type.ROWID value
+    DLLLOCAL static int typeBlob;                   // java.sql.Type.BLOB value
+    DLLLOCAL static int typeClob;                   // java.sql.Type.CLOB value
+    DLLLOCAL static int typeNClob;                  // java.sql.Type.NCLOB value
 
     DLLLOCAL static GlobalReference<jstring> javaQoreClassField;
     DLLLOCAL static GlobalReference<jstring> javaQoreClassPgmIdField;
