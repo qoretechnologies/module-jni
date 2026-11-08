@@ -46,6 +46,7 @@ class JdbcTransactionsTest inherits QUnit::Test {
             \lostAtTransactionStartCleanupFails());
         addTestCase("lost connection: a failed validity check is not a lost connection", \lostValidityCheckFails());
         addTestCase("result sets survive Java native-call boundaries", \cursorLifetime());
+        addTestCase("a cancelled thread that uses a connection raises THREAD-CANCELLED", \cancelledThread());
         set_return_value(main());
     }
 
@@ -460,5 +461,46 @@ class JdbcTransactionsTest inherits QUnit::Test {
         assertEq(({"id": 11}, {"id": 22}), JdbcCursorTest::readRows(ds, "multi:rs=id:11,22"));
         assertEq((), JdbcCursorTest::readRows(ds, "multi:rs=id:"));
         assertFalse(ds.inTransaction());
+    }
+
+    #! a thread whose cancellation is pending uses a connection: the call raises THREAD-CANCELLED; the attach to the
+    #! JVM raised it as a C++ exception that some calls (ex: rollback(), which begins an implicit transaction, and
+    #! the close of the connection) did not catch, which terminated the process
+    private cancelledThread() {
+        # each call is the first that the cancelled thread makes after the cancellation (a cancelled thread raises the
+        # cancellation at its next cancellation point, ex: a loop)
+        # the call and the result it gives: the close of the connection, a cleanup, completes on a cancelled thread
+        hash<string, list<auto>> calls = {
+            "rollback": (sub (Datasource ds) { ds.rollback(); }, "THREAD-CANCELLED"),
+            "select": (sub (Datasource ds) { ds.select("multi:typed=all"); }, "THREAD-CANCELLED"),
+            "close": (sub (Datasource ds) { ds.close(); }, "no exception"),
+        };
+        foreach hash<auto> i in (calls.pairIterator()) {
+            JdbcTransactionDriver::reset();
+            Datasource ds("jdbc:@qore-transaction-test:fixture");
+            ds.open();
+            JdbcTransactionDriver::resetLobLatches();
+            Queue result();
+            code call = i.value[0];
+            int tid = background sub () {
+                # the thread is in this Java call when it is cancelled
+                try {
+                    JdbcTransactionDriver::blockUntilReleased();
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push("wait: " + ex.err);
+                    return;
+                }
+                try {
+                    call(ds);
+                    result.push("no exception");
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push(ex.err);
+                }
+            }();
+            JdbcTransactionDriver::awaitLobEntered();
+            assertTrue(cancel_thread(tid, "the test cancels the thread"), i.key);
+            JdbcTransactionDriver::releaseLob();
+            assertEq(i.value[1], result.get(30s), i.key);
+        }
     }
 }

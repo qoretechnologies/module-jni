@@ -6,6 +6,30 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed the conversion of strings with characters outside the Basic Multilingual Plane (ex: emoji) between %Qore
+      and Java, which garbled them in both directions: \c "😀" became \c "ð" in Java, and a Java string with one
+      became invalid UTF-8 in %Qore, including in the messages of Java exceptions; such a character is a 4-byte
+      UTF-8 sequence in %Qore and a surrogate pair in Java; a NUL character is converted in both directions, and
+      invalid UTF-8 in a %Qore string (an invalid byte, a truncated or overlong sequence, an encoded surrogate) is
+      U+FFFD in Java
+    - fixed the \c jdbc driver returning Oracle's \c TIMESTAMP, \c TIMESTAMP \c WITH \c TIME \c ZONE,
+      \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE and \c ROWID values as Java objects of Oracle's driver
+      (\c oracle.sql.TIMESTAMP and the like), and \c describe() giving these columns as objects: they are dates and
+      strings (see @ref jdbc_column_values)
+    - the \c jdbc driver returns the value of a \c BLOB, \c CLOB or \c NCLOB as binary or a string, as the native
+      %Qore drivers do, and \c describe() gives these columns as binary and strings; the value is read in chunks,
+      which a cancelled thread or an interrupted program stops (see @ref jdbc_column_values); <b>behaviour
+      change:</b> they were returned as \c java.sql.Blob and \c java.sql.Clob objects, which code that read them as
+      Java objects must no longer do; the whole value is read into memory
+    - added the \c jdbc driver's \c lob-max-size option: the most bytes or characters read from a large object whose
+      length the driver does not give (see @ref jdbc_option_lob_max_size)
+    - fixed the \c jdbc driver dropping the fraction of a second of \c TIME values (ex: SQL Server's \c time(7)) and
+      the offset of \c TIME \c WITH \c TIME \c ZONE values, and returning PostgreSQL's \c 'infinity' as a date in
+      the year 292278994: it is the date that the \c pgsql driver returns (see @ref jdbc_column_values)
+    - fixed a crash of the \c jdbc driver (an exception that terminated the process) when a cancelled thread used a
+      connection or closed a statement
+    - fixed a %Qore Program destroyed on a cancelled thread leaving its Java class loader with a pointer to the
+      destroyed Program
     - fixed the \c jdbc driver binding an integer of -128 to 127 as a \c TINYINT and one of -32768 to 32767 as a
       \c SMALLINT: SQL Server stores a \c TINYINT unsigned, so a negative value was stored as another one (-1 as
       255) when a statement prepared with a small positive value was run again; an integer is bound as an \c INTEGER

@@ -57,7 +57,7 @@ int QoreJdbcPreparedStatement::prepare(const QoreString& qstr, const QoreListNod
         assignBindArgs(xsink, args ? args->listRefSelf() : nullptr);
 
         return 0;
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return -1;
@@ -110,7 +110,7 @@ int QoreJdbcPreparedStatement::exec(ExceptionSink* xsink) {
             }
         }
         return 0;
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return -1;
@@ -120,7 +120,7 @@ int QoreJdbcPreparedStatement::bind(const QoreListNode& args, ExceptionSink* xsi
     try {
         assignBindArgs(xsink, args.listRefSelf());
         return *xsink ? -1 : 0;
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return -1;
@@ -144,7 +144,7 @@ QoreHashNode* QoreJdbcPreparedStatement::getOutputHash(ExceptionSink* xsink, boo
     try {
         Env env;
         return getOutputHashIntern(env, xsink, empty_hash_if_nothing, max_rows);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return nullptr;
@@ -157,7 +157,7 @@ QoreHashNode* QoreJdbcPreparedStatement::fetchRow(ExceptionSink* xsink) {
     try {
         Env env;
         return getSingleRowIntern(env, xsink);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return nullptr;
@@ -170,7 +170,7 @@ QoreListNode* QoreJdbcPreparedStatement::fetchRows(int max_rows, ExceptionSink* 
     try {
         Env env;
         return getOutputListIntern(env, xsink, max_rows);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return nullptr;
@@ -183,7 +183,7 @@ QoreHashNode* QoreJdbcPreparedStatement::fetchColumns(int max_rows, ExceptionSin
     try {
         Env env;
         return getOutputHashIntern(env, xsink, true, max_rows);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return nullptr;
@@ -197,7 +197,7 @@ QoreColumnarResult* QoreJdbcPreparedStatement::fetchColumnar(int rows, Exception
     try {
         Env env;
         return getOutputColumnarIntern(env, xsink, rows);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return nullptr;
@@ -211,7 +211,7 @@ bool QoreJdbcPreparedStatement::next(ExceptionSink* xsink) {
     try {
         Env env;
         return QoreJdbcStatement::next(env, xsink);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return false;
@@ -221,7 +221,7 @@ QoreHashNode* QoreJdbcPreparedStatement::describe(ExceptionSink* xsink) {
     try {
         Env env;
         return QoreJdbcStatement::describe(env, xsink);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return nullptr;
@@ -235,7 +235,7 @@ int QoreJdbcPreparedStatement::clear(ExceptionSink* xsink) {
         Env env;
         freeHandles(env, xsink);
         return *xsink ? -1 : 0;
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     return -1;

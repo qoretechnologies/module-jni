@@ -1,0 +1,259 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.JdbcTransactionDriver
+%exec-class JdbcLargeObjectsTest
+
+#! Large objects and Oracle's TIMESTAMP WITH TIME ZONE with the test JDBC driver's typed result sets: what drivers
+#! other than the ones the jdbc tests run against do (SQLite, jTDS, an older ojdbc)
+class JdbcLargeObjectsTest inherits QUnit::Test {
+    private {
+        const ResultTimeout = 30s;
+    }
+
+    constructor() : Test("JDBC large objects", "1.0", \ARGV) {
+        addTestCase("LOB columns: values, failing free(), empty locators, chunks", \lobs());
+        addTestCase("a failing read raises its error and the large object is freed", \lobReadFails());
+        addTestCase("a read is cancelled between chunks and the large object is freed", \lobCancel());
+        addTestCase("TIMESTAMP WITH TIME ZONE without getObject(int, Class)", \timestampTzFallback());
+        addTestCase("large objects of an unknown length, and a CLOB read one character at a time", \lobUnknown());
+        addTestCase("a CLOB read is cancelled between chunks and the CLOB is freed", \lobCancelClob());
+        addTestCase("an SQL error of getObject(int, Class) is raised and the column is not read otherwise",
+            \getObjectAsError());
+        addTestCase("the lob-max-size option", \lobMaxSize());
+        addTestCase("a connection error that is the cause of the error of getObject(int, Class) is raised",
+            \getObjectAsWrappedError());
+        set_return_value(main());
+    }
+
+    private Datasource datasource() {
+        JdbcTransactionDriver::reset();
+        return new Datasource("jdbc:@qore-transaction-test:fixture");
+    }
+
+    # the string of the "Split" column (see JdbcTransactionDriver.splitSurrogates())
+    private static string splitString() {
+        string s = strmul("a", 65535) + "😀";
+        # Java length: 65537 units; each "ř€😀" is 4 units
+        int units = 65537;
+        while (units < 140000) {
+            s += "ř€😀";
+            units += 4;
+        }
+        return s;
+    }
+
+    private checkLobRow(hash<auto> row, string label) {
+        # a driver that returns a byte[] or a String for a LOB column (SQLite): the value as it is; it raised
+        # JNI-ERROR (IncompatibleClassChangeError), as it was read as a Blob
+        assertEq(<010203>, row.blobbytes, label);
+        assertEq("abc", row.clobstring, label);
+        # free() fails (jTDS: AbstractMethodError) after a successful read: the value
+        assertEq(<0405>, row.freefails, label);
+        assertEq("x😀", row.clobfreefails, label);
+        # an empty large object is not read (Oracle's empty_blob(): ORA-22275)
+        assertEq(binary(), row.empty, label);
+        assertEq("", row.emptyclob, label);
+        # a surrogate pair across the first chunk is one character
+        string split = splitString();
+        assertEq(split.size(), row.split.size(), label);
+        assertTrue(split == row.split, label);
+    }
+
+    private lobs() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        {
+            SQLStatement stmt(ds);
+            on_exit stmt.close();
+            stmt.prepare("multi:typed=lobs");
+            stmt.exec();
+            hash<auto> desc = stmt.describe();
+            assertEq(NT_BINARY, desc.blobbytes.type);
+            assertEq(NT_STRING, desc.clobstring.type);
+            assertEq(NT_BINARY, desc.freefails.type);
+            assertEq(NT_STRING, desc.clobfreefails.type);
+            assertTrue(stmt.next());
+            checkLobRow(stmt.fetchRow(), "SQLStatement");
+        }
+        checkLobRow(ds.selectRow("multi:typed=lobs"), "selectRow");
+        checkLobRow(ds.selectRows("multi:typed=lobs")[0], "selectRows");
+        hash<auto> h = ds.select("multi:typed=lobs");
+        checkLobRow((map {$1.key: $1.value[0]}, h.pairIterator()), "select");
+        # each large object is freed
+        foreach string name in (("FreeFails", "ClobFreeFails", "Empty", "EmptyClob", "Split")) {
+            assertEq(4, JdbcTransactionDriver::count("lob.free:" + name), name);
+        }
+        # an empty large object is not read
+        assertEq(0, JdbcTransactionDriver::count("lob.read:Empty:1"));
+        # the CLOB is read in chunks of 64 Ki characters; the first chunk ends with the high surrogate of a pair, which
+        # is converted with the second one
+        assertEq(4, JdbcTransactionDriver::count("lob.read:Split:1"));
+        assertEq(4, JdbcTransactionDriver::count("lob.read:Split:65537"));
+        assertEq(4, JdbcTransactionDriver::count("lob.read:Split:131073"));
+    }
+
+    private lobReadFails() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        assertThrows("JNI-ERROR", "injected read error", \ds.selectRow(), "multi:typed=lobfail");
+        # freed, although free() fails too
+        assertEq(1, JdbcTransactionDriver::count("lob.free:ReadFails"));
+    }
+
+    private lobUnknown() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        hash<auto> row = ds.selectRow("multi:typed=lobunknown");
+        # length() < 0: the value is read until a chunk is shorter than requested
+        binary b = binary();
+        for (int i = 0; i < 150000; ++i) {
+            b += chr(i % 251);
+        }
+        assertEq(150000, row.unknownblob.size());
+        assertTrue(b == row.unknownblob);
+        string split = splitString();
+        assertEq(split.size(), row.unknownclob.size());
+        assertTrue(split == row.unknownclob);
+        # a surrogate pair read one UTF-16 unit at a time is one character (it was U+FFFD twice)
+        assertEq("😀", row.oneunit);
+    }
+
+    private lobCancelClob() {
+        Datasource ds = datasource();
+        JdbcTransactionDriver::resetLobLatches();
+        Queue result();
+        int tid = background sub () {
+            try {
+                ds.selectRow("multi:typed=lobcancelclob");
+                result.push("no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+        JdbcTransactionDriver::awaitLobEntered();
+        assertTrue(cancel_thread(tid, "the test cancels the read"));
+        JdbcTransactionDriver::releaseLob();
+        assertEq("THREAD-CANCELLED", result.get(ResultTimeout));
+        assertEq(1, JdbcTransactionDriver::count("lob.read:BlockingClob:65537"));
+        assertEq(0, JdbcTransactionDriver::count("lob.read:BlockingClob:131073"));
+        assertEq(1, JdbcTransactionDriver::count("lob.free:BlockingClob"));
+    }
+
+    # getObject(int, LocalTime.class) raises a lost connection: it is raised, each time; it was taken for an
+    # unsupported conversion, and the column was then read with getObject(int) for good
+    private getObjectAsError() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        SQLStatement stmt(ds);
+        on_exit stmt.close();
+        stmt.prepare("multi:typed=asfail");
+        stmt.exec();
+        assertTrue(stmt.next());
+        assertThrows("JNI-ERROR", "injected connection reset", \stmt.fetchRow());
+        assertThrows("JNI-ERROR", "injected connection reset", \ds.selectRow(), "multi:typed=asfail");
+        # any other error: the column is read with getObject(int) (a java.sql.Time)
+        hash<auto> row = ds.selectRow("multi:typed=asfallback");
+        foreach string col in (("mismatch", "localized", "runtime", "cycle")) {
+            assertEq(Type::Date, row{col}.type(), col);
+            assertEq("10:15:30", row{col}.format("HH:mm:SS"), col);
+        }
+    }
+
+    #! a connection error that is the cause of the error (ex: wrapped by a pool's proxy) is raised; it was taken for an
+    #! unsupported conversion
+    private getObjectAsWrappedError() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        # the error of the driver is raised as it is, with its causes in its argument
+        assertThrows("JNI-ERROR", "proxy failure", \ds.selectRow(), "multi:typed=aswrapped");
+    }
+
+    #! a large object of an unknown length is read up to the lob-max-size option
+    private lobMaxSize() {
+        JdbcTransactionDriver::reset();
+        Datasource ds("jdbc:@qore-transaction-test:fixture{lob-max-size=100000}");
+        ds.open();
+        on_exit ds.rollback();
+        assertEq(100000, ds.getOption("lob-max-size"));
+        assertThrows("JDBC-LOB-SIZE-ERROR", "more than 100000 bytes", \ds.selectRow(), "multi:typed=lobunknown");
+        # freed
+        assertEq(1, JdbcTransactionDriver::count("lob.free:UnknownBlob"));
+        # the default is 2 GiB
+        Datasource ds2("jdbc:@qore-transaction-test:fixture");
+        ds2.open();
+        assertEq(2147483648, ds2.getOption("lob-max-size"));
+        assertThrows("JDBC-OPTION-ERROR", \ds2.setOption(), ("lob-max-size", 0));
+        # an integer, or a string of digits only
+        ds2.setOption("lob-max-size", "123456");
+        assertEq(123456, ds2.getOption("lob-max-size"));
+        ds2.setOption("lob-max-size", 654321);
+        assertEq(654321, ds2.getOption("lob-max-size"));
+        foreach auto v in (("2G", "1e9x", "", "-5", " 5", "5 ", 1.5, 99999999999999999999n)) {
+            assertThrows("JDBC-OPTION-ERROR", "positive integer", \ds2.setOption(), ("lob-max-size", v),
+                sprintf("%y", v));
+        }
+        # the value is unchanged
+        assertEq(654321, ds2.getOption("lob-max-size"));
+    }
+
+    # the thread waits in the read of the second chunk while it is cancelled: the read ends with THREAD-CANCELLED
+    # before the next chunk, and the large object is freed
+    private lobCancel() {
+        Datasource ds = datasource();
+        JdbcTransactionDriver::resetLobLatches();
+        Queue result();
+        int tid = background sub () {
+            try {
+                ds.selectRow("multi:typed=lobcancel");
+                result.push("no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+            # a cancelled thread stays cancelled
+            try {
+                ds.rollback();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }();
+        JdbcTransactionDriver::awaitLobEntered();
+        assertTrue(cancel_thread(tid, "the test cancels the read"));
+        JdbcTransactionDriver::releaseLob();
+        assertEq("THREAD-CANCELLED", result.get(ResultTimeout));
+        # the third chunk was not read; the large object was freed
+        assertEq(1, JdbcTransactionDriver::count("lob.read:Blocking:65537"));
+        assertEq(0, JdbcTransactionDriver::count("lob.read:Blocking:131073"));
+        assertEq(1, JdbcTransactionDriver::count("lob.free:Blocking"));
+    }
+
+    # an older Oracle driver has no getObject(int, OffsetDateTime.class): the value is read from its string, which
+    # has its offset, or, with a time zone region, from getTimestamp(), as the same point in time
+    private timestampTzFallback() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        hash<auto> row = ds.selectRow("multi:typed=oldtstz");
+        assertEq(Type::Date, row.tstz.type());
+        assertEq(2026-03-04T05:06:07.123456+02:00, row.tstz);
+        assertEq("+02:00", row.tstz.format("Z"));
+        assertEq(2026-03-04T05:06:07-05:30, row.tstznegative);
+        assertEq("-05:30", row.tstznegative.format("Z"));
+        # Oracle's TIMESTAMP: the local time of getTimestamp() (getObject() gives Oracle's own class)
+        assertEq(Type::Date, row.ts.type());
+        assertEq("2026-07-04 12:00:00.123456", row.ts.format("YYYY-MM-DD HH:mm:SS.xx"));
+        assertEq(Type::Date, row.tstzregion.type());
+        assertEq(2026-03-04T04:06:07.123456Z.getEpochSeconds(), row.tstzregion.getEpochSeconds());
+        assertEq(123456, row.tstzregion.microseconds());
+        # described as dates
+        SQLStatement stmt(ds);
+        on_exit stmt.close();
+        stmt.prepare("multi:typed=oldtstz");
+        hash<auto> desc = stmt.describe();
+        assertEq(NT_DATE, desc.tstz.type);
+    }
+}

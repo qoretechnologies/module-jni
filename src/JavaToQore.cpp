@@ -44,7 +44,8 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
     // convert to Qore value if possible
     if (env.isInstanceOf(v, Globals::classString)) {
         Env::GetStringUtfChars chars(env, v.as<jstring>());
-        return QoreValue(new QoreStringNode(chars.c_str(), QCS_UTF8));
+        // the length is given: the string may have NUL characters
+        return QoreValue(new QoreStringNode(chars.c_str(), chars.size(), QCS_UTF8));
     }
 
     if (env.isInstanceOf(v, Globals::classZonedDateTime)) {

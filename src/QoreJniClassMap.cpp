@@ -4322,6 +4322,9 @@ JniExternalProgramData::~JniExternalProgramData() {
 
     // NOTE: any exception thrown here will be printed out to stderr
     ExceptionSink xsink;
+    // the class loader's pointer to the Program is cleared on a cancelled thread too: Env's constructor raised the
+    // pending cancellation, so the loader kept a pointer to the destroyed Program
+    QoreCancelDeferralHelper cancel_deferral;
     try {
         Env env;
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderClearProgramPtr, nullptr);

@@ -68,6 +68,41 @@ struct QoreJdbcColumn {
     //! The class of the values that ResultSet.getObject() returns, if the driver reports it
     std::string class_name;
 
+    //! How the values of the column are read from the result set
+    /** ResultSet.getObject() returns a vendor class for some types, which is not converted to a Qore value; the
+        values of these types are read as standard Java values
+    */
+    enum class Fetch {
+        //! ResultSet.getObject(int)
+        Object,
+        //! ResultSet.getTimestamp(int), converted from the time since the epoch: Oracle's TIMESTAMP WITH LOCAL TIME
+        //! ZONE, a point in time
+        Timestamp,
+        //! ResultSet.getObject(int, LocalDateTime.class): Oracle's TIMESTAMP and DATE, a local date and time; with a
+        //! driver without it, the java.sql.Timestamp of getObject(int), which has the same local time
+        LocalDateTime,
+        //! ResultSet.getObject(int, OffsetDateTime.class): Oracle's TIMESTAMP WITH TIME ZONE; with a driver without
+        //! it, the string of the value, which has its offset
+        OffsetDateTime,
+        //! ResultSet.getString(int): ROWID
+        String,
+        //! ResultSet.getObject(int, LocalTime.class): TIME, which java.sql.Time gives without its fraction
+        LocalTime,
+        //! ResultSet.getObject(int, OffsetTime.class): TIME WITH TIME ZONE
+        OffsetTime,
+        //! a BLOB column: a java.sql.Blob is read in chunks and freed; any other value is converted
+        Blob,
+        //! a CLOB or NCLOB column: a java.sql.Clob is read in chunks and freed; any other value is converted
+        Clob,
+    };
+
+    //! How the values of the column are read
+    Fetch fetch = Fetch::Object;
+
+    //! True if the driver does not support ResultSet.getObject(int, Class) for the column, which is then read with
+    //! the fallback of its Fetch mode
+    bool no_get_object_as = false;
+
     //! Constructor
     DLLLOCAL QoreJdbcColumn(std::string&& name, std::string&& qname, jint ctype, std::string&& native_type,
         jint precision, jint scale, bool nullable, std::string&& class_name);

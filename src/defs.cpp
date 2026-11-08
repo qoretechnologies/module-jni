@@ -161,17 +161,18 @@ QoreStringNode* JavaException::toString(bool clear) const {
             return new QoreStringNode("Unable to get exception class name: another exception thrown");
         }
 
-        const char* chars = env->GetStringUTFChars(excName, nullptr);
-        if (!chars) {
-            env->ExceptionClear();
-            return new QoreStringNode("Unable to get exception class name: GetStringUTFChars() failed");
+        {
+            Env::JniUtfChars chars(env, excName);
+            if (!chars.get()) {
+                env->ExceptionClear();
+                return new QoreStringNode("Unable to get exception class name: GetStringUTFChars() failed");
+            }
+            if (!desc->empty()) {
+                desc->concat(": ");
+            }
+            Env::ModifiedUtf8 name(chars.get());
+            desc->concat(name.c_str(), name.size());
         }
-        //printd(5, "chars: %s\n", chars);
-        if (!desc->empty()) {
-            desc->concat(": ");
-        }
-        desc->concat(chars);
-        env->ReleaseStringUTFChars(excName, chars);
 
         LocalReference<jstring> msg = static_cast<jstring>(env->CallObjectMethod(throwable, Globals::methodThrowableGetMessage));
         //printd(5, "msg: %p\n", (jstring)msg);
@@ -179,12 +180,12 @@ QoreStringNode* JavaException::toString(bool clear) const {
             env->ExceptionClear();
         } else if (msg != nullptr) {
             desc->concat(": ");
-            chars = env->GetStringUTFChars(msg, nullptr);
-            if (!chars) {
+            Env::JniUtfChars chars(env, msg);
+            if (!chars.get()) {
                 env->ExceptionClear();
             } else {
-                desc->concat(chars);
-                env->ReleaseStringUTFChars(msg, chars);
+                Env::ModifiedUtf8 m(chars.get());
+                desc->concat(m.c_str(), m.size());
             }
         }
 
@@ -283,14 +284,17 @@ void JavaException::convert(ExceptionSink* xsink) {
     }
     LocalReference<jstring> excName(raw_exc_name);
 
-    const char* chars = env->GetStringUTFChars(excName, nullptr);
-    if (!chars) {
-        env->ExceptionClear();
-        xsink->raiseException("JNI-ERROR", "Unable to get exception class name - GetStringUTFChars() failed");
-        return;
+    SimpleRefHolder<QoreStringNode> desc;
+    {
+        Env::JniUtfChars chars(env, excName);
+        if (!chars.get()) {
+            env->ExceptionClear();
+            xsink->raiseException("JNI-ERROR", "Unable to get exception class name - GetStringUTFChars() failed");
+            return;
+        }
+        Env::ModifiedUtf8 name(chars.get());
+        desc = new QoreStringNode(name.c_str(), name.size(), QCS_UTF8);
     }
-    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(chars, QCS_UTF8));
-    env->ReleaseStringUTFChars(excName, chars);
 
     jstring raw_msg = static_cast<jstring>(env->CallObjectMethod(throwable,
         Globals::methodThrowableGetMessage));
@@ -302,12 +306,12 @@ void JavaException::convert(ExceptionSink* xsink) {
     } else if (raw_msg != nullptr) {
         LocalReference<jstring> msg(raw_msg);
         desc->concat(": ");
-        chars = env->GetStringUTFChars(msg, nullptr);
-        if (!chars) {
+        Env::JniUtfChars chars(env, msg);
+        if (!chars.get()) {
             env->ExceptionClear();
         } else {
-            desc->concat(chars);
-            env->ReleaseStringUTFChars(msg, chars);
+            Env::ModifiedUtf8 m(chars.get());
+            desc->concat(m.c_str(), m.size());
         }
     }
 
@@ -377,21 +381,22 @@ void JavaException::ignoreOrRethrowNoClass() {
     }
     LocalReference<jstring> excName(raw_exc_name);
 
-    const char* chars = env->GetStringUTFChars(excName, nullptr);
-    if (!chars) {
-        env->ExceptionClear();
-        xsink.raiseException("JNI-ERROR", "Unable to get exception class name: GetStringUTFChars() failed");
-        return;
+    SimpleRefHolder<QoreStringNode> desc;
+    {
+        Env::JniUtfChars chars(env, excName);
+        if (!chars.get()) {
+            env->ExceptionClear();
+            xsink.raiseException("JNI-ERROR", "Unable to get exception class name: GetStringUTFChars() failed");
+            return;
+        }
+        // return if this is the exception we should ignore (a class name is compared: ASCII)
+        if (!strcmp(chars.get(), "java.lang.ClassNotFoundException")
+            || !strcmp(chars.get(), "java.lang.NoClassDefFoundError")) {
+            return;
+        }
+        Env::ModifiedUtf8 name(chars.get());
+        desc = new QoreStringNode(name.c_str(), name.size(), QCS_UTF8);
     }
-    // return if this is the exception we should ignore
-    if (!strcmp(chars, "java.lang.ClassNotFoundException")
-        || !strcmp(chars, "java.lang.NoClassDefFoundError")) {
-        env->ReleaseStringUTFChars(excName, chars);
-        return;
-    }
-
-    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(chars, QCS_UTF8));
-    env->ReleaseStringUTFChars(excName, chars);
 
     jstring raw_msg = static_cast<jstring>(env->CallObjectMethod(throwable, Globals::methodThrowableGetMessage));
     if (env->ExceptionCheck()) {
@@ -402,12 +407,12 @@ void JavaException::ignoreOrRethrowNoClass() {
     } else if (raw_msg != nullptr) {
         LocalReference<jstring> msg(raw_msg);
         desc->concat(": ");
-        chars = env->GetStringUTFChars(msg, nullptr);
-        if (!chars) {
+        Env::JniUtfChars chars(env, msg);
+        if (!chars.get()) {
             env->ExceptionClear();
         } else {
-            desc->concat(chars);
-            env->ReleaseStringUTFChars(msg, chars);
+            Env::ModifiedUtf8 m(chars.get());
+            desc->concat(m.c_str(), m.size());
         }
     }
 
@@ -432,18 +437,21 @@ bool JavaException::checkBug_8221530() {
         return true;
     }
 
-    const char* chars = env->GetStringUTFChars(excName, nullptr);
-    if (!chars) {
-        // Unable to get exception class name: GetStringUTFChars() failed
-        env->ExceptionClear();
-        restore(throwable.release());
-        return true;
-    }
+    {
+        // the characters are released when this block ends; this function never called ReleaseStringUTFChars()
+        Env::JniUtfChars chars(env, excName);
+        if (!chars.get()) {
+            // Unable to get exception class name: GetStringUTFChars() failed
+            env->ExceptionClear();
+            restore(throwable.release());
+            return true;
+        }
 
-    // return if this is the exception we should ignore
-    if (strcmp(chars, "java.lang.NullPointerException")) {
-        restore(throwable.release());
-        return true;
+        // return if this is the exception we should ignore (a class name is compared: ASCII)
+        if (strcmp(chars.get(), "java.lang.NullPointerException")) {
+            restore(throwable.release());
+            return true;
+        }
     }
 
     // check if the exception happened in AccessibleObject

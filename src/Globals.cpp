@@ -457,6 +457,8 @@ jmethodID Globals::methodResultSetGetLong;
 jmethodID Globals::methodResultSetGetObject;
 jmethodID Globals::methodResultSetGetShort;
 jmethodID Globals::methodResultSetGetString;
+jmethodID Globals::methodResultSetGetTimestamp;
+jmethodID Globals::methodResultSetGetObjectAs;
 
 GlobalReference<jclass> Globals::classResultSetMetaData;
 jmethodID Globals::methodResultSetMetaDataGetColumnClassName;
@@ -474,6 +476,23 @@ jfieldID Globals::fieldJdbcColumnarBatchRows;
 jfieldID Globals::fieldJdbcColumnarBatchData;
 jfieldID Globals::fieldJdbcColumnarBatchValidity;
 jfieldID Globals::fieldJdbcColumnarBatchNullCounts;
+
+GlobalReference<jclass> Globals::classBlob;
+jmethodID Globals::methodBlobLength;
+jmethodID Globals::methodBlobGetBytes;
+jmethodID Globals::methodBlobFree;
+GlobalReference<jclass> Globals::classClob;
+jmethodID Globals::methodClobLength;
+jmethodID Globals::methodClobGetSubString;
+jmethodID Globals::methodClobFree;
+GlobalReference<jclass> Globals::classSQLRecoverableException;
+GlobalReference<jclass> Globals::classSQLNonTransientConnectionException;
+GlobalReference<jclass> Globals::classSQLTransientConnectionException;
+GlobalReference<jclass> Globals::classSQLTimeoutException;
+jmethodID Globals::methodSQLExceptionGetSQLState;
+GlobalReference<jclass> Globals::classUtilDate;
+jmethodID Globals::methodUtilDateGetTime;
+jmethodID Globals::methodTimestampGetNanos;
 
 GlobalReference<jclass> Globals::classArray;
 jmethodID Globals::methodArrayGetArray;
@@ -511,6 +530,10 @@ int Globals::typeTimestampWithTimezone;
 int Globals::typeTinyInt;
 int Globals::typeVarbinary;
 int Globals::typeVarchar;
+int Globals::typeRowId;
+int Globals::typeBlob;
+int Globals::typeClob;
+int Globals::typeNClob;
 
 GlobalReference<jstring> Globals::javaQoreClassField;
 GlobalReference<jstring> Globals::javaQoreClassPgmIdField;
@@ -2390,17 +2413,64 @@ static jobject JNICALL qore_url_classloader_get_syscl(JNIEnv* jenv, jclass jcls)
 // module command) to route every reference to `qoremod.<mod>.*` through a single loader so
 // all consumer Programs see the same Class object.  Returns null for unknown modules and
 // for binary modules that don't have an owning user Program — callers fall back to syscl.
+// raises the error of getModuleLoader0() as a java.lang.RuntimeException with the error's code and description, if
+// any; it raises no C++ exception (a failure to make the message gives a fixed one)
+static void jni_throw_module_loader_error(JNIEnv* jenv, jni::Exception* e) {
+    if (jenv->ExceptionCheck()) {
+        return;
+    }
+    static const char* fixed = "getModuleLoader() failed";
+    jclass cls = jenv->FindClass("java/lang/RuntimeException");
+    if (!cls) {
+        // FindClass() raised the error
+        return;
+    }
+    try {
+        std::string msg = fixed;
+        if (e) {
+            ExceptionSink xsink;
+            e->convert(&xsink);
+            if (xsink) {
+                QoreValue err = xsink.getExceptionErr();
+                QoreValue desc = xsink.getExceptionDesc();
+                if (err.getType() == NT_STRING) {
+                    msg += ": ";
+                    msg += err.get<const QoreStringNode>()->c_str();
+                }
+                if (desc.getType() == NT_STRING) {
+                    msg += ": ";
+                    msg += desc.get<const QoreStringNode>()->c_str();
+                }
+                xsink.clear();
+            }
+        }
+        jenv->ThrowNew(cls, msg.c_str());
+    } catch (...) {
+        jenv->ThrowNew(cls, fixed);
+    }
+}
+
 static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jclass jcls, jstring jname) {
     if (!jname) {
         return nullptr;
     }
-    const char* utf = jenv->GetStringUTFChars(jname, nullptr);
-    if (!utf) {
-        return nullptr;
+    // no C++ exception may leave a JNI native method: a failure is raised as a Java exception
+    try {
+        Env::JniUtfChars utf(jenv, jname);
+        if (!utf.get()) {
+            return nullptr;
+        }
+        return Globals::getModuleClassLoader(Env::ModifiedUtf8(utf.get()).c_str());
+    } catch (JavaException&) {
+        // the Java exception of a JNI call is pending: it is raised to the caller
+        assert(jenv->ExceptionCheck());
+    } catch (jni::Exception& e) {
+        // any other error (ex: a Qore exception) is raised as a Java exception with its description
+        jni_throw_module_loader_error(jenv, &e);
+    } catch (...) {
+        jni_throw_module_loader_error(jenv, nullptr);
     }
-    jobject loader = Globals::getModuleClassLoader(utf);
-    jenv->ReleaseStringUTFChars(jname, utf);
-    return loader;
+    return nullptr;
 }
 
 // Instance native: returns the canonical owning loader for `bin_name` from the
@@ -2410,18 +2480,17 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
     if (!jname) {
         return nullptr;
     }
-    const char* utf = jenv->GetStringUTFChars(jname, nullptr);
-    if (!utf) {
+    Env::JniUtfChars utf(jenv, jname);
+    if (!utf.get()) {
         return nullptr;
     }
     jobject loader = nullptr;
     try {
         Env env(jenv);
-        loader = Globals::getCanonicalLoader(env, jthis, utf);
+        loader = Globals::getCanonicalLoader(env, jthis, Env::ModifiedUtf8(utf.get()).c_str());
     } catch (...) {
         // swallow; null tells the Java caller to fall back to local generation
     }
-    jenv->ReleaseStringUTFChars(jname, utf);
     return loader;
 }
 
@@ -3318,6 +3387,16 @@ jobject Globals::getModuleClassLoader(const char* name) {
     if (!name || !*name) {
         return nullptr;
     }
+#ifdef DEBUG
+    // a test hook (debug builds): a failure of the named module's lookup, raised as a Qore exception
+    if (const char* fail = getenv("QORE_JNI_TEST_MODULE_LOADER_FAIL")) {
+        if (!strcmp(fail, name)) {
+            ExceptionSink xsink;
+            xsink.raiseException("JNI-TEST-ERROR", "injected module loader failure for module '%s'", name);
+            throw XsinkException(xsink);
+        }
+    }
+#endif
     QoreProgram* pgm = ModuleManager::findUserModuleProgram(name);
     if (!pgm) {
         return nullptr;
@@ -3968,6 +4047,9 @@ bool Globals::init() {
     methodResultSetGetObject = env.getMethod(classResultSet, "getObject", "(I)Ljava/lang/Object;");
     methodResultSetGetShort = env.getMethod(classResultSet, "getShort", "(I)S");
     methodResultSetGetString = env.getMethod(classResultSet, "getString", "(I)Ljava/lang/String;");
+    methodResultSetGetTimestamp = env.getMethod(classResultSet, "getTimestamp", "(I)Ljava/sql/Timestamp;");
+    methodResultSetGetObjectAs = env.getMethod(classResultSet, "getObject",
+        "(ILjava/lang/Class;)Ljava/lang/Object;");
 
     classResultSetMetaData = env.findClass("java/sql/ResultSetMetaData").makeGlobal();
     methodResultSetMetaDataGetColumnClassName = env.getMethod(classResultSetMetaData, "getColumnClassName",
@@ -4048,6 +4130,14 @@ bool Globals::init() {
         typeVarbinary = env.getStaticIntField(classTypes, field);
         field = env.getStaticField(classTypes, "VARCHAR", "I");
         typeVarchar = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "ROWID", "I");
+        typeRowId = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "BLOB", "I");
+        typeBlob = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "CLOB", "I");
+        typeClob = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "NCLOB", "I");
+        typeNClob = env.getStaticIntField(classTypes, field);
     }
 
     assert(!classQoreURLClassLoader);
@@ -4134,6 +4224,24 @@ bool Globals::init() {
     fieldJdbcColumnarBatchData = env.getField(classJdbcColumnarBatch, "data", "[Ljava/lang/Object;");
     fieldJdbcColumnarBatchValidity = env.getField(classJdbcColumnarBatch, "validity", "[[B");
     fieldJdbcColumnarBatchNullCounts = env.getField(classJdbcColumnarBatch, "nullCounts", "[J");
+
+    classBlob = env.findClass("java/sql/Blob").makeGlobal();
+    methodBlobLength = env.getMethod(classBlob, "length", "()J");
+    methodBlobGetBytes = env.getMethod(classBlob, "getBytes", "(JI)[B");
+    methodBlobFree = env.getMethod(classBlob, "free", "()V");
+    classClob = env.findClass("java/sql/Clob").makeGlobal();
+    methodClobLength = env.getMethod(classClob, "length", "()J");
+    methodClobGetSubString = env.getMethod(classClob, "getSubString", "(JI)Ljava/lang/String;");
+    methodClobFree = env.getMethod(classClob, "free", "()V");
+    classSQLRecoverableException = env.findClass("java/sql/SQLRecoverableException").makeGlobal();
+    classSQLNonTransientConnectionException = env.findClass("java/sql/SQLNonTransientConnectionException")
+        .makeGlobal();
+    classSQLTransientConnectionException = env.findClass("java/sql/SQLTransientConnectionException").makeGlobal();
+    classSQLTimeoutException = env.findClass("java/sql/SQLTimeoutException").makeGlobal();
+    methodSQLExceptionGetSQLState = env.getMethod(classSQLException, "getSQLState", "()Ljava/lang/String;");
+    classUtilDate = env.findClass("java/util/Date").makeGlobal();
+    methodUtilDateGetTime = env.getMethod(classUtilDate, "getTime", "()J");
+    methodTimestampGetNanos = env.getMethod(classTimestamp, "getNanos", "()I");
 
     env.registerNatives(classJavaClassBuilder, javaClassBuilderNativeMethods,
         sizeof(javaClassBuilderNativeMethods) / sizeof(JNINativeMethod));
@@ -4619,6 +4727,13 @@ void Globals::cleanup() {
     classResultSet = nullptr;
     classResultSetMetaData = nullptr;
     classJdbcColumnarBatch = nullptr;
+    classBlob = nullptr;
+    classClob = nullptr;
+    classSQLRecoverableException = nullptr;
+    classSQLNonTransientConnectionException = nullptr;
+    classSQLTransientConnectionException = nullptr;
+    classSQLTimeoutException = nullptr;
+    classUtilDate = nullptr;
     classArray = nullptr;
     classSQLException = nullptr;
     classServiceLoader = nullptr;

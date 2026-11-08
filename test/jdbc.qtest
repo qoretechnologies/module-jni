@@ -10,6 +10,7 @@
 %requires FsUtil
 
 %module-cmd(jni) import java.sql.Types
+%module-cmd(jni) import java.util.TimeZone
 
 %exec-class Main
 
@@ -33,6 +34,14 @@ public class Main inherits QUnit::Test {
         addTestCase("mssqlDescribeTest", \mssqlDescribeTest());
         addTestCase("integers keep their value and sign on every server", \integerBindTest());
         addTestCase("execRaw() executes the SQL as given, and its effects last for the session", \execRawTest());
+        addTestCase("Oracle date and time values and row ids are Qore values", \oracleDateTimeTest());
+        addTestCase("large objects are read as values", \lobTest());
+        addTestCase("Oracle's empty large objects are empty values", \oracleEmptyLobTest());
+        addTestCase("Oracle's TIMESTAMP WITH LOCAL TIME ZONE in the hour repeated at the end of DST",
+            \oracleLtzDstTest());
+        addTestCase("SQL Server's datetimeoffset, time and datetime2", \mssqlTemporalTest());
+        addTestCase("PostgreSQL's time, timetz and infinite timestamps", \pgsqlTemporalTest());
+        addTestCase("NUL characters in column values", \nulValueTest());
 
         # execute tests and set program return value
         set_return_value(main());
@@ -582,6 +591,363 @@ printf(\"imported\\n\");
         if (!found) {
             testSkip("no jdbc connection available");
         }
+    }
+
+    #! Oracle's driver returns its own classes for TIMESTAMP (oracle.sql.TIMESTAMP), TIMESTAMP WITH TIME ZONE
+    #! (TIMESTAMPTZ), TIMESTAMP WITH LOCAL TIME ZONE (TIMESTAMPLTZ) and ROWID (ROWID) from getObject(), which were
+    #! returned as Java objects and described as objects; they are read as dates and strings
+    private oracleDateTimeTest() {
+        *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_ORACLE");
+        if (!ds) {
+            testSkip("no jdbc connection available");
+        }
+        string table = sprintf("jdbc_dt_%d_%d", getpid(), now_us().getEpochSeconds());
+        ds.execRaw(sprintf("create table %s (id number(2), ts timestamp(6), tstz timestamp(6) with time zone, "
+            "tsltz timestamp(6) with local time zone, d date)", table));
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table " + table);
+            ds.commit();
+        }
+        ds.execRaw(sprintf("insert into %s values (1, timestamp '2026-03-04 05:06:07.123456', "
+            "timestamp '2026-03-04 05:06:07.123456 +02:00', timestamp '2026-03-04 05:06:07.123456 +02:00', "
+            "to_date('2026-03-04 05:06:07', 'YYYY-MM-DD HH24:MI:SS'))", table));
+        ds.execRaw(sprintf("insert into %s (id) values (2)", table));
+        ds.commit();
+
+        # a time zone is kept as the same point in time
+        date tz = 2026-03-04T05:06:07.123456+02:00;
+        string sql = sprintf("select ts, tstz, tsltz, d, rowid as rid from %s order by id", table);
+
+        hash<auto> h = ds.select(sql);
+        # the first row of the columns
+        checkDateTimeRow((map {$1.key: $1.value[0]}, h.pairIterator()), tz, "select");
+        list<hash<auto>> rows = ds.selectRows(sql);
+        assertEq(2, rows.size());
+        checkDateTimeRow(rows[0], tz, "selectRows");
+        # NULL values
+        assertEq({"ts": NULL, "tstz": NULL, "tsltz": NULL, "d": NULL}, rows[1] - "rid", "selectRows NULL");
+        assertEq(Type::String, rows[1].rid.type(), "selectRows NULL row id");
+        checkDateTimeRow(ds.selectRow(sql + " fetch first 1 rows only"), tz, "selectRow");
+        {
+            SQLStatement stmt(ds);
+            stmt.prepare(sql);
+            stmt.exec();
+            # the column types
+            hash<auto> desc = stmt.describe();
+            foreach string col in (("ts", "tstz", "tsltz", "d")) {
+                assertEq(NT_DATE, desc{col}.type, "describe " + col);
+            }
+            assertEq(NT_STRING, desc.rid.type, "describe rid");
+            assertTrue(stmt.next());
+            checkDateTimeRow(stmt.fetchRow(), tz, "SQLStatement");
+        }
+        if (hasColumnar(ds)) {
+            auto r = ds.selectColumnar(sql);
+            # a timestamp column holds the microseconds since the epoch, a list column dates
+            hash<auto> row = (map {$1: getColumn(r, $1)[0]}, ("ts", "tstz", "tsltz", "d", "rid"));
+            map row{$1} = row{$1}.typeCode() == NT_INT ? toDate(row{$1}) : row{$1}, ("ts", "tstz", "tsltz", "d");
+            checkDateTimeRow(row, tz, "selectColumnar");
+            # NULL values
+            assertEq(NULL, getColumn(r, "ts")[1] ?? NULL, "selectColumnar NULL");
+        }
+    }
+
+    #! a BLOB, CLOB or NCLOB was returned as a java.sql.Blob or java.sql.Clob object and described as an object; it is
+    #! read as binary or a string in chunks, and freed; other servers' large types are unchanged
+    private lobTest() {
+        # more than one chunk (the jdbc driver reads 65536 bytes or characters at a time)
+        binary big_bin = binary(strmul("0123456789abcdef", 12500)) + binary("x");
+        string big_str = strmul("abcdefghij", 15000) + "z";
+        # multibyte characters and characters outside the BMP (surrogate pairs in Java) across chunk boundaries
+        string big_nstr = strmul("ř€😀", 30000) + "ž";
+        int found = 0;
+        foreach hash<auto> i in ({
+                "QORE_DB_CONNSTR_JDBC_ORACLE": ("blob", "clob", "nclob", "empty_blob()", "empty_clob()"),
+                "QORE_DB_CONNSTR_JDBC_PGSQL": ("bytea", "text", "text", "''::bytea", "''"),
+                "QORE_DB_CONNSTR_JDBC_MSSQL": ("varbinary(max)", "varchar(max)", "nvarchar(max)", "0x", "''"),
+            }.pairIterator()) {
+            *Datasource ds = getConnection(i.key);
+            if (!ds) {
+                continue;
+            }
+            ++found;
+            list<string> types = i.value;
+            string label = ds.getDriverRealName();
+            string table = sprintf("jdbc_lob_%d_%d", getpid(), now_us().getEpochSeconds());
+            ds.execRaw(sprintf("create table %s (id int, b %s, c %s, nc %s)", table, types[0], types[1], types[2]));
+            ds.commit();
+            on_exit {
+                ds.rollback();
+                ds.execRaw("drop table " + table);
+                ds.commit();
+            }
+            ds.exec(sprintf("insert into %s (id) values (1)", table));
+            ds.execRaw(sprintf("insert into %s values (2, %s, %s, %s)", table, types[3], types[4], types[4]));
+            ds.exec(sprintf("insert into %s values (3, %%v, %%v, %%v)", table), big_bin, big_str, big_nstr);
+            ds.commit();
+
+            # Oracle: an empty large object is empty; PostgreSQL and SQL Server: an empty value
+            hash<auto> empty = {"id": 2, "b": binary(), "c": "", "nc": ""};
+            hash<auto> big = {"id": 3, "b": big_bin, "c": big_str, "nc": big_nstr};
+            string sql = sprintf("select id, b, c, nc from %s order by id", table);
+
+            list<hash<auto>> rows = ds.selectRows(sql);
+            assertEq(3, rows.size(), label);
+            assertEq({"id": 1, "b": NULL, "c": NULL, "nc": NULL}, rows[0], label + ": selectRows NULL");
+            checkLobRow(empty, rows[1], label + ": selectRows empty");
+            checkLobRow(big, rows[2], label + ": selectRows");
+
+            hash<auto> h = ds.select(sql);
+            checkLobRow(big, (map {$1.key: $1.value[2]}, h.pairIterator()), label + ": select");
+            checkLobRow(big, ds.selectRow(sprintf("select id, b, c, nc from %s where id = 3", table)),
+                label + ": selectRow");
+            {
+                SQLStatement stmt(ds);
+                stmt.prepare(sql);
+                stmt.exec();
+                hash<auto> desc = stmt.describe();
+                assertEq(NT_BINARY, desc.b.type, label + ": describe b");
+                assertEq(NT_STRING, desc.c.type, label + ": describe c");
+                assertEq(NT_STRING, desc.nc.type, label + ": describe nc");
+                list<hash<auto>> l = stmt.fetchRows();
+                assertEq(3, l.size(), label);
+                checkLobRow(big, l[2], label + ": SQLStatement");
+            }
+            if (hasColumnar(ds)) {
+                auto r = ds.selectColumnar(sql);
+                checkLobRow(big, (map {$1: asList(getColumn(r, $1))[2]}, ("id", "b", "c", "nc")),
+                    label + ": selectColumnar");
+                # the columns' types are those of describe() (a BLOB or CLOB column was an "auto" column)
+                hash<auto> types = map {$1.name: $1.type}, r.schema();
+                assertEq("binary", types.b, label + ": selectColumnar b");
+                assertEq("string", types.c, label + ": selectColumnar c");
+                assertEq("string", types.nc, label + ": selectColumnar nc");
+            }
+        }
+        if (!found) {
+            testSkip("no jdbc connection available");
+        }
+    }
+
+    private checkLobRow(hash<auto> expected, hash<auto> row, string label) {
+        assertEq(expected.id, int(row.id), label + ": id");
+        foreach string col in (("b", "c", "nc")) {
+            assertEq(expected{col}.type(), row{col}.type(), label + ": " + col + " type");
+            assertEq(expected{col}.size(), row{col}.size(), label + ": " + col + " size");
+            assertTrue(expected{col} == row{col}, label + ": " + col + " value");
+        }
+    }
+
+    #! a query of Oracle's empty_blob() raised ORA-22275 (invalid LOB locator): an empty large object is not read
+    private oracleEmptyLobTest() {
+        *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_ORACLE");
+        if (!ds) {
+            testSkip("no jdbc connection available");
+        }
+        on_exit ds.rollback();
+        string sql = "select empty_blob() as b, empty_clob() as c, to_nclob(empty_clob()) as nc from dual";
+        hash<auto> expected = {"b": binary(), "c": "", "nc": ""};
+        assertEq(expected, ds.selectRow(sql));
+        assertEq((expected,), ds.selectRows(sql));
+        SQLStatement stmt(ds);
+        on_exit stmt.close();
+        stmt.prepare(sql);
+        stmt.exec();
+        assertTrue(stmt.next());
+        assertEq(expected, stmt.fetchRow());
+    }
+
+    #! TIMESTAMP WITH LOCAL TIME ZONE was converted from its local time, which is ambiguous in the hour repeated when
+    #! daylight saving time ends: one of the two points in time was an hour off; TIMESTAMP (a local date and time)
+    #! keeps its wall clock; the time zones of Qore, of the JVM and of the session differ and have DST, so that
+    #! neither a UTC time zone nor equal time zones can hide a conversion
+    private oracleLtzDstTest() {
+        *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_ORACLE");
+        if (!ds) {
+            testSkip("no jdbc connection available");
+        }
+        java::util::TimeZone jvm_tz = java::util::TimeZone::getDefault();
+        on_exit {
+            java::util::TimeZone::setDefault(jvm_tz);
+            set_thread_tz();
+        }
+        java::util::TimeZone::setDefault(java::util::TimeZone::getTimeZone("Europe/Prague"));
+        set_thread_tz(new Qore::TimeZone("America/New_York"));
+        ds.execRaw("alter session set time_zone = 'Asia/Tokyo'");
+
+        string table = sprintf("jdbc_ltz_%d_%d", getpid(), now_us().getEpochSeconds());
+        ds.execRaw(sprintf("create table %s (id number(2), ltz timestamp(6) with local time zone, "
+            "tz timestamp(6) with time zone, ts timestamp(6))", table));
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table " + table);
+            ds.commit();
+        }
+        # 02:30 local time in Prague on 2026-10-25 is 00:30 UTC (CEST) and 01:30 UTC (CET)
+        list<date> utc = (2026-10-25T00:30:00.123456Z, 2026-10-25T01:30:00.123456Z, 2026-07-04T12:00:00Z,
+            2026-01-04T12:00:00Z);
+        foreach date d in (utc) {
+            ds.execRaw(sprintf("insert into %s values (%d, timestamp '%s UTC', timestamp '%s UTC', "
+                "timestamp '%s')", table, $#, d.format("YYYY-MM-DD HH:mm:SS.xx"), d.format("YYYY-MM-DD HH:mm:SS.xx"),
+                d.format("YYYY-MM-DD HH:mm:SS.xx")));
+        }
+        ds.commit();
+        list<hash<auto>> rows = ds.selectRows(sprintf("select ltz, tz, ts from %s order by id", table));
+        assertEq(utc.size(), rows.size());
+        foreach hash<auto> row in (rows) {
+            # points in time
+            assertEq(utc[$#].getEpochSeconds(), row.ltz.getEpochSeconds(), sprintf("ltz %d", $#));
+            assertEq(utc[$#].microseconds(), row.ltz.microseconds(), sprintf("ltz %d", $#));
+            assertEq(utc[$#].getEpochSeconds(), row.tz.getEpochSeconds(), sprintf("tz %d", $#));
+            # a local date and time: the wall clock as it was inserted (it was shifted by the difference between
+            # the time zones of Qore and of the JVM)
+            assertEq(utc[$#].format("YYYY-MM-DD HH:mm:SS.xx"), row.ts.format("YYYY-MM-DD HH:mm:SS.xx"),
+                sprintf("ts %d", $#));
+        }
+        if (hasColumnar(ds)) {
+            # a timestamp column holds the microseconds since the epoch, a list column dates
+            auto r = ds.selectColumnar(sprintf("select ltz, tz, ts from %s order by id", table));
+            foreach date d in (utc) {
+                int i = $#;
+                # a copy that takes values of any type (the map gives a hash of the type of its first value)
+                hash<auto> row = {} + (map {$1: getColumn(r, $1)[i]}, ("ltz", "tz", "ts"));
+                map row{$1} = row{$1}.typeCode() == NT_INT ? toDate(row{$1}) : row{$1}, ("ltz", "tz", "ts");
+                assertEq(d.getEpochSeconds(), row.ltz.getEpochSeconds(), sprintf("columnar ltz %d", i));
+                assertEq(d.getEpochSeconds(), row.tz.getEpochSeconds(), sprintf("columnar tz %d", i));
+                assertEq(d.format("YYYY-MM-DD HH:mm:SS.xx"), row.ts.format("YYYY-MM-DD HH:mm:SS.xx"),
+                    sprintf("columnar ts %d", i));
+            }
+        }
+    }
+
+    #! datetimeoffset keeps its offset, also in and out of daylight saving time; time(7) came back without its
+    #! fraction (java.sql.Time)
+    private mssqlTemporalTest() {
+        *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_MSSQL");
+        if (!ds) {
+            testSkip("no jdbc connection available");
+        }
+        string table = sprintf("jdbc_temporal_%d_%d", getpid(), now_us().getEpochSeconds());
+        ds.execRaw(sprintf("create table %s (id int, dto datetimeoffset(7), t time(7), dt2 datetime2(7))", table));
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table " + table);
+            ds.commit();
+        }
+        ds.execRaw(sprintf("insert into %s values (1, '2026-07-04 05:06:07.1234567 +02:00', '05:06:07.1234567', "
+            "'2026-07-04 05:06:07.1234567'), (2, '2026-01-04 05:06:07.1 -05:30', '23:59:59.9999999', "
+            "'2026-01-04 05:06:07'), (3, null, null, null)", table));
+        ds.commit();
+        string sql = sprintf("select dto, t, dt2 from %s order by id", table);
+        code check = sub (list<hash<auto>> rows, string label) {
+            assertEq(3, rows.size(), label);
+            assertEq(2026-07-04T05:06:07.123456+02:00, rows[0].dto, label);
+            assertEq("+02:00", rows[0].dto.format("Z"), label);
+            assertEq(2026-01-04T05:06:07.1-05:30, rows[1].dto, label);
+            assertEq("-05:30", rows[1].dto.format("Z"), label);
+            # the fraction of a time(7) value, to the microsecond
+            assertEq("05:06:07.123456", rows[0].t.format("HH:mm:SS.xx"), label);
+            assertEq("23:59:59.999999", rows[1].t.format("HH:mm:SS.xx"), label);
+            assertEq("2026-07-04 05:06:07.123456", rows[0].dt2.format("YYYY-MM-DD HH:mm:SS.xx"), label);
+            assertEq({"dto": NULL, "t": NULL, "dt2": NULL}, rows[2], label);
+        };
+        check(ds.selectRows(sql), "selectRows");
+        hash<auto> h = ds.select(sql);
+        check((map ("dto": h.dto[$1], "t": h.t[$1], "dt2": h.dt2[$1]), xrange(3)), "select");
+        SQLStatement stmt(ds);
+        on_exit stmt.close();
+        stmt.prepare(sql);
+        stmt.exec();
+        hash<auto> desc = stmt.describe();
+        map assertEq(NT_DATE, desc{$1}.type, "describe " + $1), ("dto", "t", "dt2");
+        check(stmt.fetchRows(), "SQLStatement");
+    }
+
+    #! time and timetz came back without their fraction (java.sql.Time), timetz without its offset, and 'infinity' as a
+    #! date in the year 292278994: it is the date that the pgsql driver gives, just after the largest date of
+    #! PostgreSQL (and '-infinity' the one just before the smallest), which no value of the database equals
+    private pgsqlTemporalTest() {
+        *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_PGSQL");
+        if (!ds) {
+            testSkip("no jdbc connection available");
+        }
+        on_exit ds.rollback();
+        hash<auto> row = ds.selectRow("select time '05:06:07.123456' as t, timetz '05:06:07.123456+02' as ttz, "
+            "timestamptz '2026-07-04 05:06:07.123456+02' as tstz, cast(null as timetz) as ttzn");
+        assertEq("05:06:07.123456", row.t.format("HH:mm:SS.xx"));
+        assertEq(2026-07-04T03:06:07.123456Z, row.tstz);
+        assertEq("05:06:07.123456", row.ttz.format("HH:mm:SS.xx"));
+        assertEq("+02:00", row.ttz.format("Z"));
+        assertEq(NULL, row.ttzn);
+
+        # the dates of the pgsql driver: the largest and the smallest number of microseconds since 2000-01-01
+        int pos_secs = 9223372036854 + 946684800;
+        int neg_secs = -9223372036854 + 946684800;
+        hash<auto> inf = ds.selectRow("select timestamptz 'infinity' as tstz, timestamptz '-infinity' as ntstz, "
+            "timestamp 'infinity' as ts, timestamp '-infinity' as nts, date 'infinity' as d, date '-infinity' as nd");
+        # with a time zone: points in time
+        assertEq(pos_secs, inf.tstz.getEpochSeconds());
+        assertEq(775807, inf.tstz.microseconds());
+        # -9223372036854775808 microseconds: 775808 microseconds before the second
+        assertEq(neg_secs - 1, inf.ntstz.getEpochSeconds());
+        assertEq(1000000 - 775808, inf.ntstz.microseconds());
+        # without one: the local time of those points in UTC
+        assertEq(gmtime(pos_secs).format("YYYY-MM-DD HH:mm:SS"), inf.ts.format("YYYY-MM-DD HH:mm:SS"));
+        assertEq(gmtime(neg_secs - 1).format("YYYY-MM-DD HH:mm:SS"), inf.nts.format("YYYY-MM-DD HH:mm:SS"));
+        # dates: the largest and the smallest number of days since 2000-01-01, as local dates
+        assertEq(gmtime((2147483647 + 10957) * 86400).format("YYYY-MM-DD HH:mm:SS"),
+            inf.d.format("YYYY-MM-DD HH:mm:SS"));
+        assertEq(gmtime((-2147483648 + 10957) * 86400).format("YYYY-MM-DD HH:mm:SS"),
+            inf.nd.format("YYYY-MM-DD HH:mm:SS"));
+    }
+
+    #! a NUL character of a column value is kept by select(), selectRows() and selectColumnar(), whose string columns
+    #! ended it there
+    private nulValueTest() {
+        int found = 0;
+        foreach hash<auto> i in ({
+                "QORE_DB_CONNSTR_JDBC_MSSQL": "select cast('a' + char(0) + 'b' as varchar(10)) as s",
+                "QORE_DB_CONNSTR_JDBC_ORACLE": "select 'a' || chr(0) || 'b' as s from dual",
+            }.pairIterator()) {
+            *Datasource ds = getConnection(i.key);
+            if (!ds) {
+                continue;
+            }
+            ++found;
+            on_exit ds.rollback();
+            string label = ds.getDriverRealName();
+            assertEq(<610062>, binary(ds.selectRow(i.value).s), label + ": selectRow");
+            assertEq(<610062>, binary(ds.select(i.value).s[0]), label + ": select");
+            if (hasColumnar(ds)) {
+                assertEq(<610062>, binary(asList(getColumn(ds.selectColumnar(i.value), "s"))[0]),
+                    label + ": selectColumnar");
+            }
+        }
+        if (!found) {
+            testSkip("no jdbc connection available");
+        }
+    }
+
+    # returns the local date of a number of microseconds since the epoch
+    private static date toDate(int us) {
+        return localtime(us / 1000000) + microseconds(us % 1000000);
+    }
+
+    private checkDateTimeRow(hash<auto> row, date tz, string label) {
+        # TIMESTAMP and DATE have no time zone: the values are local
+        assertEq(Type::Date, row.ts.type(), label + " ts");
+        assertEq("2026-03-04 05:06:07.123456", row.ts.format("YYYY-MM-DD HH:mm:SS.xx"), label + " ts");
+        assertEq(Type::Date, row.d.type(), label + " d");
+        assertEq("2026-03-04 05:06:07", row.d.format("YYYY-MM-DD HH:mm:SS"), label + " d");
+        # TIMESTAMP WITH (LOCAL) TIME ZONE: the same point in time
+        foreach string col in (("tstz", "tsltz")) {
+            assertEq(Type::Date, row{col}.type(), label + " " + col);
+            assertEq(tz.getEpochSeconds(), row{col}.getEpochSeconds(), label + " " + col);
+            assertEq(123456, row{col}.microseconds(), label + " " + col);
+        }
+        # an Oracle row id: 18 characters of its base 64 encoding
+        assertRegex("^[A-Za-z0-9+/]{18}$", row.rid ?? "", label + " rid");
     }
 
     #! asserts that execRaw() returns the same results as exec() for each SQL string, which must not change the data

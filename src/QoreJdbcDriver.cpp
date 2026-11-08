@@ -60,10 +60,12 @@ static int jdbc_open(Datasource* ds, ExceptionSink* xsink) {
 static int jdbc_close(Datasource* ds) {
     std::unique_ptr<QoreJdbcConnection> conn(ds->getPrivateData<QoreJdbcConnection>());
     ExceptionSink xsink;
+    // the connection is closed on a cancelled thread too
+    QoreCancelDeferralHelper cancel_deferral;
     try {
         Env env;
         conn->close(env);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(&xsink);
     }
     int rc = xsink ? -1 : 0;
@@ -313,10 +315,12 @@ static int jdbc_stmt_close(SQLStatement* stmt, ExceptionSink* xsink) {
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
+    // the statement is closed on a cancelled thread too
+    QoreCancelDeferralHelper cancel_deferral;
     try {
         Env env;
         ps->close(env, xsink);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     delete ps;
@@ -389,6 +393,8 @@ void setup_jdbc_driver() {
         "'string-numbers' and 'optimal-numbers'");
     methods.registerOption(JDBC_OPT_CLASSPATH, "set the classpath before loading the driver", stringTypeInfo);
     methods.registerOption(JDBC_OPT_URL, "override the database string with the jdbc driver URL", stringTypeInfo);
+    methods.registerOption(JDBC_OPT_LOB_MAX_SIZE, "the most bytes or characters read from a large object whose "
+        "length the driver does not give (default: 2 GiB); a larger one raises JDBC-LOB-SIZE-ERROR", bigIntTypeInfo);
 
     DBID_JDBC = DBI.registerDriver("jdbc", methods, jdbc_caps);
 }

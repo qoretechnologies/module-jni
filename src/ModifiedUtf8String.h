@@ -36,7 +36,10 @@
 namespace jni {
 
 /**
- * \brief A helper class for converting strings to JNI's "modified utf-8" encoding.
+ * \brief A helper class for converting a string to UTF-8 for Java.
+ *
+ * The string is converted to UTF-8 only: Env::newString() makes a Java string of it (strictly, from UTF-16, for any
+ * string that is not ASCII), and a class name for JNI's FindClass() is ASCII in practice.
  */
 class ModifiedUtf8String {
 
@@ -51,7 +54,6 @@ public:
    explicit ModifiedUtf8String(const QoreString& src) {
       ExceptionSink xsink;
       helper.set(&src, QCS_UTF8, &xsink);
-      //XXX check and convert special characters
       if (xsink) {
          throw XsinkException(xsink);
       }
@@ -60,20 +62,24 @@ public:
    explicit ModifiedUtf8String(const QoreString* src) {
       ExceptionSink xsink;
       helper.set(src, QCS_UTF8, &xsink);
-      //XXX check and convert special characters
       if (xsink) {
          throw XsinkException(xsink);
       }
    }
 
    /**
-    * \brief Returns the string converted to modified utf-8 encoding.
+    * \brief Returns the string converted to UTF-8.
     *
     * The returned pointer remains valid until this instance is destroyed.
-    * \return the string converted to modified utf-8 encoding
+    * \return the string converted to UTF-8
     */
    const char* c_str() {
       return helper->getBuffer();
+   }
+
+   //! Returns the length of the string in bytes; it may have NUL characters
+   size_t size() {
+      return helper->size();
    }
 
 private:

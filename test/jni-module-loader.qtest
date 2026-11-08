@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+%module-cmd(jni) import java.lang.Class
+%exec-class JniModuleLoaderTest
+
+#! A Qore exception in the native method that gives the class loader of a user module (getModuleLoader0()) is a
+#! Java RuntimeException with its error and description; it left the JNI frame as a C++ exception, or a generic
+#! message lost its description
+class JniModuleLoaderTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI module loader errors", "1.0") {
+        addTestCase("a Qore exception of getModuleLoader0() is a Java exception", \moduleLoaderError());
+        set_return_value(main());
+    }
+
+    # calls the private static native method QoreURLClassLoader.getModuleLoader0(String)
+    private static auto getModuleLoader(string mod) {
+        Class cls = Class::forName("org.qore.jni.QoreURLClassLoader");
+        auto m = cls.getDeclaredMethod("getModuleLoader0", Class::forName("java.lang.String"));
+        m.setAccessible(True);
+        return m.invoke(NOTHING, mod);
+    }
+
+    private moduleLoaderError() {
+        # a test hook of debug builds raises a Qore exception for the named module
+        setenv("QORE_JNI_TEST_MODULE_LOADER_FAIL", "QtestLoaderFail");
+        on_exit unsetenv("QORE_JNI_TEST_MODULE_LOADER_FAIL");
+        try {
+            getModuleLoader("QtestLoaderFail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JNI-ERROR", ex.err);
+            assertRegex("java.lang.RuntimeException: getModuleLoader\\(\\) failed: JNI-TEST-ERROR: injected module "
+                "loader failure for module 'QtestLoaderFail'", ex.desc);
+            # the process survives: an unknown module has no loader
+            assertNothing(getModuleLoader("QtestNoSuchModule"));
+            return;
+        }
+        # a release build has no test hook: an unknown module has no loader
+        testSkip("the module has no test hook (not a debug build)");
+    }
+}

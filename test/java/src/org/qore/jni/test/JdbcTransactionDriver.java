@@ -28,6 +28,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.function.Supplier;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.time.Instant;
 import java.util.logging.Logger;
 
 /** Instrumented JDBC driver for transaction-boundary and failure-path tests. */
@@ -192,10 +197,25 @@ public final class JdbcTransactionDriver implements Driver {
         final int scale;
         final int nullable;
         final String className;
+        // the value, or a Supplier of a new value for each row (ex: a large object, which is freed)
         final Object value;
+        // getObject(int, Class) raises SQLFeatureNotSupportedException for the column (an older driver)
+        final boolean noGetObjectAs;
+        // the values of getString(int) and getTimestamp(int)
+        final String stringValue;
+        final Timestamp timestampValue;
+        // getObject(int, Class) raises this error for the column (ex: a lost connection)
+        SQLException getObjectAsError;
+        // getObject(int, Class) raises an IllegalArgumentException for the column
+        boolean getObjectAsRuntimeError;
 
         Column(String label, int type, String typeName, int precision, int scale, int nullable, String className,
                 Object value) {
+            this(label, type, typeName, precision, scale, nullable, className, value, false, null, null);
+        }
+
+        Column(String label, int type, String typeName, int precision, int scale, int nullable, String className,
+                Object value, boolean noGetObjectAs, String stringValue, Timestamp timestampValue) {
             this.label = label;
             this.type = type;
             this.typeName = typeName;
@@ -204,7 +224,161 @@ public final class JdbcTransactionDriver implements Driver {
             this.nullable = nullable;
             this.className = className;
             this.value = value;
+            this.noGetObjectAs = noGetObjectAs;
+            this.stringValue = stringValue;
+            this.timestampValue = timestampValue;
         }
+    }
+
+    // the latches of the cancellation of a large object read: the reader enters the second chunk, and waits there
+    // until it is released
+    private static CountDownLatch lobEntered = new CountDownLatch(1);
+    private static CountDownLatch lobRelease = new CountDownLatch(1);
+
+    /** Resets the latches of the large object that blocks in its second chunk ("typed=lobcancel") */
+    public static void resetLobLatches() {
+        lobEntered = new CountDownLatch(1);
+        lobRelease = new CountDownLatch(1);
+    }
+
+    /** Waits until a reader reads the second chunk of the blocking large object */
+    public static void awaitLobEntered() throws InterruptedException {
+        lobEntered.await();
+    }
+
+    /** Lets the reader of the blocking large object continue */
+    public static void releaseLob() {
+        lobRelease.countDown();
+    }
+
+    /** Waits in this Java call until releaseLob(), after making awaitLobEntered() return: the caller is in the call
+        when it is cancelled */
+    public static void blockUntilReleased() throws InterruptedException {
+        lobEntered.countDown();
+        lobRelease.await();
+    }
+
+    // records an event without the class monitor, which a typed result set holds while it gives a value
+    private static void lobEvent(String operation) {
+        synchronized (JdbcTransactionDriver.class) {
+            events.add(operation);
+        }
+    }
+
+    /** A large object of the given bytes or characters (Blob for a byte[], Clob for a String); {@code freeError} is
+        thrown by free(); {@code readError} by any read; with {@code block}, the read of the second chunk waits for
+        releaseLob() */
+    private static Object lob(String name, Object data, Throwable freeError, SQLException readError, boolean block) {
+        return lob(name, data, freeError, readError, block, null);
+    }
+
+    /** A large object as above whose length() returns {@code length} instead of its length (null: its length) */
+    private static Object lob(String name, Object data, Throwable freeError, SQLException readError, boolean block,
+            Long length) {
+        boolean blob = data instanceof byte[];
+        return Proxy.newProxyInstance(JdbcTransactionDriver.class.getClassLoader(),
+            new Class<?>[] {blob ? Blob.class : Clob.class}, (proxy, method, args) -> {
+                switch (method.getName()) {
+                    case "length":
+                        if (length != null) {
+                            return length;
+                        }
+                        return blob ? (long) ((byte[]) data).length : (long) ((String) data).length();
+                    case "getBytes":
+                    case "getSubString": {
+                        if (readError != null) {
+                            throw readError;
+                        }
+                        int pos = (int) (long) (Long) args[0] - 1;
+                        int n = (Integer) args[1];
+                        lobEvent("lob.read:" + name + ":" + (pos + 1));
+                        if (block && pos > 0) {
+                            lobEntered.countDown();
+                            lobRelease.await();
+                        }
+                        if (blob) {
+                            byte[] b = (byte[]) data;
+                            return java.util.Arrays.copyOfRange(b, Math.min(b.length, pos),
+                                Math.min(b.length, pos + n));
+                        }
+                        String str = (String) data;
+                        return str.substring(Math.min(str.length(), pos), Math.min(str.length(), pos + n));
+                    }
+                    case "free":
+                        lobEvent("lob.free:" + name);
+                        if (freeError != null) {
+                            throw freeError;
+                        }
+                        return null;
+                    case "hashCode":
+                    case "equals":
+                    case "toString": return objectMethod(proxy, method, args, "test large object " + name);
+                    default: throw new SQLFeatureNotSupportedException(method.getName());
+                }
+            });
+    }
+
+    // the bytes of a BLOB of an unknown length: more than two chunks
+    private static byte[] unknownBytes() {
+        byte[] b = new byte[150000];
+        for (int i = 0; i < b.length; ++i) {
+            b[i] = (byte) (i % 251);
+        }
+        return b;
+    }
+
+    // a CLOB of a surrogate pair whose getSubString() gives one character at a time
+    private static Object oneUnitClob() {
+        String data = new StringBuilder().appendCodePoint(0x1f600).toString();
+        return Proxy.newProxyInstance(JdbcTransactionDriver.class.getClassLoader(), new Class<?>[] {Clob.class},
+            (proxy, method, args) -> {
+                switch (method.getName()) {
+                    case "length": return (long) data.length();
+                    case "getSubString": {
+                        int pos = (int) (long) (Long) args[0] - 1;
+                        return data.substring(pos, pos + 1);
+                    }
+                    case "free": return null;
+                    case "hashCode":
+                    case "equals":
+                    case "toString": return objectMethod(proxy, method, args, "test one-unit CLOB");
+                    default: throw new SQLFeatureNotSupportedException(method.getName());
+                }
+            });
+    }
+
+    // an SQLException whose cause's cause is itself
+    private static SQLException cyclicError() {
+        SQLException a = new SQLException("cycle a", "22005");
+        SQLException b = new SQLException("cycle b", "22005");
+        a.initCause(b);
+        b.initCause(a);
+        return a;
+    }
+
+    // a TIME column whose getObject(int, LocalTime.class) raises the given error (null: an IllegalArgumentException,
+    // which is not an SQLException)
+    private static Column asFailColumn(String label, SQLException error) {
+        Column col = new Column(label, Types.TIME, "time", 8, 0, ResultSetMetaData.columnNullable, "java.sql.Time",
+            java.sql.Time.valueOf("10:15:30"));
+        col.getObjectAsError = error;
+        col.getObjectAsRuntimeError = error == null;
+        return col;
+    }
+
+    // a string of the given length whose character at index 65535 (the last of the first 64 KiB chunk) is the high
+    // surrogate of a surrogate pair
+    private static String splitSurrogates() {
+        StringBuilder sb = new StringBuilder();
+        while (sb.length() < 65535) {
+            sb.append('a');
+        }
+        sb.appendCodePoint(0x1f600);
+        while (sb.length() < 140000) {
+            sb.append("ř€");
+            sb.appendCodePoint(0x1f600);
+        }
+        return sb.toString();
     }
 
     /** The typed result sets, by name ("typed=NAME" in a scripted statement) */
@@ -249,6 +423,92 @@ public final class JdbcTransactionDriver implements Driver {
             new Column("Unreported", Types.TIMESTAMP_WITH_TIMEZONE, "timestamp with time zone", 35, 6,
                 ResultSetMetaData.columnNullable, null,
                 OffsetDateTime.of(2026, 10, 21, 10, 15, 30, 0, ZoneOffset.UTC)),
+        });
+        // large objects: a driver that returns a byte[] or a String for a LOB column (SQLite), a free() that fails
+        // (jTDS: AbstractMethodError), an empty large object that cannot be read (Oracle's empty_blob():
+        // ORA-22275), and a CLOB with a surrogate pair across the first chunk
+        typedResultSets.put("lobs", new Column[] {
+            new Column("BlobBytes", Types.BLOB, "blob", 0, 0, ResultSetMetaData.columnNullable, "[B",
+                new byte[] {1, 2, 3}),
+            new Column("ClobString", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.lang.String",
+                "abc"),
+            new Column("FreeFails", Types.BLOB, "blob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Blob",
+                (Supplier<Object>) () -> lob("FreeFails", new byte[] {4, 5}, new AbstractMethodError("free"), null,
+                    false)),
+            new Column("ClobFreeFails", Types.NCLOB, "nclob", 0, 0, ResultSetMetaData.columnNullable,
+                "java.sql.NClob", (Supplier<Object>) () -> lob("ClobFreeFails", "x😀", new RuntimeException("free"),
+                    null, false)),
+            new Column("Empty", Types.BLOB, "blob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Blob",
+                (Supplier<Object>) () -> lob("Empty", new byte[0], null, new SQLException("ORA-22275: invalid LOB "
+                    + "locator specified"), false)),
+            new Column("EmptyClob", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Clob",
+                (Supplier<Object>) () -> lob("EmptyClob", "", null, new SQLException("ORA-22275: invalid LOB "
+                    + "locator specified"), false)),
+            new Column("Split", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Clob",
+                (Supplier<Object>) () -> lob("Split", splitSurrogates(), null, null, false)),
+        });
+        // a large object whose read fails, and whose free() fails too: the read error is raised
+        typedResultSets.put("lobfail", new Column[] {
+            new Column("ReadFails", Types.BLOB, "blob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Blob",
+                (Supplier<Object>) () -> lob("ReadFails", new byte[] {1}, new AbstractMethodError("free"),
+                    new SQLException("injected read error"), false)),
+        });
+        // large objects of an unknown length (length() < 0), which are read until a chunk is shorter than requested
+        typedResultSets.put("lobunknown", new Column[] {
+            new Column("UnknownBlob", Types.BLOB, "blob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Blob",
+                (Supplier<Object>) () -> lob("UnknownBlob", unknownBytes(), null, null, false, -1L)),
+            new Column("UnknownClob", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Clob",
+                (Supplier<Object>) () -> lob("UnknownClob", splitSurrogates(), null, null, false, -1L)),
+            // a chunk of one character, the high surrogate of a pair: the length is 2, read as 1 + 1
+            new Column("OneUnit", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Clob",
+                (Supplier<Object>) () -> oneUnitClob()),
+        });
+        // a CLOB whose second chunk waits for releaseLob(), to cancel the reader
+        typedResultSets.put("lobcancelclob", new Column[] {
+            new Column("BlockingClob", Types.CLOB, "clob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Clob",
+                (Supplier<Object>) () -> lob("BlockingClob", "x".repeat(140000), null, null, true)),
+        });
+        // getObject(int, LocalTime.class) raises an SQL error that is not an unsupported conversion: it is raised
+        typedResultSets.put("asfail", new Column[] {
+            asFailColumn("T", new SQLException("injected connection reset", "08006")),
+        });
+        // getObject(int, LocalTime.class) raises other errors: a type mismatch (Derby), a message in another language;
+        // the column is read with getObject(int)
+        typedResultSets.put("asfallback", new Column[] {
+            asFailColumn("Mismatch", new SQLException("An attempt was made to get a data value of type "
+                + "'java.time.LocalTime' from a data value of type 'TIME'.", "22005")),
+            asFailColumn("Localized", new SQLException("Type de colonne non valide", "99999")),
+            asFailColumn("Runtime", null),
+            // a cycle of causes, none of them a connection error
+            asFailColumn("Cycle", cyclicError()),
+        });
+        // a connection error wrapped by a driver or a pool's proxy: it is raised
+        typedResultSets.put("aswrapped", new Column[] {
+            asFailColumn("Wrapped", new SQLException("proxy failure", "HY000",
+                new RuntimeException("wrapper", new SQLException("injected connection reset", "08006")))),
+        });
+        // a large object whose second chunk waits for releaseLob(), to cancel the reader
+        typedResultSets.put("lobcancel", new Column[] {
+            new Column("Blocking", Types.BLOB, "blob", 0, 0, ResultSetMetaData.columnNullable, "java.sql.Blob",
+                (Supplier<Object>) () -> lob("Blocking", new byte[140000], null, null, true)),
+        });
+        // Oracle's TIMESTAMP WITH TIME ZONE with a driver without getObject(int, OffsetDateTime.class): the string
+        // of the value, with an offset or with a time zone region
+        typedResultSets.put("oldtstz", new Column[] {
+            new Column("Tstz", -101, "TIMESTAMP WITH TIME ZONE", 35, 6, ResultSetMetaData.columnNullable,
+                "oracle.sql.TIMESTAMPTZ", "unexpected getObject()", true, "2026-03-04 05:06:07.123456 +2:00",
+                null),
+            new Column("TstzNegative", -101, "TIMESTAMP WITH TIME ZONE", 35, 6, ResultSetMetaData.columnNullable,
+                "oracle.sql.TIMESTAMPTZ", "unexpected getObject()", true, "2026-03-04 05:06:07 -5:30", null),
+            new Column("TstzRegion", -101, "TIMESTAMP WITH TIME ZONE", 35, 6, ResultSetMetaData.columnNullable,
+                "oracle.sql.TIMESTAMPTZ", "unexpected getObject()", true,
+                "2026-03-04 05:06:07.123456 Europe/Prague",
+                Timestamp.from(Instant.parse("2026-03-04T04:06:07.123456Z"))),
+            // Oracle's TIMESTAMP with a driver without getObject(int, LocalDateTime.class): getObject() gives
+            // Oracle's own class, getTimestamp() a java.sql.Timestamp
+            new Column("Ts", Types.TIMESTAMP, "TIMESTAMP", 29, 6, ResultSetMetaData.columnNullable,
+                "oracle.sql.TIMESTAMP", "unexpected getObject()", true, null,
+                Timestamp.valueOf("2026-07-04 12:00:00.123456")),
         });
         // duplicate column labels, in another case than the first
         typedResultSets.put("duplicates", new Column[] {
@@ -305,11 +565,32 @@ public final class JdbcTransactionDriver implements Driver {
                                 ++row[0];
                             }
                             return row[0] == 1;
-                        case "getObject":
+                        case "getObject": {
                             if (closed[0] || row[0] != 1) {
                                 throw new SQLException("no current row");
                             }
-                            return columns[(Integer) args[0] - 1].value;
+                            Column col = columns[(Integer) args[0] - 1];
+                            if (args.length == 2 && col.getObjectAsError != null) {
+                                throw col.getObjectAsError;
+                            }
+                            if (args.length == 2 && col.getObjectAsRuntimeError) {
+                                throw new IllegalArgumentException("unsupported class: " + args[1]);
+                            }
+                            if (args.length == 2 && col.noGetObjectAs) {
+                                throw new SQLFeatureNotSupportedException("getObject(int, Class)");
+                            }
+                            return col.value instanceof Supplier ? ((Supplier<?>) col.value).get() : col.value;
+                        }
+                        case "getString":
+                            if (closed[0] || row[0] != 1) {
+                                throw new SQLException("no current row");
+                            }
+                            return columns[(Integer) args[0] - 1].stringValue;
+                        case "getTimestamp":
+                            if (closed[0] || row[0] != 1) {
+                                throw new SQLException("no current row");
+                            }
+                            return columns[(Integer) args[0] - 1].timestampValue;
                         case "wasNull": return false;
                         case "getMetaData": return metadata;
                         case "close": closed[0] = true; return null;

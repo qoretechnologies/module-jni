@@ -31,7 +31,8 @@ namespace jni {
 static jstring jni_string_to_jstring(const QoreString& qstr) {
     ModifiedUtf8String str(qstr);
     Env env;
-    return env.newString(str.c_str()).release();
+    // the length is given: the string may have NUL characters
+    return env.newString(str.c_str(), str.size()).release();
 }
 
 static jobject jni_date_to_jobject(const DateTimeNode& qdate) {

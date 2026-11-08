@@ -469,6 +469,8 @@ public:
     DLLLOCAL static jmethodID methodResultSetGetObject;                           // Object getObject(int)
     DLLLOCAL static jmethodID methodResultSetGetShort;                            // short getShort(int)
     DLLLOCAL static jmethodID methodResultSetGetString;                           // String getString(int)
+    DLLLOCAL static jmethodID methodResultSetGetTimestamp;                        // Timestamp getTimestamp(int)
+    DLLLOCAL static jmethodID methodResultSetGetObjectAs;                         // Object getObject(int, Class)
     DLLLOCAL static jmethodID methodResultSetNext;                                // boolean next()
     DLLLOCAL static jmethodID methodResultSetWasNull;                             // boolean wasNull()
     DLLLOCAL static jmethodID methodResultSetGetMetaData;                         // ResultSetMetaData getMetaData()
@@ -489,6 +491,23 @@ public:
     DLLLOCAL static jfieldID fieldJdbcColumnarBatchData;                          // Object[] data
     DLLLOCAL static jfieldID fieldJdbcColumnarBatchValidity;                      // byte[][] validity
     DLLLOCAL static jfieldID fieldJdbcColumnarBatchNullCounts;                    // long[] nullCounts
+
+    DLLLOCAL static GlobalReference<jclass> classBlob;                            // java.sql.Blob
+    DLLLOCAL static jmethodID methodBlobLength;                                   // long length()
+    DLLLOCAL static jmethodID methodBlobGetBytes;                                 // byte[] getBytes(long, int)
+    DLLLOCAL static jmethodID methodBlobFree;                                     // void free()
+    DLLLOCAL static GlobalReference<jclass> classClob;                            // java.sql.Clob
+    DLLLOCAL static jmethodID methodClobLength;                                   // long length()
+    DLLLOCAL static jmethodID methodClobGetSubString;                             // String getSubString(long, int)
+    DLLLOCAL static jmethodID methodClobFree;                                     // void free()
+    DLLLOCAL static GlobalReference<jclass> classSQLRecoverableException;          // java.sql.SQLRecoverableException
+    DLLLOCAL static GlobalReference<jclass> classSQLNonTransientConnectionException; // java.sql.SQLNonTransientConnectionException
+    DLLLOCAL static GlobalReference<jclass> classSQLTransientConnectionException; // java.sql.SQLTransientConnectionException
+    DLLLOCAL static GlobalReference<jclass> classSQLTimeoutException;             // java.sql.SQLTimeoutException
+    DLLLOCAL static jmethodID methodSQLExceptionGetSQLState;                      // String getSQLState()
+    DLLLOCAL static GlobalReference<jclass> classUtilDate;                        // java.util.Date
+    DLLLOCAL static jmethodID methodUtilDateGetTime;                              // long getTime()
+    DLLLOCAL static jmethodID methodTimestampGetNanos;                            // int getNanos()
 
     DLLLOCAL static GlobalReference<jclass> classArray;                           // java.sql.Array
     DLLLOCAL static jmethodID methodArrayGetArray;                                // Object getArray()
@@ -526,6 +545,10 @@ public:
     DLLLOCAL static int typeTinyInt;                // java.sql.Type.TINYINT value
     DLLLOCAL static int typeVarbinary;              // java.sql.Type.VARBINARY value
     DLLLOCAL static int typeVarchar;                // java.sql.Type.VARCHAR value
+    DLLLOCAL static int typeRowId;                  // java.sql.Type.ROWID value
+    DLLLOCAL static int typeBlob;                   // java.sql.Type.BLOB value
+    DLLLOCAL static int typeClob;                   // java.sql.Type.CLOB value
+    DLLLOCAL static int typeNClob;                  // java.sql.Type.NCLOB value
 
     DLLLOCAL static GlobalReference<jstring> javaQoreClassField;
     DLLLOCAL static GlobalReference<jstring> javaQoreClassPgmIdField;

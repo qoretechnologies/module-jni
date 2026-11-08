@@ -34,6 +34,11 @@
 #include "Jvm.h"
 #include "LocalReference.h"
 
+#include <cstdint>
+#include <cstring>
+#include <string>
+#include <vector>
+
 namespace jni {
 
 /**
@@ -1024,13 +1029,65 @@ public:
         return ret;
     }
 
-    DLLLOCAL LocalReference<jstring> newString(const char* utf8) {
-        jstring s = env->NewStringUTF(utf8);
+    //! Creates a Java string from a UTF-8 string
+    /** JNI's NewStringUTF() takes "modified" UTF-8, in which a character outside the Basic Multilingual Plane is a
+        UTF-16 surrogate pair of two 3-byte sequences and NUL is the two bytes C0 80; only an ASCII string is the same
+        in both encodings and is created with NewStringUTF().  Any other string is decoded strictly to UTF-16: an
+        invalid byte, a truncated or overlong sequence, an encoded surrogate (CESU-8) and a value beyond U+10FFFF
+        each become U+FFFD.
+
+        @param utf8 the string in UTF-8; it must have a NUL at \a len (a Qore string's buffer has one), which the
+        ASCII fast path (NewStringUTF()) needs
+        @param len the length of the string in bytes; it may have NUL characters
+    */
+    DLLLOCAL LocalReference<jstring> newString(const char* utf8, size_t len) {
+        assert(!utf8[len]);
+        jstring s;
+        if (isAscii(utf8, len)) {
+            s = env->NewStringUTF(utf8);
+        } else {
+            std::vector<jchar> utf16;
+            decodeUtf8(utf8, len, utf16);
+            s = env->NewString(utf16.data(), static_cast<jsize>(utf16.size()));
+        }
         if (s == nullptr) {
             throw JavaException();
         }
         return s;
     }
+
+    //! Creates a Java string from a NUL-terminated UTF-8 string; see newString(const char*, size_t)
+    DLLLOCAL LocalReference<jstring> newString(const char* utf8) {
+        return newString(utf8, strlen(utf8));
+    }
+
+    //! Returns true if a string has only ASCII characters other than NUL
+    DLLLOCAL static bool isAscii(const char* str, size_t len) {
+        for (size_t i = 0; i < len; ++i) {
+            unsigned char c = static_cast<unsigned char>(str[i]);
+            if (!c || c >= 0x80) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    //! Decodes UTF-8 to UTF-16 strictly: each invalid sequence becomes U+FFFD
+    DLLLOCAL static void decodeUtf8(const char* utf8, size_t len, std::vector<jchar>& out);
+
+    //! Appends UTF-16 to a UTF-8 string: a surrogate pair is one character, an unpaired surrogate is U+FFFD
+    DLLLOCAL static void appendUtf16(std::string& out, const jchar* utf16, size_t len);
+
+    //! Converts the modified UTF-8 of JNI to standard UTF-8 if it differs
+    /** A surrogate pair becomes the 4-byte sequence of its character, an unpaired surrogate U+FFFD, and the
+        two bytes C0 80 a NUL character
+
+        @param mutf8 a string in modified UTF-8, as GetStringUTFChars() returns it
+        @param out the standard UTF-8 string, if a conversion was needed
+
+        @return true if the string was converted to \a out, false if it is standard UTF-8 as it is
+    */
+    DLLLOCAL static bool convertModifiedUtf8(const char* mutf8, std::string& out);
 
     DLLLOCAL void registerNatives(jclass cls, const JNINativeMethod *methods, jint count) {
         if (env->RegisterNatives(cls, methods, count) != 0) {
@@ -1112,6 +1169,24 @@ public:
 
     DLLLOCAL jsize getArrayLength(jarray array) {
         return env->GetArrayLength(array);
+    }
+
+    DLLLOCAL void getByteArrayRegion(jbyteArray array, jsize start, jsize len, jbyte* buf) {
+        env->GetByteArrayRegion(array, start, len, buf);
+        if (env->ExceptionCheck()) {
+            throw JavaException();
+        }
+    }
+
+    DLLLOCAL jsize getStringLength(jstring str) {
+        return env->GetStringLength(str);
+    }
+
+    DLLLOCAL void getStringRegion(jstring str, jsize start, jsize len, jchar* buf) {
+        env->GetStringRegion(str, start, len, buf);
+        if (env->ExceptionCheck()) {
+            throw JavaException();
+        }
     }
 
     DLLLOCAL jboolean getBooleanArrayElement(jbooleanArray array, jsize index) {
@@ -1289,6 +1364,15 @@ public:
         return id;
     }
 
+    //! Returns a new local reference to the object
+    DLLLOCAL jobject newLocalRef(jobject obj) {
+        jobject rv = env->NewLocalRef(obj);
+        if (obj && !rv) {
+            throw JavaException();
+        }
+        return rv;
+    }
+
     DLLLOCAL bool isSameObject(jobject obj1, jobject obj2) {
         return env->IsSameObject(obj1, obj2) == JNI_TRUE;
     }
@@ -1337,6 +1421,68 @@ public:
         return c;
     }
 
+    //! A string from GetStringUTFChars() (modified UTF-8) in standard UTF-8, for as long as the object lives
+    /** For the code that calls GetStringUTFChars() itself; see convertModifiedUtf8()
+    */
+    class ModifiedUtf8 {
+    public:
+        DLLLOCAL explicit ModifiedUtf8(const char* mutf8) {
+            if (Env::convertModifiedUtf8(mutf8, converted)) {
+                str = converted.c_str();
+                len = converted.size();
+            } else {
+                str = mutf8;
+                len = strlen(mutf8);
+            }
+        }
+
+        ModifiedUtf8(const ModifiedUtf8&) = delete;
+        ModifiedUtf8& operator=(const ModifiedUtf8&) = delete;
+
+        DLLLOCAL const char* c_str() const {
+            return str;
+        }
+
+        //! the length in bytes; the string may have NUL characters
+        DLLLOCAL size_t size() const {
+            return len;
+        }
+
+    private:
+        //! the converted string, which str may point to
+        std::string converted;
+        const char* str;
+        size_t len;
+    };
+
+    //! Holds the characters of a Java string from GetStringUTFChars() and releases them, without C++ exceptions
+    /** For the code that must not use the Env wrapper; the characters are modified UTF-8 (see ModifiedUtf8)
+    */
+    class JniUtfChars {
+    public:
+        DLLLOCAL JniUtfChars(JNIEnv* env, jstring str) : env(env), str(str),
+                chars(str ? env->GetStringUTFChars(str, nullptr) : nullptr) {
+        }
+
+        JniUtfChars(const JniUtfChars&) = delete;
+        JniUtfChars& operator=(const JniUtfChars&) = delete;
+
+        DLLLOCAL ~JniUtfChars() {
+            if (chars) {
+                env->ReleaseStringUTFChars(str, chars);
+            }
+        }
+
+        DLLLOCAL const char* get() const {
+            return chars;
+        }
+
+    private:
+        JNIEnv* env;
+        jstring str;
+        const char* chars;
+    };
+
     class GetStringUtfChars {
     public:
         //! Holds an independent local reference while the UTF character buffer is active.
@@ -1371,26 +1517,48 @@ public:
             if (!str) {
                 return -1;
             }
-            chars = env.env->GetStringUTFChars(str, nullptr);
-            if (!chars) {
+            jchars = env.env->GetStringUTFChars(str, nullptr);
+            if (!jchars) {
                 env.env->DeleteLocalRef(str);
                 str = nullptr;
                 return -1;
+            }
+            // the modified UTF-8 of a character outside the Basic Multilingual Plane or of NUL is converted to UTF-8;
+            // the buffer is released if the conversion fails
+            try {
+                if (Env::convertModifiedUtf8(jchars, converted)) {
+                    chars = converted.c_str();
+                    len = converted.size();
+                } else {
+                    chars = jchars;
+                    len = strlen(jchars);
+                }
+            } catch (...) {
+                discard();
+                throw;
             }
             return 0;
         }
 
         DLLLOCAL void discard() {
             if (str) {
-                env.env->ReleaseStringUTFChars(str, chars);
+                env.env->ReleaseStringUTFChars(str, jchars);
                 env.env->DeleteLocalRef(str);
                 str = nullptr;
-                chars = nullptr;
+                jchars = nullptr;
             }
+            chars = nullptr;
+            len = 0;
+            converted.clear();
         }
 
         DLLLOCAL const char* c_str() const {
             return chars ? chars : "";
+        }
+
+        //! The length of the string in bytes; it may have NUL characters
+        DLLLOCAL size_t size() const {
+            return chars ? len : 0;
         }
 
         DLLLOCAL char operator[](int i) const {
@@ -1417,13 +1585,21 @@ public:
         DLLLOCAL GetStringUtfChars& operator=(const char* new_chars) {
             discard();
             chars = new_chars;
+            len = new_chars ? strlen(new_chars) : 0;
             return *this;
         }
 
     private:
         Env& env;
         jstring str;
+        //! the string as the JVM gives it (modified UTF-8), released with the string
+        const char* jchars = nullptr;
+        //! the string in standard UTF-8: jchars, converted, or a string assigned with operator=()
         const char* chars;
+        //! the length of chars in bytes
+        size_t len = 0;
+        //! jchars converted to standard UTF-8, if it has a character outside the Basic Multilingual Plane or NUL
+        std::string converted;
     };
 
 private:

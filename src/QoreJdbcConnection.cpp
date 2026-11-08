@@ -266,6 +266,26 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
         }
         QoreStringValueHelper db_str(val);
         db.assign(db_str->c_str(), db_str->size());
+    } else if (!strcasecmp(opt, JDBC_OPT_LOB_MAX_SIZE)) {
+        // an integer, or a string of digits only (ex: from a datasource string); "2G" or "1e9x" is refused
+        int64 v = -1;
+        if (val.getType() == NT_INT) {
+            v = val.getAsBigInt();
+        } else if (val.getType() == NT_STRING) {
+            const QoreStringNode* str = val.get<const QoreStringNode>();
+            const char* p = str->c_str();
+            size_t len = str->size();
+            if (len && len <= 18 && strspn(p, "0123456789") == len) {
+                v = strtoll(p, nullptr, 10);
+            }
+        }
+        if (v <= 0) {
+            QoreStringValueHelper text(val);
+            xsink->raiseException("JDBC-OPTION-ERROR", "option '%s' must be a positive integer number of bytes or "
+                "characters; got %s '%s'", opt, val.getTypeName(), text->c_str());
+            return -1;
+        }
+        lob_max_size = v;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_OPT)) {
         numeric = ENO_OPTIMAL;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_STRING)) {
@@ -284,6 +304,8 @@ QoreValue QoreJdbcConnection::getOption(const char* opt) {
         return classpath.empty() ? QoreValue() : new QoreStringNode(classpath);
     } else if (!strcasecmp(opt, JDBC_OPT_URL)) {
         return db.empty() ? QoreValue() : new QoreStringNode(db);
+    } else if (!strcasecmp(opt, JDBC_OPT_LOB_MAX_SIZE)) {
+        return lob_max_size;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_OPT)) {
         return numeric == ENO_OPTIMAL;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_STRING)) {
@@ -469,8 +491,9 @@ int QoreJdbcConnection::rollback(ExceptionSink* xsink) {
 
 QoreValue QoreJdbcConnection::getServerVersion(ExceptionSink* xsink) {
     assert(connection);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         LocalReference<jobject> md = env.callObjectMethod(connection, Globals::methodConnectionGetMetaData, nullptr);
         if (!md) {
             xsink->raiseException("JDBC-METADATA-ERROR", "the connection returned no metadata");
@@ -506,8 +529,9 @@ QoreValue QoreJdbcConnection::getServerVersion(ExceptionSink* xsink) {
 
 QoreValue QoreJdbcConnection::getClientVersion(ExceptionSink* xsink) {
     assert(connection);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         LocalReference<jobject> md = env.callObjectMethod(connection, Globals::methodConnectionGetMetaData, nullptr);
         if (!md) {
             xsink->raiseException("JDBC-METADATA-ERROR", "the connection returned no metadata");
@@ -543,8 +567,9 @@ QoreValue QoreJdbcConnection::getClientVersion(ExceptionSink* xsink) {
 
 QoreStringNode* QoreJdbcConnection::getDriverRealName(ExceptionSink* xsink) {
     assert(connection);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         LocalReference<jobject> md = env.callObjectMethod(connection, Globals::methodConnectionGetMetaData, nullptr);
         if (!md) {
             xsink->raiseException("JDBC-METADATA-ERROR", "the connection returned no metadata");
@@ -568,8 +593,9 @@ QoreStringNode* QoreJdbcConnection::getDriverRealName(ExceptionSink* xsink) {
 
 QoreValue QoreJdbcConnection::select(const QoreString* qstr, const QoreListNode* args, ExceptionSink* xsink) {
     assert(connection);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         QoreJdbcStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
@@ -589,8 +615,9 @@ QoreValue QoreJdbcConnection::select(const QoreString* qstr, const QoreListNode*
 QoreColumnarResult* QoreJdbcConnection::selectColumnar(const QoreString* qstr, const QoreListNode* args,
         ExceptionSink* xsink) {
     assert(connection);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         QoreJdbcStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
@@ -616,8 +643,9 @@ QoreColumnarResult* QoreJdbcConnection::selectColumnar(const QoreString* qstr, c
 QoreListNode* QoreJdbcConnection::selectRows(const QoreString* qstr, const QoreListNode* args, ExceptionSink* xsink) {
     assert(connection);
     ValueHolder rv(xsink);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         QoreJdbcStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
@@ -642,8 +670,9 @@ QoreListNode* QoreJdbcConnection::selectRows(const QoreString* qstr, const QoreL
 QoreHashNode* QoreJdbcConnection::selectRow(const QoreString* qstr, const QoreListNode* args, ExceptionSink* xsink) {
     assert(connection);
     ValueHolder rv(xsink);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         QoreJdbcStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
@@ -667,8 +696,9 @@ QoreHashNode* QoreJdbcConnection::selectRow(const QoreString* qstr, const QoreLi
 
 QoreValue QoreJdbcConnection::exec(const QoreString* qstr, const QoreListNode* args, ExceptionSink* xsink) {
     assert(connection);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         QoreJdbcStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
@@ -686,8 +716,9 @@ QoreValue QoreJdbcConnection::exec(const QoreString* qstr, const QoreListNode* a
 
 QoreValue QoreJdbcConnection::execRaw(const QoreString* qstr, ExceptionSink* xsink) {
     assert(connection);
-    Env env;
     try {
+        // Env's constructor raises a pending cancellation as an exception
+        Env env;
         QoreJdbcStatement stmt(xsink, this);
 
         // a plain java.sql.Statement executes the SQL as given (no placeholders are parsed), and its effects last for
