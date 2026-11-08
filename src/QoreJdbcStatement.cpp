@@ -2325,13 +2325,10 @@ int QoreJdbcStatement::bindParamSingleValue(Env& env, int column, QoreValue arg,
 
         case NT_INT: {
             int64 i = arg.getAsBigInt();
-            if (i <= 127 && i >= -128) {
-                jargs[1].b = (int8_t)i;
-                env.callVoidMethod(stmt, Globals::methodPreparedStatementSetByte, &jargs[0]);
-            } else if (i <= 32767 && i >= -32768) {
-                jargs[1].s = (int16_t)i;
-                env.callVoidMethod(stmt, Globals::methodPreparedStatementSetShort, &jargs[0]);
-            } else if (i <= 2147483647 && i >= -2147483648) {
+            // an integer is bound as an INTEGER or a BIGINT: setByte() binds a TINYINT, which is unsigned on SQL
+            // Server (-1 is stored as 255), and setShort() a SMALLINT, whose range is no reason to narrow the value's
+            // type for the server
+            if (i <= 2147483647 && i >= -2147483648) {
                 jargs[1].i = (int32_t)i;
                 env.callVoidMethod(stmt, Globals::methodPreparedStatementSetInt, &jargs[0]);
             } else {

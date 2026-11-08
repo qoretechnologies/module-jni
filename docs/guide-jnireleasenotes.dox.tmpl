@@ -6,6 +6,10 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed the \c jdbc driver binding an integer of -128 to 127 as a \c TINYINT and one of -32768 to 32767 as a
+      \c SMALLINT: SQL Server stores a \c TINYINT unsigned, so a negative value was stored as another one (-1 as
+      255) when a statement prepared with a small positive value was run again; an integer is bound as an \c INTEGER
+      or a \c BIGINT
     - fixed a deadlock when a module failed to load while another thread generated the Java class of a %Qore class:
       once the two threads had deadlocked, every thread loading a module or generating a Java class waited forever
     - <b>Security</b>: %Qore code that Java calls on a Java thread - a

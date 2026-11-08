@@ -31,6 +31,7 @@ public class Main inherits QUnit::Test {
         addTestCase("mssqlLostConnectionTest", \mssqlLostConnectionTest());
         addTestCase("mssqlClassLoadReportTest", \mssqlClassLoadReportTest());
         addTestCase("mssqlDescribeTest", \mssqlDescribeTest());
+        addTestCase("integers keep their value and sign on every server", \integerBindTest());
 
         # execute tests and set program return value
         set_return_value(main());
@@ -473,6 +474,50 @@ printf(\"imported\\n\");
         string output = trim(backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
             "'%s' '%s' 2>&1; echo exit=$?", qore_bin, tmp.path)));
         assertEq("error: object<SQLServerException>\nimported\nexit=0", output);
+    }
+
+    #! An integer is bound with its value: a small one was bound as a TINYINT (setByte()), which SQL Server stores
+    #! unsigned, so -1 was stored as 255
+    private integerBindTest() {
+        list<int> values = (100, -1, -4, -128, 127, 128, 200, -32769, 40000, -2147483649, 9223372036854775807);
+        int found = 0;
+        foreach string var in (("QORE_DB_CONNSTR_JDBC_MSSQL", "QORE_DB_CONNSTR_JDBC_PGSQL",
+                "QORE_DB_CONNSTR_JDBC_ORACLE")) {
+            *Datasource ds = getConnection(var);
+            if (!ds) {
+                continue;
+            }
+            ++found;
+            string table = sprintf("jdbc_int_bind_%d_%d", getpid(), now_us().getEpochSeconds() % 100000);
+            string type = var == "QORE_DB_CONNSTR_JDBC_ORACLE" ? "number(20)" : "numeric(20)";
+            ds.exec(sprintf("create table %s (id integer not null, n %s)", table, type));
+            ds.commit();
+            on_exit {
+                ds.rollback();
+                ds.exec("drop table " + table);
+                ds.commit();
+            }
+            # a prepared statement executed once per value: SQL Server takes the type of each parameter from its first
+            # execution, here a small positive value, which was bound as an unsigned TINYINT
+            SQLStatement stmt(ds);
+            stmt.prepare(sprintf("insert into %s (id, n) values (%%v, %%v)", table));
+            foreach int v in (values) {
+                stmt.execArgs(($#, v));
+            }
+            stmt.close();
+            ds.commit();
+            list<auto> stored = ds.select(sprintf("select n from %s order by id", table)).n;
+            assertEq(values, (map $1.toInt(), stored), var);
+            # and an update of all rows with array binds
+            list<int> negated = map -$1, values;
+            ds.exec(sprintf("update %s set n = %%v where id = %%v", table), negated, range(values.size()));
+            ds.commit();
+            stored = ds.select(sprintf("select n from %s order by id", table)).n;
+            assertEq(negated, (map $1.toInt(), stored), var + ": array binds");
+        }
+        if (!found) {
+            testSkip("no jdbc connection available");
+        }
     }
 
     private *Datasource getConnection(string var) {
