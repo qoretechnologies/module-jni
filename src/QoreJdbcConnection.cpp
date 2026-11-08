@@ -690,7 +690,9 @@ QoreValue QoreJdbcConnection::execRaw(const QoreString* qstr, ExceptionSink* xsi
     try {
         QoreJdbcStatement stmt(xsink, this);
 
-        bool result_set = stmt.exec(env, xsink, qstr, nullptr);
+        // a plain java.sql.Statement executes the SQL as given (no placeholders are parsed), and its effects last for
+        // the session: SQL Server runs a prepared statement with sp_prepexec, which drops the #temp tables it creates
+        bool result_set = stmt.execRaw(env, xsink, *qstr);
         if (*xsink) {
             return QoreValue();
         }

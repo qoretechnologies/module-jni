@@ -71,7 +71,7 @@ class JdbcTransactionsTest inherits QUnit::Test {
         ds.select("read");
         assertEq(("connect", "auto:true", "execute:read:true", "statement.close", "auto:false",
             "execute:write:false", "statement.close", "execute:read:false", "statement.close", "commit",
-            "auto:true", "execute:read:true", "statement.close", "auto:false", "execute:write:false",
+            "auto:true", "execute:read:true", "statement.close", "auto:false", "plain:write", "execute:write:false",
             "statement.close", "rollback", "auto:true", "execute:read:true", "statement.close"),
             JdbcTransactionDriver::events());
     }
@@ -229,6 +229,16 @@ class JdbcTransactionsTest inherits QUnit::Test {
         assertEq(0, JdbcTransactionDriver::durable());
         ds.commit();
         assertEq(1, JdbcTransactionDriver::durable());
+
+        # execRaw() executes its SQL with a plain java.sql.Statement, which is created again and executed once more
+        JdbcTransactionDriver::loseConnectionAt("execute:write:false", True);
+        assertEq(1, ds.execRaw("write"));
+        assertEq(4, JdbcTransactionDriver::count("execute:write:false"));
+        assertEq(3, JdbcTransactionDriver::count("connect"));
+        # both executions used a plain Statement
+        assertEq(2, JdbcTransactionDriver::count("plain:write"));
+        ds.commit();
+        assertEq(2, JdbcTransactionDriver::durable());
     }
 
     private lostFirstPreparedStatement() {
@@ -329,7 +339,8 @@ class JdbcTransactionsTest inherits QUnit::Test {
         assertEq(1, single.select("read"));
         single.execRaw("write");
         assertEq(("connect", "auto:true", "auto:false", "close", "connect", "auto:false", "execute:read:false",
-            "statement.close", "execute:write:false", "statement.close"), JdbcTransactionDriver::events());
+            "statement.close", "plain:write", "execute:write:false", "statement.close"),
+            JdbcTransactionDriver::events());
         single.commit();
         assertEq(1, JdbcTransactionDriver::durable());
     }

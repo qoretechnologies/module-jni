@@ -453,6 +453,58 @@ public final class JdbcTransactionDriver implements Driver {
         }
     }
 
+    /** A plain Statement: "multi:" SQL has scripted results (see ScriptedStatement); any other SQL is executed as a
+        prepared statement of the session is (with its events, injected connection losses and transaction effects) */
+    private static final class PlainStatement implements InvocationHandler {
+        private final Session session;
+        private final ScriptedStatement scripted = new ScriptedStatement(null);
+        // the prepared statement executing the last SQL that is not "multi:" SQL
+        private PreparedStatement prepared;
+
+        PlainStatement(Session session) {
+            this.session = session;
+        }
+
+        private void closePrepared() throws SQLException {
+            if (prepared != null) {
+                PreparedStatement closing = prepared;
+                prepared = null;
+                closing.close();
+            }
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            synchronized (JdbcTransactionDriver.class) {
+                String name = method.getName();
+                if (name.startsWith("execute") && args != null && args.length == 1 && args[0] instanceof String) {
+                    String sql = (String) args[0];
+                    if (!sql.startsWith("multi:")) {
+                        if (!name.equals("execute")) {
+                            throw new SQLFeatureNotSupportedException(name + " of SQL that is not \"multi:\" SQL");
+                        }
+                        closePrepared();
+                        // recorded, so that tests can tell SQL executed by a plain Statement from prepared SQL
+                        event("plain:" + sql);
+                        prepared = session.prepare(sql);
+                        return prepared.execute();
+                    }
+                    closePrepared();
+                }
+                if (prepared != null) {
+                    switch (name) {
+                        case "getUpdateCount": return prepared.getUpdateCount();
+                        case "getMoreResults": return prepared.getMoreResults();
+                        case "getResultSet": return null;
+                        case "close": closePrepared(); return null;
+                        default: break;
+                    }
+                }
+                return scripted.invoke(proxy, method, args);
+            }
+        }
+    }
+
     private static final class Session {
         boolean autoCommit = true;
         boolean closed;
@@ -470,6 +522,10 @@ public final class JdbcTransactionDriver implements Driver {
             return (PreparedStatement) Proxy.newProxyInstance(JdbcTransactionDriver.class.getClassLoader(),
                 new Class<?>[] {PreparedStatement.class}, (proxy, method, args) -> {
                     synchronized (JdbcTransactionDriver.class) {
+                        // Statement.execute(String) and the like raise an SQLException on a PreparedStatement
+                        if (method.getName().startsWith("execute") && args != null && args.length > 0) {
+                            throw new SQLException(method.getName() + "(String) called on a PreparedStatement");
+                        }
                         switch (method.getName()) {
                             case "execute": {
                                 String operation = "execute:" + sql + ":" + autoCommit;
@@ -544,7 +600,7 @@ public final class JdbcTransactionDriver implements Driver {
                             case "prepareStatement": return prepare((String) args[0]);
                             case "createStatement":
                                 return Proxy.newProxyInstance(JdbcTransactionDriver.class.getClassLoader(),
-                                    new Class<?>[] {Statement.class}, new ScriptedStatement(null));
+                                    new Class<?>[] {Statement.class}, new PlainStatement(this));
                             case "commit":
                                 event("commit");
                                 if (autoCommit) {

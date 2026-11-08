@@ -6,6 +6,19 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed the \c jdbc driver binding an integer of -128 to 127 as a \c TINYINT and one of -32768 to 32767 as a
+      \c SMALLINT: SQL Server stores a \c TINYINT unsigned, so a negative value was stored as another one (-1 as
+      255) when a statement prepared with a small positive value was run again; an integer is bound as an \c INTEGER
+      or a \c BIGINT
+    - the \c jdbc driver's \c execRaw() executes the SQL with a plain \c java.sql.Statement instead of a prepared
+      statement, as the other DBI drivers do:
+      - the SQL is sent to the server as given: it is no longer parsed for placeholders, so \c %v, \c %d and \c %s
+        are not replaced, \c "\%" and \c "\:" keep their backslash, and a \c % outside a string that does not follow a
+        letter or a digit (ex: SQL Server's and PostgreSQL's modulo operator in <tt>7 % 4</tt>) no longer raises
+        \c JDBC-PARSE-ERROR
+      - on SQL Server, the effects of the SQL last for the session: a \c \#temp table it creates can be used by later
+        statements (it was dropped when the statement ended, as SQL Server runs a prepared statement with
+        \c sp_prepexec), and a \c SET option it sets stays set
     - fixed a deadlock when a module failed to load while another thread generated the Java class of a %Qore class:
       once the two threads had deadlocked, every thread loading a module or generating a Java class waited forever
     - <b>Security</b>: %Qore code that Java calls on a Java thread - a

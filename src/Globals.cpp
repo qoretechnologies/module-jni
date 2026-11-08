@@ -391,6 +391,7 @@ jmethodID Globals::methodConnectionCommit;
 jmethodID Globals::methodConnectionRollback;
 jmethodID Globals::methodConnectionCreateArrayOf;
 jmethodID Globals::methodConnectionGetMetaData;
+jmethodID Globals::methodConnectionCreateStatement;
 jmethodID Globals::methodConnectionPrepareStatement;
 jmethodID Globals::methodConnectionPrepareStatementArray;
 jmethodID Globals::methodConnectionSetAutoCommit;
@@ -406,23 +407,24 @@ jmethodID Globals::methodDatabaseMetaDataGetDriverMinorVersion;
 jmethodID Globals::methodDatabaseMetaDataGetDriverName;
 jmethodID Globals::methodDatabaseMetaDataGetDriverVersion;
 
+GlobalReference<jclass> Globals::classStatement;
+jmethodID Globals::methodStatementClose;
+jmethodID Globals::methodStatementExecute;
+jmethodID Globals::methodStatementGetResultSet;
+jmethodID Globals::methodStatementGetMoreResults;
+jmethodID Globals::methodStatementGetUpdateCount;
+
 GlobalReference<jclass> Globals::classPreparedStatement;
 jmethodID Globals::methodPreparedStatementAddBatch;
 jmethodID Globals::methodPreparedStatementClearBatch;
-jmethodID Globals::methodPreparedStatementClose;
 jmethodID Globals::methodPreparedStatementExecute;
 jmethodID Globals::methodPreparedStatementExecuteBatch;
-jmethodID Globals::methodPreparedStatementGetResultSet;
-jmethodID Globals::methodPreparedStatementGetMoreResults;
-jmethodID Globals::methodPreparedStatementGetUpdateCount;
 jmethodID Globals::methodPreparedStatementSetArray;
 jmethodID Globals::methodPreparedStatementSetBigDecimal;
 jmethodID Globals::methodPreparedStatementSetBoolean;
-jmethodID Globals::methodPreparedStatementSetByte;
 jmethodID Globals::methodPreparedStatementSetBytes;
 jmethodID Globals::methodPreparedStatementSetDouble;
 jmethodID Globals::methodPreparedStatementSetInt;
-jmethodID Globals::methodPreparedStatementSetShort;
 jmethodID Globals::methodPreparedStatementSetLong;
 jmethodID Globals::methodPreparedStatementSetNull;
 jmethodID Globals::methodPreparedStatementSetString;
@@ -3885,6 +3887,7 @@ bool Globals::init() {
     methodConnectionCreateArrayOf = env.getMethod(classConnection, "createArrayOf",
         "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/sql/Array;");
     methodConnectionGetMetaData = env.getMethod(classConnection, "getMetaData", "()Ljava/sql/DatabaseMetaData;");
+    methodConnectionCreateStatement = env.getMethod(classConnection, "createStatement", "()Ljava/sql/Statement;");
     methodConnectionPrepareStatement = env.getMethod(classConnection, "prepareStatement",
         "(Ljava/lang/String;)Ljava/sql/PreparedStatement;");
     methodConnectionPrepareStatementArray = env.getMethod(classConnection, "prepareStatement",
@@ -3910,26 +3913,26 @@ bool Globals::init() {
     methodDatabaseMetaDataGetDriverVersion = env.getMethod(classDatabaseMetaData, "getDriverVersion",
         "()Ljava/lang/String;");
 
+    classStatement = env.findClass("java/sql/Statement").makeGlobal();
+    methodStatementClose = env.getMethod(classStatement, "close", "()V");
+    methodStatementExecute = env.getMethod(classStatement, "execute", "(Ljava/lang/String;)Z");
+    methodStatementGetResultSet = env.getMethod(classStatement, "getResultSet", "()Ljava/sql/ResultSet;");
+    methodStatementGetMoreResults = env.getMethod(classStatement, "getMoreResults", "()Z");
+    methodStatementGetUpdateCount = env.getMethod(classStatement, "getUpdateCount", "()I");
+
     classPreparedStatement = env.findClass("java/sql/PreparedStatement").makeGlobal();
     methodPreparedStatementAddBatch = env.getMethod(classPreparedStatement, "addBatch", "()V");
     methodPreparedStatementClearBatch = env.getMethod(classPreparedStatement, "clearBatch", "()V");
-    methodPreparedStatementClose = env.getMethod(classPreparedStatement, "close", "()V");
     methodPreparedStatementExecute = env.getMethod(classPreparedStatement, "execute", "()Z");
     methodPreparedStatementExecuteBatch = env.getMethod(classPreparedStatement, "executeBatch", "()[I");
-    methodPreparedStatementGetResultSet = env.getMethod(classPreparedStatement, "getResultSet",
-        "()Ljava/sql/ResultSet;");
-    methodPreparedStatementGetMoreResults = env.getMethod(classPreparedStatement, "getMoreResults", "()Z");
-    methodPreparedStatementGetUpdateCount = env.getMethod(classPreparedStatement, "getUpdateCount", "()I");
     methodPreparedStatementSetArray = env.getMethod(classPreparedStatement, "setArray", "(ILjava/sql/Array;)V");
     methodPreparedStatementSetBigDecimal = env.getMethod(classPreparedStatement, "setBigDecimal",
         "(ILjava/math/BigDecimal;)V");
     methodPreparedStatementSetBoolean = env.getMethod(classPreparedStatement, "setBoolean", "(IZ)V");
-    methodPreparedStatementSetByte = env.getMethod(classPreparedStatement, "setByte", "(IB)V");
     methodPreparedStatementSetBytes = env.getMethod(classPreparedStatement, "setBytes", "(I[B)V");
     methodPreparedStatementSetDouble = env.getMethod(classPreparedStatement, "setDouble", "(ID)V");
     methodPreparedStatementSetInt = env.getMethod(classPreparedStatement, "setInt", "(II)V");
     methodPreparedStatementSetLong = env.getMethod(classPreparedStatement, "setLong", "(IJ)V");
-    methodPreparedStatementSetShort = env.getMethod(classPreparedStatement, "setShort", "(IS)V");
     methodPreparedStatementSetNull = env.getMethod(classPreparedStatement, "setNull", "(II)V");
     methodPreparedStatementSetString = env.getMethod(classPreparedStatement, "setString", "(ILjava/lang/String;)V");
     methodPreparedStatementSetTimestamp = env.getMethod(classPreparedStatement, "setTimestamp",
@@ -4608,6 +4611,7 @@ void Globals::cleanup() {
     classDriverManager = nullptr;
     classConnection = nullptr;
     classDatabaseMetaData = nullptr;
+    classStatement = nullptr;
     classPreparedStatement = nullptr;
     classTimestamp = nullptr;
     classDate = nullptr;
