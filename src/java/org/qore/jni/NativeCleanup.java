@@ -110,6 +110,9 @@ public final class NativeCleanup {
     /** delete (JniObjectHandle*)ptr: releases the weak reference to the Qore object. */
     public static final int KIND_OBJECT_BASE_WEAK = 3;
 
+    /** delete (QoreSandboxCapture*)ptr: releases a QoreSandbox.Policy that was not closed. */
+    public static final int KIND_SANDBOX_POLICY = 4;
+
     /** Shared ReferenceQueue.  The C++ cleanup thread blocks on
         {@code queue.remove()} and dispatches by Ref.kind. */
     public static final ReferenceQueue<Object> queue = new ReferenceQueue<>();

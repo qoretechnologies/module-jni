@@ -38,6 +38,7 @@
 #include "QoreToJava.h"
 #include "QoreJniClassMap.h"
 #include "GeneratedBinding.h"
+#include "JavaSandbox.h"
 
 #include <thread>
 #include <unordered_map>
@@ -158,6 +159,7 @@ jmethodID Globals::ctorQoreInvocationHandler;
 jmethodID Globals::methodQoreInvocationHandlerDestroy;
 
 GlobalReference<jclass> Globals::classQoreJavaApi;
+GlobalReference<jclass> Globals::classQoreSandbox;
 jmethodID Globals::methodQoreJavaApiGetStackTrace;
 GlobalReference<jclass> Globals::classJavaCollectionTypes;
 jmethodID Globals::methodJavaCollectionTypesIsStringKeyMap;
@@ -2644,6 +2646,8 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassStaticEntry.inc"
 #include "JavaClassQoreClassFileLocator.inc"
 #include "JavaClassQoreJavaApi.inc"
+#include "JavaClassQoreSandbox.inc"
+#include "JavaClassQoreSandbox_Policy.inc"
 #include "JavaClassJavaCollectionTypes.inc"
 #include "JavaClassQoreRelativeTime.inc"
 #include "JavaClassJdbcColumnarBatch.inc"
@@ -2727,6 +2731,9 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreObjectBase", {java_org_qore_jni_QoreObjectBase_class_len, java_org_qore_jni_QoreObjectBase_class}},
     {"org.qore.jni.QoreObjectWrapper", {java_org_qore_jni_QoreObjectWrapper_class_len, java_org_qore_jni_QoreObjectWrapper_class}},
     {"org.qore.jni.QoreRelativeTime", {java_org_qore_jni_QoreRelativeTime_class_len, java_org_qore_jni_QoreRelativeTime_class}},
+    {"org.qore.jni.QoreSandbox", {java_org_qore_jni_QoreSandbox_class_len, java_org_qore_jni_QoreSandbox_class}},
+    {"org.qore.jni.QoreSandbox$Policy", {java_org_qore_jni_QoreSandbox_Policy_class_len,
+        java_org_qore_jni_QoreSandbox_Policy_class}},
     {"org.qore.jni.QoreURLClassLoader", {java_org_qore_jni_QoreURLClassLoader_class_len, java_org_qore_jni_QoreURLClassLoader_class}},
     {"org.qore.jni.QoreURLClassLoader$1", {java_org_qore_jni_QoreURLClassLoader_1_class_len, java_org_qore_jni_QoreURLClassLoader_1_class}},
     {"org.qore.jni.QoreURLClassLoader$2", {java_org_qore_jni_QoreURLClassLoader_2_class_len, java_org_qore_jni_QoreURLClassLoader_2_class}},
@@ -3768,6 +3775,13 @@ bool Globals::init() {
     methodQoreJavaApiGetStackTrace = env.getStaticMethod(classQoreJavaApi, "getStackTrace",
         "()[Ljava/lang/StackTraceElement;");
 
+    // the sandbox policy of Qore code for the I/O of Java code
+    classQoreSandbox = findDefineClass(env, "org.qore.jni.QoreSandbox", nullptr, java_org_qore_jni_QoreSandbox_class,
+        java_org_qore_jni_QoreSandbox_class_len).makeGlobal();
+    findDefineClass(env, "org.qore.jni.QoreSandbox$Policy", nullptr, java_org_qore_jni_QoreSandbox_Policy_class,
+        java_org_qore_jni_QoreSandbox_Policy_class_len);
+    jni_register_qore_sandbox_natives(env, classQoreSandbox);
+
     classJavaCollectionTypes = findDefineClass(env, "org.qore.jni.JavaCollectionTypes", nullptr,
         java_org_qore_jni_JavaCollectionTypes_class, java_org_qore_jni_JavaCollectionTypes_class_len).makeGlobal();
     methodJavaCollectionTypesIsStringKeyMap = env.getStaticMethod(classJavaCollectionTypes, "isStringKeyMap",
@@ -4498,6 +4512,11 @@ void native_cleanup_dispatch(jlong ptr, jint kind) {
             delete reinterpret_cast<JniObjectHandle*>(ptr);
             break;
         }
+        case 4: {  // NativeCleanup.KIND_SANDBOX_POLICY
+            // a QoreSandbox.Policy that was not closed
+            jni_release_sandbox_policy(ptr);
+            break;
+        }
         default:
             // unknown kind — silently ignore
             break;
@@ -4675,6 +4694,7 @@ void Globals::cleanup() {
     classQoreClosureMarker = nullptr;
     classQoreClosureMarkerImpl = nullptr;
     classQoreJavaApi = nullptr;
+    classQoreSandbox = nullptr;
     classJavaCollectionTypes = nullptr;
     classProxy = nullptr;
     classClassLoader = nullptr;

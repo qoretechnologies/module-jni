@@ -120,6 +120,16 @@ public:
             }
         }
 
+        LocalReference<jobject> obj = newExceptionWrapper(env, src);
+        env.throwException(obj.as<jthrowable>());
+    }
+
+    //! Returns a new org.qore.jni.QoreExceptionWrapper that takes the Qore exception in \a src, without throwing it
+    /** \a src is empty afterwards, also if the wrapper cannot be created (a Java exception is then pending, and
+        JavaException is thrown); only if the native state of the wrapper cannot be allocated (std::bad_alloc) is
+        \a src left unchanged.
+    */
+    static LocalReference<jobject> newExceptionWrapper(Env& env, ExceptionSink& src) {
         auto discard_sink = [](ExceptionSink* sink) {
             sink->clear();
             delete sink;
@@ -132,9 +142,9 @@ public:
         arg.j = reinterpret_cast<jlong>(xsink.get());
         LocalReference<jobject> obj = env.newObject(Globals::classQoreExceptionWrapper,
             Globals::ctorQoreExceptionWrapper, &arg);
-        xsink.release();
         // from now on, the Java instance of QoreExceptionWrapper is responsible for the exception sink
-        env.throwException(obj.as<jthrowable>());
+        xsink.release();
+        return obj;
     }
 
 private:

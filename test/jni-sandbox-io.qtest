@@ -1,0 +1,390 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.QoreSandbox
+%module-cmd(jni) import org.qore.jni.test.SandboxIo
+%requires QUnit
+%requires Util
+
+%exec-class JniSandboxIoTest
+
+#! org.qore.jni.QoreSandbox applies the sandbox policy of the calling Qore code to the I/O of Java code
+/** Java code does its own I/O through the JVM, which Qore never sees; Java code that checks its network
+    destinations and paths with QoreSandbox gets the policy that Qore applies to its own sockets and files, also on
+    Java threads that run work for a Qore caller
+*/
+class JniSandboxIoTest inherits QUnit::Test {
+    private {
+        #! a directory that the filesystem sandbox allows reading
+        string dir;
+        #! a file in the directory
+        string file;
+        #! a directory that the filesystem sandbox does not allow
+        string other_dir;
+    }
+
+    constructor() : QUnit::Test("JNI sandbox I/O", "1.0", \ARGV) {
+        addTestCase("trusted code passes every check", \testTrusted());
+        addTestCase("a sandbox blocking private networks denies them", \testPrivateNetworks());
+        addTestCase("allowed host patterns and ports apply", \testHostsAndPorts());
+        addTestCase("UDP is checked as UDP", \testUdp());
+        addTestCase("a name that the hosts file maps is checked by its addresses", \testHostsFile());
+        addTestCase("the filesystem policy applies to paths", \testFilesystem());
+        addTestCase("a system-policy capability is checked with the system policy", \testCapability());
+        addTestCase("invalid arguments are rejected", \testInvalidArguments());
+        addTestCase("a Java thread without a captured policy is refused", \testUncapturedThread());
+        addTestCase("a captured policy governs Java threads", \testCapturedPolicy());
+        addTestCase("a task's policy is scoped to the task", \testPolicyScope());
+        addTestCase("a closed policy refuses checks", \testClosedPolicy());
+        addTestCase("a policy is shared between Java threads", \testConcurrent());
+        addTestCase("a Qore callback on a Java thread checks with its sandbox", \testCallback());
+        addTestCase("the checked address is the address connected to", \testConnect());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = tmp_location() + DirSep + sprintf("jni-sandbox-io-%d-%d", getpid(), now_us().durationMicroseconds());
+        mkdir(dir);
+        file = dir + DirSep + "data.txt";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("data");
+        f.close();
+        other_dir = dir + "-other";
+        mkdir(other_dir);
+    }
+
+    globalTearDown() {
+        foreach string path in (file, dir + DirSep + "link") {
+            try {
+                unlink(path);
+            } catch () {
+            }
+        }
+        rmdir(dir);
+        rmdir(other_dir);
+    }
+
+    #! returns a Program with the given sandbox that calls the code it is given
+    private Program getSandboxed(SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("auto sub through(code c) { return c(); }", "jni-sandbox-io");
+        return p;
+    }
+
+    #! returns a Program whose sandbox blocks private networks and allows the rest of the network
+    private Program getPrivateBlocked() {
+        SandboxManager sm();
+        sm.blockPrivateNetworks();
+        sm.setNetworkDefaultPolicy(True);
+        return getSandboxed(sm);
+    }
+
+    #! returns a Program whose sandbox allows reading in the test directory only
+    private Program getFilesystemSandboxed() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(dir, QSEC_READ);
+        return getSandboxed(sm);
+    }
+
+    #! asserts that the code raises the exception and that its description contains the text
+    private assertDenied(string err, code c, string text, string label) {
+        try {
+            c();
+            fail(label + ": no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err, label);
+            assertRegex(text, ex.desc, label + " (description)");
+        }
+    }
+
+    testTrusted() {
+        assertEq(("127.0.0.1",), SandboxIo::checkNetwork("127.0.0.1", 80));
+        assertEq(("0:0:0:0:0:0:0:1",), SandboxIo::checkNetwork("[::1]", 80), "an IPv6 literal in brackets");
+        assertTrue(inlist("127.0.0.1", SandboxIo::checkNetwork("localhost", 80)), "localhost resolves");
+        assertEq("::1", SandboxIo::checkedHostName("[::1]", 80),
+            "the host name of a bracketed IPv6 literal is the literal without the brackets");
+        SandboxIo::checkFile(file, False);
+        SandboxIo::checkFile(file, True);
+        SandboxIo::checkFileMode(other_dir + DirSep + "new", QoreSandbox::CREATE | QoreSandbox::WRITE);
+        assertFalse(SandboxIo::isSandboxed());
+    }
+
+    testPrivateNetworks() {
+        Program p = getPrivateBlocked();
+        code check = auto sub (string host, int port = 80) {
+            return p.callFunction("through", auto sub () { return SandboxIo::checkNetwork(host, port); });
+        };
+        assertTrue(p.callFunction("through", \SandboxIo::isSandboxed()), "the caller is sandboxed");
+        # the denial names the address
+        foreach string host in ("127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "[::1]",
+                "fe80::1", "fd00::1") {
+            string addr = (host =~ x/^\[(.*)\]$/)[0] ?? host;
+            assertDenied("NETWORK-ACCESS-DENIED", sub () { check(host); }, addr, host);
+        }
+        # an IPv4-mapped address is checked as the IPv4 address, and the unspecified address as the loopback
+        assertDenied("NETWORK-ACCESS-DENIED", sub () { check("::ffff:127.0.0.1"); }, "127.0.0.1", "IPv4-mapped");
+        assertThrows("NETWORK-ACCESS-DENIED", sub () { check("0.0.0.0"); }, NOTHING, "the unspecified address");
+        # a host name is checked by every address it resolves to
+        assertThrows("NETWORK-ACCESS-DENIED", sub () { check("localhost"); }, NOTHING, "localhost");
+        # public addresses are allowed and returned; no connection is made
+        assertEq(("8.8.8.8",), check("8.8.8.8"));
+        assertEq(("2001:4860:4860:0:0:0:0:8888",), check("[2001:4860:4860::8888]"));
+        # trusted code is not affected
+        assertEq(("10.1.2.3",), SandboxIo::checkNetwork("10.1.2.3", 80));
+    }
+
+    testHostsAndPorts() {
+        {
+            # only the host name pattern allows the destination
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(False);
+            sm.addNetworkAllowedHost("localhost");
+            Program p = getSandboxed(sm);
+            list<string> addrs = p.callFunction("through", auto sub () { return SandboxIo::checkNetwork("localhost", 80); });
+            assertTrue(inlist("127.0.0.1", addrs), "an allowed host name is allowed");
+            assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("through", sub () {
+                SandboxIo::checkNetwork("127.0.0.1", 80);
+            }), "the address of the allowed host name is denied as an address");
+        }
+        {
+            # a port that the policy denies is denied before the host name is resolved: a name that does not
+            # resolve raises the denial and not a resolver error
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(True);
+            sm.addNetworkAllowedPort(443, QSEC_NET_TCP);
+            Program p = getSandboxed(sm);
+            assertDenied("NETWORK-ACCESS-DENIED", sub () {
+                p.callFunction("through", sub () { SandboxIo::checkNetwork("does-not-exist.invalid", 80); });
+            }, "does-not-exist\\.invalid", "a denied port is denied before resolution");
+            assertEq(("8.8.8.8",), p.callFunction("through", auto sub () { return SandboxIo::checkNetwork("8.8.8.8", 443); }),
+                "an allowed port is allowed");
+        }
+    }
+
+    testUdp() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(53, QSEC_NET_TCP);
+        Program p = getSandboxed(sm);
+        assertEq(("8.8.8.8",), p.callFunction("through", auto sub () {
+            return SandboxIo::checkNetworkProto("8.8.8.8", 53, QoreSandbox::TCP);
+        }), "TCP port 53 is allowed");
+        assertDenied("NETWORK-ACCESS-DENIED", sub () {
+            p.callFunction("through", sub () { SandboxIo::checkNetworkProto("8.8.8.8", 53, QoreSandbox::UDP); });
+        }, "UDP", "UDP port 53 is denied");
+        assertEq(("8.8.8.8",), SandboxIo::checkNetworkProto("8.8.8.8", 53, QoreSandbox::UDP), "trusted UDP");
+    }
+
+    testHostsFile() {
+        # the hosts file of the Qore resolver can be set in debug builds of the Qore library only
+        if (!exists_function("dbg_cares_set_hosts_file")) {
+            testSkip("the Qore library is not a debug build");
+        }
+        string hosts = dir + DirSep + "hosts";
+        {
+            File f();
+            f.open2(hosts, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("10.0.0.5 rebind.test\n8.8.8.8 public.test\n8.8.4.4 mixed.test\n10.0.0.6 mixed.test\n");
+            f.close();
+        }
+        on_exit unlink(hosts);
+        string prev = call_function("dbg_cares_set_hosts_file", hosts);
+        on_exit call_function("dbg_cares_set_hosts_file", prev);
+
+        Program p = getPrivateBlocked();
+        code check = auto sub (string host) {
+            return p.callFunction("through", auto sub () { return SandboxIo::checkNetwork(host, 80); });
+        };
+        assertDenied("NETWORK-ACCESS-DENIED", sub () { check("rebind.test"); }, "10\\.0\\.0\\.5",
+            "a name that resolves to a private address");
+        assertDenied("NETWORK-ACCESS-DENIED", sub () { check("mixed.test"); }, "10\\.0\\.0\\.6",
+            "a name with a private address among its addresses");
+        assertEq(("8.8.8.8",), check("public.test"), "a name that resolves to a public address");
+        assertEq("public.test", SandboxIo::checkedHostName("public.test", 80), "the address carries the name");
+    }
+
+    testFilesystem() {
+        Program p = getFilesystemSandboxed();
+        code check = sub (string path, int mode) {
+            p.callFunction("through", sub () { SandboxIo::checkFileMode(path, mode); });
+        };
+        # allowed
+        check(file, QoreSandbox::READ);
+        p.callFunction("through", sub () { SandboxIo::checkFile(file, False); });
+        check(dir, QoreSandbox::READ);
+        # denied
+        assertDenied("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("through", sub () { SandboxIo::checkFile(file, True); });
+        }, "data\\.txt", "writing an allowed file");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { check(dir + DirSep + "new", QoreSandbox::CREATE | QoreSandbox::WRITE); }, NOTHING,
+            "creating a file");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { check(file, QoreSandbox::DELETE); }, NOTHING, "deleting a file");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { check(other_dir, QoreSandbox::READ); }, NOTHING,
+            "reading outside the allowed path");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { check(dir + DirSep + ".." + DirSep + basename(other_dir), QoreSandbox::READ); }, NOTHING,
+            "a path leaving the allowed path with ..");
+%ifndef Windows
+        # a symbolic link is checked by its target
+        symlink(other_dir, dir + DirSep + "link");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () { check(dir + DirSep + "link", QoreSandbox::READ); }, NOTHING,
+            "a link to a path outside the allowed path");
+%endif
+        # trusted code is not affected
+        SandboxIo::checkFileMode(other_dir, QoreSandbox::ALL);
+    }
+
+    testCapability() {
+        Program p = getPrivateBlocked();
+        code check = list<string> sub () {
+            return SandboxIo::checkNetwork("127.0.0.1", 80);
+        };
+        assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("through", check), "called directly");
+        assertEq(("127.0.0.1",), p.callFunction("through", SandboxManager::createSystemPolicyCall(check)),
+            "called in a system-policy capability");
+    }
+
+    testInvalidArguments() {
+        # port 0 is no destination, and an allowed-port policy does not restrict it
+        foreach int port in (-1, 0, 65536) {
+            assertDenied("JNI-SANDBOX-ERROR", sub () { SandboxIo::checkNetwork("127.0.0.1", port); },
+                "port " + port, "port " + port);
+        }
+        assertDenied("JNI-SANDBOX-ERROR", sub () { SandboxIo::checkNetworkProto("127.0.0.1", 80, 4); },
+            "invalid protocol", "protocol");
+        assertDenied("JNI-SANDBOX-ERROR", sub () { SandboxIo::checkNetwork("", 80); }, "host must not be empty",
+            "empty host");
+        assertDenied("JNI-SANDBOX-ERROR", \SandboxIo::checkNullHost(), "host must not be null", "null host");
+        assertDenied("JNI-SANDBOX-ERROR", \SandboxIo::checkNullPath(), "path must not be null", "null path");
+        assertDenied("JNI-SANDBOX-ERROR", \SandboxIo::checkNulPath(), "NUL character", "NUL in a path");
+        assertDenied("JNI-SANDBOX-ERROR", sub () { SandboxIo::checkFileMode("", QoreSandbox::READ); },
+            "path must not be empty", "empty path");
+        foreach int mode in (0, QoreSandbox::ALL + 1, -1) {
+            assertDenied("JNI-SANDBOX-ERROR", sub () { SandboxIo::checkFileMode(file, mode); }, "invalid access mode",
+                "mode " + mode);
+        }
+        assertThrows("JNI-ERROR", "NullPointerException: task", \SandboxIo::wrapNull());
+    }
+
+    testUncapturedThread() {
+        # a Java thread has no Qore caller: the check is refused, for a trusted and for a sandboxed caller
+        Program p = getPrivateBlocked();
+        foreach code call in (sub (code c) { c(); }, sub (code c) { p.callFunction("through", c); }) {
+            assertDenied("JNI-SANDBOX-ERROR", sub () {
+                call(sub () { SandboxIo::checkNetworkOnJavaThread("8.8.8.8", 80); });
+            }, "no Qore caller", "network check");
+            assertThrows("JNI-SANDBOX-ERROR", sub () { call(sub () { SandboxIo::checkFileOnJavaThread(file, False); }); }, NOTHING,
+                "file check");
+            assertThrows("JNI-SANDBOX-ERROR", sub () { call(sub () { SandboxIo::isSandboxedOnJavaThread(); }); }, NOTHING,
+                "isSandboxed()");
+            assertThrows("JNI-SANDBOX-ERROR", sub () { call(\SandboxIo::captureOnJavaThread()); }, NOTHING, "capture()");
+        }
+    }
+
+    testCapturedPolicy() {
+        Program p = getPrivateBlocked();
+        code through = auto sub (code c) { return p.callFunction("through", c); };
+
+        # the Policy object
+        assertThrows("NETWORK-ACCESS-DENIED", sub () { through(sub () { SandboxIo::checkNetworkWithPolicy("127.0.0.1", 80); }); });
+        assertEq(("8.8.8.8",), through(auto sub () { return SandboxIo::checkNetworkWithPolicy("8.8.8.8", 80); }));
+        assertEq(("127.0.0.1",), SandboxIo::checkNetworkWithPolicy("127.0.0.1", 80), "trusted");
+
+        # the static methods in a wrapped task
+        assertThrows("NETWORK-ACCESS-DENIED", sub () { through(sub () { SandboxIo::checkNetworkWrapped("127.0.0.1", 80); }); });
+        assertEq(("8.8.8.8",), through(auto sub () { return SandboxIo::checkNetworkWrapped("8.8.8.8", 80); }));
+        assertEq(("127.0.0.1",), SandboxIo::checkNetworkWrapped("127.0.0.1", 80), "trusted");
+
+        # a policy captured in a task, for another Java thread
+        assertThrows("NETWORK-ACCESS-DENIED", sub () { through(sub () { SandboxIo::checkNetworkNestedCapture("127.0.0.1", 80); }); });
+        assertEq(("8.8.8.8",), through(auto sub () { return SandboxIo::checkNetworkNestedCapture("8.8.8.8", 80); }));
+
+        # isSandboxed() of a captured policy
+        assertEq((True, True), through(\SandboxIo::isSandboxedCaptured()));
+        assertEq((False, False), SandboxIo::isSandboxedCaptured());
+
+        # filesystem checks
+        Program fp = getFilesystemSandboxed();
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            fp.callFunction("through", sub () { SandboxIo::checkFileWithPolicy(file, True); });
+        });
+        fp.callFunction("through", sub () { SandboxIo::checkFileWithPolicy(file, False); });
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            fp.callFunction("through", sub () { SandboxIo::checkFileWrappedRunnable(other_dir, QoreSandbox::READ); });
+        });
+        fp.callFunction("through", sub () { SandboxIo::checkFileWrappedRunnable(file, QoreSandbox::READ); });
+    }
+
+    testPolicyScope() {
+        Program p = getPrivateBlocked();
+        # after a task returns, the static methods of its thread no longer have a policy
+        assertDenied("JNI-SANDBOX-ERROR", sub () {
+            p.callFunction("through", sub () { SandboxIo::checkNetworkAfterRun("8.8.8.8", 80); });
+        }, "no Qore caller", "after the task");
+        # a nested task uses its own policy, and the outer policy is restored after it
+        object trusted = SandboxIo::capture();
+        on_exit trusted.close();
+        list<string> rv = p.callFunction("through", auto sub () {
+            return SandboxIo::checkNetworkNestedRun(trusted, "127.0.0.1", "10.0.0.1", 80);
+        });
+        assertRegex("NETWORK-ACCESS-DENIED", rv[0], "outer policy before the inner task");
+        assertEq("10.0.0.1", rv[1], "inner task with the trusted policy");
+        assertRegex("NETWORK-ACCESS-DENIED", rv[2], "outer policy restored after the inner task");
+    }
+
+    testClosedPolicy() {
+        assertDenied("JNI-SANDBOX-ERROR", sub () { SandboxIo::checkClosedPolicy("127.0.0.1", 80); }, "closed",
+            "check");
+        assertDenied("JNI-SANDBOX-ERROR", \SandboxIo::captureFromClosedPolicy(), "closed", "capture");
+        # policies that are not closed are released by native cleanup (checked by valgrind)
+        Program p = getPrivateBlocked();
+        p.callFunction("through", sub () { SandboxIo::leakPolicies(50); });
+        SandboxIo::leakPolicies(50);
+        assertEq(("8.8.8.8",), p.callFunction("through", auto sub () { return SandboxIo::checkNetworkWithPolicy("8.8.8.8", 80); }),
+            "capturing still works");
+    }
+
+    testConcurrent() {
+        Program p = getPrivateBlocked();
+        assertEq(8, p.callFunction("through", auto sub () { return SandboxIo::checkNetworkConcurrently("8.8.8.8", 80, 8); }));
+        assertThrows("NETWORK-ACCESS-DENIED", sub () {
+            p.callFunction("through", sub () { SandboxIo::checkNetworkConcurrently("127.0.0.1", 80, 8); });
+        });
+    }
+
+    testCallback() {
+        # the closure is handed to Java by the sandboxed Program, so it runs under its sandbox on the Java thread,
+        # and the check that it makes through Java is made with that sandbox
+        Program p = getPrivateBlocked();
+        code check = auto sub (string host) {
+            return p.callFunction("through", auto sub () {
+                return SandboxIo::callOnJavaThread(auto sub () { return SandboxIo::checkNetwork(host, 80); });
+            });
+        };
+        assertThrows("NETWORK-ACCESS-DENIED", sub () { check("127.0.0.1"); });
+        assertEq(("8.8.8.8",), check("8.8.8.8"));
+        # a trusted closure on a Java thread is trusted
+        assertEq(("127.0.0.1",), SandboxIo::callOnJavaThread(auto sub () { return SandboxIo::checkNetwork("127.0.0.1", 80); }));
+    }
+
+    testConnect() {
+        # trusted
+        assertEq(("127.0.0.1", "127.0.0.1", "127.0.0.1"), SandboxIo::connectChecked("localhost"));
+        assertEq("localhost", SandboxIo::checkedHostName("localhost", 80), "the address carries the host name");
+        # a sandbox allowing only the host name
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedHost("localhost");
+        Program p = getSandboxed(sm);
+        assertEq(("127.0.0.1", "127.0.0.1", "127.0.0.1"), p.callFunction("through", auto sub () {
+            return SandboxIo::connectChecked("localhost");
+        }));
+    }
+}
