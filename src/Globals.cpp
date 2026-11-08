@@ -477,9 +477,17 @@ jfieldID Globals::fieldJdbcColumnarBatchData;
 jfieldID Globals::fieldJdbcColumnarBatchValidity;
 jfieldID Globals::fieldJdbcColumnarBatchNullCounts;
 
-GlobalReference<jclass> Globals::classJdbcLob;
-jmethodID Globals::methodJdbcLobReadBlob;
-jmethodID Globals::methodJdbcLobReadClob;
+GlobalReference<jclass> Globals::classBlob;
+jmethodID Globals::methodBlobLength;
+jmethodID Globals::methodBlobGetBytes;
+jmethodID Globals::methodBlobFree;
+GlobalReference<jclass> Globals::classClob;
+jmethodID Globals::methodClobLength;
+jmethodID Globals::methodClobGetSubString;
+jmethodID Globals::methodClobFree;
+GlobalReference<jclass> Globals::classUtilDate;
+jmethodID Globals::methodUtilDateGetTime;
+jmethodID Globals::methodTimestampGetNanos;
 
 GlobalReference<jclass> Globals::classArray;
 jmethodID Globals::methodArrayGetArray;
@@ -2598,7 +2606,6 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassJavaCollectionTypes.inc"
 #include "JavaClassQoreRelativeTime.inc"
 #include "JavaClassJdbcColumnarBatch.inc"
-#include "JavaClassJdbcLob.inc"
 #include "JavaClassQoreJavaDynamicApi.inc"
 #include "JavaClassQoreJavaDynamicApi_AccessibleMethods.inc"
 #include "JavaClassHash.inc"
@@ -2655,7 +2662,6 @@ static ucmap_t ucmap = {
     {"org.qore.jni.JavaClassBuilder$1", {java_org_qore_jni_JavaClassBuilder_1_class_len, java_org_qore_jni_JavaClassBuilder_1_class}},
     {"org.qore.jni.JavaClassBuilder$2", {java_org_qore_jni_JavaClassBuilder_2_class_len, java_org_qore_jni_JavaClassBuilder_2_class}},
     {"org.qore.jni.JdbcColumnarBatch", {java_org_qore_jni_JdbcColumnarBatch_class_len, java_org_qore_jni_JdbcColumnarBatch_class}},
-    {"org.qore.jni.JdbcLob", {java_org_qore_jni_JdbcLob_class_len, java_org_qore_jni_JdbcLob_class}},
     {"org.qore.jni.StaticEntry", {java_org_qore_jni_StaticEntry_class_len, java_org_qore_jni_StaticEntry_class}},
     {"org.qore.jni.QoreClassFileLocator", {java_org_qore_jni_QoreClassFileLocator_class_len,
         java_org_qore_jni_QoreClassFileLocator_class}},
@@ -4168,10 +4174,17 @@ bool Globals::init() {
     fieldJdbcColumnarBatchValidity = env.getField(classJdbcColumnarBatch, "validity", "[[B");
     fieldJdbcColumnarBatchNullCounts = env.getField(classJdbcColumnarBatch, "nullCounts", "[J");
 
-    classJdbcLob = findDefineClass(env, "org.qore.jni.JdbcLob", syscl, java_org_qore_jni_JdbcLob_class,
-        java_org_qore_jni_JdbcLob_class_len).makeGlobal();
-    methodJdbcLobReadBlob = env.getStaticMethod(classJdbcLob, "readBlob", "(Ljava/sql/Blob;)[B");
-    methodJdbcLobReadClob = env.getStaticMethod(classJdbcLob, "readClob", "(Ljava/sql/Clob;)Ljava/lang/String;");
+    classBlob = env.findClass("java/sql/Blob").makeGlobal();
+    methodBlobLength = env.getMethod(classBlob, "length", "()J");
+    methodBlobGetBytes = env.getMethod(classBlob, "getBytes", "(JI)[B");
+    methodBlobFree = env.getMethod(classBlob, "free", "()V");
+    classClob = env.findClass("java/sql/Clob").makeGlobal();
+    methodClobLength = env.getMethod(classClob, "length", "()J");
+    methodClobGetSubString = env.getMethod(classClob, "getSubString", "(JI)Ljava/lang/String;");
+    methodClobFree = env.getMethod(classClob, "free", "()V");
+    classUtilDate = env.findClass("java/util/Date").makeGlobal();
+    methodUtilDateGetTime = env.getMethod(classUtilDate, "getTime", "()J");
+    methodTimestampGetNanos = env.getMethod(classTimestamp, "getNanos", "()I");
 
     env.registerNatives(classJavaClassBuilder, javaClassBuilderNativeMethods,
         sizeof(javaClassBuilderNativeMethods) / sizeof(JNINativeMethod));
@@ -4657,7 +4670,9 @@ void Globals::cleanup() {
     classResultSet = nullptr;
     classResultSetMetaData = nullptr;
     classJdbcColumnarBatch = nullptr;
-    classJdbcLob = nullptr;
+    classBlob = nullptr;
+    classClob = nullptr;
+    classUtilDate = nullptr;
     classArray = nullptr;
     classSQLException = nullptr;
     classServiceLoader = nullptr;

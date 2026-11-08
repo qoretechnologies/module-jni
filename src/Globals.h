@@ -492,9 +492,17 @@ public:
     DLLLOCAL static jfieldID fieldJdbcColumnarBatchValidity;                      // byte[][] validity
     DLLLOCAL static jfieldID fieldJdbcColumnarBatchNullCounts;                    // long[] nullCounts
 
-    DLLLOCAL static GlobalReference<jclass> classJdbcLob;                         // org.qore.jni.JdbcLob
-    DLLLOCAL static jmethodID methodJdbcLobReadBlob;                              // static byte[] readBlob(Blob)
-    DLLLOCAL static jmethodID methodJdbcLobReadClob;                              // static String readClob(Clob)
+    DLLLOCAL static GlobalReference<jclass> classBlob;                            // java.sql.Blob
+    DLLLOCAL static jmethodID methodBlobLength;                                   // long length()
+    DLLLOCAL static jmethodID methodBlobGetBytes;                                 // byte[] getBytes(long, int)
+    DLLLOCAL static jmethodID methodBlobFree;                                     // void free()
+    DLLLOCAL static GlobalReference<jclass> classClob;                            // java.sql.Clob
+    DLLLOCAL static jmethodID methodClobLength;                                   // long length()
+    DLLLOCAL static jmethodID methodClobGetSubString;                             // String getSubString(long, int)
+    DLLLOCAL static jmethodID methodClobFree;                                     // void free()
+    DLLLOCAL static GlobalReference<jclass> classUtilDate;                        // java.util.Date
+    DLLLOCAL static jmethodID methodUtilDateGetTime;                              // long getTime()
+    DLLLOCAL static jmethodID methodTimestampGetNanos;                            // int getNanos()
 
     DLLLOCAL static GlobalReference<jclass> classArray;                           // java.sql.Array
     DLLLOCAL static jmethodID methodArrayGetArray;                                // Object getArray()

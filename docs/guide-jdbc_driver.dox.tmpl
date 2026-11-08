@@ -122,13 +122,38 @@ foreach hash<auto> col in (stmt.describe().iterator()) {
     - the trailing spaces of a \c CHAR value are removed: a \c CHAR(20) value \c "hello" is returned as
       \c "hello" on every database, where a native %Qore driver such as \c oracle returns it padded to the size of
       the column
-    - Oracle's \c TIMESTAMP and \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE values, for which Oracle's driver
-      returns its own classes, are read with \c ResultSet.getTimestamp(), and \c TIMESTAMP \c WITH \c TIME
-      \c ZONE values as a \c java.time.OffsetDateTime, so that they are dates; a row id (\c ROWID) is read as a
-      string; \c describe() gives these columns as dates and strings
-    - a large object is read as its value: a \c BLOB as binary, a \c CLOB or \c NCLOB as a string (in chunks of
-      64 KiB or characters), and the \c java.sql.Blob or \c java.sql.Clob object is freed; the whole value is in
-      memory, as with the native %Qore drivers; \c describe() gives these columns as binary and strings
+    - Oracle's \c TIMESTAMP, \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE and \c DATE values, for which
+      Oracle's driver returns its own classes, are read with \c ResultSet.getTimestamp() and converted from the time
+      since the epoch, so that a time in the hour repeated when daylight saving time ends is the right one of the two
+    - Oracle's \c TIMESTAMP \c WITH \c TIME \c ZONE values are read as a \c java.time.OffsetDateTime and keep
+      their offset; with a driver that cannot read one (older than the JDBC 4.2 support of Oracle's driver), the
+      value is read from its string, which has the offset, or, for a value with a time zone region instead of an
+      offset, as the same point in time in the current time zone
+    - a row id (\c ROWID) is read as a string
+    - a \c TIME value is read as a \c java.time.LocalTime and a \c TIME \c WITH \c TIME \c ZONE value as a
+      \c java.time.OffsetTime, which have the fraction of a second that \c java.sql.Time drops (ex: SQL Server's
+      \c time(7), PostgreSQL's \c time and \c timetz); a time is a time on 1970-01-01
+    - PostgreSQL's \c 'infinity' and \c '-infinity' timestamps and dates are the dates that the native \c pgsql
+      driver returns for them: the largest and the smallest number of microseconds (days for a \c date) since
+      2000-01-01, which are beyond PostgreSQL's range of dates, so no other value equals them (\c pgjdbc returned
+      dates in the year 292278994)
+    - a large object is read as its value: a \c BLOB as binary, a \c CLOB or \c NCLOB as a string; it is read in
+      chunks of 64 KiB or 64 Ki characters, a cancelled thread or an interrupted program stops the read before the
+      next chunk (with \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED), and the \c java.sql.Blob or
+      \c java.sql.Clob object is freed however the read ends (an error of \c free() is ignored); an empty large
+      object (ex: Oracle's \c empty_blob()) is not read; a driver that returns another value for such a column
+      (ex: SQLite's \c byte[] for a \c BLOB) gives that value
+    - \c describe() gives these columns as dates, strings and binary, as their values are
+
+    Dates have microseconds: the fraction of a value with nanoseconds (ex: Oracle's \c TIMESTAMP(9)) is truncated
+    to the microsecond.  A local time that does not exist in the current time zone (in the hour skipped when daylight
+    saving time starts) cannot be a %Qore date in that time zone; such a value of a type without a time zone is the
+    point in time that the JDBC driver gives for it.
+
+    The memory that a large object takes while it is read is its value and one chunk: a \c BLOB of \c n bytes takes
+    up to twice \c n bytes beyond the first 16 MiB (the buffer doubles as it grows) and 64 KiB for the chunk; a
+    \c CLOB of \c n characters takes up to 3 \c n bytes of UTF-8 (4 bytes for each pair of UTF-16 units of a
+    character outside the Basic Multilingual Plane) plus the growth of the string, and 128 KiB for the chunk.
 
     @subsection jdbc_sql_errors SQL Errors
 

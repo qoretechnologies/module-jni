@@ -60,10 +60,12 @@ static int jdbc_open(Datasource* ds, ExceptionSink* xsink) {
 static int jdbc_close(Datasource* ds) {
     std::unique_ptr<QoreJdbcConnection> conn(ds->getPrivateData<QoreJdbcConnection>());
     ExceptionSink xsink;
+    // the connection is closed on a cancelled thread too
+    QoreCancelDeferralHelper cancel_deferral;
     try {
         Env env;
         conn->close(env);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(&xsink);
     }
     int rc = xsink ? -1 : 0;
@@ -313,10 +315,12 @@ static int jdbc_stmt_close(SQLStatement* stmt, ExceptionSink* xsink) {
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
+    // the statement is closed on a cancelled thread too
+    QoreCancelDeferralHelper cancel_deferral;
     try {
         Env env;
         ps->close(env, xsink);
-    } catch (JavaException& e) {
+    } catch (jni::Exception& e) {
         e.convert(xsink);
     }
     delete ps;

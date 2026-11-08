@@ -75,20 +75,30 @@ struct QoreJdbcColumn {
     enum class Fetch {
         //! ResultSet.getObject(int)
         Object,
-        //! ResultSet.getTimestamp(int): Oracle's TIMESTAMP and TIMESTAMP WITH LOCAL TIME ZONE
+        //! ResultSet.getTimestamp(int), converted from the time since the epoch: Oracle's TIMESTAMP, TIMESTAMP WITH
+        //! LOCAL TIME ZONE and DATE
         Timestamp,
-        //! ResultSet.getObject(int, OffsetDateTime.class): Oracle's TIMESTAMP WITH TIME ZONE
+        //! ResultSet.getObject(int, OffsetDateTime.class): Oracle's TIMESTAMP WITH TIME ZONE; with a driver without
+        //! it, the string of the value, which has its offset
         OffsetDateTime,
         //! ResultSet.getString(int): ROWID
         String,
-        //! the bytes of the java.sql.Blob that ResultSet.getObject(int) returns, which is freed: BLOB
+        //! ResultSet.getObject(int, LocalTime.class): TIME, which java.sql.Time gives without its fraction
+        LocalTime,
+        //! ResultSet.getObject(int, OffsetTime.class): TIME WITH TIME ZONE
+        OffsetTime,
+        //! a BLOB column: a java.sql.Blob is read in chunks and freed; any other value is converted
         Blob,
-        //! the characters of the java.sql.Clob that ResultSet.getObject(int) returns, which is freed: CLOB, NCLOB
+        //! a CLOB or NCLOB column: a java.sql.Clob is read in chunks and freed; any other value is converted
         Clob,
     };
 
     //! How the values of the column are read
     Fetch fetch = Fetch::Object;
+
+    //! True if the driver does not support ResultSet.getObject(int, Class) for the column, which is then read with
+    //! the fallback of its Fetch mode
+    bool no_get_object_as = false;
 
     //! Constructor
     DLLLOCAL QoreJdbcColumn(std::string&& name, std::string&& qname, jint ctype, std::string&& native_type,
