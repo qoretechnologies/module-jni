@@ -22,6 +22,8 @@ class JniUtf8Test inherits QUnit::Test {
         addTestCase("Round trips", \roundTrips());
         addTestCase("Invalid sequences and unpaired surrogates", \invalid());
         addTestCase("Exception messages", \exceptionMessages());
+        addTestCase("Invalid UTF-8 to Java", \invalidToJava());
+        addTestCase("NUL characters", \nulCharacters());
         set_return_value(main());
     }
 
@@ -80,5 +82,61 @@ class JniUtf8Test inherits QUnit::Test {
             assertEq("JNI-ERROR", ex.err);
             assertRegex("java.lang.NumberFormatException: For input string: \"x😀ž\"", ex.desc);
         }
+    }
+
+    # returns a Qore string of the given bytes, which may be invalid UTF-8
+    private static string utf8(binary b) {
+        return binary_to_string(b, "UTF-8");
+    }
+
+    # returns the UTF-16 units of a Java string
+    private static list<int> units(java::lang::String js) {
+        return map js.charAt($1).toInt(), xrange(js.length());
+    }
+
+    #! each invalid sequence is U+FFFD, on the fast (ASCII) and the slow path; an invalid byte was dropped or passed
+    #! to JNI as it was
+    private invalidToJava() {
+        hash<string, list<auto>> cases = {
+            # an invalid byte in an ASCII string
+            "lone continuation": (<618062>, (0x61, 0xfffd, 0x62)),
+            "FF": (<61ff62>, (0x61, 0xfffd, 0x62)),
+            # an overlong form of "/" and of NUL: each byte is invalid
+            "overlong 2-byte": (<c0af>, (0xfffd, 0xfffd)),
+            "overlong NUL": (<61c08062>, (0x61, 0xfffd, 0xfffd, 0x62)),
+            "overlong 3-byte": (<e080af>, (0xfffd,)),
+            # CESU-8: the surrogates of U+1F600 encoded as two 3-byte sequences
+            "CESU-8": (<eda0bdedb880>, (0xfffd, 0xfffd)),
+            "truncated": (<61e282>, (0x61, 0xfffd)),
+            "truncated 4-byte": (<f09f9861>, (0xfffd, 0x61)),
+            "beyond Unicode": (<f4908080>, (0xfffd,)),
+            # "ř€" and U+1F600
+            "valid": (<c599e282acf09f9880>, (0x159, 0x20ac, 0xd83d, 0xde00)),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            java::lang::String js(utf8(i.value[0]));
+            assertEq(i.value[1], units(js), i.key);
+        }
+    }
+
+    #! NUL is a character of a Qore string and of a Java string in both directions; JNI's modified UTF-8 has it as
+    #! C0 80, which was passed to Qore as it is
+    private nulCharacters() {
+        java::lang::String js(utf8(<610062>));
+        assertEq((0x61, 0, 0x62), units(js));
+        StringBuilder sb();
+        sb.append("a");
+        sb.appendCodePoint(0);
+        sb.append("b");
+        string s = sb.toString();
+        assertEq(3, s.size());
+        assertEq(<610062>, binary(s));
+        # round trip
+        assertEq(<610062>, binary(js.toString()));
+        # reversed surrogates (a low one, then a high one) are two U+FFFD
+        StringBuilder r();
+        r.appendCodePoint(0xdc00);
+        r.appendCodePoint(0xd83d);
+        assertEq("\ufffd\ufffd", r.toString());
     }
 }

@@ -2404,13 +2404,24 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
     if (!jname) {
         return nullptr;
     }
-    const char* utf = jenv->GetStringUTFChars(jname, nullptr);
-    if (!utf) {
-        return nullptr;
+    // no C++ exception may leave a JNI native method: a failure is raised as a Java exception
+    try {
+        Env::JniUtfChars utf(jenv, jname);
+        if (!utf.get()) {
+            return nullptr;
+        }
+        return Globals::getModuleClassLoader(Env::ModifiedUtf8(utf.get()).c_str());
+    } catch (std::bad_alloc&) {
+        if (!jenv->ExceptionCheck()) {
+            jenv->ThrowNew(jenv->FindClass("java/lang/OutOfMemoryError"), "getModuleLoader()");
+        }
+    } catch (...) {
+        // a Java exception raised by a JNI call is already pending
+        if (!jenv->ExceptionCheck()) {
+            jenv->ThrowNew(jenv->FindClass("java/lang/RuntimeException"), "getModuleLoader() failed");
+        }
     }
-    jobject loader = Globals::getModuleClassLoader(Env::ModifiedUtf8(utf).c_str());
-    jenv->ReleaseStringUTFChars(jname, utf);
-    return loader;
+    return nullptr;
 }
 
 // Instance native: returns the canonical owning loader for `bin_name` from the
@@ -2420,18 +2431,17 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
     if (!jname) {
         return nullptr;
     }
-    const char* utf = jenv->GetStringUTFChars(jname, nullptr);
-    if (!utf) {
+    Env::JniUtfChars utf(jenv, jname);
+    if (!utf.get()) {
         return nullptr;
     }
     jobject loader = nullptr;
     try {
         Env env(jenv);
-        loader = Globals::getCanonicalLoader(env, jthis, Env::ModifiedUtf8(utf).c_str());
+        loader = Globals::getCanonicalLoader(env, jthis, Env::ModifiedUtf8(utf.get()).c_str());
     } catch (...) {
         // swallow; null tells the Java caller to fall back to local generation
     }
-    jenv->ReleaseStringUTFChars(jname, utf);
     return loader;
 }
 
