@@ -95,6 +95,15 @@ released capture; `Reference.reachabilityFence()` keeps the object reachable dur
 is never closed is released by the NativeCleanup thread (`KIND_SANDBOX_POLICY`), which runs the release as a
 registered Qore thread; at JVM shutdown NativeCleanup releases every outstanding handle.
 
+## Known limitation (qore#5644)
+
+`QoreSandboxCaptureHelper` sets only the thread's inherited sandbox context, which libqore consults last
+(`find_thread_sandbox_stack_ref_intern()` in `lib/thread.cpp`). A captured policy therefore decides a check only on
+a thread with no Qore context of its own. On a Qore thread, a sandboxed Program on the stack decides instead, and a
+policy barrier (`SandboxManager::createSystemPolicyCall()`) leaves no sandbox at all. The fix needs a libqore
+accessor for the policy manager of a capture, after which `SandboxCallScope::enter()` checks against it directly
+and `capture0()` duplicates the parent capture; see qore#5644.
+
 ## What is not enforced here
 
 The checks are cooperative: they constrain only Java code that makes them.  Declaring Java code (a module or a data

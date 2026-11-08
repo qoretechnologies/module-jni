@@ -168,6 +168,12 @@ class Outer {
     bypass.  %Qore code that Java calls back on a Java thread already runs under the sandbox of the code that handed
     it to Java (see @ref jni_callback_sandbox), so the checks it makes through Java use that sandbox.
 
+    @note Known limitation (qore#5644): a captured \c QoreSandbox.Policy governs a check only on a thread with no
+    %Qore context of its own, such as a Java worker thread.  On a %Qore thread that runs other sandboxed code, that
+    code's policy applies instead, and inside a system-policy capability (\c SandboxManager::createSystemPolicyCall())
+    no sandbox applies; until this is fixed, use a captured policy only on Java threads, and the static methods on
+    the thread of the %Qore caller.
+
     @par Example:
     @code{.java}
 import java.net.InetAddress;

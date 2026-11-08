@@ -93,6 +93,12 @@ public final class QoreSandbox {
     /** Created with QoreSandbox.capture() in the call from %Qore.  The object can be shared between threads; its
         checks can run concurrently.  Close it when the work it governs is finished; a policy that is not closed is
         released when it is garbage-collected.  A check made with a closed policy raises \c JNI-SANDBOX-ERROR.
+
+        @note Known limitation (qore#5644): the captured policy governs a check only on a thread that has no %Qore
+        context of its own, such as a Java worker thread, which is the use it is made for.  On a %Qore thread that
+        runs other sandboxed code, that code's policy applies instead, and inside a system-policy capability
+        (\c SandboxManager::createSystemPolicyCall()) no sandbox applies; use a Policy only on Java threads until
+        this is fixed
     */
     public static final class Policy implements AutoCloseable {
         //! the native capture; released by close() or by NativeCleanup
