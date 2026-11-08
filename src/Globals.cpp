@@ -457,6 +457,8 @@ jmethodID Globals::methodResultSetGetLong;
 jmethodID Globals::methodResultSetGetObject;
 jmethodID Globals::methodResultSetGetShort;
 jmethodID Globals::methodResultSetGetString;
+jmethodID Globals::methodResultSetGetTimestamp;
+jmethodID Globals::methodResultSetGetObjectAs;
 
 GlobalReference<jclass> Globals::classResultSetMetaData;
 jmethodID Globals::methodResultSetMetaDataGetColumnClassName;
@@ -511,6 +513,7 @@ int Globals::typeTimestampWithTimezone;
 int Globals::typeTinyInt;
 int Globals::typeVarbinary;
 int Globals::typeVarchar;
+int Globals::typeRowId;
 
 GlobalReference<jstring> Globals::javaQoreClassField;
 GlobalReference<jstring> Globals::javaQoreClassPgmIdField;
@@ -3968,6 +3971,9 @@ bool Globals::init() {
     methodResultSetGetObject = env.getMethod(classResultSet, "getObject", "(I)Ljava/lang/Object;");
     methodResultSetGetShort = env.getMethod(classResultSet, "getShort", "(I)S");
     methodResultSetGetString = env.getMethod(classResultSet, "getString", "(I)Ljava/lang/String;");
+    methodResultSetGetTimestamp = env.getMethod(classResultSet, "getTimestamp", "(I)Ljava/sql/Timestamp;");
+    methodResultSetGetObjectAs = env.getMethod(classResultSet, "getObject",
+        "(ILjava/lang/Class;)Ljava/lang/Object;");
 
     classResultSetMetaData = env.findClass("java/sql/ResultSetMetaData").makeGlobal();
     methodResultSetMetaDataGetColumnClassName = env.getMethod(classResultSetMetaData, "getColumnClassName",
@@ -4048,6 +4054,8 @@ bool Globals::init() {
         typeVarbinary = env.getStaticIntField(classTypes, field);
         field = env.getStaticField(classTypes, "VARCHAR", "I");
         typeVarchar = env.getStaticIntField(classTypes, field);
+        field = env.getStaticField(classTypes, "ROWID", "I");
+        typeRowId = env.getStaticIntField(classTypes, field);
     }
 
     assert(!classQoreURLClassLoader);

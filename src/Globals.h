@@ -469,6 +469,8 @@ public:
     DLLLOCAL static jmethodID methodResultSetGetObject;                           // Object getObject(int)
     DLLLOCAL static jmethodID methodResultSetGetShort;                            // short getShort(int)
     DLLLOCAL static jmethodID methodResultSetGetString;                           // String getString(int)
+    DLLLOCAL static jmethodID methodResultSetGetTimestamp;                        // Timestamp getTimestamp(int)
+    DLLLOCAL static jmethodID methodResultSetGetObjectAs;                         // Object getObject(int, Class)
     DLLLOCAL static jmethodID methodResultSetNext;                                // boolean next()
     DLLLOCAL static jmethodID methodResultSetWasNull;                             // boolean wasNull()
     DLLLOCAL static jmethodID methodResultSetGetMetaData;                         // ResultSetMetaData getMetaData()
@@ -526,6 +528,7 @@ public:
     DLLLOCAL static int typeTinyInt;                // java.sql.Type.TINYINT value
     DLLLOCAL static int typeVarbinary;              // java.sql.Type.VARBINARY value
     DLLLOCAL static int typeVarchar;                // java.sql.Type.VARCHAR value
+    DLLLOCAL static int typeRowId;                  // java.sql.Type.ROWID value
 
     DLLLOCAL static GlobalReference<jstring> javaQoreClassField;
     DLLLOCAL static GlobalReference<jstring> javaQoreClassPgmIdField;

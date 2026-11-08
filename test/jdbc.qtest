@@ -33,6 +33,7 @@ public class Main inherits QUnit::Test {
         addTestCase("mssqlDescribeTest", \mssqlDescribeTest());
         addTestCase("integers keep their value and sign on every server", \integerBindTest());
         addTestCase("execRaw() executes the SQL as given, and its effects last for the session", \execRawTest());
+        addTestCase("Oracle date and time values and row ids are Qore values", \oracleDateTimeTest());
 
         # execute tests and set program return value
         set_return_value(main());
@@ -582,6 +583,87 @@ printf(\"imported\\n\");
         if (!found) {
             testSkip("no jdbc connection available");
         }
+    }
+
+    #! Oracle's driver returns its own classes for TIMESTAMP (oracle.sql.TIMESTAMP), TIMESTAMP WITH TIME ZONE
+    #! (TIMESTAMPTZ), TIMESTAMP WITH LOCAL TIME ZONE (TIMESTAMPLTZ) and ROWID (ROWID) from getObject(), which were
+    #! returned as Java objects and described as objects; they are read as dates and strings
+    private oracleDateTimeTest() {
+        *Datasource ds = getConnection("QORE_DB_CONNSTR_JDBC_ORACLE");
+        if (!ds) {
+            testSkip("no jdbc connection available");
+        }
+        string table = sprintf("jdbc_dt_%d_%d", getpid(), now_us().getEpochSeconds());
+        ds.execRaw(sprintf("create table %s (id number(2), ts timestamp(6), tstz timestamp(6) with time zone, "
+            "tsltz timestamp(6) with local time zone, d date)", table));
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table " + table);
+            ds.commit();
+        }
+        ds.execRaw(sprintf("insert into %s values (1, timestamp '2026-03-04 05:06:07.123456', "
+            "timestamp '2026-03-04 05:06:07.123456 +02:00', timestamp '2026-03-04 05:06:07.123456 +02:00', "
+            "to_date('2026-03-04 05:06:07', 'YYYY-MM-DD HH24:MI:SS'))", table));
+        ds.execRaw(sprintf("insert into %s (id) values (2)", table));
+        ds.commit();
+
+        # a time zone is kept as the same point in time
+        date tz = 2026-03-04T05:06:07.123456+02:00;
+        string sql = sprintf("select ts, tstz, tsltz, d, rowid as rid from %s order by id", table);
+
+        hash<auto> h = ds.select(sql);
+        # the first row of the columns
+        checkDateTimeRow((map {$1.key: $1.value[0]}, h.pairIterator()), tz, "select");
+        list<hash<auto>> rows = ds.selectRows(sql);
+        assertEq(2, rows.size());
+        checkDateTimeRow(rows[0], tz, "selectRows");
+        # NULL values
+        assertEq({"ts": NULL, "tstz": NULL, "tsltz": NULL, "d": NULL}, rows[1] - "rid", "selectRows NULL");
+        assertEq(Type::String, rows[1].rid.type(), "selectRows NULL row id");
+        checkDateTimeRow(ds.selectRow(sql + " fetch first 1 rows only"), tz, "selectRow");
+        {
+            SQLStatement stmt(ds);
+            stmt.prepare(sql);
+            stmt.exec();
+            # the column types
+            hash<auto> desc = stmt.describe();
+            foreach string col in (("ts", "tstz", "tsltz", "d")) {
+                assertEq(NT_DATE, desc{col}.type, "describe " + col);
+            }
+            assertEq(NT_STRING, desc.rid.type, "describe rid");
+            assertTrue(stmt.next());
+            checkDateTimeRow(stmt.fetchRow(), tz, "SQLStatement");
+        }
+        if (hasColumnar(ds)) {
+            auto r = ds.selectColumnar(sql);
+            # a timestamp column holds the microseconds since the epoch, a list column dates
+            hash<auto> row = (map {$1: getColumn(r, $1)[0]}, ("ts", "tstz", "tsltz", "d", "rid"));
+            map row{$1} = row{$1}.typeCode() == NT_INT ? toDate(row{$1}) : row{$1}, ("ts", "tstz", "tsltz", "d");
+            checkDateTimeRow(row, tz, "selectColumnar");
+            # NULL values
+            assertEq(NULL, getColumn(r, "ts")[1] ?? NULL, "selectColumnar NULL");
+        }
+    }
+
+    # returns the local date of a number of microseconds since the epoch
+    private static date toDate(int us) {
+        return localtime(us / 1000000) + microseconds(us % 1000000);
+    }
+
+    private checkDateTimeRow(hash<auto> row, date tz, string label) {
+        # TIMESTAMP and DATE have no time zone: the values are local
+        assertEq(Type::Date, row.ts.type(), label + " ts");
+        assertEq("2026-03-04 05:06:07.123456", row.ts.format("YYYY-MM-DD HH:mm:SS.xx"), label + " ts");
+        assertEq(Type::Date, row.d.type(), label + " d");
+        assertEq("2026-03-04 05:06:07", row.d.format("YYYY-MM-DD HH:mm:SS"), label + " d");
+        # TIMESTAMP WITH (LOCAL) TIME ZONE: the same point in time
+        foreach string col in (("tstz", "tsltz")) {
+            assertEq(Type::Date, row{col}.type(), label + " " + col);
+            assertEq(tz.getEpochSeconds(), row{col}.getEpochSeconds(), label + " " + col);
+            assertEq(123456, row{col}.microseconds(), label + " " + col);
+        }
+        # an Oracle row id: 18 characters of its base 64 encoding
+        assertRegex("^[A-Za-z0-9+/]{18}$", row.rid ?? "", label + " rid");
     }
 
     #! asserts that execRaw() returns the same results as exec() for each SQL string, which must not change the data

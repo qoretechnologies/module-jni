@@ -41,6 +41,15 @@ QoreJdbcColumn::QoreJdbcColumn(std::string&& name, std::string&& qname, jint cty
         : name(std::move(name)), qname(std::move(qname)), strip(ctype == Globals::typeChar), ctype(ctype),
         native_type(std::move(native_type)), precision(precision), scale(scale), nullable(nullable),
         class_name(std::move(class_name)) {
+    // the vendor classes of Oracle's date and time types and row ids, which getObject() returns
+    const std::string& cn = this->class_name;
+    if (cn == "oracle.sql.TIMESTAMP" || cn == "oracle.sql.TIMESTAMPLTZ" || cn == "oracle.sql.DATE") {
+        fetch = Fetch::Timestamp;
+    } else if (cn == "oracle.sql.TIMESTAMPTZ") {
+        fetch = Fetch::OffsetDateTime;
+    } else if (ctype == Globals::typeRowId || cn == "oracle.sql.ROWID") {
+        fetch = Fetch::String;
+    }
 }
 
 QoreJdbcStatement::~QoreJdbcStatement() {
@@ -459,6 +468,16 @@ static qore_type_t jdbc_sql_type_code(const QoreJdbcColumn& col, NumericOption n
 }
 
 qore_type_t QoreJdbcStatement::getColumnTypeCode(Env& env, const QoreJdbcColumn& col) {
+    // the values that are not read with getObject() (see getColumnValue())
+    switch (col.fetch) {
+        case QoreJdbcColumn::Fetch::Timestamp:
+        case QoreJdbcColumn::Fetch::OffsetDateTime:
+            return NT_DATE;
+        case QoreJdbcColumn::Fetch::String:
+            return NT_STRING;
+        case QoreJdbcColumn::Fetch::Object:
+            break;
+    }
     NumericOption numeric = conn->getNumericOption();
     const std::string& name = col.class_name;
     if (name.empty()) {
@@ -2192,7 +2211,25 @@ QoreValue QoreJdbcStatement::getColumnValue(Env& env, int column, QoreJdbcColumn
     // get column value for this row
     jvalue jarg;
     jarg.i = column;
-    LocalReference<jobject> val = env.callObjectMethod(rs, Globals::methodResultSetGetObject, &jarg);
+    LocalReference<jobject> val;
+    switch (col.fetch) {
+        case QoreJdbcColumn::Fetch::Timestamp:
+            val = env.callObjectMethod(rs, Globals::methodResultSetGetTimestamp, &jarg);
+            break;
+        case QoreJdbcColumn::Fetch::OffsetDateTime: {
+            jvalue jargs[2];
+            jargs[0].i = column;
+            jargs[1].l = Globals::classOffsetDateTime;
+            val = env.callObjectMethod(rs, Globals::methodResultSetGetObjectAs, &jargs[0]);
+            break;
+        }
+        case QoreJdbcColumn::Fetch::String:
+            val = env.callObjectMethod(rs, Globals::methodResultSetGetString, &jarg);
+            break;
+        case QoreJdbcColumn::Fetch::Object:
+            val = env.callObjectMethod(rs, Globals::methodResultSetGetObject, &jarg);
+            break;
+    }
     if (!val) {
         return &Null;
     }

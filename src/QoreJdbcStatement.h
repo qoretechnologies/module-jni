@@ -68,6 +68,24 @@ struct QoreJdbcColumn {
     //! The class of the values that ResultSet.getObject() returns, if the driver reports it
     std::string class_name;
 
+    //! How the values of the column are read from the result set
+    /** ResultSet.getObject() returns a vendor class for some types, which is not converted to a Qore value; the
+        values of these types are read as standard Java values
+    */
+    enum class Fetch {
+        //! ResultSet.getObject(int)
+        Object,
+        //! ResultSet.getTimestamp(int): Oracle's TIMESTAMP and TIMESTAMP WITH LOCAL TIME ZONE
+        Timestamp,
+        //! ResultSet.getObject(int, OffsetDateTime.class): Oracle's TIMESTAMP WITH TIME ZONE
+        OffsetDateTime,
+        //! ResultSet.getString(int): ROWID
+        String,
+    };
+
+    //! How the values of the column are read
+    Fetch fetch = Fetch::Object;
+
     //! Constructor
     DLLLOCAL QoreJdbcColumn(std::string&& name, std::string&& qname, jint ctype, std::string&& native_type,
         jint precision, jint scale, bool nullable, std::string&& class_name);

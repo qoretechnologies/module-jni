@@ -6,6 +6,10 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed the \c jdbc driver returning Oracle's \c TIMESTAMP, \c TIMESTAMP \c WITH \c TIME \c ZONE,
+      \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE and \c ROWID values as Java objects of Oracle's driver
+      (\c oracle.sql.TIMESTAMP and the like), and \c describe() giving these columns as objects: they are dates and
+      strings (see @ref jdbc_column_values)
     - fixed the \c jdbc driver binding an integer of -128 to 127 as a \c TINYINT and one of -32768 to 32767 as a
       \c SMALLINT: SQL Server stores a \c TINYINT unsigned, so a negative value was stored as another one (-1 as
       255) when a statement prepared with a small positive value was run again; an integer is bound as an \c INTEGER

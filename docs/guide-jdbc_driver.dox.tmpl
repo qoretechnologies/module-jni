@@ -117,11 +117,15 @@ foreach hash<auto> col in (stmt.describe().iterator()) {
 
     @subsection jdbc_column_values Column Values
 
-    A column value is the value that \c ResultSet.getObject() returns, converted to a %Qore value, with this
-    exception:
+    A column value is the value that \c ResultSet.getObject() returns, converted to a %Qore value, with these
+    exceptions:
     - the trailing spaces of a \c CHAR value are removed: a \c CHAR(20) value \c "hello" is returned as
       \c "hello" on every database, where a native %Qore driver such as \c oracle returns it padded to the size of
       the column
+    - Oracle's \c TIMESTAMP and \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE values, for which Oracle's driver
+      returns its own classes, are read with \c ResultSet.getTimestamp(), and \c TIMESTAMP \c WITH \c TIME
+      \c ZONE values as a \c java.time.OffsetDateTime, so that they are dates; a row id (\c ROWID) is read as a
+      string; \c describe() gives these columns as dates and strings
 
     @subsection jdbc_sql_errors SQL Errors
 
