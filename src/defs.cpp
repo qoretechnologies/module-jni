@@ -170,7 +170,7 @@ QoreStringNode* JavaException::toString(bool clear) const {
         if (!desc->empty()) {
             desc->concat(": ");
         }
-        desc->concat(chars);
+        desc->concat(Env::ModifiedUtf8(chars).c_str());
         env->ReleaseStringUTFChars(excName, chars);
 
         LocalReference<jstring> msg = static_cast<jstring>(env->CallObjectMethod(throwable, Globals::methodThrowableGetMessage));
@@ -183,7 +183,7 @@ QoreStringNode* JavaException::toString(bool clear) const {
             if (!chars) {
                 env->ExceptionClear();
             } else {
-                desc->concat(chars);
+                desc->concat(Env::ModifiedUtf8(chars).c_str());
                 env->ReleaseStringUTFChars(msg, chars);
             }
         }
@@ -289,7 +289,7 @@ void JavaException::convert(ExceptionSink* xsink) {
         xsink->raiseException("JNI-ERROR", "Unable to get exception class name - GetStringUTFChars() failed");
         return;
     }
-    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(chars, QCS_UTF8));
+    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(Env::ModifiedUtf8(chars).c_str(), QCS_UTF8));
     env->ReleaseStringUTFChars(excName, chars);
 
     jstring raw_msg = static_cast<jstring>(env->CallObjectMethod(throwable,
@@ -306,7 +306,7 @@ void JavaException::convert(ExceptionSink* xsink) {
         if (!chars) {
             env->ExceptionClear();
         } else {
-            desc->concat(chars);
+            desc->concat(Env::ModifiedUtf8(chars).c_str());
             env->ReleaseStringUTFChars(msg, chars);
         }
     }
@@ -390,7 +390,7 @@ void JavaException::ignoreOrRethrowNoClass() {
         return;
     }
 
-    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(chars, QCS_UTF8));
+    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(Env::ModifiedUtf8(chars).c_str(), QCS_UTF8));
     env->ReleaseStringUTFChars(excName, chars);
 
     jstring raw_msg = static_cast<jstring>(env->CallObjectMethod(throwable, Globals::methodThrowableGetMessage));
@@ -406,7 +406,7 @@ void JavaException::ignoreOrRethrowNoClass() {
         if (!chars) {
             env->ExceptionClear();
         } else {
-            desc->concat(chars);
+            desc->concat(Env::ModifiedUtf8(chars).c_str());
             env->ReleaseStringUTFChars(msg, chars);
         }
     }

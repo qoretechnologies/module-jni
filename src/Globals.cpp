@@ -2401,7 +2401,7 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
     if (!utf) {
         return nullptr;
     }
-    jobject loader = Globals::getModuleClassLoader(utf);
+    jobject loader = Globals::getModuleClassLoader(Env::ModifiedUtf8(utf).c_str());
     jenv->ReleaseStringUTFChars(jname, utf);
     return loader;
 }
@@ -2420,7 +2420,7 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
     jobject loader = nullptr;
     try {
         Env env(jenv);
-        loader = Globals::getCanonicalLoader(env, jthis, utf);
+        loader = Globals::getCanonicalLoader(env, jthis, Env::ModifiedUtf8(utf).c_str());
     } catch (...) {
         // swallow; null tells the Java caller to fall back to local generation
     }

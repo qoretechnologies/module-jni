@@ -34,6 +34,10 @@
 #include "Jvm.h"
 #include "LocalReference.h"
 
+#include <cstdint>
+#include <string>
+#include <vector>
+
 namespace jni {
 
 /**
@@ -1024,13 +1028,38 @@ public:
         return ret;
     }
 
+    //! Creates a Java string from a UTF-8 string
+    /** JNI's NewStringUTF() takes "modified" UTF-8, in which a character outside the Basic Multilingual Plane is a
+        UTF-16 surrogate pair of two 3-byte sequences; the 4-byte sequence of standard UTF-8 gave a wrong string, so
+        a string with a 4-byte sequence is converted to UTF-16
+    */
+    DLLLOCAL jstring newStringFromUtf8(const char* utf8);
+
     DLLLOCAL LocalReference<jstring> newString(const char* utf8) {
-        jstring s = env->NewStringUTF(utf8);
+        jstring s = hasUtf8Supplementary(utf8) ? newStringFromUtf8(utf8) : env->NewStringUTF(utf8);
         if (s == nullptr) {
             throw JavaException();
         }
         return s;
     }
+
+    //! Returns true if a UTF-8 string has a 4-byte sequence, a character outside the Basic Multilingual Plane
+    DLLLOCAL static bool hasUtf8Supplementary(const char* utf8) {
+        for (const unsigned char* p = reinterpret_cast<const unsigned char*>(utf8); *p; ++p) {
+            if (*p >= 0xf0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! Converts the modified UTF-8 of JNI to standard UTF-8, if it has a surrogate pair
+    /** @param mutf8 a string in modified UTF-8, as GetStringUTFChars() returns it
+        @param out the standard UTF-8 string, if a conversion was needed
+
+        @return true if the string was converted to \a out, false if it is standard UTF-8 as it is
+    */
+    DLLLOCAL static bool convertModifiedUtf8(const char* mutf8, std::string& out);
 
     DLLLOCAL void registerNatives(jclass cls, const JNINativeMethod *methods, jint count) {
         if (env->RegisterNatives(cls, methods, count) != 0) {
@@ -1337,6 +1366,28 @@ public:
         return c;
     }
 
+    //! A string from GetStringUTFChars() (modified UTF-8) in standard UTF-8, for as long as the object lives
+    /** For the code that calls GetStringUTFChars() itself; see convertModifiedUtf8()
+    */
+    class ModifiedUtf8 {
+    public:
+        DLLLOCAL explicit ModifiedUtf8(const char* mutf8)
+                : str(Env::convertModifiedUtf8(mutf8, converted) ? converted.c_str() : mutf8) {
+        }
+
+        ModifiedUtf8(const ModifiedUtf8&) = delete;
+        ModifiedUtf8& operator=(const ModifiedUtf8&) = delete;
+
+        DLLLOCAL const char* c_str() const {
+            return str;
+        }
+
+    private:
+        //! the converted string; declared before str, which may point to it
+        std::string converted;
+        const char* str;
+    };
+
     class GetStringUtfChars {
     public:
         //! Holds an independent local reference while the UTF character buffer is active.
@@ -1371,22 +1422,26 @@ public:
             if (!str) {
                 return -1;
             }
-            chars = env.env->GetStringUTFChars(str, nullptr);
-            if (!chars) {
+            jchars = env.env->GetStringUTFChars(str, nullptr);
+            if (!jchars) {
                 env.env->DeleteLocalRef(str);
                 str = nullptr;
                 return -1;
             }
+            // the modified UTF-8 of a character outside the Basic Multilingual Plane is converted to UTF-8
+            chars = Env::convertModifiedUtf8(jchars, converted) ? converted.c_str() : jchars;
             return 0;
         }
 
         DLLLOCAL void discard() {
             if (str) {
-                env.env->ReleaseStringUTFChars(str, chars);
+                env.env->ReleaseStringUTFChars(str, jchars);
                 env.env->DeleteLocalRef(str);
                 str = nullptr;
-                chars = nullptr;
+                jchars = nullptr;
             }
+            chars = nullptr;
+            converted.clear();
         }
 
         DLLLOCAL const char* c_str() const {
@@ -1423,7 +1478,12 @@ public:
     private:
         Env& env;
         jstring str;
+        //! the string as the JVM gives it (modified UTF-8), released with the string
+        const char* jchars = nullptr;
+        //! the string in standard UTF-8: jchars, converted, or a string assigned with operator=()
         const char* chars;
+        //! jchars converted to standard UTF-8, if it has a character outside the Basic Multilingual Plane
+        std::string converted;
     };
 
 private:

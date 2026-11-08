@@ -6,6 +6,10 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed the conversion of strings with characters outside the Basic Multilingual Plane (ex: emoji) between %Qore
+      and Java, which garbled them in both directions: \c "😀" became \c "ð" in Java, and a Java string with one
+      became invalid UTF-8 in %Qore, including in the messages of Java exceptions; such a character is a 4-byte
+      UTF-8 sequence in %Qore and a surrogate pair in Java
     - fixed the \c jdbc driver returning Oracle's \c TIMESTAMP, \c TIMESTAMP \c WITH \c TIME \c ZONE,
       \c TIMESTAMP \c WITH \c LOCAL \c TIME \c ZONE and \c ROWID values as Java objects of Oracle's driver
       (\c oracle.sql.TIMESTAMP and the like), and \c describe() giving these columns as objects: they are dates and
