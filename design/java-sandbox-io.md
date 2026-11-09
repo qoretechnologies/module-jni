@@ -27,19 +27,21 @@ anonymous class is used, so the only class files are `QoreSandbox` and `QoreSand
 Every native method runs in a `SandboxCallScope`:
 
 1. The calling thread is attached to Qore (`QoreThreadAttacher`) for the duration of the call if it is not a Qore
-   thread.  This is required: `QoreSandboxCaptureHelper` does nothing on a thread without Qore thread data, so a
-   captured policy would silently not apply on a pure Java thread.
+   thread, so that the Qore library, and `QoreSandboxCaptureHelper`, which does nothing on a thread without Qore
+   thread data, work on a pure Java thread.
 2. With a captured policy (a `Policy` object, or the policy of the task a thread runs with `Policy.run()`/`call()`/
-   `wrap()`), the capture is applied with `QoreSandboxCaptureHelper`, exactly as `Dispatcher` and the closure and
-   object handles do for Qore callbacks on Java threads.
+   `wrap()`), the check is made against `QoreSandboxCapture::getPolicyManagerRef()` and against the thread's policy
+   (step 4), and must pass both.  The capture is also applied with `QoreSandboxCaptureHelper` for the call, so that
+   the check, and the host name lookup of a network check, run under the call budgets of the capturing code and
+   end when its sandbox interrupts or terminates its calls.
 3. Without one, the thread must have a Qore caller: it must not have been attached by this call, and either a
    sandbox governs it (`QoreSandboxCapture::isSandboxed()`) or it runs the code of a Program
    (`qore_get_call_program_context()`).  Otherwise `JNI-SANDBOX-ERROR` is raised: the policy is unknown, and
    allowing the operation would turn a missing capture into a sandbox bypass.  `capture()` follows the same rule, so
    a policy cannot be captured lazily on a worker thread.
-4. The policy itself is resolved with `QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)`, the resolution
-   that Qore's own policy checks use, so module code in between inherits the caller's sandbox and a system-policy
-   capability (`SandboxManager::createSystemPolicyCall()`) is checked with the system policy.
+4. The thread's policy is resolved with `QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)`, the
+   resolution that Qore's own policy checks use, so module code in between inherits the caller's sandbox and a
+   system-policy capability (`SandboxManager::createSystemPolicyCall()`) is checked with the system policy.
 
 The Java side keeps the task policy in a `ThreadLocal` and restores the previous value when the task returns, so
 nested tasks with different policies work and a pooled thread does not keep a policy after its task.
@@ -95,14 +97,15 @@ released capture; `Reference.reachabilityFence()` keeps the object reachable dur
 is never closed is released by the NativeCleanup thread (`KIND_SANDBOX_POLICY`), which runs the release as a
 registered Qore thread; at JVM shutdown NativeCleanup releases every outstanding handle.
 
-## Known limitation (qore#5644)
+## Why a captured policy is checked explicitly (qore#5644)
 
-`QoreSandboxCaptureHelper` sets only the thread's inherited sandbox context, which libqore consults last
-(`find_thread_sandbox_stack_ref_intern()` in `lib/thread.cpp`). A captured policy therefore decides a check only on
-a thread with no Qore context of its own. On a Qore thread, a sandboxed Program on the stack decides instead, and a
-policy barrier (`SandboxManager::createSystemPolicyCall()`) leaves no sandbox at all. The fix needs a libqore
-accessor for the policy manager of a capture, after which `SandboxCallScope::enter()` checks against it directly
-and `capture0()` duplicates the parent capture; see qore#5644.
+An applied capture (`QoreSandboxCaptureHelper`) sets only the thread's inherited sandbox context, which libqore
+consults last (`find_thread_sandbox_stack_ref_intern()`): on a Qore thread, a sandboxed Program on the stack would
+decide instead, and inside a system-policy capability no sandbox would.  So a check with a captured policy is made
+against `QoreSandboxCapture::getPolicyManagerRef()` (`SandboxCallScope::managers()`), which does not depend on the
+thread, and against the thread's policy, so that the stricter one wins and a captured policy never lowers the
+sandbox of the code that uses it.  `capture0()` with a parent policy copies the parent capture with the
+`QoreSandboxCapture` copy constructor: a policy captured in a task is the policy of the task.
 
 ## What is not enforced here
 

@@ -36,8 +36,8 @@
 #include <new>
 #include <optional>
 #include <string>
-#include <unordered_set>
 #include <vector>
+#include <unordered_set>
 
 #ifdef _Q_WINDOWS
 #include <winsock2.h>
@@ -61,10 +61,15 @@ static_assert(QSEC_NET_TCP == (1 << 0) && QSEC_NET_UDP == (1 << 1), "QoreSandbox
 constexpr const char* JNI_SANDBOX_ERROR = "JNI-SANDBOX-ERROR";
 
 //! The policy that a native method of org.qore.jni.QoreSandbox applies
-/** The calling Java thread is attached to Qore for the duration of the call if it is not a Qore thread, because a
-    captured policy can only be applied to a Qore thread: on a thread without Qore thread data it would silently not
-    apply.  The policy is either a policy captured with QoreSandbox.capture() or the policy of the thread's Qore
-    caller; a thread with neither cannot be checked.
+/** The calling Java thread is attached to Qore for the duration of the call if it is not a Qore thread, so that the
+    Qore library can be used on it.  The policy is either a policy captured with QoreSandbox.capture() or the policy
+    of the thread's Qore caller; a thread with neither cannot be checked.
+
+    A captured policy is checked with QoreSandboxCapture::getPolicyManagerRef(), which does not depend on the thread,
+    and the policy of the thread's own Qore code (none on a Java thread) applies as well, so that the stricter one
+    wins.  The capture is also applied with QoreSandboxCaptureHelper, for the call budgets and interrupts of the
+    capturing code, but an applied capture governs the thread only as its outermost caller: a sandboxed Program that
+    the thread runs would decide instead, and inside a system-policy call no sandbox would (qore#5644).
 */
 class SandboxCallScope {
 public:
@@ -75,13 +80,23 @@ public:
         attacher.attach();
     }
 
-    //! Applies the captured policy \a ptr, or checks that the thread has a Qore caller if \a ptr is 0
+    //! Uses the captured policy \a ptr, or the policy of the thread's Qore caller if \a ptr is 0
     /** @return 0 if the policy is known, -1 if not (JNI-SANDBOX-ERROR is raised)
     */
     DLLLOCAL int enter(jlong ptr, ExceptionSink* xsink) {
-        assert(!sch);
+        assert(!sch && !captured_policy && !thread_policy);
         if (ptr) {
-            sch.emplace(*reinterpret_cast<const QoreSandboxCapture*>(ptr));
+            const QoreSandboxCapture* capture = reinterpret_cast<const QoreSandboxCapture*>(ptr);
+            // the policy of the code that runs on the thread applies as well: a captured policy never lowers it.  It
+            // is resolved before the capture is applied, which replaces the context that the thread inherited from
+            // the code that started it (or clears it, for an unsandboxed capture): resolved afterwards, the policy
+            // of a thread that only an inherited sandbox governs was lost, and a trusted or looser policy passed
+            // checks that the thread's sandbox denies
+            thread_policy.emplace(QoreSandboxManagerHelper::Policy);
+            // applied for its call budgets and interrupts: the check and its host name lookup run as part of the
+            // capturing code's call; the policy itself is checked explicitly below
+            sch.emplace(*capture);
+            captured_policy = capture->getPolicyManagerRef();
             return 0;
         }
         // a thread attached by this call is a Java thread with no Qore caller; a Qore thread has a caller if a
@@ -89,6 +104,7 @@ public:
         if (!attacher) {
             QoreSandboxCapture current;
             if (current.isSandboxed() || qore_get_call_program_context()) {
+                thread_policy.emplace(QoreSandboxManagerHelper::Policy);
                 return 0;
             }
         }
@@ -99,11 +115,29 @@ public:
         return -1;
     }
 
+    //! Returns the policy managers that a check must pass after enter(): none if no sandbox applies
+    /** The captured policy, if any, and the policy of the code that runs on the thread
+    */
+    DLLLOCAL std::vector<QoreSandboxManager*> managers() {
+        std::vector<QoreSandboxManager*> rv;
+        if (captured_policy) {
+            rv.push_back(*captured_policy);
+        }
+        if (thread_policy && *thread_policy) {
+            rv.push_back(thread_policy->operator->());
+        }
+        return rv;
+    }
+
 private:
     //! attaches a Java thread to Qore for the call; destroyed last
     QoreThreadAttacher attacher;
-    //! applies a captured policy
+    //! applies a captured policy for its call budgets and interrupts; released after the policies below
     std::optional<QoreSandboxCaptureHelper> sch;
+    //! the policy manager of a captured policy (referenced), or nullptr
+    ReferenceHolder<QoreSandboxManager> captured_policy{nullptr};
+    //! the policy of the thread's Qore caller
+    std::optional<QoreSandboxManagerHelper> thread_policy;
 };
 
 //! Throws a Java exception of the given class with a message, ignoring errors
@@ -204,9 +238,13 @@ static bool encode_address(const struct addrinfo& ai, std::string& rv) {
     return false;
 }
 
-//! QoreSandbox.capture0(): captures the policy of the current thread, or of the policy \a ptr
+//! QoreSandbox.capture0(): captures the policy of the current thread, or copies the policy \a ptr
 static jlong JNICALL qore_sandbox_capture(JNIEnv* jenv, jclass, jlong ptr) {
     return sandbox_native<jlong>(jenv, 0, [ptr](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jlong {
+        // a capture made inside Policy.run() is the run's policy, whatever the thread runs (qore#5644)
+        if (ptr) {
+            return reinterpret_cast<jlong>(new QoreSandboxCapture(*reinterpret_cast<const QoreSandboxCapture*>(ptr)));
+        }
         if (scope.enter(ptr, xsink)) {
             return 0;
         }
@@ -229,8 +267,7 @@ static jboolean JNICALL qore_sandbox_is_sandboxed(JNIEnv* jenv, jclass, jlong pt
         if (scope.enter(ptr, xsink)) {
             return JNI_FALSE;
         }
-        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-        return smh ? JNI_TRUE : JNI_FALSE;
+        return scope.managers().empty() ? JNI_FALSE : JNI_TRUE;
     });
 }
 
@@ -261,12 +298,14 @@ static jobjectArray JNICALL qore_sandbox_check_network_access(JNIEnv* jenv, jcla
         }
         const char* proto_name = proto == QSEC_NET_TCP ? "TCP" : "UDP";
 
-        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-        // a host name that the policy denies whatever it resolves to is not looked up
-        if (smh && !smh->network().checkHostname(host.c_str(), port, proto)) {
-            xsink->raiseException("NETWORK-ACCESS-DENIED", "%s connection to '%s' port %d denied by the sandbox "
-                "network policy", proto_name, host.c_str(), (int)port);
-            return nullptr;
+        std::vector<QoreSandboxManager*> managers = scope.managers();
+        // a host name that a policy denies whatever it resolves to is not looked up
+        for (QoreSandboxManager* sm : managers) {
+            if (!sm->network().checkHostname(host.c_str(), port, proto)) {
+                xsink->raiseException("NETWORK-ACCESS-DENIED", "%s connection to '%s' port %d denied by the sandbox "
+                    "network policy", proto_name, host.c_str(), (int)port);
+                return nullptr;
+            }
         }
 
         // the Qore resolver, so that the host name resolves as it does for Qore sockets
@@ -290,8 +329,10 @@ static jobjectArray JNICALL qore_sandbox_check_network_access(JNIEnv* jenv, jcla
             if (!encode_address(*p, addr)) {
                 continue;
             }
-            if (smh && !smh->checkNetworkAccess(host.c_str(), p->ai_addr, p->ai_addrlen, proto, xsink)) {
-                return nullptr;
+            for (QoreSandboxManager* sm : managers) {
+                if (!sm->checkNetworkAccess(host.c_str(), p->ai_addr, p->ai_addrlen, proto, xsink)) {
+                    return nullptr;
+                }
             }
             // the addresses are returned once each, in the order of the resolver
             if (seen.insert(addr).second) {
@@ -332,9 +373,10 @@ static void JNICALL qore_sandbox_check_file_access(JNIEnv* jenv, jclass, jlong p
                 "QoreSandbox.READ, WRITE, EXECUTE, DELETE and CREATE", (int)mode);
             return JNI_FALSE;
         }
-        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-        if (smh && !smh->checkFilesystemAccess(path.c_str(), mode, xsink)) {
-            return JNI_FALSE;
+        for (QoreSandboxManager* sm : scope.managers()) {
+            if (!sm->checkFilesystemAccess(path.c_str(), mode, xsink)) {
+                return JNI_FALSE;
+            }
         }
         return JNI_TRUE;
     });

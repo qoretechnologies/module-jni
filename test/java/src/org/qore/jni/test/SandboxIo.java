@@ -190,6 +190,25 @@ public class SandboxIo {
         }
     }
 
+    //! Checks with a policy captured elsewhere on the current thread, a Qore thread that runs other code
+    /** With the Policy object, with a static check in a task called with the policy, with a policy captured in such
+        a task, and with isSandboxed() of the policy (qore#5644)
+
+        @return the first address checked or the error of each check, and isSandboxed() of the policy
+    */
+    public static String[] checkWithPolicyOnThisThread(QoreSandbox.Policy policy, String host, int port) {
+        List<String> rv = new ArrayList<>();
+        rv.add(describe(() -> hostAddresses(policy.checkNetworkAccess(host, port))));
+        rv.add(describe(() -> policy.call(() -> checkNetwork(host, port))));
+        rv.add(describe(() -> policy.call(() -> {
+            try (QoreSandbox.Policy nested = QoreSandbox.capture()) {
+                return hostAddresses(nested.checkNetworkAccess(host, port));
+            }
+        })));
+        rv.add(String.valueOf(policy.isSandboxed()));
+        return rv.toArray(new String[0]);
+    }
+
     //! Captures a trusted policy for checkNetworkNestedRun()
     public static QoreSandbox.Policy capture() {
         return QoreSandbox.capture();
