@@ -40,6 +40,7 @@ class JniSandboxIoTest inherits QUnit::Test {
         addTestCase("a Java thread without a captured policy is refused", \testUncapturedThread());
         addTestCase("a captured policy governs Java threads", \testCapturedPolicy());
         addTestCase("a captured policy governs Qore threads that run other code", \testPolicyOnQoreThread());
+        addTestCase("a captured policy does not lower an inherited sandbox", \testPolicyOnInheritedThread());
         addTestCase("a task's policy is scoped to the task", \testPolicyScope());
         addTestCase("a closed policy refuses checks", \testClosedPolicy());
         addTestCase("a policy is shared between Java threads", \testConcurrent());
@@ -376,6 +377,61 @@ class JniSandboxIoTest inherits QUnit::Test {
         assertEq("true", rv[3], "a trusted policy on tenant A's thread: isSandboxed()");
         assertEq(("127.0.0.1",), SandboxIo::checkWithPolicyOnThisThread(trusted, "127.0.0.1", 80)[0..0],
             "a trusted policy on a trusted thread");
+    }
+
+    #! qore#5644: on a thread that only the sandbox inherited from the code that started it governs, a trusted or a
+    #! looser captured policy does not lower that sandbox
+    /** Applying a captured policy replaces the context that a thread inherited (an unsandboxed capture clears it), so
+        the policy of the thread must be resolved before the capture is applied; resolved afterwards, both checks
+        passed.
+    */
+    testPolicyOnInheritedThread() {
+        # tenant B blocks private networks; trusted code that it calls starts a thread, which runs only trusted code:
+        # only the sandbox that the thread inherited from tenant B's call governs it
+        SandboxManager sm_b();
+        sm_b.blockPrivateNetworks();
+        sm_b.setNetworkDefaultPolicy(True);
+        Program b = getSandboxed(sm_b);
+        # a looser tenant, whose sandbox allows the whole network
+        SandboxManager sm_c();
+        sm_c.setNetworkDefaultPolicy(True);
+        Program c = getSandboxed(sm_c);
+        object looser = c.callFunction("through", \SandboxIo::capture());
+        on_exit looser.close();
+        object trusted = SandboxIo::capture();
+        on_exit trusted.close();
+
+        Queue q();
+        code checks = sub () {
+            try {
+                # B's sandbox governs the thread: a static check without a captured policy is denied
+                list<string> rv;
+                try {
+                    rv += SandboxIo::checkNetwork("127.0.0.1", 80)[0];
+                } catch (hash<ExceptionInfo> ex) {
+                    rv += ex.err + ": " + ex.desc;
+                }
+                rv += SandboxIo::checkWithPolicyOnThisThread(trusted, "127.0.0.1", 80);
+                rv += SandboxIo::checkWithPolicyOnThisThread(looser, "127.0.0.1", 80);
+                q.push(rv);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err + ": " + ex.desc);
+            }
+        };
+        b.callFunction("through", sub () { background checks(); });
+        auto rv = q.get(60s);
+        if (rv.typeCode() == NT_STRING) {
+            fail("the thread's checks raised an exception: " + rv);
+        }
+        assertRegex("NETWORK-ACCESS-DENIED", rv[0], "tenant B's sandbox governs the thread");
+        list<string> labels = ("the Policy object", "a static check in Policy.call()", "a nested capture()");
+        foreach hash<auto> i in ({"a trusted policy": 1, "a looser tenant's policy": 5}.pairIterator()) {
+            foreach string label in (labels) {
+                assertRegex("NETWORK-ACCESS-DENIED", rv[i.value + $#], sprintf("%s on the thread: %s", i.key,
+                    label));
+            }
+            assertEq("true", rv[i.value + 3], i.key + " on the thread: isSandboxed()");
+        }
     }
 
     testPolicyScope() {

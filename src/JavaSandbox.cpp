@@ -87,12 +87,16 @@ public:
         assert(!sch && !captured_policy && !thread_policy);
         if (ptr) {
             const QoreSandboxCapture* capture = reinterpret_cast<const QoreSandboxCapture*>(ptr);
+            // the policy of the code that runs on the thread applies as well: a captured policy never lowers it.  It
+            // is resolved before the capture is applied, which replaces the context that the thread inherited from
+            // the code that started it (or clears it, for an unsandboxed capture): resolved afterwards, the policy
+            // of a thread that only an inherited sandbox governs was lost, and a trusted or looser policy passed
+            // checks that the thread's sandbox denies
+            thread_policy.emplace(QoreSandboxManagerHelper::Policy);
             // applied for its call budgets and interrupts: the check and its host name lookup run as part of the
             // capturing code's call; the policy itself is checked explicitly below
             sch.emplace(*capture);
             captured_policy = capture->getPolicyManagerRef();
-            // the policy of the code that runs on the thread applies as well: a captured policy never lowers it
-            thread_policy.emplace(QoreSandboxManagerHelper::Policy);
             return 0;
         }
         // a thread attached by this call is a Java thread with no Qore caller; a Qore thread has a caller if a
