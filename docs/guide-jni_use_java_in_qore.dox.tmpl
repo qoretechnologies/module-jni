@@ -232,7 +232,18 @@ public class Fetcher {
     No app is declared \c sandbox_aware yet: each app with \c external_io lets a Java library connect to destinations
     that it resolves or discovers itself, or open files it finds itself, which these checks cannot cover until the
     app is changed to make them.  The Excel and ODS apps create temporary files of their own in the JVM's temporary
-    directory, with names that no caller chooses; these are not declared as external I/O.
+    directory; these are not declared as external I/O, because no caller chooses their names and no caller data
+    leaves the process through them.
+
+    The connection and data provider classes of the modules of the apps with \c external_io refuse sandboxed code in
+    their constructors as well (\c APP-SANDBOX-ACCESS-DENIED), so that sandboxed code that loads such a module and
+    creates its classes itself, without the data provider catalog, is refused too.
+
+    <b>Classpath module commands:</b> the classpath that a sandboxed Program adds with the \c add-classpath and
+    \c add-relative-classpath module commands is checked against its filesystem policy, entry by entry, as a read
+    (\c FILESYSTEM-ACCESS-DENIED), and sandboxed code cannot use \c global-add-classpath and
+    \c global-add-relative-classpath (\c JNI-SANDBOX-ERROR), which change the classpath that every Program shares,
+    so that a sandboxed Program cannot make trusted Programs load its classes.
 
     @subsection jni_fork Child Processes Created with fork()
 

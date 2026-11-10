@@ -48,6 +48,8 @@ class DataProviderExternalIoTest inherits QUnit::Test {
         addTestCase("every data provider module of the repository is listed", \inventoryTest());
         addTestCase("every app declares its external I/O as audited", \declarationTest());
         addTestCase("sandboxed callers are refused the apps with external I/O", \refusalTest());
+        addTestCase("sandboxed code cannot construct the connections and providers of these apps itself",
+            \constructorTest());
         set_return_value(main());
     }
 
@@ -71,6 +73,110 @@ class DataProviderExternalIoTest inherits QUnit::Test {
                 hash<DataProviderAppInfo> app = getApp(m.key, a.key);
                 assertEq(a.value, app.external_io ?? False, sprintf("%s: external_io", a.key));
                 assertNothing(app.sandbox_aware, sprintf("%s: not sandbox-aware", a.key));
+            }
+        }
+    }
+
+    #! Returns the connection and provider classes of the module: class name -> the source of the class
+    private static hash<string, string> getClasses(string module) {
+        hash<string, string> rv = {};
+        Dir d();
+        d.chdir(get_script_dir() + "/../qlib/" + module);
+        foreach string file in (d.listFiles("\\.q[cm]$")) {
+            string src = ReadOnlyFile::readTextFile(d.path() + "/" + file);
+            # each class's source runs to the next class declaration
+            list<string> blocks = split("\nclass ", replace(src, "\npublic class ", "\nclass "));
+            foreach string block in (blocks) {
+                *list<*string> m = (block =~ x/^(\w+)[ \t]+inherits[ \t]+([^{]+)\{/);
+                if (m && m[1] =~ /(DataProvider|Connection)/ && m[1] !~ /DataType|Factory/) {
+                    rv{module + "::" + m[0]} = block;
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! Tries to construct the class with typical constructor arguments; returns the error, or "constructed"
+    private static string construct(string class_name) {
+        Class cls = Class::forName(class_name);
+        if (cls.isAbstract()) {
+            return "abstract";
+        }
+        string last = "no variant";
+        # a connection is given a URL with one of its own schemes, so that its arguments are valid
+        string url = "tcp://127.0.0.1:1";
+        try {
+            *hash<auto> scheme = cls.getConstant("ConnectionScheme").getValue();
+            if (scheme.schemes) {
+                url = (keys scheme.schemes)[0] + "://127.0.0.1:1";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "UNKNOWN-CONSTANT") {
+                rethrow;
+            }
+        }
+        foreach softlist<auto> args in (("test", "test", url), ("test", "test", url, {}, {}), (), ({},)) {
+            try {
+                cls.newObjectArgs(args);
+                return "constructed";
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "RUNTIME-OVERLOAD-ERROR") {
+                    continue;
+                }
+                return ex.err;
+            }
+        }
+        return last;
+    }
+
+    constructorTest() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("auto sub through(code c) { return c(); }", "external-io-constructors");
+        # module -> the classes refused at run time
+        hash<string, list<string>> refused = {};
+        foreach hash<auto> m in (Apps.pairIterator()) {
+            if (!m.value.firstValue()) {
+                continue;
+            }
+            load_module(m.key);
+            foreach hash<auto> c in (getClasses(m.key).pairIterator()) {
+                string class_name = c.key;
+                # every constructor starts with the check, also of a class that the test cannot construct
+                int constructors
+                    = (c.value =~ x/(\n[ \t]+(?:public[ \t]+|private[ \t]+|private:internal[ \t]+)?constructor\()/g)
+                    .size();
+                int checks = (c.value =~ x/(\{\n[ \t]+#[^\n]*\n[ \t]+DataProviderActionCatalog::checkSandboxAccess\()/g)
+                    .size();
+                assertTrue(constructors > 0, class_name + ": has constructors");
+                assertEq(constructors, checks, class_name + ": every constructor starts with the check");
+                string sandboxed = p.callFunction("through", string sub () {
+                    return DataProviderExternalIoTest::construct(class_name);
+                });
+                if (sandboxed == "abstract" || sandboxed == "no variant") {
+                    continue;
+                }
+                # trusted code is not refused; it may fail for its own reasons with these arguments
+                string trusted = construct(class_name);
+                assertTrue(trusted != "APP-SANDBOX-ACCESS-DENIED", class_name + ": trusted");
+                # sandboxed code never constructs the object: it is refused, or the arguments of a base class
+                # constructor are invalid, exactly as they are for trusted code, before any constructor body runs
+                if (sandboxed != "APP-SANDBOX-ACCESS-DENIED") {
+                    assertTrue(sandboxed != "constructed", class_name + ": sandboxed code constructed it");
+                    assertEq(trusted, sandboxed, class_name + ": sandboxed fails as trusted code does");
+                    continue;
+                }
+                refused{m.key} += (class_name,);
+            }
+        }
+        # in every module, at least one class is refused at run time, before it does any I/O; the classes that the test
+        # cannot construct with generic arguments are covered by the source check above
+        foreach hash<auto> m in (Apps.pairIterator()) {
+            if (m.value.firstValue()) {
+                assertTrue(refused{m.key}.size() > 0,
+                    m.key + ": refused at run time: " + (refused{m.key} ?? ()).join(", "));
             }
         }
     }

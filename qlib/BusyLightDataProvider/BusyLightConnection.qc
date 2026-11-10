@@ -51,6 +51,8 @@ public class BusyLightConnection inherits MqttDataProvider::MqttConnection {
     #! Creates the object from the arguments
     constructor(string name, string desc, string url, hash<auto> attr = {}, hash<auto> options = {},
             *LoggerInterface logger) : MqttConnection(name, desc, url, attr, options, logger) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(BusyLightDataProvider::AppName);
     }
 
     #! Creates the object from the arguments
@@ -72,6 +74,8 @@ public class BusyLightConnection inherits MqttDataProvider::MqttConnection {
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr) : MqttConnection(config, attr) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(BusyLightDataProvider::AppName);
     }
 
     #! returns the string type name for the connection object

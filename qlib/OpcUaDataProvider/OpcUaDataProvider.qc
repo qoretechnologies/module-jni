@@ -44,6 +44,8 @@ public class OpcUaDataProvider inherits AbstractFunctionalOpcUaDataProvider {
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) : AbstractFunctionalOpcUaDataProvider(options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(OpcUaDataProvider::AppName);
     }
 
     string getName() {

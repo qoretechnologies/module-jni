@@ -6,6 +6,12 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: sandboxed code cannot use the \c global-add-classpath and \c global-add-relative-classpath
+      module commands, which change the classpath that every Program shares, and the entries that a sandboxed
+      Program adds with \c add-classpath and \c add-relative-classpath are checked against its filesystem policy
+      (see @ref jni_sandbox)
+    - <b>Security</b>: the connection and data provider classes of the apps with \c external_io refuse sandboxed code
+      in their constructors (\c APP-SANDBOX-ACCESS-DENIED), also when it creates them directly
     - <b>Security</b>: the Access, Busylight, Camel, Flyway, JakartaJMS, JasperReports, JdbcDP, Kafka, MQTT and
       OpcUA data provider apps declare \c external_io: their Java code does network or filesystem I/O that the sandbox
       does not control, so data provider consumers refuse them to sandboxed callers (\c APP-SANDBOX-ACCESS-DENIED);

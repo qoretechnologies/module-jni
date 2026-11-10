@@ -101,6 +101,8 @@ public class FlywayDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(FlywayDataProvider::AppName);
         *hash<auto> copts = checkOptions("FLYWAY-CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (!copts.url) {
             error("FLYWAY-CONSTRUCTOR-ERROR", "the \"url\" option is required");
@@ -116,6 +118,8 @@ public class FlywayDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from a connection object
     constructor(FlywayConnection conn, *hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(FlywayDataProvider::AppName);
         hash<auto> copts = conn.getFlywayOptions();
         if (options) {
             copts += options;

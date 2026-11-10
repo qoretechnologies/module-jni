@@ -38,11 +38,14 @@
 #include <string.h>
 #include <cstdlib>
 #include <map>
+#include <string>
 #include <vector>
 
 #include <dlfcn.h>
 
 #include "jni-module.h"
+
+#include <qore/QoreSandboxManager.h>
 
 #include "defs.h"
 #include "Jvm.h"
@@ -528,10 +531,63 @@ static void qore_jni_mc_import(const QoreString& cmd_arg, QoreProgram* pgm, JniE
     }
 }
 
+//! Refuses a classpath module command to sandboxed code where its policy does not allow it
+/** A \c global-* command changes the classpath that every Program shares, so a sandboxed Program could make trusted
+    Programs load its classes: it is refused to sandboxed code.  A Program's own classpath is checked entry by entry
+    against the filesystem policy, so that sandboxed code reads no class or resource from a path its policy denies.
+
+    @param cmd the module command, for the error
+    @param classpath the classpath: entries separated by the system path separator or \c ';', as
+    QoreURLClassLoader.addPath() splits them
+    @param global if the command changes the classpath that every Program shares
+
+    @throw JNI-SANDBOX-ERROR sandboxed code uses a \c global-* classpath command
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
+*/
+static void jni_check_classpath_sandbox(const char* cmd, const char* classpath, bool global) {
+    if (global) {
+        // any governing sandbox, also through a policy barrier: a capability cannot change what every Program loads
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+        if (governing) {
+            throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"%s\" module command, which "
+                "changes the classpath of every Program", cmd);
+        }
+        return;
+    }
+    // the filesystem policy, as for Qore's own file operations
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (!smh) {
+        return;
+    }
+    std::string cp(classpath);
+    size_t start = 0;
+    while (start <= cp.size()) {
+        size_t end = cp.find_first_of(
+#ifdef _Q_WINDOWS
+            ";",
+#else
+            ":;",
+#endif
+            start);
+        if (end == std::string::npos) {
+            end = cp.size();
+        }
+        std::string entry = cp.substr(start, end - start);
+        if (!entry.empty()) {
+            ExceptionSink xsink;
+            if (!smh->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
+                throw XsinkException(xsink);
+            }
+        }
+        start = end + 1;
+    }
+}
+
 static void qore_jni_mc_global_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
     QoreString arg(cmd_arg);
     q_env_subst(arg);
+    jni_check_classpath_sandbox("global-add-classpath", arg.c_str(), true);
     printd(LogLevel, "qore_jni_mc_global_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
     jpc->addParentClasspath(arg.c_str());
 }
@@ -562,6 +618,7 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
 
     printd(LogLevel, "qore_jni_mc_global_add_relative_classpath() arg: '%s' cwd: '%s'\n", arg.c_str(),
         cwd_str->c_str());
+    jni_check_classpath_sandbox("global-add-relative-classpath", cwd_str->c_str(), true);
 
     jpc->addParentClasspath(cwd_str->c_str());
 }
@@ -570,6 +627,7 @@ static void qore_jni_mc_add_classpath(const QoreString& cmd_arg, QoreProgram* pg
     QoreString arg(cmd_arg);
     q_env_subst(arg);
     printd(LogLevel, "qore_jni_mc_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
+    jni_check_classpath_sandbox("add-classpath", arg.c_str(), false);
     jpc->addClasspath(arg.c_str());
 }
 
@@ -596,6 +654,7 @@ static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgra
     cwd_str->concat('/');
 
     printd(LogLevel, "qore_jni_mc_add_relative_classpath() arg: '%s' cwd: '%s'\n", arg.c_str(), cwd_str->c_str());
+    jni_check_classpath_sandbox("add-relative-classpath", cwd_str->c_str(), false);
 
     jpc->addClasspath(cwd_str->c_str());
 }

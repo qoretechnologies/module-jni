@@ -125,4 +125,19 @@ The apps of this module, from the audit for qore#5632 (the table is also in the 
   locations (`FileLocationHandler`) and Java only transforms the streams it is given; Excel and ODS also create
   temporary files of their own in `java.io.tmpdir`, with names that no caller chooses.
 
-`test/data-provider-external-io.qtest` loads every app and checks its declaration against this list.
+The connection and data provider classes of the `external_io` modules call
+`DataProviderActionCatalog::checkSandboxAccess(<AppName>)` as the first statement of every constructor, so sandboxed
+code that loads such a module and creates its classes directly is refused before any I/O; a class that inherits
+another module's class (Busylight from MQTT) is refused by both.
+
+`test/data-provider-external-io.qtest` loads every app and checks its declaration against this list, checks that every
+constructor of these classes starts with the check, and constructs the classes from sandboxed code.
+
+## Classpath module commands
+
+`jni_check_classpath_sandbox()` (`src/jni-module.cpp`): the `global-add-classpath` and
+`global-add-relative-classpath` commands are refused to any governing sandbox (`QoreSandboxManagerHelper(All)`, so a
+system-policy capability cannot use them either), because they change the parent classpath that every Program
+shares; the entries of `add-classpath` and `add-relative-classpath` (split on the path separator and `;`, as
+`QoreURLClassLoader.addPath()` splits them) are checked with the filesystem policy as reads
+(`QoreSandboxManagerHelper(Policy)`).  `test/jni-classpath-sandbox.qtest`.

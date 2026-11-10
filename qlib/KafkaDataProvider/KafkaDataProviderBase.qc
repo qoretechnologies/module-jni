@@ -40,6 +40,8 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
 
     #! Creates the object from a connection object
     constructor(KafkaConnection conn) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
         self.conn = conn;
     }
 

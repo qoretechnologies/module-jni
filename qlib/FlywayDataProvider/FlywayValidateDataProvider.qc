@@ -56,6 +56,8 @@ public class FlywayValidateDataProvider inherits DataProvider::AbstractDataProvi
 
     #! Creates the object from the runner
     constructor(QoreFlywayRunner runner) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(FlywayDataProvider::AppName);
         self.runner = runner;
     }
 

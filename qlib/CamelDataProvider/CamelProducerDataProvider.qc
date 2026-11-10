@@ -90,6 +90,8 @@ public class CamelProducerDataProvider inherits DataProvider::AbstractDataProvid
 
     #! Creates the object from the Camel context
     constructor(QoreCamelContext ctx) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(CamelDataProvider::AppName);
         self.ctx = ctx;
     }
 

@@ -120,6 +120,8 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
 
     constructor(*hash<auto> opts) : KafkaDataProviderBase(
             new KafkaConnection(KafkaDataProvider::makeConnectionConfig(opts))) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
         self.opts = opts ? opts - keys ConnectionConstructorOptions : NOTHING;
         @debug {
             LoggerWrapper::debug("KafkaDataProvider::constructor() opts: %y", self.opts);
@@ -128,6 +130,8 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
 
     #! Creates the object from a connection object
     constructor(KafkaConnection conn, *hash<auto> opts) : KafkaDataProviderBase(conn) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
         self.opts = opts;
     }
 

@@ -164,6 +164,8 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
 
     #! Creates the object from constructor options
     constructor(KafkaConnection conn, *hash<auto> options) : KafkaDataProviderBase(conn) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
         @debug {
             LoggerWrapper::debug("KafkaProducerDataProvider::constructor() options: %y", options);
         }
