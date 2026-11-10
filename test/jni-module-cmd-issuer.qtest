@@ -4,7 +4,6 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %prepend-module-path "${SCRIPT_DIR}/../qlib"
-%prepend-module-path "${SCRIPT_DIR}/jni-cmd-issuer-fixture"
 %requires jni
 %requires QUnit
 %requires FsUtil
@@ -60,6 +59,8 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         addTestCase("a command issued by library module code is judged by the sandbox only", \libraryTest());
         addTestCase("a library module's own directive is judged by the sandbox only", \libraryDirectiveTest());
         addTestCase("the jdbc classpath option follows the rule of add-classpath", \jdbcOptionTest());
+        addTestCase("the jdbc classpath option set by library module code is judged by the sandbox only",
+            \libraryJdbcOptionTest());
         addTestCase("a command replayed from compiled code is judged by its recorded restrictions and its loader",
             \replayTest());
         set_return_value(main());
@@ -221,20 +222,47 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         }
     }
 
+    #! Runs jni-cmd-issuer-library.q in a process of its own for the issuer kind and case given; returns its result
+    /** The fixture modules' directory is in QORE_MODULE_DIR, so the fixture modules are library code (a directory that
+        the loading code adds with \c %prepend-module-path is not), and the Program of the issuer kind is the first to
+        load them, so that the module's Program inherits that Program's parse options
+    */
+    private static string runLibrary(string kind, string which) {
+        string dir = get_script_dir();
+        string mdir = dir + "jni-cmd-issuer-fixture" + (exists ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        int rc;
+        string out = run(sprintf("QORE_MODULE_DIR='%s' '%s' '%sjni-cmd-issuer-library.q' %s %s", mdir, QORE_ARGV[0],
+            dir, kind, which), \rc);
+        # the last line is the result; warnings precede it
+        list<string> lines = select (out.split("\n")), $1 != "";
+        return lines ? lines.last() : sprintf("no output (exit status %d)", rc);
+    }
+
     libraryTest() {
         if (!issuerAware()) {
             testSkip("the jni module was built for module API 2.0");
         }
         # a library module (from the module path) issues commands from its own code, as the provider modules do; its
-        # code has no parse options, so only a sandbox that governs its caller restricts the command
-        string cmd = "add-classpath /nonexistent-qore-test-dir";
+        # code has no parse options, also when the Program of a %no-filesystem loader, whose options its own Program
+        # inherits, loads it first: only a sandbox that governs its caller restricts the command
         foreach hash<auto> c in ({"kind": "trusted", "expected": "ok"}, {"kind": "no-filesystem", "expected": "ok"},
                 {"kind": "no-uncontrolled", "expected": "ok"}, {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
-            Program p = getIssuer(c.kind);
-            p.loadModule("JniCmdIssuerFixture");
-            p.parse("string sub run(string c) { return JniCmdIssuerFixture::issue(c); }",
-                "jni-module-cmd-issuer-library-" + c.kind);
-            assertEq(c.expected, p.callFunction("run", cmd), c.kind + " caller");
+            assertEq(c.expected, runLibrary(c.kind, "cmd").split(":")[0], c.kind + " first loader");
+        }
+    }
+
+    libraryJdbcOptionTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for module API 2.0");
+        }
+        # library module code that sets the jdbc classpath option is judged by the sandbox only, not by the parse options
+        # that its Program inherited from the code that loaded it first (for example a %no-filesystem loader);
+        # JNI-ERROR is the error of the jdbc driver that is not found after the option was accepted
+        foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
+                {"kind": "no-filesystem", "expected": "JNI-ERROR"},
+                {"kind": "no-uncontrolled", "expected": "JNI-ERROR"},
+                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+            assertEq(c.expected, runLibrary(c.kind, "jdbc").split(":")[0], c.kind + " first loader");
         }
     }
 
@@ -243,17 +271,9 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
             testSkip("the jni module was built for module API 2.0");
         }
         # the directive has no parse options (decision A), and a module from the module path is initialized as library
-        # code, with no sandbox, also when sandboxed code loads it first: every loader loads it
+        # code, with no sandbox, also when restricted or sandboxed code loads it first: every loader loads it
         foreach string kind in (keys Kinds) {
-            Program p = getIssuer(kind);
-            string err;
-            try {
-                p.loadModule("JniCmdDirectiveFixture");
-                err = "ok";
-            } catch (hash<ExceptionInfo> ex) {
-                err = ex.err + ": " + ex.desc;
-            }
-            assertEq("ok", err, kind + " loader");
+            assertEq("ok", runLibrary(kind, "directive"), kind + " first loader");
         }
     }
 }

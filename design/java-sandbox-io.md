@@ -163,8 +163,10 @@ the module command context if one is active, else to the declared parse options 
 so it refuses with `nullptr`, which `JavaLoader` reports; the `import pkg.*` command uses
 `jni_find_create_java_namespace_intern()`, which has no check (the command has been checked). The jdbc DBI driver's
 `classpath` option (`QoreJdbcConnection::setOption()`) applies the `add-classpath` rule to the caller
-(`QoreReflectionCaller`: `PO_NO_UNCONTROLLED_APIS`, `PO_NO_FILESYSTEM`; a governing sandbox). These checks are made with
-module API 2.0 as well.
+(`PO_NO_UNCONTROLLED_APIS`, `PO_NO_FILESYSTEM`; a governing sandbox). With module API 2.1 the caller's restrictions come
+from `QoreModuleCommandRestrictions::getCallerRestrictions()`, which gives library module code only its sandbox (its
+Program's parse options are only those inherited from its loader); with API 2.0 from `QoreReflectionCaller` and
+`QoreSandboxManagerHelper`. These checks are made with module API 2.0 as well.
 
 `test/jni-module-cmd-issuer.qtest` (skipped for a module built for API 2.0).
 

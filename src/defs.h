@@ -39,6 +39,12 @@
 #include <stdarg.h>
 #include <memory>
 
+// module API 2.1 (qore#5699): module commands are judged by the restrictions of the code that issues them, and module
+// functions can judge their caller the same way
+#if QORE_MODULE_API_MAJOR > 2 || (QORE_MODULE_API_MAJOR == 2 && QORE_MODULE_API_MINOR >= 1)
+#define QORE_JNI_HAS_COMMAND_CONTEXT 1
+#endif
+
 namespace jni {
 
 /**

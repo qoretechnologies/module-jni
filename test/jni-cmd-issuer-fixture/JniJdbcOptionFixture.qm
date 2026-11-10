@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# JniJdbcOptionFixture.qm: a library module that sets the jdbc classpath option from its own code, for
+# jni-module-cmd-issuer.qtest; it is loaded first by a Program with PO_NO_FILESYSTEM, whose options its Program inherits
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires jni
+
+module JniJdbcOptionFixture {
+    version = "1.0";
+    desc = "sets the jdbc classpath option from library module code";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+public namespace JniJdbcOptionFixture {
+#! Opens a jdbc Datasource with the classpath option from this module's code; returns the error code, or "ok"
+public string sub openJdbc(string cp) {
+    Datasource ds("jdbc:u/p@jdbc:qore-none://x{classpath=" + cp + "}");
+    try {
+        ds.open();
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}

@@ -225,6 +225,24 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
 
         // the rule of the "add-classpath" module command, for the code that sets the option (qore#5699): it loads jars
         // into the Program's class loader and reads the filesystem
+#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
+        {
+            // the restrictions that a module command from the same code would have: library module code is judged by
+            // the sandbox only, not by the parse options that its Program inherited from the code that loaded it
+            QoreModuleCommandRestrictions caller = QoreModuleCommandRestrictions::getCallerRestrictions();
+            if (caller.isSandboxed()) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which sandboxed code cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+            if (caller.hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which code that does not allow uncontrolled APIs or the filesystem cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+        }
+#else
+        // module API 2.0: the parse options of the calling code and the sandbox that governs it
         {
             QoreReflectionCaller caller;
             if (caller.getParseOptions().hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {
@@ -239,6 +257,7 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                 return -1;
             }
         }
+#endif
 
         try {
             // the entries are read by this Program's class loader, as with the "add-classpath" module command

@@ -69,11 +69,6 @@ sig_vec_t sig_vec = {
 #endif
 };
 
-// module API 2.1 (qore#5699): module commands are judged by the restrictions of the code that issues them
-#if QORE_MODULE_API_MAJOR > 2 || (QORE_MODULE_API_MAJOR == 2 && QORE_MODULE_API_MINOR >= 1)
-#define QORE_JNI_HAS_COMMAND_CONTEXT 1
-#endif
-
 static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void jni_module_delete();
