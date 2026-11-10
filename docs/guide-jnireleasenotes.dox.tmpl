@@ -6,6 +6,11 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: the options of the JDBC, Jakarta JMS, Kafka, Camel, JasperReports and Flyway providers that
+      name a Java class to load, a classpath to add, or code that Java compiles are refused with
+      \c JNI-SANDBOX-ERROR to sandboxed code; added \c Jni::org::qore::jni::check_class_option() for modules
+      (see @ref jni_sandbox)
+
     - <b>Security</b>: added @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the sandbox
       network and filesystem policy of the %Qore code that called into Java to the I/O that Java code makes itself,
       which %Qore does not see: \c checkNetworkAccess() resolves a host name once with the %Qore resolver, checks

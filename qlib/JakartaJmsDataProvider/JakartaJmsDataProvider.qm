@@ -379,6 +379,8 @@ module JakartaJmsDataProvider {
 
     @subsection JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider v1.0
     - initial release
+    - the \c provider_classpath and \c connection_factory_class options are refused to sandboxed code
+      (\c JNI-SANDBOX-ERROR)
 */
 
 #! contains all public definitions in the JakartaJmsDataProvider module

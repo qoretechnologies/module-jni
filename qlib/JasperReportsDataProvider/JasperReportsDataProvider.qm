@@ -239,6 +239,8 @@ module JasperReportsDataProvider {
 
     @subsection JasperReportsDataProvider_v1_0 JasperReportsDataProvider v1.0
     - initial release
+    - report templates are refused to sandboxed code, as their expressions are compiled and run as Java code
+      (\c JNI-SANDBOX-ERROR)
 */
 
 #! contains all public definitions in the JasperReportsDataProvider module

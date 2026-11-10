@@ -85,6 +85,13 @@ public class JmsDataProviderBase inherits DataProvider::AbstractDataProvider {
         \c %%module-cmd(jni) add-classpath directives in your code.
     */
     static ConnectionFactory createConnectionFactory(hash<auto> copts) {
+        # both options make Java load code that the sandbox does not control: before either is used (qore#5742);
+        # the connection factory class is always named, so code that may not load arbitrary classes cannot use JMS
+        if (copts.provider_classpath) {
+            Jni::org::qore::jni::check_class_option("jakarta-jms", "provider_classpath");
+        }
+        Jni::org::qore::jni::check_class_option("jakarta-jms", "connection_factory_class");
+
         # load provider JARs at runtime if specified
         if (copts.provider_classpath) {
             list<string> paths = copts.provider_classpath.split(",");
