@@ -53,6 +53,9 @@ module BusyLightDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BusyLightDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java I/O that the Qore sandbox does not see (qore#5632): the Paho MQTT client connects to the broker
+            # itself
+            "external_io": True,
             "display_name": "MQTT Kuando Busylight",
             "short_desc": "MQTT Kuando Busylight devices (by Plenom)",
             "desc": "MQTT server for accessing Kuando Busylight devices (by Plenom)",
@@ -110,6 +113,9 @@ module BusyLightDataProvider {
     @section BusyLightDataProvider_relnotes Release Notes
 
     @subsection BusyLightDataProvider_v1_1 BusyLightDataProvider v1.1
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
+      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
+      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
       presentation keeps its original producer identity, including HTTP/REST options and allowed values
 

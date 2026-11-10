@@ -98,7 +98,7 @@
 %module-cmd(jni) import java.util.concurrent.TimeUnit
 
 # implements a data provider for OPC UA functionality
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.12
 # implements support for OPC UA connections
 %requires(reexport) ConnectionProvider
 # implements file/resource location handling for offline NodeSet2 import
@@ -122,6 +122,9 @@ module OpcUaDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OpcUaDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java I/O that the Qore sandbox does not see (qore#5632): the Milo OPC UA client connects to the server
+            # and to the endpoints it returns itself
+            "external_io": True,
             "display_name": "OPC UA",
             "short_desc": "OPC UA server for industrial communication and IoT",
             "desc": "OPC UA (Open Platform Communications Unified Architecture) server for industrial "
@@ -525,6 +528,9 @@ module OpcUaDataProvider {
     @section opcuadataproviderrelnotes Release Notes
 
     @subsection opcuadataproviderv110 OpcUaDataProvider v1.10.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
+      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
+      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - @ref OpcUaDataProvider::OpcUaServerRuntime "OpcUaServerRuntime": a \c port of 0 lets the OS assign a free port,
       which is held from the runtime's creation until it is stopped and returned by the new
       @ref OpcUaDataProvider::OpcUaServerRuntime::getPort() "getPort()" method

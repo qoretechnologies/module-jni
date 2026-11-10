@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.12
 %requires FileLocationHandler
 %requires Util
 
@@ -52,6 +52,9 @@ module AccessDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AccessDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java I/O that the Qore sandbox does not see (qore#5632): Jackcess opens the database file named by the
+            # action's path itself
+            "external_io": True,
             "display_name": "Access Databases",
             "short_desc": "Read Microsoft Access databases",
             "desc": "Read Microsoft Access databases (.mdb/.accdb format) using the Jackcess library",
@@ -182,6 +185,9 @@ module AccessDataProvider {
     @section AccessDataProvider_relnotes Release Notes
 
     @subsection AccessDataProvider_v1_0 AccessDataProvider v1.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
+      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
+      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - initial release
 */
 

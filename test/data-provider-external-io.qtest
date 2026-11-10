@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires DataProvider >= 3.12
+%requires QUnit
+
+%exec-class DataProviderExternalIoTest
+
+#! The data provider apps of this module declare the I/O that their Java code does outside the sandbox (qore#5632)
+/** An app whose Java code opens paths or connects to destinations itself declares \c external_io, so that data
+    provider consumers refuse it to sandboxed callers; an app whose data Qore reads and writes declares nothing.  No
+    app is \c sandbox_aware yet.  The expected declarations are the audit in design/java-sandbox-io.md.
+*/
+class DataProviderExternalIoTest inherits QUnit::Test {
+    public {
+        #! module -> app -> whether the app declares external_io
+        const Apps = {
+            "AccessDataProvider": {"Access": True},
+            "AvroDataProvider": {"Avro": False},
+            "BusyLightDataProvider": {"Busylight": True},
+            "CamelDataProvider": {"Camel": True},
+            "EmailDataProvider": {"Email": False},
+            "ExcelDataProvider": {"Excel": False},
+            "FlywayDataProvider": {"Flyway": True},
+            "IcsDataProvider": {"ICS": False},
+            "JakartaJmsDataProvider": {"JakartaJMS": True},
+            "JasperReportsDataProvider": {"JasperReports": True},
+            "JdbcDataProvider": {"JdbcDP": True},
+            "KafkaDataProvider": {"Kafka": True},
+            "MqttDataProvider": {"MQTT": True},
+            "OdpDataProvider": {"ODP": False},
+            "OdsDataProvider": {"ODS": False},
+            "OdtDataProvider": {"ODT": False},
+            "OpcUaDataProvider": {"OpcUA": True},
+            "PowerPointDataProvider": {"PowerPoint": False},
+            "TikaDataProvider": {"Tika": False},
+            "VcfDataProvider": {"VCF": False},
+            "VisioDataProvider": {"Visio": False},
+            "WordDataProvider": {"Word": False},
+        };
+    }
+
+    constructor() : QUnit::Test("JNI data provider external I/O declarations", "1.0", \ARGV) {
+        addTestCase("every data provider module of the repository is listed", \inventoryTest());
+        addTestCase("every app declares its external I/O as audited", \declarationTest());
+        addTestCase("sandboxed callers are refused the apps with external I/O", \refusalTest());
+        set_return_value(main());
+    }
+
+    #! Loads the module and returns the info of its app
+    private static hash<DataProviderAppInfo> getApp(string module, string app) {
+        load_module(module);
+        return DataProviderActionCatalog::getAppEx(app);
+    }
+
+    inventoryTest() {
+        # a new data provider module must be audited and added to Apps
+        Dir d();
+        d.chdir(get_script_dir() + "/../qlib");
+        list<string> modules = sort(map $1, d.listDirs(), $1 =~ /DataProvider$/);
+        assertEq(sort(keys Apps), modules);
+    }
+
+    declarationTest() {
+        foreach hash<auto> m in (Apps.pairIterator()) {
+            foreach hash<auto> a in (m.value.pairIterator()) {
+                hash<DataProviderAppInfo> app = getApp(m.key, a.key);
+                assertEq(a.value, app.external_io ?? False, sprintf("%s: external_io", a.key));
+                assertNothing(app.sandbox_aware, sprintf("%s: not sandbox-aware", a.key));
+            }
+        }
+    }
+
+    refusalTest() {
+        foreach hash<auto> m in (Apps.pairIterator()) {
+            foreach hash<auto> a in (m.value.pairIterator()) {
+                hash<DataProviderAppInfo> app = getApp(m.key, a.key);
+                # trusted callers are never refused
+                DataProviderActionCatalog::checkSandboxAccess(app, False);
+                if (a.value) {
+                    assertThrows("APP-SANDBOX-ACCESS-DENIED", \DataProviderActionCatalog::checkSandboxAccess(),
+                        (app, True), a.key);
+                } else {
+                    DataProviderActionCatalog::checkSandboxAccess(app, True);
+                    assertTrue(DataProviderActionCatalog::isSandboxAllowed(app), a.key);
+                }
+            }
+        }
+    }
+}

@@ -40,7 +40,7 @@
 %module-cmd(jni) import org.qore.dataprovider.flyway.QoreFlywayRunner
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.12
 # implements support for Flyway connections
 %requires(reexport) ConnectionProvider
 %requires Util
@@ -62,6 +62,9 @@ module FlywayDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": FlywayDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java I/O that the Qore sandbox does not see (qore#5632): Flyway opens the JDBC URL and scans the
+            # filesystem migration locations itself
+            "external_io": True,
             "display_name": "Flyway",
             "short_desc": "Flyway database schema migration",
             "desc": "Manage database schema migrations using [Flyway](https://flywaydb.org/).\n\n"
@@ -218,6 +221,9 @@ module FlywayDataProvider {
     @section flywaydataprovider_relnotes Release Notes
 
     @subsection flywaydataprovider_v1_0 FlywayDataProvider v1.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
+      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
+      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - initial release
 */
 

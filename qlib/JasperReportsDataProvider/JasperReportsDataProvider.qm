@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider >= 3.9
+%requires(reexport) DataProvider >= 3.12
 %requires FileLocationHandler
 %requires Util
 
@@ -65,6 +65,9 @@ module JasperReportsDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": JasperReportsDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java I/O that the Qore sandbox does not see (qore#5632): a report can load subreports, images and data
+            # from files and URLs itself
+            "external_io": True,
             "display_name": "JasperReports",
             "short_desc": "Generate reports from JasperReports templates",
             "desc": "Generate enterprise reports from [JasperReports](https://jasperreports.sourceforge.net/) "
@@ -238,6 +241,9 @@ module JasperReportsDataProvider {
     @section JasperReportsDataProvider_relnotes Release Notes
 
     @subsection JasperReportsDataProvider_v1_0 JasperReportsDataProvider v1.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
+      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
+      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - initial release
 */
 

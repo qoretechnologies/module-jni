@@ -107,9 +107,22 @@ thread, and against the thread's policy, so that the stricter one wins and a cap
 sandbox of the code that uses it.  `capture0()` with a parent policy copies the parent capture with the
 `QoreSandboxCapture` copy constructor: a policy captured in a task is the policy of the task.
 
-## What is not enforced here
+## Declarations of the data provider apps
 
-The checks are cooperative: they constrain only Java code that makes them.  Declaring Java code (a module or a data
-provider app) sandbox-aware, after an audit against the rules in the `jni_sandbox` documentation, and refusing
-sandboxed callers for Java-backed code that is not declared sandbox-aware, are the responsibility of the code that
-offers the Java code to sandboxed callers (the data provider consumers).
+The checks are cooperative: they constrain only Java code that makes them.  A data provider app declares in its
+`DataProviderAppInfo` (DataProvider 3.12) `external_io` when its actions do I/O that the sandbox does not see, and
+`sandbox_aware` only after an audit against the rules in the `jni_sandbox` documentation; data provider consumers
+refuse sandboxed callers an app with `external_io` and without `sandbox_aware`
+(`DataProviderActionCatalog::checkSandboxAccess()`).
+
+The apps of this module, from the audit for qore#5632 (the table is also in the `jni_sandbox` documentation):
+
+- `external_io`: Access, Busylight, Camel, Flyway, JakartaJMS, JasperReports, JdbcDP, Kafka, MQTT, OpcUA. In each
+  of them a Java library opens a path or connects to a destination given in an option, and most of them also reach
+  destinations that the library resolves or discovers itself (cluster metadata, failover lists, server endpoint
+  lists, report resources, linked database files), so none is `sandbox_aware`.
+- no declaration: Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio, Word. Qore opens the
+  locations (`FileLocationHandler`) and Java only transforms the streams it is given; Excel and ODS also create
+  temporary files of their own in `java.io.tmpdir`, with names that no caller chooses.
+
+`test/data-provider-external-io.qtest` loads every app and checks its declaration against this list.

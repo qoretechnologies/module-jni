@@ -6,6 +6,10 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: the Access, Busylight, Camel, Flyway, JakartaJMS, JasperReports, JdbcDP, Kafka, MQTT and
+      OpcUA data provider apps declare \c external_io: their Java code does network or filesystem I/O that the sandbox
+      does not control, so data provider consumers refuse them to sandboxed callers (\c APP-SANDBOX-ACCESS-DENIED);
+      the provider modules require \c DataProvider 3.12 or later (see @ref jni_sandbox)
     - <b>Security</b>: added @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the sandbox
       network and filesystem policy of the %Qore code that called into Java to the I/O that Java code makes itself,
       which %Qore does not see: \c checkNetworkAccess() resolves a host name once with the %Qore resolver, checks

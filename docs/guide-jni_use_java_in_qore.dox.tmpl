@@ -211,7 +211,28 @@ public class Fetcher {
     - no I/O is made before the check; an operation that cannot be checked is not made
 
     A Java-backed data provider or module that has not been audited is not sandbox-aware, and must not be made
-    available to sandboxed callers.
+    available to sandboxed callers.  A data provider app declares this in its \c DataProviderAppInfo (\c DataProvider
+    3.12 or later): \c external_io when its actions do I/O that the sandbox does not see, and \c sandbox_aware
+    only after the audit; data provider consumers refuse sandboxed callers an app with \c external_io and without
+    \c sandbox_aware (\c DataProviderActionCatalog::checkSandboxAccess(), \c APP-SANDBOX-ACCESS-DENIED).
+
+    <b>Data provider apps of this module:</b>
+    |!App|!Declaration|!The Java I/O that the sandbox does not see
+    |Access|\c external_io|Jackcess opens the database file named by the action's path
+    |Busylight, MQTT|\c external_io|the Paho client connects to the broker and to its failover URIs
+    |Camel|\c external_io|Camel endpoints connect to and open what their URIs name
+    |Flyway|\c external_io|the JDBC URL and the filesystem migration locations
+    |JakartaJMS|\c external_io|the provider connects to the broker URL and loads the provider classpath
+    |JasperReports|\c external_io|a report can load subreports, images and data from files and URLs
+    |JdbcDP|\c external_io|the JDBC driver connects to the destinations of the URL
+    |Kafka|\c external_io|the client connects to the bootstrap servers and to the brokers they return
+    |OpcUA|\c external_io|the client connects to the server and the endpoints it returns
+    |Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio, Word|none|Java only transforms the data
+
+    No app is declared \c sandbox_aware yet: each app with \c external_io lets a Java library connect to destinations
+    that it resolves or discovers itself, or open files it finds itself, which these checks cannot cover until the
+    app is changed to make them.  The Excel and ODS apps create temporary files of their own in the JVM's temporary
+    directory, with names that no caller chooses; these are not declared as external I/O.
 
     @subsection jni_fork Child Processes Created with fork()
 
