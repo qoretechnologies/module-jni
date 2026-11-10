@@ -59,7 +59,7 @@ JNI reference qualification
 
 Run the reference and exception regressions with checked JNI enabled:
 
-    QORE_JNI_JVM_ARGS=-Xcheck:jni qore -b --enable-debug -l build/jni-api-2.0.qmod test/jni-reference-safety.qtest -v
+    QORE_JNI_JVM_ARGS=-Xcheck:jni qore -b --enable-debug -l build/jni-api-$(qore --latest-module-api).qmod test/jni-reference-safety.qtest -v
 
 The suite covers repeated array allocation, failed constructors, nullable exception
 fields, argument conversion failures, Qore object arguments, owned callback results, and callbacks whose
