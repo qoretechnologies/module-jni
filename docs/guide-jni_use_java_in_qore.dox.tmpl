@@ -258,14 +258,25 @@ public class Fetcher {
     Code of a library module (a module from the module path) has no parse options, so only a sandbox restricts the
     commands it issues, also on behalf of a restricted caller: the provider modules of this module, which add
     classpaths at run time, can be used by a Program restricted only with parse options, and not by sandboxed code.
-    Restricted code cannot issue a command into another, trusted Program at all (\c RUNTIME-COMMAND-ERROR).  The
-    exported functions \c jni_module_import() and \c jni_module_find_create_java_namespace(), which other modules
-    (the \c python module's Java loader) call without a module command, apply the rule of \c import: to the issuer of
-    the module command that they run in, or else to the code of the Program they import into.
+    Restricted code cannot issue a command into another, trusted Program at all (\c RUNTIME-COMMAND-ERROR).
+
+    These rules apply to the module commands only: code with \c PO_NO_FILESYSTEM or \c PO_NO_EMBEDDED_LOGIC that may
+    use Java classes can still change its class loader or the JVM through Java itself; only
+    \c PO_NO_UNCONTROLLED_APIS, or a sandbox, keeps Java away from code.
+
+    The exported functions \c jni_module_import() and \c jni_module_find_create_java_namespace(), which other modules
+    (the \c python module's Java loader) call without a module command of this module, apply the rule of \c import:
+    to the issuer of the module command that they run in, if any, and otherwise to the declared parse options of the
+    Program they import into (\c PO_NO_UNCONTROLLED_APIS) and to a sandbox that governs the calling code.  The
+    \c classpath option of the \c jdbc database driver applies the rule of \c add-classpath to the code that sets it
+    (its effective parse options and its sandbox).  These checks are made with module API 2.0 as well.
 
     <b>Module commands, by their target:</b> a module command also runs in the Program that it is issued in, also when
     trusted code issues it with \c Program::issueModuleCmd(), so it also follows that Program's sandbox and parse
-    options (with module API 2.0, only these checks apply):
+    options.  With module API 2.0 these are the only checks of the module commands; with module API 2.1, the parse
+    options of the target are checked only for a command that another Program issues into it, as the issuer check
+    already covers a Program's own commands (a library module's Program inherits the parse options of the code that
+    loads it, which must not refuse the module's own directives):
     - the classpath that a sandboxed Program adds with the \c add-classpath and \c add-relative-classpath module
       commands, and with the \c classpath option of the \c jdbc database driver, is checked against its filesystem
       policy, entry by entry, as a read (\c FILESYSTEM-ACCESS-DENIED)
@@ -277,7 +288,7 @@ public class Fetcher {
       for them (ex: \c http.proxyHost, \c javax.net.ssl.trustStore)
     - \c define-class and \c define-pending-class raise \c JNI-SANDBOX-ERROR in a Program with
       \c PO_NO_UNCONTROLLED_APIS, as defining a class runs its static initializer, and a sandboxed Program defines a
-      class only in its own class loader: a class that belongs to another Program (ex: \c qoremod.<module>.<class>)
+      class only in its own class loader: a class that belongs to another Program (ex: \c qoremod.MODULE.CLASS)
       cannot be defined by it
 
     @subsection jni_fork Child Processes Created with fork()

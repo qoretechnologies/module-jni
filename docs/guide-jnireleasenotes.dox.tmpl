@@ -11,7 +11,8 @@
       issuers are refused the commands that load or define Java code, change a classpath or change state that every
       Program shares, and issuers with a restricting parse option the commands that the option forbids
       (\c JNI-SANDBOX-ERROR); the exported functions used by the \c python module's Java loader apply the rule of
-      \c import (see @ref jni_sandbox)
+      \c import, and the \c classpath option of the \c jdbc database driver the rule of \c add-classpath, also with
+      module API 2.0 (see @ref jni_sandbox)
 
     - <b>Security</b>: sandboxed code, and a Program with \c PO_NO_UNCONTROLLED_APIS, cannot use the module commands
       that change state of the JVM that every Program shares or that run Java code (\c global-add-classpath,

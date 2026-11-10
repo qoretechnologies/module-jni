@@ -223,6 +223,23 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
         q_env_subst(arg);
         //printd(5, "QoreJdbcConnection::setOption() %p '%s' jpc: %p arg: '%s'\n", this, opt, jpc, arg.c_str());
 
+        // the rule of the "add-classpath" module command, for the code that sets the option (qore#5699): it loads jars
+        // into the Program's class loader and reads the filesystem
+        {
+            QoreReflectionCaller caller;
+            if (caller.getParseOptions().hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which code that does not allow uncontrolled APIs or the filesystem cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+            QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+            if (governing) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which sandboxed code cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+        }
+
         try {
             // the entries are read by this Program's class loader, as with the "add-classpath" module command
             ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);

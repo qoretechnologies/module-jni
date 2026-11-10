@@ -79,6 +79,7 @@ static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exception
 static void jni_module_delete();
 static void jni_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink);
 static bool jni_exported_import_allowed(const QoreProgram* pgm, std::string& refused);
+static QoreNamespace* jni_find_create_java_namespace_intern(QoreString& arg, QoreProgram* pgm);
 
 void jni_qore_module_desc(QoreModuleInfo& mod_info) {
 #ifdef QORE_JNI_HAS_COMMAND_CONTEXT
@@ -436,19 +437,23 @@ static QoreNamespace* qore_jni_wildcard_import(QoreString& arg, QoreProgram* pgm
     arg.terminate(arg.strlen() - 2);
 
     arg.replaceAll(".", "::");
-    return jni_module_find_create_java_namespace(arg, pgm);
+    return jni_find_create_java_namespace_intern(arg, pgm);
 }
 
+// exported function
 extern "C" QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg, QoreProgram* pgm) {
     // the namespace's class handler loads Java classes when they are used: refused as an import (qore#5699); this
     // function has no exception sink, so a refusal returns nullptr, which its caller reports
-    {
-        std::string refused;
-        if (!jni_exported_import_allowed(pgm, refused)) {
-            printd(LogLevel, "jni_module_find_create_java_namespace() '%s': %s\n", arg.c_str(), refused.c_str());
-            return nullptr;
-        }
+    std::string refused;
+    if (!jni_exported_import_allowed(pgm, refused)) {
+        printd(LogLevel, "jni_module_find_create_java_namespace() '%s': %s\n", arg.c_str(), refused.c_str());
+        return nullptr;
     }
+    return jni_find_create_java_namespace_intern(arg, pgm);
+}
+
+//! Creates the Java namespace for a wildcard import; the caller has checked that the import is allowed
+static QoreNamespace* jni_find_create_java_namespace_intern(QoreString& arg, QoreProgram* pgm) {
     arg.concat("::x");
 
     // create jni namespace in root namespace if necessary
@@ -539,10 +544,15 @@ struct JniCommandIssuerRule {
     bool all_restricted;
     //! what the command does, for the error
     const char* what;
+    //! true if the command is not checked: it changes only flags of its target Program
+    bool exempt = false;
 };
 
-//! The issuer rules of the module commands; a command that is not listed changes only flags of its target Program
+//! The issuer rules of every module command in mcmap; a command that is not listed is refused to restricted issuers
 static const std::map<std::string, JniCommandIssuerRule> jni_command_issuer_rules = {
+    // flags of the target Program
+    {"set-compat-types", {0, false, "sets the type compatibility of the Program", true}},
+    {"mark-module-injected", {0, false, "marks a module as injected in the Program", true}},
     // loads Java classes, running their static initializers; a wildcard import loads them when they are used
     {"import", {PO_NO_UNCONTROLLED_APIS, false, "imports Java classes"}},
     // loads jars or classes from the filesystem into the Program's class loader
@@ -575,21 +585,42 @@ static const std::map<std::string, JniCommandIssuerRule> jni_command_issuer_rule
 */
 static int jni_check_command_issuer(const char* name, ExceptionSink* xsink) {
     auto i = jni_command_issuer_rules.find(name);
-    if (i == jni_command_issuer_rules.end()) {
+    if (i != jni_command_issuer_rules.end() && i->second.exempt) {
         return 0;
     }
     const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
     if (!ctx) {
         // the core gives every command a context: none means the issuer is unknown
-        xsink->raiseException("JNI-SANDBOX-ERROR", "the \"%s\" module command %s, and its issuer is unknown", name,
-            i->second.what);
+        xsink->raiseException("JNI-SANDBOX-ERROR", "the issuer of the \"%s\" module command is unknown", name);
         return -1;
+    }
+    if (i == jni_command_issuer_rules.end()) {
+        // a command with no rule is refused to every restricted issuer (fail closed)
+        QoreStringMaker what("use the \"%s\" module command", name);
+        return ctx->check(QoreModuleCommandRestrictions::getRestrictingOptions(), true, "JNI-SANDBOX-ERROR",
+            what.c_str(), xsink);
     }
     QoreStringMaker what("use the \"%s\" module command, which %s", name, i->second.what);
     const QoreParseOptions mask = i->second.all_restricted
         ? QoreModuleCommandRestrictions::getRestrictingOptions()
         : QoreParseOptions(i->second.mask);
     return ctx->check(mask, true, "JNI-SANDBOX-ERROR", what.c_str(), xsink);
+}
+
+//! Returns true if the target-side parse-option checks of a command apply (qore#5699)
+/** When the command's issuer is its target Program, the issuer's restrictions (checked by jni_check_command_issuer())
+    are that Program's, except for the directives of a library module, which have none (only a sandbox restricts
+    them): the target's own parse options, which a module's Program inherits from the code that loads it, must not
+    refuse them.  For a command issued into another Program, the target's options still apply.
+*/
+static bool jni_check_target_options() {
+    const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+    return !ctx || ctx->getIssuerProgram() != ctx->getTargetProgram();
+}
+#else
+//! With module API 2.0, the target-side checks are the only checks
+static bool jni_check_target_options() {
+    return true;
 }
 #endif
 
@@ -678,7 +709,7 @@ static void qore_jni_mc_import(const QoreString& cmd_arg, QoreProgram* pgm, JniE
     @throw JNI-SANDBOX-ERROR the command is issued in a restricted Program or under a sandbox
 */
 static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, const char* what) {
-    if (pgm && (pgm->getParseOptions64() & PO_NO_UNCONTROLLED_APIS)) {
+    if (pgm && jni_check_target_options() && (pgm->getParseOptions64() & PO_NO_UNCONTROLLED_APIS)) {
         throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command %s, so it cannot be used in a Program "
             "that does not allow uncontrolled APIs", cmd, what);
     }
@@ -699,7 +730,7 @@ static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, 
     @throw JNI-SANDBOX-ERROR the Program does not allow uncontrolled APIs
 */
 static void jni_check_define_class_restricted(const char* cmd, const QoreProgram* pgm) {
-    if (pgm && (pgm->getParseOptions64() & PO_NO_UNCONTROLLED_APIS)) {
+    if (pgm && jni_check_target_options() && (pgm->getParseOptions64() & PO_NO_UNCONTROLLED_APIS)) {
         throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command defines Java code, so it cannot be used "
             "in a Program that does not allow uncontrolled APIs", cmd);
     }

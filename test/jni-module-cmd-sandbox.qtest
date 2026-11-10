@@ -223,9 +223,10 @@ class JniModuleCmdSandboxTest inherits QUnit::Test {
         Program sp(PO_NEW_STYLE);
         sp.setSandboxManager(getSandbox());
         sp.parse(JdbcSource, "jni-module-cmd-sandbox-jdbc");
-        assertEq("FILESYSTEM-ACCESS-DENIED", sp.callFunction("open_jdbc", denied), "a denied classpath");
-        # an allowed classpath reaches the driver lookup, which finds no driver for the URL
-        assertEq("JNI-ERROR", sp.callFunction("open_jdbc", allowed), "an allowed classpath");
+        # the option follows the rule of add-classpath for the code that sets it (qore#5699): sandboxed code is refused
+        # it before its entries are checked
+        assertEq("JNI-SANDBOX-ERROR", sp.callFunction("open_jdbc", denied), "a denied classpath");
+        assertEq("JNI-SANDBOX-ERROR", sp.callFunction("open_jdbc", allowed), "an allowed classpath");
 
         Program tp(PO_NEW_STYLE);
         tp.parse(JdbcSource, "jni-module-cmd-sandbox-jdbc-trusted");

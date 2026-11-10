@@ -24,20 +24,32 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
             "sandboxed": -1,
         };
 
-        #! the commands and the issuer kinds that are refused each one
-        const Refused = {
-            "import java.lang.StringBuilder": ("no-uncontrolled", "sandboxed"),
-            "import java.util.concurrent.*": ("no-uncontrolled", "sandboxed"),
-            "add-classpath /nonexistent-qore-test-dir": ("no-uncontrolled", "no-filesystem", "sandboxed"),
-            "add-relative-classpath nonexistent-qore-test-dir": ("no-uncontrolled", "no-filesystem", "sandboxed"),
-            "global-add-classpath /nonexistent-qore-test-dir": ("no-uncontrolled", "no-filesystem", "no-embedded",
-                "sandboxed"),
-            "set-property org.qore.test.issuer.placeholder value": ("no-uncontrolled", "no-filesystem", "no-embedded",
-                "sandboxed"),
-            "register-shared-class qore.QoreTestIssuerPlaceholder": ("no-uncontrolled", "no-filesystem",
-                "no-embedded", "sandboxed"),
-            "kotlin-eval 1": ("no-uncontrolled", "no-embedded", "sandboxed"),
-            "set-compat-types true": (),
+        #! all restricted issuer kinds
+        const AllRestricted = ("no-uncontrolled", "no-filesystem", "no-embedded", "sandboxed");
+
+        #! the commands: the issuer kinds that are refused, and the results accepted for the other kinds
+        const Commands = {
+            "import java.lang.StringBuilder": {"refused": ("no-uncontrolled", "sandboxed"), "allowed": ("ok",)},
+            "import java.util.concurrent.*": {"refused": ("no-uncontrolled", "sandboxed"), "allowed": ("ok",)},
+            "add-classpath /nonexistent-qore-test-dir": {"refused": ("no-uncontrolled", "no-filesystem", "sandboxed"),
+                "allowed": ("ok",)},
+            "add-relative-classpath nonexistent-qore-test-dir": {"refused": ("no-uncontrolled", "no-filesystem",
+                "sandboxed"), "allowed": ("ok",)},
+            "global-add-classpath /nonexistent-qore-test-dir": {"refused": AllRestricted, "allowed": ("ok",)},
+            "global-add-relative-classpath nonexistent-qore-test-dir": {"refused": AllRestricted,
+                "allowed": ("ok",)},
+            "set-property org.qore.test.issuer.placeholder value": {"refused": AllRestricted, "allowed": ("ok",)},
+            "register-shared-class qore.QoreTestIssuerPlaceholder": {"refused": AllRestricted, "allowed": ("ok",)},
+            # the argument is not valid byte code: an allowed issuer gets the command's own error
+            "define-class qore.QoreTestIssuerPlaceholder AAAA": {"refused": ("no-uncontrolled", "no-embedded",
+                "sandboxed"), "allowed": ("JNI-DEFINE-CLASS-ERROR", "JNI-ERROR")},
+            "define-pending-class qore.QoreTestIssuerPlaceholder AAAA": {"refused": ("no-uncontrolled", "no-embedded",
+                "sandboxed"), "allowed": ("ok", "JNI-DEFINE-CLASS-ERROR", "JNI-ERROR")},
+            # Kotlin scripting may not be installed
+            "kotlin-eval 1": {"refused": ("no-uncontrolled", "no-embedded", "sandboxed"),
+                "allowed": ("ok", "KOTLIN-SCRIPTING-NOT-AVAILABLE")},
+            "set-compat-types true": {"refused": (), "allowed": ("ok",)},
+            "mark-module-injected QoreTestIssuerPlaceholder": {"refused": (), "allowed": ("ok",)},
         };
     }
 
@@ -45,6 +57,8 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         addTestCase("a directive is judged by the restrictions of its Program", \directiveTest());
         addTestCase("a command issued at run time is judged by its issuer", \runtimeTest());
         addTestCase("a command issued by library module code is judged by the sandbox only", \libraryTest());
+        addTestCase("a library module's own directive is judged by the sandbox only", \libraryDirectiveTest());
+        addTestCase("the jdbc classpath option follows the rule of add-classpath", \jdbcOptionTest());
         set_return_value(main());
     }
 
@@ -67,7 +81,8 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         if (!issuerAware()) {
             testSkip("the jni module was built for module API 2.0");
         }
-        foreach hash<auto> c in (Refused.pairIterator()) {
+        on_exit Jni::java::lang::System::clearProperty("org.qore.test.issuer.placeholder");
+        foreach hash<auto> c in (Commands.pairIterator()) {
             foreach string kind in (keys Kinds) {
                 Program p = getIssuer(kind);
                 string err;
@@ -77,11 +92,10 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
                 } catch (hash<ExceptionInfo> ex) {
                     err = ex.err;
                 }
-                if (inlist(kind, c.value)) {
+                if (inlist(kind, c.value.refused)) {
                     assertEq("JNI-SANDBOX-ERROR", err, kind + ": " + c.key);
                 } else {
-                    # a command that is not refused may still fail for its own reasons, but not for its issuer
-                    assertTrue(err != "JNI-SANDBOX-ERROR", kind + ": " + c.key + ": " + err);
+                    assertTrue(inlist(err, c.value.allowed), kind + ": " + c.key + ": " + err);
                 }
             }
         }
@@ -119,6 +133,24 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         restricted_target.parse("%requires jni\n", "jni-module-cmd-issuer-restricted-target");
         assertThrows("JNI-SANDBOX-ERROR", \restricted_target.issueModuleCmd(), ("jni", cmd),
             "a trusted issuer into a target that does not allow uncontrolled APIs");
+        # a trusted issuer into a target without the filesystem: its parse options are not the issuer's
+        Program nofs_target = getIssuer("no-filesystem");
+        nofs_target.parse("%requires jni\n", "jni-module-cmd-issuer-nofs-target");
+        nofs_target.issueModuleCmd("jni", "add-classpath /nonexistent-qore-test-dir");
+    }
+
+    jdbcOptionTest() {
+        # the classpath option of the jdbc database driver follows the rule of add-classpath for the code that sets it
+        string src = "string sub open(string cp) { Datasource ds(\"jdbc:u/p@jdbc:qore-none://x{classpath=\" + cp "
+            "+ \"}\"); try { ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }";
+        foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
+                {"kind": "no-filesystem", "expected": "JNI-SANDBOX-ERROR"},
+                {"kind": "no-uncontrolled", "expected": "JNI-SANDBOX-ERROR"},
+                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+            Program p = getIssuer(c.kind);
+            p.parse("%requires jni\n" + src, "jni-module-cmd-issuer-jdbc-" + c.kind);
+            assertEq(c.expected, p.callFunction("open", "/nonexistent-qore-test-dir"), c.kind);
+        }
     }
 
     libraryTest() {
@@ -129,12 +161,31 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         # code has no parse options, so only a sandbox that governs its caller restricts the command
         string cmd = "add-classpath /nonexistent-qore-test-dir";
         foreach hash<auto> c in ({"kind": "trusted", "expected": "ok"}, {"kind": "no-filesystem", "expected": "ok"},
-                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+                {"kind": "no-uncontrolled", "expected": "ok"}, {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
             Program p = getIssuer(c.kind);
             p.loadModule("JniCmdIssuerFixture");
             p.parse("string sub run(string c) { return JniCmdIssuerFixture::issue(c); }",
                 "jni-module-cmd-issuer-library-" + c.kind);
             assertEq(c.expected, p.callFunction("run", cmd), c.kind + " caller");
+        }
+    }
+
+    libraryDirectiveTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for module API 2.0");
+        }
+        # the directive has no parse options (decision A), and a module from the module path is initialized as library
+        # code, with no sandbox, also when sandboxed code loads it first: every loader loads it
+        foreach string kind in (keys Kinds) {
+            Program p = getIssuer(kind);
+            string err;
+            try {
+                p.loadModule("JniCmdDirectiveFixture");
+                err = "ok";
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err + ": " + ex.desc;
+            }
+            assertEq("ok", err, kind + " loader");
         }
     }
 }
