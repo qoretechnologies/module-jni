@@ -112,16 +112,31 @@ class JniModuleCmdSandboxTest inherits QUnit::Test {
 
     classpathTest() {
         SandboxManager sm = getSandbox();
-        assertEq("parsed", parseIn(sm, "add-classpath " + allowed), "an allowed path");
-        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-classpath " + denied), "a denied path");
+        # the sandboxed Program's own directive: with module API 2.1 the issuer is judged first (qore#5699), and a
+        # sandboxed issuer is refused the command; before, only its filesystem policy was checked
+        assertEq(issuerAware() ? "JNI-SANDBOX-ERROR" : "parsed", parseIn(sm, "add-classpath " + allowed),
+            "an allowed path in the sandboxed Program's own directive");
+
+        # the target's filesystem policy, for a command that trusted code issues into the sandboxed Program
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("%requires jni\n", "jni-module-cmd-sandbox");
+        assertEq("ok", issueIn(p, "add-classpath " + allowed), "an allowed path");
+        assertEq("FILESYSTEM-ACCESS-DENIED", issueIn(p, "add-classpath " + denied), "a denied path");
         # every entry of a classpath list is checked
-        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-classpath " + allowed + PathSep + denied),
+        assertEq("FILESYSTEM-ACCESS-DENIED", issueIn(p, "add-classpath " + allowed + PathSep + denied),
             "a denied entry in a list");
-        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-classpath " + allowed + ";" + denied),
+        assertEq("FILESYSTEM-ACCESS-DENIED", issueIn(p, "add-classpath " + allowed + ";" + denied),
             "a denied entry after ';'");
-        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-classpath " + denied + "/*"), "a wildcard entry");
-        # a relative path is resolved against the script directory, which the sandbox does not allow
-        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-relative-classpath x.jar"), "a relative path");
+        assertEq("FILESYSTEM-ACCESS-DENIED", issueIn(p, "add-classpath " + denied + "/*"), "a wildcard entry");
+        # a relative path is resolved against the script directory (here, the current directory), which the sandbox
+        # does not allow
+        assertEq("FILESYSTEM-ACCESS-DENIED", issueIn(p, "add-relative-classpath x.jar"), "a relative path");
+    }
+
+    #! Returns True if the jni module judges module commands by their issuer (module API 2.1, qore#5699)
+    private static bool issuerAware() {
+        return get_module_hash().jni.api_minor >= 1;
     }
 
     globalTest() {

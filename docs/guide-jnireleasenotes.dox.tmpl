@@ -6,6 +6,13 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: built for module API 2.1, the module sets \c cmd_caller_aware and judges every module command
+      first by the restrictions of the code that issues it (\c QoreModuleCommandContext, qore#5699): sandboxed
+      issuers are refused the commands that load or define Java code, change a classpath or change state that every
+      Program shares, and issuers with a restricting parse option the commands that the option forbids
+      (\c JNI-SANDBOX-ERROR); the exported functions used by the \c python module's Java loader apply the rule of
+      \c import (see @ref jni_sandbox)
+
     - <b>Security</b>: sandboxed code, and a Program with \c PO_NO_UNCONTROLLED_APIS, cannot use the module commands
       that change state of the JVM that every Program shares or that run Java code (\c global-add-classpath,
       \c global-add-relative-classpath, \c set-property, \c register-shared-class, \c kotlin-eval;

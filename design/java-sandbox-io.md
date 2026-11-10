@@ -138,9 +138,30 @@ constructor of these classes starts with the check, and constructs the classes f
 
 ## Module commands
 
+### By the issuer (module API 2.1, qore#5699)
+
+Built against a Qore with module API 2.1 (`QORE_JNI_HAS_COMMAND_CONTEXT`), the module sets
+`QoreModuleInfo::cmd_caller_aware` and `jni_module_parse_cmd()` calls `jni_check_command_issuer()` before it runs a
+command. It looks the command up in `jni_command_issuer_rules` (a command that is not listed changes only flags of its
+target Program) and calls `QoreModuleCommandContext::check()` with the rule's mask (`getRestrictingOptions()` for the
+commands that change state that every Program shares) and `sandboxed_denied = true`. The context holds the issuer's
+restrictions, captured by Qore before it switches to the target Program; code of a library module has no parse
+options, so only a sandbox restricts the commands that the provider modules issue at run time. A missing context fails
+closed.
+
+The exported functions `jni_module_import()` and `jni_module_find_create_java_namespace()` (module-python's
+`JavaLoader`) bypass `jni_module_parse_cmd()`; `jni_exported_import_allowed()` applies the `import` rule to them: to
+the module command context if one is active, else to the Program they import into (`PO_NO_UNCONTROLLED_APIS`) and a
+governing sandbox. `jni_module_find_create_java_namespace()` has no exception sink, so it refuses with `nullptr`,
+which `JavaLoader` reports.
+
+`test/jni-module-cmd-issuer.qtest` (skipped for a module built for API 2.0).
+
+### By the target
+
 A module command runs in the Program that it is issued in, also when trusted code issues it with
-`Program::issueModuleCmd()` (libqore puts that Program in context), so the checks follow that Program's sandbox and
-parse options (`src/jni-module.cpp`):
+`Program::issueModuleCmd()` (libqore puts that Program in context), so the checks also follow that Program's sandbox
+and parse options (`src/jni-module.cpp`); with module API 2.0 they are the only checks:
 
 - `jni_check_classpath_sandbox()`: the entries of `add-classpath` and `add-relative-classpath`, and of the `classpath`
   option of the jdbc DBI driver (`QoreJdbcConnection::setOption()`), split on the path separator and `;` as

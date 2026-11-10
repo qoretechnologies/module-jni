@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%prepend-module-path "${SCRIPT_DIR}/jni-cmd-issuer-fixture"
+%requires jni
+%requires QUnit
+
+%exec-class JniModuleCmdIssuerTest
+
+#! The jni module commands are judged by the restrictions of the code that issues them (qore#5699)
+/** Needs a jni module built for module API 2.1 (QoreModuleCommandContext); with an older module it is skipped.
+*/
+class JniModuleCmdIssuerTest inherits QUnit::Test {
+    private:internal {
+        #! the issuer kinds: name -> restricting parse options, or -1 for a sandboxed issuer
+        const Kinds = {
+            "trusted": 0,
+            "no-uncontrolled": PO_NO_UNCONTROLLED_APIS,
+            "no-filesystem": PO_NO_FILESYSTEM,
+            "no-embedded": PO_NO_EMBEDDED_LOGIC,
+            "sandboxed": -1,
+        };
+
+        #! the commands and the issuer kinds that are refused each one
+        const Refused = {
+            "import java.lang.StringBuilder": ("no-uncontrolled", "sandboxed"),
+            "import java.util.concurrent.*": ("no-uncontrolled", "sandboxed"),
+            "add-classpath /nonexistent-qore-test-dir": ("no-uncontrolled", "no-filesystem", "sandboxed"),
+            "add-relative-classpath nonexistent-qore-test-dir": ("no-uncontrolled", "no-filesystem", "sandboxed"),
+            "global-add-classpath /nonexistent-qore-test-dir": ("no-uncontrolled", "no-filesystem", "no-embedded",
+                "sandboxed"),
+            "set-property org.qore.test.issuer.placeholder value": ("no-uncontrolled", "no-filesystem", "no-embedded",
+                "sandboxed"),
+            "register-shared-class qore.QoreTestIssuerPlaceholder": ("no-uncontrolled", "no-filesystem",
+                "no-embedded", "sandboxed"),
+            "kotlin-eval 1": ("no-uncontrolled", "no-embedded", "sandboxed"),
+            "set-compat-types true": (),
+        };
+    }
+
+    constructor() : QUnit::Test("JNI module command issuer", "1.0", \ARGV) {
+        addTestCase("a directive is judged by the restrictions of its Program", \directiveTest());
+        addTestCase("a command issued at run time is judged by its issuer", \runtimeTest());
+        addTestCase("a command issued by library module code is judged by the sandbox only", \libraryTest());
+        set_return_value(main());
+    }
+
+    #! Returns True if the jni module judges module commands by their issuer (module API 2.1)
+    private static bool issuerAware() {
+        return get_module_hash().jni.api_minor >= 1;
+    }
+
+    #! Returns a new Program of the given issuer kind
+    private static Program getIssuer(string kind) {
+        int po = Kinds{kind};
+        Program p(PO_NEW_STYLE | (po > 0 ? po : 0));
+        if (po < 0) {
+            p.setSandboxManager(new SandboxManager());
+        }
+        return p;
+    }
+
+    directiveTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for module API 2.0");
+        }
+        foreach hash<auto> c in (Refused.pairIterator()) {
+            foreach string kind in (keys Kinds) {
+                Program p = getIssuer(kind);
+                string err;
+                try {
+                    p.parse("%requires jni\n%module-cmd(jni) " + c.key + "\n", "jni-module-cmd-issuer");
+                    err = "ok";
+                } catch (hash<ExceptionInfo> ex) {
+                    err = ex.err;
+                }
+                if (inlist(kind, c.value)) {
+                    assertEq("JNI-SANDBOX-ERROR", err, kind + ": " + c.key);
+                } else {
+                    # a command that is not refused may still fail for its own reasons, but not for its issuer
+                    assertTrue(err != "JNI-SANDBOX-ERROR", kind + ": " + c.key + ": " + err);
+                }
+            }
+        }
+    }
+
+    runtimeTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for module API 2.0");
+        }
+        string prop = "org.qore.test.issuer.runtime";
+        string cmd = "set-property " + prop + " value";
+        Program trusted_target(PO_NEW_STYLE);
+        trusted_target.parse("%requires jni\n", "jni-module-cmd-issuer-target");
+        foreach string kind in (("no-uncontrolled", "no-filesystem", "no-embedded", "sandboxed")) {
+            Program p = getIssuer(kind);
+            p.parse("%requires jni\n"
+                "string sub self(string c) { try { Program::issueModuleCmd(\"jni\", c); return \"ok\"; } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+                "string sub into(Program t, string c) { try { t.issueModuleCmd(\"jni\", c); return \"ok\"; } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n", "jni-module-cmd-issuer-" + kind);
+            # into its own Program: refused by the jni module for its issuer
+            assertEq("JNI-SANDBOX-ERROR", p.callFunction("self", cmd), kind + ": into its own Program");
+            # into a trusted Program: refused before the module is given the command
+            assertEq("RUNTIME-COMMAND-ERROR", p.callFunction("into", trusted_target, cmd),
+                kind + ": into a trusted Program");
+        }
+        assertEq(NOTHING, Jni::java::lang::System::getProperty(prop), "the refused commands set nothing");
+
+        # a trusted issuer: allowed into a trusted Program; into a restricted Program, the target's own check refuses
+        # what the target may not do
+        trusted_target.issueModuleCmd("jni", cmd);
+        on_exit Jni::java::lang::System::clearProperty(prop);
+        assertEq("value", Jni::java::lang::System::getProperty(prop), "a trusted issuer");
+        Program restricted_target = getIssuer("no-uncontrolled");
+        restricted_target.parse("%requires jni\n", "jni-module-cmd-issuer-restricted-target");
+        assertThrows("JNI-SANDBOX-ERROR", \restricted_target.issueModuleCmd(), ("jni", cmd),
+            "a trusted issuer into a target that does not allow uncontrolled APIs");
+    }
+
+    libraryTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for module API 2.0");
+        }
+        # a library module (from the module path) issues commands from its own code, as the provider modules do; its
+        # code has no parse options, so only a sandbox that governs its caller restricts the command
+        string cmd = "add-classpath /nonexistent-qore-test-dir";
+        foreach hash<auto> c in ({"kind": "trusted", "expected": "ok"}, {"kind": "no-filesystem", "expected": "ok"},
+                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+            Program p = getIssuer(c.kind);
+            p.loadModule("JniCmdIssuerFixture");
+            p.parse("string sub run(string c) { return JniCmdIssuerFixture::issue(c); }",
+                "jni-module-cmd-issuer-library-" + c.kind);
+            assertEq(c.expected, p.callFunction("run", cmd), c.kind + " caller");
+        }
+    }
+}

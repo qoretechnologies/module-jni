@@ -242,8 +242,30 @@ public class Fetcher {
     \c ConnectionProvider::AbstractConnection, which check the module of the connection's class), so a connection
     that a server uses on a sandboxed user's behalf is refused too.
 
-    <b>Module commands:</b> a module command runs in the Program that it is issued in, also when trusted code issues
-    it with \c Program::issueModuleCmd(), so it follows that Program's sandbox and parse options:
+    <b>Module commands, by their issuer:</b> built for module API 2.1 (%Qore with \c QoreModuleCommandContext), the
+    module judges every command first by the restrictions of the code that issues it, which %Qore captures before it
+    switches to the Program that the command applies to (a \c %module-cmd directive, \c Program::issueModuleCmd(), or
+    a command replayed from a compiled program).  A sandboxed issuer is refused every command below; an issuer with a
+    restricting parse option is refused the commands that the option forbids (\c JNI-SANDBOX-ERROR):
+    |!Command|!Refused to a sandboxed issuer and to
+    |\c import (also \c import \c pkg.*, whose classes are loaded when they are used)|\c PO_NO_UNCONTROLLED_APIS
+    |\c add-classpath, \c add-relative-classpath|\c PO_NO_UNCONTROLLED_APIS, \c PO_NO_FILESYSTEM
+    |\c define-class, \c define-pending-class, \c kotlin-eval|\c PO_NO_UNCONTROLLED_APIS, \c PO_NO_EMBEDDED_LOGIC
+    |\c global-add-classpath, \c global-add-relative-classpath, \c set-property, \c register-shared-class|every \
+      restricting parse option: they change state that every Program shares
+    |\c set-compat-types, \c mark-module-injected|none: they set flags of the Program the command applies to
+
+    Code of a library module (a module from the module path) has no parse options, so only a sandbox restricts the
+    commands it issues, also on behalf of a restricted caller: the provider modules of this module, which add
+    classpaths at run time, can be used by a Program restricted only with parse options, and not by sandboxed code.
+    Restricted code cannot issue a command into another, trusted Program at all (\c RUNTIME-COMMAND-ERROR).  The
+    exported functions \c jni_module_import() and \c jni_module_find_create_java_namespace(), which other modules
+    (the \c python module's Java loader) call without a module command, apply the rule of \c import: to the issuer of
+    the module command that they run in, or else to the code of the Program they import into.
+
+    <b>Module commands, by their target:</b> a module command also runs in the Program that it is issued in, also when
+    trusted code issues it with \c Program::issueModuleCmd(), so it also follows that Program's sandbox and parse
+    options (with module API 2.0, only these checks apply):
     - the classpath that a sandboxed Program adds with the \c add-classpath and \c add-relative-classpath module
       commands, and with the \c classpath option of the \c jdbc database driver, is checked against its filesystem
       policy, entry by entry, as a read (\c FILESYSTEM-ACCESS-DENIED)
