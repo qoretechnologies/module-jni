@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../qlib"
 %requires jni
 %requires DataProvider >= 3.12
+%requires ConnectionProvider >= 3.1
 %requires QUnit
 
 %exec-class DataProviderExternalIoTest
@@ -50,6 +51,8 @@ class DataProviderExternalIoTest inherits QUnit::Test {
         addTestCase("sandboxed callers are refused the apps with external I/O", \refusalTest());
         addTestCase("sandboxed code cannot construct the connections and providers of these apps itself",
             \constructorTest());
+        addTestCase("a connection that trusted code created refuses a sandboxed caller its I/O",
+            \trustedConnectionTest());
         set_return_value(main());
     }
 
@@ -98,6 +101,12 @@ class DataProviderExternalIoTest inherits QUnit::Test {
 
     #! Tries to construct the class with typical constructor arguments; returns the error, or "constructed"
     private static string construct(string class_name) {
+        *object obj;
+        return construct(class_name, \obj);
+    }
+
+    #! Tries to construct the class with typical constructor arguments; returns the error, or "constructed"
+    private static string construct(string class_name, reference<*object> obj) {
         Class cls = Class::forName(class_name);
         if (cls.isAbstract()) {
             return "abstract";
@@ -117,7 +126,7 @@ class DataProviderExternalIoTest inherits QUnit::Test {
         }
         foreach softlist<auto> args in (("test", "test", url), ("test", "test", url, {}, {}), (), ({},)) {
             try {
-                cls.newObjectArgs(args);
+                obj = cls.newObjectArgs(args);
                 return "constructed";
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "RUNTIME-OVERLOAD-ERROR") {
@@ -178,6 +187,55 @@ class DataProviderExternalIoTest inherits QUnit::Test {
                 assertTrue(refused{m.key}.size() > 0,
                     m.key + ": refused at run time: " + (refused{m.key} ?? ()).join(", "));
             }
+        }
+    }
+
+    trustedConnectionTest() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("auto sub through(code c) { return c(); }", "external-io-trusted-connections");
+        # module -> the connection classes checked
+        hash<string, list<string>> checked = {};
+        foreach hash<auto> m in (Apps.pairIterator()) {
+            if (!m.value.firstValue()) {
+                continue;
+            }
+            load_module(m.key);
+            foreach string class_name in (keys getClasses(m.key)) {
+                *object obj;
+                if (construct(class_name, \obj) != "constructed" || !(obj instanceof AbstractConnection)) {
+                    continue;
+                }
+                AbstractConnection conn = obj;
+                # the connection's info is not I/O
+                assertEq(conn.getName(), p.callFunction("through", auto sub () { return conn.getName(); }),
+                    class_name + ": getName()");
+                hash<string, code> io = {
+                    "get()": sub () { conn.get(); },
+                    "get(False)": sub () { conn.get(False); },
+                    "ping()": sub () { conn.ping(); },
+                    "ping(True)": sub () { conn.ping(True); },
+                };
+                foreach hash<auto> i in (io.pairIterator()) {
+                    code c = i.value;
+                    assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () { p.callFunction("through", c); }, NOTHING,
+                        class_name + ": " + i.key);
+                }
+                # a server thread serving a sandboxed user
+                assertThrows("APP-SANDBOX-ACCESS-DENIED", \conn.checkSandboxAccess(), (True,),
+                    class_name + ": checkSandboxAccess(True)");
+                # trusted code is not refused: its ping fails for its own reasons with these arguments
+                hash<PingInfo> ping = conn.ping();
+                assertTrue(ping.info !~ /APP-SANDBOX-ACCESS-DENIED/, class_name + ": trusted ping");
+                checked{m.key} += (class_name,);
+            }
+        }
+        # the connection classes of these modules; the other modules have none that the test can construct
+        foreach string mod in ("JdbcDataProvider", "KafkaDataProvider", "MqttDataProvider") {
+            assertTrue(checked{mod}.size() > 0, mod + ": a connection was checked");
         }
     }
 

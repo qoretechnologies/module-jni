@@ -1,0 +1,240 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%exec-class JniModuleCmdSandboxTest
+
+#! The module commands of the jni module follow the sandbox and the restrictions of the Program that issues them
+/** - A Program's own classpath entries are checked against its filesystem policy, so that it reads no class or
+      resource from a path its policy denies; the same applies to the \c classpath option of the jdbc DBI driver.
+    - A command that changes state of the JVM that every Program shares (\c global-*, \c set-property,
+      \c register-shared-class) or that runs Java code (\c kotlin-eval) is refused to a sandbox, and in a Program that
+      does not allow uncontrolled APIs.
+    - \c define-class and \c define-pending-class are refused in a Program that does not allow uncontrolled APIs, and
+      a sandboxed Program cannot define a class in the loader of another Program.
+*/
+class JniModuleCmdSandboxTest inherits QUnit::Test {
+    private {
+        #! a directory that the sandbox allows reading
+        string allowed;
+        #! a directory that the sandbox does not allow
+        string denied;
+    }
+
+    private:internal {
+        #! the commands that change state of the JVM that every Program shares, or run Java code
+        const UncontrolledCmds = {
+            "global-add-classpath": "global-add-classpath %s",
+            "global-add-relative-classpath": "global-add-relative-classpath x.jar",
+            "set-property": "set-property org.qore.jni.test.sandbox.prop tenant",
+            "register-shared-class": "register-shared-class qore.JniModuleCmdSandboxShared",
+            "kotlin-eval": "kotlin-eval 1 + 1",
+        };
+
+        #! the JVM system property that the sandboxed set-property command would set
+        const SandboxProp = "org.qore.jni.test.sandbox.prop";
+
+        #! a Program that generates the byte code of a Qore class of a user module for define-class
+        const ByteCodeSource = "%requires jni\n%requires Util\n"
+            "binary sub byte_code(string c) { return Jni::org::qore::jni::get_byte_code(c); }\n"
+            "string sub java_name(string c) { return Jni::org::qore::jni::get_java_name(c); }\n";
+
+        #! the code of a Program that opens a jdbc Datasource with the given classpath
+        const JdbcSource = "%requires jni\n"
+            "string sub open_jdbc(string cp) {\n"
+            "    Datasource ds(\"jdbc:u/p@jdbc:qore-no-such-db://x{classpath=\" + cp + \"}\");\n"
+            "    try { ds.open(); return \"opened\"; } catch (hash<ExceptionInfo> ex) { return ex.err; }\n"
+            "}\n";
+    }
+
+    constructor() : QUnit::Test("JNI module command sandbox", "1.0", \ARGV) {
+        addTestCase("a sandboxed Program's classpath entries are checked against its filesystem policy",
+            \classpathTest());
+        addTestCase("a sandboxed Program cannot change the classpath of every Program", \globalTest());
+        addTestCase("a trusted Program is not restricted", \trustedTest());
+        addTestCase("sandboxed and restricted code cannot change the JVM or run Java code with a module command",
+            \uncontrolledCmdTest());
+        addTestCase("a module command issued at run time on a sandboxed Program follows its sandbox",
+            \runtimeCmdTest());
+        addTestCase("define-class is refused in a restricted Program and into another Program's loader",
+            \defineClassTest());
+        addTestCase("the jdbc classpath option is checked against the filesystem policy", \jdbcClasspathTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        allowed = make_tmp_dir();
+        denied = make_tmp_dir();
+    }
+
+    globalTearDown() {
+        remove_tree(allowed);
+        remove_tree(denied);
+    }
+
+    #! Parses the module command in a new Program with the sandbox; returns the error, or "parsed"
+    private string parseIn(*SandboxManager sm, string cmd) {
+        Program p(PO_NEW_STYLE);
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        try {
+            p.parse("%requires jni\n%module-cmd(jni) " + cmd + "\n", "jni-module-cmd-sandbox");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Returns a sandbox that allows reading the allowed directory only
+    private SandboxManager getSandbox() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        # the module and its jars are read from the module path
+        foreach string dir in (get_module_path_list()) {
+            sm.addFilesystemAllowedPath(dir, QSEC_READ);
+        }
+        return sm;
+    }
+
+    #! Returns the directories of the module path
+    private static list<string> get_module_path_list() {
+        return map $1, (ENV.QORE_MODULE_DIR ?? "").split(PathSep), $1.val();
+    }
+
+    classpathTest() {
+        SandboxManager sm = getSandbox();
+        assertEq("parsed", parseIn(sm, "add-classpath " + allowed), "an allowed path");
+        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-classpath " + denied), "a denied path");
+        # every entry of a classpath list is checked
+        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-classpath " + allowed + PathSep + denied),
+            "a denied entry in a list");
+        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-classpath " + allowed + ";" + denied),
+            "a denied entry after ';'");
+        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-classpath " + denied + "/*"), "a wildcard entry");
+        # a relative path is resolved against the script directory, which the sandbox does not allow
+        assertEq("FILESYSTEM-ACCESS-DENIED", parseIn(sm, "add-relative-classpath x.jar"), "a relative path");
+    }
+
+    globalTest() {
+        SandboxManager sm = getSandbox();
+        assertEq("JNI-SANDBOX-ERROR", parseIn(sm, "global-add-classpath " + allowed), "global-add-classpath");
+        assertEq("JNI-SANDBOX-ERROR", parseIn(sm, "global-add-relative-classpath x.jar"),
+            "global-add-relative-classpath");
+    }
+
+    trustedTest() {
+        assertEq("parsed", parseIn(NOTHING, "add-classpath " + denied));
+        assertEq("parsed", parseIn(NOTHING, "add-relative-classpath x.jar"));
+        assertEq("parsed", parseIn(NOTHING, "global-add-relative-classpath x.jar"));
+    }
+
+    uncontrolledCmdTest() {
+        SandboxManager sm = getSandbox();
+        foreach hash<auto> i in (UncontrolledCmds.pairIterator()) {
+            string cmd = sprintf(i.value, allowed);
+            assertEq("JNI-SANDBOX-ERROR", parseIn(sm, cmd), "sandboxed " + i.key);
+            assertEq("JNI-SANDBOX-ERROR", parseRestricted(cmd), "restricted " + i.key);
+        }
+        # the refused command changed nothing
+        assertEq(NOTHING, Jni::java::lang::System::getProperty(SandboxProp), "the property was not set");
+
+        # a trusted Program can set a property, so the refusal is the sandbox's
+        string trusted_prop = SandboxProp + ".trusted";
+        assertEq("parsed", parseIn(NOTHING, "set-property " + trusted_prop + " trusted"), "trusted set-property");
+        on_exit Jni::java::lang::System::clearProperty(trusted_prop);
+        assertEq("trusted", Jni::java::lang::System::getProperty(trusted_prop), "the trusted property was set");
+    }
+
+    runtimeCmdTest() {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(getSandbox());
+        p.parse("%requires jni\n", "jni-module-cmd-sandbox");
+
+        string cmd = UncontrolledCmds."set-property";
+        assertEq("JNI-SANDBOX-ERROR", issueIn(p, cmd), "trusted code issues the command on a sandboxed Program");
+        # a policy barrier or a system-policy capability does not let trusted code change the JVM for the sandbox
+        assertEq("JNI-SANDBOX-ERROR", SandboxManager::callWithSystemPolicy(\issueIn(), (p, cmd)), "a barrier");
+        code cap = SandboxManager::createSystemPolicyCall(\issueIn());
+        assertEq("JNI-SANDBOX-ERROR", cap(p, cmd), "a system-policy capability");
+        assertEq(NOTHING, Jni::java::lang::System::getProperty(SandboxProp), "the property was not set");
+
+        # the Program's own classpath follows its filesystem policy also at run time
+        assertEq("FILESYSTEM-ACCESS-DENIED", issueIn(p, "add-classpath " + denied), "a denied path");
+        assertEq("ok", issueIn(p, "add-classpath " + allowed), "an allowed path");
+    }
+
+    defineClassTest() {
+        Program gen(PO_NEW_STYLE);
+        gen.parse(ByteCodeSource, "jni-module-cmd-sandbox-gen");
+        # the Java class of a class of the Util module belongs to the Util module's Program
+        string cls = "::Util::TerminalColor";
+        string name = gen.callFunction("java_name", cls);
+        assertEq("qoremod.Util.TerminalColor", name);
+        string cmd = name + " " + gen.callFunction("byte_code", cls).toBase64();
+
+        assertEq("JNI-SANDBOX-ERROR", parseRestricted("define-class " + cmd), "restricted define-class");
+        assertEq("JNI-SANDBOX-ERROR", parseRestricted("define-pending-class " + cmd),
+            "restricted define-pending-class");
+        assertEq("JNI-SANDBOX-ERROR", parseIn(getSandbox(), "define-class " + cmd),
+            "sandboxed define-class into the loader of another Program");
+
+        # a sandboxed Program defines the class of its own Qore class in its own loader
+        Program own(PO_NEW_STYLE);
+        own.setSandboxManager(getSandbox());
+        own.parse("%requires jni\nclass JniModuleCmdSandboxOwn { int get() { return 1; } }\n"
+            "binary sub byte_code(string c) { return Jni::org::qore::jni::get_byte_code(c); }\n"
+            "string sub java_name(string c) { return Jni::org::qore::jni::get_java_name(c); }\n",
+            "jni-module-cmd-sandbox-own");
+        string own_name = own.callFunction("java_name", "::JniModuleCmdSandboxOwn");
+        assertEq("qore.JniModuleCmdSandboxOwn", own_name);
+        assertEq("ok", issueIn(own, "define-class " + own_name + " "
+            + own.callFunction("byte_code", "::JniModuleCmdSandboxOwn").toBase64()),
+            "sandboxed define-class of its own class");
+
+        # trusted code defines the class in the loader of the module that owns it
+        assertEq("parsed", parseIn(NOTHING, "define-class " + cmd), "trusted define-class");
+    }
+
+    jdbcClasspathTest() {
+        Program sp(PO_NEW_STYLE);
+        sp.setSandboxManager(getSandbox());
+        sp.parse(JdbcSource, "jni-module-cmd-sandbox-jdbc");
+        assertEq("FILESYSTEM-ACCESS-DENIED", sp.callFunction("open_jdbc", denied), "a denied classpath");
+        # an allowed classpath reaches the driver lookup, which finds no driver for the URL
+        assertEq("JNI-ERROR", sp.callFunction("open_jdbc", allowed), "an allowed classpath");
+
+        Program tp(PO_NEW_STYLE);
+        tp.parse(JdbcSource, "jni-module-cmd-sandbox-jdbc-trusted");
+        assertEq("JNI-ERROR", tp.callFunction("open_jdbc", denied), "a trusted Program");
+    }
+
+    #! Parses the module command in a new Program that does not allow uncontrolled APIs; returns the error or "parsed"
+    private string parseRestricted(string cmd) {
+        Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+        try {
+            p.parse("%requires jni\n%module-cmd(jni) " + cmd + "\n", "jni-module-cmd-sandbox-restricted");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Issues the module command at run time in the Program; returns the error, or "ok"
+    private static string issueIn(Program p, string cmd) {
+        try {
+            p.issueModuleCmd("jni", cmd);
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}

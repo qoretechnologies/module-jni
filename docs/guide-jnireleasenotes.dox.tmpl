@@ -6,10 +6,12 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
-    - <b>Security</b>: sandboxed code cannot use the \c global-add-classpath and \c global-add-relative-classpath
-      module commands, which change the classpath that every Program shares, and the entries that a sandboxed
-      Program adds with \c add-classpath and \c add-relative-classpath are checked against its filesystem policy
-      (see @ref jni_sandbox)
+    - <b>Security</b>: sandboxed code, and a Program with \c PO_NO_UNCONTROLLED_APIS, cannot use the module commands
+      that change state of the JVM that every Program shares or that run Java code (\c global-add-classpath,
+      \c global-add-relative-classpath, \c set-property, \c register-shared-class, \c kotlin-eval;
+      \c JNI-SANDBOX-ERROR); \c define-class is refused in such a Program and to a sandboxed Program for a class of
+      another Program; the entries that a sandboxed Program adds with \c add-classpath, \c add-relative-classpath or
+      the \c jdbc driver's \c classpath option are checked against its filesystem policy (see @ref jni_sandbox)
     - <b>Security</b>: the connection and data provider classes of the apps with \c external_io refuse sandboxed code
       in their constructors (\c APP-SANDBOX-ACCESS-DENIED), also when it creates them directly
     - <b>Security</b>: the Access, Busylight, Camel, Flyway, JakartaJMS, JasperReports, JdbcDP, Kafka, MQTT and

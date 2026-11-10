@@ -224,6 +224,8 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
         //printd(5, "QoreJdbcConnection::setOption() %p '%s' jpc: %p arg: '%s'\n", this, opt, jpc, arg.c_str());
 
         try {
+            // the entries are read by this Program's class loader, as with the "add-classpath" module command
+            ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
             jpc->addClasspath(arg.c_str());
             classpath = arg.c_str();
 

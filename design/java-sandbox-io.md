@@ -128,16 +128,32 @@ The apps of this module, from the audit for qore#5632 (the table is also in the 
 The connection and data provider classes of the `external_io` modules call
 `DataProviderActionCatalog::checkSandboxAccess(<AppName>)` as the first statement of every constructor, so sandboxed
 code that loads such a module and creates its classes directly is refused before any I/O; a class that inherits
-another module's class (Busylight from MQTT) is refused by both.
+another module's class (Busylight from MQTT) is refused by both.  A connection that trusted code created is refused to
+a sandboxed caller by `ConnectionProvider::AbstractConnection` itself (`get()`, `getAsync()`, `ping()` and the file
+location methods check the modules of the connection's class hierarchy), so no connection method of these modules
+does I/O for a sandboxed caller.
 
 `test/data-provider-external-io.qtest` loads every app and checks its declaration against this list, checks that every
 constructor of these classes starts with the check, and constructs the classes from sandboxed code.
 
-## Classpath module commands
+## Module commands
 
-`jni_check_classpath_sandbox()` (`src/jni-module.cpp`): the `global-add-classpath` and
-`global-add-relative-classpath` commands are refused to any governing sandbox (`QoreSandboxManagerHelper(All)`, so a
-system-policy capability cannot use them either), because they change the parent classpath that every Program
-shares; the entries of `add-classpath` and `add-relative-classpath` (split on the path separator and `;`, as
-`QoreURLClassLoader.addPath()` splits them) are checked with the filesystem policy as reads
-(`QoreSandboxManagerHelper(Policy)`).  `test/jni-classpath-sandbox.qtest`.
+A module command runs in the Program that it is issued in, also when trusted code issues it with
+`Program::issueModuleCmd()` (libqore puts that Program in context), so the checks follow that Program's sandbox and
+parse options (`src/jni-module.cpp`):
+
+- `jni_check_classpath_sandbox()`: the entries of `add-classpath` and `add-relative-classpath`, and of the `classpath`
+  option of the jdbc DBI driver (`QoreJdbcConnection::setOption()`), split on the path separator and `;` as
+  `QoreURLClassLoader.addPath()` splits them, are checked with the filesystem policy as reads
+  (`QoreSandboxManagerHelper(Policy)`)
+- `jni_check_uncontrolled_cmd()`: `global-add-classpath`, `global-add-relative-classpath` (the parent classpath that
+  every Program shares), `set-property` (JVM system properties), `register-shared-class` (the owning loader of a
+  shared dynamic class) and `kotlin-eval` (runs code) are refused (`JNI-SANDBOX-ERROR`) in a Program with
+  `PO_NO_UNCONTROLLED_APIS` and to any governing sandbox (`QoreSandboxManagerHelper(All)`, so a policy barrier or a
+  system-policy capability cannot use them either)
+- `jni_check_define_class_restricted()`: `define-class` and `define-pending-class` are refused in a Program with
+  `PO_NO_UNCONTROLLED_APIS`, because defining a class runs its static initializer; `define-class` refuses a governing
+  sandbox a class whose canonical loader (`Globals::getCanonicalLoader()`) is not the Program's own, so a sandboxed
+  Program cannot define the class that another Program loads under that name
+
+`test/jni-module-cmd-sandbox.qtest`.

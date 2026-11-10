@@ -406,6 +406,12 @@ private:
 
 } // namespace jni
 
+//! Refuses a classpath to sandboxed code where its policy does not allow it (see jni-module.cpp)
+/** @throw JNI-SANDBOX-ERROR sandboxed or restricted code changes the classpath of every Program
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
+*/
+DLLLOCAL void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const char* classpath, bool global);
+
 extern "C" DLLEXPORT int jni_module_import(ExceptionSink* xsink, QoreProgram* pgm, const char* import);
 extern "C" DLLEXPORT QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg, QoreProgram* pgm);
 

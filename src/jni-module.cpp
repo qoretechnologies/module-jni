@@ -531,27 +531,67 @@ static void qore_jni_mc_import(const QoreString& cmd_arg, QoreProgram* pgm, JniE
     }
 }
 
-//! Refuses a classpath module command to sandboxed code where its policy does not allow it
-/** A \c global-* command changes the classpath that every Program shares, so a sandboxed Program could make trusted
-    Programs load its classes: it is refused to sandboxed code.  A Program's own classpath is checked entry by entry
-    against the filesystem policy, so that sandboxed code reads no class or resource from a path its policy denies.
+//! Refuses a module command that runs Java code, or changes state of the JVM, to sandboxed and restricted code
+/** These commands do what an uncontrolled API does: they change state that every Program shares (the parent
+    classpath, JVM system properties, the owners of shared dynamic classes), or they run Java code that the module
+    command names or defines.  So they are refused:
+    - in a Program that does not allow uncontrolled APIs (\c PO_NO_UNCONTROLLED_APIS), where the module's functions
+      and Java classes are not available either
+    - to any governing sandbox, also through a policy barrier or a system-policy capability: a sandboxed Program must
+      not change what trusted Programs load or how the JVM connects for them
 
     @param cmd the module command, for the error
+    @param pgm the Program that the command is issued in
+    @param what what the command does, for the error
+
+    @throw JNI-SANDBOX-ERROR the command is issued in a restricted Program or under a sandbox
+*/
+static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, const char* what) {
+    if (pgm && (pgm->getParseOptions64() & PO_NO_UNCONTROLLED_APIS)) {
+        throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command %s, so it cannot be used in a Program "
+            "that does not allow uncontrolled APIs", cmd, what);
+    }
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    if (governing) {
+        throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"%s\" module command, which %s",
+            cmd, what);
+    }
+}
+
+//! Refuses a class definition module command in a Program that does not allow uncontrolled APIs
+/** Defining a class from byte code is running Java code: its static initializer runs when the class is first used,
+    as when its constants are imported, so it is an uncontrolled API.
+
+    @param cmd the module command, for the error
+    @param pgm the Program that the command is issued in
+
+    @throw JNI-SANDBOX-ERROR the Program does not allow uncontrolled APIs
+*/
+static void jni_check_define_class_restricted(const char* cmd, const QoreProgram* pgm) {
+    if (pgm && (pgm->getParseOptions64() & PO_NO_UNCONTROLLED_APIS)) {
+        throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command defines Java code, so it cannot be used "
+            "in a Program that does not allow uncontrolled APIs", cmd);
+    }
+}
+
+//! Refuses a classpath module command to sandboxed code where its policy does not allow it
+/** A \c global-* command changes the classpath that every Program shares, so a sandboxed Program could make trusted
+    Programs load its classes: it is refused as jni_check_uncontrolled_cmd() describes.  A Program's own classpath is
+    checked entry by entry against the filesystem policy, so that sandboxed code reads no class or resource from a
+    path its policy denies.
+
+    @param cmd the module command, for the error
+    @param pgm the Program that the command is issued in
     @param classpath the classpath: entries separated by the system path separator or \c ';', as
     QoreURLClassLoader.addPath() splits them
     @param global if the command changes the classpath that every Program shares
 
-    @throw JNI-SANDBOX-ERROR sandboxed code uses a \c global-* classpath command
+    @throw JNI-SANDBOX-ERROR sandboxed or restricted code uses a \c global-* classpath command
     @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
 */
-static void jni_check_classpath_sandbox(const char* cmd, const char* classpath, bool global) {
+void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const char* classpath, bool global) {
     if (global) {
-        // any governing sandbox, also through a policy barrier: a capability cannot change what every Program loads
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-        if (governing) {
-            throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"%s\" module command, which "
-                "changes the classpath of every Program", cmd);
-        }
+        jni_check_uncontrolled_cmd(cmd, pgm, "changes the classpath of every Program");
         return;
     }
     // the filesystem policy, as for Qore's own file operations
@@ -587,7 +627,7 @@ static void qore_jni_mc_global_add_classpath(const QoreString& cmd_arg, QoreProg
         JniExternalProgramData* jpc) {
     QoreString arg(cmd_arg);
     q_env_subst(arg);
-    jni_check_classpath_sandbox("global-add-classpath", arg.c_str(), true);
+    jni_check_classpath_sandbox("global-add-classpath", pgm, arg.c_str(), true);
     printd(LogLevel, "qore_jni_mc_global_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
     jpc->addParentClasspath(arg.c_str());
 }
@@ -618,7 +658,7 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
 
     printd(LogLevel, "qore_jni_mc_global_add_relative_classpath() arg: '%s' cwd: '%s'\n", arg.c_str(),
         cwd_str->c_str());
-    jni_check_classpath_sandbox("global-add-relative-classpath", cwd_str->c_str(), true);
+    jni_check_classpath_sandbox("global-add-relative-classpath", pgm, cwd_str->c_str(), true);
 
     jpc->addParentClasspath(cwd_str->c_str());
 }
@@ -627,7 +667,7 @@ static void qore_jni_mc_add_classpath(const QoreString& cmd_arg, QoreProgram* pg
     QoreString arg(cmd_arg);
     q_env_subst(arg);
     printd(LogLevel, "qore_jni_mc_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
-    jni_check_classpath_sandbox("add-classpath", arg.c_str(), false);
+    jni_check_classpath_sandbox("add-classpath", pgm, arg.c_str(), false);
     jpc->addClasspath(arg.c_str());
 }
 
@@ -654,12 +694,13 @@ static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgra
     cwd_str->concat('/');
 
     printd(LogLevel, "qore_jni_mc_add_relative_classpath() arg: '%s' cwd: '%s'\n", arg.c_str(), cwd_str->c_str());
-    jni_check_classpath_sandbox("add-relative-classpath", cwd_str->c_str(), false);
+    jni_check_classpath_sandbox("add-relative-classpath", pgm, cwd_str->c_str(), false);
 
     jpc->addClasspath(cwd_str->c_str());
 }
 
 static void qore_jni_mc_define_pending_class(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
+    jni_check_define_class_restricted("define-pending-class", pgm);
     assert(pgm);
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
 
@@ -697,6 +738,7 @@ static void qore_jni_mc_define_pending_class(const QoreString& arg, QoreProgram*
 }
 
 static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
+    jni_check_define_class_restricted("define-class", pgm);
     assert(pgm);
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);
@@ -748,6 +790,15 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
             define_loader = canon;
         }
     }
+    // a sandboxed Program defines classes only in its own loader: in the loader of another Program, its byte code
+    // would become the class that the other Program, and every Program that it serves, loads under that name
+    if (!env.isSameObject(define_loader, jpc->getClassLoader())) {
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+        if (governing) {
+            throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"define-class\" module "
+                "command to define class '%s', which belongs to another Program", binary_name.c_str());
+        }
+    }
 
     LocalReference<jclass> jcls = Globals::findDefineClass(env, binary_name.c_str(), define_loader,
         static_cast<const unsigned char*>(byte_code->getPtr()), byte_code->size());
@@ -766,6 +817,7 @@ static void qore_jni_mc_set_compat_types(const QoreString& arg, QoreProgram* pgm
 }
 
 static void qore_jni_mc_set_property(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
+    jni_check_uncontrolled_cmd("set-property", pgm, "sets a system property of the JVM");
     assert(pgm);
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);
@@ -806,6 +858,8 @@ static void qore_jni_mc_mark_module_injected(const QoreString& arg, QoreProgram*
 
 static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
+    jni_check_uncontrolled_cmd("register-shared-class", pgm, "makes the class of this Program the class of every "
+        "Program");
     assert(pgm);
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);
@@ -818,6 +872,7 @@ static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram
 }
 
 static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
+    jni_check_uncontrolled_cmd("kotlin-eval", pgm, "runs Kotlin code");
     assert(pgm);
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);

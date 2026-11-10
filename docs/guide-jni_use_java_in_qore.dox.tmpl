@@ -237,13 +237,26 @@ public class Fetcher {
 
     The connection and data provider classes of the modules of the apps with \c external_io refuse sandboxed code in
     their constructors as well (\c APP-SANDBOX-ACCESS-DENIED), so that sandboxed code that loads such a module and
-    creates its classes itself, without the data provider catalog, is refused too.
+    creates its classes itself, without the data provider catalog, is refused too.  A connection that trusted code
+    created refuses a sandboxed caller its I/O (\c get(), \c ping() and the other I/O methods of
+    \c ConnectionProvider::AbstractConnection, which check the module of the connection's class), so a connection
+    that a server uses on a sandboxed user's behalf is refused too.
 
-    <b>Classpath module commands:</b> the classpath that a sandboxed Program adds with the \c add-classpath and
-    \c add-relative-classpath module commands is checked against its filesystem policy, entry by entry, as a read
-    (\c FILESYSTEM-ACCESS-DENIED), and sandboxed code cannot use \c global-add-classpath and
-    \c global-add-relative-classpath (\c JNI-SANDBOX-ERROR), which change the classpath that every Program shares,
-    so that a sandboxed Program cannot make trusted Programs load its classes.
+    <b>Module commands:</b> a module command runs in the Program that it is issued in, also when trusted code issues
+    it with \c Program::issueModuleCmd(), so it follows that Program's sandbox and parse options:
+    - the classpath that a sandboxed Program adds with the \c add-classpath and \c add-relative-classpath module
+      commands, and with the \c classpath option of the \c jdbc database driver, is checked against its filesystem
+      policy, entry by entry, as a read (\c FILESYSTEM-ACCESS-DENIED)
+    - the commands that change state of the JVM that every Program shares (\c global-add-classpath,
+      \c global-add-relative-classpath, \c set-property, \c register-shared-class) or that run Java code
+      (\c kotlin-eval) raise \c JNI-SANDBOX-ERROR under a sandbox, also through a policy barrier or a system-policy
+      capability, and in a Program with \c PO_NO_UNCONTROLLED_APIS, where the module's Java classes are not available
+      either; so a sandboxed Program cannot make trusted Programs load its classes, or change how the JVM connects
+      for them (ex: \c http.proxyHost, \c javax.net.ssl.trustStore)
+    - \c define-class and \c define-pending-class raise \c JNI-SANDBOX-ERROR in a Program with
+      \c PO_NO_UNCONTROLLED_APIS, as defining a class runs its static initializer, and a sandboxed Program defines a
+      class only in its own class loader: a class that belongs to another Program (ex: \c qoremod.<module>.<class>)
+      cannot be defined by it
 
     @subsection jni_fork Child Processes Created with fork()
 
