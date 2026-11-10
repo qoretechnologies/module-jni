@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/jni-cmd-issuer-fixture"
 %requires jni
 %requires QUnit
+%requires FsUtil
 
 %exec-class JniModuleCmdIssuerTest
 
@@ -59,6 +60,8 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         addTestCase("a command issued by library module code is judged by the sandbox only", \libraryTest());
         addTestCase("a library module's own directive is judged by the sandbox only", \libraryDirectiveTest());
         addTestCase("the jdbc classpath option follows the rule of add-classpath", \jdbcOptionTest());
+        addTestCase("a command replayed from compiled code is judged by its recorded restrictions and its loader",
+            \replayTest());
         set_return_value(main());
     }
 
@@ -137,6 +140,71 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         Program nofs_target = getIssuer("no-filesystem");
         nofs_target.parse("%requires jni\n", "jni-module-cmd-issuer-nofs-target");
         nofs_target.issueModuleCmd("jni", "add-classpath /nonexistent-qore-test-dir");
+    }
+
+    #! Returns the qcc compiler next to the qore binary that runs the test, or "qcc"
+    private static string getQcc() {
+        string dir = dirname(QORE_ARGV[0]);
+        return ENV.QCC ?? (is_file(dir + "/qcc") ? dir + "/qcc" : "qcc");
+    }
+
+    #! Runs a shell command; returns its output and sets its exit status
+    private static string run(string cmd, reference<int> rc) {
+        return backquote(cmd + " 2>&1", \rc);
+    }
+
+    replayTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for module API 2.0");
+        }
+        TmpDir tmp("jni-module-cmd-issuer-");
+        string qcc = getQcc();
+        int rc;
+
+        # a compiled program: the directive before %no-filesystem is replayed with the options in force at it
+        string first = tmp.path + "/first.q";
+        File f();
+        f.open2(first, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%module-cmd(jni) add-classpath /nonexistent-qore-test-dir\n%no-filesystem\n"
+            "printf(\"loaded\\n\");\n");
+        f.close();
+        string out = run(sprintf("%s -O0 -o %s/first %s", qcc, tmp.path, first), \rc);
+        if (rc || !is_file(tmp.path + "/first")) {
+            testSkip("qcc is not available or cannot compile the program: " + out);
+        }
+        out = run(tmp.path + "/first", \rc);
+        assertEq(0, rc, "replayed directive before %no-filesystem: " + out);
+        assertRegex("loaded", out, "the program ran");
+
+        # the directive after %no-filesystem is refused already when the program is compiled
+        string after = tmp.path + "/after.q";
+        f.open2(after, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%no-filesystem\n%module-cmd(jni) add-classpath /nonexistent-qore-test-dir\n");
+        f.close();
+        out = run(sprintf("%s -O0 -o %s/after %s", qcc, tmp.path, after), \rc);
+        assertTrue(rc != 0, "qcc refuses the directive after %no-filesystem");
+        assertRegex("JNI-SANDBOX-ERROR", out, "the error is the jni module's");
+
+        # a compiled module: its recorded command is replayed when it is loaded; loaded by name from the module path it
+        # is library code (no parse options); loaded by a path that the loader chose, the loader's restrictions apply
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(qmod_dir);
+        out = run(sprintf("%s -m -o %s/JniReplayFixture.qmod %s/jni-cmd-issuer-fixture/replay/JniReplayFixture.qm", qcc,
+            qmod_dir, get_script_dir()), \rc);
+        assertEq(0, rc, "qcc compiles the module: " + out);
+        string load = tmp.path + "/load.q";
+        f.open2(load, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nProgram p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);\n"
+            "try { p.loadModule(ARGV[0]); printf(\"loaded\\n\"); } catch (hash<ExceptionInfo> ex) { "
+            "printf(\"%s: %s\\n\", ex.err, ex.desc); }\n");
+        f.close();
+        string qore = QORE_ARGV[0];
+        out = run(sprintf("QORE_MODULE_DIR=%s:%s %s %s JniReplayFixture", qmod_dir, ENV.QORE_MODULE_DIR, qore, load),
+            \rc);
+        assertRegex("^loaded$", trim(out), "a library module: its replayed command is judged by the sandbox only");
+        out = run(sprintf("%s %s %s/JniReplayFixture.qmod", qore, load, qmod_dir), \rc);
+        assertRegex("add-classpath", out, "a module chosen by path: its replayed command is refused");
+        assertFalse(trim(out) =~ /^loaded$/, "a module chosen by path is not loaded");
     }
 
     jdbcOptionTest() {
