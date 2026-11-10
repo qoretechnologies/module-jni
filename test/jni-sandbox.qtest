@@ -117,10 +117,11 @@ SecretReader sub run_method_in_java_thread(string path, Queue results, string ho
 
 # hands an object to Java, which destroys it in a new Java thread; returns the object, which must stay alive until
 # then
-SecretReader sub destroy_in_java_thread(string path, Queue results) {
+# Java holds a reference to the object until it destroys it, so it is not returned: Java's thread can destroy it before
+# this function returns
+nothing sub destroy_in_java_thread(string path, Queue results) {
     SecretReader r(path, new Queue(), results);
     callbacks_method(\"destroyInThread\", \"org/qore/jni/QoreObjectBase\").invoke(NOTHING, r);
-    return r;
 }
 
 # hands a proxy to Java, which calls it in a new Java thread; returns the handler, which must stay alive until then
@@ -276,12 +277,10 @@ auto sub run(code c, ...) {
         Program u = getTrusted();
         Program p = getSandboxed();
         Queue results();
-        object r = call(u, NOTHING, "destroy_in_java_thread", secret, results);
+        call(u, NOTHING, "destroy_in_java_thread", secret, results);
         assertEq(SecretContent, results.get(CallbackTimeout), "unsandboxed");
-        delete r;
-        r = call(u, p, "destroy_in_java_thread", secret, results);
+        call(u, p, "destroy_in_java_thread", secret, results);
         assertEq("FILESYSTEM-ACCESS-DENIED", results.get(CallbackTimeout));
-        delete r;
     }
 
     testRelease() {
