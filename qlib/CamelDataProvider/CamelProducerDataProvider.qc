@@ -122,7 +122,7 @@ public class CamelProducerDataProvider inherits DataProvider::AbstractDataProvid
         # an endpoint's component, its options and its property placeholders can load classes, run code or access
         # files that the sandbox does not control; code that may not load arbitrary classes may use only a plain
         # endpoint name of an in-memory component, with no options (qore#5742)
-        *string scheme = (req.endpoint =~ x/^([a-z]+):[A-Za-z0-9_.\-]+$/)[0];
+        *string scheme = (req.endpoint =~ x/^([a-z]+):[A-Za-z0-9_.\-]+\z/)[0];
         if (!scheme || !InMemorySchemes{scheme}) {
             Jni::org::qore::jni::check_class_option("camel", "endpoint", "selects a Camel component that can load "
                 "classes, run code or access files");

@@ -52,13 +52,23 @@ class JniClassOptionsSandboxTest inherits QUnit::Test {
     }
 
     #! Checks that the sandboxed run is refused for the option and that the trusted run is not
-    private checkOption(string label, string option, string body) {
-        string desc;
-        assertEq("JNI-SANDBOX-ERROR", runAs(True, body, \desc), label + ": sandboxed");
-        assertRegex(option, desc, label + ": option named");
+    /** @param trusted_desc if given, a regular expression that the trusted run's error must match
+    */
+    private checkOption(string label, string option, string body, *string trusted_desc) {
+        checkSandboxed(label, option, body);
         string tdesc;
         string err = runAs(False, body, \tdesc);
         assertTrue(err != "JNI-SANDBOX-ERROR", label + ": trusted: " + err);
+        if (trusted_desc) {
+            assertRegex(trusted_desc, tdesc, label + ": trusted: the option was used");
+        }
+    }
+
+    #! Checks that the sandboxed run is refused for the option
+    private checkSandboxed(string label, string option, string body) {
+        string desc;
+        assertEq("JNI-SANDBOX-ERROR", runAs(True, body, \desc), label + ": sandboxed");
+        assertRegex(option, desc, label + ": option named");
     }
 
     #! Checks that neither run is refused by the check
@@ -76,9 +86,12 @@ class JniClassOptionsSandboxTest inherits QUnit::Test {
         checkOption("classpath", "classpath", "new JdbcDataProvider::JdbcDataProvider({" + base
             + ", \"classpath\": \"/nonexistent-qore-test-dir\"});");
         checkOption("driver_class", "driver_class", "new JdbcDataProvider::JdbcDataProvider({" + base
-            + ", \"driver_class\": \"com.example.Placeholder\"});");
-        checkOption("url properties", "url", "new JdbcDataProvider::JdbcDataProvider({\"url\": "
-            "\"jdbc:qore-none://x?a=b\", \"user\": \"u\", \"password\": \"p\"});");
+            + ", \"driver_class\": \"com.example.Placeholder\"});", "com.example.Placeholder");
+        foreach string url in ("jdbc:qore-none://x?a=b", "jdbc:qore-none://x;a=b", "jdbc:qore-none://(host=x,a=b)/d",
+                "jdbc:qore-none://address=(host=x)/d") {
+            checkOption("url properties " + url, "url", sprintf("new JdbcDataProvider::JdbcDataProvider({\"url\": "
+                "%y, \"user\": \"u\", \"password\": \"p\"});", url));
+        }
         checkAllowed("plain url", "new JdbcDataProvider::JdbcDataProvider({" + base + "});");
     }
 
@@ -88,7 +101,8 @@ class JniClassOptionsSandboxTest inherits QUnit::Test {
             "JakartaJmsDataProvider::JmsDataProviderBase::createConnectionFactory({" + base
             + ", \"provider_classpath\": \"/nonexistent-qore-test-dir\"});");
         checkOption("connection_factory_class", "connection_factory_class",
-            "JakartaJmsDataProvider::JmsDataProviderBase::createConnectionFactory({" + base + "});");
+            "JakartaJmsDataProvider::JmsDataProviderBase::createConnectionFactory({" + base + "});",
+            "com.example.Placeholder");
     }
 
     #! Returns code that checks one Kafka option value
@@ -152,14 +166,18 @@ class JniClassOptionsSandboxTest inherits QUnit::Test {
             checkAllowed(endpoint, camelSend(endpoint));
         }
         foreach string endpoint in ("file:/nonexistent-qore-test-dir", "seda:qoretest?size=1", "log:x?level=INFO",
-                "direct:{{qoretest}}", "no-scheme") {
+                "direct:{{qoretest}}", "no-scheme", "seda:qoretest\n") {
             checkOption(endpoint, "endpoint", camelSend(endpoint));
         }
+        # the connection returns the Camel context, which has no endpoint check
+        checkOption("connection get", "connection", "CamelDataProvider::CamelConnection c(\"c\", \"c\", "
+            "\"camel://x\"); object ctx = c.get(False); delete ctx;");
     }
 
     jasperTest() {
         string cls = "JasperReportsDataProvider::JasperReportsDataProvider";
-        checkOption("template_data", "template", "new " + cls + "({\"template_data\": <00>, \"output_format\": "
+        # the trusted run of an in-memory template is not made here: it would compile the placeholder template
+        checkSandboxed("template_data", "template", "new " + cls + "({\"template_data\": <00>, \"output_format\": "
             "\"pdf\"});");
         checkOption("template option", "template", "new " + cls + "({\"template\": "
             "\"/nonexistent-qore-test-dir/x.jrxml\", \"output_format\": \"pdf\"});");

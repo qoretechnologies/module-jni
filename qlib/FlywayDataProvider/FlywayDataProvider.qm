@@ -242,13 +242,15 @@ const FlywayLogo = File::readTextFile(get_script_dir() + "/flyway-logo.svg");
 QoreFlywayRunner sub get_flyway_runner(hash<auto> copts) {
     # prefix locations with "filesystem:" if no prefix is present
     list<string> locations = map ($1 =~ /:/ ? $1 : "filesystem:" + $1), copts.locations ?? ();
-    # a location other than a directory (ex: "classpath:") makes Flyway load the Java migration classes that it finds
-    # there: before Flyway is configured (qore#5742)
-    # driver properties in the JDBC URL ("?name=value" or ";name=value") can name classes for the driver to load
-    if (copts.url =~ /[?;]/) {
+    # both checks are made before Flyway is configured (qore#5742)
+    # driver properties in the JDBC URL ("?name=value", ";name=value", or key-value forms such as "(name=value)") can
+    # name classes for the driver to load
+    if (copts.url =~ /[?;=(&]/) {
         Jni::org::qore::jni::check_class_option("flyway", "url", "sets JDBC driver properties, which can name Java "
             "classes for the driver to load");
     }
+    # a location other than a directory (ex: "classpath:") makes Flyway load the Java migration classes that it finds
+    # there
     if (map 1, locations, $1 !~ /^filesystem:/i) {
         Jni::org::qore::jni::check_class_option("flyway", "locations", "names a location from which Flyway loads "
             "Java migration classes");

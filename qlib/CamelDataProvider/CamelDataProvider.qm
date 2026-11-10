@@ -203,7 +203,8 @@ module CamelDataProvider {
     @subsection cameldataprovider_v1_0 CamelDataProvider v1.0
     - initial release
     - sandboxed code may only send to a plain endpoint name, with no options or placeholders, of the in-memory
-      components \c direct, \c seda, \c log and \c mock (\c JNI-SANDBOX-ERROR)
+      components \c direct, \c seda, \c log and \c mock, and cannot get the Camel context from a \c CamelConnection
+      (\c JNI-SANDBOX-ERROR)
 */
 
 #! Contains all public definitions in the CamelDataProvider module

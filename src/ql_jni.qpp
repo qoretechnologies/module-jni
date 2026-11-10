@@ -34,7 +34,6 @@
 #include "JavaToQore.h"
 
 #include <qore/QoreSandboxManager.h>
-#include <qore/QoreReflection.h>
 
 #include <algorithm>
 #include <cctype>
@@ -182,17 +181,15 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
     return QoreValue();
 }
 
-//! Refuses an option that makes Java load a class or extend the classpath to code that may not load arbitrary classes
+//! Refuses an option that makes Java load a class or extend the classpath to sandboxed code
 /** Data provider and connection modules call this before they act on an option that names a Java class to load or
     instantiate (a JDBC driver class, a JMS connection factory class, a Kafka handler class, ...), or a classpath to
-    add.  Such an option lets whoever sets it run Java code that the sandbox does not control, so it is refused to:
-    - code that a sandbox governs, also through a policy barrier or a system-policy capability
-    - code whose runtime parse options do not allow uncontrolled APIs
-      (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"); module code runs with its own Program's parse
-      options, and with its caller's only when the caller is sandboxed, so the sandbox is the run-time boundary for
-      module code
+    add.  Such an option lets whoever sets it run Java code that the sandbox does not control, so it is refused to
+    code that a sandbox governs, also through a policy barrier or a system-policy capability.
 
-    Trusted code is not refused.
+    The sandbox is the run-time boundary for module code: module code runs with its own Program's parse options, and
+    with its caller's only when the caller is sandboxed, so a Program that is restricted only with parse options is
+    not refused by this check.  Trusted code is not refused.
 
     The same applies to a value that makes Java load or compile code in another way (a report template that is
     compiled, an endpoint URI that selects a component that loads classes); @p what then describes it.
@@ -201,12 +198,12 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
     @param option the name of the option, for the error
     @param what what the option does, for the error; by default, that it names a Java class or classpath to load
 
-    @throw JNI-SANDBOX-ERROR the caller is sandboxed, or does not allow uncontrolled APIs
+    @throw JNI-SANDBOX-ERROR the caller is sandboxed
 
     @par Example:
     @code{.py}
 if (copts.driver_class) {
-    Jni::org::qore::jni::check_class_option("jdbc", "driver_class");
+    Jni::org::qore::jni::check_class_option("jdbc-dp", "driver_class");
 }
     @endcode
 
@@ -214,13 +211,6 @@ if (copts.driver_class) {
  */
 nothing check_class_option(string provider, string option, *string what) [flags=NAMED_ARGS] {
     const char* desc = what ? what->c_str() : "names a Java class or classpath to load";
-    // the runtime parse options of the calling code: module code runs with the restrictions of its caller as well
-    QoreReflectionCaller caller;
-    if (!caller.allowsDomain(QDOM_UNCONTROLLED_API, nullptr)) {
-        xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which code that does not allow uncontrolled "
-            "APIs cannot use", provider->c_str(), option->c_str(), desc);
-        return QoreValue();
-    }
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
     if (governing) {
         xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which sandboxed code cannot use",

@@ -228,16 +228,17 @@ public class Fetcher {
 
     The provider modules of this module check:
     |!Module|!Options
-    |JdbcDataProvider|\c classpath, \c driver_class, and a \c url with driver properties (\c ? or \c ;), which can \
-      name classes for the driver to load
+    |JdbcDataProvider|\c classpath, \c driver_class, and a \c url with driver properties (any of \c ?, \c ;, \c =, \
+      \c ( or \c &), which can name classes for the driver to load
     |JakartaJmsDataProvider|\c provider_classpath, \c connection_factory_class (always set, so sandboxed code \
       cannot use JMS)
-    |KafkaDataProvider|\c ssl.engine.factory.class, \c sasl.client.callback.handler.class, \
-      \c sasl.login.callback.handler.class, \c sasl.login.class (except Kafka's own classes), the serializers and \
-      deserializers (except Kafka's own), and \c sasl.jaas.config (except one entry for one of Kafka's own login \
-      modules)
+    |KafkaDataProvider|\c ssl.engine.factory.class (except Kafka's \c DefaultSslEngineFactory, the connection's \
+      default), \c sasl.client.callback.handler.class, \c sasl.login.callback.handler.class and \
+      \c sasl.login.class (when set), the serializers and deserializers (except Kafka's own), and \
+      \c sasl.jaas.config (except one entry for one of Kafka's own login modules)
     |CamelDataProvider|the endpoint of a request, except a plain endpoint name, with no options or placeholders, of \
-      the in-memory components \c direct, \c seda, \c log and \c mock
+      the in-memory components \c direct, \c seda, \c log and \c mock; and \c CamelConnection::get(), which returns \
+      the Camel context
     |JasperReportsDataProvider|the report template: its expressions are compiled and run as Java code, and a \
       compiled \c .jasper template is deserialized by Java
     |FlywayDataProvider|\c locations other than directories (ex: \c classpath:), and a \c url with driver \

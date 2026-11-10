@@ -117,6 +117,10 @@ public class CamelConnection inherits ConnectionProvider::AbstractConnectionWith
         @return the connection object
     */
     private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        # the Camel context sends to and routes between any endpoints, with no check of the endpoint URIs; sandboxed
+        # code uses the producer data provider, which checks them (qore#5742)
+        Jni::org::qore::jni::check_class_option("camel", "connection", "returns the Camel context, which uses any "
+            "endpoint without the endpoint check of the producer data provider");
         QoreCamelContext ctx = new QoreCamelContext();
         if (connect) {
             ctx.start();

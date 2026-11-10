@@ -197,9 +197,9 @@ sub prepareJdbcDriver(hash<auto> copts) {
     if (copts.driver_class) {
         Jni::org::qore::jni::check_class_option("jdbc-dp", "driver_class");
     }
-    # driver properties in the URL ("?name=value" or ";name=value") are interpreted by the driver, and some name
-    # classes for it to load
-    if (copts.url =~ /[?;]/) {
+    # driver properties in the URL ("?name=value", ";name=value", or key-value forms such as "(name=value)") are
+    # interpreted by the driver, and some name classes for it to load
+    if (copts.url =~ /[?;=(&]/) {
         Jni::org::qore::jni::check_class_option("jdbc-dp", "url", "sets JDBC driver properties, which can name "
             "Java classes for the driver to load");
     }
