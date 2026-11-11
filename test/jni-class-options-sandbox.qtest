@@ -16,6 +16,28 @@ class JniClassOptionsSandboxTest inherits QUnit::Test {
     private:internal {
         const Modules = ("JdbcDataProvider", "JakartaJmsDataProvider", "KafkaDataProvider", "CamelDataProvider",
             "JasperReportsDataProvider", "FlywayDataProvider");
+
+        #! The Kafka option that names a command, its default and another value
+        const KinitOpt = "sasl.kerberos.kinit.cmd";
+        const KinitDefault = "/usr/bin/kinit";
+        const KinitOther = "/nonexistent-qore-test-dir/kinit";
+
+        #! Code of a trusted Program that makes what the test gives to sandboxed code
+        const TrustedKinitCode = sprintf("
+auto sub default_value() {
+    return KafkaDataProvider::KafkaConnection::ConnectionScheme.options.%y.default_value;
+}
+
+KafkaDataProvider::KafkaConnection sub make_connection(string cmd) {
+    return new KafkaDataProvider::KafkaConnection(\"k\", \"k\", \"kafka://127.0.0.1:1\", {}, {%y: cmd});
+}
+
+code sub make_capability(string cmd) {
+    return SandboxManager::createSystemPolicyCall(sub () {
+        KafkaDataProvider::KafkaDataProviderBase::checkClassOptions({%y: cmd});
+    });
+}
+", KinitOpt, KinitOpt, KinitOpt);
     }
 
     constructor() : QUnit::Test("JNI class options sandbox", "1.0", \ARGV) {
@@ -24,6 +46,7 @@ class JniClassOptionsSandboxTest inherits QUnit::Test {
         addTestCase("kafka options", \kafkaTest());
         addTestCase("kafka jaas entries", \kafkaJaasTest());
         addTestCase("kafka clients", \kafkaClientTest());
+        addTestCase("kafka kinit command", \kafkaKinitTest());
         addTestCase("jdbc and jms connections", \connectionTest());
         addTestCase("camel endpoints", \camelTest());
         addTestCase("jasperreports templates", \jasperTest());
@@ -143,6 +166,75 @@ class JniClassOptionsSandboxTest inherits QUnit::Test {
             + "), {\"value.serializer\": \"com.example.Placeholder\"});");
         checkOption("connection option", "sasl.login.class", "new KafkaDataProvider::KafkaConsumerDataProvider("
             + conn + ", {}, {\"sasl.login.class\": \"com.example.Placeholder\"}), {\"topics\": (\"t\",)});");
+    }
+
+    kafkaKinitTest() {
+        string Opt = KinitOpt;
+        string Default = KinitDefault;
+        string Other = KinitOther;
+
+        Program tp(PO_NEW_STYLE);
+        map tp.loadModule($1), Modules;
+        tp.parse(TrustedKinitCode, "jni-class-options-kinit-trusted");
+        assertEq(Default, tp.callFunction("default_value"), "the allowed value is the connection's default");
+
+        checkOption("the check", Opt, kafkaCheck(Opt, Other));
+        checkAllowed("the check: default", kafkaCheck(Opt, Default));
+        checkAllowed("the check: not set", "KafkaDataProvider::KafkaDataProviderBase::checkClassOptions({});");
+
+        string conn = "new KafkaDataProvider::KafkaConnection(\"k\", \"k\", \"kafka://127.0.0.1:1\"";
+        foreach hash<auto> p in (
+                {"name": "consumer", "cls": "KafkaConsumerDataProvider", "args": "\"topics\": (\"t\",)"},
+                {"name": "producer", "cls": "KafkaProducerDataProvider", "args": ""},
+            ) {
+            string prefix = "new KafkaDataProvider::" + p.cls + "(";
+            string sep = p.args ? ", " : "";
+            # the data provider of the connection gives the connection's options to its children
+            string root = conn + ", {}, {%y: %y}).getDataProvider({" + p.args + "}).getChildProviderEx("
+                + sprintf("%y", p.name) + ");";
+            checkOption(p.name + ": connection option", Opt, sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn, Opt,
+                Other, p.args));
+            checkOption(p.name + ": data provider of the connection", Opt, sprintf(root, Opt, Other));
+            # it is a connection option only: a provider does not accept it from any caller
+            string direct = sprintf("%s%s), {%s%s%y: %y});", prefix, conn, p.args, sep, Opt, Other);
+            foreach bool sandboxed in ((True, False)) {
+                string desc;
+                assertEq("CONSTRUCTOR-ERROR", runAs(sandboxed, direct, \desc), sprintf("%s: provider option: %s", p.name,
+                    sandboxed ? "sandboxed" : "trusted"));
+                assertRegex(Opt, desc, p.name + ": provider option: named");
+            }
+            checkAllowed(p.name + ": connection option, default", sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn,
+                Opt, Default, p.args));
+            checkAllowed(p.name + ": data provider of the connection, default", sprintf(root, Opt, Default));
+        }
+
+        # a connection that trusted code configured does not let sandboxed code use the command
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        map p.loadModule($1), Modules;
+        p.parse("sub run(KafkaDataProvider::KafkaConnection c) { new KafkaDataProvider::KafkaConsumerDataProvider(c, "
+            "{\"topics\": (\"t\",)}); }", "jni-class-options-kinit-connection");
+        assertThrows("JNI-SANDBOX-ERROR", Opt, \p.callFunction(), ("run", tp.callFunction("make_connection", Other)),
+            "trusted connection");
+
+        # through a policy barrier and a capability
+        string check = kafkaCheck(Opt, Other);
+        string desc;
+        assertEq("JNI-SANDBOX-ERROR", runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});",
+            \desc), "policy barrier");
+        assertRegex(Opt, desc, "policy barrier: option named");
+        code cap = tp.callFunction("make_capability", Other);
+        Program cp(PO_NEW_STYLE);
+        cp.setSandboxManager(new SandboxManager());
+        cp.parse("sub run(code c) { c(); }", "jni-class-options-kinit-capability");
+        assertThrows("JNI-SANDBOX-ERROR", Opt, \cp.callFunction(), ("run", cap), "capability");
+
+        # at run time only the sandbox restricts module code: a Program that forbids process control and has no sandbox
+        # is not refused
+        Program np(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        map np.loadModule($1), Modules;
+        np.parse("sub run() {" + check + "}", "jni-class-options-kinit-no-process");
+        assertEq(NOTHING, np.callFunction("run"), "no sandbox");
     }
 
     connectionTest() {

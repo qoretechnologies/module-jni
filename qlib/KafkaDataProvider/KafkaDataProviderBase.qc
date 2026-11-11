@@ -40,6 +40,14 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
             "sasl.login.class": {},
         };
 
+        #! The client options that name a command for the Kafka client to run, with the values that every caller may
+        #! use (the connection sets its default); see checkClassOptions()
+        const CommandOptions = {
+            "sasl.kerberos.kinit.cmd": {
+                "/usr/bin/kinit": True,
+            },
+        };
+
         #! The serializer and deserializer options; see checkClassOptions()
         const SerdeOptions = (
             "key.serializer",
@@ -215,6 +223,12 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
         foreach hash<auto> i in (ClassOptions.pairIterator()) {
             if (opts{i.key}.val() && !i.value{opts{i.key}}) {
                 Jni::org::qore::jni::check_class_option("kafka", i.key);
+            }
+        }
+        # the Kafka client runs this command in Java, outside of the process controls of Qore (qore#5743)
+        foreach hash<auto> i in (CommandOptions.pairIterator()) {
+            if (opts{i.key}.val() && !i.value{opts{i.key}}) {
+                Jni::org::qore::jni::check_class_option("kafka", i.key, "names a command for the Kafka client to run");
             }
         }
         foreach string opt in (SerdeOptions) {
