@@ -52,6 +52,7 @@ code sub make_capability(string cmd) {
         addTestCase("jasperreports templates", \jasperTest());
         addTestCase("flyway options", \flywayTest());
         addTestCase("barrier and capability", \barrierTest());
+        addTestCase("a sandbox that trusts the code with uncontrolled APIs does not refuse it", \trustedSandboxTest());
         set_return_value(main());
     }
 
@@ -90,8 +91,20 @@ code sub make_capability(string cmd) {
     #! Checks that the sandboxed run is refused for the option
     private checkSandboxed(string label, string option, string body) {
         string desc;
-        assertEq("JNI-SANDBOX-ERROR", runAs(True, body, \desc), label + ": sandboxed");
-        assertRegex(option, desc, label + ": option named");
+        assertSandboxRefused(runAs(True, body, \desc), desc, label + ": sandboxed", option);
+    }
+
+    #! Asserts that a sandboxed run was refused: by the check, naming the option, or, where a sandbox refuses
+    #! uncontrolled APIs at run time (qore#5741), by the core before the check is reached
+    private assertSandboxRefused(string err, *string desc, string label, *string option) {
+        if (err == "INVALID-FUNCTION-ACCESS") {
+            assertRegex("uncontrolled API", desc, label + ": refused as an uncontrolled API");
+            return;
+        }
+        assertEq("JNI-SANDBOX-ERROR", err, label);
+        if (option) {
+            assertRegex(option, desc, label + ": option named");
+        }
     }
 
     #! Checks that neither run is refused by the check
@@ -220,9 +233,8 @@ code sub make_capability(string cmd) {
         # through a policy barrier and a capability
         string check = kafkaCheck(Opt, Other);
         string desc;
-        assertEq("JNI-SANDBOX-ERROR", runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});",
-            \desc), "policy barrier");
-        assertRegex(Opt, desc, "policy barrier: option named");
+        assertSandboxRefused(runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});", \desc), desc,
+            "policy barrier", Opt);
         code cap = tp.callFunction("make_capability", Other);
         Program cp(PO_NEW_STYLE);
         cp.setSandboxManager(new SandboxManager());
@@ -292,11 +304,43 @@ code sub make_capability(string cmd) {
             "\"locations\": (\"classpath:qore/test/x\",)}).getDataProvider();");
     }
 
+    trustedSandboxTest() {
+        # a host that governs trusted code with a sandbox only for its interrupts or limits allows uncontrolled APIs
+        # (SandboxManager::setUncontrolledApiPolicy(), a Qore with the trust policy); that code may use the options
+        SandboxManager sm();
+        if (!sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            testSkip("the Qore library has no uncontrolled-API policy of sandboxes");
+        }
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        string check = "Jni::org::qore::jni::check_class_option(\"qore-test\", \"placeholder\");";
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("sub run() {\n" + check + "\n}\n", "jni-class-options-trusted-sandbox");
+        p.callFunction("run");
+        # the provider options too: a Kafka serializer of the caller's own
+        Program kp(PO_NEW_STYLE);
+        kp.setSandboxManager(sm);
+        kp.loadModule("KafkaDataProvider");
+        kp.parse("sub run() {\n" + kafkaCheck("value.serializer", "com.example.Placeholder") + "\n}\n",
+            "jni-class-options-trusted-sandbox-kafka");
+        kp.callFunction("run");
+        # the default sandbox, with the same filesystem and network policy, still refuses it
+        SandboxManager deny();
+        deny.setFilesystemDefaultPolicy(True);
+        deny.setNetworkDefaultPolicy(True);
+        Program dp(PO_NEW_STYLE);
+        dp.setSandboxManager(deny);
+        dp.parse("sub run() {\n" + check + "\n}\n", "jni-class-options-default-sandbox");
+        assertThrows("JNI-SANDBOX-ERROR", \dp.callFunction(), "run", "the default sandbox");
+    }
+
     barrierTest() {
         string check = "Jni::org::qore::jni::check_class_option(\"qore-test\", \"placeholder\");";
         string desc;
-        assertEq("JNI-SANDBOX-ERROR", runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});",
-            \desc), "policy barrier");
+        assertSandboxRefused(runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});", \desc), desc,
+            "policy barrier");
         code cap = SandboxManager::createSystemPolicyCall(sub () {
             Jni::org::qore::jni::check_class_option("qore-test", "placeholder");
         });

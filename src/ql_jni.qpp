@@ -211,8 +211,9 @@ if (copts.driver_class) {
  */
 nothing check_class_option(string provider, string option, *string what) [flags=NAMED_ARGS] {
     const char* desc = what ? what->c_str() : "names a Java class or classpath to load";
-    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-    if (governing) {
+    // seen through a policy barrier and a system-policy capability, so that the check fails closed; only a sandbox
+    // that does not trust the code with uncontrolled APIs refuses it
+    if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which sandboxed code cannot use",
             provider->c_str(), option->c_str(), desc);
     }

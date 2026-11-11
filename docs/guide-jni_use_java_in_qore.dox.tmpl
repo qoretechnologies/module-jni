@@ -367,7 +367,10 @@ public class Fetcher {
     |FlywayDataProvider|\c locations other than directories (ex: \c classpath:), and a \c url with driver \
       properties
 
-    Modules check their own options with \c Jni::org::qore::jni::check_class_option().
+    Modules check their own options with \c Jni::org::qore::jni::check_class_option().  With a %Qore that has the
+    uncontrolled-API policy of sandboxes (\c SandboxManager::setUncontrolledApiPolicy()), code counts as sandboxed for
+    these checks only if a governing sandbox does not allow uncontrolled APIs: code that a host governs with a sandbox
+    only for its interrupts or limits, and trusts, may use these options.
 
     The Kafka \c sasl.kerberos.kinit.cmd option names a command that the Kafka client runs in Java, outside of the
     process controls of %Qore.  It is trusted configuration: code that no sandbox governs can set it, so an application
