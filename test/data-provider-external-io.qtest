@@ -13,35 +13,37 @@
 
 #! The data provider apps of this module declare the I/O that their Java code does outside the sandbox (qore#5632)
 /** An app whose Java code opens paths or connects to destinations itself declares \c external_io, so that data
-    provider consumers refuse it to sandboxed callers; an app whose data Qore reads and writes declares nothing.  No
-    app is \c sandbox_aware yet.  The expected declarations are the audit in design/java-sandbox-io.md.
+    provider consumers refuse it to sandboxed callers; an app whose data Qore reads and writes declares it as well,
+    because a governing sandbox refuses its Java calls (\c QDOM_UNCONTROLLED_API), also from library code running for
+    a sandboxed caller (qore#5741), so it refuses sandboxed callers up front.  No app is \c sandbox_aware yet.  The
+    expected declarations are the audit in design/java-sandbox-io.md.
 */
 class DataProviderExternalIoTest inherits QUnit::Test {
     public {
         #! module -> app -> whether the app declares external_io
         const Apps = {
             "AccessDataProvider": {"Access": True},
-            "AvroDataProvider": {"Avro": False},
+            "AvroDataProvider": {"Avro": True},
             "BusyLightDataProvider": {"Busylight": True},
             "CamelDataProvider": {"Camel": True},
-            "EmailDataProvider": {"Email": False},
-            "ExcelDataProvider": {"Excel": False},
+            "EmailDataProvider": {"Email": True},
+            "ExcelDataProvider": {"Excel": True},
             "FlywayDataProvider": {"Flyway": True},
-            "IcsDataProvider": {"ICS": False},
+            "IcsDataProvider": {"ICS": True},
             "JakartaJmsDataProvider": {"JakartaJMS": True},
             "JasperReportsDataProvider": {"JasperReports": True},
             "JdbcDataProvider": {"JdbcDP": True},
             "KafkaDataProvider": {"Kafka": True},
             "MqttDataProvider": {"MQTT": True},
-            "OdpDataProvider": {"ODP": False},
-            "OdsDataProvider": {"ODS": False},
-            "OdtDataProvider": {"ODT": False},
+            "OdpDataProvider": {"ODP": True},
+            "OdsDataProvider": {"ODS": True},
+            "OdtDataProvider": {"ODT": True},
             "OpcUaDataProvider": {"OpcUA": True},
-            "PowerPointDataProvider": {"PowerPoint": False},
-            "TikaDataProvider": {"Tika": False},
-            "VcfDataProvider": {"VCF": False},
-            "VisioDataProvider": {"Visio": False},
-            "WordDataProvider": {"Word": False},
+            "PowerPointDataProvider": {"PowerPoint": True},
+            "TikaDataProvider": {"Tika": True},
+            "VcfDataProvider": {"VCF": True},
+            "VisioDataProvider": {"Visio": True},
+            "WordDataProvider": {"Word": True},
         };
     }
 

@@ -103,6 +103,8 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the IcsWriteDataProvider with the output path and optionally an option hash
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(IcsDataProvider::AppName);
         *hash<auto> copts = checkOptions("ICS-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.stream) {
             error("ICS-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when path is given as first "
@@ -120,6 +122,8 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the IcsWriteDataProvider with an output stream and optionally an option hash
     constructor(OutputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(IcsDataProvider::AppName);
         *hash<auto> copts = checkOptions("ICS-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.path) {
             error("ICS-WRITE-OPTION-ERROR", "cannot provide \"path\" option when stream is given as first "
@@ -137,6 +141,8 @@ public class IcsWriteDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(IcsDataProvider::AppName);
         *hash<auto> copts = checkOptions("ICS-WRITE-OPTION-ERROR", ConstructorOptions, options);
         content_type = copts.content_type ?? "events";
         if (copts.path) {

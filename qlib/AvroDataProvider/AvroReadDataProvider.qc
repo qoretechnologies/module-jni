@@ -96,6 +96,8 @@ public class AvroReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw AVRO-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(AvroDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         checkOptions("AVRO-READ-OPTION-ERROR", ConstructorOptions, opts);
@@ -108,6 +110,8 @@ public class AvroReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw AVRO-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(AvroDataProvider::AppName);
         i = stream;
         checkOptions("AVRO-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("stream=%s", stream.uniqueHash());
@@ -118,6 +122,8 @@ public class AvroReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw AVRO-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(AvroDataProvider::AppName);
         *hash<auto> copts = checkOptions("AVRO-READ-OPTION-ERROR", ConstructorOptions, options);
         if (copts.path) {
             if (copts.stream) {

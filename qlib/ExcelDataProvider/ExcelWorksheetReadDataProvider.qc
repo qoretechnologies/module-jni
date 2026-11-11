@@ -70,6 +70,8 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
         @param opts a hash of optional options, must be already processed for validity
     */
     constructor(InputStream i, string name, string sheet, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
         file = new ExcelFile(i);
         setup(name, sheet, opts);
     }
@@ -83,6 +85,8 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
         @param opts a hash of optional options, must be already processed for validity
     */
     constructor(string path, string name, string sheet, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
         file = new ExcelFile(FileLocationHandler::getBinaryStreamFromLocation(path));
         setup(name, sheet, opts);
     }
@@ -94,6 +98,8 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
         @param opts a hash of optional options, must be already processed for validity
     */
     constructor(ExcelFile file, string name, string sheet, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
         self.file = file.retain();
         setup(name, sheet, opts);
     }
@@ -109,6 +115,8 @@ public class ExcelWorksheetReadDataProvider inherits DataProvider::AbstractDataP
     /** Without input (\c path, \c stream, or \c data), the provider has no records
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
         *hash<auto> copts = ExcelReadDataProvider::processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR",
             ExcelReadDataProvider::ConstructorOptions, options));
         if ((copts.path ? 1 : 0) + (copts.stream ? 1 : 0) + (copts.data ? 1 : 0) > 1) {

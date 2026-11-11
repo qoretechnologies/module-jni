@@ -70,6 +70,8 @@ public class OdsWorksheetReadDataProvider inherits DataProvider::AbstractDataPro
         @param opts a hash of optional options, must be already processed for validity
     */
     constructor(InputStream i, string name, string sheet, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdsDataProvider::AppName);
         file = new OdsFile(i);
         setup(name, sheet, opts);
     }
@@ -83,6 +85,8 @@ public class OdsWorksheetReadDataProvider inherits DataProvider::AbstractDataPro
         @param opts a hash of optional options, must be already processed for validity
     */
     constructor(string path, string name, string sheet, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdsDataProvider::AppName);
         file = new OdsFile(FileLocationHandler::getBinaryStreamFromLocation(path));
         setup(name, sheet, opts);
     }
@@ -94,6 +98,8 @@ public class OdsWorksheetReadDataProvider inherits DataProvider::AbstractDataPro
         @param opts a hash of optional options, must be already processed for validity
     */
     constructor(OdsFile file, string name, string sheet, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdsDataProvider::AppName);
         self.file = file.retain();
         setup(name, sheet, opts);
     }
@@ -109,6 +115,8 @@ public class OdsWorksheetReadDataProvider inherits DataProvider::AbstractDataPro
     /** Without input (\c path, \c stream, or \c data), the provider has no records
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdsDataProvider::AppName);
         *hash<auto> copts = OdsReadDataProvider::processCellOptions(checkOptions("ODS-READ-OPTION-ERROR",
             OdsReadDataProvider::ConstructorOptions, options));
         if ((copts.path ? 1 : 0) + (copts.stream ? 1 : 0) + (copts.data ? 1 : 0) > 1) {

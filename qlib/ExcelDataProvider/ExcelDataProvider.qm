@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider >= 3.9
+%requires(reexport) DataProvider >= 3.12
 %requires FileLocationHandler
 %requires Util
 %requires ValueMask
@@ -70,6 +70,10 @@ module ExcelDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ExcelDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java calls are uncontrolled APIs (QDOM_UNCONTROLLED_API) that a governing sandbox refuses,
+            # also from library code running for a sandboxed caller (qore#5741): sandboxed callers are refused
+            # up front instead of failing in the middle of a call
+            "external_io": True,
             "display_name": "Excel Spreadsheets",
             "short_desc": "Read and write Excel spreadsheets",
             "desc": "Read and write Excel spreadsheets",
@@ -606,6 +610,11 @@ module ExcelDataProvider {
     @section ExcelDataProvider_relnotes Release Notes
 
     @subsection ExcelDataProvider_v1_1 ExcelDataProvider v1.1
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
+      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
+      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
+      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
+      middle of a call; the module requires \c DataProvider 3.12 or later
     - `preserve_empty_rows` lets the reader keep empty records, including trailing empty rows, when checking exports
     - added the \c header_row write option to place column headers after blank leading rows, including in
       individual worksheets of a multi-sheet workbook

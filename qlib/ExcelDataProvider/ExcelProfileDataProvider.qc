@@ -47,6 +47,8 @@ public class ExcelProfileDataProvider inherits AbstractTabularProfileDataProvide
 
     #! Creates the object
     constructor(*hash<auto> options) : AbstractTabularProfileDataProvider(options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
     }
 
     #! Returns data provider static info

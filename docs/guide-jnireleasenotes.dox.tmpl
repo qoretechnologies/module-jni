@@ -29,6 +29,12 @@
       the \c jdbc driver's \c classpath option are checked against its filesystem policy (see @ref jni_sandbox)
     - <b>Security</b>: the connection and data provider classes of the apps with \c external_io refuse sandboxed code
       in their constructors (\c APP-SANDBOX-ACCESS-DENIED), also when it creates them directly
+    - <b>Security</b>: the Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio and Word data provider
+      apps declare \c external_io as well, and their data provider classes refuse sandboxed code in their
+      constructors (\c APP-SANDBOX-ACCESS-DENIED): a governing sandbox refuses the uncontrolled APIs
+      (\c QDOM_UNCONTROLLED_API) that their Java calls are, also when library code makes them for a sandboxed caller
+      (qore#5741), so they refuse sandboxed callers cleanly up front instead of failing in the middle of a call; the
+      provider modules require \c DataProvider 3.12 or later (see @ref jni_sandbox)
     - <b>Security</b>: the Access, Busylight, Camel, Flyway, JakartaJMS, JasperReports, JdbcDP, Kafka, MQTT and
       OpcUA data provider apps declare \c external_io: their Java code does network or filesystem I/O that the sandbox
       does not control, so data provider consumers refuse them to sandboxed callers (\c APP-SANDBOX-ACCESS-DENIED);

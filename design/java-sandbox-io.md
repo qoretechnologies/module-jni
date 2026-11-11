@@ -121,11 +121,14 @@ The apps of this module, from the audit for qore#5632 (the table is also in the 
   of them a Java library opens a path or connects to a destination given in an option, and most of them also reach
   destinations that the library resolves or discovers itself (cluster metadata, failover lists, server endpoint
   lists, report resources, linked database files), so none is `sandbox_aware`.
-- no declaration: Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio, Word. Qore opens the
-  locations (`FileLocationHandler`) and Java only transforms the streams it is given; Excel and ODS also create
-  temporary files of their own in `java.io.tmpdir`, with names that no caller chooses.
+- `external_io` because their Java calls are uncontrolled APIs (qore#5741): Avro, Email, Excel, ICS, ODP, ODS, ODT,
+  PowerPoint, Tika, VCF, Visio, Word. Qore opens the locations (`FileLocationHandler`) and Java only transforms the
+  streams it is given; Excel and ODS also create temporary files of their own in `java.io.tmpdir`, with names that no
+  caller chooses. A governing sandbox refuses `QDOM_UNCONTROLLED_API` (Java) calls, also from library code running
+  for a sandboxed caller, so these apps declare `external_io` to refuse sandboxed callers cleanly up front instead of
+  failing in the middle of a call.
 
-The connection and data provider classes of the `external_io` modules call
+The connection and data provider classes of all `external_io` modules call
 `DataProviderActionCatalog::checkSandboxAccess(<AppName>)` as the first statement of every constructor, so sandboxed
 code that loads such a module and creates its classes directly is refused before any I/O; a class that inherits
 another module's class (Busylight from MQTT) is refused by both.  A connection that trusted code created is refused to

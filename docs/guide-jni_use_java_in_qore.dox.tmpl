@@ -227,13 +227,19 @@ public class Fetcher {
     |JdbcDP|\c external_io|the JDBC driver connects to the destinations of the URL
     |Kafka|\c external_io|the client connects to the bootstrap servers and to the brokers they return
     |OpcUA|\c external_io|the client connects to the server and the endpoints it returns
-    |Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio, Word|none|Java only transforms the data
+    |Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio, Word|\c external_io|Java only transforms the data, but every Java call is an uncontrolled API (\c QDOM_UNCONTROLLED_API)
 
     No app is declared \c sandbox_aware yet: each app with \c external_io lets a Java library connect to destinations
     that it resolves or discovers itself, or open files it finds itself, which these checks cannot cover until the
-    app is changed to make them.  The Excel and ODS apps create temporary files of their own in the JVM's temporary
-    directory; these are not declared as external I/O, because no caller chooses their names and no caller data
-    leaves the process through them.
+    app is changed to make them.
+
+    The document apps (Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio and Word) read and write
+    only the locations that %Qore opens for them (\c FileLocationHandler), and Java only transforms the streams it is
+    given; the Excel and ODS apps also create temporary files of their own in the JVM's temporary directory, with
+    names that no caller chooses.  They declare \c external_io as well, because a governing sandbox refuses the
+    uncontrolled APIs (\c QDOM_UNCONTROLLED_API) that their Java calls are, also when library code makes them for a
+    sandboxed caller (qore#5741): declared, they refuse sandboxed callers cleanly up front instead of failing in the
+    middle of a call.
 
     The connection and data provider classes of the modules of the apps with \c external_io refuse sandboxed code in
     their constructors as well (\c APP-SANDBOX-ACCESS-DENIED), so that sandboxed code that loads such a module and
