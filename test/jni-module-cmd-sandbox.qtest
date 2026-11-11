@@ -203,8 +203,15 @@ class JniModuleCmdSandboxTest inherits QUnit::Test {
             "sandboxed define-class into the loader of another Program");
 
         # a sandboxed Program defines the class of its own Qore class in its own loader
+        # qore#5741 run-time refusal of uncontrolled APIs: the Program generates the byte code itself with jni functions
+        # in that domain, which its sandbox must allow; the filesystem policy and the loader check are unchanged (the
+        # call is dynamic because the Qore library may lack the rule)
+        SandboxManager own_sm = getSandbox();
+        if (own_sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(own_sm, "setUncontrolledApiPolicy", True);
+        }
         Program own(PO_NEW_STYLE);
-        own.setSandboxManager(getSandbox());
+        own.setSandboxManager(own_sm);
         own.parse("%requires jni\nclass JniModuleCmdSandboxOwn { int get() { return 1; } }\n"
             "binary sub byte_code(string c) { return Jni::org::qore::jni::get_byte_code(c); }\n"
             "string sub java_name(string c) { return Jni::org::qore::jni::get_java_name(c); }\n",

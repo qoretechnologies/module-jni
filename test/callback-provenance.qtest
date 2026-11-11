@@ -27,6 +27,12 @@ class ProvenanceTest inherits QUnit::Test {
         sandbox.parse("code sub make(code reader) { return Callbacks::readingClosure(reader); }", "foreign-callback-factory");
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
+        # qore#5741 run-time refusal of uncontrolled APIs: the sandboxed factory calls Java, which its sandbox must
+        # allow; the filesystem policy that the callback must retain is unchanged (the call is dynamic because the Qore
+        # library may lack the rule)
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
         sandbox.setSandboxManager(sm);
         code trusted = Callbacks::readingClosure(reader);
         code restricted = sandbox.callFunction("make", reader);

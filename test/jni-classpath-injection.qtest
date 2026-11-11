@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %requires jni
 %requires QUnit
+%requires FsUtil
 
 %exec-class JniClasspathInjectionTest
 
@@ -20,19 +21,48 @@ class JniClasspathInjectionTest inherits QUnit::Test {
 
         const Denied = "JNI-SANDBOX-ERROR";
 
-        #! the code of a Program that issues a jni command at run time; returns the error, or "ok"
+        #! the error of the core's run-time refusal of an uncontrolled API to sandboxed code (qore#5741)
+        const CoreRefused = "INVALID-FUNCTION-ACCESS";
+
+        #! the code of a Program that issues a jni command at run time; returns "<err>: <desc>", or "ok"
         const IssueSource = "
 string sub issue(string cmd) {
     try {
         Program::issueModuleCmd(\"jni\", cmd);
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return ex.err + \": \" + ex.desc;
     }
 }
 
 string sub issue_barrier(string cmd) {
-    return SandboxManager::callWithSystemPolicy(\\issue(), cmd);
+    try {
+        return SandboxManager::callWithSystemPolicy(\\issue(), cmd);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+
+        #! the code of a child process in which a sandbox that allows uncontrolled APIs adds the jar to the shared
+        #! classpath; ARGV: the jar, the test class, the file with IssueSource; prints the result of the command, then
+        #! whether a new trusted Program can import the class
+        const TrustingSandboxSource = "
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(True);
+if (sm.hasCallableMethod(\"setUncontrolledApiPolicy\")) {
+    call_object_method(sm, \"setUncontrolledApiPolicy\", True);
+}
+Program p(PO_NEW_STYLE);
+p.setSandboxManager(sm);
+p.parse(\"%requires jni\\n\" + ReadOnlyFile::readTextFile(ARGV[2]), \"jni-classpath-injection-trusting\");
+printf(\"issue: %s\\n\", p.callFunction(\"issue\", \"global-add-classpath \" + ARGV[0]));
+Program t(PO_NEW_STYLE);
+try {
+    t.parse(\"%requires jni\\n%module-cmd(jni) import \" + ARGV[1] + \"\\n\", \"jni-classpath-injection-trusted\");
+    printf(\"import: ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"import: %s\\n\", ex.err);
 }
 ";
     }
@@ -43,6 +73,7 @@ string sub issue_barrier(string cmd) {
         addTestCase("a capability of trusted code does not add to it for sandboxed code", \capabilityTest());
         addTestCase("a trusted Program cannot load the sandboxed code's classes", \injectionTest());
         addTestCase("sandboxed code cannot add a path that its policy denies to its own classpath", \ownTest());
+        addTestCase("a sandbox that allows uncontrolled APIs may add to the shared classpath", \trustingSandboxTest());
         addTestCase("trusted code adds to the shared classpath", \controlTest());
         set_return_value(main());
     }
@@ -83,6 +114,45 @@ string sub issue_barrier(string cmd) {
         }
     }
 
+    #! Allows uncontrolled APIs in the sandbox, so that the module's own checks are reached (qore#5741)
+    /** the call is dynamic because the Qore library may lack the rule
+    */
+    private static allowUncontrolledApis(SandboxManager sm) {
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
+    }
+
+    #! Asserts that the module refused the command: \a rv is the "<err>: <desc>" result of issue()
+    private assertModuleRefused(string rv, string cmd, string label) {
+        assertRegex("^" + Denied + ": ", rv, label);
+        assertRegex(sprintf("\"%s\" module command", cmd.split(" ")[0]), rv, label + " (reason)");
+    }
+
+    #! Asserts that sandboxed code was refused the command, by the module or by the core
+    /** qore#5741 run-time refusal of uncontrolled APIs: under a sandbox that does not allow them, the core can refuse
+        the call (Program::issueModuleCmd() or SandboxManager::callWithSystemPolicy()) before the module's own check
+    */
+    private assertRefused(string rv, string cmd, string label) {
+        if (rv.equalPartial(CoreRefused + ": ")) {
+            assertRegex("does not allow access to uncontrolled API", rv, label + " (reason)");
+        } else {
+            assertModuleRefused(rv, cmd, label);
+        }
+    }
+
+    #! Asserts that the module's path check refused the command for the jar: \a rv is the result of issue()
+    private assertFilesystemDenied(string rv, string cmd, string label) {
+        assertRegex("^FILESYSTEM-ACCESS-DENIED: ", rv, label);
+        assertRegex("'" + getJar() + "'.*module command error from command '" + cmd.split(" ")[0], rv,
+            label + " (reason)");
+    }
+
+    #! Returns True if the jni module judges module commands by their issuer (module API 2.1, qore#5699)
+    private static bool issuerAware() {
+        return get_module_hash().jni.api_minor >= 1;
+    }
+
     beforeTest() {
         assertTrue(is_file(getJar()), "the test jar exists: " + getJar());
         assertFalse(trustedCanLoad(), "the class is not on any classpath yet");
@@ -96,8 +166,8 @@ string sub issue_barrier(string cmd) {
         Program p = getSandboxed(sm);
         foreach string cmd in (cmds) {
             assertEq(Denied, parseSandboxed(cmd), "directive: " + cmd);
-            assertEq(Denied, p.callFunction("issue", cmd), "run time: " + cmd);
-            assertEq(Denied, p.callFunction("issue_barrier", cmd), "own policy barrier: " + cmd);
+            assertRefused(p.callFunction("issue", cmd), cmd, "run time: " + cmd);
+            assertRefused(p.callFunction("issue_barrier", cmd), cmd, "own policy barrier: " + cmd);
         }
     }
 
@@ -112,7 +182,8 @@ code sub make_capability(string cmd) {
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(new SandboxManager());
         p.parse("string sub call(code c) { return c(); }", "jni-classpath-injection-capability");
-        assertEq(Denied, p.callFunction("call", cap), "capability called by sandboxed code");
+        # the capability of trusted code is not governed by the sandbox that calls it, so the module itself refuses it
+        assertModuleRefused(p.callFunction("call", cap), "global-add-classpath", "capability called by sandboxed code");
     }
 
     injectionTest() {
@@ -121,10 +192,53 @@ code sub make_capability(string cmd) {
 
     ownTest() {
         # its own classpath reads the files: the filesystem policy applies, and sandboxed code is refused the command
-        # (the rule of add-classpath for its issuer, qore#5699)
+        # (the rule of add-classpath for its issuer, qore#5699); without that rule (module API 2.0), the module's path
+        # check refuses it
+        string cmd = "add-classpath " + getJar();
         Program p = getSandboxed();
-        assertEq(Denied, p.callFunction("issue", "add-classpath " + getJar()), "add-classpath");
+        string rv = p.callFunction("issue", cmd);
+        if (issuerAware()) {
+            assertRefused(rv, cmd, "add-classpath");
+        } else {
+            assertFilesystemDenied(rv, cmd, "add-classpath");
+        }
+        # qore#5741 run-time refusal of uncontrolled APIs: a sandbox that allows uncontrolled APIs, and so is not
+        # refused the command as an issuer, but denies the path reaches the module's own path check, which refuses it
+        SandboxManager usm();
+        usm.setFilesystemDefaultPolicy(False);
+        allowUncontrolledApis(usm);
+        Program up = getSandboxed(usm);
+        assertFilesystemDenied(up.callFunction("issue", cmd), cmd, "add-classpath, uncontrolled APIs allowed");
         assertFalse(trustedCanLoad(), "a Program's own classpath is not shared");
+    }
+
+    #! qore#5741: a sandbox that allows uncontrolled APIs trusts its code with them, and that code could call Java's
+    #! class loaders directly, so a global-* classpath command is not refused to it
+    /** The command changes the classpath of every Program, so the case runs in a child process, and the test process's
+        classpath stays as the other cases expect it
+    */
+    trustingSandboxTest() {
+        if (!(new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
+            testSkip("the Qore library has no uncontrolled-API policy of sandboxes");
+        }
+        TmpDir tmp("jni-classpath-injection-");
+        string issue_file = tmp.path + DirSep + "issue.q";
+        string script = tmp.path + DirSep + "trusting.q";
+        File f();
+        f.open2(issue_file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(IssueSource);
+        f.close();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n%%prepend-module-path \"%s\"\n%%requires jni\n",
+            dirname(get_module_hash().jni.filename)) + TrustingSandboxSource);
+        f.close();
+        int rc;
+        string out = backquote(sprintf("'%s' '%s' '%s' '%s' '%s' 2>&1", QORE_ARGV[0], script, getJar(), TestClass,
+            issue_file), \rc);
+        assertEq(0, rc, "the child process's exit status: " + out);
+        assertRegex("(^|\n)issue: ok\n", out, "the sandbox adds to the shared classpath");
+        assertRegex("(^|\n)import: ok\n", out, "a trusted Program of the child process loads the class");
+        assertFalse(trustedCanLoad(), "the classpath of the test process is unchanged");
     }
 
     controlTest() {

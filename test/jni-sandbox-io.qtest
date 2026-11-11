@@ -46,6 +46,7 @@ class JniSandboxIoTest inherits QUnit::Test {
         addTestCase("a policy is shared between Java threads", \testConcurrent());
         addTestCase("a Qore callback on a Java thread checks with its sandbox", \testCallback());
         addTestCase("the checked address is the address connected to", \testConnect());
+        addTestCase("a default sandbox does not allow calling Java", \testUncontrolledApiRefused());
         set_return_value(main());
     }
 
@@ -73,11 +74,23 @@ class JniSandboxIoTest inherits QUnit::Test {
     }
 
     #! returns a Program with the given sandbox that calls the code it is given
+    /** qore#5741 run-time refusal of uncontrolled APIs: the sandbox allows the uncontrolled API of the imported Java
+        classes, so that the Java checks are reached; its network and filesystem policy stays as given, and is what the
+        cases test
+    */
     private Program getSandboxed(SandboxManager sm) {
         Program p(PO_NEW_STYLE);
+        allowUncontrolledApis(sm);
         p.setSandboxManager(sm);
         p.parse("auto sub through(code c) { return c(); }", "jni-sandbox-io");
         return p;
+    }
+
+    #! allows uncontrolled APIs in the sandbox (qore#5741); dynamic because the Qore library may lack the rule
+    private static allowUncontrolledApis(SandboxManager sm) {
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
     }
 
     #! returns a Program whose sandbox blocks private networks and allows the rest of the network
@@ -498,5 +511,41 @@ class JniSandboxIoTest inherits QUnit::Test {
         assertEq(("127.0.0.1", "127.0.0.1", "127.0.0.1"), p.callFunction("through", auto sub () {
             return SandboxIo::connectChecked("localhost");
         }));
+    }
+
+    #! qore#5741 run-time refusal of uncontrolled APIs: code that a default sandbox governs cannot call Java at all
+    testUncontrolledApiRefused() {
+        # a default sandbox, which does not allow uncontrolled APIs
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        p.parse("auto sub through(code c) { return c(); }", "jni-sandbox-io-default");
+        # SandboxManager::setUncontrolledApiPolicy() predates the run-time refusal, so the refusal is detected with a
+        # builtin of the Qore library in the uncontrolled-API domain, which sandboxed code could call before
+        bool refused;
+        try {
+            p.callFunction("through", sub () { SandboxManager::callWithSystemPolicy(sub () {}); });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "INVALID-FUNCTION-ACCESS") {
+                rethrow;
+            }
+            refused = True;
+        }
+        if (!refused) {
+            testSkip("the Qore library does not refuse uncontrolled APIs to sandboxed code at run time");
+        }
+        # the core refuses the call before Java runs: the static check would raise NETWORK-ACCESS-DENIED, as the
+        # default sandbox denies the network
+        hash<string, code> calls = {
+            "a static method": sub () { SandboxIo::checkNetwork("8.8.8.8", 80); },
+            "a constructor": sub () { new Jni::java::lang::StringBuilder("x"); },
+            "the capture of a policy": sub () { SandboxIo::capture(); },
+        };
+        foreach hash<auto> i in (calls.pairIterator()) {
+            assertDenied("INVALID-FUNCTION-ACCESS", sub () { p.callFunction("through", i.value); },
+                "does not allow access to uncontrolled API", i.key);
+        }
+        # the same calls are allowed to trusted code
+        assertEq(("8.8.8.8",), SandboxIo::checkNetwork("8.8.8.8", 80), "trusted static method");
+        assertEq("x", (new Jni::java::lang::StringBuilder("x")).toString(), "trusted constructor");
     }
 }

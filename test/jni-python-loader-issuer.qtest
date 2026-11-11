@@ -67,6 +67,24 @@ def imp(name):
 
     # every case uses Java packages of its own, because a Python module that was imported stays in the import cache
 
+    #! Asserts that sandboxed code is refused: by the module with \a err and \a desc, or by the core first
+    /** qore#5741 run-time refusal of uncontrolled APIs: the core refuses the sandboxed call of the Python code (an
+        uncontrolled API) before it reaches the module, with INVALID-FUNCTION-ACCESS
+    */
+    private assertRefused(string err, string desc, code c, string label) {
+        try {
+            c();
+            fail(label + ": no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "INVALID-FUNCTION-ACCESS") {
+                assertRegex("does not allow access to uncontrolled API", ex.desc, label + " (core refusal)");
+            } else {
+                assertEq(err, ex.err, label);
+                assertRegex(desc, ex.desc, label + " (reason)");
+            }
+        }
+    }
+
     trustedTest() {
         PythonProgram pp(PySource, "jni-python-loader-trusted.py");
         assertEq("ok", pp.callFunction("load", "java.lang.StringBuilder"), "load_java");
@@ -90,10 +108,16 @@ def imp(name):
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(new SandboxManager());
         p.parse("auto sub go(code f, string fn, string n) { return f(fn, n); }", "jni-python-loader-sandboxed");
+        assertRefused("JNI-SANDBOX-ERROR", "sandboxed code cannot import Java classes",
+            sub () { p.callFunction("go", f, "load", "java.util.ArrayList"); }, "load_java");
+        assertRefused("builtins.ValueError", "failed to create Java namespace",
+            sub () { p.callFunction("go", f, "imp", "java.util"); }, "import of a java module");
+        # a system-policy capability of trusted code is not governed by the sandbox of the code that calls it, so the
+        # core lets the call reach the Python code on every core; the module still judges the sandboxed caller behind
+        # it and refuses the import itself
+        code load_cap = SandboxManager::createSystemPolicyCall(auto sub (string fn, string n) { return f(fn, n); });
         assertThrows("JNI-SANDBOX-ERROR", "sandboxed code cannot import Java classes", \p.callFunction(),
-            ("go", f, "load", "java.util.ArrayList"), "load_java");
-        assertThrows("builtins.ValueError", "failed to create Java namespace", \p.callFunction(),
-            ("go", f, "imp", "java.util"), "import of a java module");
+            ("go", load_cap, "load", "java.util.LinkedList"), "load_java through a capability of trusted code");
         # the same Python functions work when the caller is not sandboxed
         assertEq("ok", f("load", "java.util.HashMap"), "load_java from trusted code");
     }
