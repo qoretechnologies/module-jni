@@ -489,8 +489,7 @@ static bool jni_exported_import_allowed(const QoreProgram* pgm, std::string& ref
         refused = "a Program that does not allow uncontrolled APIs cannot import Java classes";
         return false;
     }
-    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-    if (governing) {
+    if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         refused = "sandboxed code cannot import Java classes";
         return false;
     }
@@ -708,8 +707,7 @@ static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, 
         throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command %s, so it cannot be used in a Program "
             "that does not allow uncontrolled APIs", cmd, what);
     }
-    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-    if (governing) {
+    if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"%s\" module command, which %s",
             cmd, what);
     }
@@ -950,8 +948,7 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
     // a sandboxed Program defines classes only in its own loader: in the loader of another Program, its byte code
     // would become the class that the other Program, and every Program that it serves, loads under that name
     if (!env.isSameObject(define_loader, jpc->getClassLoader())) {
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-        if (governing) {
+        if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
             throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"define-class\" module "
                 "command to define class '%s', which belongs to another Program", binary_name.c_str());
         }

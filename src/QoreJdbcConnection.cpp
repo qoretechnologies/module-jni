@@ -250,8 +250,7 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                     "which code that does not allow uncontrolled APIs or the filesystem cannot use", JDBC_OPT_CLASSPATH);
                 return -1;
             }
-            QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-            if (governing) {
+            if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
                 xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
                     "which sandboxed code cannot use", JDBC_OPT_CLASSPATH);
                 return -1;
