@@ -213,6 +213,15 @@ public class Fetcher {
     A Java-backed data provider or module that has not been audited is not sandbox-aware, and must not be made
     available to sandboxed callers.
 
+    <b>The jdbc database driver:</b> a \c Datasource or \c DatasourcePool that uses the \c jdbc driver raises
+    \c NETWORK-ACCESS-DENIED when it connects for code that a sandbox policy governs, whatever the destination and
+    whatever the policy allows.  The JDBC driver opens its sockets in Java, so %Qore cannot apply the policy to them: a
+    host name that was checked is resolved again by the driver, and drivers connect to destinations that they discover
+    themselves (failover hosts, replicas, server redirects) or that have a syntax of their own for each driver (ex:
+    Oracle TNS descriptors).  As with other policy checks, trusted code that connects under a policy barrier
+    (\c SandboxManager::callWithSystemPolicy()) or from a capability (\c SandboxManager::createSystemPolicyCall()) is
+    not refused.
+
     @subsection jni_fork Child Processes Created with fork()
 
     Java cannot be used in a child process created with \c fork() after the JVM has been started (when the module

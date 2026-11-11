@@ -46,11 +46,19 @@ class ConnectionSetupTest inherits QUnit::Test {
         SandboxManager sm();
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.loadModule("jni");
+        # a sandbox delivers the interrupt; the jdbc driver does not connect for code that a sandbox policy governs
+        # (qore#5747), so the sandboxed Program connects with a capability that trusted code makes, which an
+        # interrupt of the sandbox still reaches
+        *code open;
         if (mode == "interrupt") {
             p.setSandboxManager(sm);
+            open = SandboxManager::createSystemPolicyCall(sub (hash<auto> c) {
+                Datasource ds(c);
+                ds.open();
+            });
         }
         p.parse(sprintf("%%modern\n%%module-cmd(jni) add-classpath \"%s/qore-jni-test.jar\"\n%%module-cmd(jni) import org.qore.jni.test.JdbcConnectionDriver\n", get_script_dir()) + "%modern
-sub run(Queue done, hash<auto> cfg) {
+sub run(Queue done, hash<auto> cfg, *code open) {
     hash<auto> result;
     try {
         JdbcConnectionDriver::install();
@@ -58,8 +66,12 @@ sub run(Queue done, hash<auto> cfg) {
             JdbcConnectionDriver::throwAfterRead(int(cfg.fixture_port));
         }
         remove cfg.fixture_port;
-        Datasource ds(cfg);
-        ds.open();
+        if (open) {
+            open(cfg);
+        } else {
+            Datasource ds(cfg);
+            ds.open();
+        }
         result.err = \"NONE\";
     } catch (hash<ExceptionInfo> ex) {
         result.err = ex.err;
@@ -71,7 +83,7 @@ hash<auto> sub stats() {
     return {\"active\": JdbcConnectionDriver::active(), \"closed\": JdbcConnectionDriver::closed()};
 }
 ", "connection-setup-worker");
-        int tid = background p.callFunction("run", done, cfg);
+        int tid = background p.callFunction("run", done, cfg, open);
         *Socket peer = server.accept(5s);
         if (!peer) {
             hash<auto> result = done.get(1s);

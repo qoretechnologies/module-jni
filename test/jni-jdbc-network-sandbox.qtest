@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The jdbc database driver is refused to code that a sandbox policy governs: the JDBC driver resolves and connects to its
+# destinations in Java, where the sandbox network policy cannot be applied to them (qore#5747)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+
+%exec-class JniJdbcNetworkSandboxTest
+
+class JniJdbcNetworkSandboxTest inherits QUnit::Test {
+    private:internal {
+        #! no driver accepts this URL, so a connection that is not refused fails with the driver's error
+        const Url = "jdbc:u/p@ignored{url=qore-none://127.0.0.1:1/x}";
+
+        #! the error of a connection that was not refused
+        const NoDriver = "JNI-ERROR";
+
+        const Denied = "NETWORK-ACCESS-DENIED";
+
+        #! returns the error of opening a connection, or "ok"
+        const OpenSource = "
+string sub open_url(string url) {
+    try {
+        Datasource ds(url);
+        ds.open();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! returns the error of a pool, or "ok"
+        const PoolSource = "
+string sub open_pool(string url) {
+    try {
+        DatasourcePool dsp(url);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! the code of a trusted library that connects for its callers
+        const TrustedSource = OpenSource + "
+string sub open_barrier(string url) {
+    return SandboxManager::callWithSystemPolicy(\\open_url(), url);
+}
+
+code sub make_capability(string url) {
+    return SandboxManager::createSystemPolicyCall(string sub () { return open_url(url); });
+}
+
+# a connection with a Qore socket, which the network policy is applied to
+string sub connect_socket() {
+    try {
+        Socket s();
+        s.connect(\"127.0.0.1:1\", 1s);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub socket_barrier() {
+    return SandboxManager::callWithSystemPolicy(\\connect_socket());
+}
+";
+    }
+
+    constructor() : QUnit::Test("JNI jdbc network sandbox", "1.0", \ARGV) {
+        addTestCase("sandboxed code cannot connect", \sandboxedTest());
+        addTestCase("a sandbox that allows the destination does not allow the connection", \allowedPolicyTest());
+        addTestCase("sandboxed code cannot use a pool", \poolTest());
+        addTestCase("trusted code connects", \trustedTest());
+        addTestCase("sandboxed code cannot establish a barrier for itself", \ownBarrierTest());
+        addTestCase("trusted code called by sandboxed code", \trustedCalleeTest());
+        addTestCase("a trusted Datasource used by sandboxed code", \trustedDatasourceTest());
+        set_return_value(main());
+    }
+
+    #! Returns a sandboxed Program with the code given
+    private static Program getSandboxed(string source, *SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm ?? new SandboxManager());
+        p.parse(source, "jni-jdbc-network-sandboxed");
+        return p;
+    }
+
+    #! Returns a trusted Program with the code given
+    private static Program getTrusted(string source) {
+        Program p(PO_NEW_STYLE);
+        p.parse(source, "jni-jdbc-network-trusted");
+        return p;
+    }
+
+    sandboxedTest() {
+        Program p = getSandboxed(OpenSource);
+        # the destinations are not parsed: the form of the URL does not matter
+        foreach string url in (Url, "jdbc:u/p@qore-none:x", "jdbc:u/p@ignored{url=qore-none://db1:1;db2:2/x}",
+                "jdbc:u/p@ignored{url=qore-none:mem:x}") {
+            assertEq(Denied, p.callFunction("open_url", url), url);
+        }
+    }
+
+    allowedPolicyTest() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url));
+    }
+
+    poolTest() {
+        assertEq(Denied, getSandboxed(PoolSource).callFunction("open_pool", Url), "sandboxed");
+        assertEq(NoDriver, getTrusted(PoolSource).callFunction("open_pool", Url), "trusted");
+    }
+
+    trustedTest() {
+        assertEq(NoDriver, getTrusted(OpenSource).callFunction("open_url", Url));
+    }
+
+    ownBarrierTest() {
+        # a barrier stops at the Program of the call, whose own sandbox still applies
+        Program p = getSandboxed(OpenSource + "
+string sub run(string url) {
+    return SandboxManager::callWithSystemPolicy(\\open_url(), url);
+}
+");
+        assertEq(Denied, p.callFunction("run", Url));
+    }
+
+    trustedCalleeTest() {
+        Program lib = getTrusted(TrustedSource);
+        code direct = string sub (string url) { return lib.callFunction("open_url", url); };
+        code barrier = string sub (string url) { return lib.callFunction("open_barrier", url); };
+        code socket_barrier = string sub (string url) { return lib.callFunction("socket_barrier"); };
+        code cap = lib.callFunction("make_capability", Url);
+
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        Program p = getSandboxed("
+string sub call(code c, string url) { return c(url); }
+string sub call_cap(code c) { return c(); }
+", sm);
+        assertEq(Denied, p.callFunction("call", direct, Url), "no barrier: the caller's sandbox applies");
+        # under a policy barrier the connection is judged as a Qore socket's is: the policy that applies is resolved
+        # in the same way
+        string socket_result = p.callFunction("call", socket_barrier, Url);
+        assertEq(socket_result == "NETWORK-ACCESS-DENIED" ? Denied : NoDriver, p.callFunction("call", barrier, Url),
+            "policy barrier: as a socket (" + socket_result + ")");
+        assertEq(NoDriver, p.callFunction("call_cap", cap), "capability");
+    }
+
+    trustedDatasourceTest() {
+        Datasource ds(Url);
+        Program p = getSandboxed("
+string sub open_ds(Datasource ds) {
+    try {
+        ds.open();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+");
+        assertEq(Denied, p.callFunction("open_ds", ds));
+    }
+}
