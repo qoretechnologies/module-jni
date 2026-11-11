@@ -6,6 +6,12 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: the functions that load, define or run Java code or return the class loader
+      (\c Jni::org::qore::jni::kotlin_eval(), \c get_byte_code(), \c load_class(), \c define_class(),
+      \c implement_interface() and \c get_class_loader()) are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), as the Java
+      classes that they give access to are, so a Program with \c PO_NO_UNCONTROLLED_APIS cannot call them;
+      \c check_network_bind(), which only checks the sandbox policy, is not
+
     - <b>Security</b>: built for module API 2.1, the module sets \c cmd_caller_aware and judges every module command
       first by the restrictions of the code that issues it (\c QoreModuleCommandContext, qore#5699): sandboxed
       issuers are refused the commands that load or define Java code, change a classpath or change state that every

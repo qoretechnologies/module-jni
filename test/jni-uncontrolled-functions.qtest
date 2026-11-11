@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The jni functions that load, define or run Java code or return the class loader are uncontrolled APIs, as the Java
+# classes that they give access to are (qore#5741)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+
+%exec-class JniUncontrolledFunctionsTest
+
+class JniUncontrolledFunctionsTest inherits QUnit::Test {
+    private:internal {
+        #! the calls, each in a function of its own
+        const Calls = {
+            "kotlin_eval": "Jni::org::qore::jni::kotlin_eval(\"1\");",
+            "get_byte_code": "Jni::org::qore::jni::get_byte_code(\"java/lang/String\");",
+            "load_class": "Jni::org::qore::jni::load_class(\"java/lang/String\");",
+            "define_class": "Jni::org::qore::jni::define_class(\"qore.QoreTestUncontrolledPlaceholder\", <00>);",
+            # untyped arguments: the call is resolved at parse time and its arguments are checked when it runs
+            "implement_interface": "auto h; auto c; Jni::org::qore::jni::implement_interface(h, c);",
+            "get_class_loader": "Jni::org::qore::jni::get_class_loader();",
+        };
+
+        #! the functions that are not uncontrolled APIs: checks and information
+        const NotTagged = {
+            "check_network_bind": "Jni::org::qore::jni::check_network_bind(\"127.0.0.1\", 1);",
+        };
+    }
+
+    constructor() : QUnit::Test("JNI uncontrolled functions", "1.0", \ARGV) {
+        addTestCase("a Program that forbids uncontrolled APIs cannot call them", \restrictedTest());
+        addTestCase("trusted code can call them", \trustedTest());
+        addTestCase("checks are not uncontrolled APIs", \checkTest());
+        set_return_value(main());
+    }
+
+    #! Returns the error of parsing the call in a Program with the options given, or "parsed"
+    private static string parseIn(int po, string call, *reference<string> desc) {
+        Program p(PO_NEW_STYLE | po);
+        try {
+            p.parse("%requires jni\nsub run() {\n" + call + "\n}\n", "jni-uncontrolled-functions");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+            return ex.err;
+        }
+    }
+
+    restrictedTest() {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            string desc;
+            assertEq("PARSE-EXCEPTION", parseIn(PO_NO_UNCONTROLLED_APIS, i.value, \desc), i.key);
+            # refused for the restriction: the function is named as not available, not some other parse error
+            assertRegex("parse options do not allow access to builtin function '" + i.key + "\\(", desc,
+                i.key + ": refused for the restriction");
+        }
+    }
+
+    trustedTest() {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            assertEq("parsed", parseIn(0, i.value), i.key);
+        }
+        # and the calls run: the class loader is returned and a class is loaded
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires jni\nauto sub run() { return Jni::org::qore::jni::load_class(\"java/lang/String\")"
+            ".getName(); }\n", "jni-uncontrolled-functions-run");
+        assertEq("java.lang.String", p.callFunction("run"));
+    }
+
+    checkTest() {
+        foreach hash<auto> i in (NotTagged.pairIterator()) {
+            assertEq("parsed", parseIn(PO_NO_UNCONTROLLED_APIS, i.value), i.key);
+        }
+    }
+}
