@@ -45,6 +45,10 @@ static void set_prop(Env& env, LocalReference<jobject>& props, const char* prop,
 
 QoreJdbcConnection::QoreJdbcConnection(Datasource* ds, ExceptionSink* xsink) : ds(ds) {
     assert(pgm);
+    // before the options are processed: the classpath option loads jars and instantiates the JDBC drivers in them
+    if (checkSandbox(xsink)) {
+        return;
+    }
     try {
         jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
     } catch (jni::Exception& e) {
@@ -110,18 +114,24 @@ int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {
     return connect(env, xsink);
 }
 
-int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
-    assert(!connection);
+int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
     // the JDBC driver resolves and connects to its destinations in Java and discovers some of them itself (failover
     // hosts, redirects), so the sandbox network policy cannot be applied to them (qore#5747)
-    {
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
-        if (governing) {
-            xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
-                "policy governs, because the JDBC driver resolves and connects to its destinations in Java, where "
-                "the sandbox network policy cannot be applied to them");
-            return -1;
-        }
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
+    if (governing) {
+        xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
+            "policy governs, because the JDBC driver resolves and connects to its destinations in Java, where the "
+            "sandbox network policy cannot be applied to them");
+        return -1;
+    }
+    return 0;
+}
+
+int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
+    assert(!connection);
+    // also for a reconnect, which can be made for other code than the code that opened the connection
+    if (checkSandbox(xsink)) {
+        return -1;
     }
 
     // get URL

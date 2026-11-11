@@ -213,9 +213,14 @@ public class Fetcher {
     A Java-backed data provider or module that has not been audited is not sandbox-aware, and must not be made
     available to sandboxed callers.
 
-    <b>The jdbc database driver:</b> sandboxed code cannot use JDBC \c Datasource or \c DatasourcePool connections for
-    now: a \c Datasource or \c DatasourcePool that uses the \c jdbc driver raises \c NETWORK-ACCESS-DENIED when it
-    connects for code that a sandbox policy governs, whatever the destination and whatever the policy allows.  Applying
+    <b>The jdbc database driver:</b> sandboxed code cannot open JDBC \c Datasource or \c DatasourcePool connections
+    for now: a \c Datasource or \c DatasourcePool that uses the \c jdbc driver raises \c NETWORK-ACCESS-DENIED when it
+    connects or reconnects for code that a sandbox policy governs, whatever the destination and whatever the policy
+    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A
+    connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect; trusted
+    code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data provider
+    (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to sandboxed
+    code as an \c external_io app.  Applying
     the sandbox network policy to the destinations of individual JDBC drivers is planned separately.  The JDBC driver opens its sockets in Java, so %Qore cannot apply the policy to them: a
     host name that was checked is resolved again by the driver, and drivers connect to destinations that they discover
     themselves (failover hosts, replicas, server redirects) or that have a syntax of their own for each driver (ex:

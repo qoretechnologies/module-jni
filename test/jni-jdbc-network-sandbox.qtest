@@ -83,6 +83,7 @@ string sub socket_barrier() {
         addTestCase("sandboxed code cannot establish a barrier for itself", \ownBarrierTest());
         addTestCase("trusted code called by sandboxed code", \trustedCalleeTest());
         addTestCase("a trusted Datasource used by sandboxed code", \trustedDatasourceTest());
+        addTestCase("the options are not processed for a refused connection", \optionsTest());
         set_return_value(main());
     }
 
@@ -170,5 +171,30 @@ string sub open_ds(Datasource ds) {
 }
 ");
         assertEq(Denied, p.callFunction("open_ds", ds));
+        # the refusal leaves nothing behind: trusted code opens the same Datasource
+        try {
+            ds.open();
+            fail("the connection was not refused by the missing driver");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(NoDriver, ex.err, "trusted code after the refusal");
+        }
+    }
+
+    optionsTest() {
+        # an invalid classpath option is reported by the code that processes the options, which runs before the
+        # connection; for sandboxed code the connection is refused first, so the classpath option does not load jars
+        string src = OpenSource + "
+string sub open_options() {
+    try {
+        Datasource ds({\"type\": \"jdbc\", \"db\": \"qore-none:x\", \"options\": {\"classpath\": 1}});
+        ds.open();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+        assertEq("JDBC-OPTION-ERROR", getTrusted(src).callFunction("open_options"), "trusted: the options are processed");
+        assertEq(Denied, getSandboxed(src).callFunction("open_options"), "sandboxed: refused before the options");
     }
 }
