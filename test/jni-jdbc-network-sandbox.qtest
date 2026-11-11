@@ -51,7 +51,11 @@ string sub open_pool(string url) {
         #! the code of a trusted library that connects for its callers
         const TrustedSource = OpenSource + "
 string sub open_barrier(string url) {
-    return SandboxManager::callWithSystemPolicy(\\open_url(), url);
+    try {
+        return SandboxManager::callWithSystemPolicy(\\open_url(), url);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
 }
 
 code sub make_capability(string url) {
@@ -70,7 +74,11 @@ string sub connect_socket() {
 }
 
 string sub socket_barrier() {
-    return SandboxManager::callWithSystemPolicy(\\connect_socket());
+    try {
+        return SandboxManager::callWithSystemPolicy(\\connect_socket());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
 }
 ";
     }
@@ -84,6 +92,7 @@ string sub socket_barrier() {
         addTestCase("trusted code called by sandboxed code", \trustedCalleeTest());
         addTestCase("a trusted Datasource used by sandboxed code", \trustedDatasourceTest());
         addTestCase("the options are not processed for a refused connection", \optionsTest());
+        addTestCase("a sandbox that trusts the code with uncontrolled APIs does not refuse it", \trustedSandboxTest());
         set_return_value(main());
     }
 
@@ -111,6 +120,25 @@ string sub socket_barrier() {
         }
     }
 
+    trustedSandboxTest() {
+        # a host that governs trusted code with a sandbox only for its interrupts or limits allows uncontrolled APIs
+        # (SandboxManager::setUncontrolledApiPolicy(), a Qore with the trust policy); the jdbc driver does not refuse
+        # that code
+        SandboxManager sm();
+        if (!sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            testSkip("the Qore library has no uncontrolled-API policy of sandboxes");
+        }
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        assertEq(NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "a trusting sandbox");
+        # the default sandbox, with the same filesystem and network policy, still refuses it
+        SandboxManager deny();
+        deny.setFilesystemDefaultPolicy(True);
+        deny.setNetworkDefaultPolicy(True);
+        assertEq(Denied, getSandboxed(OpenSource, deny).callFunction("open_url", Url), "the default sandbox");
+    }
+
     allowedPolicyTest() {
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(True);
@@ -127,13 +155,19 @@ string sub socket_barrier() {
     }
 
     ownBarrierTest() {
-        # a barrier stops at the Program of the call, whose own sandbox still applies
+        # a barrier stops at the Program of the call, whose own sandbox still applies; where a sandbox refuses
+        # uncontrolled APIs at run time (qore#5741), the sandboxed code cannot establish the barrier at all
         Program p = getSandboxed(OpenSource + "
 string sub run(string url) {
-    return SandboxManager::callWithSystemPolicy(\\open_url(), url);
+    try {
+        return SandboxManager::callWithSystemPolicy(\\open_url(), url);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
 }
 ");
-        assertEq(Denied, p.callFunction("run", Url));
+        string err = p.callFunction("run", Url);
+        assertTrue(inlist(err, (Denied, "INVALID-FUNCTION-ACCESS")), "refused: " + err);
     }
 
     trustedCalleeTest() {
@@ -152,9 +186,12 @@ string sub call_cap(code c) { return c(); }
         assertEq(Denied, p.callFunction("call", direct, Url), "no barrier: the caller's sandbox applies");
         # under a policy barrier the connection is judged as a Qore socket's is: the policy that applies is resolved
         # in the same way
+        # the socket's refusal, if any, is the jdbc driver's too: the network policy (NETWORK-ACCESS-DENIED), or the
+        # refusal of the barrier itself where a sandbox refuses uncontrolled APIs at run time (qore#5741); a socket
+        # that was not refused fails to connect, and the jdbc driver then finds no driver
         string socket_result = p.callFunction("call", socket_barrier, Url);
-        assertEq(socket_result == "NETWORK-ACCESS-DENIED" ? Denied : NoDriver, p.callFunction("call", barrier, Url),
-            "policy barrier: as a socket (" + socket_result + ")");
+        string expected = inlist(socket_result, (Denied, "INVALID-FUNCTION-ACCESS")) ? socket_result : NoDriver;
+        assertEq(expected, p.callFunction("call", barrier, Url), "policy barrier: as a socket (" + socket_result + ")");
         assertEq(NoDriver, p.callFunction("call_cap", cap), "capability");
     }
 

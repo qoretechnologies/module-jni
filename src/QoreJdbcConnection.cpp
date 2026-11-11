@@ -116,9 +116,10 @@ int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {
 
 int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
     // the JDBC driver resolves and connects to its destinations in Java and discovers some of them itself (failover
-    // hosts, redirects), so the sandbox network policy cannot be applied to them (qore#5747)
-    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
-    if (governing) {
+    // hosts, redirects), so the sandbox network policy cannot be applied to them (qore#5747); a policy check, so a
+    // system-policy capability of trusted code connects, and only a sandbox that does not trust the code with
+    // uncontrolled APIs refuses it
+    if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Policy)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
             "policy governs, because the JDBC driver resolves and connects to its destinations in Java, where the "
             "sandbox network policy cannot be applied to them");
