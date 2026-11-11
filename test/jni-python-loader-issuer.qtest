@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Python code reaches the jni module through two exported functions that do not run in a module command of this module:
+# qoreloader.load_java() calls jni_module_import() and the import of a "java." module calls
+# jni_module_find_create_java_namespace() (qore#5699)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires QUnit
+
+%try-module python
+%define NoPython
+%endtry
+
+%exec-class JniPythonLoaderIssuerTest
+
+class JniPythonLoaderIssuerTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI exported import functions from Python", "1.0", \ARGV) {
+        addTestCase("trusted Python code imports Java classes", \trustedTest());
+        addTestCase("a Python command of trusted code imports Java classes", \trustedCommandTest());
+        addTestCase("a sandboxed caller of Python code cannot import Java classes", \sandboxedCallerTest());
+        addTestCase("Python code in a Program without uncontrolled APIs cannot import Java classes",
+            \restrictedProgramTest());
+        set_return_value(main());
+    }
+
+%ifdef NoPython
+    private checkPython() {
+        testSkip("the python module is not available");
+    }
+
+    trustedTest() {
+        checkPython();
+    }
+
+    trustedCommandTest() {
+        checkPython();
+    }
+
+    sandboxedCallerTest() {
+        checkPython();
+    }
+
+    restrictedProgramTest() {
+        checkPython();
+    }
+%else
+    private:internal {
+        #! Python code calling each exported function
+        const PySource = "import importlib
+import qoreloader
+
+def load(name):
+    qoreloader.load_java(name)
+    return 'ok'
+
+def imp(name):
+    importlib.import_module(name)
+    return 'ok'
+";
+    }
+
+    # every case uses Java packages of its own, because a Python module that was imported stays in the import cache
+
+    trustedTest() {
+        PythonProgram pp(PySource, "jni-python-loader-trusted.py");
+        assertEq("ok", pp.callFunction("load", "java.lang.StringBuilder"), "load_java");
+        assertEq("ok", pp.callFunction("imp", "java.lang"), "import of a java module");
+    }
+
+    trustedCommandTest() {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("jni");
+        p.loadModule("python");
+        p.issueModuleCmd("python", "parse c.py import qoreloader; qoreloader.load_java('java.lang.StringBuffer')");
+        # the class was imported into the Program: its code can use it
+        p.parse("string sub get() { return (new Jni::java::lang::StringBuffer(\"imported\")).toString(); }",
+            "jni-python-loader-command-use");
+        assertEq("imported", p.callFunction("get"), "the imported class");
+    }
+
+    sandboxedCallerTest() {
+        PythonProgram pp(PySource, "jni-python-loader-sandboxed.py");
+        code f = auto sub (string fn, string n) { return pp.callFunction(fn, n); };
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        p.parse("auto sub go(code f, string fn, string n) { return f(fn, n); }", "jni-python-loader-sandboxed");
+        assertThrows("JNI-SANDBOX-ERROR", "sandboxed code cannot import Java classes", \p.callFunction(),
+            ("go", f, "load", "java.util.ArrayList"), "load_java");
+        assertThrows("builtins.ValueError", "failed to create Java namespace", \p.callFunction(),
+            ("go", f, "imp", "java.util"), "import of a java module");
+        # the same Python functions work when the caller is not sandboxed
+        assertEq("ok", f("load", "java.util.HashMap"), "load_java from trusted code");
+    }
+
+    restrictedProgramTest() {
+        # the Python functions are defined before the option is set; they run with no module command in progress
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires python\n"
+            "%module-cmd(python) parse load.py def load(n): import qoreloader; qoreloader.load_java(n); return 'ok'\n"
+            "%module-cmd(python) parse imp.py def imp(n): import importlib; importlib.import_module(n); return 'ok'\n"
+            "%module-cmd(python) export-func load\n"
+            "%module-cmd(python) export-func imp\n"
+            "%no-uncontrolled-apis\n", "jni-python-loader-restricted");
+        assertEq(PO_NO_UNCONTROLLED_APIS, p.getParseOptions() & PO_NO_UNCONTROLLED_APIS, "the Program is restricted");
+        assertThrows("JNI-SANDBOX-ERROR", "does not allow uncontrolled APIs", \p.callFunction(),
+            ("load", "java.net.URI"), "load_java");
+        assertThrows("builtins.ValueError", "failed to create Java namespace", \p.callFunction(),
+            ("imp", "java.net"), "import of a java module");
+    }
+%endif
+}
