@@ -72,14 +72,18 @@ public class Callbacks {
     // destroys a Qore object in a new Java thread once the caller counts down the latch, so that the caller can hold
     // its own reference to the object until Java has destroyed it
     public static void destroyInThread(QoreObjectBase obj, CountDownLatch go) {
-        new Thread(() -> {
+        Thread t = new Thread(() -> {
             try {
                 go.await();
                 obj.destroy();
-            } catch (Throwable t) {
-                t.printStackTrace();
+            } catch (Throwable e) {
+                e.printStackTrace();
             }
-        }).start();
+        });
+        // a latch that is never counted down must not keep the JVM from shutting down: DestroyJavaVM waits for
+        // non-daemon threads
+        t.setDaemon(true);
+        t.start();
     }
 
     public static boolean trueIfThrows(Runnable r) {
