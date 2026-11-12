@@ -301,6 +301,11 @@ auto sub run(code c, ...) {
             # here
             auto r = call(u, NOTHING, "make_destroy_reader", secret, results);
             object latch = call(u, i.sandbox, "destroy_in_java_thread", r);
+            # Java's thread waits for the latch; count it down also if an assertion fails before the explicit
+            # countdown; counting down again has no effect
+            on_exit {
+                latch.countDown();
+            }
             assertEq("SecretReader", r.className(), i.label + " (alive until Java destroys it)");
             # let Java's thread destroy the object
             latch.countDown();
