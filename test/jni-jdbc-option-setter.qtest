@@ -167,6 +167,14 @@ list<string> sub loader_urls() {
         return info.jdbc_option_setter ?? False;
     }
 
+    #! Returns True if the Qore library has the uncontrolled-API policy of sandboxes (qore#5741)
+    /** without it, the jni module refuses every caller that a sandbox governs, even one whose sandbox a host uses only
+        for its limits and interrupts
+    */
+    private static bool hasUncontrolledApiPolicy() {
+        return (new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy");
+    }
+
     private skipIfNotSetterAware() {
         if (!setterAware()) {
             testSkip("the jni module was built for a Qore library that does not record the setters of datasource "
@@ -186,7 +194,10 @@ list<string> sub loader_urls() {
             SandboxManager sm();
             sm.setFilesystemDefaultPolicy(False);
             sm.setNetworkDefaultPolicy(True);
-            sm.setUncontrolledApiPolicy(True);
+            # (a Qore without the policy has no run-time refusal of uncontrolled APIs: the call is dynamic)
+            if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+                call_object_method(sm, "setUncontrolledApiPolicy", True);
+            }
             sm.addFilesystemAllowedPath(allowed, QSEC_READ);
             p.setSandboxManager(sm);
         }
@@ -224,10 +235,15 @@ list<string> sub loader_urls() {
 
     #! Returns the result that opening a datasource with the classpath entry gives, as the code of the kind set it
     /** the classpath option is accepted for trusted code, and the jdbc driver that is not found raises JNI-ERROR; a
-        sandbox that allows uncontrolled APIs checks the entry against its filesystem policy
+        sandbox that allows uncontrolled APIs checks the entry against its filesystem policy (with a Qore library
+        without that policy, the sandbox refuses the option like any other)
     */
     private string expectedFor(string kind, string entry) {
         if (inlist(kind, Refused)) {
+            return "JNI-SANDBOX-ERROR";
+        }
+        # without the uncontrolled-API policy of sandboxes, every governing sandbox restricts the code it governs
+        if (kind == "trusted-sandbox" && !hasUncontrolledApiPolicy()) {
             return "JNI-SANDBOX-ERROR";
         }
         if (kind == "trusted-sandbox" && entry.substr(0, allowed.size()) != allowed) {
