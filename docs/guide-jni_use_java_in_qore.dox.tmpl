@@ -252,7 +252,11 @@ public class Fetcher {
     module judges every command first by the restrictions of the code that issues it, which %Qore captures before it
     switches to the Program that the command applies to (a \c %module-cmd directive, \c Program::issueModuleCmd(), or
     a command replayed from a compiled program).  A sandboxed issuer is refused every command below; an issuer with a
-    restricting parse option is refused the commands that the option forbids (\c JNI-SANDBOX-ERROR):
+    restricting parse option is refused the commands that the option forbids (\c JNI-SANDBOX-ERROR).  With a %Qore
+    that has the uncontrolled-API policy of sandboxes (qore#5741), code governed by a sandbox that allows uncontrolled
+    APIs (\c SandboxManager::setUncontrolledApiPolicy(), for example a sandbox that a host attaches to trusted code only
+    for its interrupts or limits) is not a sandboxed issuer here, nor in the checks of sandboxed code described below;
+    the filesystem policy of the entries of a Program's classpath is still checked:
     |!Command|!Refused to a sandboxed issuer and to
     |\c import (also \c import \c pkg.*, whose classes are loaded when they are used)|\c PO_NO_UNCONTROLLED_APIS
     |\c add-classpath, \c add-relative-classpath|\c PO_NO_UNCONTROLLED_APIS, \c PO_NO_FILESYSTEM
@@ -272,13 +276,28 @@ public class Fetcher {
 
     The exported functions \c jni_module_import() and \c jni_module_find_create_java_namespace(), which other modules
     (the \c python module's Java loader) call without a module command of this module, apply the rule of \c import:
-    to the issuer of the module command that they run in, if any, and otherwise to the declared parse options of the
-    Program they import into (\c PO_NO_UNCONTROLLED_APIS) and to a sandbox that governs the calling code.  The
+    to the issuer of the module command that they run in, if any, and otherwise, with module API 2.1, to the code that
+    calls into the loader, as for a module command issued by that code (for the code of a library module only its
+    sandbox), or, with module API 2.0, to the declared parse options of the Program they import into
+    (\c PO_NO_UNCONTROLLED_APIS) and to a sandbox that governs the calling code.  The
     \c classpath option of the \c jdbc database driver applies the rule of \c add-classpath to the code that sets it,
     as for a module command issued by that code: its parse options and its sandbox, and for the code of a library
     module only its sandbox, also when a Program with \c %no-filesystem loaded the module.  These checks are made with
     module API 2.0 as well, where the \c jdbc option is judged by the parse options of the Program of the calling code
     and its sandbox.
+
+    The \c jdbc \c classpath option is applied when a connection is opened, which can be on another thread and for
+    other code than the code that set it (a \c DatasourcePool opens a connection on the thread that first needs one).
+    With a %Qore library that records the code that sets each datasource option (qore#5741), <b>whoever configures
+    the datasource decides</b>: the option is judged by the code that set it with \c Datasource::setOption(), with the
+    options of a \c Datasource constructor or connection string, or, for every connection of a \c DatasourcePool, by
+    the code that created the pool (copies keep it), and not by the code that opens the connection.  So a datasource
+    whose classpath sandboxed or restricted code set is refused (\c JNI-SANDBOX-ERROR) also when trusted code opens it,
+    and a trusted datasource or pool is not refused when a connection is opened on a sandboxed caller's thread.  The
+    classpath entries are checked against the filesystem policy of the code that set the option, not of the code that
+    opens the connection: the code that configures a datasource reads only what its own policy allows.  The module
+    hash reports this with \c "jdbc_option_setter" in its \c "info" key; with an older %Qore library the option is
+    judged by the code that opens the connection.
 
     <b>Module commands, by their target:</b> a module command also runs in the Program that it is issued in, also when
     trusted code issues it with \c Program::issueModuleCmd(), so it also follows that Program's sandbox and parse
@@ -291,14 +310,15 @@ public class Fetcher {
       policy, entry by entry, as a read (\c FILESYSTEM-ACCESS-DENIED)
     - the commands that change state of the JVM that every Program shares (\c global-add-classpath,
       \c global-add-relative-classpath, \c set-property, \c register-shared-class) or that run Java code
-      (\c kotlin-eval) raise \c JNI-SANDBOX-ERROR under a sandbox, also through a policy barrier or a system-policy
-      capability, and in a Program with \c PO_NO_UNCONTROLLED_APIS, where the module's Java classes are not available
+      (\c kotlin-eval) raise \c JNI-SANDBOX-ERROR under a sandbox that does not allow uncontrolled APIs, also through
+      a policy barrier or a system-policy capability, and in a Program with \c PO_NO_UNCONTROLLED_APIS, where the
+      module's Java classes are not available
       either; so a sandboxed Program cannot make trusted Programs load its classes, or change how the JVM connects
       for them (ex: \c http.proxyHost, \c javax.net.ssl.trustStore)
     - \c define-class and \c define-pending-class raise \c JNI-SANDBOX-ERROR in a Program with
-      \c PO_NO_UNCONTROLLED_APIS, as defining a class runs its static initializer, and a sandboxed Program defines a
-      class only in its own class loader: a class that belongs to another Program (ex: \c qoremod.MODULE.CLASS)
-      cannot be defined by it
+      \c PO_NO_UNCONTROLLED_APIS, as defining a class runs its static initializer, and a Program under a sandbox that
+      does not allow uncontrolled APIs defines a class only in its own class loader: a class that belongs to another
+      Program (ex: \c qoremod.MODULE.CLASS) cannot be defined by it
 
     @subsection jni_fork Child Processes Created with fork()
 

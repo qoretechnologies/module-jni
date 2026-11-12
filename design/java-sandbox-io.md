@@ -159,17 +159,50 @@ made only when `jni_check_target_options()` says so: for a command issued into a
 library module's Program inherits the options of its loader, which must not refuse the module's directives (decision
 A). The sandbox checks and the filesystem policy of classpath entries are always made.
 
+"Sandboxed" in this section and the next one means governed by a sandbox that does not trust the code with
+uncontrolled APIs (qore#5741): with a Qore that has the uncontrolled-API policy of sandboxes
+(`_QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY`), a sandbox that allows them (`SandboxManager::setUncontrolledApiPolicy()`,
+for example one that a host attaches to trusted code only for its interrupts or limits) refuses nothing here.
+`QoreModuleCommandRestrictions::isSandboxed()` (the issuer check and `getCallerRestrictions()`) is computed so by Qore,
+and the module's own sandbox checks use `jni_sandbox_restricts_caller()` (`src/defs.h`), which is
+`!qore_sandbox_allows_uncontrolled_apis()`; without the policy, any governing sandbox refuses. The filesystem policy of
+classpath entries is checked under any sandbox.
+
 The exported functions `jni_module_import()` and `jni_module_find_create_java_namespace()` (module-python's
-`JavaLoader`) bypass `jni_module_parse_cmd()`; `jni_exported_import_allowed()` applies the `import` rule to them: to
-the module command context if one is active, else to the declared parse options of the Program they import into
-(`PO_NO_UNCONTROLLED_APIS`) and a governing sandbox. `jni_module_find_create_java_namespace()` has no exception sink,
+`JavaLoader`) bypass `jni_module_parse_cmd()`; `jni_exported_import_allowed()` applies the `import` rule to them
+(`PO_NO_UNCONTROLLED_APIS`; a governing sandbox). With module API 2.1 the caller's restrictions come from
+`QoreModuleCommandRestrictions::getCallerRestrictions()`, as for the jdbc option below: the issuer's within a module
+command, else the calling code's, so library module code is judged by its sandbox only; with API 2.0 from the declared
+parse options of the Program they import into and `jni_sandbox_restricts_caller()`.
+`jni_module_find_create_java_namespace()` has no exception sink,
 so it refuses with `nullptr`, which `JavaLoader` reports; the `import pkg.*` command uses
 `jni_find_create_java_namespace_intern()`, which has no check (the command has been checked). The jdbc DBI driver's
 `classpath` option (`QoreJdbcConnection::setOption()`) applies the `add-classpath` rule to the caller
 (`PO_NO_UNCONTROLLED_APIS`, `PO_NO_FILESYSTEM`; a governing sandbox). With module API 2.1 the caller's restrictions come
 from `QoreModuleCommandRestrictions::getCallerRestrictions()`, which gives library module code only its sandbox (its
 Program's parse options are only those inherited from its loader); with API 2.0 from `QoreReflectionCaller` and
-`QoreSandboxManagerHelper`. These checks are made with module API 2.0 as well.
+`jni_sandbox_restricts_caller()`. These checks are made with module API 2.0 as well.
+
+The option is applied when a connection is opened (`QoreJdbcConnection::parseOptions()` over
+`Datasource::getConnectOptions()`), which can be on another thread and for other code than the code that set it: a
+`DatasourcePool` opens a connection on the thread that first needs one, and trusted code can open a datasource that
+sandboxed code configured. With a Qore library that records the setters of datasource options
+(`_QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS`, qore#5741), whoever configured the datasource decides: the option is judged
+by `Datasource::getOptionRestrictions()` (the restrictions that `getCallerRestrictions()` gave the code that set it:
+`Datasource::setOption()`, the options of a constructor or connection string, or for the connections of a pool the code
+that created the pool; copies keep them), and its entries are checked against the setter's filesystem policy
+(`Datasource::getOptionPolicyManagerRef()`, `jni_check_classpath_policy()`) instead of the policy of the code that opens
+the connection. A setter that a refusing sandbox governs is refused before the entries are checked, so that policy is
+the one of trusted code that a sandbox governs only for its limits (it allows uncontrolled APIs): it reads only what its
+own policy allows, also when other code opens the connection, and the policy of the opener does not refuse a
+configuration that is not its own. An option with no recorded setter, and every option with an older Qore library, is
+judged by the code that is running, as before. The jars are added to the class loader of the Program given by
+`qore_get_call_program_context()` when the connection is created, which for a method of a `Datasource` or
+`DatasourcePool` object is the Program that the object belongs to, not the Program of the code that opens the
+connection: a trusted pool that grows on a sandboxed caller's thread adds the jars of its configuration to the trusted
+Program's class loader, and a datasource that sandboxed code created adds them to the sandboxed Program's class loader
+also when trusted code opens it or a copy of it. The module reports the behavior in its module hash
+(`get_module_hash().jni.info.jdbc_option_setter`). `test/jni-jdbc-option-setter.qtest`.
 
 `test/jni-module-cmd-issuer.qtest` (skipped for a module built for API 2.0).
 
@@ -182,15 +215,17 @@ and parse options (`src/jni-module.cpp`); with module API 2.0 they are the only 
 - `jni_check_classpath_sandbox()`: the entries of `add-classpath` and `add-relative-classpath`, and of the `classpath`
   option of the jdbc DBI driver (`QoreJdbcConnection::setOption()`), split on the path separator and `;` as
   `QoreURLClassLoader.addPath()` splits them, are checked with the filesystem policy as reads
-  (`QoreSandboxManagerHelper(Policy)`)
+  (`QoreSandboxManagerHelper(Policy)`; for a jdbc option with a recorded setter, the setter's policy, see above)
 - `jni_check_uncontrolled_cmd()`: `global-add-classpath`, `global-add-relative-classpath` (the parent classpath that
   every Program shares), `set-property` (JVM system properties), `register-shared-class` (the owning loader of a
   shared dynamic class) and `kotlin-eval` (runs code) are refused (`JNI-SANDBOX-ERROR`) in a Program with
-  `PO_NO_UNCONTROLLED_APIS` and to any governing sandbox (`QoreSandboxManagerHelper(All)`, so a policy barrier or a
-  system-policy capability cannot use them either)
+  `PO_NO_UNCONTROLLED_APIS` and to any governing sandbox that does not allow uncontrolled APIs
+  (`jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)`, so a policy barrier or a system-policy capability
+  cannot use them either)
 - `jni_check_define_class_restricted()`: `define-class` and `define-pending-class` are refused in a Program with
   `PO_NO_UNCONTROLLED_APIS`, because defining a class runs its static initializer; `define-class` refuses a governing
-  sandbox a class whose canonical loader (`Globals::getCanonicalLoader()`) is not the Program's own, so a sandboxed
-  Program cannot define the class that another Program loads under that name
+  sandbox that does not allow uncontrolled APIs (`jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)`) a
+  class whose canonical loader (`Globals::getCanonicalLoader()`) is not the Program's own, so a sandboxed Program
+  cannot define the class that another Program loads under that name
 
 `test/jni-module-cmd-sandbox.qtest`.

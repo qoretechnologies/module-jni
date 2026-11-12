@@ -94,6 +94,15 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.parse_cmd = jni_module_parse_cmd;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
+#if defined(_QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
+    // the features of the module that depend on the Qore library it was built with, in the "info" key of the module
+    // hash (get_module_hash()): "jdbc_option_setter": the jdbc driver judges its options by the code that set them
+    // (qore#5741), which it does only when both are available (QoreJdbcConnection::setOption()); the Qore library
+    // takes over the hash
+    QoreHashNode* info = new QoreHashNode(autoTypeInfo);
+    info->setKeyValue("jdbc_option_setter", true, nullptr);
+    mod_info.info = info;
+#endif
 }
 
 // global type compatibility option
@@ -465,35 +474,49 @@ static QoreNamespace* jni_find_create_java_namespace_intern(QoreString& arg, Qor
 //! Returns true if the code that imports Java classes through an exported function may do so (qore#5699)
 /** The exported functions jni_module_import() and jni_module_find_create_java_namespace() are called by other modules
     (module-python's Java loader), not through jni_module_parse_cmd(), so they apply the rule of the \c import command
-    themselves: within a module command, to its issuer; otherwise to the code that runs in the Program they import into
-    (a sandbox that governs it, and its Program's parse options).
+    themselves: code that a governing sandbox does not trust with uncontrolled APIs is refused, and so is code with
+    \c PO_NO_UNCONTROLLED_APIS.  The import is refused if either of these refuses it:
+    - the Program that the classes are imported into: if it has \c PO_NO_UNCONTROLLED_APIS, no code can give it Java
+      classes, whoever calls the loader (trusted code calling Python code in a standalone Program that does not allow
+      uncontrolled APIs, for example)
+    - the code that imports them: with module API 2.1 it is judged as the issuer of a module command is, with
+      QoreModuleCommandRestrictions::getCallerRestrictions() (as the \c classpath option of the \c jdbc driver is):
+      within a module command, its issuer; otherwise the code that calls into the loader, where the code of a library
+      module has no parse options, only the sandbox that governs it, so the parse options that its Program inherited
+      from the code that loaded it do not refuse it.  With module API 2.0, the sandbox that governs the calling code
+      is used.
+
+    Called on the thread of the exported function, which %Qore knows (the Python code runs in a %Qore call).
 
     @param pgm the Program the classes are imported into
     @param refused set to a description of the refusal when the import is not allowed
 */
 static bool jni_exported_import_allowed(const QoreProgram* pgm, std::string& refused) {
-#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
-    if (const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get()) {
-        if (ctx->isSandboxed()) {
-            refused = "sandboxed code cannot import Java classes";
-            return false;
-        }
-        if (ctx->hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS))) {
-            refused = "code that does not allow uncontrolled APIs cannot import Java classes";
-            return false;
-        }
-        return true;
-    }
-#endif
+    // the Program that the classes are imported into
     if (pgm && (pgm->getParseOptions64() & PO_NO_UNCONTROLLED_APIS)) {
         refused = "a Program that does not allow uncontrolled APIs cannot import Java classes";
         return false;
     }
+#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
+    // the restrictions that a module command issued by the same code would have; inside a module command, those of
+    // its issuer
+    QoreModuleCommandRestrictions caller = QoreModuleCommandRestrictions::getCallerRestrictions();
+    if (caller.isSandboxed()) {
+        refused = "sandboxed code cannot import Java classes";
+        return false;
+    }
+    if (caller.hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS))) {
+        refused = "code that does not allow uncontrolled APIs cannot import Java classes";
+        return false;
+    }
+    return true;
+#else
     if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         refused = "sandboxed code cannot import Java classes";
         return false;
     }
     return true;
+#endif
 }
 
 // exported function
@@ -743,6 +766,8 @@ static void jni_check_define_class_restricted(const char* cmd, const QoreProgram
 
     @throw JNI-SANDBOX-ERROR sandboxed or restricted code uses a \c global-* classpath command
     @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
+
+    @see jni_check_classpath_policy()
 */
 void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const char* classpath, bool global) {
     if (global) {
@@ -751,7 +776,11 @@ void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const 
     }
     // the filesystem policy, as for Qore's own file operations
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-    if (!smh) {
+    jni_check_classpath_policy(smh.get(), classpath);
+}
+
+void jni_check_classpath_policy(QoreSandboxManager* policy, const char* classpath) {
+    if (!policy) {
         return;
     }
     std::string cp(classpath);
@@ -770,7 +799,7 @@ void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const 
         std::string entry = cp.substr(start, end - start);
         if (!entry.empty()) {
             ExceptionSink xsink;
-            if (!smh->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
+            if (!policy->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
                 throw XsinkException(xsink);
             }
         }

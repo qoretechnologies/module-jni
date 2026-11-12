@@ -215,27 +215,47 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
         }
         QoreStringValueHelper cp_str(val);
         const char* cp = cp_str->c_str();
-        if (!strcmp(classpath.c_str(), cp)) {
-            return 0;
-        }
 
+        // the value is judged by the code that sets it before it is compared with the current classpath: the same
+        // value set again by other code is recorded with that code as its setter, so restricted code that sets it is
+        // refused now, not only when the next connection is opened (qore#5741)
         QoreString arg(cp);
         q_env_subst(arg);
         //printd(5, "QoreJdbcConnection::setOption() %p '%s' jpc: %p arg: '%s'\n", this, opt, jpc, arg.c_str());
 
-        // the rule of the "add-classpath" module command, for the code that sets the option (qore#5699): it loads jars
-        // into the Program's class loader and reads the filesystem
+        // the rule of the "add-classpath" module command, for the code that set the option (qore#5699): it loads jars
+        // into the Program's class loader and reads the filesystem.
+        //
+        // The option is applied when a connection is opened, which can happen on another thread and for other code
+        // than the code that set it: a DatasourcePool opens a connection on the thread that first needs one, and
+        // trusted code can open a datasource that sandboxed code configured.  So whoever configured the datasource
+        // decides (qore#5741): the Qore library records the restrictions and the filesystem policy of the code that
+        // set each option (Datasource::getOptionRestrictions()), and the option is judged by them, not by the code
+        // that opens the connection.  An option with no recorded setter, and every option with a Qore library that
+        // does not record setters, is judged by the code that is running, as the option was before.
+#ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+        // true if the code that set the option is known
+        bool setter_known = false;
+#endif
 #ifdef QORE_JNI_HAS_COMMAND_CONTEXT
         {
             // the restrictions that a module command from the same code would have: library module code is judged by
             // the sandbox only, not by the parse options that its Program inherited from the code that loaded it
-            QoreModuleCommandRestrictions caller = QoreModuleCommandRestrictions::getCallerRestrictions();
-            if (caller.isSandboxed()) {
+            QoreModuleCommandRestrictions setter;
+#ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+            setter_known = ds->getOptionRestrictions(opt, setter);
+            if (!setter_known) {
+                setter = QoreModuleCommandRestrictions::getCallerRestrictions();
+            }
+#else
+            setter = QoreModuleCommandRestrictions::getCallerRestrictions();
+#endif
+            if (setter.isSandboxed()) {
                 xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
                     "which sandboxed code cannot use", JDBC_OPT_CLASSPATH);
                 return -1;
             }
-            if (caller.hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {
+            if (setter.hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {
                 xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
                     "which code that does not allow uncontrolled APIs or the filesystem cannot use", JDBC_OPT_CLASSPATH);
                 return -1;
@@ -259,8 +279,26 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
 #endif
 
         try {
-            // the entries are read by this Program's class loader, as with the "add-classpath" module command
+            // the entries are read by this Program's class loader, as with the "add-classpath" module command, so they
+            // are checked against the filesystem policy of the code that set the option (qore#5741): the code that
+            // configured the datasource can read only what its own policy allows, also when other code opens the
+            // connection, and the policy of the code that opens it does not refuse a configuration that is not its own.
+            // A setter that a refusing sandbox governs was refused above, so this is the policy of trusted code that a
+            // sandbox governs only for its limits and interrupts (it allows uncontrolled APIs)
+#ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+            if (setter_known) {
+                ReferenceHolder<QoreSandboxManager> setter_policy(ds->getOptionPolicyManagerRef(opt), xsink);
+                ::jni_check_classpath_policy(*setter_policy, arg.c_str());
+            } else {
+                ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
+            }
+#else
             ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
+#endif
+            // the classpath of the connection is already this value: nothing to add
+            if (classpath == arg.c_str()) {
+                return 0;
+            }
             jpc->addClasspath(arg.c_str());
             classpath = arg.c_str();
 

@@ -115,7 +115,7 @@ string str = a.toString();
 
     @since jni 1.1
 */
-string JavaArray::toString() [flags=CONSTANT] {
+string JavaArray::toString() [dom=UNCONTROLLED_API;flags=RET_VALUE_ONLY] {
     try {
         return array->deepToString().release();
     } catch (jni::Exception &e) {
@@ -134,7 +134,7 @@ string str = a.deepToString();
 
     @since jni 1.1
 */
-string JavaArray::deepToString() [flags=CONSTANT] {
+string JavaArray::deepToString() [dom=UNCONTROLLED_API;flags=RET_VALUE_ONLY] {
     try {
         return array->deepToString().release();
     } catch (jni::Exception &e) {

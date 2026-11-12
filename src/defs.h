@@ -435,6 +435,15 @@ private:
 */
 DLLLOCAL void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const char* classpath, bool global);
 
+//! Checks the entries of a classpath against a filesystem policy (see jni-module.cpp)
+/** @param policy the policy to check the entries against; nullptr: no policy, every entry is allowed
+    @param classpath the classpath: entries separated by the system path separator or \c ';', as
+    QoreURLClassLoader.addPath() splits them
+
+    @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a classpath entry
+*/
+DLLLOCAL void jni_check_classpath_policy(QoreSandboxManager* policy, const char* classpath);
+
 extern "C" DLLEXPORT int jni_module_import(ExceptionSink* xsink, QoreProgram* pgm, const char* import);
 extern "C" DLLEXPORT QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg, QoreProgram* pgm);
 

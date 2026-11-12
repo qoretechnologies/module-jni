@@ -1,0 +1,476 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires QUnit
+%requires FsUtil
+
+# the classpath of every Program: the fixture JDBC driver that DriverManager has registered is the same class in the
+# Program of the code that grows a pool
+%module-cmd(jni) global-add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.JdbcTransactionDriver
+%module-cmd(jni) import java.net.URLClassLoader
+%module-cmd(jni) import java.net.URL
+
+%exec-class JniJdbcOptionSetterTest
+
+#! The classpath option of the jdbc driver is judged by the code that set it, not by the code that opens a connection
+/** The option adds jars to a Program's class loader, so it is refused to sandboxed and restricted code (the rule of
+    the "add-classpath" module command, qore#5699).  It is applied when a connection is opened, which can be on
+    another thread and for other code than the code that set it; with a Qore library that records the setters of
+    datasource options (qore#5741), whoever configures the datasource decides:
+    - a datasource whose classpath restricted code set is refused when trusted code opens it
+    - a trusted datasource or pool is not refused when it opens a connection on a restricted caller's thread
+    - the classpath entries are checked against the filesystem policy of the code that set the option
+
+    The cases of the new rule are skipped with a jni module built for a Qore library that does not record the
+    setters; the cases where the same code sets the option and opens the connection run with every library.
+*/
+class JniJdbcOptionSetterTest inherits QUnit::Test {
+    private:internal {
+        #! the restricting parse options of the kinds of code: name -> parse options, or -1 for a sandbox
+        const Kinds = {
+            "trusted": 0,
+            "no-filesystem": PO_NO_FILESYSTEM,
+            "no-uncontrolled": PO_NO_UNCONTROLLED_APIS,
+            "sandboxed": -1,
+            "trusted-sandbox": -2,
+        };
+
+        #! the kinds of code that may not set the classpath option
+        const Refused = ("no-filesystem", "no-uncontrolled", "sandboxed");
+
+        #! the code of the Programs of the test
+        const Source = "
+string sub open(Datasource ds) {
+    try {
+        ds.open();
+        ds.close();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+Datasource sub make(string cp) {
+    return new Datasource(\"jdbc:u/p@jdbc:qore-none://x{classpath=\" + cp + \"}\");
+}
+
+Datasource sub make_hash(string cp) {
+    return new Datasource({\"type\": \"jdbc\", \"user\": \"u\", \"pass\": \"p\", \"db\": \"jdbc:qore-none://x\",
+        \"options\": {\"classpath\": cp}});
+}
+
+string sub open_new(string cp) {
+    return open(make(cp));
+}
+
+nothing sub set_classpath(Datasource ds, string cp) {
+    ds.setOption(\"classpath\", cp);
+}
+
+string sub try_set_classpath(Datasource ds, string cp) {
+    try {
+        ds.setOption(\"classpath\", cp);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+Datasource sub copy_ds(Datasource ds) {
+    return ds.copy();
+}
+
+string sub make_pool(string cp) {
+    try {
+        DatasourcePool p({\"type\": \"jdbc\", \"db\": \"qore-transaction-test:fixture\",
+            \"options\": {\"classpath\": cp, \"min\": 1, \"max\": 2}});
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+auto sub pool_read(DatasourcePool p) {
+    try {
+        return p.select(\"read\");
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! a classpath entry that does not exist; the jdbc driver that is not found then raises JNI-ERROR
+        const NoSuchEntry = "/nonexistent-qore-jdbc-option-setter-dir";
+
+        #! the code that lists the classpath of a Program's own class loader, for the kinds of code that can use it
+        const LoaderSource = "%requires jni
+%module-cmd(jni) import java.net.URLClassLoader
+%module-cmd(jni) import java.net.URL
+list<string> sub loader_urls() {
+    list<string> rv = ();
+    foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(
+            Jni::org::qore::jni::get_class_loader()).getURLs()) {
+        rv += url.toString();
+    }
+    return rv;
+}
+";
+
+        #! the kinds of code whose class loader the test can list: they may use the uncontrolled APIs of the module
+        const LoaderKinds = ("trusted", "trusted-sandbox");
+    }
+
+    private {
+        #! the Programs of the test, one for each kind of code
+        hash<string, Program> pgms;
+
+        #! a directory that the sandbox of the trusted-sandbox code allows to read
+        string allowed;
+        #! a directory that no sandbox of the test allows to read
+        string denied;
+    }
+
+    constructor() : QUnit::Test("JNI jdbc classpath option setter", "1.0", \ARGV) {
+        addTestCase("code that sets the option and opens the connection", \directTest());
+        addTestCase("a datasource configured by restricted code is refused to trusted code", \configuredTest());
+        addTestCase("a copy keeps the code that configured the datasource", \copyTest());
+        addTestCase("a trusted datasource opened on a restricted thread", \trustedOpenedTest());
+        addTestCase("the option set on an open connection", \openConnectionTest());
+        addTestCase("a trusted pool that grows on a restricted thread", \poolTest());
+        addTestCase("the filesystem policy of the code that sets the option", \policyTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        allowed = make_tmp_dir();
+        denied = make_tmp_dir();
+        foreach string kind in (keys Kinds) {
+            pgms{kind} = getProgram(kind);
+        }
+    }
+
+    globalTearDown() {
+        remove_tree(allowed);
+        remove_tree(denied);
+    }
+
+    #! Returns True if the jdbc driver judges its options by the code that set them (qore#5741)
+    private static bool setterAware() {
+        *hash<auto> info = get_module_hash().jni.info;
+        return info.jdbc_option_setter ?? False;
+    }
+
+    private skipIfNotSetterAware() {
+        if (!setterAware()) {
+            testSkip("the jni module was built for a Qore library that does not record the setters of datasource "
+                "options");
+        }
+    }
+
+    #! Returns a Program of the kind of code given
+    private Program getProgram(string kind) {
+        int po = Kinds{kind};
+        Program p(PO_NEW_STYLE | (po > 0 ? po : 0));
+        if (po == -1) {
+            p.setSandboxManager(new SandboxManager());
+        } else if (po == -2) {
+            # a sandbox that a host attaches to trusted code for its limits and interrupts: it allows uncontrolled
+            # APIs, and its filesystem policy allows only one directory (its code loads no module)
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(False);
+            sm.setNetworkDefaultPolicy(True);
+            sm.setUncontrolledApiPolicy(True);
+            sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+            p.setSandboxManager(sm);
+        }
+        # a Program is parsed once
+        p.parse(inlist(kind, LoaderKinds) ? LoaderSource + Source : Source, "jni-jdbc-option-setter-" + kind);
+        return p;
+    }
+
+    #! Returns True if the class loader of the Program of the kind given (or of this Program) has the entry
+    private bool loaderHas(*string kind, string entry) {
+        list<string> urls;
+        if (kind) {
+            urls = pgms{kind}.callFunction("loader_urls");
+        } else {
+            foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(
+                    Jni::org::qore::jni::get_class_loader()).getURLs()) {
+                urls += url.toString();
+            }
+        }
+        # the loader keeps the canonical path of the entry: compare its directory and file name
+        string tail = basename(dirname(entry)) + DirSep + basename(entry);
+        return (select urls, $1.find(tail) >= 0).size() > 0;
+    }
+
+    #! Opens a datasource as this trusted code; returns "ok" or the error
+    private static string open(Datasource ds) {
+        try {
+            ds.open();
+            ds.close();
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Returns the result that opening a datasource with the classpath entry gives, as the code of the kind set it
+    /** the classpath option is accepted for trusted code, and the jdbc driver that is not found raises JNI-ERROR; a
+        sandbox that allows uncontrolled APIs checks the entry against its filesystem policy
+    */
+    private string expectedFor(string kind, string entry) {
+        if (inlist(kind, Refused)) {
+            return "JNI-SANDBOX-ERROR";
+        }
+        if (kind == "trusted-sandbox" && entry.substr(0, allowed.size()) != allowed) {
+            return "FILESYSTEM-ACCESS-DENIED";
+        }
+        return "JNI-ERROR";
+    }
+
+    #! the classpath entries of the test: one in the allowed directory, one in the denied directory
+    private list<string> entries() {
+        return (allowed + DirSep + "driver.jar", denied + DirSep + "driver.jar");
+    }
+
+    directTest() {
+        # the code that sets the option opens the connection: the same result with every Qore library
+        foreach string kind in (keys Kinds) {
+            foreach string entry in (entries()) {
+                assertEq(expectedFor(kind, entry), pgms{kind}.callFunction("open_new", entry), kind + ": " + entry);
+            }
+        }
+        # restricted code cannot create a pool with a classpath either: the pool opens its first connection
+        foreach string kind in (Refused) {
+            assertEq("JNI-SANDBOX-ERROR", pgms{kind}.callFunction("make_pool", get_script_dir() + "qore-jni-test.jar"),
+                kind + ": a pool");
+        }
+    }
+
+    configuredTest() {
+        skipIfNotSetterAware();
+        foreach string kind in (keys Kinds) {
+            foreach string entry in (entries()) {
+                # trusted code creates the datasource, the code of the kind sets the option, trusted code opens it
+                Datasource ds("jdbc:u/p@jdbc:qore-none://x");
+                pgms{kind}.callFunction("set_classpath", ds, entry);
+                assertEq(expectedFor(kind, entry), open(ds), kind + ": setOption(): " + entry);
+                # the last setter decides: trusted code sets the option again
+                ds.setOption("classpath", NoSuchEntry);
+                assertEq("JNI-ERROR", open(ds), kind + ": set again by trusted code");
+
+                # the code of the kind creates the datasource with the option
+                assertEq(expectedFor(kind, entry), open(pgms{kind}.callFunction("make", entry)),
+                    kind + ": connection string: " + entry);
+                assertEq(expectedFor(kind, entry), open(pgms{kind}.callFunction("make_hash", entry)),
+                    kind + ": constructor hash: " + entry);
+            }
+        }
+    }
+
+    copyTest() {
+        skipIfNotSetterAware();
+        foreach string kind in (keys Kinds) {
+            foreach string entry in (entries()) {
+                # trusted code copies a datasource that the code of the kind configured
+                Datasource configured = pgms{kind}.callFunction("make", entry);
+                assertEq(expectedFor(kind, entry), open(configured.copy()), kind + ": a trusted copy: " + entry);
+            }
+            # the code of the kind copies a datasource that trusted code configured
+            Datasource trusted("jdbc:u/p@jdbc:qore-none://x{classpath=" + NoSuchEntry + "}");
+            assertEq("JNI-ERROR", open(pgms{kind}.callFunction("copy_ds", trusted)), kind + ": its copy of a trusted "
+                "datasource");
+        }
+    }
+
+    trustedOpenedTest() {
+        skipIfNotSetterAware();
+        foreach string kind in (keys Kinds) {
+            # trusted code configures the datasource: the code of the kind opens it, also with a classpath entry
+            # that its own policy denies
+            foreach string entry in ((NoSuchEntry,) + entries()) {
+                Datasource ds("jdbc:u/p@jdbc:qore-none://x{classpath=" + entry + "}");
+                assertEq("JNI-ERROR", pgms{kind}.callFunction("open", ds), kind + ": " + entry);
+            }
+        }
+    }
+
+    openConnectionTest() {
+        skipIfNotSetterAware();
+        string jar = get_script_dir() + "qore-jni-test.jar";
+        # the fixture driver is registered with the DriverManager, so a datasource without a classpath connects
+        JdbcTransactionDriver::reset();
+        foreach string kind in (keys Kinds) {
+            # trusted code opens the datasource, the code of the kind sets the option on the open connection: the
+            # driver is given the value with the code of the kind as its setter
+            Datasource ds({"type": "jdbc", "db": "qore-transaction-test:fixture"});
+            ds.open();
+            on_exit ds.close();
+            string exp = inlist(kind, Refused)
+                ? "JNI-SANDBOX-ERROR"
+                : (kind == "trusted-sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok");
+            assertEq(exp, pgms{kind}.callFunction("try_set_classpath", ds, jar), kind + ": setOption() when open");
+            if (exp != "ok") {
+                # the refused value is not kept: a copy opens without it
+                assertEq("ok", open(ds.copy()), kind + ": a copy after the refusal");
+                # trusted code can set the option on the open connection
+                assertEq("ok", try_set_classpath(ds, jar), kind + ": set by trusted code when open");
+            }
+            # the value that was set is kept with its setter: a copy that trusted code opens is allowed
+            assertEq("ok", open(ds.copy()), kind + ": a copy of the trusted configuration");
+        }
+        # the value that the connection already has, set again on the open connection by the code of the kind: it is
+        # judged by its new setter at once, not only when the next connection is opened
+        foreach string kind in (keys Kinds) {
+            Datasource ds({"type": "jdbc", "db": "qore-transaction-test:fixture"});
+            ds.open();
+            on_exit ds.close();
+            assertEq("ok", try_set_classpath(ds, jar), kind + ": trusted code sets the classpath when open");
+            string exp = inlist(kind, Refused)
+                ? "JNI-SANDBOX-ERROR"
+                : (kind == "trusted-sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok");
+            assertEq(exp, pgms{kind}.callFunction("try_set_classpath", ds, jar), kind + ": the same value set again");
+            # a refused value keeps the trusted setter: a copy opens
+            assertEq("ok", open(ds.copy()), kind + ": a copy after the same value was set again");
+        }
+
+        # a classpath with an environment variable, expanded when the value is applied: the raw value set twice, and
+        # the raw value followed by the value already expanded, which is the same classpath
+        # the previous value of the variable is restored afterwards
+        *string old_cp_dir = getenv("QORE_JNI_TEST_CP_DIR");
+        on_exit {
+            if (exists old_cp_dir) {
+                setenv("QORE_JNI_TEST_CP_DIR", old_cp_dir);
+            } else {
+                unsetenv("QORE_JNI_TEST_CP_DIR");
+            }
+        }
+        setenv("QORE_JNI_TEST_CP_DIR", dirname(jar));
+        string raw = "$QORE_JNI_TEST_CP_DIR" + DirSep + basename(jar);
+        foreach string kind in (keys Kinds) {
+            string exp = inlist(kind, Refused)
+                ? "JNI-SANDBOX-ERROR"
+                : (kind == "trusted-sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok");
+            foreach string again in ((raw, jar)) {
+                string label = sprintf("%s: %y after the raw value %y", kind, again, raw);
+                Datasource ds({"type": "jdbc", "db": "qore-transaction-test:fixture"});
+                ds.open();
+                on_exit ds.close();
+                assertEq("ok", try_set_classpath(ds, raw), label + ": trusted code sets the raw value");
+                # the connection reports the expanded value
+                assertEq(jar, ds.getOptionHash().classpath.value, label + ": the value is expanded");
+                assertEq(exp, pgms{kind}.callFunction("try_set_classpath", ds, again), label + ": set again");
+                assertEq(jar, ds.getOptionHash().classpath.value, label + ": the value after it was set again");
+                # the kept value and its setter: a copy opens with the variable expanded when it opens
+                assertEq("ok", open(ds.copy()), label + ": a copy opens");
+            }
+        }
+
+        # the variable points into the directory that the trusted sandbox allows: the entry is checked against the
+        # policy after it is expanded, so the trusted sandbox can set it
+        setenv("QORE_JNI_TEST_CP_DIR", allowed);
+        {
+            string allowed_raw = "$QORE_JNI_TEST_CP_DIR" + DirSep + "env-allowed.jar";
+            foreach string kind in (keys Kinds) {
+                string exp = inlist(kind, Refused) ? "JNI-SANDBOX-ERROR" : "ok";
+                Datasource ds({"type": "jdbc", "db": "qore-transaction-test:fixture"});
+                ds.open();
+                on_exit ds.close();
+                assertEq(exp, pgms{kind}.callFunction("try_set_classpath", ds, allowed_raw),
+                    kind + ": a variable that points into the allowed directory");
+            }
+        }
+
+        # the sandbox that allows uncontrolled APIs can set an entry that its policy allows
+        Datasource ds({"type": "jdbc", "db": "qore-transaction-test:fixture"});
+        ds.open();
+        on_exit ds.close();
+        string entry = allowed + DirSep + "open-connection.jar";
+        assertEq("ok", pgms."trusted-sandbox".callFunction("try_set_classpath", ds, entry),
+            "trusted-sandbox: an allowed entry when open");
+        # the copy keeps the trusted sandbox as the setter: its policy allows the entry for trusted code too
+        assertEq("ok", open(ds.copy()), "trusted-sandbox: a copy with an allowed entry");
+    }
+
+    #! Sets the option as this trusted code; returns "ok" or the error
+    private static string try_set_classpath(Datasource ds, string cp) {
+        try {
+            ds.setOption("classpath", cp);
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    poolTest() {
+        skipIfNotSetterAware();
+        string jar = get_script_dir() + "qore-jni-test.jar";
+        foreach string kind in (keys Kinds) {
+            JdbcTransactionDriver::reset();
+            # a directory of the classpath shows which class loader the classpath was added to (the jar is in the
+            # global classpath, so a Program's own class loader does not list it)
+            string marker = allowed + DirSep + "pool-" + kind;
+            mkdir(marker);
+            DatasourcePool pool({"type": "jdbc", "db": "qore-transaction-test:fixture",
+                "options": {"classpath": jar + ";" + marker, "min": 1, "max": 2}});
+            # this thread holds the first connection in a transaction, so the code of the kind on another thread
+            # needs a new one
+            pool.beginTransaction();
+            auto rv;
+            {
+                on_exit pool.rollback();
+                Queue q();
+                background q.push(pgms{kind}.callFunction("pool_read", pool));
+                rv = q.get();
+            }
+            assertEq(1, rv, kind + ": the connection that the pool opened on the thread of the code");
+            # the fixture driver connected twice: the first connection and the new one
+            assertEq(2, (select JdbcTransactionDriver::events(), $1 == "connect").size(), kind + ": connections");
+            # the current behavior (see the jdbc driver guide): the classpath of every connection of the pool is
+            # added to the class loader of the Program that created the pool, not of the code that opened the
+            # connection
+            assertTrue(loaderHas(NOTHING, marker), kind + ": the class loader of the code that created the pool");
+            if (inlist(kind, LoaderKinds)) {
+                assertFalse(loaderHas(kind, marker), kind + ": the class loader of the code that opened the "
+                    "connection");
+            }
+        }
+    }
+
+    policyTest() {
+        skipIfNotSetterAware();
+        # the trusted sandbox sets the option: its policy applies when trusted or sandboxed code opens the datasource
+        foreach string entry in (entries()) {
+            Datasource ds = pgms."trusted-sandbox".callFunction("make", entry);
+            string exp = expectedFor("trusted-sandbox", entry);
+            assertEq(exp, open(ds.copy()), "opened by trusted code: " + entry);
+            foreach string kind in (keys Kinds) {
+                assertEq(exp, pgms{kind}.callFunction("open", ds.copy()), "opened by " + kind + " code: " + entry);
+            }
+        }
+
+        # the current behavior (see the jdbc driver guide): the classpath is added to the class loader of the Program
+        # that created the Datasource object, not of the code that opens the connection; a directory of the classpath
+        # shows which class loader it was added to
+        string dir = allowed + DirSep + "policy-classes";
+        mkdir(dir);
+        Datasource ds = pgms."trusted-sandbox".callFunction("make", dir);
+        # the driver is not found in the directory
+        assertEq("JNI-ERROR", open(ds), "opened by trusted code: " + dir);
+        assertEq("JNI-ERROR", pgms.trusted.callFunction("open", ds), "opened by the trusted Program: " + dir);
+        assertTrue(loaderHas("trusted-sandbox", dir), "the class loader of the code that created the datasource");
+        assertFalse(loaderHas(NOTHING, dir), "the class loader of the trusted code that opened it");
+        assertFalse(loaderHas("trusted", dir), "the class loader of the trusted Program that opened it");
+        # nor of the trusted code that copies the datasource and opens the copy
+        assertEq("JNI-ERROR", open(ds.copy()), "a copy opened by trusted code: " + dir);
+        assertFalse(loaderHas(NOTHING, dir), "the class loader of the trusted code that copied and opened it");
+    }
+}

@@ -8,9 +8,12 @@
 
     - <b>Security</b>: the functions that load, define or run Java code or return the class loader
       (\c Jni::org::qore::jni::kotlin_eval(), \c get_byte_code(), \c load_class(), \c define_class(),
-      \c implement_interface() and \c get_class_loader()) are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), as the Java
-      classes that they give access to are, so a Program with \c PO_NO_UNCONTROLLED_APIS cannot call them;
-      \c check_network_bind(), which only checks the sandbox policy, is not
+      \c implement_interface(), \c invoke(), \c invoke_nonvirtual() and \c get_class_loader()), and
+      \c JavaArray::toString() and \c JavaArray::deepToString(), which run the \c toString() methods of the
+      elements, are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), as the Java classes that they give access to are, so
+      a Program with \c PO_NO_UNCONTROLLED_APIS cannot call them, nor, with a Qore that refuses uncontrolled APIs at run
+      time, code governed by a sandbox that does not allow them; \c check_network_bind(), which only checks the sandbox
+      policy, is not
 
     - <b>Security</b>: built for module API 2.1, the module sets \c cmd_caller_aware and judges every module command
       first by the restrictions of the code that issues it (\c QoreModuleCommandContext, qore#5699): sandboxed
@@ -18,8 +21,25 @@
       Program shares, and issuers with a restricting parse option the commands that the option forbids
       (\c JNI-SANDBOX-ERROR); the exported functions used by the \c python module's Java loader apply the rule of
       \c import, and the \c classpath option of the \c jdbc database driver the rule of \c add-classpath, also with
-      module API 2.0; with module API 2.1 the code of a library module that sets the \c jdbc option is judged by its
-      sandbox only (see @ref jni_sandbox)
+      module API 2.0; with module API 2.1 the code of a library module that sets the \c jdbc option, or that reaches
+      the \c python module's Java loader, is judged by its sandbox only (see @ref jni_sandbox)
+    - <b>Security</b>: with a %Qore that has the uncontrolled-API policy of sandboxes (qore#5741), the module command
+      rules, the exported import functions and the \c jdbc \c classpath option refuse sandboxed code only when its
+      sandbox does not allow uncontrolled APIs (\c SandboxManager::setUncontrolledApiPolicy()); the same holds for
+      \c define-class of a class of another Program (see @ref jni_sandbox)
+    - <b>Security</b>: with a %Qore that records the code that sets each datasource option
+      (\c _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS, qore#5741), the \c jdbc driver's \c classpath option is judged by
+      the code that set it (with \c Datasource::setOption(), a constructor or connection string, or the code that
+      created a \c DatasourcePool), not by the code that opens the connection: trusted code that opens a datasource
+      whose classpath sandboxed code set is refused it, a trusted pool that grows on a sandboxed caller's thread is not
+      refused it, and the classpath entries are checked against the filesystem policy of the code that set the option;
+      the module hash reports this with \c "jdbc_option_setter" in its \c "info" key (see @ref jdbc_option_classpath);
+      the jars are added to the class loader of the %Program that the datasource or pool object belongs to, not of
+      the code that opens the connection; a value set on an open connection is judged by its setter also when it
+      equals the current classpath
+    - <b>Security</b>: the exported import functions used by the \c python module's Java loader refuse an import into
+      a %Program with \c PO_NO_UNCONTROLLED_APIS whoever calls the loader, in addition to judging the code that
+      imports (also with module API 2.1)
 
     - <b>Security</b>: sandboxed code, and a Program with \c PO_NO_UNCONTROLLED_APIS, cannot use the module commands
       that change state of the JVM that every Program shares or that run Java code (\c global-add-classpath,
