@@ -123,7 +123,8 @@ list<string> sub loader_urls() {
 }
 ";
 
-        #! the kinds of code whose class loader the test can list: they may use the uncontrolled APIs of the module
+        #! the kinds of code whose class loader the test can list (only in the cases that need a jni module that
+        #! judges the option by its setter, where the trusted-sandbox code may use the uncontrolled APIs of the module)
         const LoaderKinds = ("trusted", "trusted-sandbox");
     }
 
@@ -138,6 +139,7 @@ list<string> sub loader_urls() {
     }
 
     constructor() : QUnit::Test("JNI jdbc classpath option setter", "1.0", \ARGV) {
+        addTestCase("the features of the jni module match the Qore library", \featureTest());
         addTestCase("code that sets the option and opens the connection", \directTest());
         addTestCase("a datasource configured by restricted code is refused to trusted code", \configuredTest());
         addTestCase("a copy keeps the code that configured the datasource", \copyTest());
@@ -167,12 +169,14 @@ list<string> sub loader_urls() {
         return info.jdbc_option_setter ?? False;
     }
 
-    #! Returns True if the Qore library has the uncontrolled-API policy of sandboxes (qore#5741)
+    #! Returns True if the jni module was built with the uncontrolled-API policy of sandboxes (qore#5741)
     /** without it, the jni module refuses every caller that a sandbox governs, even one whose sandbox a host uses only
-        for its limits and interrupts
+        for its limits and interrupts; the module decides this when it is built, so its own report is tested, not the
+        Qore library it runs on
     */
     private static bool hasUncontrolledApiPolicy() {
-        return (new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy");
+        *hash<auto> info = get_module_hash().jni.info;
+        return info.uncontrolled_api_policy ?? False;
     }
 
     private skipIfNotSetterAware() {
@@ -255,6 +259,20 @@ list<string> sub loader_urls() {
     #! the classpath entries of the test: one in the allowed directory, one in the denied directory
     private list<string> entries() {
         return (allowed + DirSep + "driver.jar", denied + DirSep + "driver.jar");
+    }
+
+    #! the cases of the new rule are skipped only with a module and a Qore library that both lack the features
+    /** a jni module built with the uncontrolled-API policy, or run on a Qore library that has it, but that does not
+        judge the option by its setter is a mismatch of module and library, not a reason to skip
+    */
+    featureTest() {
+        bool core_policy = (new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy");
+        assertEq(core_policy, hasUncontrolledApiPolicy(), "the module's uncontrolled-API policy flag and the Qore "
+            "library's SandboxManager::setUncontrolledApiPolicy()");
+        if (core_policy || hasUncontrolledApiPolicy()) {
+            assertTrue(setterAware(), "a jni module with the uncontrolled-API policy judges the jdbc classpath "
+                "option by its setter (\"jdbc_option_setter\" in the \"info\" key of the module hash)");
+        }
     }
 
     directTest() {

@@ -94,15 +94,24 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.parse_cmd = jni_module_parse_cmd;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
-#if defined(_QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
     // the features of the module that depend on the Qore library it was built with, in the "info" key of the module
-    // hash (get_module_hash()): "jdbc_option_setter": the jdbc driver judges its options by the code that set them
-    // (qore#5741), which it does only when both are available (QoreJdbcConnection::setOption()); the Qore library
-    // takes over the hash
-    QoreHashNode* info = new QoreHashNode(autoTypeInfo);
-    info->setKeyValue("jdbc_option_setter", true, nullptr);
-    mod_info.info = info;
+    // hash (get_module_hash()); the Qore library takes over the hash
+    QoreHashNode* info = nullptr;
+#ifdef _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY
+    // "uncontrolled_api_policy": code counts as restricted only if a governing sandbox refuses uncontrolled APIs
+    // (qore#5741, jni_sandbox_restricts_caller()); without it, any governing sandbox restricts the code
+    info = new QoreHashNode(autoTypeInfo);
+    info->setKeyValue("uncontrolled_api_policy", true, nullptr);
 #endif
+#if defined(_QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
+    // "jdbc_option_setter": the jdbc driver judges its options by the code that set them (qore#5741), which it does
+    // only when both are available (QoreJdbcConnection::setOption())
+    if (!info) {
+        info = new QoreHashNode(autoTypeInfo);
+    }
+    info->setKeyValue("jdbc_option_setter", true, nullptr);
+#endif
+    mod_info.info = info;
 }
 
 // global type compatibility option

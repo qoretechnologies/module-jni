@@ -26,7 +26,8 @@
     - <b>Security</b>: with a %Qore that has the uncontrolled-API policy of sandboxes (qore#5741), the module command
       rules, the exported import functions and the \c jdbc \c classpath option refuse sandboxed code only when its
       sandbox does not allow uncontrolled APIs (\c SandboxManager::setUncontrolledApiPolicy()); the same holds for
-      \c define-class of a class of another Program (see @ref jni_sandbox)
+      \c define-class of a class of another Program (see @ref jni_sandbox); the module hash reports this with
+      \c "uncontrolled_api_policy" in its \c "info" key
     - <b>Security</b>: with a %Qore that records the code that sets each datasource option
       (\c _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS, qore#5741), the \c jdbc driver's \c classpath option is judged by
       the code that set it (with \c Datasource::setOption(), a constructor or connection string, or the code that
