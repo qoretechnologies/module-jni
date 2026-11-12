@@ -96,6 +96,8 @@ public class VcfReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw VCF-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(VcfDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         checkOptions("VCF-READ-OPTION-ERROR", ConstructorOptions, opts);
@@ -108,6 +110,8 @@ public class VcfReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw VCF-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(VcfDataProvider::AppName);
         i = stream;
         checkOptions("VCF-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("stream=%s", stream.uniqueHash());
@@ -118,6 +122,8 @@ public class VcfReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw VCF-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(VcfDataProvider::AppName);
         *hash<auto> copts = checkOptions("VCF-READ-OPTION-ERROR", ConstructorOptions, options);
         if (copts.path) {
             if (copts.stream) {

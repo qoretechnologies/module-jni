@@ -30,7 +30,7 @@
 %module-cmd(jni) global-add-relative-classpath ./jar/jakarta.jms-api-3.1.0.jar
 
 # implements a data provider for JMS functionality
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.12
 # implements support for JMS connections
 %requires(reexport) ConnectionProvider
 
@@ -51,6 +51,9 @@ module JakartaJmsDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": JakartaJmsDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java I/O that the Qore sandbox does not see (qore#5632): the JMS provider connects to the broker URL
+            # and loads the provider classpath itself
+            "external_io": True,
             "display_name": "Jakarta JMS",
             "short_desc": "Jakarta Messaging (JMS) 3.x compliant broker",
             "desc": "Jakarta Messaging (JMS) 3.x compliant broker for enterprise messaging with support for "
@@ -378,6 +381,9 @@ module JakartaJmsDataProvider {
     @section JakartaJmsDataProvider_relnotes Release Notes
 
     @subsection JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider v1.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
+      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
+      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - initial release
 */
 

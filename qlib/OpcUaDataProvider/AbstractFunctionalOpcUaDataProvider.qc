@@ -572,10 +572,14 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Creates the object from another object of the same class
     constructor(AbstractOpcUaDataProvider prev) : AbstractOpcUaDataProvider(prev) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(OpcUaDataProvider::AppName);
     }
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(OpcUaDataProvider::AppName);
         @debug {
             LoggerWrapper::debug("AbstractFunctionalOpcUaDataProvider::constructor() url: %y",
                 options.url);

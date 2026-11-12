@@ -88,6 +88,8 @@ public class JdbcTablesDataProvider inherits DataProvider::AbstractDataProvider 
 
     #! Creates the object from the introspector and executor
     constructor(JdbcSchemaIntrospector introspector, JdbcQueryExecutor executor) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JdbcDataProvider::AppName);
         self.introspector = introspector;
         self.executor = executor;
     }
@@ -170,6 +172,8 @@ public class JdbcTableDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object for the given table
     constructor(string table_name, JdbcSchemaIntrospector introspector, JdbcQueryExecutor executor) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JdbcDataProvider::AppName);
         self.table_name = table_name;
         self.introspector = introspector;
         self.executor = executor;

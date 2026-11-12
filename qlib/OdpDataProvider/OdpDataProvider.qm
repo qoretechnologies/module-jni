@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider >= 3.9
+%requires(reexport) DataProvider >= 3.12
 %requires FileLocationHandler
 %requires Util
 
@@ -79,6 +79,10 @@ module OdpDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": OdpDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java calls are uncontrolled APIs (QDOM_UNCONTROLLED_API) that a governing sandbox refuses,
+            # also from library code running for a sandboxed caller (qore#5741): sandboxed callers are refused
+            # up front instead of failing in the middle of a call
+            "external_io": True,
             "display_name": "ODP Presentations",
             "short_desc": "Read and write ODP presentations",
             "desc": "Provides data provider actions for reading and writing **ODP** (OpenDocument "
@@ -397,6 +401,11 @@ module OdpDataProvider {
     @section OdpDataProvider_relnotes Release Notes
 
     @subsection OdpDataProvider_v1_0 OdpDataProvider v1.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
+      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
+      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
+      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
+      middle of a call; the module requires \c DataProvider 3.12 or later
     - initial release
 */
 

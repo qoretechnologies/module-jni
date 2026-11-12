@@ -38,7 +38,7 @@
 %module-cmd(jni) import java.sql.DriverManager
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.12
 # implements support for JDBC connections
 %requires(reexport) ConnectionProvider
 %requires Util
@@ -60,6 +60,9 @@ module JdbcDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": JdbcDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java I/O that the Qore sandbox does not see (qore#5632): the JDBC driver connects to the destinations
+            # of the URL itself
+            "external_io": True,
             "display_name": "JDBC Database",
             "short_desc": "JDBC database access",
             "desc": "Access any JDBC-compatible database with schema introspection and SQL "
@@ -170,6 +173,9 @@ module JdbcDataProvider {
     @section jdbcdataprovider_relnotes Release Notes
 
     @subsection jdbcdataprovider_v1_0 JdbcDataProvider v1.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
+      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
+      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - initial release
 */
 

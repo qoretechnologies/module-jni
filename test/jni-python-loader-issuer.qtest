@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Python code reaches the jni module through two exported functions that do not run in a module command of this module:
+# qoreloader.load_java() calls jni_module_import() and the import of a "java." module calls
+# jni_module_find_create_java_namespace() (qore#5699)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires QUnit
+
+%try-module python
+%define NoPython
+%endtry
+
+%exec-class JniPythonLoaderIssuerTest
+
+class JniPythonLoaderIssuerTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI exported import functions from Python", "1.0", \ARGV) {
+        addTestCase("trusted Python code imports Java classes", \trustedTest());
+        addTestCase("a Python command of trusted code imports Java classes", \trustedCommandTest());
+        addTestCase("a sandboxed caller of Python code cannot import Java classes", \sandboxedCallerTest());
+        addTestCase("Python code in a Program without uncontrolled APIs cannot import Java classes",
+            \restrictedProgramTest());
+        addTestCase("trusted code cannot import Java classes into a Program without uncontrolled APIs",
+            \restrictedTargetTest());
+        set_return_value(main());
+    }
+
+%ifdef NoPython
+    private checkPython() {
+        testSkip("the python module is not available");
+    }
+
+    trustedTest() {
+        checkPython();
+    }
+
+    trustedCommandTest() {
+        checkPython();
+    }
+
+    sandboxedCallerTest() {
+        checkPython();
+    }
+
+    restrictedProgramTest() {
+        checkPython();
+    }
+
+    restrictedTargetTest() {
+        checkPython();
+    }
+%else
+    private:internal {
+        #! Python code calling each exported function
+        const PySource = "import importlib
+import qoreloader
+
+def load(name):
+    qoreloader.load_java(name)
+    return 'ok'
+
+def imp(name):
+    importlib.import_module(name)
+    return 'ok'
+";
+    }
+
+    # every case uses Java packages of its own, because a Python module that was imported stays in the import cache
+
+    #! Asserts that sandboxed code is refused: by the module with \a err and \a desc, or by the core first
+    /** qore#5741 run-time refusal of uncontrolled APIs: the core refuses the sandboxed call of the Python code (an
+        uncontrolled API) before it reaches the module, with INVALID-FUNCTION-ACCESS
+    */
+    private assertRefused(string err, string desc, code c, string label) {
+        try {
+            c();
+            fail(label + ": no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "INVALID-FUNCTION-ACCESS") {
+                assertRegex("does not allow access to uncontrolled API", ex.desc, label + " (core refusal)");
+            } else {
+                assertEq(err, ex.err, label);
+                assertRegex(desc, ex.desc, label + " (reason)");
+            }
+        }
+    }
+
+    trustedTest() {
+        PythonProgram pp(PySource, "jni-python-loader-trusted.py");
+        assertEq("ok", pp.callFunction("load", "java.lang.StringBuilder"), "load_java");
+        assertEq("ok", pp.callFunction("imp", "java.lang"), "import of a java module");
+    }
+
+    trustedCommandTest() {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("jni");
+        p.loadModule("python");
+        p.issueModuleCmd("python", "parse c.py import qoreloader; qoreloader.load_java('java.lang.StringBuffer')");
+        # the class was imported into the Program: its code can use it
+        p.parse("string sub get() { return (new Jni::java::lang::StringBuffer(\"imported\")).toString(); }",
+            "jni-python-loader-command-use");
+        assertEq("imported", p.callFunction("get"), "the imported class");
+    }
+
+    sandboxedCallerTest() {
+        PythonProgram pp(PySource, "jni-python-loader-sandboxed.py");
+        code f = auto sub (string fn, string n) { return pp.callFunction(fn, n); };
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        p.parse("auto sub go(code f, string fn, string n) { return f(fn, n); }", "jni-python-loader-sandboxed");
+        assertRefused("JNI-SANDBOX-ERROR", "sandboxed code cannot import Java classes",
+            sub () { p.callFunction("go", f, "load", "java.util.ArrayList"); }, "load_java");
+        assertRefused("builtins.ValueError", "failed to create Java namespace",
+            sub () { p.callFunction("go", f, "imp", "java.util"); }, "import of a java module");
+        # a system-policy capability of trusted code is not governed by the sandbox of the code that calls it, so the
+        # core lets the call reach the Python code on every core; the module still judges the sandboxed caller behind
+        # it and refuses the import itself
+        code load_cap = SandboxManager::createSystemPolicyCall(auto sub (string fn, string n) { return f(fn, n); });
+        assertThrows("JNI-SANDBOX-ERROR", "sandboxed code cannot import Java classes", \p.callFunction(),
+            ("go", load_cap, "load", "java.util.LinkedList"), "load_java through a capability of trusted code");
+        # the same for the import of a java module: jni_module_find_create_java_namespace() refuses it, and the
+        # python module's Java loader reports the refusal
+        assertThrows("builtins.ValueError", "failed to create Java namespace 'text'",
+            \p.callFunction(), ("go", load_cap, "imp", "java.text"),
+            "import of a java module through a capability of trusted code");
+        # the same Python functions work when the caller is not sandboxed: the refusals above were made for the
+        # sandboxed caller, not because the package or the class cannot be imported (the refused import of
+        # java.text left nothing in the Python import cache)
+        assertEq("ok", f("load", "java.util.HashMap"), "load_java from trusted code");
+        assertEq("ok", f("imp", "java.text"), "import of the refused java module from trusted code");
+    }
+
+    restrictedProgramTest() {
+        # the Python functions are defined before the option is set; they run with no module command in progress
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires python\n"
+            "%module-cmd(python) parse load.py def load(n): import qoreloader; qoreloader.load_java(n); return 'ok'\n"
+            "%module-cmd(python) parse imp.py def imp(n): import importlib; importlib.import_module(n); return 'ok'\n"
+            "%module-cmd(python) export-func load\n"
+            "%module-cmd(python) export-func imp\n"
+            "%no-uncontrolled-apis\n", "jni-python-loader-restricted");
+        assertEq(PO_NO_UNCONTROLLED_APIS, p.getParseOptions() & PO_NO_UNCONTROLLED_APIS, "the Program is restricted");
+        assertThrows("JNI-SANDBOX-ERROR", "does not allow uncontrolled APIs", \p.callFunction(),
+            ("load", "java.net.URI"), "load_java");
+        assertThrows("builtins.ValueError", "failed to create Java namespace", \p.callFunction(),
+            ("imp", "java.net"), "import of a java module");
+    }
+
+    restrictedTargetTest() {
+        # a standalone PythonProgram imports into the Program that created it; that Program does not allow
+        # uncontrolled APIs once it created the PythonProgram.  The methods of the PythonProgram object are refused
+        # to all code then (they run in the context of the restricted Program), so the Python functions are taken as
+        # Qore callables before the option is set
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires python\n"
+            "object sub make(string src) { return new Python::PythonProgram(src, 'jni-python-loader-target.py'); }",
+            "jni-python-loader-target");
+        object pp = p.callFunction("make", PySource);
+        code load = pp.getAttribute("load");
+        code imp = pp.getAttribute("imp");
+        p.setParseOptions(PO_NO_UNCONTROLLED_APIS);
+        assertEq(PO_NO_UNCONTROLLED_APIS, p.getParseOptions() & PO_NO_UNCONTROLLED_APIS, "the Program is restricted");
+        # the trusted code of this test calls the Python code: the code that imports is trusted, but the Program that
+        # the classes would be imported into does not allow uncontrolled APIs, which refuses the import as well
+        assertThrows("JNI-SANDBOX-ERROR", "a Program that does not allow uncontrolled APIs cannot import Java classes",
+            load, ("java.time.Duration",), "load_java");
+        assertThrows("builtins.ValueError", "failed to create Java namespace 'time'", imp,
+            ("java.time.format",), "import of a java module");
+        # the same Python code in a PythonProgram of trusted code imports both
+        PythonProgram trusted(PySource, "jni-python-loader-target-trusted.py");
+        assertEq("ok", trusted.callFunction("load", "java.time.Duration"), "load_java into a trusted Program");
+        assertEq("ok", trusted.callFunction("imp", "java.time.format"), "import of a java module into a trusted "
+            "Program");
+    }
+%endif
+}

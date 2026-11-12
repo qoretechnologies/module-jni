@@ -39,6 +39,29 @@
 #include <stdarg.h>
 #include <memory>
 
+//! Returns true if a sandbox that does not trust the calling code governs it
+/** With a %Qore that has the uncontrolled-API policy of sandboxes (\c SandboxManager::setUncontrolledApiPolicy()),
+    code counts as restricted only if a governing sandbox refuses uncontrolled APIs (the default), so that code that a
+    host governs with a sandbox only for its interrupts or limits, and trusts, is not refused; without it, any
+    governing sandbox restricts the code.
+
+    @param purpose how the governing sandboxes are resolved (see QoreSandboxManagerHelper)
+*/
+static inline bool jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Purpose purpose) {
+#ifdef _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY
+    return !qore_sandbox_allows_uncontrolled_apis(purpose);
+#else
+    QoreSandboxManagerHelper governing(purpose);
+    return static_cast<bool>(governing);
+#endif
+}
+
+// module API 2.2 (qore#5699): module commands are judged by the restrictions of the code that issues them, and module
+// functions can judge their caller the same way
+#if QORE_MODULE_API_MAJOR > 2 || (QORE_MODULE_API_MAJOR == 2 && QORE_MODULE_API_MINOR >= 2)
+#define QORE_JNI_HAS_COMMAND_CONTEXT 1
+#endif
+
 namespace jni {
 
 /**
@@ -405,6 +428,21 @@ private:
 };
 
 } // namespace jni
+
+//! Refuses a classpath to sandboxed code where its policy does not allow it (see jni-module.cpp)
+/** @throw JNI-SANDBOX-ERROR sandboxed or restricted code changes the classpath of every Program
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
+*/
+DLLLOCAL void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const char* classpath, bool global);
+
+//! Checks the entries of a classpath against a filesystem policy (see jni-module.cpp)
+/** @param policy the policy to check the entries against; nullptr: no policy, every entry is allowed
+    @param classpath the classpath: entries separated by the system path separator or \c ';', as
+    QoreURLClassLoader.addPath() splits them
+
+    @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a classpath entry
+*/
+DLLLOCAL void jni_check_classpath_policy(QoreSandboxManager* policy, const char* classpath);
 
 extern "C" DLLEXPORT int jni_module_import(ExceptionSink* xsink, QoreProgram* pgm, const char* import);
 extern "C" DLLEXPORT QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg, QoreProgram* pgm);

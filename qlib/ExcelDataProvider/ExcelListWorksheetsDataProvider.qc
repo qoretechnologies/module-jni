@@ -158,6 +158,8 @@ public class ExcelListWorksheetsDataProvider inherits AbstractDataProvider {
 
     #! Creates the object
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
     }
 
     #! Returns the data provider name

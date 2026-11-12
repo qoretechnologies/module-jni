@@ -127,6 +127,12 @@ class JniImportProgramScopeTest inherits QUnit::Test {
         Program s = getProgram();
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
+        # qore#5741 run-time refusal of uncontrolled APIs: the sandboxed Program uses the Java class that it imports,
+        # which its sandbox must allow; what the case tests, which Programs see an import, is unchanged (the call is
+        # dynamic because the Qore library may lack the rule)
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
         s.setSandboxManager(sm);
         assertEq("UNKNOWN-CLASS", lookup(s, ImportedShortName), "a sandboxed Program");
         assertEq("UNKNOWN-CLASS", lookup(s, "LinkedList"), "a sandboxed Program, a class not imported");

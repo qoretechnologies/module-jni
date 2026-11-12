@@ -1,0 +1,305 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires QUnit
+%requires FsUtil
+
+%exec-class JniModuleCmdIssuerTest
+
+#! The jni module commands are judged by the restrictions of the code that issues them (qore#5699)
+/** Needs a jni module built for module API 2.2 (QoreModuleCommandContext); with an older module it is skipped.
+*/
+class JniModuleCmdIssuerTest inherits QUnit::Test {
+    private:internal {
+        #! the issuer kinds: name -> restricting parse options, or -1 for a sandboxed issuer
+        const Kinds = {
+            "trusted": 0,
+            "no-uncontrolled": PO_NO_UNCONTROLLED_APIS,
+            "no-filesystem": PO_NO_FILESYSTEM,
+            "no-embedded": PO_NO_EMBEDDED_LOGIC,
+            "sandboxed": -1,
+        };
+
+        #! all restricted issuer kinds
+        const AllRestricted = ("no-uncontrolled", "no-filesystem", "no-embedded", "sandboxed");
+
+        #! the commands: the issuer kinds that are refused, and the results accepted for the other kinds
+        const Commands = {
+            "import java.lang.StringBuilder": {"refused": ("no-uncontrolled", "sandboxed"), "allowed": ("ok",)},
+            "import java.util.concurrent.*": {"refused": ("no-uncontrolled", "sandboxed"), "allowed": ("ok",)},
+            "add-classpath /nonexistent-qore-test-dir": {"refused": ("no-uncontrolled", "no-filesystem", "sandboxed"),
+                "allowed": ("ok",)},
+            "add-relative-classpath nonexistent-qore-test-dir": {"refused": ("no-uncontrolled", "no-filesystem",
+                "sandboxed"), "allowed": ("ok",)},
+            "global-add-classpath /nonexistent-qore-test-dir": {"refused": AllRestricted, "allowed": ("ok",)},
+            "global-add-relative-classpath nonexistent-qore-test-dir": {"refused": AllRestricted,
+                "allowed": ("ok",)},
+            "set-property org.qore.test.issuer.placeholder value": {"refused": AllRestricted, "allowed": ("ok",)},
+            "register-shared-class qore.QoreTestIssuerPlaceholder": {"refused": AllRestricted, "allowed": ("ok",)},
+            # the argument is not valid byte code: an allowed issuer gets the command's own error
+            "define-class qore.QoreTestIssuerPlaceholder AAAA": {"refused": ("no-uncontrolled", "no-embedded",
+                "sandboxed"), "allowed": ("JNI-DEFINE-CLASS-ERROR", "JNI-ERROR")},
+            "define-pending-class qore.QoreTestIssuerPlaceholder AAAA": {"refused": ("no-uncontrolled", "no-embedded",
+                "sandboxed"), "allowed": ("ok", "JNI-DEFINE-CLASS-ERROR", "JNI-ERROR")},
+            # Kotlin scripting may not be installed
+            "kotlin-eval 1": {"refused": ("no-uncontrolled", "no-embedded", "sandboxed"),
+                "allowed": ("ok", "KOTLIN-SCRIPTING-NOT-AVAILABLE")},
+            "set-compat-types true": {"refused": (), "allowed": ("ok",)},
+            "mark-module-injected QoreTestIssuerPlaceholder": {"refused": (), "allowed": ("ok",)},
+        };
+    }
+
+    constructor() : QUnit::Test("JNI module command issuer", "1.0", \ARGV) {
+        addTestCase("a directive is judged by the restrictions of its Program", \directiveTest());
+        addTestCase("a command issued at run time is judged by its issuer", \runtimeTest());
+        addTestCase("a command issued by library module code is judged by the sandbox only", \libraryTest());
+        addTestCase("a library module's own directive is judged by the sandbox only", \libraryDirectiveTest());
+        addTestCase("the jdbc classpath option follows the rule of add-classpath", \jdbcOptionTest());
+        addTestCase("the jdbc classpath option set by library module code is judged by the sandbox only",
+            \libraryJdbcOptionTest());
+        addTestCase("a command replayed from compiled code is judged by its recorded restrictions and its loader",
+            \replayTest());
+        set_return_value(main());
+    }
+
+    #! Returns True if the jni module judges module commands by their issuer (module API 2.2)
+    private static bool issuerAware() {
+        return get_module_hash().jni.api_minor >= 2;
+    }
+
+    #! Returns a new Program of the given issuer kind
+    private static Program getIssuer(string kind) {
+        int po = Kinds{kind};
+        Program p(PO_NEW_STYLE | (po > 0 ? po : 0));
+        if (po < 0) {
+            p.setSandboxManager(new SandboxManager());
+        }
+        return p;
+    }
+
+    directiveTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for a module API before 2.2");
+        }
+        on_exit Jni::java::lang::System::clearProperty("org.qore.test.issuer.placeholder");
+        foreach hash<auto> c in (Commands.pairIterator()) {
+            foreach string kind in (keys Kinds) {
+                Program p = getIssuer(kind);
+                string err;
+                try {
+                    p.parse("%requires jni\n%module-cmd(jni) " + c.key + "\n", "jni-module-cmd-issuer");
+                    err = "ok";
+                } catch (hash<ExceptionInfo> ex) {
+                    err = ex.err;
+                }
+                if (inlist(kind, c.value.refused)) {
+                    assertEq("JNI-SANDBOX-ERROR", err, kind + ": " + c.key);
+                } else {
+                    assertTrue(inlist(err, c.value.allowed), kind + ": " + c.key + ": " + err);
+                }
+            }
+        }
+    }
+
+    runtimeTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for a module API before 2.2");
+        }
+        string prop = "org.qore.test.issuer.runtime";
+        string cmd = "set-property " + prop + " value";
+        Program trusted_target(PO_NEW_STYLE);
+        trusted_target.parse("%requires jni\n", "jni-module-cmd-issuer-target");
+        foreach string kind in (("no-uncontrolled", "no-filesystem", "no-embedded", "sandboxed")) {
+            Program p = getIssuer(kind);
+            p.parse("%requires jni\n"
+                "string sub self(string c) { try { Program::issueModuleCmd(\"jni\", c); return \"ok\"; } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+                "string sub into(Program t, string c) { try { t.issueModuleCmd(\"jni\", c); return \"ok\"; } "
+                "catch (hash<ExceptionInfo> ex) { return ex.err; } }\n", "jni-module-cmd-issuer-" + kind);
+            # into its own Program: refused by the jni module for its issuer
+            assertEq("JNI-SANDBOX-ERROR", p.callFunction("self", cmd), kind + ": into its own Program");
+            # into a trusted Program: refused before the module is given the command
+            assertEq("RUNTIME-COMMAND-ERROR", p.callFunction("into", trusted_target, cmd),
+                kind + ": into a trusted Program");
+        }
+        assertEq(NOTHING, Jni::java::lang::System::getProperty(prop), "the refused commands set nothing");
+
+        # a trusted issuer: allowed into a trusted Program; into a restricted Program, the target's own check refuses
+        # what the target may not do
+        trusted_target.issueModuleCmd("jni", cmd);
+        on_exit Jni::java::lang::System::clearProperty(prop);
+        assertEq("value", Jni::java::lang::System::getProperty(prop), "a trusted issuer");
+        Program restricted_target = getIssuer("no-uncontrolled");
+        restricted_target.parse("%requires jni\n", "jni-module-cmd-issuer-restricted-target");
+        assertThrows("JNI-SANDBOX-ERROR", \restricted_target.issueModuleCmd(), ("jni", cmd),
+            "a trusted issuer into a target that does not allow uncontrolled APIs");
+        # a trusted issuer into a target without the filesystem: its parse options are not the issuer's
+        Program nofs_target = getIssuer("no-filesystem");
+        nofs_target.parse("%requires jni\n", "jni-module-cmd-issuer-nofs-target");
+        # the command is allowed: no exception is raised
+        string nofs_result;
+        try {
+            nofs_target.issueModuleCmd("jni", "add-classpath /nonexistent-qore-test-dir");
+            nofs_result = "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            nofs_result = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertEq("ok", nofs_result, "a trusted issuer into a target without the filesystem");
+    }
+
+    #! Returns the qcc compiler next to the qore binary that runs the test, or "qcc"
+    private static string getQcc() {
+        string dir = dirname(QORE_ARGV[0]);
+        return ENV.QCC ?? (is_file(dir + "/qcc") ? dir + "/qcc" : "qcc");
+    }
+
+    #! Runs a shell command; returns its output and sets its exit status
+    private static string run(string cmd, reference<int> rc) {
+        return backquote(cmd + " 2>&1", \rc);
+    }
+
+    replayTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for a module API before 2.2");
+        }
+        TmpDir tmp("jni-module-cmd-issuer-");
+        string qcc = getQcc();
+        int rc;
+
+        # a compiled program: the directive before %no-filesystem is replayed with the options in force at it
+        string first = tmp.path + "/first.q";
+        File f();
+        f.open2(first, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%module-cmd(jni) add-classpath /nonexistent-qore-test-dir\n%no-filesystem\n"
+            "printf(\"loaded\\n\");\n");
+        f.close();
+        string out = run(sprintf("%s -O0 -o %s/first %s", qcc, tmp.path, first), \rc);
+        if (rc || !is_file(tmp.path + "/first")) {
+            testSkip("qcc is not available or cannot compile the program: " + out);
+        }
+        out = run(tmp.path + "/first", \rc);
+        assertEq(0, rc, "replayed directive before %no-filesystem: " + out);
+        assertRegex("loaded", out, "the program ran");
+
+        # the directive after %no-filesystem is refused already when the program is compiled
+        string after = tmp.path + "/after.q";
+        f.open2(after, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n%no-filesystem\n%module-cmd(jni) add-classpath /nonexistent-qore-test-dir\n");
+        f.close();
+        out = run(sprintf("%s -O0 -o %s/after %s", qcc, tmp.path, after), \rc);
+        assertTrue(rc != 0, "qcc refuses the directive after %no-filesystem");
+        assertRegex("JNI-SANDBOX-ERROR", out, "the error is the jni module's");
+
+        # a compiled module: its recorded command is replayed when it is loaded; loaded by name from the module path it
+        # is library code (no parse options); loaded by a path that the loader chose, the loader's restrictions apply
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(qmod_dir);
+        out = run(sprintf("%s -m -o %s/JniReplayFixture.qmod %s/jni-cmd-issuer-fixture/replay/JniReplayFixture.qm", qcc,
+            qmod_dir, get_script_dir()), \rc);
+        assertEq(0, rc, "qcc compiles the module: " + out);
+        # the loader: ARGV[0] is the module to load, ARGV[1] the issuer kind of the loading Program
+        string load = tmp.path + "/load.q";
+        f.open2(load, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nProgram p(PO_NEW_STYLE | (ARGV[1] == \"sandboxed\" ? 0 : PO_NO_UNCONTROLLED_APIS));\n"
+            "if (ARGV[1] == \"sandboxed\") { p.setSandboxManager(new SandboxManager()); }\n"
+            "try { p.loadModule(ARGV[0]); printf(\"loaded\\n\"); } catch (hash<ExceptionInfo> ex) { "
+            "printf(\"%s: %s\\n\", ex.err, ex.desc); }\n");
+        f.close();
+        string qore = QORE_ARGV[0];
+        # the loader kinds and the reason of the jni module's refusal (JNI-SANDBOX-ERROR), which the core reports in
+        # the MODULE-LOAD-ERROR of the replay
+        hash<string, string> reasons = {
+            "no-uncontrolled": "the code that issued the command has parse options that forbid it",
+            "sandboxed": "the command was issued by sandboxed code",
+        };
+        foreach hash<auto> i in (reasons.pairIterator()) {
+            string kind = i.key;
+            out = run(sprintf("QORE_MODULE_DIR=%s:%s %s %s JniReplayFixture %s", qmod_dir, ENV.QORE_MODULE_DIR, qore,
+                load, kind), \rc);
+            # as the directive of a source library module is (libraryDirectiveTest()): a module from the module path is
+            # initialized as library code, with no parse options and no sandbox, whatever Program loads it first
+            assertRegex("^loaded$", trim(out), kind + ": a library module: its replayed command is judged as library "
+                "code: " + out);
+            out = run(sprintf("%s %s %s/JniReplayFixture.qmod %s", qore, load, qmod_dir, kind), \rc);
+            # refused by the jni module for the add-classpath command and the loader, not by another error
+            assertRegex("^MODULE-LOAD-ERROR: AOT module-command replay error .*%module-cmd\\(jni\\) add-classpath "
+                "/nonexistent-qore-test-dir: cannot use the \"add-classpath\" module command, which adds to the "
+                "Program's classpath: " + i.value, trim(out), kind + ": a module chosen by path: its replayed command "
+                "is refused: " + out);
+            assertFalse(trim(out) =~ /^loaded$/, kind + ": a module chosen by path is not loaded");
+        }
+    }
+
+    jdbcOptionTest() {
+        # the classpath option of the jdbc database driver follows the rule of add-classpath for the code that sets it
+        string src = "string sub open(string cp) { Datasource ds(\"jdbc:u/p@jdbc:qore-none://x{classpath=\" + cp "
+            "+ \"}\"); try { ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }";
+        foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
+                {"kind": "no-filesystem", "expected": "JNI-SANDBOX-ERROR"},
+                {"kind": "no-uncontrolled", "expected": "JNI-SANDBOX-ERROR"},
+                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+            Program p = getIssuer(c.kind);
+            p.parse("%requires jni\n" + src, "jni-module-cmd-issuer-jdbc-" + c.kind);
+            assertEq(c.expected, p.callFunction("open", "/nonexistent-qore-test-dir"), c.kind);
+        }
+    }
+
+    #! Runs jni-cmd-issuer-library.q in a process of its own for the issuer kind and case given; returns its result
+    /** The fixture modules' directory is in QORE_MODULE_DIR, so the fixture modules are library code (a directory that
+        the loading code adds with \c %prepend-module-path is not), and the Program of the issuer kind is the first to
+        load them, so that the module's Program inherits that Program's parse options
+    */
+    private static string runLibrary(string kind, string which) {
+        string dir = get_script_dir();
+        string mdir = dir + "jni-cmd-issuer-fixture" + (exists ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+        int rc;
+        string out = run(sprintf("QORE_MODULE_DIR='%s' '%s' '%sjni-cmd-issuer-library.q' %s %s", mdir, QORE_ARGV[0],
+            dir, kind, which), \rc);
+        # the last line is the result; warnings precede it
+        list<string> lines = select (out.split("\n")), $1 != "";
+        return lines ? lines.last() : sprintf("no output (exit status %d)", rc);
+    }
+
+    libraryTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for a module API before 2.2");
+        }
+        # a library module (from the module path) issues commands from its own code, as the provider modules do; its
+        # code has no parse options, also when the Program of a %no-filesystem loader, whose options its own Program
+        # inherits, loads it first: only a sandbox that governs its caller restricts the command
+        foreach hash<auto> c in ({"kind": "trusted", "expected": "ok"}, {"kind": "no-filesystem", "expected": "ok"},
+                {"kind": "no-uncontrolled", "expected": "ok"}, {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+            assertEq(c.expected, runLibrary(c.kind, "cmd").split(":")[0], c.kind + " first loader");
+        }
+    }
+
+    libraryJdbcOptionTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for a module API before 2.2");
+        }
+        # library module code that sets the jdbc classpath option is judged by the sandbox only, not by the parse options
+        # that its Program inherited from the code that loaded it first (for example a %no-filesystem loader);
+        # JNI-ERROR is the error of the jdbc driver that is not found after the option was accepted
+        foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
+                {"kind": "no-filesystem", "expected": "JNI-ERROR"},
+                {"kind": "no-uncontrolled", "expected": "JNI-ERROR"},
+                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+            assertEq(c.expected, runLibrary(c.kind, "jdbc").split(":")[0], c.kind + " first loader");
+        }
+    }
+
+    libraryDirectiveTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for a module API before 2.2");
+        }
+        # the directive has no parse options (decision A), and a module from the module path is initialized as library
+        # code, with no sandbox, also when restricted or sandboxed code loads it first: every loader loads it
+        foreach string kind in (keys Kinds) {
+            assertEq("ok", runLibrary(kind, "directive"), kind + " first loader");
+        }
+    }
+}

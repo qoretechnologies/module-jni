@@ -194,7 +194,7 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
     Class c = Jni::load_class(class_name: "java/lang/String");
     @endcode
  */
-Jni::java::lang::Class load_class(string class_name) [flags=NAMED_ARGS] {
+Jni::java::lang::Class load_class(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         QoreProgram* pgm = jni::jni_get_program_context();
         //printd(5, "load_class() pgm: %p\n", pgm);
@@ -212,7 +212,7 @@ Jni::java::lang::Class load_class(string class_name) [flags=NAMED_ARGS] {
     - reflection is not used, so exceptions are thrown directly (i.e. not wrapped as \c java.lang.reflect.InvocationTargetException objects)
     - for static method invocations, this function is identical to @ref invoke_nonvirtual()
  */
-Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) {
+Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
         Env env;
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
@@ -237,14 +237,14 @@ Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateDa
     - reflection is not used, so exceptions are thrown directly (i.e. not wrapped as \c java.lang.reflect.InvocationTargetException objects)
     - for static method invocations, this function is identical to @ref invoke()
  */
-Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) {
+Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
         Env env;
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(), Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
         BaseMethod m(method->getObject(), *cls);
 
-         QoreProgram* pgm = jni_get_program_context();
-       return object
+        QoreProgram* pgm = jni_get_program_context();
+        return object
             ? m.invokeNonvirtual(object->getObject(), args, pgm, 2)
             : m.invokeStatic(args, pgm, 2);
     } catch (jni::Exception& e) {
@@ -267,7 +267,7 @@ Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJ
     # runnableInstance now has a Java method void run() that calls Qore function doRun()
     @endcode
  */
-Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [flags=NAMED_ARGS] {
+Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     // get Qore class for Class object
     jni::Env env;
     jni::LocalReference<jstring> clsName = env.callObjectMethod(interface_class->getObject(),
@@ -305,7 +305,7 @@ Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationH
     # runnableInstance now has a Java method void run() that calls Qore function doRun()
     @endcode
  */
-Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] class_loader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [flags=NAMED_ARGS] {
+Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] class_loader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     // get Qore class for Class object
     jni::Env env;
     jni::LocalReference<jstring> clsName = env.callObjectMethod(interface_class->getObject(),
@@ -358,7 +358,7 @@ java::lang::Class cls = define_class(class_name: class_name, bytecode: bytecode)
 
     @since %jni 1.1
 */
-Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [flags=NAMED_ARGS] {
+Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         ModifiedUtf8String utf8_name(class_name);
         jni::Env env;
@@ -422,7 +422,7 @@ ClassLoader loader = get_class_loader();
 
     @since jni 2.0
 */
-Jni::java::lang::Object get_class_loader() {
+Jni::java::lang::Object get_class_loader() [dom=UNCONTROLLED_API] {
     try {
         jni::Env env;
 
@@ -456,7 +456,7 @@ binary byte_code = get_byte_code(class_name: "::Qore::Thread::Condition");
 
     @since jni 2.0
 */
-binary get_byte_code(string class_name) [flags=NAMED_ARGS] {
+binary get_byte_code(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     TempEncodingHelper cn(class_name, QCS_UTF8, xsink);
     if (*xsink) {
         return QoreValue();
@@ -563,7 +563,7 @@ auto result = kotlin_eval(script: "1 + 2");  // returns 3
 
     @since jni 3.0
 */
-auto kotlin_eval(string script) [flags=NAMED_ARGS] {
+auto kotlin_eval(string script) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         jni::Env env;
 

@@ -161,6 +161,8 @@ public class OdpReadDataProvider inherits DataProvider::AbstractDataProvider {
         is @ref True "True" and \c "headers" is also present
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdpDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         self.opts = checkOptions("ODP-READ-OPTION-ERROR", ConstructorOptions, opts);
@@ -178,6 +180,8 @@ public class OdpReadDataProvider inherits DataProvider::AbstractDataProvider {
         is @ref True "True" and \c "headers" is also present
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdpDataProvider::AppName);
         i = stream;
         self.opts = checkOptions("ODP-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("stream=%s", stream.uniqueHash());
@@ -193,6 +197,8 @@ public class OdpReadDataProvider inherits DataProvider::AbstractDataProvider {
         is @ref True "True" and \c "headers" is also present
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdpDataProvider::AppName);
         *hash<auto> copts = checkOptions("ODP-READ-OPTION-ERROR", ConstructorOptions, options);
         # Validate mutual exclusion of headers and header_row
         if (copts.headers && copts.header_row) {

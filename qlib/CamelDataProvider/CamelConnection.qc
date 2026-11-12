@@ -45,6 +45,8 @@ public class CamelConnection inherits ConnectionProvider::AbstractConnectionWith
     #! Creates the object from the arguments
     constructor(string name, string desc, string url, hash<auto> attr = {}, hash<auto> options = {},
             *LoggerInterface logger) : AbstractConnectionWithInfo(name, desc, url, attr, options, logger) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(CamelDataProvider::AppName);
     }
 
     #! Creates the object from the arguments
@@ -66,6 +68,8 @@ public class CamelConnection inherits ConnectionProvider::AbstractConnectionWith
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr) : AbstractConnectionWithInfo(config, attr) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(CamelDataProvider::AppName);
     }
 
     #! Returns the string type name for the connection object

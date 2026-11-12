@@ -76,10 +76,14 @@ public class AbstractMqttDataProvider inherits DataProvider::AbstractDataProvide
 
     #! Creates the object without any arguments for child classes
     private constructor() {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
     }
 
     #! Creates the object from another object of the same class for child classes
     private constructor(AbstractMqttDataProvider prev) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
         client = remove prev.client;
         opts = remove prev.opts;
         topic = prev.topic;

@@ -117,6 +117,8 @@ public class OdpWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @throw ODP-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdpDataProvider::AppName);
         *hash<auto> copts = checkOptions("ODP-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.stream) {
             error("ODP-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when path is given as first "
@@ -139,6 +141,8 @@ public class OdpWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @throw ODP-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(OutputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdpDataProvider::AppName);
         *hash<auto> copts = checkOptions("ODP-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.path) {
             error("ODP-WRITE-OPTION-ERROR", "cannot provide \"path\" option when stream is given as first "
@@ -162,6 +166,8 @@ public class OdpWriteDataProvider inherits DataProvider::AbstractDataProvider {
         as binary
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdpDataProvider::AppName);
         *hash<auto> copts = checkOptions("ODP-WRITE-OPTION-ERROR", ConstructorOptions, options);
         if (copts.path) {
             if (copts.stream) {

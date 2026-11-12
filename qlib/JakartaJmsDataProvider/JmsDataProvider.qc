@@ -168,6 +168,8 @@ public class JmsDataProvider inherits JmsDataProviderBase {
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) : JmsDataProviderBase(options ?? {}) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JakartaJmsDataProvider::AppName);
         hash<auto> validated_opts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         copts = validated_opts;
 

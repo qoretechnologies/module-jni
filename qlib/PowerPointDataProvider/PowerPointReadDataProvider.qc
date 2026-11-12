@@ -153,6 +153,8 @@ public class PowerPointReadDataProvider inherits DataProvider::AbstractDataProvi
         is @ref True "True" and \c "headers" is also present
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(PowerPointDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         self.opts = checkOptions("POWERPOINT-READ-OPTION-ERROR", ConstructorOptions, opts);
@@ -170,6 +172,8 @@ public class PowerPointReadDataProvider inherits DataProvider::AbstractDataProvi
         is @ref True "True" and \c "headers" is also present
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(PowerPointDataProvider::AppName);
         i = stream;
         self.opts = checkOptions("POWERPOINT-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("stream=%s", stream.uniqueHash());
@@ -185,6 +189,8 @@ public class PowerPointReadDataProvider inherits DataProvider::AbstractDataProvi
         is @ref True "True" and \c "headers" is also present
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(PowerPointDataProvider::AppName);
         *hash<auto> copts = checkOptions("POWERPOINT-READ-OPTION-ERROR", ConstructorOptions, options);
         # Validate mutual exclusion of headers and header_row
         if (copts.headers && copts.header_row) {

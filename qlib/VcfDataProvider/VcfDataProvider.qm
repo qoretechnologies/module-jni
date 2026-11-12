@@ -27,7 +27,7 @@
 %modern
 
 # supports using the DataProvider module
-%requires(reexport) DataProvider >= 3.9
+%requires(reexport) DataProvider >= 3.12
 %requires FileLocationHandler
 %requires Util
 
@@ -56,6 +56,10 @@ module VcfDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": VcfDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java calls are uncontrolled APIs (QDOM_UNCONTROLLED_API) that a governing sandbox refuses,
+            # also from library code running for a sandboxed caller (qore#5741): sandboxed callers are refused
+            # up front instead of failing in the middle of a call
+            "external_io": True,
             "display_name": "VCF Contacts",
             "short_desc": "Read and write vCard (.vcf) contact files",
             "desc": "Read and write vCard (.vcf) contact files containing names, emails, phones, "
@@ -274,6 +278,11 @@ module VcfDataProvider {
     @section VcfDataProvider_relnotes Release Notes
 
     @subsection VcfDataProvider_v1_0 VcfDataProvider v1.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
+      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
+      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
+      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
+      middle of a call; the module requires \c DataProvider 3.12 or later
     - initial release
 */
 

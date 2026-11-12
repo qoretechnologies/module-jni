@@ -35,7 +35,7 @@
 %module-cmd(jni) global-add-relative-classpath ./jar/org.eclipse.paho.mqttv5.client-1.2.5.jar
 
 # implements a data provider for MQTT functionality
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.12
 # implements support for MQTT connections
 %requires(reexport) ConnectionProvider
 %requires AsyncApi >= 1.0
@@ -59,6 +59,9 @@ module MqttDataProvider {
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": MqttDataProvider::AppName,
             "presentation_source_locale": "en",
+            # Java I/O that the Qore sandbox does not see (qore#5632): the Paho MQTT client connects to the broker
+            # and its failover URIs, and reads its key stores itself
+            "external_io": True,
             "display_name": "MQTT",
             "short_desc": "MQTT 5.0 server for fast and efficient messaging",
             "desc": "MQTT 5.0 server for fast and efficient messaging with support for request/response "
@@ -211,6 +214,9 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
     @section MqttDataProvider_relnotes Release Notes
 
     @subsection MqttDataProvider_v3_0 MqttDataProvider v3.0
+    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
+      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
+      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
       presentation keeps its original producer identity, including HTTP/REST options and allowed values
     - added \c getMessageFormat(), so that a consumer of the provider's messages knows whether their payloads were

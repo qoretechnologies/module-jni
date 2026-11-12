@@ -93,6 +93,8 @@ public class AvroWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @throw AVRO-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(string path, string schema, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(AvroDataProvider::AppName);
         *hash<auto> copts = checkOptions("AVRO-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.stream) {
             error("AVRO-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when path is given as first "
@@ -116,6 +118,8 @@ public class AvroWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @throw AVRO-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(OutputStream stream, string schema, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(AvroDataProvider::AppName);
         *hash<auto> copts = checkOptions("AVRO-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.path) {
             error("AVRO-WRITE-OPTION-ERROR", "cannot provide \"path\" option when stream is given as first "
@@ -138,6 +142,8 @@ public class AvroWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @note If neither \c path nor \c stream is provided, use getData() to retrieve the Avro data as binary
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(AvroDataProvider::AppName);
         *hash<auto> copts = checkOptions("AVRO-WRITE-OPTION-ERROR", ConstructorOptions, options);
         if (!copts.schema) {
             error("AVRO-WRITE-OPTION-ERROR", "the \"schema\" option is required for writing Avro data");

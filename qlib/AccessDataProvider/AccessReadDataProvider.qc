@@ -108,6 +108,8 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         @throw ACCESS-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(string path, *hash<auto> opts) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
         *hash<auto> copts = checkOptions("ACCESS-READ-OPTION-ERROR", ConstructorOptions, opts);
         db_path = path;
         name = path;
@@ -119,6 +121,8 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         @throw ACCESS-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(*hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
         *hash<auto> copts = checkOptions("ACCESS-READ-OPTION-ERROR", ConstructorOptions, options);
         table_name = copts.table_name;
         if (copts.path) {

@@ -1,0 +1,288 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The jni functions that load, define or run Java code or return the class loader, and the JavaArray methods that run
+# the toString() methods of Java elements, are uncontrolled APIs, as the Java classes that they give access to are
+# (qore#5741)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+
+%exec-class JniUncontrolledFunctionsTest
+
+class JniUncontrolledFunctionsTest inherits QUnit::Test {
+    private:internal {
+        #! the calls, each in a function of its own: label -> the name in the error and the code of the call
+        /** untyped arguments: the call is resolved at parse time and its arguments are checked when it runs
+        */
+        const Calls = {
+            "kotlin_eval": {
+                "name": "kotlin_eval",
+                "call": "Jni::org::qore::jni::kotlin_eval(\"1\");",
+            },
+            "get_byte_code": {
+                "name": "get_byte_code",
+                "call": "Jni::org::qore::jni::get_byte_code(\"::Qore::Thread::Condition\");",
+            },
+            "load_class": {
+                "name": "load_class",
+                "call": "Jni::org::qore::jni::load_class(\"java/lang/String\");",
+            },
+            "define_class": {
+                "name": "define_class",
+                "call": "Jni::org::qore::jni::define_class(\"qore.QoreTestUncontrolledPlaceholder\", <00>);",
+            },
+            "implement_interface": {
+                "name": "implement_interface",
+                "call": "auto h; auto c; Jni::org::qore::jni::implement_interface(h, c);",
+            },
+            "implement_interface with a class loader": {
+                "name": "implement_interface",
+                "call": "auto l; auto h; auto c; Jni::org::qore::jni::implement_interface(l, h, c);",
+            },
+            "get_class_loader": {
+                "name": "get_class_loader",
+                "call": "Jni::org::qore::jni::get_class_loader();",
+            },
+            "invoke": {
+                "name": "invoke",
+                "call": "auto m; auto o; Jni::org::qore::jni::invoke(m, o);",
+            },
+            "invoke_nonvirtual": {
+                "name": "invoke_nonvirtual",
+                "call": "auto m; auto o; Jni::org::qore::jni::invoke_nonvirtual(m, o);",
+            },
+            "JavaArray::toString": {
+                "name": "JavaArray::toString",
+                "call": "Jni::org::qore::jni::JavaArray a; a.toString();",
+            },
+            "JavaArray::deepToString": {
+                "name": "JavaArray::deepToString",
+                "call": "Jni::org::qore::jni::JavaArray a; a.deepToString();",
+            },
+        };
+
+        #! the functions that are not uncontrolled APIs: checks and information
+        const NotTagged = {
+            "check_network_bind": "Jni::org::qore::jni::check_network_bind(\"127.0.0.1\", 1);",
+        };
+    }
+
+    constructor() : QUnit::Test("JNI uncontrolled functions", "1.0", \ARGV) {
+        addTestCase("a Program that forbids uncontrolled APIs cannot call them", \restrictedTest());
+        addTestCase("trusted code can call them", \trustedTest());
+        addTestCase("checks are not uncontrolled APIs", \checkTest());
+        addTestCase("a default sandbox does not allow calling them", \sandboxedTest());
+        set_return_value(main());
+    }
+
+    #! Returns the error of parsing the call in a Program with the options given, or "parsed"
+    private static string parseIn(int po, string call, *reference<string> desc) {
+        Program p(PO_NEW_STYLE | po);
+        try {
+            p.parse("%requires jni\nsub run() {\n" + call + "\n}\n", "jni-uncontrolled-functions");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+            return ex.err;
+        }
+    }
+
+    #! Returns the calls of every tagged function and method with valid arguments, made by trusted code here
+    /** The arguments are created here, so that only the call itself is made by the code that calls the closure; each
+        closure returns the result of the call
+    */
+    private static hash<string, code> getRunCalls() {
+        Jni::java::lang::Class runnable = Jni::org::qore::jni::load_class("java/lang/Runnable");
+        Jni::org::qore::jni::QoreInvocationHandler handler(auto sub (auto m, *list<auto> args) {});
+        Jni::java::lang::Object loader = Jni::org::qore::jni::get_class_loader();
+        # a method of the module's own class loader class: invoke_nonvirtual() needs access to its declaring class
+        Jni::java::lang::reflect::Method get_ptr = Jni::org::qore::jni::load_class("org/qore/jni/QoreURLClassLoader")
+            .getMethod("getPtr");
+        Jni::org::qore::jni::JavaArray array = Jni::org::qore::jni::new_array(
+            Jni::org::qore::jni::load_class("java/lang/String"), 1);
+        return {
+            "kotlin_eval": auto sub () { return Jni::org::qore::jni::kotlin_eval("1"); },
+            "get_byte_code": auto sub () {
+                return Jni::org::qore::jni::get_byte_code("::Qore::Thread::Condition");
+            },
+            "load_class": auto sub () { return Jni::org::qore::jni::load_class("java/lang/String"); },
+            "define_class": auto sub () {
+                return Jni::org::qore::jni::define_class("qore.QoreTestUncontrolledPlaceholder", <00>);
+            },
+            "implement_interface": auto sub () {
+                return Jni::org::qore::jni::implement_interface(handler, runnable);
+            },
+            "implement_interface with a class loader": auto sub () {
+                return Jni::org::qore::jni::implement_interface(loader, handler, runnable);
+            },
+            "get_class_loader": auto sub () { return Jni::org::qore::jni::get_class_loader(); },
+            "invoke": auto sub () { return Jni::org::qore::jni::invoke(get_ptr, loader); },
+            "invoke_nonvirtual": auto sub () { return Jni::org::qore::jni::invoke_nonvirtual(get_ptr, loader); },
+            "JavaArray::toString": auto sub () { return array.toString(); },
+            "JavaArray::deepToString": auto sub () { return array.deepToString(); },
+        };
+    }
+
+    #! Returns the checks of the results of getRunCalls() for trusted code: label -> a closure that asserts the result
+    /** A call that raises an exception is checked by \c error instead: it returns True if the exception is the
+        expected result of the call (the call was made)
+    */
+    private hash<string, hash<auto>> getRunChecks() {
+        Jni::java::lang::Class runnable = Jni::org::qore::jni::load_class("java/lang/Runnable");
+        Jni::java::lang::Class loader_class = Jni::org::qore::jni::load_class("org/qore/jni/QoreURLClassLoader");
+        Jni::java::lang::reflect::Method get_ptr = loader_class.getMethod("getPtr");
+        auto ptr = Jni::org::qore::jni::invoke(get_ptr, Jni::org::qore::jni::get_class_loader());
+        return {
+            "kotlin_eval": {
+                "result": sub (auto v) { assertEq(1, v, "kotlin_eval"); },
+                # Kotlin scripting may not be available; the call was still made
+                "error": bool sub (hash<ExceptionInfo> ex) { return ex.err != "INVALID-FUNCTION-ACCESS"; },
+            },
+            "get_byte_code": {
+                "result": sub (auto v) {
+                    assertEq(Type::Binary, v.type(), "get_byte_code: binary");
+                    # the magic number of a class file
+                    assertEq(<cafebabe>, v.substr(0, 4), "get_byte_code: a class file");
+                },
+            },
+            "load_class": {
+                "result": sub (auto v) { assertEq("java.lang.String", v.getName(), "load_class"); },
+            },
+            "define_class": {
+                # the placeholder is not valid byte code: the JVM refuses it
+                "error": bool sub (hash<ExceptionInfo> ex) {
+                    return ex.err == "JNI-ERROR" && ex.desc =~ /^java\.lang\.ClassFormatError/;
+                },
+            },
+            "implement_interface": {
+                "result": sub (auto v) { assertTrue(runnable.isInstance(v), "implement_interface"); },
+            },
+            "implement_interface with a class loader": {
+                "result": sub (auto v) {
+                    assertTrue(runnable.isInstance(v), "implement_interface with a class loader");
+                },
+            },
+            "get_class_loader": {
+                "result": sub (auto v) { assertTrue(loader_class.isInstance(v), "get_class_loader"); },
+            },
+            "invoke": {
+                "result": sub (auto v) { assertEq(ptr, v, "invoke"); },
+            },
+            "invoke_nonvirtual": {
+                "result": sub (auto v) { assertEq(ptr, v, "invoke_nonvirtual"); },
+            },
+            "JavaArray::toString": {
+                "result": sub (auto v) { assertEq("[null]", v, "JavaArray::toString"); },
+            },
+            "JavaArray::deepToString": {
+                "result": sub (auto v) { assertEq("[null]", v, "JavaArray::deepToString"); },
+            },
+        };
+    }
+
+    restrictedTest() {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            string desc;
+            assertEq("PARSE-EXCEPTION", parseIn(PO_NO_UNCONTROLLED_APIS, i.value.call, \desc), i.key);
+            # refused for the restriction: the function is named as not available, not some other parse error
+            assertRegex("parse options do not allow access to builtin (function|method) '" + i.value.name + "\\(",
+                desc, i.key + ": refused for the restriction");
+        }
+    }
+
+    trustedTest() {
+        foreach hash<auto> i in (Calls.pairIterator()) {
+            assertEq("parsed", parseIn(0, i.value.call), i.key);
+        }
+        # and the calls run: the class loader is returned and a class is loaded
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires jni\nauto sub run() { return Jni::org::qore::jni::load_class(\"java/lang/String\")"
+            ".getName(); }\n", "jni-uncontrolled-functions-run");
+        assertEq("java.lang.String", p.callFunction("run"));
+        # the methods run Java code chosen by the caller
+        Jni::java::lang::reflect::Method get_ptr = Jni::org::qore::jni::load_class("org/qore/jni/QoreURLClassLoader")
+            .getMethod("getPtr");
+        Jni::java::lang::Object loader = Jni::org::qore::jni::get_class_loader();
+        # the class loader of this Program holds the pointer of the Program
+        auto ptr = Jni::org::qore::jni::invoke(get_ptr, loader);
+        assertEq(Type::Int, ptr.type(), "invoke: a long is returned");
+        assertNeq(0, ptr, "invoke");
+        assertEq(ptr, Jni::org::qore::jni::invoke_nonvirtual(get_ptr, loader), "invoke_nonvirtual");
+        Jni::org::qore::jni::JavaArray array = Jni::org::qore::jni::new_array(
+            Jni::org::qore::jni::load_class("java/lang/String"), 2);
+        array.set(0, "a");
+        array.set(1, "b");
+        assertEq("[a, b]", array.toString(), "JavaArray::toString");
+        assertEq("[a, b]", array.deepToString(), "JavaArray::deepToString");
+        # every call of the run-time case runs for trusted code and returns its result, so a refusal there is the
+        # sandbox's
+        hash<string, code> calls = getRunCalls();
+        hash<string, hash<auto>> checks = getRunChecks();
+        assertEq(sort(keys Calls), sort(keys checks), "every run-time case is checked");
+        foreach hash<auto> i in (calls.pairIterator()) {
+            hash<auto> check = checks{i.key};
+            auto v;
+            try {
+                v = i.value();
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(exists check.error && check.error(ex), i.key + ": " + ex.err + ": " + ex.desc);
+                continue;
+            }
+            if (!check.result) {
+                fail(i.key + ": no exception");
+                continue;
+            }
+            check.result(v);
+        }
+    }
+
+    checkTest() {
+        foreach hash<auto> i in (NotTagged.pairIterator()) {
+            assertEq("parsed", parseIn(PO_NO_UNCONTROLLED_APIS, i.value), i.key);
+        }
+    }
+
+    sandboxedTest() {
+        # a default sandbox, which does not allow uncontrolled APIs
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        p.parse("auto sub through(code c) { return c(); }\n"
+            # the code of the sandboxed Program itself: the barrier is judged by the code that calls it
+            "nothing sub barrier() { SandboxManager::callWithSystemPolicy(sub () {}); }\n",
+            "jni-uncontrolled-functions-sandboxed");
+        # SandboxManager::setUncontrolledApiPolicy() predates the run-time refusal, so the refusal is detected with a
+        # builtin of the Qore library in the uncontrolled-API domain, which sandboxed code could call before; it is
+        # called by the code of the sandboxed Program, as it is judged by the code that calls it
+        bool refused;
+        try {
+            p.callFunction("barrier");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "INVALID-FUNCTION-ACCESS") {
+                rethrow;
+            }
+            refused = True;
+        }
+        if (!refused) {
+            testSkip("the Qore library does not refuse uncontrolled APIs to sandboxed code at run time");
+        }
+        hash<string, code> calls = getRunCalls();
+        # every tagged function and method has a run-time case
+        assertEq(sort(keys Calls), sort(keys calls), "the run-time cases");
+        foreach hash<auto> i in (calls.pairIterator()) {
+            try {
+                p.callFunction("through", i.value);
+                fail(i.key + ": no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("INVALID-FUNCTION-ACCESS", ex.err, i.key);
+                assertRegex("does not allow access to uncontrolled API", ex.desc, i.key + " (description)");
+                # the refused call is the tagged one, not another call that the closure makes
+                assertRegex("'([A-Za-z:]+::)?" + Calls{i.key}.name + "\\(", ex.desc, i.key + " (function)");
+            }
+        }
+    }
+}

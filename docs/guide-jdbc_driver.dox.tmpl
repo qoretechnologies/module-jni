@@ -371,11 +371,40 @@ foreach hash<auto> column in (result.schemaV2()) {
 
     The \c classpath option allows for the classpath to be set before the JVM loads the Java \c jdbc driver.  The
     value of this option must be a string and is subject to environment variable substitution before being used.
+    The variables are expanded from the environment of the process when the option is applied: when a connection is
+    opened (also each new connection of a \c DatasourcePool), or when the option is set on an open connection, not
+    when it is set on a closed datasource; the environment is that of the process at that time, and the expanded
+    entries are judged by the code that set the option, as below.
 
     If this option is used, then the \c java.util.ServiceLoader for \c "java.sql.Driver" objects is run and iterated
     after updating the classpath, to ensure that any new drivers are loaded and available to drivers loaded after the
     initial driver is loaded, otherwise the \c java.sql.DriverManager will not see the new drivers as they were not
     present in the classpath during on-demand static initialization).
+
+    The option adds jars to the class loader of a %Qore %Program, so it follows the rule of the \c add-classpath module
+    command (see @ref jni_sandbox): sandboxed code (under a sandbox that does not allow uncontrolled APIs) and code with
+    \c PO_NO_UNCONTROLLED_APIS or \c PO_NO_FILESYSTEM cannot use it (\c JNI-SANDBOX-ERROR), and its entries are checked
+    against the filesystem policy of a sandbox that allows uncontrolled APIs (\c FILESYSTEM-ACCESS-DENIED).
+
+    The option is applied when a connection is opened, but it is judged by the code that set it: whoever configures
+    the datasource decides (with a %Qore library that records the code that sets each datasource option, qore#5741).
+    The code that sets the option is the code that calls \c Datasource::setOption(), or that creates the
+    \c Datasource with the option (also in a connection string), and for every connection of a \c DatasourcePool the
+    code that created the pool; a copy keeps it.  So:
+    - a datasource whose \c classpath option restricted code set is refused also when trusted code opens it
+    - a trusted datasource or pool is not refused when a connection is opened on the thread of restricted code, for
+      example when a trusted pool that is shared with sandboxed code opens a new connection for it
+    - the entries are checked against the filesystem policy of the code that set the option, not of the code that
+      opens the connection
+
+    @note
+    - a configuration (a connection string, an option hash or serialized data) that trusted code turns into a
+      datasource is the trusted code's configuration, wherever it came from
+    - the jars are added to the class loader of the %Program that the \c Datasource or \c DatasourcePool object
+      belongs to (the call context of its methods), not of the code that opens the connection: a trusted
+      \c DatasourcePool that opens a new connection for sandboxed code adds the jars of its configuration to the
+      class loader of the trusted %Program that created it, and a datasource that sandboxed code created adds them
+      to the class loader of the sandboxed %Program also when trusted code opens it (or a copy of it)
 
     @subsection jdbc_option_lob_max_size jdbc lob-max-size Option
 
