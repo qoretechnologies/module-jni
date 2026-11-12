@@ -1,6 +1,7 @@
 package org.qore.jni.test;
 
 import java.lang.reflect.*;
+import java.util.concurrent.CountDownLatch;
 
 import org.qore.jni.QoreClosure;
 import org.qore.jni.QoreClosureMarker;
@@ -68,9 +69,17 @@ public class Callbacks {
         }).start();
     }
 
-    // destroys a Qore object in a new Java thread
-    public static void destroyInThread(QoreObjectBase obj) {
-        new Thread(() -> obj.destroy()).start();
+    // destroys a Qore object in a new Java thread once the caller counts down the latch, so that the caller can hold
+    // its own reference to the object until Java has destroyed it
+    public static void destroyInThread(QoreObjectBase obj, CountDownLatch go) {
+        new Thread(() -> {
+            try {
+                go.await();
+                obj.destroy();
+            } catch (Throwable t) {
+                t.printStackTrace();
+            }
+        }).start();
     }
 
     public static boolean trueIfThrows(Runnable r) {
