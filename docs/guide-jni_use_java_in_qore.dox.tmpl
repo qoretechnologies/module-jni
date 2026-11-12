@@ -248,7 +248,7 @@ public class Fetcher {
     \c ConnectionProvider::AbstractConnection, which check the module of the connection's class), so a connection
     that a server uses on a sandboxed user's behalf is refused too.
 
-    <b>Module commands, by their issuer:</b> built for module API 2.1 (%Qore with \c QoreModuleCommandContext), the
+    <b>Module commands, by their issuer:</b> built for module API 2.2 (%Qore with \c QoreModuleCommandContext), the
     module judges every command first by the restrictions of the code that issues it, which %Qore captures before it
     switches to the Program that the command applies to (a \c %module-cmd directive, \c Program::issueModuleCmd(), or
     a command replayed from a compiled program).  A sandboxed issuer is refused every command below; an issuer with a
@@ -276,15 +276,15 @@ public class Fetcher {
 
     The exported functions \c jni_module_import() and \c jni_module_find_create_java_namespace(), which other modules
     (the \c python module's Java loader) call without a module command of this module, apply the rule of \c import:
-    to the issuer of the module command that they run in, if any, and otherwise, with module API 2.1, to the code that
+    to the issuer of the module command that they run in, if any, and otherwise, with module API 2.2, to the code that
     calls into the loader, as for a module command issued by that code (for the code of a library module only its
-    sandbox), or, with module API 2.0, to the declared parse options of the Program they import into
+    sandbox), or, before module API 2.2, to the declared parse options of the Program they import into
     (\c PO_NO_UNCONTROLLED_APIS) and to a sandbox that governs the calling code.  The
     \c classpath option of the \c jdbc database driver applies the rule of \c add-classpath to the code that sets it,
     as for a module command issued by that code: its parse options and its sandbox, and for the code of a library
-    module only its sandbox, also when a Program with \c %no-filesystem loaded the module.  These checks are made with
-    module API 2.0 as well, where the \c jdbc option is judged by the parse options of the Program of the calling code
-    and its sandbox.
+    module only its sandbox, also when a Program with \c %no-filesystem loaded the module.  These checks are also made
+    with a module API before 2.2, where the \c jdbc option is judged by the parse options of the Program of the calling
+    code and its sandbox.
 
     The \c jdbc \c classpath option is applied when a connection is opened, which can be on another thread and for
     other code than the code that set it (a \c DatasourcePool opens a connection on the thread that first needs one).
@@ -301,7 +301,7 @@ public class Fetcher {
 
     <b>Module commands, by their target:</b> a module command also runs in the Program that it is issued in, also when
     trusted code issues it with \c Program::issueModuleCmd(), so it also follows that Program's sandbox and parse
-    options.  With module API 2.0 these are the only checks of the module commands; with module API 2.1, the parse
+    options.  Before module API 2.2 these are the only checks of the module commands; with module API 2.2, the parse
     options of the target are checked only for a command that another Program issues into it, as the issuer check
     already covers a Program's own commands (a library module's Program inherits the parse options of the code that
     loads it, which must not refuse the module's own directives):

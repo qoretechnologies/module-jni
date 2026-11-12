@@ -15,14 +15,14 @@
       time, code governed by a sandbox that does not allow them; \c check_network_bind(), which only checks the sandbox
       policy, is not
 
-    - <b>Security</b>: built for module API 2.1, the module sets \c cmd_caller_aware and judges every module command
+    - <b>Security</b>: built for module API 2.2, the module sets \c cmd_caller_aware and judges every module command
       first by the restrictions of the code that issues it (\c QoreModuleCommandContext, qore#5699): sandboxed
       issuers are refused the commands that load or define Java code, change a classpath or change state that every
       Program shares, and issuers with a restricting parse option the commands that the option forbids
       (\c JNI-SANDBOX-ERROR); the exported functions used by the \c python module's Java loader apply the rule of
       \c import, and the \c classpath option of the \c jdbc database driver the rule of \c add-classpath, also with
-      module API 2.0; with module API 2.1 the code of a library module that sets the \c jdbc option, or that reaches
-      the \c python module's Java loader, is judged by its sandbox only (see @ref jni_sandbox)
+      an older module API; with module API 2.2 the code of a library module that sets the \c jdbc option, or that
+      reaches the \c python module's Java loader, is judged by its sandbox only (see @ref jni_sandbox)
     - <b>Security</b>: with a %Qore that has the uncontrolled-API policy of sandboxes (qore#5741), the module command
       rules, the exported import functions and the \c jdbc \c classpath option refuse sandboxed code only when its
       sandbox does not allow uncontrolled APIs (\c SandboxManager::setUncontrolledApiPolicy()); the same holds for
@@ -39,7 +39,7 @@
       equals the current classpath
     - <b>Security</b>: the exported import functions used by the \c python module's Java loader refuse an import into
       a %Program with \c PO_NO_UNCONTROLLED_APIS whoever calls the loader, in addition to judging the code that
-      imports (also with module API 2.1)
+      imports (also with module API 2.2)
 
     - <b>Security</b>: sandboxed code, and a Program with \c PO_NO_UNCONTROLLED_APIS, cannot use the module commands
       that change state of the JVM that every Program shares or that run Java code (\c global-add-classpath,

@@ -112,7 +112,7 @@ class JniModuleCmdSandboxTest inherits QUnit::Test {
 
     classpathTest() {
         SandboxManager sm = getSandbox();
-        # the sandboxed Program's own directive: with module API 2.1 the issuer is judged first (qore#5699), and a
+        # the sandboxed Program's own directive: with module API 2.2 the issuer is judged first (qore#5699), and a
         # sandboxed issuer is refused the command; before, only its filesystem policy was checked
         assertEq(issuerAware() ? "JNI-SANDBOX-ERROR" : "parsed", parseIn(sm, "add-classpath " + allowed),
             "an allowed path in the sandboxed Program's own directive");
@@ -134,9 +134,9 @@ class JniModuleCmdSandboxTest inherits QUnit::Test {
         assertEq("FILESYSTEM-ACCESS-DENIED", issueIn(p, "add-relative-classpath x.jar"), "a relative path");
     }
 
-    #! Returns True if the jni module judges module commands by their issuer (module API 2.1, qore#5699)
+    #! Returns True if the jni module judges module commands by their issuer (module API 2.2, qore#5699)
     private static bool issuerAware() {
-        return get_module_hash().jni.api_minor >= 1;
+        return get_module_hash().jni.api_minor >= 2;
     }
 
     globalTest() {

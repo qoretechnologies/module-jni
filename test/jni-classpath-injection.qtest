@@ -148,9 +148,9 @@ try {
             label + " (reason)");
     }
 
-    #! Returns True if the jni module judges module commands by their issuer (module API 2.1, qore#5699)
+    #! Returns True if the jni module judges module commands by their issuer (module API 2.2, qore#5699)
     private static bool issuerAware() {
-        return get_module_hash().jni.api_minor >= 1;
+        return get_module_hash().jni.api_minor >= 2;
     }
 
     beforeTest() {
@@ -192,8 +192,8 @@ code sub make_capability(string cmd) {
 
     ownTest() {
         # its own classpath reads the files: the filesystem policy applies, and sandboxed code is refused the command
-        # (the rule of add-classpath for its issuer, qore#5699); without that rule (module API 2.0), the module's path
-        # check refuses it
+        # (the rule of add-classpath for its issuer, qore#5699); without that rule (before module API 2.2), the module's
+        # path check refuses it
         string cmd = "add-classpath " + getJar();
         Program p = getSandboxed();
         string rv = p.callFunction("issue", cmd);

@@ -141,9 +141,9 @@ constructor of these classes starts with the check, and constructs the classes f
 
 ## Module commands
 
-### By the issuer (module API 2.1, qore#5699)
+### By the issuer (module API 2.2, qore#5699)
 
-Built against a Qore with module API 2.1 (`QORE_JNI_HAS_COMMAND_CONTEXT`), the module sets
+Built against a Qore with module API 2.2 (`QORE_JNI_HAS_COMMAND_CONTEXT`), the module sets
 `QoreModuleInfo::cmd_caller_aware` and `jni_module_parse_cmd()` calls `jni_check_command_issuer()` before it runs a
 command. It looks the command up in `jni_command_issuer_rules`, which lists every command of `mcmap`
 (`set-compat-types` and `mark-module-injected` are exempt: they change only flags of the target Program; a command
@@ -170,18 +170,18 @@ classpath entries is checked under any sandbox.
 
 The exported functions `jni_module_import()` and `jni_module_find_create_java_namespace()` (module-python's
 `JavaLoader`) bypass `jni_module_parse_cmd()`; `jni_exported_import_allowed()` applies the `import` rule to them
-(`PO_NO_UNCONTROLLED_APIS`; a governing sandbox). With module API 2.1 the caller's restrictions come from
+(`PO_NO_UNCONTROLLED_APIS`; a governing sandbox). With module API 2.2 the caller's restrictions come from
 `QoreModuleCommandRestrictions::getCallerRestrictions()`, as for the jdbc option below: the issuer's within a module
-command, else the calling code's, so library module code is judged by its sandbox only; with API 2.0 from the declared
+command, else the calling code's, so library module code is judged by its sandbox only; before API 2.2 from the declared
 parse options of the Program they import into and `jni_sandbox_restricts_caller()`.
 `jni_module_find_create_java_namespace()` has no exception sink,
 so it refuses with `nullptr`, which `JavaLoader` reports; the `import pkg.*` command uses
 `jni_find_create_java_namespace_intern()`, which has no check (the command has been checked). The jdbc DBI driver's
 `classpath` option (`QoreJdbcConnection::setOption()`) applies the `add-classpath` rule to the caller
-(`PO_NO_UNCONTROLLED_APIS`, `PO_NO_FILESYSTEM`; a governing sandbox). With module API 2.1 the caller's restrictions come
+(`PO_NO_UNCONTROLLED_APIS`, `PO_NO_FILESYSTEM`; a governing sandbox). With module API 2.2 the caller's restrictions come
 from `QoreModuleCommandRestrictions::getCallerRestrictions()`, which gives library module code only its sandbox (its
-Program's parse options are only those inherited from its loader); with API 2.0 from `QoreReflectionCaller` and
-`jni_sandbox_restricts_caller()`. These checks are made with module API 2.0 as well.
+Program's parse options are only those inherited from its loader); before API 2.2 from `QoreReflectionCaller` and
+`jni_sandbox_restricts_caller()`. These checks are made before module API 2.2 as well.
 
 The option is applied when a connection is opened (`QoreJdbcConnection::parseOptions()` over
 `Datasource::getConnectOptions()`), which can be on another thread and for other code than the code that set it: a
@@ -204,13 +204,13 @@ Program's class loader, and a datasource that sandboxed code created adds them t
 also when trusted code opens it or a copy of it. The module reports the behavior in its module hash
 (`get_module_hash().jni.info.jdbc_option_setter`). `test/jni-jdbc-option-setter.qtest`.
 
-`test/jni-module-cmd-issuer.qtest` (skipped for a module built for API 2.0).
+`test/jni-module-cmd-issuer.qtest` (skipped for a module built for an API before 2.2).
 
 ### By the target
 
 A module command runs in the Program that it is issued in, also when trusted code issues it with
 `Program::issueModuleCmd()` (libqore puts that Program in context), so the checks also follow that Program's sandbox
-and parse options (`src/jni-module.cpp`); with module API 2.0 they are the only checks of the module commands:
+and parse options (`src/jni-module.cpp`); before module API 2.2 they are the only checks of the module commands:
 
 - `jni_check_classpath_sandbox()`: the entries of `add-classpath` and `add-relative-classpath`, and of the `classpath`
   option of the jdbc DBI driver (`QoreJdbcConnection::setOption()`), split on the path separator and `;` as

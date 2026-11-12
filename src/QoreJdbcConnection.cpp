@@ -262,7 +262,7 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
             }
         }
 #else
-        // module API 2.0: the parse options of the calling code and the sandbox that governs it
+        // before module API 2.2: the parse options of the calling code and the sandbox that governs it
         {
             QoreReflectionCaller caller;
             if (caller.getParseOptions().hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {

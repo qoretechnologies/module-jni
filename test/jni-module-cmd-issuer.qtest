@@ -11,7 +11,7 @@
 %exec-class JniModuleCmdIssuerTest
 
 #! The jni module commands are judged by the restrictions of the code that issues them (qore#5699)
-/** Needs a jni module built for module API 2.1 (QoreModuleCommandContext); with an older module it is skipped.
+/** Needs a jni module built for module API 2.2 (QoreModuleCommandContext); with an older module it is skipped.
 */
 class JniModuleCmdIssuerTest inherits QUnit::Test {
     private:internal {
@@ -66,9 +66,9 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! Returns True if the jni module judges module commands by their issuer (module API 2.1)
+    #! Returns True if the jni module judges module commands by their issuer (module API 2.2)
     private static bool issuerAware() {
-        return get_module_hash().jni.api_minor >= 1;
+        return get_module_hash().jni.api_minor >= 2;
     }
 
     #! Returns a new Program of the given issuer kind
@@ -83,7 +83,7 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
 
     directiveTest() {
         if (!issuerAware()) {
-            testSkip("the jni module was built for module API 2.0");
+            testSkip("the jni module was built for a module API before 2.2");
         }
         on_exit Jni::java::lang::System::clearProperty("org.qore.test.issuer.placeholder");
         foreach hash<auto> c in (Commands.pairIterator()) {
@@ -107,7 +107,7 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
 
     runtimeTest() {
         if (!issuerAware()) {
-            testSkip("the jni module was built for module API 2.0");
+            testSkip("the jni module was built for a module API before 2.2");
         }
         string prop = "org.qore.test.issuer.runtime";
         string cmd = "set-property " + prop + " value";
@@ -164,7 +164,7 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
 
     replayTest() {
         if (!issuerAware()) {
-            testSkip("the jni module was built for module API 2.0");
+            testSkip("the jni module was built for a module API before 2.2");
         }
         TmpDir tmp("jni-module-cmd-issuer-");
         string qcc = getQcc();
@@ -266,7 +266,7 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
 
     libraryTest() {
         if (!issuerAware()) {
-            testSkip("the jni module was built for module API 2.0");
+            testSkip("the jni module was built for a module API before 2.2");
         }
         # a library module (from the module path) issues commands from its own code, as the provider modules do; its
         # code has no parse options, also when the Program of a %no-filesystem loader, whose options its own Program
@@ -279,7 +279,7 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
 
     libraryJdbcOptionTest() {
         if (!issuerAware()) {
-            testSkip("the jni module was built for module API 2.0");
+            testSkip("the jni module was built for a module API before 2.2");
         }
         # library module code that sets the jdbc classpath option is judged by the sandbox only, not by the parse options
         # that its Program inherited from the code that loaded it first (for example a %no-filesystem loader);
@@ -294,7 +294,7 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
 
     libraryDirectiveTest() {
         if (!issuerAware()) {
-            testSkip("the jni module was built for module API 2.0");
+            testSkip("the jni module was built for a module API before 2.2");
         }
         # the directive has no parse options (decision A), and a module from the module path is initialized as library
         # code, with no sandbox, also when restricted or sandboxed code loads it first: every loader loads it
