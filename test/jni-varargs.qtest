@@ -8,6 +8,11 @@
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.VarargsCalls
+%module-cmd(jni) import org.qore.jni.test.VarargsIface
+%module-cmd(jni) import org.qore.jni.test.VarargsImpl
+%module-cmd(jni) import org.qore.jni.test.VarargsBase
+%module-cmd(jni) import org.qore.jni.test.VarargsChild
+%module-cmd(jni) import java.nio.file.FileSystems
 %module-cmd(jni) import java.lang.String
 %module-cmd(jni) import java.lang.Long
 %module-cmd(jni) import java.util.Arrays
@@ -15,6 +20,33 @@
 %module-cmd(jni) import java.util.EnumSet
 %module-cmd(jni) import java.util.concurrent.TimeUnit
 %exec-class JniVarargsTest
+
+#! implements the abstract varargs method of a Java interface with the soft list that the module declares for it, and
+#! overrides its default varargs method with a list
+class QoreVarargsIface inherits VarargsIface {
+    string join(*string prefix, softlist<auto> values) {
+        return sprintf("qore.join:%s:%y", prefix, values);
+    }
+
+    string joinDefault(*string prefix, *list<auto> values) {
+        return sprintf("qore.joinDefault(list):%s:%y", prefix, values);
+    }
+}
+
+#! overrides the default varargs method of a Java interface with a soft list, as an abstract method declares it
+class QoreVarargsIfaceSoft inherits VarargsIface {
+    string join(*string prefix, softlist<auto> values) {
+        return sprintf("qore.join:%s:%y", prefix, values);
+    }
+
+    string joinDefault(*string prefix, softlist<auto> values) {
+        return sprintf("qore.joinDefault(softlist):%s:%y", prefix, values);
+    }
+}
+
+#! a subclass of a public Java class implementing an abstract varargs method of an interface
+class QoreVarargsImpl inherits VarargsImpl {
+}
 
 #! The arguments for the variable arguments of a Java varargs method are packed into an array, as in Java
 /** VarargsCalls describes on the Java side exactly what it receives, with the class of each value and of each array.
@@ -31,6 +63,12 @@ class JniVarargsTest inherits QUnit::Test {
         addTestCase("Fixed-arity overloads are called for their number of arguments", \fixedArityOverloads());
         addTestCase("Calls in a Program without strict arguments", \nonStrictProgram());
         addTestCase("Invalid variable arguments raise errors", \invalidArgs());
+        addTestCase("Abstract varargs methods called through an abstract class or interface", \abstractMethods());
+        addTestCase("A Java class implementing an abstract varargs method", \implementations());
+        addTestCase("Qore classes implementing and overriding varargs methods", \qoreOverrides());
+        addTestCase("A fixed-arity method of a parent class is called for its number of arguments",
+            \inheritedOverloads());
+        addTestCase("A JavaArray for typed variable arguments, and byte variable arguments", \typedArrays());
         set_return_value(main());
     }
 
@@ -188,6 +226,9 @@ class JniVarargsTest inherits QUnit::Test {
 %%requires jni
 %%module-cmd(jni) add-classpath %s
 %%module-cmd(jni) import org.qore.jni.test.VarargsCalls
+%%module-cmd(jni) import org.qore.jni.test.VarargsIface
+%%module-cmd(jni) import org.qore.jni.test.VarargsImpl
+%%module-cmd(jni) import java.nio.file.FileSystems
 auto sub objects() { return VarargsCalls::objects(1, 2, 3); }
 auto sub mixed() { return VarargsCalls::mixed(\"p\", 1, 2); }
 auto sub invoke() {
@@ -197,12 +238,20 @@ auto sub invoke() {
 }
 auto sub list_then_value() { return VarargsCalls::objects((1,), 2); }
 auto sub single_list() { return VarargsCalls::objects((1, 2)); }
+auto sub iface() {
+    VarargsIface i = VarargsImpl::makeHidden();
+    return i.join(\"p\", 1, 2);
+}
+auto sub get_path() { return FileSystems::getDefault().getPath(\"a\", \"b\", \"c\").toString(); }
 ", get_script_dir() + "qore-jni-test.jar"), "non-strict");
         assertEq("Object[Long:1, Long:2, Long:3]", p.callFunction("objects"));
         assertEq("p:Object[Long:1, Long:2]", p.callFunction("mixed"));
         assertEq("two(a, b)", p.callFunction("invoke"));
         assertEq("Object[Long[Long:1], Long:2]", p.callFunction("list_then_value"));
         assertEq("Object[Long:1, Long:2]", p.callFunction("single_list"));
+        # an abstract method called through an interface or an abstract class
+        assertEq("hidden.p:Object[Long:1, Long:2]", p.callFunction("iface"));
+        assertEq(join_paths("a", "b", "c"), p.callFunction("get_path"));
     }
 
     #! values that cannot be converted to the type of the array's elements raise errors
@@ -220,5 +269,101 @@ auto sub single_list() { return VarargsCalls::objects((1, 2)); }
 auto sub f() { return VarargsCalls::strings(2, (1, 2), \"a\"); }
 ", get_script_dir() + "qore-jni-test.jar"), "strict");
         });
+        # a String[] JavaArray is the array of String..., but not a Long[]
+        JavaArray la = new_array(load_class("java/lang/Long"), 1);
+        assertThrows("JNI-ERROR", "java.lang.Long\\[\\]", sub () { VarargsCalls::strings(2, la); });
+    }
+
+    #! an abstract varargs method has a concrete variant for the variable arguments as separate arguments, which calls
+    #! the Java method of the object
+    abstractMethods() {
+        # java.nio.file.FileSystem.getPath(String first, String... more) is abstract
+        Jni::java::nio::file::FileSystem fs = FileSystems::getDefault();
+        assertEq(join_paths("a", "b", "c"), fs.getPath("a", "b", "c").toString());
+        assertEq(join_paths("a", "b"), fs.getPath("a", "b").toString());
+        assertEq("a", fs.getPath("a").toString());
+        assertEq(join_paths("a", "b", "c"), fs.getPath("a", ("b", "c")).toString());
+
+        # an object of a class that is not public, known by its interface
+        VarargsIface i = VarargsImpl::makeHidden();
+        assertEq("hidden.p:Object[Long:1, Long:2]", i.join("p", 1, 2));
+        assertEq("hidden.p:Object[Long:1]", i.join("p", 1));
+        assertEq("hidden.p:Object[Long:1, Long:2]", i.join("p", (1, 2)));
+        assertEq("hidden.p:Object[]", i.join("p"));
+        assertEq("default:hidden.p:Object[Long:1, Long:2]", i.joinDefault("p", 1, 2));
+
+        # a Qore class implementing the interface must still implement the abstract variant
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        assertThrows("ABSTRACT-CLASS-ERROR", "join\\(\\*string, softlist<auto>\\)", sub () {
+            p.parse(sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsIface
+class Missing inherits VarargsIface {
+}
+object sub f() { return new Missing(); }
+", get_script_dir() + "qore-jni-test.jar"), "abstract");
+        });
+    }
+
+    #! a Java class implementing an abstract varargs method implements its abstract variant, whose array is a soft list
+    implementations() {
+        VarargsImpl impl();
+        assertEq("impl.p:Object[Long:1, Long:2]", impl.join("p", 1, 2));
+        assertEq("impl.p:Object[Long:1, Long:2]", impl.join("p", (1, 2)));
+        VarargsIface i = impl;
+        assertEq("impl.p:Object[Long:1, Long:2]", i.join("p", 1, 2));
+        assertEq("default:impl.p:Object[Long:1]", i.joinDefault("p", 1));
+        # a Qore subclass has no unimplemented abstract variants
+        QoreVarargsImpl sub_impl();
+        assertEq("impl.p:Object[Long:1, Long:2]", sub_impl.join("p", 1, 2));
+        assertEq("impl.j:Object[String:x, String:y]", VarargsImpl::callJoin(sub_impl));
+    }
+
+    #! a Qore class implements an abstract varargs method with a soft list and overrides a default varargs method with
+    #! a list or a soft list; Java calls them with the array
+    qoreOverrides() {
+        QoreVarargsIface q();
+        assertEq("qore.join:j:[\"x\", \"y\"]", VarargsImpl::callJoin(q));
+        assertEq("qore.join:p:[1, 2]", q.join("p", (1, 2)));
+        assertEq("qore.joinDefault(list):d:[\"x\", \"y\"]", VarargsImpl::callJoinDefault(q));
+        assertEq("qore.joinDefault(list):p:[1, 2]", q.joinDefault("p", (1, 2)));
+
+        QoreVarargsIfaceSoft qs();
+        assertEq("qore.joinDefault(softlist):d:[\"x\", \"y\"]", VarargsImpl::callJoinDefault(qs));
+        assertEq("qore.joinDefault(softlist):p:[1]", qs.joinDefault("p", 1));
+    }
+
+    #! with VarargsBase.over(String) and VarargsChild.over(String...), Java calls VarargsBase.over(String) for one
+    #! argument
+    inheritedOverloads() {
+        VarargsChild c();
+        assertEq("base(a)", c.over("a"));
+        assertEq("child:String[String:a, String:b]", c.over("a", "b"));
+        assertEq("child:String[String:a, String:b, String:c]", c.over("a", "b", "c"));
+        assertEq("child:String[String:a]", c.over(("a",)));
+        assertEq("child:String[]", c.over(()));
+    }
+
+    #! a JavaArray of the array's class is the array of typed variable arguments; byte variable arguments are a binary
+    #! or separate integers
+    typedArrays() {
+        JavaArray sa = new_array(load_class("java/lang/String"), 2);
+        sa.set(0, "a");
+        sa.set(1, "b");
+        assertEq("2:String[String:a, String:b]", VarargsCalls::strings(2, sa));
+        assertEq("p:String[String:a, String:b]", VarargsCalls::mixed("p", sa));
+
+        assertEq("p:byte[1, 2]", VarargsCalls::bytes("p", <0102>));
+        assertEq("p:byte[1, 2]", VarargsCalls::bytes("p", 1, 2));
+        assertEq("p:byte[7]", VarargsCalls::bytes("p", 7));
+        assertEq("p:byte[]", VarargsCalls::bytes("p"));
+        assertEq("p:byte[]", VarargsCalls::bytes("p", binary()));
+    }
+
+    #! returns the path of the given elements with the separator of the default file system
+    private static string join_paths(string a, string b, *string c) {
+        string sep = FileSystems::getDefault().getSeparator();
+        return a + sep + b + (c ? sep + c : "");
     }
 }

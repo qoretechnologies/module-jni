@@ -43,6 +43,7 @@
 #include "Functions.h"
 #include "JavaToQore.h"
 #include "ModifiedUtf8String.h"
+#include "Array.h"
 
 #include "JavaClassQoreJavaDynamicApi.inc"
 #include "JavaClassQoreJavaDynamicApi_AccessibleMethods.inc"
@@ -342,6 +343,12 @@ void QoreJniClassMap::initIntern(QoreProgram* pgm) {
     default_jns->addInitialNamespace(javans);
 
     Env env;
+
+    // the variants of varargs methods with typed elements take a JavaArray for the array (see
+    // jni_add_loose_varargs_variants()), so its class must exist before any Java class is created
+    if (!QC_JAVAARRAY) {
+        preinitJavaArrayClass();
+    }
 
     // add "Object" class
     // find/create parent namespace in default / master Jni namespace first
@@ -1653,7 +1660,50 @@ struct JniLooseVariant {
     const QoreTypeInfo* elem_type;
     //! the return type of a method
     const QoreTypeInfo* return_type;
+    //! true for an abstract method, which has only the variant for separate arguments, as a concrete variant
+    bool abstract_method = false;
 };
+}
+
+//! Returns true if two lists of parameter types are the same
+static bool jni_same_param_types(const type_vec_t& a, const type_vec_t& b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0, e = a.size(); i < e; ++i) {
+        if (!qore_type_equal(a[i], b[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Returns true if a parent class of \a qc has a variant of a method with the given parameter types that can be
+//! called and does not take extra arguments
+static bool jni_parent_has_fixed_arity_variant(const QoreClass& qc, const char* name, bool is_static,
+        const type_vec_t& params) {
+    QoreParentClassIterator ci(qc);
+    while (ci.next()) {
+        const QoreClass& pc = ci.getParentClass();
+        const QoreMethod* qm = is_static ? pc.findLocalStaticMethod(name) : pc.findLocalMethod(name);
+        if (qm) {
+            QoreExternalFunctionIterator vi(*qm->getFunction());
+            while (vi.next()) {
+                const QoreExternalMethodVariant* v =
+                    reinterpret_cast<const QoreExternalMethodVariant*>(vi.getVariant());
+                if (v->isAbstract() || v->getAccess() == Internal || (v->getCodeFlags() & QCF_USES_EXTRA_ARGS)) {
+                    continue;
+                }
+                if (jni_same_param_types(v->getParamTypeList(), params)) {
+                    return true;
+                }
+            }
+        }
+        if (jni_parent_has_fixed_arity_variant(pc, name, is_static, params)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 //! Adds the variants taking the variable arguments of varargs methods or constructors as separate arguments
@@ -1674,16 +1724,29 @@ struct JniLooseVariant {
     types of all the variants are determined before any of them is added; a variant with the same parameter types as
     one of them added before is not added.
 
+    A varargs method or constructor that can be called whose array has elements of a type other than \c auto also
+    has a variant taking a @ref Jni::org::qore::jni::JavaArray "JavaArray" for the array, which neither the list nor
+    the elements' type accept.  An abstract method has only the variant taking the variable arguments as separate
+    arguments, as a concrete variant calling the Java method, so that a %Qore class implementing the method only
+    implements the variant taking the soft list (see QoreJniClassMap::JavaTypeUse::VarargsParam).
+
     @param variants the varargs variants added to the class
     @param exists returns true if the class has a variant with the given parameter types for the method of the
     variant
-    @param add adds the variant to the class
+    @param add adds the variant to the class with the given parameter types and flags
 */
 static void jni_add_loose_varargs_variants(std::vector<JniLooseVariant>& variants,
         std::function<bool(const JniLooseVariant&, const type_vec_t&)> exists,
-        std::function<void(const JniLooseVariant&)> add) {
+        std::function<void(const JniLooseVariant&, const type_vec_t&, int64)> add) {
+    // the variants taking a JavaArray for the array
+    std::vector<std::pair<const JniLooseVariant*, type_vec_t>> array_variants;
     for (JniLooseVariant& lv : variants) {
         assert(!lv.params.empty());
+        if (!lv.abstract_method && lv.elem_type != autoTypeInfo) {
+            type_vec_t params = lv.params;
+            params.back() = QC_JAVAARRAY->getTypeInfo();
+            array_variants.emplace_back(&lv, std::move(params));
+        }
         // replace the array with the first variable argument
         lv.params.back() = lv.elem_type;
         while (exists(lv, lv.params)) {
@@ -1697,7 +1760,12 @@ static void jni_add_loose_varargs_variants(std::vector<JniLooseVariant>& variant
     }
     for (const JniLooseVariant& lv : variants) {
         if (!lv.params.empty() && !exists(lv, lv.params)) {
-            add(lv);
+            add(lv, lv.params, QCF_USES_EXTRA_ARGS);
+        }
+    }
+    for (const auto& i : array_variants) {
+        if (!exists(*i.first, i.second)) {
+            add(*i.first, i.second, QCF_NO_FLAGS);
         }
     }
 }
@@ -1758,9 +1826,9 @@ void QoreJniClassMap::doConstructors(JniQoreClass& qc, jni::Class* jc, QoreProgr
             const QoreMethod* qm = qc.getConstructor();
             return qm && qm->existsVariant(params);
         },
-        [&qc](const JniLooseVariant& lv) {
+        [&qc](const JniLooseVariant& lv, const type_vec_t& params, int64 flags) {
             qc.addConstructor((void*)lv.meth, (q_external_constructor_t)exec_java_constructor, lv.meth->getAccess(),
-                QCF_USES_EXTRA_ARGS, QDOM_UNCONTROLLED_API, lv.params);
+                flags, QDOM_UNCONTROLLED_API, params);
         });
 }
 
@@ -2247,6 +2315,12 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
         const type_vec_t& params = v.getParams();
         // the variant taking Java objects for list and map arguments has no flags
         int64 flags = v.alt ? QCF_NO_FLAGS : meth->getFlags();
+        // a varargs method of a class that is not abstract implements every abstract variant of its name that the
+        // class inherits, as Java requires; the array is declared as a list, while an abstract method declares it as
+        // a soft list (see QoreJniClassMap::JavaTypeUse), so the signatures differ
+        if (meth->isVarargs() && !abstract_class && !meth->isStatic()) {
+            flags |= QCF_ABSTRACT_OVERRIDE_ALL;
+        }
 
         if (meth->isStatic()) {
             // check for duplicate signature
@@ -2275,29 +2349,100 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
             }
         }
         v.entry->setUsed(jc);
-        // an abstract method keeps only the variant that a %Qore class implementing it declares
-        if (meth->isVarargs() && !(abstract_class && meth->isAbstract())) {
-            varargs_variants.push_back(JniLooseVariant{meth, mname, params,
-                meth->getVarargsElementTypeInfo(*this, pgm), v.entry->return_type});
+        if (meth->isVarargs()) {
+            JniLooseVariant lv{meth, mname, params, meth->getVarargsElementTypeInfo(*this, pgm),
+                v.entry->return_type};
+            lv.abstract_method = abstract_class && meth->isAbstract();
+            varargs_variants.push_back(std::move(lv));
         }
     }
 
     // the variants taking the variable arguments as separate arguments; the entries owning the names are alive
     jni_add_loose_varargs_variants(varargs_variants,
-        [&qc](const JniLooseVariant& lv, const type_vec_t& params) {
-            const QoreMethod* qm = lv.meth->isStatic() ? qc.findLocalStaticMethod(lv.name)
-                : qc.findLocalMethod(lv.name);
-            return qm && qm->existsVariant(params);
+        [this, &qc, jc, pgm](const JniLooseVariant& lv, const type_vec_t& params) {
+            bool is_static = lv.meth->isStatic();
+            const QoreMethod* qm = is_static ? qc.findLocalStaticMethod(lv.name) : qc.findLocalMethod(lv.name);
+            if (qm && qm->existsVariant(params)) {
+                return true;
+            }
+            // a variant of a parent class for a Java method with fixed parameters is called for its number of
+            // arguments, as in Java
+            return addInheritedFixedArityVariant(qc, jc, lv.name, is_static, params, pgm);
         },
-        [&qc](const JniLooseVariant& lv) {
+        [&qc](const JniLooseVariant& lv, const type_vec_t& params, int64 flags) {
+            // the variant of an abstract method calls the Java method of the object, as a concrete variant
             if (lv.meth->isStatic()) {
                 qc.addStaticMethod((void*)lv.meth, lv.name, (q_external_static_method_t)exec_java_static_method,
-                    lv.meth->getAccess(), QCF_USES_EXTRA_ARGS, QDOM_UNCONTROLLED_API, lv.return_type, lv.params);
+                    lv.meth->getAccess(), flags, QDOM_UNCONTROLLED_API, lv.return_type, params);
             } else {
                 qc.addMethod((void*)lv.meth, lv.name, (q_external_method_t)exec_java_method, lv.meth->getAccess(),
-                    QCF_USES_EXTRA_ARGS, QDOM_UNCONTROLLED_API, lv.return_type, lv.params);
+                    flags, QDOM_UNCONTROLLED_API, lv.return_type, params);
             }
         });
+}
+
+bool QoreJniClassMap::addInheritedFixedArityVariant(JniQoreClass& qc, jni::Class* jc, const char* name,
+        bool is_static, const type_vec_t& params, QoreProgram* pgm) {
+    if (!jni_parent_has_fixed_arity_variant(qc, name, is_static, params)) {
+        return false;
+    }
+    // find the public Java method that the parent's variant calls; Class.getMethods() returns the inherited public
+    // methods as well
+    Env env;
+    LocalReference<jobjectArray> methods = env.callObjectMethod(jc->getJavaObject(), Globals::methodClassGetMethods,
+        nullptr).as<jobjectArray>();
+    for (jsize i = 0, e = methods ? env.getArrayLength(methods) : 0; i < e; ++i) {
+        LocalReference<jobject> m = env.getObjectArrayElement(methods, i);
+        // check the name before creating the method
+        {
+            LocalReference<jstring> jmname = env.callObjectMethod(m, Globals::methodMethodGetName,
+                nullptr).as<jstring>();
+            Env::GetStringUtfChars mn(env, jmname);
+            QoreString mname(mn.c_str());
+            // see doMethodsIntern()
+            if (!is_static && (mname == "copy" || mname == "constructor" || mname == "destructor"
+                || mname == "methodGate" || mname == "memberNotification" || mname == "memberGate")) {
+                mname.prepend("java_");
+            }
+            if (strcmp(mname.c_str(), name)) {
+                continue;
+            }
+        }
+        SimpleRefHolder<BaseMethod> holder(new BaseMethod(m, jc));
+        BaseMethod* meth = *holder;
+        if ((bool)meth->isStatic() != is_static || meth->isAbstract() || meth->isVarargs() || meth->isPrivate()
+            || (meth->isSynthetic() && !meth->isBridge())) {
+            continue;
+        }
+        type_vec_t mparams, alt_params;
+        if (meth->getParamTypes(env, mparams, alt_params, *this, pgm)) {
+            continue;
+        }
+        bool alt = false;
+        if (!jni_same_param_types(mparams, params)) {
+            if (alt_params.empty() || !jni_same_param_types(alt_params, params)) {
+                continue;
+            }
+            alt = true;
+        }
+        printd(LogLevel, "QoreJniClassMap::addInheritedFixedArityVariant() adding inherited variant %s::%s()\n",
+            qc.getName(), name);
+        // the variant taking Java objects for list and map arguments has no flags
+        int64 flags = alt ? QCF_NO_FLAGS : meth->getFlags();
+        const QoreTypeInfo* return_type = meth->getReturnTypeInfo(*this, pgm);
+        if (is_static) {
+            qc.addStaticMethod((void*)meth, name, (q_external_static_method_t)exec_java_static_method,
+                meth->getAccess(), flags, QDOM_UNCONTROLLED_API, return_type, params);
+        } else {
+            qc.addMethod((void*)meth, name, (q_external_method_t)exec_java_method, meth->getAccess(), flags,
+                QDOM_UNCONTROLLED_API, return_type, params);
+        }
+        // the Java class keeps the method
+        jc->trackMethod(holder.release());
+        break;
+    }
+    // the parent's variant has the parameter types, whether or not the Java method was found
+    return true;
 }
 
 void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm) {
@@ -2692,6 +2837,7 @@ LocalReference<jobject> QoreJavaParamHelper::findOverriddenMethod(const char* na
             LocalReference<jobject> jm = env.getObjectArrayElement(methods, i);
             LocalReference<jobjectArray> pclasses = env.callObjectMethod(jm, Globals::methodMethodGetParameterTypes,
                 nullptr).as<jobjectArray>();
+            bool varargs = env.callBooleanMethod(jm, Globals::methodMethodIsVarArgs, nullptr);
             // the variant must have the types of the variant converting Qore values, or of the variant taking Java
             // objects for list and map parameters
             bool primary = true;
@@ -2700,6 +2846,17 @@ LocalReference<jobject> QoreJavaParamHelper::findOverriddenMethod(const char* na
                 LocalReference<jclass> pcls = env.getObjectArrayElement(pclasses, (jsize)j).as<jclass>();
                 const QoreTypeInfo* alt_type = nullptr;
                 const QoreTypeInfo* ti = qjcm.getQoreType(pcls, alt_type, pgm);
+                // the array of variable arguments may also be declared as the module declares it: a list, or a soft
+                // list as for an abstract method (see QoreJniClassMap::JavaTypeUse)
+                if (varargs && j == vtypes.size() - 1 && !qore_type_equal(ti, vtypes[j])) {
+                    const QoreTypeInfo* va_alt_type = nullptr;
+                    if (qore_type_equal(qjcm.getQoreType(pcls, va_alt_type, pgm,
+                                QoreJniClassMap::JavaTypeUse::VarargsArrayParam), vtypes[j])
+                            || qore_type_equal(qjcm.getQoreType(pcls, va_alt_type, pgm,
+                                QoreJniClassMap::JavaTypeUse::VarargsParam), vtypes[j])) {
+                        ti = vtypes[j];
+                    }
+                }
                 if (!qore_type_equal(ti, vtypes[j])) {
                     primary = false;
                 }

@@ -39,6 +39,8 @@
 typedef std::set<std::string> strset_t;
 
 DLLLOCAL QoreClass* initJavaArrayClass(QoreNamespace& ns);
+//! creates the JavaArray class before its methods are added, as Java classes created before it use its type
+DLLLOCAL void preinitJavaArrayClass();
 DLLLOCAL QoreClass* initQoreInvocationHandlerClass(QoreNamespace& ns);
 
 DLLLOCAL void init_jni_functions(QoreNamespace& ns);
@@ -385,6 +387,26 @@ protected:
     DLLLOCAL void doMethods(JniQoreClass& qc, Class* jc, QoreProgram* pgm = nullptr);
     DLLLOCAL void doMethodsIntern(JniQoreClass& qc, Class* jc, QoreProgram* pgm, Env& env,
         jobjectArray mArray);
+
+    //! Returns true if a variant of a method of a parent class has the given parameter types, and adds it to the class
+    /** A variant that a parent class has for a public Java method with fixed parameters (ex: \c A.m(String)) is added
+        to the class, calling the Java method, when the class has a varargs method with the same name (ex:
+        \c B.m(String...)) whose variant taking the variable arguments as separate arguments would have its
+        parameter types: %Qore calls a variant of the class before one of its parents, so that variant would be
+        called instead of the parent's, while Java calls the method with fixed parameters.
+
+        @param qc the class
+        @param jc the Java class
+        @param name the name of the %Qore method
+        @param is_static true for a static method
+        @param params the parameter types
+        @param pgm the program the types are resolved in
+
+        @return true if a parent class has a variant with the parameter types that is not abstract and does not take
+        extra arguments
+    */
+    DLLLOCAL bool addInheritedFixedArityVariant(JniQoreClass& qc, Class* jc, const char* name, bool is_static,
+            const type_vec_t& params, QoreProgram* pgm);
 
     DLLLOCAL void doFields(JniQoreClass& qc, Class* jc, QoreProgram* pgm = nullptr);
 

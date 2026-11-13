@@ -106,14 +106,34 @@ that can be called has two variants:
 
 As in Java, a single argument that is the array itself is passed as the array:
 a list, a binary for `byte[]`, or a Java array object that is an instance of
-the array's class; any other arguments are packed into the array.
+the array's class; any other arguments are packed into the array. When the
+element type is not `auto`, a third variant takes `object<JavaArray>` for the
+array, which neither the list nor the element type accepts; the `JavaArray`
+class is created before any Java class for this
+(`preinitJavaArrayClass()`).
+
+The variants added for collisions are found in the class and its parents: a
+parent's fixed-arity variant (`A.m(String)` for `B.m(String...)`) is added to
+the child calling the inherited public Java method
+(`QoreJniClassMap::addInheritedFixedArityVariant()`), as Qore calls a variant
+of the child before one of its parents.
+
+A varargs method of a class that is not abstract has
+`QCF_ABSTRACT_OVERRIDE_ALL` on its array variant: Java requires the class to
+implement every abstract method it inherits, and the inherited abstract
+variant declares the array as a soft list, so the signatures differ.
+
+An abstract varargs method (`JavaTypeUse::VarargsParam`) keeps `softlist<E>`,
+which a Qore class implementing it declares, and gets the variant for
+separate arguments as a concrete variant calling the Java method virtually.
+`QoreJavaParamHelper::findOverriddenMethod()` accepts `*softlist<E>`,
+`softlist<E>` and `*list<E>` for the array of a varargs Java method that a
+Qore method overrides.
 
 The array must not be a soft list for a method that can be called: a soft
 list converts a single value to a list, so the first of several separate
 variable arguments became a list nested in the array (`[[a], b]`), and with
-`%strict-args` the further arguments matched no variant. An abstract varargs
-method (`JavaTypeUse::VarargsParam`) keeps `softlist<E>`, which a Qore class
-implementing it declares, and has no variant for separate arguments.
+`%strict-args` the further arguments matched no variant.
 
 **The overload rule: a Qore argument selects the variant Java would select for
 the converted value.** `QoreToJava::toObject()` converts the following Qore

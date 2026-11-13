@@ -178,8 +178,9 @@
     declared in two variants (see @ref jni_array_varargs): the array as a <tt>*list&lt;T&gt;</tt>, which passes no
     value as an empty array, as Java passes when there are no variable arguments, and the variable arguments given as
     separate arguments, the first of them declared with the type \c T of the array's elements, followed by \c ...;
-    an abstract method declares the array as a <tt>softlist&lt;T&gt;</tt>, which a %Qore class implementing it
-    declares.
+    when \c T is not \c auto, a third variant takes a @ref Jni::org::qore::jni::JavaArray "JavaArray" for the
+    array.  An abstract method declares the array as a <tt>softlist&lt;T&gt;</tt>, which a %Qore class implementing
+    it declares, and has a concrete variant for the variable arguments given as separate arguments.
 
     A %Qore argument selects the variant Java would select for the value it is converted to.  A string, an integer
     (passed as a \c java.lang.Long), a float (\c java.lang.Double), a boolean (\c java.lang.Boolean), a number
@@ -314,8 +315,35 @@
     that number of arguments, as in Java (ex: <tt>java.util.List.of()</tt> with up to 10 elements); the variant
     taking the variable arguments as separate arguments then declares as many of them as needed to be different.
 
+    The same applies to a Java method with fixed parameters inherited from a parent class (ex: \c A.m(String)
+    called for one argument of \c B.m(String...) when \c B extends \c A).
+
     The variant taking the variable arguments as separate arguments takes extra arguments (\c ...), so they are
     accepted with \c %%strict-args and \c %%require-types (both in \c %%modern); only the first of them is
     checked against the type of the array's elements when the call is parsed, and the others are converted to it
-    when the method is called.  An abstract method has only the variant taking the array.
+    when the method is called.
+
+    An abstract method (ex: \c java.nio.file.FileSystem.getPath(String, String...) called through a variable of
+    the abstract class) declares the array as a <tt>softlist&lt;T&gt;</tt>, which a %Qore class implementing the
+    method declares as well, and its variant taking the variable arguments as separate arguments is a concrete
+    variant calling the Java method of the object:
+    @code{.py}
+    # Java: public interface Joiner { String join(String prefix, Object... values); }
+    class MyJoiner inherits Joiner {
+        string join(*string prefix, softlist<auto> values) {
+            return prefix + join(",", values);
+        }
+    }
+    @endcode
+    A %Qore method overriding a varargs method of a Java interface (a default method) may declare the array as
+    <tt>*list&lt;T&gt;</tt> or <tt>softlist&lt;T&gt;</tt>; Java calls it with the array.
+
+    Limitations:
+    - a variant of a Java interface that is not abstract (a default method, or the variant of an abstract method
+      taking the variable arguments as separate arguments) cannot be called on an object of a %Qore class
+      implementing the interface, which raises \c OBJECT-INCOMPATIBLE; the %Qore class's own method is called with
+      the array instead
+    - the elements of a \c byte... array are given as a binary or as separate integers, not as a list
+    - a @ref Jni::org::qore::jni::JavaArray "JavaArray" is the array only for a method that is not abstract, or for
+      an array of \c Object
 */

@@ -39,6 +39,9 @@ public final class VarargsCalls {
         if (value instanceof long[]) {
             return "long" + Arrays.toString((long[])value);
         }
+        if (value instanceof byte[]) {
+            return "byte" + Arrays.toString((byte[])value);
+        }
         return value.getClass().getSimpleName() + ":" + value;
     }
 
@@ -69,6 +72,11 @@ public final class VarargsCalls {
 
     /** a static method that takes primitive variable arguments */
     public static String longs(String prefix, long... values) {
+        return prefix + ":" + describe(values);
+    }
+
+    /** a static method that takes byte variable arguments */
+    public static String bytes(String prefix, byte... values) {
         return prefix + ":" + describe(values);
     }
 

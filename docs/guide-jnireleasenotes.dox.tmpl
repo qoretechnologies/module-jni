@@ -14,8 +14,19 @@
       taking the variable arguments as separate arguments, which are packed into the array as in Java, and its
       variant taking the array declares it as a <tt>*list&lt;T&gt;</tt> instead of a <tt>softlist&lt;T&gt;</tt>, as
       a single value is a separate variable argument; a single Java array of the array's class is the array, and a
-      Java method with fixed parameters for the same number of arguments is called instead, as in Java (see
-      @ref jni_array_varargs)
+      Java method with fixed parameters for the same number of arguments, also of a parent class, is called
+      instead, as in Java; an abstract varargs method (ex: \c java.nio.file.FileSystem.getPath()) has a concrete
+      variant for the variable arguments as separate arguments, and keeps the <tt>softlist&lt;T&gt;</tt> that a
+      %Qore class implementing it declares; a %Qore method overriding a varargs method of a Java interface may
+      declare the array as <tt>*list&lt;T&gt;</tt> or <tt>softlist&lt;T&gt;</tt> (see @ref jni_array_varargs);
+      <b>signature change:</b> the %Qore signatures of Java varargs methods and constructors changed (the array is
+      <tt>*list&lt;T&gt;</tt>, and variants for separate arguments and for a
+      @ref Jni::org::qore::jni::JavaArray "JavaArray" were added), so AOT-compiled programs and generated
+      documentation that captured the former <tt>softlist&lt;T&gt;</tt> signatures differ and must be rebuilt;
+      remaining limitations: a default method of a Java interface, and the variant for separate arguments of an
+      abstract method, cannot be called on an object of a %Qore class implementing the interface, the elements of a
+      \c byte... array cannot be given as a list, and a \c JavaArray is not taken for the typed array of an
+      abstract method
     - <b>Security</b>: added @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the sandbox
       network and filesystem policy of the %Qore code that called into Java to the I/O that Java code makes itself,
       which %Qore does not see: \c checkNetworkAccess() resolves a host name once with the %Qore resolver, checks
