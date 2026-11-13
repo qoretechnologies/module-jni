@@ -1,0 +1,577 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# Programs created by the test do not inherit %modern, so that calls without strict arguments are tested
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.VarargsCalls
+%module-cmd(jni) import org.qore.jni.test.VarargsIface
+%module-cmd(jni) import org.qore.jni.test.VarargsImpl
+%module-cmd(jni) import org.qore.jni.test.VarargsBase
+%module-cmd(jni) import org.qore.jni.test.VarargsChild
+%module-cmd(jni) import org.qore.jni.test.VarargsProtectedChild
+%module-cmd(jni) import org.qore.jni.test.VarargsSubIface
+%module-cmd(jni) import org.qore.jni.test.VarargsLeaf
+%module-cmd(jni) import org.qore.jni.test.VarargsBoth
+%module-cmd(jni) import org.qore.jni.test.VarargsGrand
+%module-cmd(jni) import org.qore.jni.test.VarargsGenLeaf
+%module-cmd(jni) import org.qore.jni.test.VarargsListLeaf
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import javax.tools.DiagnosticCollector
+%module-cmd(jni) import java.nio.file.FileSystems
+%module-cmd(jni) import java.lang.String
+%module-cmd(jni) import java.lang.Long
+%module-cmd(jni) import java.util.Arrays
+%module-cmd(jni) import java.util.List
+%module-cmd(jni) import java.util.EnumSet
+%module-cmd(jni) import java.util.concurrent.TimeUnit
+%exec-class JniVarargsTest
+
+#! implements the abstract varargs method of a Java interface with the soft list that the module declares for it, and
+#! overrides its default varargs method with a list
+class QoreVarargsIface inherits VarargsIface {
+    string join(*string prefix, softlist<auto> values) {
+        return sprintf("qore.join:%s:%y", prefix, values);
+    }
+
+    string joinDefault(*string prefix, *list<auto> values) {
+        return sprintf("qore.joinDefault(list):%s:%y", prefix, values);
+    }
+}
+
+#! overrides the default varargs method of a Java interface with a soft list, as an abstract method declares it
+class QoreVarargsIfaceSoft inherits VarargsIface {
+    string join(*string prefix, softlist<auto> values) {
+        return sprintf("qore.join:%s:%y", prefix, values);
+    }
+
+    string joinDefault(*string prefix, softlist<auto> values) {
+        return sprintf("qore.joinDefault(softlist):%s:%y", prefix, values);
+    }
+}
+
+#! a subclass of a public Java class implementing an abstract varargs method of an interface
+class QoreVarargsImpl inherits VarargsImpl {
+}
+
+#! a Qore class with an abstract method that Java classes extend
+class QoreVarargsAbs {
+    abstract string m(int i);
+}
+
+#! implements both the abstract method with fixed parameters of the parent interface and the abstract varargs method
+class QoreVarargsSubIface inherits VarargsSubIface {
+    string m(*string a) {
+        return "qore.fixed:" + a;
+    }
+
+    string m(softlist<*string> a) {
+        return sprintf("qore.varargs:%y", a);
+    }
+}
+
+#! The arguments for the variable arguments of a Java varargs method are packed into an array, as in Java
+/** VarargsCalls describes on the Java side exactly what it receives, with the class of each value and of each array.
+*/
+class JniVarargsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI varargs", "1.0") {
+        addTestCase("Separate variable arguments are packed into the array", \looseArgs());
+        addTestCase("A single list is the array", \listArg());
+        addTestCase("A single Java array of the array's type is the array", \arrayArg());
+        addTestCase("No variable arguments is an empty array", \noArgs());
+        addTestCase("Fixed parameters followed by variable arguments", \mixedArgs());
+        addTestCase("Method.invoke() of static and instance methods", \methodInvoke());
+        addTestCase("Varargs methods of the JDK", \jdkMethods());
+        addTestCase("Fixed-arity overloads are called for their number of arguments", \fixedArityOverloads());
+        addTestCase("Calls in a Program without strict arguments", \nonStrictProgram());
+        addTestCase("Invalid variable arguments raise errors", \invalidArgs());
+        addTestCase("Abstract varargs methods called through an abstract class or interface", \abstractMethods());
+        addTestCase("A Java class implementing an abstract varargs method", \implementations());
+        addTestCase("Qore classes implementing and overriding varargs methods", \qoreOverrides());
+        addTestCase("A fixed-arity method of a parent class is called for its number of arguments",
+            \inheritedOverloads());
+        addTestCase("A JavaArray for typed variable arguments, and byte variable arguments", \typedArrays());
+        addTestCase("Parent variants that are not public Java methods with fixed parameters", \parentVariants());
+        addTestCase("An abstract overload with fixed parameters of a parent interface", \abstractParentOverload());
+        addTestCase("A Qore class implementing an abstract varargs method called from Qore",
+            \qoreImplementationFromQore());
+        addTestCase("Inherited methods with fixed parameters in deeper hierarchies", \inheritedHierarchies());
+        addTestCase("A Java class with a Qore parent class", \qoreParentClass());
+        set_return_value(main());
+    }
+
+    #! separate arguments are packed into the array; a list among them is an element of the array, as in Java
+    looseArgs() {
+        assertEq("Object[Long:1]", VarargsCalls::objects(1));
+        assertEq("Object[Long:1, Long:2]", VarargsCalls::objects(1, 2));
+        assertEq("Object[Long:1, String:two, Double:3.0]", VarargsCalls::objects(1, "two", 3.0));
+        # the first argument was converted to a list by the soft list type of the array, which was passed nested in
+        # the array: Object[Long[Long:1], Long:2]
+        assertEq("Object[Long:1, Long:2, Long:3]", VarargsCalls::objects(1, 2, 3));
+        assertEq("Object[null, Long:2]", VarargsCalls::objects(NOTHING, 2));
+        assertEq("Object[Long[Long:1], Long:2]", VarargsCalls::objects((1,), 2));
+        assertEq("Object[Long:1, Long[Long:2, Long:3]]", VarargsCalls::objects(1, (2, 3)));
+        assertEq("Object[Long[Long:1, Long:2], Long:3]", VarargsCalls::objects((1, 2), 3));
+    }
+
+    #! a single list is the array, as documented
+    listArg() {
+        assertEq("Object[Long:1, Long:2]", VarargsCalls::objects((1, 2)));
+        assertEq("Object[Long:1]", VarargsCalls::objects((1,)));
+        assertEq("Object[]", VarargsCalls::objects(()));
+        assertEq("p:Object[Long:1, String:x]", VarargsCalls::mixed("p", (1, "x")));
+        assertEq("2:String[String:a, String:b]", VarargsCalls::strings(2, ("a", "b")));
+        assertEq("p:long[1, 2]", VarargsCalls::longs("p", (1, 2)));
+        list<auto> l = (1, 2);
+        assertEq("Object[Long:1, Long:2]", VarargsCalls::objects(l));
+    }
+
+    #! a Java array of the array's type is the array, as in Java; another object is an element
+    arrayArg() {
+        JavaArray a = new_array(load_class("java/lang/Long"), 2);
+        a.set(0, 1);
+        a.set(1, 2);
+        assertEq("Long[Long:1, Long:2]", VarargsCalls::objects(a));
+        assertEq("p:Long[Long:1, Long:2]", VarargsCalls::mixed("p", a));
+        # with further arguments, the array is an element of the array
+        assertEq("Object[Long[Long:1, Long:2], Long:3]", VarargsCalls::objects(a, 3));
+
+        JavaArray s = new_array(load_class("java/lang/String"), 1);
+        s.set(0, "x");
+        assertEq("String[String:x]", VarargsCalls::objects(s));
+
+        # a long[] is not an Object[]: it is the only element
+        JavaArray p = new_array(Long::TYPE, 2);
+        assertEq("Object[long[0, 0]]", VarargsCalls::objects(p));
+
+        # an object that is not an array is an element
+        VarargsCalls obj("o");
+        assertRegex("^Object\\[VarargsCalls:org\\.qore\\.jni\\.test\\.VarargsCalls@", VarargsCalls::objects(obj));
+    }
+
+    #! no variable arguments, or no value as the single argument, is an empty array, as Java passes
+    noArgs() {
+        assertEq("Object[]", VarargsCalls::objects());
+        assertEq("Object[]", VarargsCalls::objects(NOTHING));
+        assertEq("p:Object[]", VarargsCalls::mixed("p"));
+        assertEq("p:Object[]", VarargsCalls::mixed("p", NOTHING));
+        assertEq("2:String[]", VarargsCalls::strings(2));
+        assertEq("p:long[]", VarargsCalls::longs("p"));
+        assertEq("n", (new VarargsCalls("n")).getName());
+        assertEq("o.p:Object[]", (new VarargsCalls("o")).mixedInstance("p"));
+    }
+
+    #! fixed parameters are converted to their types and the remaining arguments are packed into the array
+    mixedArgs() {
+        assertEq("p:Object[Long:1, Long:2]", VarargsCalls::mixed("p", 1, 2));
+        assertEq("2:String[String:a, String:b]", VarargsCalls::strings(2, "a", "b"));
+        assertEq("2:String[String:a, null]", VarargsCalls::strings(2, "a", NOTHING));
+        assertEq("p:long[1, 2, 3]", VarargsCalls::longs("p", 1, 2, 3));
+        assertEq("p:long[7]", VarargsCalls::longs("p", 7));
+
+        VarargsCalls obj("o");
+        assertEq("o.p:Object[Long:1, Long:2]", obj.mixedInstance("p", 1, 2));
+        assertEq("o.p:Object[Long:1]", obj.mixedInstance("p", 1));
+        assertEq("o.p:Object[Long:1, Long:2]", obj.mixedInstance("p", (1, 2)));
+
+        # a constructor with variable arguments
+        assertEq("nObject[Long:1, Long:2]", (new VarargsCalls("n", 1, 2)).getName());
+        assertEq("nObject[Long:1]", (new VarargsCalls("n", 1)).getName());
+        assertEq("nObject[Long:1, Long:2]", (new VarargsCalls("n", (1, 2))).getName());
+
+        # a variable whose type is not known at parse time
+        auto dyn = obj;
+        assertEq("o.p:Object[Long:1, Long:2, Long:3]", dyn.mixedInstance("p", 1, 2, 3));
+    }
+
+    #! java.lang.reflect.Method.invoke(Object obj, Object... args)
+    methodInvoke() {
+        Class cls = load_class("org/qore/jni/test/VarargsCalls");
+        Class str = load_class("java/lang/String");
+        Method two = cls.getMethod("two", str, str);
+        Method twoi = cls.getMethod("twoInstance", str, str);
+        VarargsCalls obj("o");
+
+        # the arguments were passed as [["a"], "b"], which Java rejected with "argument type mismatch"
+        assertEq("two(a, b)", two.invoke(NOTHING, "a", "b"));
+        assertEq("two(a, b)", two.invoke(NOTHING, ("a", "b")));
+        assertEq("o.two(a, b)", twoi.invoke(obj, "a", "b"));
+        assertEq("o.two(a, b)", twoi.invoke(obj, ("a", "b")));
+
+        # a varargs method invoked by reflection takes its array as one argument: the list is converted to a Long[]
+        Method mixed = cls.getMethod("mixed", str, load_class("[Ljava/lang/Object;"));
+        assertEq("p:Long[Long:1, Long:2]", mixed.invoke(NOTHING, "p", (1, 2)));
+
+        # Class.getMethod(String name, Class<?>... parameterTypes) with separate arguments
+        assertEq("public static java.lang.String org.qore.jni.test.VarargsCalls.two(java.lang.String,"
+            "java.lang.String)", cls.getMethod("two", str, str).toString());
+
+        # jni::invoke() takes the arguments of the method as separate arguments
+        assertEq("p:Object[Long:1, Long:2]", jni::invoke(mixed, NOTHING, "p", 1, 2));
+        assertEq("two(a, b)", jni::invoke(two, NOTHING, "a", "b"));
+    }
+
+    #! varargs methods of the JDK called without reflection
+    jdkMethods() {
+        assertEq("a b", String::format("%s %s", "a", "b"));
+        assertEq("a b", String::format("%s %s", ("a", "b")));
+        assertEq("1-2-3", String::format("%d-%d-%d", 1, 2, 3));
+        assertEq("x", String::format("x"));
+        assertEq(("a", "b", "c"), Arrays::asList("a", "b", "c"));
+        assertEq(("a",), Arrays::asList("a"));
+        assertEq(("a", "b"), Arrays::asList(("a", "b")));
+        assertEq((), Arrays::asList());
+        assertEq("a,b,c", String::join(",", "a", "b", "c"));
+        assertEq("a", String::join(",", "a"));
+    }
+
+    #! a Java method with fixed parameters for a number of arguments is called for that number, as in Java, and the
+    #! varargs method for more arguments
+    fixedArityOverloads() {
+        # List.of() has fixed-arity overloads for up to 10 elements
+        assertEq((1, 2, 3), List::of(1, 2, 3));
+        list<int> l = range(1, 12);
+        assertEq(l, List::of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11));
+        l = range(1, 13);
+        assertEq(l, List::of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
+        assertEq(l, List::of(l));
+
+        # EnumSet.of(E first, E... rest) and EnumSet.of(E e1, ..., E e5)
+        list<TimeUnit> units = (TimeUnit::NANOSECONDS, TimeUnit::MICROSECONDS, TimeUnit::MILLISECONDS,
+            TimeUnit::SECONDS, TimeUnit::MINUTES, TimeUnit::HOURS, TimeUnit::DAYS);
+        EnumSet two = EnumSet::of(units[0], units[1]);
+        assertEq(2, two.size());
+        EnumSet all = EnumSet::of(units[0], units[1], units[2], units[3], units[4], units[5], units[6]);
+        assertEq(7, all.size());
+        assertTrue(all.contains(TimeUnit::DAYS));
+    }
+
+    #! in a Program without strict arguments, %Qore passed arguments beyond the parameters of the variant taking the
+    #! array as well, after converting the first variable argument to a list
+    nonStrictProgram() {
+        Program p(PO_NEW_STYLE);
+        p.parse(sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsCalls
+%%module-cmd(jni) import org.qore.jni.test.VarargsIface
+%%module-cmd(jni) import org.qore.jni.test.VarargsImpl
+%%module-cmd(jni) import java.nio.file.FileSystems
+auto sub objects() { return VarargsCalls::objects(1, 2, 3); }
+auto sub mixed() { return VarargsCalls::mixed(\"p\", 1, 2); }
+auto sub invoke() {
+    auto m = load_class(\"org/qore/jni/test/VarargsCalls\").getMethod(\"two\", load_class(\"java/lang/String\"),
+        load_class(\"java/lang/String\"));
+    return m.invoke(NOTHING, \"a\", \"b\");
+}
+auto sub list_then_value() { return VarargsCalls::objects((1,), 2); }
+auto sub single_list() { return VarargsCalls::objects((1, 2)); }
+auto sub iface() {
+    VarargsIface i = VarargsImpl::makeHidden();
+    return i.join(\"p\", 1, 2);
+}
+auto sub get_path() { return FileSystems::getDefault().getPath(\"a\", \"b\", \"c\").toString(); }
+", get_script_dir() + "qore-jni-test.jar"), "non-strict");
+        assertEq("Object[Long:1, Long:2, Long:3]", p.callFunction("objects"));
+        assertEq("p:Object[Long:1, Long:2]", p.callFunction("mixed"));
+        assertEq("two(a, b)", p.callFunction("invoke"));
+        assertEq("Object[Long[Long:1], Long:2]", p.callFunction("list_then_value"));
+        assertEq("Object[Long:1, Long:2]", p.callFunction("single_list"));
+        # an abstract method called through an interface or an abstract class
+        assertEq("hidden.p:Object[Long:1, Long:2]", p.callFunction("iface"));
+        assertEq(join_paths("a", "b", "c"), p.callFunction("get_path"));
+    }
+
+    #! values that cannot be converted to the type of the array's elements raise errors
+    invalidArgs() {
+        # a list is not a String
+        assertThrows("JNI-ERROR", "cannot be converted to Java class 'java.lang.String'",
+            sub () { VarargsCalls::strings(2, "a", (1, 2)); });
+        # the type of the first variable argument is checked at parse time
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        assertThrows("PARSE-TYPE-ERROR", sub () {
+            p.parse(sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsCalls
+auto sub f() { return VarargsCalls::strings(2, (1, 2), \"a\"); }
+", get_script_dir() + "qore-jni-test.jar"), "strict");
+        });
+        # a String[] JavaArray is the array of String..., but not a Long[]
+        JavaArray la = new_array(load_class("java/lang/Long"), 1);
+        assertThrows("JNI-ERROR", "java.lang.Long\\[\\]", sub () { VarargsCalls::strings(2, la); });
+    }
+
+    #! an abstract varargs method has a concrete variant for the variable arguments as separate arguments, which calls
+    #! the Java method of the object
+    abstractMethods() {
+        # java.nio.file.FileSystem.getPath(String first, String... more) is abstract
+        Jni::java::nio::file::FileSystem fs = FileSystems::getDefault();
+        assertEq(join_paths("a", "b", "c"), fs.getPath("a", "b", "c").toString());
+        assertEq(join_paths("a", "b"), fs.getPath("a", "b").toString());
+        assertEq("a", fs.getPath("a").toString());
+        assertEq(join_paths("a", "b", "c"), fs.getPath("a", ("b", "c")).toString());
+
+        # an object of a class that is not public, known by its interface
+        VarargsIface i = VarargsImpl::makeHidden();
+        assertEq("hidden.p:Object[Long:1, Long:2]", i.join("p", 1, 2));
+        assertEq("hidden.p:Object[Long:1]", i.join("p", 1));
+        assertEq("hidden.p:Object[Long:1, Long:2]", i.join("p", (1, 2)));
+        assertEq("hidden.p:Object[]", i.join("p"));
+        assertEq("default:hidden.p:Object[Long:1, Long:2]", i.joinDefault("p", 1, 2));
+
+        # a Qore class implementing the interface must still implement the abstract variant
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        assertThrows("ABSTRACT-CLASS-ERROR", "join\\(\\*string, softlist<auto>\\)", sub () {
+            p.parse(sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsIface
+class Missing inherits VarargsIface {
+}
+object sub f() { return new Missing(); }
+", get_script_dir() + "qore-jni-test.jar"), "abstract");
+        });
+    }
+
+    #! a Java class implementing an abstract varargs method implements its abstract variant, whose array is a soft list
+    implementations() {
+        VarargsImpl impl();
+        assertEq("impl.p:Object[Long:1, Long:2]", impl.join("p", 1, 2));
+        assertEq("impl.p:Object[Long:1, Long:2]", impl.join("p", (1, 2)));
+        VarargsIface i = impl;
+        assertEq("impl.p:Object[Long:1, Long:2]", i.join("p", 1, 2));
+        assertEq("default:impl.p:Object[Long:1]", i.joinDefault("p", 1));
+        # a Qore subclass has no unimplemented abstract variants
+        QoreVarargsImpl sub_impl();
+        assertEq("impl.p:Object[Long:1, Long:2]", sub_impl.join("p", 1, 2));
+        assertEq("impl.j:Object[String:x, String:y]", VarargsImpl::callJoin(sub_impl));
+    }
+
+    #! a Qore class implements an abstract varargs method with a soft list and overrides a default varargs method with
+    #! a list or a soft list; Java calls them with the array
+    qoreOverrides() {
+        QoreVarargsIface q();
+        assertEq("qore.join:j:[\"x\", \"y\"]", VarargsImpl::callJoin(q));
+        assertEq("qore.join:p:[1, 2]", q.join("p", (1, 2)));
+        assertEq("qore.joinDefault(list):d:[\"x\", \"y\"]", VarargsImpl::callJoinDefault(q));
+        assertEq("qore.joinDefault(list):p:[1, 2]", q.joinDefault("p", (1, 2)));
+
+        QoreVarargsIfaceSoft qs();
+        assertEq("qore.joinDefault(softlist):d:[\"x\", \"y\"]", VarargsImpl::callJoinDefault(qs));
+        assertEq("qore.joinDefault(softlist):p:[1]", qs.joinDefault("p", 1));
+    }
+
+    #! with VarargsBase.over(String) and VarargsChild.over(String...), Java calls VarargsBase.over(String) for one
+    #! argument
+    inheritedOverloads() {
+        VarargsChild c();
+        assertEq("base(a)", c.over("a"));
+        assertEq("child:String[String:a, String:b]", c.over("a", "b"));
+        assertEq("child:String[String:a, String:b, String:c]", c.over("a", "b", "c"));
+        assertEq("child:String[String:a]", c.over(("a",)));
+        assertEq("child:String[]", c.over(()));
+    }
+
+    #! a JavaArray of the array's class is the array of typed variable arguments; byte variable arguments are a binary
+    #! or separate integers
+    typedArrays() {
+        JavaArray sa = new_array(load_class("java/lang/String"), 2);
+        sa.set(0, "a");
+        sa.set(1, "b");
+        assertEq("2:String[String:a, String:b]", VarargsCalls::strings(2, sa));
+        assertEq("p:String[String:a, String:b]", VarargsCalls::mixed("p", sa));
+
+        assertEq("p:byte[1, 2]", VarargsCalls::bytes("p", <0102>));
+        assertEq("p:byte[1, 2]", VarargsCalls::bytes("p", 1, 2));
+        assertEq("p:byte[7]", VarargsCalls::bytes("p", 7));
+        assertEq("p:byte[]", VarargsCalls::bytes("p"));
+        assertEq("p:byte[]", VarargsCalls::bytes("p", binary()));
+    }
+
+    #! a protected Java method of a parent class, and the variants of a varargs method of a parent class, are not
+    #! taken for Java methods with fixed parameters
+    parentVariants() {
+        # VarargsProtectedBase.over(String) is protected: VarargsProtectedChild.over(String...) is called, as in Java
+        VarargsProtectedChild pc();
+        assertEq("child:String[String:a]", pc.over("a"));
+        assertEq("child:String[String:a, String:b]", pc.over("a", "b"));
+
+        # VarargsBase.typed(String...) and VarargsChild.typed(Integer...): each has its JavaArray variant
+        VarargsChild c();
+        JavaArray ia = new_array(load_class("java/lang/Integer"), 1);
+        ia.set(0, 5);
+        assertEq("child.typed:Integer[Integer:5]", c.typed(ia));
+        assertEq("child.typed:Integer[Integer:1, Integer:2]", c.typed(1, 2));
+        assertEq("base.typed:String[String:a, String:b]", c.typed("a", "b"));
+        assertEq("base.typed:String[String:a]", c.typed("a"));
+        # the child's JavaArray variant is called for any JavaArray, so a String[] is not passed to the parent's
+        JavaArray sa = new_array(load_class("java/lang/String"), 1);
+        sa.set(0, "s");
+        assertThrows("JNI-ERROR", "java.lang.String\\[\\]", sub () { c.typed(sa); });
+    }
+
+    #! with VarargsBaseIface.m(String) and VarargsSubIface.m(String...), the variant of VarargsSubIface for
+    #! separate arguments does not implement the abstract variant of VarargsBaseIface
+    abstractParentOverload() {
+        VarargsSubIface i = VarargsSubIface::make();
+        assertEq("fixed(x)", i.m("x"));
+        assertEq("varargs:String[String:x, String:y]", i.m("x", "y"));
+        assertEq("varargs:String[String:x, String:y, String:z]", i.m("x", "y", "z"));
+        assertEq("varargs:String[String:x]", i.m(("x",)));
+
+        QoreVarargsSubIface q();
+        assertEq("qore.fixed:x|qore.varargs:[\"x\", \"y\"]", VarargsSubIface::callBoth(q));
+
+        # a Qore class implementing only the varargs method has the parent's abstract variant
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        assertThrows("ABSTRACT-CLASS-ERROR", "m\\(\\*string\\)", sub () {
+            p.parse(sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsSubIface
+class OnlyVarargs inherits VarargsSubIface {
+    string m(softlist<*string> a) { return \"\"; }
+}
+object sub f() { return new OnlyVarargs(); }
+", get_script_dir() + "qore-jni-test.jar"), "abstract-parent");
+        });
+    }
+
+    #! a Qore class implementing an abstract varargs method is called from Qore with the array; a variant of a Java
+    #! interface that is not abstract, as the variant for separate arguments, needs the Java object of the Qore
+    #! object, which it does not have (see the limitations in the user guide)
+    qoreImplementationFromQore() {
+        QoreVarargsIface q();
+        assertEq("qore.join:p:[1, 2]", q.join("p", (1, 2)));
+        assertEq("qore.join:p:[1]", q.join("p", 1));
+        assertThrows("OBJECT-INCOMPATIBLE", sub () { q.join("p", 1, 2); });
+        # Java calls the Qore method with the array of the separate arguments
+        assertEq("qore.join:j:[\"x\", \"y\"]", VarargsImpl::callJoin(q));
+
+        # without strict arguments, the Qore method taking the soft list is called and the further separate arguments
+        # are ignored, as for any Qore method, also when the class declares a variant for separate arguments, as the
+        # soft list ranks higher; with strict arguments, that variant gets them all
+        string src = sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsIface
+class Impl inherits VarargsIface {
+    string join(*string prefix, softlist<auto> values) {
+        return sprintf(\"array:%%s:%%y\", prefix, values);
+    }
+}
+class ImplLoose inherits VarargsIface {
+    string join(*string prefix, softlist<auto> values) {
+        return sprintf(\"array:%%s:%%y\", prefix, values);
+    }
+    string join(*string prefix, auto first, ...) {
+        return sprintf(\"loose:%%s:%%y\", prefix, (first,) + argv);
+    }
+}
+string sub impl() { Impl q(); return q.join(\"p\", 1, 2); }
+string sub impl_loose() { ImplLoose q(); return q.join(\"p\", 1, 2); }
+string sub impl_loose_list() { ImplLoose q(); return q.join(\"p\", (1, 2)); }
+", get_script_dir() + "qore-jni-test.jar");
+        Program ns(PO_NEW_STYLE);
+        ns.parse(src, "non-strict");
+        assertEq("array:p:[1]", ns.callFunction("impl"));
+        assertEq("array:p:[1]", ns.callFunction("impl_loose"));
+        assertEq("array:p:[1, 2]", ns.callFunction("impl_loose_list"));
+
+        Program st(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        st.parse(src, "strict");
+        assertThrows("OBJECT-INCOMPATIBLE", \st.callFunction(), "impl");
+        assertEq("loose:p:[1, 2]", st.callFunction("impl_loose"));
+        assertEq("array:p:[1, 2]", st.callFunction("impl_loose_list"));
+    }
+
+    #! a public Java method with fixed parameters inherited from a parent class, at any depth, is called for its
+    #! number of arguments, as in Java, also when an ancestor declares it as abstract
+    inheritedHierarchies() {
+        # VarargsLeaf.m(String...) extends VarargsMid.m(String), which implements abstract VarargsAbsBase.m(String)
+        VarargsLeaf leaf();
+        assertEq("mid(a)", leaf.m("a"));
+        assertEq("leaf:String[String:a, String:b]", leaf.m("a", "b"));
+
+        # VarargsBoth extends VarargsFixedBase.m(String) and implements VarargsSubIface.m(String...), whose parent
+        # interface declares m(String) as abstract
+        VarargsBoth both();
+        assertEq("fixedbase(a)", both.m("a"));
+        assertEq("both:String[String:a, String:b]", both.m("a", "b"));
+        VarargsSubIface i = both;
+        assertEq("fixedbase(a)", i.m("a"));
+        assertEq("both:String[String:a, String:b]", i.m("a", "b"));
+
+        # VarargsGrand.over(String...) overrides VarargsChild.over(String...); VarargsBase.over(String) is inherited
+        # from the grandparent
+        VarargsGrand grand();
+        assertEq("base(a)", grand.over("a"));
+        assertEq("grand:String[String:a, String:b]", grand.over("a", "b"));
+
+        # VarargsGenMid.g(ArrayList) has a bridge method g(List) with the same Qore signature, which is not used;
+        # both call the same Java code
+        VarargsGenLeaf gen();
+        assertEq("genmid:2", gen.g((1, 2)));
+        assertEq("genleaf:2", gen.g((1,), (2,)));
+
+        # VarargsListMid.h(ArrayList) and h(LinkedList) have the same Qore signature: the method taking the
+        # ArrayList that a Qore list is converted to is chosen, as for the methods of a class
+        VarargsListLeaf list_leaf();
+        assertEq("arraylist:2", list_leaf.h((1, 2)));
+        assertEq("listleaf:2", list_leaf.h((1,), (2,)));
+    }
+
+    #! the Java class generated for an abstract Qore class is abstract, so a Java class extending it implements its
+    #! abstract methods; a varargs method of such a Java class has the variant for separate arguments
+    qoreParentClass() {
+        QoreJavaCompiler compiler();
+        DiagnosticCollector diags();
+        assertThrows("JNI-ERROR", \compiler.compile(), ("org.qore.test.JVarargsMissing", "
+package org.qore.test;
+
+public class JVarargsMissing extends qore.QoreVarargsAbs {
+    public JVarargsMissing() throws Throwable {
+    }
+
+    public String m(String... a) {
+        return \"java\";
+    }
+}
+", diags));
+        assertRegex("does not override abstract method m\\(long\\)", diags.getDiagnostics()[0].toString());
+
+        compiler::CompilerOutput out = compiler.compile("org.qore.test.JVarargsQ", "
+package org.qore.test;
+
+public class JVarargsQ extends qore.QoreVarargsAbs {
+    public JVarargsQ() throws Throwable {
+    }
+
+    public String m(long i) {
+        return \"long:\" + i;
+    }
+
+    public String m(String... a) {
+        return \"java:\" + a.length;
+    }
+}
+");
+        object obj = define_class("org/qore/test/JVarargsQ", out.file.openInputStream().readAllBytes())
+            .newInstance();
+        assertEq("long:5", obj.m(5));
+        assertEq("java:2", obj.m("a", "b"));
+        assertEq("java:1", obj.m(("a",)));
+    }
+
+    #! returns the path of the given elements with the separator of the default file system
+    private static string join_paths(string a, string b, *string c) {
+        string sep = FileSystems::getDefault().getSeparator();
+        return a + sep + b + (c ? sep + c : "");
+    }
+}
