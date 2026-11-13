@@ -2384,9 +2384,9 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
     }
 
     // the variants taking the variable arguments as separate arguments; the entries owning the names are alive
-    // the parameter types for which no inherited Java method with fixed parameters was found, so that the Java
-    // methods of the class are not listed again for them
-    std::vector<std::pair<std::string, type_vec_t>> no_fixed_arity;
+    // the methods (name, static, parameter types) for which no inherited Java method with fixed parameters was found
+    // while adding the variants of this class, so that its Java methods are not listed again for them
+    std::vector<std::tuple<std::string, bool, type_vec_t>> no_fixed_arity;
     jni_add_loose_varargs_variants(varargs_variants,
         [this, &qc, jc, pgm, &no_fixed_arity](const JniLooseVariant& lv, const type_vec_t& params) {
             bool is_static = lv.meth->isStatic();
@@ -2402,7 +2402,8 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
             if (pv.concrete) {
                 bool known = false;
                 for (const auto& i : no_fixed_arity) {
-                    if (i.first == lv.name && jni_same_param_types(i.second, params)) {
+                    if (std::get<0>(i) == lv.name && std::get<1>(i) == is_static
+                        && jni_same_param_types(std::get<2>(i), params)) {
                         known = true;
                         break;
                     }
@@ -2411,7 +2412,7 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
                     if (addInheritedFixedArityVariant(qc, jc, lv.name, is_static, params, pgm)) {
                         return true;
                     }
-                    no_fixed_arity.emplace_back(lv.name, params);
+                    no_fixed_arity.emplace_back(lv.name, is_static, params);
                 }
             }
             // an abstract variant of a parent with the parameter types (ex: I1.m(String) for I2.m(String...)) must

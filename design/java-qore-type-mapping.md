@@ -116,8 +116,10 @@ The variants added for collisions are found in the class and its parents
 (`jni_get_parent_variants()`, public variants without extra arguments only,
 at any depth): a parent's concrete variant is a collision if it is a public
 Java method with fixed parameters, which is added to the child calling the
-inherited Java method (`QoreJniClassMap::addInheritedFixedArityVariant()`, no
-bridge methods, the choice among several by `jni_choose_variant()`), as Qore
+inherited Java method (`QoreJniClassMap::addInheritedFixedArityVariant()`: the
+method is found with `Class.getMethods()` of the child, which returns the
+most-derived public method, and is called virtually; no bridge methods, the
+choice among several by `jni_choose_variant()`), as Qore
 calls a variant of the child before one of its parents, also when an ancestor
 declares it abstract; otherwise a parent's abstract variant with the same
 types (`I1.m(String)` for `I2.m(String...)`) is a collision, so the concrete
