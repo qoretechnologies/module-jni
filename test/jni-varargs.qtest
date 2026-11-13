@@ -12,6 +12,8 @@
 %module-cmd(jni) import org.qore.jni.test.VarargsImpl
 %module-cmd(jni) import org.qore.jni.test.VarargsBase
 %module-cmd(jni) import org.qore.jni.test.VarargsChild
+%module-cmd(jni) import org.qore.jni.test.VarargsProtectedChild
+%module-cmd(jni) import org.qore.jni.test.VarargsSubIface
 %module-cmd(jni) import java.nio.file.FileSystems
 %module-cmd(jni) import java.lang.String
 %module-cmd(jni) import java.lang.Long
@@ -48,6 +50,17 @@ class QoreVarargsIfaceSoft inherits VarargsIface {
 class QoreVarargsImpl inherits VarargsImpl {
 }
 
+#! implements both the abstract method with fixed parameters of the parent interface and the abstract varargs method
+class QoreVarargsSubIface inherits VarargsSubIface {
+    string m(*string a) {
+        return "qore.fixed:" + a;
+    }
+
+    string m(softlist<*string> a) {
+        return sprintf("qore.varargs:%y", a);
+    }
+}
+
 #! The arguments for the variable arguments of a Java varargs method are packed into an array, as in Java
 /** VarargsCalls describes on the Java side exactly what it receives, with the class of each value and of each array.
 */
@@ -69,6 +82,10 @@ class JniVarargsTest inherits QUnit::Test {
         addTestCase("A fixed-arity method of a parent class is called for its number of arguments",
             \inheritedOverloads());
         addTestCase("A JavaArray for typed variable arguments, and byte variable arguments", \typedArrays());
+        addTestCase("Parent variants that are not public Java methods with fixed parameters", \parentVariants());
+        addTestCase("An abstract overload with fixed parameters of a parent interface", \abstractParentOverload());
+        addTestCase("A Qore class implementing an abstract varargs method called from Qore",
+            \qoreImplementationFromQore());
         set_return_value(main());
     }
 
@@ -359,6 +376,67 @@ object sub f() { return new Missing(); }
         assertEq("p:byte[7]", VarargsCalls::bytes("p", 7));
         assertEq("p:byte[]", VarargsCalls::bytes("p"));
         assertEq("p:byte[]", VarargsCalls::bytes("p", binary()));
+    }
+
+    #! a protected Java method of a parent class, and the variants of a varargs method of a parent class, are not
+    #! taken for Java methods with fixed parameters
+    parentVariants() {
+        # VarargsProtectedBase.over(String) is protected: VarargsProtectedChild.over(String...) is called, as in Java
+        VarargsProtectedChild pc();
+        assertEq("child:String[String:a]", pc.over("a"));
+        assertEq("child:String[String:a, String:b]", pc.over("a", "b"));
+
+        # VarargsBase.typed(String...) and VarargsChild.typed(Integer...): each has its JavaArray variant
+        VarargsChild c();
+        JavaArray ia = new_array(load_class("java/lang/Integer"), 1);
+        ia.set(0, 5);
+        assertEq("child.typed:Integer[Integer:5]", c.typed(ia));
+        assertEq("child.typed:Integer[Integer:1, Integer:2]", c.typed(1, 2));
+        assertEq("base.typed:String[String:a, String:b]", c.typed("a", "b"));
+        assertEq("base.typed:String[String:a]", c.typed("a"));
+        # the child's JavaArray variant is called for any JavaArray, so a String[] is not passed to the parent's
+        JavaArray sa = new_array(load_class("java/lang/String"), 1);
+        sa.set(0, "s");
+        assertThrows("JNI-ERROR", "java.lang.String\\[\\]", sub () { c.typed(sa); });
+    }
+
+    #! with VarargsBaseIface.m(String) and VarargsSubIface.m(String...), the variant of VarargsSubIface for
+    #! separate arguments does not implement the abstract variant of VarargsBaseIface
+    abstractParentOverload() {
+        VarargsSubIface i = VarargsSubIface::make();
+        assertEq("fixed(x)", i.m("x"));
+        assertEq("varargs:String[String:x, String:y]", i.m("x", "y"));
+        assertEq("varargs:String[String:x, String:y, String:z]", i.m("x", "y", "z"));
+        assertEq("varargs:String[String:x]", i.m(("x",)));
+
+        QoreVarargsSubIface q();
+        assertEq("qore.fixed:x|qore.varargs:[\"x\", \"y\"]", VarargsSubIface::callBoth(q));
+
+        # a Qore class implementing only the varargs method has the parent's abstract variant
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        assertThrows("ABSTRACT-CLASS-ERROR", "m\\(\\*string\\)", sub () {
+            p.parse(sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsSubIface
+class OnlyVarargs inherits VarargsSubIface {
+    string m(softlist<*string> a) { return \"\"; }
+}
+object sub f() { return new OnlyVarargs(); }
+", get_script_dir() + "qore-jni-test.jar"), "abstract-parent");
+        });
+    }
+
+    #! a Qore class implementing an abstract varargs method is called from Qore with the array; a variant of a Java
+    #! interface that is not abstract, as the variant for separate arguments, needs the Java object of the Qore
+    #! object, which it does not have (see the limitations in the user guide)
+    qoreImplementationFromQore() {
+        QoreVarargsIface q();
+        assertEq("qore.join:p:[1, 2]", q.join("p", (1, 2)));
+        assertEq("qore.join:p:[1]", q.join("p", 1));
+        assertThrows("OBJECT-INCOMPATIBLE", sub () { q.join("p", 1, 2); });
+        # Java calls the Qore method with the array of the separate arguments
+        assertEq("qore.join:j:[\"x\", \"y\"]", VarargsImpl::callJoin(q));
     }
 
     #! returns the path of the given elements with the separator of the default file system

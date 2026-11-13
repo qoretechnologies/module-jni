@@ -315,8 +315,9 @@
     that number of arguments, as in Java (ex: <tt>java.util.List.of()</tt> with up to 10 elements); the variant
     taking the variable arguments as separate arguments then declares as many of them as needed to be different.
 
-    The same applies to a Java method with fixed parameters inherited from a parent class (ex: \c A.m(String)
-    called for one argument of \c B.m(String...) when \c B extends \c A).
+    The same applies to a public Java method with fixed parameters inherited from a parent class (ex:
+    \c A.m(String) called for one argument of \c B.m(String...) when \c B extends \c A), and to an abstract method
+    of a parent interface (ex: \c I1.m(String) for \c I2.m(String...) when \c I2 extends \c I1).
 
     The variant taking the variable arguments as separate arguments takes extra arguments (\c ...), so they are
     accepted with \c %%strict-args and \c %%require-types (both in \c %%modern); only the first of them is
@@ -341,8 +342,17 @@
     Limitations:
     - a variant of a Java interface that is not abstract (a default method, or the variant of an abstract method
       taking the variable arguments as separate arguments) cannot be called on an object of a %Qore class
-      implementing the interface, which raises \c OBJECT-INCOMPATIBLE; the %Qore class's own method is called with
-      the array instead
+      implementing the interface, which has no Java object for it, and raises \c OBJECT-INCOMPATIBLE; the %Qore
+      class's own method is called with the array, and without \c %%strict-args the further separate arguments are
+      ignored, as for any %Qore method; a %Qore class whose method is called with separate arguments from %Qore
+      also declares a variant for them (ex: <tt>string join(*string prefix, auto first, ...)</tt>)
+    - a Java method of a parent class with fixed parameters of other %Qore types (ex: \c A.m(CharSequence) for
+      \c B.m(String...)) is not preferred for a call with one argument, as Java prefers it; the variant of the class
+      is called
+    - only one variant takes a @ref Jni::org::qore::jni::JavaArray "JavaArray" for a method name with several
+      varargs methods (ex: \c m(String...) and \c m(Integer...), also in a parent class): it is called for any
+      \c JavaArray, and a \c JavaArray of another class is converted to its elements' type, which raises an
+      exception
     - the elements of a \c byte... array are given as a binary or as separate integers, not as a list
     - a @ref Jni::org::qore::jni::JavaArray "JavaArray" is the array only for a method that is not abstract, or for
       an array of \c Object

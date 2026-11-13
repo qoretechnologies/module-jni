@@ -6,6 +6,11 @@ public class VarargsChild extends VarargsBase {
     public VarargsChild() {
     }
 
+    /** a varargs method with Integer elements overloading the parent's with String elements */
+    public String typed(Integer... values) {
+        return "child.typed:" + VarargsCalls.describe(values);
+    }
+
     public String over(String... a) {
         return "child:" + VarargsCalls.describe(a);
     }

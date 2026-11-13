@@ -16,6 +16,11 @@ public class VarargsBase {
         return "base.fmt:" + VarargsCalls.describe(values);
     }
 
+    /** a varargs method with String elements, which a subclass overloads with Integer elements */
+    public String typed(String... values) {
+        return "base.typed:" + VarargsCalls.describe(values);
+    }
+
     /** calls over() from Java */
     public static String callOver(VarargsBase b) {
         return b.over("j");

@@ -388,12 +388,14 @@ protected:
     DLLLOCAL void doMethodsIntern(JniQoreClass& qc, Class* jc, QoreProgram* pgm, Env& env,
         jobjectArray mArray);
 
-    //! Returns true if a variant of a method of a parent class has the given parameter types, and adds it to the class
+    //! Adds a variant for an inherited public Java method with fixed parameters and the given parameter types
     /** A variant that a parent class has for a public Java method with fixed parameters (ex: \c A.m(String)) is added
         to the class, calling the Java method, when the class has a varargs method with the same name (ex:
         \c B.m(String...)) whose variant taking the variable arguments as separate arguments would have its
         parameter types: %Qore calls a variant of the class before one of its parents, so that variant would be
-        called instead of the parent's, while Java calls the method with fixed parameters.
+        called instead of the parent's, while Java calls the method with fixed parameters.  Bridge methods are not
+        used, and if several methods have the parameter types, the method is chosen as for the methods of a class
+        (see jni_choose_variant() in QoreJniClassMap.cpp).
 
         @param qc the class
         @param jc the Java class
@@ -402,8 +404,8 @@ protected:
         @param params the parameter types
         @param pgm the program the types are resolved in
 
-        @return true if a parent class has a variant with the parameter types that is not abstract and does not take
-        extra arguments
+        @return true if the variant was added; false if no public Java method with fixed parameters has the
+        parameter types (ex: the parent's variant is one of a varargs method)
     */
     DLLLOCAL bool addInheritedFixedArityVariant(JniQoreClass& qc, Class* jc, const char* name, bool is_static,
             const type_vec_t& params, QoreProgram* pgm);

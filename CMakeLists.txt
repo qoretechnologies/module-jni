@@ -1258,6 +1258,10 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/VarargsImpl.java
     test/java/src/org/qore/jni/test/VarargsBase.java
     test/java/src/org/qore/jni/test/VarargsChild.java
+    test/java/src/org/qore/jni/test/VarargsProtectedBase.java
+    test/java/src/org/qore/jni/test/VarargsProtectedChild.java
+    test/java/src/org/qore/jni/test/VarargsBaseIface.java
+    test/java/src/org/qore/jni/test/VarargsSubIface.java
     test/java/src/org/qore/jni/test/CollectionTypes.java
     test/java/src/org/qore/jni/test/ConvertedValueFields.java
     test/java/src/org/qore/jni/test/ConvertedValueReturns.java

@@ -25,8 +25,9 @@
       documentation that captured the former <tt>softlist&lt;T&gt;</tt> signatures differ and must be rebuilt;
       remaining limitations: a default method of a Java interface, and the variant for separate arguments of an
       abstract method, cannot be called on an object of a %Qore class implementing the interface, the elements of a
-      \c byte... array cannot be given as a list, and a \c JavaArray is not taken for the typed array of an
-      abstract method
+      \c byte... array cannot be given as a list, a \c JavaArray is not taken for the typed array of an abstract
+      method, only one variant per method name takes a \c JavaArray, and a parent's method with fixed parameters of
+      other %Qore types (ex: \c A.m(CharSequence) for \c B.m(String...)) is not preferred as Java does
     - <b>Security</b>: added @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the sandbox
       network and filesystem policy of the %Qore code that called into Java to the I/O that Java code makes itself,
       which %Qore does not see: \c checkNetworkAccess() resolves a host name once with the %Qore resolver, checks

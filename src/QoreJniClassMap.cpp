@@ -1678,10 +1678,25 @@ static bool jni_same_param_types(const type_vec_t& a, const type_vec_t& b) {
     return true;
 }
 
-//! Returns true if a parent class of \a qc has a variant of a method with the given parameter types that can be
-//! called and does not take extra arguments
-static bool jni_parent_has_fixed_arity_variant(const QoreClass& qc, const char* name, bool is_static,
+//! The public variants of a method of the parent classes with given parameter types; see
+//! jni_get_parent_variants()
+enum class JniParentVariants {
+    //! no variant
+    None,
+    //! a variant that is not abstract, which may be one of a Java method with fixed parameters
+    Concrete,
+    //! an abstract variant
+    Abstract,
+};
+
+//! Returns the public variants of a method of the parent classes of \a qc with the given parameter types that do
+//! not take extra arguments
+/** An abstract variant is reported before a variant that is not abstract.  A variant that is not public (ex: a
+    protected Java method) is not callable from outside the class, so the class's own variants are called instead.
+*/
+static JniParentVariants jni_get_parent_variants(const QoreClass& qc, const char* name, bool is_static,
         const type_vec_t& params) {
+    JniParentVariants rv = JniParentVariants::None;
     QoreParentClassIterator ci(qc);
     while (ci.next()) {
         const QoreClass& pc = ci.getParentClass();
@@ -1691,15 +1706,33 @@ static bool jni_parent_has_fixed_arity_variant(const QoreClass& qc, const char* 
             while (vi.next()) {
                 const QoreExternalMethodVariant* v =
                     reinterpret_cast<const QoreExternalMethodVariant*>(vi.getVariant());
-                if (v->isAbstract() || v->getAccess() == Internal || (v->getCodeFlags() & QCF_USES_EXTRA_ARGS)) {
+                if (v->getAccess() != Public || (v->getCodeFlags() & QCF_USES_EXTRA_ARGS)
+                    || !jni_same_param_types(v->getParamTypeList(), params)) {
                     continue;
                 }
-                if (jni_same_param_types(v->getParamTypeList(), params)) {
-                    return true;
+                if (v->isAbstract()) {
+                    return JniParentVariants::Abstract;
                 }
+                rv = JniParentVariants::Concrete;
             }
         }
-        if (jni_parent_has_fixed_arity_variant(pc, name, is_static, params)) {
+        JniParentVariants prv = jni_get_parent_variants(pc, name, is_static, params);
+        if (prv == JniParentVariants::Abstract) {
+            return prv;
+        }
+        if (prv == JniParentVariants::Concrete) {
+            rv = prv;
+        }
+    }
+    return rv;
+}
+
+//! Returns true if the class or one of its parents is a %Qore class, which is not a Java class
+static bool jni_has_qore_parent(const QoreClass& qc) {
+    QoreParentClassIterator ci(qc);
+    while (ci.next()) {
+        const QoreClass& pc = ci.getParentClass();
+        if (!dynamic_cast<const JniQoreClass*>(&pc) || jni_has_qore_parent(pc)) {
             return true;
         }
     }
@@ -2304,8 +2337,9 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
         entries.push_back(std::move(entry));
     }
 
-    // the varargs methods added that can be called
+    // the varargs methods added
     std::vector<JniLooseVariant> varargs_variants;
+    bool qore_parent = jni_has_qore_parent(qc);
     for (const JniVariant& v : jni_get_variants(env, entries,
             [](const JniMethodEntry& e) { return (bool)e.meth->isStatic(); },
             // do not add additional abstract variants for alternate parameter types
@@ -2317,8 +2351,9 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
         int64 flags = v.alt ? QCF_NO_FLAGS : meth->getFlags();
         // a varargs method of a class that is not abstract implements every abstract variant of its name that the
         // class inherits, as Java requires; the array is declared as a list, while an abstract method declares it as
-        // a soft list (see QoreJniClassMap::JavaTypeUse), so the signatures differ
-        if (meth->isVarargs() && !abstract_class && !meth->isStatic()) {
+        // a soft list (see QoreJniClassMap::JavaTypeUse), so the signatures differ; not for a class with a %Qore
+        // parent, whose abstract variants Java does not know
+        if (meth->isVarargs() && !abstract_class && !meth->isStatic() && !qore_parent) {
             flags |= QCF_ABSTRACT_OVERRIDE_ALL;
         }
 
@@ -2365,9 +2400,19 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
             if (qm && qm->existsVariant(params)) {
                 return true;
             }
-            // a variant of a parent class for a Java method with fixed parameters is called for its number of
-            // arguments, as in Java
-            return addInheritedFixedArityVariant(qc, jc, lv.name, is_static, params, pgm);
+            switch (jni_get_parent_variants(qc, lv.name, is_static, params)) {
+                // an abstract variant of a parent with the parameter types (ex: I1.m(String) for
+                // I2.m(String...)) must not be implemented by the variant for separate arguments
+                case JniParentVariants::Abstract:
+                    return true;
+                // a variant of a parent class for a Java method with fixed parameters is called for its number of
+                // arguments, as in Java; other variants (ex: of a varargs method) are not
+                case JniParentVariants::Concrete:
+                    return addInheritedFixedArityVariant(qc, jc, lv.name, is_static, params, pgm);
+                case JniParentVariants::None:
+                    break;
+            }
+            return false;
         },
         [&qc](const JniLooseVariant& lv, const type_vec_t& params, int64 flags) {
             // the variant of an abstract method calls the Java method of the object, as a concrete variant
@@ -2383,11 +2428,10 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
 
 bool QoreJniClassMap::addInheritedFixedArityVariant(JniQoreClass& qc, jni::Class* jc, const char* name,
         bool is_static, const type_vec_t& params, QoreProgram* pgm) {
-    if (!jni_parent_has_fixed_arity_variant(qc, name, is_static, params)) {
-        return false;
-    }
-    // find the public Java method that the parent's variant calls; Class.getMethods() returns the inherited public
-    // methods as well
+    // find the public Java methods with fixed parameters that have the parameter types; Class.getMethods() returns
+    // the inherited public methods as well
+    std::vector<std::unique_ptr<JniMethodEntry>> entries;
+    std::vector<JniVariant> group;
     Env env;
     LocalReference<jobjectArray> methods = env.callObjectMethod(jc->getJavaObject(), Globals::methodClassGetMethods,
         nullptr).as<jobjectArray>();
@@ -2408,40 +2452,52 @@ bool QoreJniClassMap::addInheritedFixedArityVariant(JniQoreClass& qc, jni::Class
                 continue;
             }
         }
-        SimpleRefHolder<BaseMethod> holder(new BaseMethod(m, jc));
-        BaseMethod* meth = *holder;
+        std::unique_ptr<JniMethodEntry> entry(new JniMethodEntry(new BaseMethod(m, jc)));
+        BaseMethod* meth = entry->meth;
+        // bridge methods are synthetic, and the method they bridge to is preferred
         if ((bool)meth->isStatic() != is_static || meth->isAbstract() || meth->isVarargs() || meth->isPrivate()
-            || (meth->isSynthetic() && !meth->isBridge())) {
+            || meth->isSynthetic() || meth->getAccess() != Public) {
             continue;
         }
-        type_vec_t mparams, alt_params;
-        if (meth->getParamTypes(env, mparams, alt_params, *this, pgm)) {
+        if (meth->getParamTypes(env, entry->params, entry->alt_params, *this, pgm)) {
             continue;
         }
         bool alt = false;
-        if (!jni_same_param_types(mparams, params)) {
-            if (alt_params.empty() || !jni_same_param_types(alt_params, params)) {
+        if (!jni_same_param_types(entry->params, params)) {
+            if (entry->alt_params.empty() || !jni_same_param_types(entry->alt_params, params)) {
                 continue;
             }
             alt = true;
         }
-        printd(LogLevel, "QoreJniClassMap::addInheritedFixedArityVariant() adding inherited variant %s::%s()\n",
-            qc.getName(), name);
-        // the variant taking Java objects for list and map arguments has no flags
-        int64 flags = alt ? QCF_NO_FLAGS : meth->getFlags();
-        const QoreTypeInfo* return_type = meth->getReturnTypeInfo(*this, pgm);
-        if (is_static) {
-            qc.addStaticMethod((void*)meth, name, (q_external_static_method_t)exec_java_static_method,
-                meth->getAccess(), flags, QDOM_UNCONTROLLED_API, return_type, params);
-        } else {
-            qc.addMethod((void*)meth, name, (q_external_method_t)exec_java_method, meth->getAccess(), flags,
-                QDOM_UNCONTROLLED_API, return_type, params);
-        }
-        // the Java class keeps the method
-        jc->trackMethod(holder.release());
-        break;
+        entry->name = name;
+        entry->return_type = meth->getReturnTypeInfo(*this, pgm);
+        QoreString sig;
+        meth->getSignature(sig);
+        entry->signature = sig.c_str();
+        group.push_back(JniVariant{entry.get(), alt});
+        entries.push_back(std::move(entry));
     }
-    // the parent's variant has the parameter types, whether or not the Java method was found
+    if (group.empty()) {
+        // the parent's variant is not one of a public Java method with fixed parameters
+        return false;
+    }
+
+    // the method is chosen as for the methods of a class with the same %Qore signature
+    const JniVariant& v = group.size() == 1 ? group[0] : group[jni_choose_variant(env, group)];
+    BaseMethod* meth = v.entry->meth;
+    printd(LogLevel, "QoreJniClassMap::addInheritedFixedArityVariant() adding inherited variant %s::%s()\n",
+        qc.getName(), name);
+    // the variant taking Java objects for list and map arguments has no flags
+    int64 flags = v.alt ? QCF_NO_FLAGS : meth->getFlags();
+    if (is_static) {
+        qc.addStaticMethod((void*)meth, name, (q_external_static_method_t)exec_java_static_method,
+            meth->getAccess(), flags, QDOM_UNCONTROLLED_API, v.entry->return_type, params);
+    } else {
+        qc.addMethod((void*)meth, name, (q_external_method_t)exec_java_method, meth->getAccess(), flags,
+            QDOM_UNCONTROLLED_API, v.entry->return_type, params);
+    }
+    // the Java class keeps the method
+    v.entry->setUsed(jc);
     return true;
 }
 
