@@ -1253,6 +1253,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/FinalFields.java
     test/java/src/org/qore/jni/test/FloatConversions.java
     test/java/src/org/qore/jni/test/ListConversions.java
+    test/java/src/org/qore/jni/test/VarargsCalls.java
     test/java/src/org/qore/jni/test/CollectionTypes.java
     test/java/src/org/qore/jni/test/ConvertedValueFields.java
     test/java/src/org/qore/jni/test/ConvertedValueReturns.java

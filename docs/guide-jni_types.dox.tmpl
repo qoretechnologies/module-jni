@@ -174,9 +174,12 @@
 
     Parameters follow the same rule: a parameter of a reference type takes no value, which is passed to Java as
     \c null (ex: \c *string for a \c java.lang.String parameter, <tt>*softlist&lt;int&gt;</tt> for an \c int[]
-    parameter), and only a parameter of a primitive type does not.  The variable arguments of a varargs method are the
-    exception: they are a <tt>softlist&lt;T&gt;</tt>, which passes no value as an empty array, as Java passes when there
-    are no variable arguments.
+    parameter), and only a parameter of a primitive type does not.  The variable arguments of a varargs method are
+    declared in two variants (see @ref jni_array_varargs): the array as a <tt>*list&lt;T&gt;</tt>, which passes no
+    value as an empty array, as Java passes when there are no variable arguments, and the variable arguments given as
+    separate arguments, the first of them declared with the type \c T of the array's elements, followed by \c ...;
+    an abstract method declares the array as a <tt>softlist&lt;T&gt;</tt>, which a %Qore class implementing it
+    declares.
 
     A %Qore argument selects the variant Java would select for the value it is converted to.  A string, an integer
     (passed as a \c java.lang.Long), a float (\c java.lang.Double), a boolean (\c java.lang.Boolean), a number
@@ -286,8 +289,8 @@
     variable number of arguments after the first argument.  In the mapped Qore class, these must be given as a %Qore
     list (as in the above example) or a @ref Jni::org::qore::jni::JavaArray "JavaArray" object.
 
-    If the last argument of a Java method has an array type, then the arguments in Qore can also be given in the flat
-    argument list, and the final array argument will be created automatically for the call.
+    The variable arguments can also be given as separate arguments, as in Java: they are packed into the array for
+    the call.
 
     Because of this, the example above also works as follows:
     @code{.py}
@@ -297,4 +300,22 @@
     stringBuilderAppendLong.invoke(stringBuilder, 20);
     printf("%y\n", stringBuilder.toString());
     @endcode
+
+    The arguments for the variable arguments are passed as follows, as in Java:
+    - separate arguments are packed into the array, and a list among several of them is an element of the array
+      (ex: <tt>String::format("%s %s", "a", "b")</tt>, <tt>Arrays::asList(1, 2, 3)</tt>,
+      <tt>m.invoke(NOTHING, "a", "b")</tt>)
+    - a single list is the array (ex: <tt>String::format("%s %s", ("a", "b"))</tt>), as is a single binary for a
+      \c byte[] array and a single Java array object (such as a
+      @ref Jni::org::qore::jni::JavaArray "JavaArray") that is an instance of the array's class
+    - no argument, or no value as the single argument, is an empty array
+
+    A Java method with fixed parameters for the same number of arguments is called instead of a varargs method for
+    that number of arguments, as in Java (ex: <tt>java.util.List.of()</tt> with up to 10 elements); the variant
+    taking the variable arguments as separate arguments then declares as many of them as needed to be different.
+
+    The variant taking the variable arguments as separate arguments takes extra arguments (\c ...), so they are
+    accepted with \c %%strict-args and \c %%require-types (both in \c %%modern); only the first of them is
+    checked against the type of the array's elements when the call is parsed, and the others are converted to it
+    when the method is called.  An abstract method has only the variant taking the array.
 */

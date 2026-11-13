@@ -3203,11 +3203,17 @@ string sub javaName() {
             assertFalse(acceptsNoValueUnconverted(type_name), sprintf("primitive %s parameter: %y", key, type_name));
             assertEq(prims{key}, type_name, "primitive " + key + " parameter");
         }
-        # the variable arguments of a varargs method are an empty array when there are none, as Java passes
-        assertEq("softlist<*string>", cast<AbstractMethodVariant>(cls.getMethod("paramVarargs").getVariants()[0])
-            .getParamTypes()[0].getName(), "varargs parameter");
+        # the variable arguments of a varargs method are an empty array when there are none, as Java passes; the
+        # variant taking the array takes a list, which is not converted from a single value, and the variant taking
+        # the variable arguments as separate arguments takes the elements' type
+        list<string> varargs_types = sort(map cast<AbstractMethodVariant>($1).getParamTypes()[0].getName(),
+            cls.getMethod("paramVarargs").getVariants());
+        assertEq(("*list<*string>", "*string"), varargs_types, "varargs parameter");
         assertEq("0", ValueTypeMapping::paramVarargs(), "no variable arguments");
         assertEq("0", ValueTypeMapping::paramVarargs(none), "no value for the variable arguments");
+        assertEq("1", ValueTypeMapping::paramVarargs("a"), "one variable argument");
+        assertEq("2", ValueTypeMapping::paramVarargs("a", "b"), "two variable arguments");
+        assertEq("2", ValueTypeMapping::paramVarargs(("a", "b")), "the variable arguments as a list");
 
         foreach hash<auto> i in (prims.pairIterator()) {
             hash<string, string> uses = {

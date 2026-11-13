@@ -1639,6 +1639,69 @@ static std::vector<JniVariant> jni_get_variants(Env& env, std::vector<std::uniqu
     return rv;
 }
 
+namespace {
+//! A variant taking the variable arguments of a varargs method or constructor as separate arguments
+struct JniLooseVariant {
+    //! the method or constructor
+    BaseMethod* meth;
+    //! the name of the %Qore method, owned by its JniMethodEntry; null for a constructor
+    const char* name;
+    //! the parameter types of the variant; the parameter types of the variant taking the array before
+    //! jni_add_loose_varargs_variants() sets them
+    type_vec_t params;
+    //! the type of the elements of the array of variable arguments
+    const QoreTypeInfo* elem_type;
+    //! the return type of a method
+    const QoreTypeInfo* return_type;
+};
+}
+
+//! Adds the variants taking the variable arguments of varargs methods or constructors as separate arguments
+/** Java packs the arguments given for the variable arguments parameter into an array.  The variant taking the array
+    declares it as a list (see QoreJniClassMap::JavaTypeUse::VarargsArrayParam), which does not convert a single
+    value, so a value that is not a list is a variable argument given as a separate argument.  This variant takes the
+    fixed parameters, followed by the variable arguments as separate arguments: it declares the first variable
+    argument with the type of the array's elements and takes the remaining arguments as further variable arguments
+    (\c QCF_USES_EXTRA_ARGS), so that %Qore passes the arguments as they are given, and
+    BaseMethod::getVarargsArray() packs them into the array.  The array variant must not declare a soft list, which
+    would convert the first of several separate variable arguments to a list nested in the array, and match no call
+    with further arguments with \c %strict-args.
+
+    If a variant added before has the same parameter types, as a Java method with fixed parameters for the same
+    number of arguments does (ex: \c EnumSet.of(E, E) and \c EnumSet.of(E, E...)), that variant is called for that
+    number of arguments, as Java prefers the method with fixed parameters, and the variant takes one more variable
+    argument with the type of the elements, until no variant added before has its parameter types.  The parameter
+    types of all the variants are determined before any of them is added; a variant with the same parameter types as
+    one of them added before is not added.
+
+    @param variants the varargs variants added to the class
+    @param exists returns true if the class has a variant with the given parameter types for the method of the
+    variant
+    @param add adds the variant to the class
+*/
+static void jni_add_loose_varargs_variants(std::vector<JniLooseVariant>& variants,
+        std::function<bool(const JniLooseVariant&, const type_vec_t&)> exists,
+        std::function<void(const JniLooseVariant&)> add) {
+    for (JniLooseVariant& lv : variants) {
+        assert(!lv.params.empty());
+        // replace the array with the first variable argument
+        lv.params.back() = lv.elem_type;
+        while (exists(lv, lv.params)) {
+            // a Java method has at most 255 parameters
+            if (lv.params.size() >= 255) {
+                lv.params.clear();
+                break;
+            }
+            lv.params.push_back(lv.elem_type);
+        }
+    }
+    for (const JniLooseVariant& lv : variants) {
+        if (!lv.params.empty() && !exists(lv, lv.params)) {
+            add(lv);
+        }
+    }
+}
+
 void QoreJniClassMap::doConstructors(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm) {
     Env env;
 
@@ -1667,6 +1730,8 @@ void QoreJniClassMap::doConstructors(JniQoreClass& qc, jni::Class* jc, QoreProgr
         entries.push_back(std::move(entry));
     }
 
+    // the varargs constructors added
+    std::vector<JniLooseVariant> varargs_variants;
     for (const JniVariant& v : jni_get_variants(env, entries, [](const JniMethodEntry&) { return false; },
             [](const JniMethodEntry&) { return true; })) {
         BaseMethod* meth = v.entry->meth;
@@ -1681,7 +1746,22 @@ void QoreJniClassMap::doConstructors(JniQoreClass& qc, jni::Class* jc, QoreProgr
         qc.addConstructor((void*)meth, (q_external_constructor_t)exec_java_constructor, meth->getAccess(),
             meth->getFlags(), QDOM_UNCONTROLLED_API, v.getParams());
         v.entry->setUsed(jc);
+        if (meth->isVarargs()) {
+            varargs_variants.push_back(JniLooseVariant{meth, nullptr, v.getParams(),
+                meth->getVarargsElementTypeInfo(*this, pgm), nullptr});
+        }
     }
+
+    // the variants taking the variable arguments as separate arguments
+    jni_add_loose_varargs_variants(varargs_variants,
+        [&qc](const JniLooseVariant&, const type_vec_t& params) {
+            const QoreMethod* qm = qc.getConstructor();
+            return qm && qm->existsVariant(params);
+        },
+        [&qc](const JniLooseVariant& lv) {
+            qc.addConstructor((void*)lv.meth, (q_external_constructor_t)exec_java_constructor, lv.meth->getAccess(),
+                QCF_USES_EXTRA_ARGS, QDOM_UNCONTROLLED_API, lv.params);
+        });
 }
 
 // guards relaxed_class_types; a strict leaf taken only around the set operation
@@ -1812,9 +1892,22 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
     assert(!altType);
     Env env;
     if (use == JavaTypeUse::VarargsParam) {
-        // the array of variable arguments: a soft list, which converts no value to an empty array, as Java passes
-        // when there are no variable arguments; its elements follow the nullability rule
+        // the array of variable arguments of an abstract method: a soft list, which converts no value to an empty
+        // array, as Java passes when there are no variable arguments; its elements follow the nullability rule
         return getQoreTypeIntern(env, cls, altType, pgm, JavaTypeUse::Param, member);
+    }
+    if (use == JavaTypeUse::VarargsArrayParam) {
+        // the array of variable arguments given as an array: a list, which is not converted from a single value, as
+        // a soft list would convert it, so that a single value is a variable argument given as a separate argument;
+        // no value is an empty array, as Java passes when there are no variable arguments (see
+        // BaseMethod::getVarargsArray())
+        LocalReference<jstring> clsName = env.callObjectMethod(cls, Globals::methodClassGetName,
+            nullptr).as<jstring>();
+        Env::GetStringUtfChars tname(env, clsName);
+        if (!strcmp(tname.c_str(), "[B")) {
+            return binaryOrNothingTypeInfo;
+        }
+        return qore_get_complex_list_or_nothing_type(getVarargsElementType(cls, pgm));
     }
     const QoreTypeInfo* ti = getQoreTypeIntern(env, cls, altType, pgm, use, member);
     if (use == JavaTypeUse::Param) {
@@ -1890,6 +1983,24 @@ static const QoreTypeInfo* jni_get_converted_param_type(Env& env, jclass cls, Jn
     }
     types.push_back(qc->getOrNothingTypeInfo());
     return qore_get_union_or_nothing_type(types);
+}
+
+const QoreTypeInfo* QoreJniClassMap::getVarargsElementType(jclass array_cls, QoreProgram* pgm) {
+    Env env;
+    LocalReference<jclass> elem_cls = env.callObjectMethod(array_cls, Globals::methodClassGetComponentType,
+        nullptr).as<jclass>();
+    assert(elem_cls);
+    // the element as a parameter follows the nullability rule, as the elements of an array parameter do (see
+    // getQoreTypeIntern())
+    const QoreTypeInfo* elemAltType = nullptr;
+    const QoreTypeInfo* elem_type = getQoreType(elem_cls, elemAltType, pgm, JavaTypeUse::Param);
+    if (elem_type == objectTypeInfo || elem_type == objectOrNothingTypeInfo) {
+        return autoTypeInfo;
+    }
+    if (!env.callBooleanMethod(elem_cls, Globals::methodClassIsPrimitive, nullptr)) {
+        return qore_get_or_nothing_type(elem_type);
+    }
+    return elem_type;
 }
 
 const QoreTypeInfo* QoreJniClassMap::getQoreTypeIntern(Env& env, jclass cls, const QoreTypeInfo*& altType,
@@ -2125,6 +2236,8 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
         entries.push_back(std::move(entry));
     }
 
+    // the varargs methods added that can be called
+    std::vector<JniLooseVariant> varargs_variants;
     for (const JniVariant& v : jni_get_variants(env, entries,
             [](const JniMethodEntry& e) { return (bool)e.meth->isStatic(); },
             // do not add additional abstract variants for alternate parameter types
@@ -2162,7 +2275,29 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
             }
         }
         v.entry->setUsed(jc);
+        // an abstract method keeps only the variant that a %Qore class implementing it declares
+        if (meth->isVarargs() && !(abstract_class && meth->isAbstract())) {
+            varargs_variants.push_back(JniLooseVariant{meth, mname, params,
+                meth->getVarargsElementTypeInfo(*this, pgm), v.entry->return_type});
+        }
     }
+
+    // the variants taking the variable arguments as separate arguments; the entries owning the names are alive
+    jni_add_loose_varargs_variants(varargs_variants,
+        [&qc](const JniLooseVariant& lv, const type_vec_t& params) {
+            const QoreMethod* qm = lv.meth->isStatic() ? qc.findLocalStaticMethod(lv.name)
+                : qc.findLocalMethod(lv.name);
+            return qm && qm->existsVariant(params);
+        },
+        [&qc](const JniLooseVariant& lv) {
+            if (lv.meth->isStatic()) {
+                qc.addStaticMethod((void*)lv.meth, lv.name, (q_external_static_method_t)exec_java_static_method,
+                    lv.meth->getAccess(), QCF_USES_EXTRA_ARGS, QDOM_UNCONTROLLED_API, lv.return_type, lv.params);
+            } else {
+                qc.addMethod((void*)lv.meth, lv.name, (q_external_method_t)exec_java_method, lv.meth->getAccess(),
+                    QCF_USES_EXTRA_ARGS, QDOM_UNCONTROLLED_API, lv.return_type, lv.params);
+            }
+        });
 }
 
 void QoreJniClassMap::doMethods(JniQoreClass& qc, jni::Class* jc, QoreProgram* pgm) {

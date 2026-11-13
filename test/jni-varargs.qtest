@@ -1,0 +1,224 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.VarargsCalls
+%module-cmd(jni) import java.lang.String
+%module-cmd(jni) import java.lang.Long
+%module-cmd(jni) import java.util.Arrays
+%module-cmd(jni) import java.util.List
+%module-cmd(jni) import java.util.EnumSet
+%module-cmd(jni) import java.util.concurrent.TimeUnit
+%exec-class JniVarargsTest
+
+#! The arguments for the variable arguments of a Java varargs method are packed into an array, as in Java
+/** VarargsCalls describes on the Java side exactly what it receives, with the class of each value and of each array.
+*/
+class JniVarargsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI varargs", "1.0") {
+        addTestCase("Separate variable arguments are packed into the array", \looseArgs());
+        addTestCase("A single list is the array", \listArg());
+        addTestCase("A single Java array of the array's type is the array", \arrayArg());
+        addTestCase("No variable arguments is an empty array", \noArgs());
+        addTestCase("Fixed parameters followed by variable arguments", \mixedArgs());
+        addTestCase("Method.invoke() of static and instance methods", \methodInvoke());
+        addTestCase("Varargs methods of the JDK", \jdkMethods());
+        addTestCase("Fixed-arity overloads are called for their number of arguments", \fixedArityOverloads());
+        addTestCase("Calls in a Program without strict arguments", \nonStrictProgram());
+        addTestCase("Invalid variable arguments raise errors", \invalidArgs());
+        set_return_value(main());
+    }
+
+    #! separate arguments are packed into the array; a list among them is an element of the array, as in Java
+    looseArgs() {
+        assertEq("Object[Long:1]", VarargsCalls::objects(1));
+        assertEq("Object[Long:1, Long:2]", VarargsCalls::objects(1, 2));
+        assertEq("Object[Long:1, String:two, Double:3.0]", VarargsCalls::objects(1, "two", 3.0));
+        # the first argument was converted to a list by the soft list type of the array, which was passed nested in
+        # the array: Object[Long[Long:1], Long:2]
+        assertEq("Object[Long:1, Long:2, Long:3]", VarargsCalls::objects(1, 2, 3));
+        assertEq("Object[null, Long:2]", VarargsCalls::objects(NOTHING, 2));
+        assertEq("Object[Long[Long:1], Long:2]", VarargsCalls::objects((1,), 2));
+        assertEq("Object[Long:1, Long[Long:2, Long:3]]", VarargsCalls::objects(1, (2, 3)));
+        assertEq("Object[Long[Long:1, Long:2], Long:3]", VarargsCalls::objects((1, 2), 3));
+    }
+
+    #! a single list is the array, as documented
+    listArg() {
+        assertEq("Object[Long:1, Long:2]", VarargsCalls::objects((1, 2)));
+        assertEq("Object[Long:1]", VarargsCalls::objects((1,)));
+        assertEq("Object[]", VarargsCalls::objects(()));
+        assertEq("p:Object[Long:1, String:x]", VarargsCalls::mixed("p", (1, "x")));
+        assertEq("2:String[String:a, String:b]", VarargsCalls::strings(2, ("a", "b")));
+        assertEq("p:long[1, 2]", VarargsCalls::longs("p", (1, 2)));
+        list<auto> l = (1, 2);
+        assertEq("Object[Long:1, Long:2]", VarargsCalls::objects(l));
+    }
+
+    #! a Java array of the array's type is the array, as in Java; another object is an element
+    arrayArg() {
+        JavaArray a = new_array(load_class("java/lang/Long"), 2);
+        a.set(0, 1);
+        a.set(1, 2);
+        assertEq("Long[Long:1, Long:2]", VarargsCalls::objects(a));
+        assertEq("p:Long[Long:1, Long:2]", VarargsCalls::mixed("p", a));
+        # with further arguments, the array is an element of the array
+        assertEq("Object[Long[Long:1, Long:2], Long:3]", VarargsCalls::objects(a, 3));
+
+        JavaArray s = new_array(load_class("java/lang/String"), 1);
+        s.set(0, "x");
+        assertEq("String[String:x]", VarargsCalls::objects(s));
+
+        # a long[] is not an Object[]: it is the only element
+        JavaArray p = new_array(Long::TYPE, 2);
+        assertEq("Object[long[0, 0]]", VarargsCalls::objects(p));
+
+        # an object that is not an array is an element
+        VarargsCalls obj("o");
+        assertRegex("^Object\\[VarargsCalls:org\\.qore\\.jni\\.test\\.VarargsCalls@", VarargsCalls::objects(obj));
+    }
+
+    #! no variable arguments, or no value as the single argument, is an empty array, as Java passes
+    noArgs() {
+        assertEq("Object[]", VarargsCalls::objects());
+        assertEq("Object[]", VarargsCalls::objects(NOTHING));
+        assertEq("p:Object[]", VarargsCalls::mixed("p"));
+        assertEq("p:Object[]", VarargsCalls::mixed("p", NOTHING));
+        assertEq("2:String[]", VarargsCalls::strings(2));
+        assertEq("p:long[]", VarargsCalls::longs("p"));
+        assertEq("n", (new VarargsCalls("n")).getName());
+        assertEq("o.p:Object[]", (new VarargsCalls("o")).mixedInstance("p"));
+    }
+
+    #! fixed parameters are converted to their types and the remaining arguments are packed into the array
+    mixedArgs() {
+        assertEq("p:Object[Long:1, Long:2]", VarargsCalls::mixed("p", 1, 2));
+        assertEq("2:String[String:a, String:b]", VarargsCalls::strings(2, "a", "b"));
+        assertEq("2:String[String:a, null]", VarargsCalls::strings(2, "a", NOTHING));
+        assertEq("p:long[1, 2, 3]", VarargsCalls::longs("p", 1, 2, 3));
+        assertEq("p:long[7]", VarargsCalls::longs("p", 7));
+
+        VarargsCalls obj("o");
+        assertEq("o.p:Object[Long:1, Long:2]", obj.mixedInstance("p", 1, 2));
+        assertEq("o.p:Object[Long:1]", obj.mixedInstance("p", 1));
+        assertEq("o.p:Object[Long:1, Long:2]", obj.mixedInstance("p", (1, 2)));
+
+        # a constructor with variable arguments
+        assertEq("nObject[Long:1, Long:2]", (new VarargsCalls("n", 1, 2)).getName());
+        assertEq("nObject[Long:1]", (new VarargsCalls("n", 1)).getName());
+        assertEq("nObject[Long:1, Long:2]", (new VarargsCalls("n", (1, 2))).getName());
+
+        # a variable whose type is not known at parse time
+        auto dyn = obj;
+        assertEq("o.p:Object[Long:1, Long:2, Long:3]", dyn.mixedInstance("p", 1, 2, 3));
+    }
+
+    #! java.lang.reflect.Method.invoke(Object obj, Object... args)
+    methodInvoke() {
+        Class cls = load_class("org/qore/jni/test/VarargsCalls");
+        Class str = load_class("java/lang/String");
+        Method two = cls.getMethod("two", str, str);
+        Method twoi = cls.getMethod("twoInstance", str, str);
+        VarargsCalls obj("o");
+
+        # the arguments were passed as [["a"], "b"], which Java rejected with "argument type mismatch"
+        assertEq("two(a, b)", two.invoke(NOTHING, "a", "b"));
+        assertEq("two(a, b)", two.invoke(NOTHING, ("a", "b")));
+        assertEq("o.two(a, b)", twoi.invoke(obj, "a", "b"));
+        assertEq("o.two(a, b)", twoi.invoke(obj, ("a", "b")));
+
+        # a varargs method invoked by reflection takes its array as one argument: the list is converted to a Long[]
+        Method mixed = cls.getMethod("mixed", str, load_class("[Ljava/lang/Object;"));
+        assertEq("p:Long[Long:1, Long:2]", mixed.invoke(NOTHING, "p", (1, 2)));
+
+        # Class.getMethod(String name, Class<?>... parameterTypes) with separate arguments
+        assertEq("public static java.lang.String org.qore.jni.test.VarargsCalls.two(java.lang.String,"
+            "java.lang.String)", cls.getMethod("two", str, str).toString());
+
+        # jni::invoke() takes the arguments of the method as separate arguments
+        assertEq("p:Object[Long:1, Long:2]", jni::invoke(mixed, NOTHING, "p", 1, 2));
+        assertEq("two(a, b)", jni::invoke(two, NOTHING, "a", "b"));
+    }
+
+    #! varargs methods of the JDK called without reflection
+    jdkMethods() {
+        assertEq("a b", String::format("%s %s", "a", "b"));
+        assertEq("a b", String::format("%s %s", ("a", "b")));
+        assertEq("1-2-3", String::format("%d-%d-%d", 1, 2, 3));
+        assertEq("x", String::format("x"));
+        assertEq(("a", "b", "c"), Arrays::asList("a", "b", "c"));
+        assertEq(("a",), Arrays::asList("a"));
+        assertEq(("a", "b"), Arrays::asList(("a", "b")));
+        assertEq((), Arrays::asList());
+        assertEq("a,b,c", String::join(",", "a", "b", "c"));
+        assertEq("a", String::join(",", "a"));
+    }
+
+    #! a Java method with fixed parameters for a number of arguments is called for that number, as in Java, and the
+    #! varargs method for more arguments
+    fixedArityOverloads() {
+        # List.of() has fixed-arity overloads for up to 10 elements
+        assertEq((1, 2, 3), List::of(1, 2, 3));
+        list<int> l = range(1, 12);
+        assertEq(l, List::of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11));
+        l = range(1, 13);
+        assertEq(l, List::of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12));
+        assertEq(l, List::of(l));
+
+        # EnumSet.of(E first, E... rest) and EnumSet.of(E e1, ..., E e5)
+        list<TimeUnit> units = (TimeUnit::NANOSECONDS, TimeUnit::MICROSECONDS, TimeUnit::MILLISECONDS,
+            TimeUnit::SECONDS, TimeUnit::MINUTES, TimeUnit::HOURS, TimeUnit::DAYS);
+        EnumSet two = EnumSet::of(units[0], units[1]);
+        assertEq(2, two.size());
+        EnumSet all = EnumSet::of(units[0], units[1], units[2], units[3], units[4], units[5], units[6]);
+        assertEq(7, all.size());
+        assertTrue(all.contains(TimeUnit::DAYS));
+    }
+
+    #! in a Program without strict arguments, %Qore passed arguments beyond the parameters of the variant taking the
+    #! array as well, after converting the first variable argument to a list
+    nonStrictProgram() {
+        Program p(PO_NEW_STYLE);
+        p.parse(sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsCalls
+auto sub objects() { return VarargsCalls::objects(1, 2, 3); }
+auto sub mixed() { return VarargsCalls::mixed(\"p\", 1, 2); }
+auto sub invoke() {
+    auto m = load_class(\"org/qore/jni/test/VarargsCalls\").getMethod(\"two\", load_class(\"java/lang/String\"),
+        load_class(\"java/lang/String\"));
+    return m.invoke(NOTHING, \"a\", \"b\");
+}
+auto sub list_then_value() { return VarargsCalls::objects((1,), 2); }
+auto sub single_list() { return VarargsCalls::objects((1, 2)); }
+", get_script_dir() + "qore-jni-test.jar"), "non-strict");
+        assertEq("Object[Long:1, Long:2, Long:3]", p.callFunction("objects"));
+        assertEq("p:Object[Long:1, Long:2]", p.callFunction("mixed"));
+        assertEq("two(a, b)", p.callFunction("invoke"));
+        assertEq("Object[Long[Long:1], Long:2]", p.callFunction("list_then_value"));
+        assertEq("Object[Long:1, Long:2]", p.callFunction("single_list"));
+    }
+
+    #! values that cannot be converted to the type of the array's elements raise errors
+    invalidArgs() {
+        # a list is not a String
+        assertThrows("JNI-ERROR", "cannot be converted to Java class 'java.lang.String'",
+            sub () { VarargsCalls::strings(2, "a", (1, 2)); });
+        # the type of the first variable argument is checked at parse time
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        assertThrows("PARSE-TYPE-ERROR", sub () {
+            p.parse(sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsCalls
+auto sub f() { return VarargsCalls::strings(2, (1, 2), \"a\"); }
+", get_script_dir() + "qore-jni-test.jar"), "strict");
+        });
+    }
+}

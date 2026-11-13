@@ -201,9 +201,16 @@ public:
     enum class JavaTypeUse {
         //! the type of a parameter: a %Qore value is converted to the Java type
         Param,
-        //! the type of the variable arguments parameter of a varargs method: as for \c Param, except that no value
-        //! is an empty array, as Java passes when there are no variable arguments, not null
+        //! the type of the variable arguments parameter of an abstract varargs method: as for \c Param, except that
+        //! no value is an empty array, as Java passes when there are no variable arguments, not null; a soft list,
+        //! as a %Qore class implementing the method declares it
         VarargsParam,
+        //! the type of the variable arguments parameter of a varargs method that can be called, given as an array:
+        //! a list (or a binary for \c byte[]) or no value, which is an empty array; a single value is not converted
+        //! to a list, as it is a variable argument given as a separate argument, which the variant taking the
+        //! variable arguments as separate arguments takes (see jni_add_loose_varargs_variants() in
+        //! QoreJniClassMap.cpp)
+        VarargsArrayParam,
         //! the type of a value converted to %Qore: a return value, a field, or a constant
         Value,
     };
@@ -230,7 +237,9 @@ public:
         value for overloads that all accept it selects the first variant added (see jni_get_variants()), which is the
         variant of the most specific class, as in Java (ex: <tt>m(String)</tt> before <tt>m(Object)</tt>).  The
         variable arguments array of a varargs method takes no value as an empty array, as
-        Java passes when there are no variable arguments.  See design/java-qore-type-mapping.md.
+        Java passes when there are no variable arguments; a varargs method that can be called also has a variant
+        taking the variable arguments as separate arguments (see jni_add_loose_varargs_variants() in
+        QoreJniClassMap.cpp).  See design/java-qore-type-mapping.md.
 
         A Java list (a class implementing \c java.util.List) is declared as a %Qore list, as every Java list is
         converted to one.  A Java map (a class implementing \c java.util.Map) is converted to a %Qore hash when all its
@@ -263,6 +272,15 @@ public:
         const QoreTypeInfo* altType = nullptr;
         return getQoreType(cls, altType, pgm, use, member);
     }
+
+    //! Returns the %Qore type of an element of the variable arguments array of a varargs method
+    /** This is the type of the elements of the array as a parameter (ex: \c *string for \c String..., \c int for
+        \c long..., \c auto for \c Object...), which a variable argument given as a separate argument has.
+
+        @param array_cls the Java array class of the variable arguments parameter
+        @param pgm the program the type is resolved in
+    */
+    DLLLOCAL const QoreTypeInfo* getVarargsElementType(jclass array_cls, QoreProgram* pgm = nullptr);
 
     //! Returns a new copy of the \c Jni namespace that a Program gets when the module is loaded into it
     /** The copy holds only the classes the module creates when it is initialized (\c java.lang.Object,

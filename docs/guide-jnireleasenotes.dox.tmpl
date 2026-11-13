@@ -6,6 +6,16 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed calling Java varargs methods with the variable arguments as separate arguments (ex:
+      <tt>m.invoke(NOTHING, a, b)</tt> for \c java.lang.reflect.Method.invoke(), <tt>String::format("%s %s", a,
+      b)</tt>, <tt>Arrays::asList(a, b, c)</tt>): with \c %%strict-args (in \c %%modern) more than one of them
+      matched no variant, and otherwise the first was passed as an array nested in the array (\c [[a], \c b]), which
+      Java rejected with \c "argument type mismatch" or used as the wrong value; a varargs method now has a variant
+      taking the variable arguments as separate arguments, which are packed into the array as in Java, and its
+      variant taking the array declares it as a <tt>*list&lt;T&gt;</tt> instead of a <tt>softlist&lt;T&gt;</tt>, as
+      a single value is a separate variable argument; a single Java array of the array's class is the array, and a
+      Java method with fixed parameters for the same number of arguments is called instead, as in Java (see
+      @ref jni_array_varargs)
     - <b>Security</b>: added @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the sandbox
       network and filesystem policy of the %Qore code that called into Java to the I/O that Java code makes itself,
       which %Qore does not see: \c checkNetworkAccess() resolves a host name once with the %Qore resolver, checks
