@@ -342,10 +342,21 @@
     Limitations:
     - a variant of a Java interface that is not abstract (a default method, or the variant of an abstract method
       taking the variable arguments as separate arguments) cannot be called on an object of a %Qore class
-      implementing the interface, which has no Java object for it, and raises \c OBJECT-INCOMPATIBLE; the %Qore
-      class's own method is called with the array, and without \c %%strict-args the further separate arguments are
-      ignored, as for any %Qore method; a %Qore class whose method is called with separate arguments from %Qore
-      also declares a variant for them (ex: <tt>string join(*string prefix, auto first, ...)</tt>)
+      implementing the interface, which has no Java object for it, and raises \c OBJECT-INCOMPATIBLE; without
+      \c %%strict-args, the %Qore class's own method taking the array is called instead, and the further separate
+      arguments are ignored, as for any %Qore method; with \c %%strict-args (as in \c %%modern), a %Qore class
+      whose method is called with separate arguments from %Qore also declares a variant for them, which gets them
+      all (without \c %%strict-args, the variant taking the soft list ranks higher and is called instead):
+      @code{.py}
+    class MyJoiner inherits Joiner {
+        string join(*string prefix, softlist<auto> values) {
+            return prefix + join(",", values);
+        }
+        string join(*string prefix, auto first, ...) {
+            return join(prefix, (first,) + argv);
+        }
+    }
+      @endcode
     - a Java method of a parent class with fixed parameters of other %Qore types (ex: \c A.m(CharSequence) for
       \c B.m(String...)) is not preferred for a call with one argument, as Java prefers it; the variant of the class
       is called

@@ -2,6 +2,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
+# Programs created by the test do not inherit %modern, so that calls without strict arguments are tested
+%no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %requires QUnit
@@ -14,6 +16,13 @@
 %module-cmd(jni) import org.qore.jni.test.VarargsChild
 %module-cmd(jni) import org.qore.jni.test.VarargsProtectedChild
 %module-cmd(jni) import org.qore.jni.test.VarargsSubIface
+%module-cmd(jni) import org.qore.jni.test.VarargsLeaf
+%module-cmd(jni) import org.qore.jni.test.VarargsBoth
+%module-cmd(jni) import org.qore.jni.test.VarargsGrand
+%module-cmd(jni) import org.qore.jni.test.VarargsGenLeaf
+%module-cmd(jni) import org.qore.jni.test.VarargsListLeaf
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import javax.tools.DiagnosticCollector
 %module-cmd(jni) import java.nio.file.FileSystems
 %module-cmd(jni) import java.lang.String
 %module-cmd(jni) import java.lang.Long
@@ -48,6 +57,11 @@ class QoreVarargsIfaceSoft inherits VarargsIface {
 
 #! a subclass of a public Java class implementing an abstract varargs method of an interface
 class QoreVarargsImpl inherits VarargsImpl {
+}
+
+#! a Qore class with an abstract method that Java classes extend
+class QoreVarargsAbs {
+    abstract string m(int i);
 }
 
 #! implements both the abstract method with fixed parameters of the parent interface and the abstract varargs method
@@ -86,6 +100,8 @@ class JniVarargsTest inherits QUnit::Test {
         addTestCase("An abstract overload with fixed parameters of a parent interface", \abstractParentOverload());
         addTestCase("A Qore class implementing an abstract varargs method called from Qore",
             \qoreImplementationFromQore());
+        addTestCase("Inherited methods with fixed parameters in deeper hierarchies", \inheritedHierarchies());
+        addTestCase("A Java class with a Qore parent class", \qoreParentClass());
         set_return_value(main());
     }
 
@@ -437,6 +453,120 @@ object sub f() { return new OnlyVarargs(); }
         assertThrows("OBJECT-INCOMPATIBLE", sub () { q.join("p", 1, 2); });
         # Java calls the Qore method with the array of the separate arguments
         assertEq("qore.join:j:[\"x\", \"y\"]", VarargsImpl::callJoin(q));
+
+        # without strict arguments, the Qore method taking the soft list is called and the further separate arguments
+        # are ignored, as for any Qore method, also when the class declares a variant for separate arguments, as the
+        # soft list ranks higher; with strict arguments, that variant gets them all
+        string src = sprintf("
+%%requires jni
+%%module-cmd(jni) add-classpath %s
+%%module-cmd(jni) import org.qore.jni.test.VarargsIface
+class Impl inherits VarargsIface {
+    string join(*string prefix, softlist<auto> values) {
+        return sprintf(\"array:%%s:%%y\", prefix, values);
+    }
+}
+class ImplLoose inherits VarargsIface {
+    string join(*string prefix, softlist<auto> values) {
+        return sprintf(\"array:%%s:%%y\", prefix, values);
+    }
+    string join(*string prefix, auto first, ...) {
+        return sprintf(\"loose:%%s:%%y\", prefix, (first,) + argv);
+    }
+}
+string sub impl() { Impl q(); return q.join(\"p\", 1, 2); }
+string sub impl_loose() { ImplLoose q(); return q.join(\"p\", 1, 2); }
+string sub impl_loose_list() { ImplLoose q(); return q.join(\"p\", (1, 2)); }
+", get_script_dir() + "qore-jni-test.jar");
+        Program ns(PO_NEW_STYLE);
+        ns.parse(src, "non-strict");
+        assertEq("array:p:[1]", ns.callFunction("impl"));
+        assertEq("array:p:[1]", ns.callFunction("impl_loose"));
+        assertEq("array:p:[1, 2]", ns.callFunction("impl_loose_list"));
+
+        Program st(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        st.parse(src, "strict");
+        assertThrows("OBJECT-INCOMPATIBLE", \st.callFunction(), "impl");
+        assertEq("loose:p:[1, 2]", st.callFunction("impl_loose"));
+        assertEq("array:p:[1, 2]", st.callFunction("impl_loose_list"));
+    }
+
+    #! a public Java method with fixed parameters inherited from a parent class, at any depth, is called for its
+    #! number of arguments, as in Java, also when an ancestor declares it as abstract
+    inheritedHierarchies() {
+        # VarargsLeaf.m(String...) extends VarargsMid.m(String), which implements abstract VarargsAbsBase.m(String)
+        VarargsLeaf leaf();
+        assertEq("mid(a)", leaf.m("a"));
+        assertEq("leaf:String[String:a, String:b]", leaf.m("a", "b"));
+
+        # VarargsBoth extends VarargsFixedBase.m(String) and implements VarargsSubIface.m(String...), whose parent
+        # interface declares m(String) as abstract
+        VarargsBoth both();
+        assertEq("fixedbase(a)", both.m("a"));
+        assertEq("both:String[String:a, String:b]", both.m("a", "b"));
+        VarargsSubIface i = both;
+        assertEq("fixedbase(a)", i.m("a"));
+        assertEq("both:String[String:a, String:b]", i.m("a", "b"));
+
+        # VarargsGrand.over(String...) overrides VarargsChild.over(String...); VarargsBase.over(String) is inherited
+        # from the grandparent
+        VarargsGrand grand();
+        assertEq("base(a)", grand.over("a"));
+        assertEq("grand:String[String:a, String:b]", grand.over("a", "b"));
+
+        # VarargsGenMid.g(ArrayList) has a bridge method g(List) with the same Qore signature, which is not used;
+        # both call the same Java code
+        VarargsGenLeaf gen();
+        assertEq("genmid:2", gen.g((1, 2)));
+        assertEq("genleaf:2", gen.g((1,), (2,)));
+
+        # VarargsListMid.h(ArrayList) and h(LinkedList) have the same Qore signature: the method taking the
+        # ArrayList that a Qore list is converted to is chosen, as for the methods of a class
+        VarargsListLeaf list_leaf();
+        assertEq("arraylist:2", list_leaf.h((1, 2)));
+        assertEq("listleaf:2", list_leaf.h((1,), (2,)));
+    }
+
+    #! the Java class generated for an abstract Qore class is abstract, so a Java class extending it implements its
+    #! abstract methods; a varargs method of such a Java class has the variant for separate arguments
+    qoreParentClass() {
+        QoreJavaCompiler compiler();
+        DiagnosticCollector diags();
+        assertThrows("JNI-ERROR", \compiler.compile(), ("org.qore.test.JVarargsMissing", "
+package org.qore.test;
+
+public class JVarargsMissing extends qore.QoreVarargsAbs {
+    public JVarargsMissing() throws Throwable {
+    }
+
+    public String m(String... a) {
+        return \"java\";
+    }
+}
+", diags));
+        assertRegex("does not override abstract method m\\(long\\)", diags.getDiagnostics()[0].toString());
+
+        compiler::CompilerOutput out = compiler.compile("org.qore.test.JVarargsQ", "
+package org.qore.test;
+
+public class JVarargsQ extends qore.QoreVarargsAbs {
+    public JVarargsQ() throws Throwable {
+    }
+
+    public String m(long i) {
+        return \"long:\" + i;
+    }
+
+    public String m(String... a) {
+        return \"java:\" + a.length;
+    }
+}
+");
+        object obj = define_class("org/qore/test/JVarargsQ", out.file.openInputStream().readAllBytes())
+            .newInstance();
+        assertEq("long:5", obj.m(5));
+        assertEq("java:2", obj.m("a", "b"));
+        assertEq("java:1", obj.m(("a",)));
     }
 
     #! returns the path of the given elements with the separator of the default file system

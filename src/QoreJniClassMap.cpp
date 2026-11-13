@@ -1680,23 +1680,20 @@ static bool jni_same_param_types(const type_vec_t& a, const type_vec_t& b) {
 
 //! The public variants of a method of the parent classes with given parameter types; see
 //! jni_get_parent_variants()
-enum class JniParentVariants {
-    //! no variant
-    None,
-    //! a variant that is not abstract, which may be one of a Java method with fixed parameters
-    Concrete,
-    //! an abstract variant
-    Abstract,
+struct JniParentVariants {
+    //! true if a variant is not abstract, which may be one of a Java method with fixed parameters
+    bool concrete = false;
+    //! true if a variant is abstract
+    bool abstract = false;
 };
 
-//! Returns the public variants of a method of the parent classes of \a qc with the given parameter types that do
-//! not take extra arguments
-/** An abstract variant is reported before a variant that is not abstract.  A variant that is not public (ex: a
-    protected Java method) is not callable from outside the class, so the class's own variants are called instead.
+//! Returns the public variants of a method of the parent classes of \a qc, at any depth, with the given parameter
+//! types that do not take extra arguments
+/** A variant that is not public (ex: a protected Java method) is not callable from outside the class, so the class's
+    own variants are called instead.
 */
-static JniParentVariants jni_get_parent_variants(const QoreClass& qc, const char* name, bool is_static,
-        const type_vec_t& params) {
-    JniParentVariants rv = JniParentVariants::None;
+static void jni_get_parent_variants(const QoreClass& qc, const char* name, bool is_static, const type_vec_t& params,
+        JniParentVariants& rv) {
     QoreParentClassIterator ci(qc);
     while (ci.next()) {
         const QoreClass& pc = ci.getParentClass();
@@ -1711,20 +1708,14 @@ static JniParentVariants jni_get_parent_variants(const QoreClass& qc, const char
                     continue;
                 }
                 if (v->isAbstract()) {
-                    return JniParentVariants::Abstract;
+                    rv.abstract = true;
+                } else {
+                    rv.concrete = true;
                 }
-                rv = JniParentVariants::Concrete;
             }
         }
-        JniParentVariants prv = jni_get_parent_variants(pc, name, is_static, params);
-        if (prv == JniParentVariants::Abstract) {
-            return prv;
-        }
-        if (prv == JniParentVariants::Concrete) {
-            rv = prv;
-        }
+        jni_get_parent_variants(pc, name, is_static, params, rv);
     }
-    return rv;
 }
 
 //! Returns true if the class or one of its parents is a %Qore class, which is not a Java class
@@ -2393,26 +2384,39 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
     }
 
     // the variants taking the variable arguments as separate arguments; the entries owning the names are alive
+    // the parameter types for which no inherited Java method with fixed parameters was found, so that the Java
+    // methods of the class are not listed again for them
+    std::vector<std::pair<std::string, type_vec_t>> no_fixed_arity;
     jni_add_loose_varargs_variants(varargs_variants,
-        [this, &qc, jc, pgm](const JniLooseVariant& lv, const type_vec_t& params) {
+        [this, &qc, jc, pgm, &no_fixed_arity](const JniLooseVariant& lv, const type_vec_t& params) {
             bool is_static = lv.meth->isStatic();
             const QoreMethod* qm = is_static ? qc.findLocalStaticMethod(lv.name) : qc.findLocalMethod(lv.name);
             if (qm && qm->existsVariant(params)) {
                 return true;
             }
-            switch (jni_get_parent_variants(qc, lv.name, is_static, params)) {
-                // an abstract variant of a parent with the parameter types (ex: I1.m(String) for
-                // I2.m(String...)) must not be implemented by the variant for separate arguments
-                case JniParentVariants::Abstract:
-                    return true;
-                // a variant of a parent class for a Java method with fixed parameters is called for its number of
-                // arguments, as in Java; other variants (ex: of a varargs method) are not
-                case JniParentVariants::Concrete:
-                    return addInheritedFixedArityVariant(qc, jc, lv.name, is_static, params, pgm);
-                case JniParentVariants::None:
-                    break;
+            JniParentVariants pv;
+            jni_get_parent_variants(qc, lv.name, is_static, params, pv);
+            // a variant of a parent class for a Java method with fixed parameters is called for its number of
+            // arguments, as in Java, also when an ancestor declares the method as abstract; other variants (ex:
+            // of a varargs method) are not
+            if (pv.concrete) {
+                bool known = false;
+                for (const auto& i : no_fixed_arity) {
+                    if (i.first == lv.name && jni_same_param_types(i.second, params)) {
+                        known = true;
+                        break;
+                    }
+                }
+                if (!known) {
+                    if (addInheritedFixedArityVariant(qc, jc, lv.name, is_static, params, pgm)) {
+                        return true;
+                    }
+                    no_fixed_arity.emplace_back(lv.name, params);
+                }
             }
-            return false;
+            // an abstract variant of a parent with the parameter types (ex: I1.m(String) for I2.m(String...)) must
+            // not be implemented by the variant for separate arguments
+            return pv.abstract;
         },
         [&qc](const JniLooseVariant& lv, const type_vec_t& params, int64 flags) {
             // the variant of an abstract method calls the Java method of the object, as a concrete variant
