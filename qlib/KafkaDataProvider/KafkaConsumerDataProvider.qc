@@ -229,6 +229,9 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions,
             DataProviderDataContextHelper::getHash(){keys ConstructorOptions} + options) + conn.getKafkaOptions();
+        # before anything else is done with the options: they can name classes for the client to instantiate
+        # (qore#5742)
+        KafkaDataProviderBase::checkClassOptions(copts ?? {});
         configureAsyncApiOptions(copts);
         removeAsyncApiOptions(\copts);
         # add default values automatically

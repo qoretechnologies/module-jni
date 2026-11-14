@@ -36,6 +36,15 @@ public class CamelProducerDataProvider inherits DataProvider::AbstractDataProvid
             "supports_request": True,
         };
 
+        #! The endpoint schemes of components that only pass messages in memory, which every caller may use with a
+        #! plain endpoint name and no options
+        const InMemorySchemes = {
+            "direct": True,
+            "seda": True,
+            "log": True,
+            "mock": True,
+        };
+
         #! Provider summary info
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             "name", "desc", "supports_request",
@@ -110,6 +119,14 @@ public class CamelProducerDataProvider inherits DataProvider::AbstractDataProvid
         @return the response as a hash with "body" and "headers" keys
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # an endpoint's component, its options and its property placeholders can load classes, run code or access
+        # files that the sandbox does not control; code that may not load arbitrary classes may use only a plain
+        # endpoint name of an in-memory component, with no options (qore#5742)
+        *string scheme = (req.endpoint =~ x/^([a-z]+):[A-Za-z0-9_.\-]+\z/)[0];
+        if (!scheme || !InMemorySchemes{scheme}) {
+            Jni::org::qore::jni::check_class_option("camel", "endpoint", "selects a Camel component that can load "
+                "classes, run code or access files");
+        }
         return ctx.sendBodyAndHeaders(req.endpoint, req.body, req.headers);
     }
 
