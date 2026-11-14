@@ -78,8 +78,12 @@ static QoreNamespace* jni_find_create_java_namespace_intern(QoreString& arg, Qor
 
 void jni_qore_module_desc(QoreModuleInfo& mod_info) {
 #ifdef QORE_JNI_HAS_COMMAND_CONTEXT
-    // jni_module_parse_cmd() checks the issuer of every command (jni_check_command_issuer())
-    mod_info.cmd_caller_aware = true;
+    // jni_module_parse_cmd() checks the issuer of every command (jni_check_command_issuer()); the field exists only in
+    // the struct of a library that implements module API 2.3, and the API version is validated only after this
+    // function returns, so it is set only when the loading library supports 2.3
+    if (is_module_api_supported(2, 3)) {
+        mod_info.cmd_caller_aware = true;
+    }
 #endif
     mod_info.name = QORE_JNI_MODULE_NAME;
     mod_info.version = PACKAGE_VERSION;

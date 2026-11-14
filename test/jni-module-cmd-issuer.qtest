@@ -68,7 +68,8 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
 
     #! Returns True if the jni module judges module commands by their issuer (module API 2.3)
     private static bool issuerAware() {
-        return get_module_hash().jni.api_minor >= 3;
+        hash<auto> jh = get_module_hash().jni;
+        return jh.api_major > 2 || (jh.api_major == 2 && jh.api_minor >= 3);
     }
 
     #! Returns a new Program of the given issuer kind
