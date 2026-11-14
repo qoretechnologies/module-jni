@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 1.0
+%requires qore >= 3.0
 %modern
 
 # import Camel and dependency JARs: must be added to the global classloader
@@ -172,6 +172,9 @@ module CamelDataProvider {
             "action_code": DPAT_FIND,
         });
     };
+    # PROCESS_CONTROL: its init registers connection scheme and data provider factory (process-wide registrations)
+    # (a Program restricted like a Qorus interface can load the module only when it declares them; Qore #5803)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage CamelDataProvider Module
@@ -208,6 +211,9 @@ module CamelDataProvider {
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
       callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - initial release
+    - sandboxed code may only send to a plain endpoint name, with no options or placeholders, of the in-memory
+      components \c direct, \c seda, \c log and \c mock, and cannot get the Camel context from a \c CamelConnection
+      (\c JNI-SANDBOX-ERROR)
 */
 
 #! Contains all public definitions in the CamelDataProvider module

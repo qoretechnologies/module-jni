@@ -217,10 +217,23 @@ public:
     }
 
     int64 getFlags() const {
-        // NOTE: do not set or return QCF_USES_EXTRA_ARGS when varargs is set; this causes a trailing "softlist auto" 
-        // param to be created instead
+        // NOTE: do not set or return QCF_USES_EXTRA_ARGS when varargs is set; this causes a trailing "softlist auto"
+        // param to be created instead; only the variant taking the variable arguments as separate arguments uses
+        // extra arguments (see jni_add_loose_varargs_variants() in QoreJniClassMap.cpp)
         return QCF_NO_FLAGS;
     }
+
+    //! Returns true if the method or constructor takes variable arguments
+    bool isVarargs() const {
+        return varargs;
+    }
+
+    //! Returns the %Qore type of a variable argument given as a separate argument of a varargs method
+    /** The variable arguments of the variant taking the variable arguments as separate arguments have this type (see
+        jni_add_loose_varargs_variants() in QoreJniClassMap.cpp); the variable arguments are converted to the type of
+        the array's elements when the method is called.
+    */
+    DLLLOCAL const QoreTypeInfo* getVarargsElementTypeInfo(QoreJniClassMap& clsmap, QoreProgram* pgm = nullptr);
 
     DLLLOCAL int getParamTypes(Env& env, type_vec_t& paramTypeInfo, type_vec_t& altParamTypeInfo,
             QoreJniClassMap& clsmap, QoreProgram* pgm = nullptr);
@@ -254,6 +267,23 @@ protected:
      */
     DLLLOCAL LocalReference<jobjectArray> convertArgsToArray(Env& env, const QoreListNode* args,
             size_t arg_offset = 0, size_t array_offset = 0, JniExternalProgramData* jpc = nullptr) const;
+
+    //! Returns the Java array passed for the variable arguments of a varargs method
+    /** As in Java, the arguments for the variable arguments parameter are packed into an array of its type, except
+        that a single argument that is the array itself is passed as the array: a list, a binary for a \c byte[]
+        array, or a Java array object of the array's type.  No argument, or no value as the single argument, is an
+        empty array, as Java passes when there are no variable arguments.
+
+        @param env the JNI environment
+        @param args the %Qore arguments
+        @param arg_offset the offset in \a args where the arguments of the method start
+        @param argCount the number of arguments of the method in \a args
+        @param jpc the program context for the conversion, if any
+
+        @return a local reference to the array, owned by the caller
+    */
+    DLLLOCAL jobject getVarargsArray(Env& env, const QoreListNode* args, size_t arg_offset, size_t argCount,
+            JniExternalProgramData* jpc) const;
 
     DLLLOCAL void init(Env &env);
 

@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires qore >= 3.0
+%requires QUnit
+%requires FsUtil
+
+%exec-class RestrictedProgramLoadTest
+
+#! Every user module of this repository can be loaded by a Program restricted like a Qorus interface
+/** Qorus loads user modules into Programs with PO_NO_PROCESS_CONTROL and PO_NO_THREAD_CONTROL (interfaces, and oload's
+    class-based service method discovery).  A module whose own code uses one of these functional domains, for example
+    to register a connection scheme or a data provider factory in its init closure, or to start a thread, must declare
+    the domains in its module header (domains = "PROCESS_CONTROL";), or such a Program cannot load it.
+
+    A module that a Program has loaded is not checked again when another Program loads it, so every module is loaded in
+    a child process of its own, from the qlib directory of this repository (before any installed copy).
+*/
+class RestrictedProgramLoadTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qlib_dir;
+
+        #! modules that are not meant for restricted Programs (CLI tools and REPLs that control the process on purpose)
+        const Exempt = ();
+
+        #! the child script: loads the module named by the first argument in a restricted Program
+        const ChildScript = "%new-style
+%strict-args
+Program p(PO_NO_PROCESS_CONTROL | PO_NO_THREAD_CONTROL);
+try {
+    p.parse(\"%requires \" + ARGV[0] + \"\\n\", \"restricted\");
+    printf(\"loaded\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s: %s\\n\", ex.err, ex.desc);
+}
+";
+    }
+
+    constructor() : QUnit::Test("RestrictedProgramLoadTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qlib_dir = realpath(get_script_dir() + "/../qlib");
+        addTestCase("every user module of the repository loads in a restricted Program", \testRestrictedLoad());
+        addTestCase("a module that uses a restricted domain without declaring it is refused", \testUndeclaredRefused());
+        set_return_value(main());
+    }
+
+    #! returns the names of the user modules in the qlib directory: Name.qm and Name/Name.qm
+    private list<string> getModules() {
+        list<string> rv = ();
+        Dir d();
+        d.chdir(qlib_dir);
+        foreach string f in (d.listFiles()) {
+            if (f =~ /\.qm$/ && !inlist(f.substr(0, -3), Exempt)) {
+                rv += f.substr(0, -3);
+            }
+        }
+        foreach string dn in (d.listDirs()) {
+            if (is_file(qlib_dir + "/" + dn + "/" + dn + ".qm") && !inlist(dn, Exempt)) {
+                rv += dn;
+            }
+        }
+        return rv;
+    }
+
+    #! runs the child script for a module and returns its standard output (the child prints the result and any
+    #! exception itself; standard error, where a JVM or another tool can print notes, is not part of the result)
+    private string load(string mod) {
+        TmpDir tmp("qore-restricted-load-");
+        string script = tmp.path + "/restricted.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ChildScript);
+        f.close();
+        *string env_dir = ENV.QORE_MODULE_DIR;
+        string mod_dir = env_dir ? qlib_dir + ":" + env_dir : qlib_dir;
+        string cmd = sprintf("QORE_MODULE_DIR='%s' %s -b %s '%s' 2>/dev/null", mod_dir, qore_bin, script, mod);
+        return backquote(cmd);
+    }
+
+    #! returns the last non-empty line of the output
+    private static string lastLine(string out) {
+        list<string> lines = out.split("\n");
+        while (lines && !lines[-1]) {
+            pop lines;
+        }
+        return lines ? lines[-1] : "";
+    }
+
+    testRestrictedLoad() {
+        list<string> mods = getModules();
+        assertGt(0, mods.size());
+        foreach string mod in (mods) {
+            string out = load(mod);
+            # the result is the last line: a note that a tool prints to standard output before it is no failure
+            assertEq("loaded", lastLine(out), sprintf("%s: %s", mod, out));
+        }
+    }
+
+    testUndeclaredRefused() {
+        # the restricted Program itself is refused the domain: the module header declaration is what lets it load
+        TmpDir tmp("qore-restricted-load-neg-");
+        File f();
+        f.open2(tmp.path + "/UndeclaredDomainModule.qm", O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("%requires qore >= 2.0\n%modern\nmodule UndeclaredDomainModule {\n    version = \"1.0\";\n"
+            "    desc = \"uses PROCESS_CONTROL\";\n    author = \"x\";\n    url = \"x\";\n    license = \"MIT\";\n"
+            "    init = sub () { setenv(\"UNDECLARED_DOMAIN_MODULE\", \"1\"); };\n}\n");
+        f.close();
+        File s();
+        s.open2(tmp.path + "/restricted.q", O_CREAT | O_TRUNC | O_WRONLY);
+        s.write(ChildScript);
+        s.close();
+        string out = backquote(sprintf("QORE_MODULE_DIR='%s' %s -b %s UndeclaredDomainModule 2>/dev/null", tmp.path,
+            qore_bin, tmp.path + "/restricted.q"));
+        assertRegex("^PARSE-EXCEPTION: parse options do not allow access to .*UndeclaredDomainModule", out);
+    }
+}

@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 1.0
+%requires qore >= 3.0
 %modern
 
 # import custom JDBC helper JAR: must be added to the global classloader
@@ -133,6 +133,9 @@ module JdbcDataProvider {
             ),
         });
     };
+    # PROCESS_CONTROL: its init registers connection scheme and data provider factory (process-wide registrations)
+    # (a Program restricted like a Qorus interface can load the module only when it declares them; Qore #5803)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage JdbcDataProvider Module
@@ -177,6 +180,8 @@ module JdbcDataProvider {
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
       callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - initial release
+    - the \c classpath and \c driver_class options, and a \c url with driver properties, are refused to sandboxed
+      code (\c JNI-SANDBOX-ERROR)
 */
 
 #! Contains all public definitions in the JdbcDataProvider module
@@ -194,6 +199,19 @@ namespace Priv {
     java.sql.DriverManager for drivers that are not otherwise discovered.
 */
 sub prepareJdbcDriver(hash<auto> copts) {
+    # both options make Java load code that the sandbox does not control: before either is used (qore#5742)
+    if (copts.classpath) {
+        Jni::org::qore::jni::check_class_option("jdbc-dp", "classpath");
+    }
+    if (copts.driver_class) {
+        Jni::org::qore::jni::check_class_option("jdbc-dp", "driver_class");
+    }
+    # driver properties in the URL ("?name=value", ";name=value", or key-value forms such as "(name=value)") are
+    # interpreted by the driver, and some name classes for it to load
+    if (copts.url =~ /[?;=(&]/) {
+        Jni::org::qore::jni::check_class_option("jdbc-dp", "url", "sets JDBC driver properties, which can name "
+            "Java classes for the driver to load");
+    }
     if (copts.classpath) {
         list<string> paths = copts.classpath.split(",");
         foreach string path in (paths) {

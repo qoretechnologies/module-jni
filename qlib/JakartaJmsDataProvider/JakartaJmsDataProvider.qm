@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 2.0
+%requires qore >= 3.0
 %modern
 
 # import Jakarta JMS API: JAR must be added to the global classloader
@@ -167,6 +167,10 @@ module JakartaJmsDataProvider {
             ),
         });
     };
+    # THREAD_CONTROL: the module starts its own background tasks
+    # PROCESS_CONTROL: its init registers connection scheme and data provider factory (process-wide registrations)
+    # (a Program restricted like a Qorus interface can load the module only when it declares them; Qore #5803)
+    domains = "THREAD_CONTROL,PROCESS_CONTROL";
 }
 
 /** @mainpage JakartaJmsDataProvider Module
@@ -385,6 +389,8 @@ module JakartaJmsDataProvider {
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
       callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - initial release
+    - the \c provider_classpath and \c connection_factory_class options are refused to sandboxed code
+      (\c JNI-SANDBOX-ERROR)
 */
 
 #! contains all public definitions in the JakartaJmsDataProvider module

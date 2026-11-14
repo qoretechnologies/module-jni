@@ -320,6 +320,59 @@ public class Fetcher {
       does not allow uncontrolled APIs defines a class only in its own class loader: a class that belongs to another
       Program (ex: \c qoremod.MODULE.CLASS) cannot be defined by it
 
+    <b>The jdbc database driver:</b> sandboxed code cannot open JDBC \c Datasource or \c DatasourcePool connections
+    for now: a \c Datasource or \c DatasourcePool that uses the \c jdbc driver raises \c NETWORK-ACCESS-DENIED when it
+    connects or reconnects for code that a sandbox policy governs, whatever the destination and whatever the policy
+    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A
+    connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect; trusted
+    code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data provider
+    (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to sandboxed
+    code as an \c external_io app.  Applying
+    the sandbox network policy to the destinations of individual JDBC drivers is planned separately.  The JDBC driver opens its sockets in Java, so %Qore cannot apply the policy to them: a
+    host name that was checked is resolved again by the driver, and drivers connect to destinations that they discover
+    themselves (failover hosts, replicas, server redirects) or that have a syntax of their own for each driver (ex:
+    Oracle TNS descriptors).  As with other policy checks, trusted code that connects under a policy barrier
+    (\c SandboxManager::callWithSystemPolicy()) or from a capability (\c SandboxManager::createSystemPolicyCall()) is
+    not refused.
+
+    <b>Options that load Java code:</b> an option that names a Java class to load or instantiate, a classpath to add,
+    or a value that Java compiles, deserializes or uses to select a component that loads classes, is refused with
+    \c JNI-SANDBOX-ERROR to sandboxed code, also through a policy barrier or a system-policy capability, before it is
+    used.  The run-time boundary is the sandbox (a \c Qore::SandboxManager), as for all module code: module code runs
+    with its own Program's parse options, and a caller's parse options restrict it only when the caller is
+    sandboxed, so a Program that is restricted only with parse options (ex: \c PO_NO_UNCONTROLLED_APIS) is not
+    refused these options at run time when it uses a provider module that trusted code loaded.  A host that runs
+    code it does not trust gives it a \c SandboxManager, or \c PO_NO_MODULES.  A restricted Program that loads such a
+    provider module itself is refused when the module is loaded.
+
+    The check is made for the caller, not for whoever set the value: these options are trusted configuration, and
+    must not be taken from a less trusted source, such as connection settings that users edit, without validation.
+
+    The provider modules of this module check:
+    |!Module|!Options
+    |JdbcDataProvider|\c classpath, \c driver_class, and a \c url with driver properties (any of \c ?, \c ;, \c =, \
+      \c ( or \c &), which can name classes for the driver to load
+    |JakartaJmsDataProvider|\c provider_classpath, \c connection_factory_class (always set, so sandboxed code \
+      cannot use JMS)
+    |KafkaDataProvider|\c ssl.engine.factory.class (except Kafka's \c DefaultSslEngineFactory, the connection's \
+      default), \c sasl.client.callback.handler.class, \c sasl.login.callback.handler.class and \
+      \c sasl.login.class (when set), the serializers and deserializers (except Kafka's own), and \
+      \c sasl.jaas.config (except one entry for one of Kafka's own login modules), and \
+      \c sasl.kerberos.kinit.cmd (except the connection's default, \c /usr/bin/kinit)
+    |CamelDataProvider|the endpoint of a request, except a plain endpoint name, with no options or placeholders, of \
+      the in-memory components \c direct, \c seda, \c log and \c mock; and \c CamelConnection::get(), which returns \
+      the Camel context
+    |JasperReportsDataProvider|the report template: its expressions are compiled and run as Java code, and a \
+      compiled \c .jasper template is deserialized by Java
+    |FlywayDataProvider|\c locations other than directories (ex: \c classpath:), and a \c url with driver \
+      properties
+
+    Modules check their own options with \c Jni::org::qore::jni::check_class_option().
+
+    The Kafka \c sasl.kerberos.kinit.cmd option names a command that the Kafka client runs in Java, outside of the
+    process controls of %Qore.  It is trusted configuration: code that no sandbox governs can set it, so an application
+    must not take its value from a less trusted source.
+
     @subsection jni_fork Child Processes Created with fork()
 
     Java cannot be used in a child process created with \c fork() after the JVM has been started (when the module

@@ -262,6 +262,9 @@ private:
 
     DLLLOCAL int connect(Env& env, ExceptionSink* xsink);
 
+    //! Raises NETWORK-ACCESS-DENIED and returns -1 if a sandbox policy governs the calling code (qore#5747)
+    DLLLOCAL static int checkSandbox(ExceptionSink* xsink);
+
     //! Parse options passed through the Datasource
     /** @param xsink exception sink
 

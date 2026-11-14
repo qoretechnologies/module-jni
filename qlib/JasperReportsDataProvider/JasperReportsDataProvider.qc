@@ -127,6 +127,7 @@ public class JasperReportsDataProvider inherits DataProvider::AbstractDataProvid
     constructor(string templatePath, string outputFormat, *hash<auto> opts) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(JasperReportsDataProvider::AppName);
+        JasperReportsDataProvider::checkTemplate();
         *hash<auto> copts = checkOptions("JASPERREPORTS-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.template) {
             error("JASPERREPORTS-OPTION-ERROR", "cannot provide \"template\" option when template path "
@@ -156,6 +157,7 @@ public class JasperReportsDataProvider inherits DataProvider::AbstractDataProvid
     constructor(*hash<auto> options) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(JasperReportsDataProvider::AppName);
+        JasperReportsDataProvider::checkTemplate();
         *hash<auto> copts = checkOptions("JASPERREPORTS-OPTION-ERROR", ConstructorOptions, options);
         if (!copts.output_format) {
             error("JASPERREPORTS-OPTION-ERROR", "the \"output_format\" option is required");
@@ -179,6 +181,16 @@ public class JasperReportsDataProvider inherits DataProvider::AbstractDataProvid
                 "required");
         }
         setupGenerator(templateData);
+    }
+
+    #! Refuses a report template to code that may not load arbitrary classes (qore#5742)
+    /** Every constructor takes a template, whose expressions and scriptlets are Java code that JasperReports compiles
+        and runs (a compiled \c .jasper template is deserialized by Java), so the check is made first, before the
+        template location is read
+    */
+    private static checkTemplate() {
+        Jni::org::qore::jni::check_class_option("jasperreports", "template", "is a report template, whose expressions "
+            "JasperReports compiles and runs as Java code");
     }
 
     #! Sets up the JasperReports generator from template binary data

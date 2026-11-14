@@ -1253,6 +1253,26 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/FinalFields.java
     test/java/src/org/qore/jni/test/FloatConversions.java
     test/java/src/org/qore/jni/test/ListConversions.java
+    test/java/src/org/qore/jni/test/VarargsCalls.java
+    test/java/src/org/qore/jni/test/VarargsIface.java
+    test/java/src/org/qore/jni/test/VarargsImpl.java
+    test/java/src/org/qore/jni/test/VarargsBase.java
+    test/java/src/org/qore/jni/test/VarargsChild.java
+    test/java/src/org/qore/jni/test/VarargsProtectedBase.java
+    test/java/src/org/qore/jni/test/VarargsProtectedChild.java
+    test/java/src/org/qore/jni/test/VarargsBaseIface.java
+    test/java/src/org/qore/jni/test/VarargsSubIface.java
+    test/java/src/org/qore/jni/test/VarargsAbsBase.java
+    test/java/src/org/qore/jni/test/VarargsMid.java
+    test/java/src/org/qore/jni/test/VarargsLeaf.java
+    test/java/src/org/qore/jni/test/VarargsFixedBase.java
+    test/java/src/org/qore/jni/test/VarargsBoth.java
+    test/java/src/org/qore/jni/test/VarargsGrand.java
+    test/java/src/org/qore/jni/test/VarargsGenBase.java
+    test/java/src/org/qore/jni/test/VarargsGenMid.java
+    test/java/src/org/qore/jni/test/VarargsGenLeaf.java
+    test/java/src/org/qore/jni/test/VarargsListMid.java
+    test/java/src/org/qore/jni/test/VarargsListLeaf.java
     test/java/src/org/qore/jni/test/CollectionTypes.java
     test/java/src/org/qore/jni/test/ConvertedValueFields.java
     test/java/src/org/qore/jni/test/ConvertedValueReturns.java

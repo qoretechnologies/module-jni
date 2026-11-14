@@ -1,0 +1,309 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+
+%exec-class JniClassOptionsSandboxTest
+
+#! Provider options checked with check_class_option() are refused to sandboxed callers (qore#5742)
+class JniClassOptionsSandboxTest inherits QUnit::Test {
+    private:internal {
+        const Modules = ("JdbcDataProvider", "JakartaJmsDataProvider", "KafkaDataProvider", "CamelDataProvider",
+            "JasperReportsDataProvider", "FlywayDataProvider");
+
+        #! The Kafka option that names a command, its default and another value
+        const KinitOpt = "sasl.kerberos.kinit.cmd";
+        const KinitDefault = "/usr/bin/kinit";
+        const KinitOther = "/nonexistent-qore-test-dir/kinit";
+
+        #! Code of a trusted Program that makes what the test gives to sandboxed code
+        const TrustedKinitCode = sprintf("
+auto sub default_value() {
+    return KafkaDataProvider::KafkaConnection::ConnectionScheme.options.%y.default_value;
+}
+
+KafkaDataProvider::KafkaConnection sub make_connection(string cmd) {
+    return new KafkaDataProvider::KafkaConnection(\"k\", \"k\", \"kafka://127.0.0.1:1\", {}, {%y: cmd});
+}
+
+code sub make_capability(string cmd) {
+    return SandboxManager::createSystemPolicyCall(sub () {
+        KafkaDataProvider::KafkaDataProviderBase::checkClassOptions({%y: cmd});
+    });
+}
+", KinitOpt, KinitOpt, KinitOpt);
+    }
+
+    constructor() : QUnit::Test("JNI class options sandbox", "1.0", \ARGV) {
+        addTestCase("jdbc options", \jdbcTest());
+        addTestCase("jms options", \jmsTest());
+        addTestCase("kafka options", \kafkaTest());
+        addTestCase("kafka jaas entries", \kafkaJaasTest());
+        addTestCase("kafka clients", \kafkaClientTest());
+        addTestCase("kafka kinit command", \kafkaKinitTest());
+        addTestCase("jdbc and jms connections", \connectionTest());
+        addTestCase("camel endpoints", \camelTest());
+        addTestCase("jasperreports templates", \jasperTest());
+        addTestCase("flyway options", \flywayTest());
+        addTestCase("barrier and capability", \barrierTest());
+        set_return_value(main());
+    }
+
+    #! Runs the code in a new Program, sandboxed or not; returns the error code, or "ok"
+    private static string runAs(bool sandboxed, string body, *reference<string> desc) {
+        Program p(PO_NEW_STYLE);
+        if (sandboxed) {
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(True);
+            p.setSandboxManager(sm);
+        }
+        map p.loadModule($1), Modules;
+        p.parse("sub run() {\n" + body + "\n}\n", "jni-class-options");
+        try {
+            p.callFunction("run");
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+            return ex.err;
+        }
+    }
+
+    #! Checks that the sandboxed run is refused for the option and that the trusted run is not
+    /** @param trusted_desc if given, a regular expression that the trusted run's error must match
+    */
+    private checkOption(string label, string option, string body, *string trusted_desc) {
+        checkSandboxed(label, option, body);
+        string tdesc;
+        string err = runAs(False, body, \tdesc);
+        assertTrue(err != "JNI-SANDBOX-ERROR", label + ": trusted: " + err);
+        if (trusted_desc) {
+            assertRegex(trusted_desc, tdesc, label + ": trusted: the option was used");
+        }
+    }
+
+    #! Checks that the sandboxed run is refused for the option
+    private checkSandboxed(string label, string option, string body) {
+        string desc;
+        assertEq("JNI-SANDBOX-ERROR", runAs(True, body, \desc), label + ": sandboxed");
+        assertRegex(option, desc, label + ": option named");
+    }
+
+    #! Checks that neither run is refused by the check
+    private checkAllowed(string label, string body) {
+        foreach bool sandboxed in ((True, False)) {
+            string desc;
+            string err = runAs(sandboxed, body, \desc);
+            assertTrue(err != "JNI-SANDBOX-ERROR", sprintf("%s: %s: %s", label, sandboxed ? "sandboxed" : "trusted",
+                desc));
+        }
+    }
+
+    jdbcTest() {
+        string base = "\"url\": \"jdbc:qore-none://x\", \"user\": \"u\", \"password\": \"p\"";
+        checkOption("classpath", "classpath", "new JdbcDataProvider::JdbcDataProvider({" + base
+            + ", \"classpath\": \"/nonexistent-qore-test-dir\"});");
+        checkOption("driver_class", "driver_class", "new JdbcDataProvider::JdbcDataProvider({" + base
+            + ", \"driver_class\": \"com.example.Placeholder\"});", "com.example.Placeholder");
+        foreach string url in ("jdbc:qore-none://x?a=b", "jdbc:qore-none://x;a=b", "jdbc:qore-none://(host=x,a=b)/d",
+                "jdbc:qore-none://address=(host=x)/d") {
+            checkOption("url properties " + url, "url", sprintf("new JdbcDataProvider::JdbcDataProvider({\"url\": "
+                "%y, \"user\": \"u\", \"password\": \"p\"});", url));
+        }
+        checkAllowed("plain url", "new JdbcDataProvider::JdbcDataProvider({" + base + "});");
+    }
+
+    jmsTest() {
+        string base = "\"url\": \"tcp://127.0.0.1:1\", \"connection_factory_class\": \"com.example.Placeholder\"";
+        checkOption("provider_classpath", "provider_classpath",
+            "JakartaJmsDataProvider::JmsDataProviderBase::createConnectionFactory({" + base
+            + ", \"provider_classpath\": \"/nonexistent-qore-test-dir\"});");
+        checkOption("connection_factory_class", "connection_factory_class",
+            "JakartaJmsDataProvider::JmsDataProviderBase::createConnectionFactory({" + base + "});",
+            "com.example.Placeholder");
+    }
+
+    #! Returns code that checks one Kafka option value
+    private static string kafkaCheck(string opt, string value) {
+        return sprintf("KafkaDataProvider::KafkaDataProviderBase::checkClassOptions({%y: %y});", opt, value);
+    }
+
+    kafkaTest() {
+        foreach string opt in ("ssl.engine.factory.class", "sasl.client.callback.handler.class",
+                "sasl.login.callback.handler.class", "sasl.login.class", "key.serializer", "value.serializer",
+                "key.deserializer", "value.deserializer") {
+            checkOption(opt, opt, kafkaCheck(opt, "com.example.Placeholder"));
+        }
+        checkAllowed("default ssl.engine.factory.class", kafkaCheck("ssl.engine.factory.class",
+            "org.apache.kafka.common.security.ssl.DefaultSslEngineFactory"));
+        checkAllowed("builtin key.serializer", kafkaCheck("key.serializer",
+            "org.apache.kafka.common.serialization.StringSerializer"));
+        checkAllowed("builtin value.deserializer", kafkaCheck("value.deserializer",
+            "org.apache.kafka.common.serialization.ByteArrayDeserializer"));
+    }
+
+    kafkaJaasTest() {
+        string plain = "org.apache.kafka.common.security.plain.PlainLoginModule";
+        checkAllowed("one builtin entry", kafkaCheck("sasl.jaas.config",
+            plain + " required username=\"user\" password=\"a;b\";"));
+        checkOption("other module", "sasl.jaas.config", kafkaCheck("sasl.jaas.config",
+            "com.example.PlaceholderModule required;"));
+        checkOption("two entries", "sasl.jaas.config", kafkaCheck("sasl.jaas.config",
+            plain + " required; com.example.PlaceholderModule required;"));
+        checkOption("no flag", "sasl.jaas.config", kafkaCheck("sasl.jaas.config", plain));
+    }
+
+    kafkaClientTest() {
+        string conn = "new KafkaDataProvider::KafkaConnection(\"k\", \"k\", \"kafka://127.0.0.1:1\"";
+        checkOption("consumer", "value.deserializer", "new KafkaDataProvider::KafkaConsumerDataProvider(" + conn
+            + "), {\"topics\": (\"t\",), \"value.deserializer\": \"com.example.Placeholder\"});");
+        checkOption("producer", "value.serializer", "new KafkaDataProvider::KafkaProducerDataProvider(" + conn
+            + "), {\"value.serializer\": \"com.example.Placeholder\"});");
+        checkOption("connection option", "sasl.login.class", "new KafkaDataProvider::KafkaConsumerDataProvider("
+            + conn + ", {}, {\"sasl.login.class\": \"com.example.Placeholder\"}), {\"topics\": (\"t\",)});");
+    }
+
+    kafkaKinitTest() {
+        string Opt = KinitOpt;
+        string Default = KinitDefault;
+        string Other = KinitOther;
+
+        Program tp(PO_NEW_STYLE);
+        map tp.loadModule($1), Modules;
+        tp.parse(TrustedKinitCode, "jni-class-options-kinit-trusted");
+        assertEq(Default, tp.callFunction("default_value"), "the allowed value is the connection's default");
+
+        checkOption("the check", Opt, kafkaCheck(Opt, Other));
+        checkAllowed("the check: default", kafkaCheck(Opt, Default));
+        checkAllowed("the check: not set", "KafkaDataProvider::KafkaDataProviderBase::checkClassOptions({});");
+
+        string conn = "new KafkaDataProvider::KafkaConnection(\"k\", \"k\", \"kafka://127.0.0.1:1\"";
+        foreach hash<auto> p in (
+                {"name": "consumer", "cls": "KafkaConsumerDataProvider", "args": "\"topics\": (\"t\",)"},
+                {"name": "producer", "cls": "KafkaProducerDataProvider", "args": ""},
+            ) {
+            string prefix = "new KafkaDataProvider::" + p.cls + "(";
+            string sep = p.args ? ", " : "";
+            # the data provider of the connection gives the connection's options to its children
+            string root = conn + ", {}, {%y: %y}).getDataProvider({" + p.args + "}).getChildProviderEx("
+                + sprintf("%y", p.name) + ");";
+            checkOption(p.name + ": connection option", Opt, sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn, Opt,
+                Other, p.args));
+            checkOption(p.name + ": data provider of the connection", Opt, sprintf(root, Opt, Other));
+            # it is a connection option only: a provider does not accept it from any caller
+            string direct = sprintf("%s%s), {%s%s%y: %y});", prefix, conn, p.args, sep, Opt, Other);
+            foreach bool sandboxed in ((True, False)) {
+                string desc;
+                assertEq("CONSTRUCTOR-ERROR", runAs(sandboxed, direct, \desc), sprintf("%s: provider option: %s", p.name,
+                    sandboxed ? "sandboxed" : "trusted"));
+                assertRegex(Opt, desc, p.name + ": provider option: named");
+            }
+            checkAllowed(p.name + ": connection option, default", sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn,
+                Opt, Default, p.args));
+            checkAllowed(p.name + ": data provider of the connection, default", sprintf(root, Opt, Default));
+        }
+
+        # a connection that trusted code configured does not let sandboxed code use the command
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        map p.loadModule($1), Modules;
+        p.parse("sub run(KafkaDataProvider::KafkaConnection c) { new KafkaDataProvider::KafkaConsumerDataProvider(c, "
+            "{\"topics\": (\"t\",)}); }", "jni-class-options-kinit-connection");
+        assertThrows("JNI-SANDBOX-ERROR", Opt, \p.callFunction(), ("run", tp.callFunction("make_connection", Other)),
+            "trusted connection");
+
+        # through a policy barrier and a capability
+        string check = kafkaCheck(Opt, Other);
+        string desc;
+        assertEq("JNI-SANDBOX-ERROR", runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});",
+            \desc), "policy barrier");
+        assertRegex(Opt, desc, "policy barrier: option named");
+        code cap = tp.callFunction("make_capability", Other);
+        Program cp(PO_NEW_STYLE);
+        cp.setSandboxManager(new SandboxManager());
+        cp.parse("sub run(code c) { c(); }", "jni-class-options-kinit-capability");
+        assertThrows("JNI-SANDBOX-ERROR", Opt, \cp.callFunction(), ("run", cap), "capability");
+
+        # at run time only the sandbox restricts module code: a Program that forbids process control and has no sandbox
+        # is not refused
+        Program np(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        map np.loadModule($1), Modules;
+        np.parse("sub run() {" + check + "}", "jni-class-options-kinit-no-process");
+        assertEq(NOTHING, np.callFunction("run"), "no sandbox");
+    }
+
+    connectionTest() {
+        string jdbc = "new JdbcDataProvider::JdbcConnection(\"j\", \"j\", \"jdbc-dp://x\", {}, {\"user\": \"u\", "
+            "\"password\": \"p\", \"driver_class\": \"com.example.Placeholder\"})";
+        checkOption("jdbc connection get", "driver_class", jdbc + ".get();");
+        checkOption("jdbc connection provider", "driver_class", jdbc + ".getDataProvider();");
+        string jms = "new JakartaJmsDataProvider::JmsConnection(\"m\", \"m\", \"jms://127.0.0.1:1\", {}, "
+            "{\"connection_factory_class\": \"com.example.Placeholder\"})";
+        checkOption("jms connection get", "connection_factory_class", jms + ".get();");
+    }
+
+    #! Returns code that sends a message to the endpoint
+    private static string camelSend(string endpoint) {
+        return sprintf("CamelDataProvider::CamelDataProvider dp(); on_exit delete dp; "
+            "dp.getChildProvider(\"producer\").doRequest({\"endpoint\": %y, \"body\": \"x\"});", endpoint);
+    }
+
+    camelTest() {
+        foreach string endpoint in ("seda:qoretest", "direct:qoretest", "log:qoretest", "mock:qoretest") {
+            checkAllowed(endpoint, camelSend(endpoint));
+        }
+        foreach string endpoint in ("file:/nonexistent-qore-test-dir", "seda:qoretest?size=1", "log:x?level=INFO",
+                "direct:{{qoretest}}", "no-scheme", "seda:qoretest\n") {
+            checkOption(endpoint, "endpoint", camelSend(endpoint));
+        }
+        # the connection returns the Camel context, which has no endpoint check
+        checkOption("connection get", "connection", "CamelDataProvider::CamelConnection c(\"c\", \"c\", "
+            "\"camel://x\"); object ctx = c.get(False); delete ctx;");
+    }
+
+    jasperTest() {
+        string cls = "JasperReportsDataProvider::JasperReportsDataProvider";
+        # the trusted run of an in-memory template is not made here: it would compile the placeholder template
+        checkSandboxed("template_data", "template", "new " + cls + "({\"template_data\": <00>, \"output_format\": "
+            "\"pdf\"});");
+        checkOption("template option", "template", "new " + cls + "({\"template\": "
+            "\"/nonexistent-qore-test-dir/x.jrxml\", \"output_format\": \"pdf\"});");
+        checkOption("template path", "template", "new " + cls + "(\"/nonexistent-qore-test-dir/x.jrxml\", "
+            "\"pdf\");");
+    }
+
+    #! Returns code that creates a Flyway provider with the given url and location
+    private static string flywayWith(string url, string location) {
+        return sprintf("new FlywayDataProvider::FlywayDataProvider({\"url\": %y, \"user\": \"u\", "
+            "\"password\": \"p\", \"locations\": (%y,)});", url, location);
+    }
+
+    flywayTest() {
+        checkOption("classpath location", "locations", flywayWith("jdbc:qore-none://x", "classpath:qore/test/x"));
+        checkOption("url properties", "url", flywayWith("jdbc:qore-none://x;a=b", "/nonexistent-qore-test-dir"));
+        checkAllowed("directory location", flywayWith("jdbc:qore-none://x", "/nonexistent-qore-test-dir"));
+        checkOption("connection", "locations", "new FlywayDataProvider::FlywayConnection(\"f\", \"f\", "
+            "\"flyway://x\", {}, {\"url\": \"jdbc:qore-none://x\", \"user\": \"u\", \"password\": \"p\", "
+            "\"locations\": (\"classpath:qore/test/x\",)}).getDataProvider();");
+    }
+
+    barrierTest() {
+        string check = "Jni::org::qore::jni::check_class_option(\"qore-test\", \"placeholder\");";
+        string desc;
+        assertEq("JNI-SANDBOX-ERROR", runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});",
+            \desc), "policy barrier");
+        code cap = SandboxManager::createSystemPolicyCall(sub () {
+            Jni::org::qore::jni::check_class_option("qore-test", "placeholder");
+        });
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        p.parse("sub run(code c) { c(); }", "jni-class-options-capability");
+        assertThrows("JNI-SANDBOX-ERROR", \p.callFunction(), ("run", cap), "capability");
+        assertEq("ok", runAs(False, check), "trusted");
+    }
+}

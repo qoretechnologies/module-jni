@@ -39,6 +39,8 @@
 typedef std::set<std::string> strset_t;
 
 DLLLOCAL QoreClass* initJavaArrayClass(QoreNamespace& ns);
+//! creates the JavaArray class before its methods are added, as Java classes created before it use its type
+DLLLOCAL void preinitJavaArrayClass();
 DLLLOCAL QoreClass* initQoreInvocationHandlerClass(QoreNamespace& ns);
 
 DLLLOCAL void init_jni_functions(QoreNamespace& ns);
@@ -201,9 +203,16 @@ public:
     enum class JavaTypeUse {
         //! the type of a parameter: a %Qore value is converted to the Java type
         Param,
-        //! the type of the variable arguments parameter of a varargs method: as for \c Param, except that no value
-        //! is an empty array, as Java passes when there are no variable arguments, not null
+        //! the type of the variable arguments parameter of an abstract varargs method: as for \c Param, except that
+        //! no value is an empty array, as Java passes when there are no variable arguments, not null; a soft list,
+        //! as a %Qore class implementing the method declares it
         VarargsParam,
+        //! the type of the variable arguments parameter of a varargs method that can be called, given as an array:
+        //! a list (or a binary for \c byte[]) or no value, which is an empty array; a single value is not converted
+        //! to a list, as it is a variable argument given as a separate argument, which the variant taking the
+        //! variable arguments as separate arguments takes (see jni_add_loose_varargs_variants() in
+        //! QoreJniClassMap.cpp)
+        VarargsArrayParam,
         //! the type of a value converted to %Qore: a return value, a field, or a constant
         Value,
     };
@@ -230,7 +239,9 @@ public:
         value for overloads that all accept it selects the first variant added (see jni_get_variants()), which is the
         variant of the most specific class, as in Java (ex: <tt>m(String)</tt> before <tt>m(Object)</tt>).  The
         variable arguments array of a varargs method takes no value as an empty array, as
-        Java passes when there are no variable arguments.  See design/java-qore-type-mapping.md.
+        Java passes when there are no variable arguments; a varargs method that can be called also has a variant
+        taking the variable arguments as separate arguments (see jni_add_loose_varargs_variants() in
+        QoreJniClassMap.cpp).  See design/java-qore-type-mapping.md.
 
         A Java list (a class implementing \c java.util.List) is declared as a %Qore list, as every Java list is
         converted to one.  A Java map (a class implementing \c java.util.Map) is converted to a %Qore hash when all its
@@ -263,6 +274,15 @@ public:
         const QoreTypeInfo* altType = nullptr;
         return getQoreType(cls, altType, pgm, use, member);
     }
+
+    //! Returns the %Qore type of an element of the variable arguments array of a varargs method
+    /** This is the type of the elements of the array as a parameter (ex: \c *string for \c String..., \c int for
+        \c long..., \c auto for \c Object...), which a variable argument given as a separate argument has.
+
+        @param array_cls the Java array class of the variable arguments parameter
+        @param pgm the program the type is resolved in
+    */
+    DLLLOCAL const QoreTypeInfo* getVarargsElementType(jclass array_cls, QoreProgram* pgm = nullptr);
 
     //! Returns a new copy of the \c Jni namespace that a Program gets when the module is loaded into it
     /** The copy holds only the classes the module creates when it is initialized (\c java.lang.Object,
@@ -367,6 +387,28 @@ protected:
     DLLLOCAL void doMethods(JniQoreClass& qc, Class* jc, QoreProgram* pgm = nullptr);
     DLLLOCAL void doMethodsIntern(JniQoreClass& qc, Class* jc, QoreProgram* pgm, Env& env,
         jobjectArray mArray);
+
+    //! Adds a variant for an inherited public Java method with fixed parameters and the given parameter types
+    /** A variant that a parent class has for a public Java method with fixed parameters (ex: \c A.m(String)) is added
+        to the class, calling the Java method, when the class has a varargs method with the same name (ex:
+        \c B.m(String...)) whose variant taking the variable arguments as separate arguments would have its
+        parameter types: %Qore calls a variant of the class before one of its parents, so that variant would be
+        called instead of the parent's, while Java calls the method with fixed parameters.  Bridge methods are not
+        used, and if several methods have the parameter types, the method is chosen as for the methods of a class
+        (see jni_choose_variant() in QoreJniClassMap.cpp).
+
+        @param qc the class
+        @param jc the Java class
+        @param name the name of the %Qore method
+        @param is_static true for a static method
+        @param params the parameter types
+        @param pgm the program the types are resolved in
+
+        @return true if the variant was added; false if no public Java method with fixed parameters has the
+        parameter types (ex: the parent's variant is one of a varargs method)
+    */
+    DLLLOCAL bool addInheritedFixedArityVariant(JniQoreClass& qc, Class* jc, const char* name, bool is_static,
+            const type_vec_t& params, QoreProgram* pgm);
 
     DLLLOCAL void doFields(JniQoreClass& qc, Class* jc, QoreProgram* pgm = nullptr);
 
