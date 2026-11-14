@@ -61,6 +61,8 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         addTestCase("the jdbc classpath option follows the rule of add-classpath", \jdbcOptionTest());
         addTestCase("the jdbc classpath option set by library module code is judged by the sandbox only",
             \libraryJdbcOptionTest());
+        addTestCase("the jdbc classpath option that library module code sets for trusted code to open is judged by "
+            "its setter", \libraryJdbcOptionSetterTest());
         addTestCase("a command replayed from compiled code is judged by its recorded restrictions and its loader",
             \replayTest());
         set_return_value(main());
@@ -295,11 +297,18 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
                 {"kind": "sandboxed", "expected": "NETWORK-ACCESS-DENIED"}) {
             assertEq(c.expected, runLibrary(c.kind, "jdbc").split(":")[0], c.kind + " first loader");
         }
+    }
+
+    libraryJdbcOptionSetterTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for a module API before 2.3");
+        }
+        if (!(get_module_hash().jni.info.jdbc_option_setter ?? False)) {
+            testSkip("the jni module was built for a Qore library that does not record the setters of datasource "
+                "options");
+        }
         # the option that library code sets for a sandboxed caller is refused also when trusted code opens the
         # connection, as the jdbc driver judges it by the code that set it (qore#5741)
-        if (!(get_module_hash().jni.info.jdbc_option_setter ?? False)) {
-            return;
-        }
         foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
                 {"kind": "no-filesystem", "expected": "JNI-ERROR"},
                 {"kind": "no-uncontrolled", "expected": "JNI-ERROR"},

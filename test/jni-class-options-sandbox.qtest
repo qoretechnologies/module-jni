@@ -126,8 +126,10 @@ string sub get_context(object c) {
 
     #! Checks an option of a connection or data provider that the code creates: sandboxed code is refused the object
     /** the connections and data providers of the apps with external I/O that the sandbox does not control refuse
-        sandboxed code in their constructors (\c APP-SANDBOX-ACCESS-DENIED), before the options are read; the option
-        check is tested for sandboxed code through the static checks and objects that trusted code created
+        sandboxed code in their constructors (\c APP-SANDBOX-ACCESS-DENIED), before the options are read; for
+        sandboxed code the option check is tested through the static checks of the JMS and Kafka providers and the
+        endpoint check of a Camel producer that trusted code created; the option checks of the JDBC, JasperReports
+        and Flyway constructors cannot be reached by sandboxed code, and are a second line of defence
 
         @param trusted_desc if given, a regular expression that the trusted run's error must match
     */
@@ -148,20 +150,26 @@ string sub get_context(object c) {
         assertRegex("not declared sandbox-aware", desc, label + ": sandboxed: refused by the app");
     }
 
+    #! Checks a value that the option check allows in an object that the code creates
+    /** sandboxed code is refused the object by the app, and trusted code is refused neither the object nor the value
+    */
+    private checkAppAllowed(string label, string body) {
+        checkAppRefused(label, body);
+        string desc;
+        string err = runAs(False, body, \desc);
+        assertTrue(err != "JNI-SANDBOX-ERROR" && err != "APP-SANDBOX-ACCESS-DENIED", label + ": trusted: " + err
+            + ": " + desc);
+    }
+
     #! Checks that the sandboxed run is refused for the option
     private checkSandboxed(string label, string option, string body) {
         string desc;
         assertSandboxRefused(runAs(True, body, \desc), desc, label + ": sandboxed", option);
     }
 
-    #! Asserts that a sandboxed run was refused: by the check, naming the option, or, where a sandbox refuses
-    #! uncontrolled APIs at run time (qore#5741), by the core before the check is reached
+    #! Asserts that a sandboxed run was refused by the option check, naming the option
     private assertSandboxRefused(string err, *string desc, string label, *string option) {
-        if (err == "INVALID-FUNCTION-ACCESS") {
-            assertRegex("uncontrolled API", desc, label + ": refused as an uncontrolled API");
-            return;
-        }
-        assertEq("JNI-SANDBOX-ERROR", err, label);
+        assertEq("JNI-SANDBOX-ERROR", err, label + ": " + desc);
         if (option) {
             assertRegex(option, desc, label + ": option named");
         }
@@ -188,7 +196,7 @@ string sub get_context(object c) {
             checkAppOption("url properties " + url, sprintf("new JdbcDataProvider::JdbcDataProvider({\"url\": "
                 "%y, \"user\": \"u\", \"password\": \"p\"});", url));
         }
-        checkAllowed("plain url", "new JdbcDataProvider::JdbcDataProvider({" + base + "});");
+        checkAppAllowed("plain url", "new JdbcDataProvider::JdbcDataProvider({" + base + "});");
     }
 
     jmsTest() {
@@ -278,9 +286,9 @@ string sub get_context(object c) {
                 assertEq("APP-SANDBOX-ACCESS-DENIED", runAs(True, direct, \desc), p.name
                     + ": provider option: sandboxed");
             }
-            checkAllowed(p.name + ": connection option, default", sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn,
-                Opt, Default, p.args));
-            checkAllowed(p.name + ": data provider of the connection, default", sprintf(root, Opt, Default));
+            checkAppAllowed(p.name + ": connection option, default", sprintf("%s%s, {}, {%y: %y}), {%s});", prefix,
+                conn, Opt, Default, p.args));
+            checkAppAllowed(p.name + ": data provider of the connection, default", sprintf(root, Opt, Default));
         }
 
         # a connection that trusted code configured does not let sandboxed code use the command: the app refuses
@@ -330,7 +338,7 @@ string sub get_context(object c) {
 
     camelTest() {
         foreach string endpoint in ("seda:qoretest", "direct:qoretest", "log:qoretest", "mock:qoretest") {
-            checkAllowed(endpoint, camelSend(endpoint));
+            checkAppAllowed(endpoint, camelSend(endpoint));
         }
         foreach string endpoint in ("file:/nonexistent-qore-test-dir", "seda:qoretest?size=1", "log:x?level=INFO",
                 "direct:{{qoretest}}", "no-scheme", "seda:qoretest\n") {
@@ -363,22 +371,28 @@ string sub get_context(object c) {
             (*string err, *string desc) = (sp.callFunction("send", producer[1], endpoint) =~ x/^([^:]+): (.*)$/s);
             assertSandboxRefused(err ?? "ok", desc, endpoint + ": sandboxed send with a trusted producer", "endpoint");
         }
-        # the endpoint that the check allows is not refused by it
-        string rv = sp.callFunction("send", producer[1], "seda:qoretest");
-        assertFalse(rv =~ /^JNI-SANDBOX-ERROR/, "an allowed endpoint: " + rv);
-        # the trusted code itself may use the endpoint that sandboxed code is refused (the producer sends to the
-        # endpoint, or fails for another reason than the check)
+        # the endpoints that the check allows are sent to
+        foreach string endpoint in ("seda:qoretest-trusted-obj", "log:qoretest-trusted-obj",
+                "mock:qoretest-trusted-obj") {
+            assertEq("ok", sp.callFunction("send", producer[1], endpoint), endpoint + ": an allowed endpoint");
+        }
+        # a direct endpoint is allowed too; with no consumer, Camel fails the send, not the check
+        assertRegex("^JNI-ERROR: .*CamelExecutionException", sp.callFunction("send", producer[1],
+            "direct:qoretest-trusted-obj"), "an allowed direct endpoint with no consumer");
+        # the trusted code itself may use the endpoint that sandboxed code is refused (a queue of its own, so that
+        # its size does not conflict with a queue that another send created)
         try {
-            producer[1].doRequest({"endpoint": "seda:qoretest?size=1", "body": "x"});
+            producer[1].doRequest({"endpoint": "seda:qoretest-trusted-sized?size=1", "body": "x"});
         } catch (hash<ExceptionInfo> ex) {
-            assertTrue(ex.err != "JNI-SANDBOX-ERROR", "trusted send: " + ex.err + ": " + ex.desc);
+            fail("trusted send: " + ex.err + ": " + ex.desc);
         }
 
         # a connection refuses sandboxed callers its object in AbstractConnection::get() itself, before its getImpl()
         # makes the option check, also when trusted code created it
         (*string err, *string desc) = (sp.callFunction("get_context", conn) =~ x/^([^:]+): (.*)$/s);
         assertEq("APP-SANDBOX-ACCESS-DENIED", err, "sandboxed get of a trusted connection");
-        assertRegex("sandbox", desc, "sandboxed get of a trusted connection: refused by the connection");
+        assertRegex("not declared sandbox-aware", desc, "sandboxed get of a trusted connection: refused by the "
+            "connection");
     }
 
     jasperTest() {
@@ -401,7 +415,7 @@ string sub get_context(object c) {
     flywayTest() {
         checkAppOption("classpath location", flywayWith("jdbc:qore-none://x", "classpath:qore/test/x"));
         checkAppOption("url properties", flywayWith("jdbc:qore-none://x;a=b", "/nonexistent-qore-test-dir"));
-        checkAllowed("directory location", flywayWith("jdbc:qore-none://x", "/nonexistent-qore-test-dir"));
+        checkAppAllowed("directory location", flywayWith("jdbc:qore-none://x", "/nonexistent-qore-test-dir"));
         checkAppOption("connection", "new FlywayDataProvider::FlywayConnection(\"f\", \"f\", "
             "\"flyway://x\", {}, {\"url\": \"jdbc:qore-none://x\", \"user\": \"u\", \"password\": \"p\", "
             "\"locations\": (\"classpath:qore/test/x\",)}).getDataProvider();");
