@@ -67,7 +67,8 @@ try {
         return rv;
     }
 
-    #! runs the child script for a module and returns its output
+    #! runs the child script for a module and returns its standard output (the child prints the result and any
+    #! exception itself; standard error, where a JVM or another tool can print notes, is not part of the result)
     private string load(string mod) {
         TmpDir tmp("qore-restricted-load-");
         string script = tmp.path + "/restricted.q";
@@ -77,15 +78,26 @@ try {
         f.close();
         *string env_dir = ENV.QORE_MODULE_DIR;
         string mod_dir = env_dir ? qlib_dir + ":" + env_dir : qlib_dir;
-        string cmd = sprintf("QORE_MODULE_DIR='%s' %s -b %s '%s' 2>&1", mod_dir, qore_bin, script, mod);
+        string cmd = sprintf("QORE_MODULE_DIR='%s' %s -b %s '%s' 2>/dev/null", mod_dir, qore_bin, script, mod);
         return backquote(cmd);
+    }
+
+    #! returns the last non-empty line of the output
+    private static string lastLine(string out) {
+        list<string> lines = out.split("\n");
+        while (lines && !lines[-1]) {
+            pop lines;
+        }
+        return lines ? lines[-1] : "";
     }
 
     testRestrictedLoad() {
         list<string> mods = getModules();
         assertGt(0, mods.size());
         foreach string mod in (mods) {
-            assertEq("loaded\n", load(mod), mod);
+            string out = load(mod);
+            # the result is the last line: a note that a tool prints to standard output before it is no failure
+            assertEq("loaded", lastLine(out), sprintf("%s: %s", mod, out));
         }
     }
 
@@ -102,7 +114,7 @@ try {
         s.open2(tmp.path + "/restricted.q", O_CREAT | O_TRUNC | O_WRONLY);
         s.write(ChildScript);
         s.close();
-        string out = backquote(sprintf("QORE_MODULE_DIR='%s' %s -b %s UndeclaredDomainModule 2>&1", tmp.path,
+        string out = backquote(sprintf("QORE_MODULE_DIR='%s' %s -b %s UndeclaredDomainModule 2>/dev/null", tmp.path,
             qore_bin, tmp.path + "/restricted.q"));
         assertRegex("^PARSE-EXCEPTION: parse options do not allow access to .*UndeclaredDomainModule", out);
     }
