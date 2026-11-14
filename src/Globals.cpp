@@ -110,6 +110,7 @@ jmethodID Globals::methodClassGetDeclaredConstructor;
 jmethodID Globals::methodClassGetModifiers;
 jmethodID Globals::methodClassIsPrimitive;
 jmethodID Globals::methodClassGetDeclaredMethods;
+jmethodID Globals::methodClassGetMethods;
 jmethodID Globals::methodClassGetCanonicalName;
 jmethodID Globals::methodClassGetDeclaredField;
 jmethodID Globals::methodClassIsAssignableFrom;
@@ -3658,6 +3659,7 @@ bool Globals::init() {
     methodClassGetModifiers = env.getMethod(classClass, "getModifiers", "()I");
     methodClassIsPrimitive = env.getMethod(classClass, "isPrimitive", "()Z");
     methodClassGetDeclaredMethods = env.getMethod(classClass, "getDeclaredMethods", "()[Ljava/lang/reflect/Method;");
+    methodClassGetMethods = env.getMethod(classClass, "getMethods", "()[Ljava/lang/reflect/Method;");
     methodClassGetCanonicalName = env.getMethod(classClass, "getCanonicalName", "()Ljava/lang/String;");
     methodClassGetDeclaredField = env.getMethod(classClass, "getDeclaredField",
         "(Ljava/lang/String;)Ljava/lang/reflect/Field;");

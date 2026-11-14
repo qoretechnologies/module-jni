@@ -43,6 +43,7 @@ class JniSandboxTest inherits QUnit::Test {
 %module-cmd(jni) add-classpath @TEST_JAR@
 %module-cmd(jni) add-classpath @JNI_JAR@
 %module-cmd(jni) import org.qore.jni.test.Callbacks
+%module-cmd(jni) import java.util.concurrent.CountDownLatch
 
 string sub read_file(string path) {
     try {
@@ -78,7 +79,8 @@ auto sub callbacks_method(string name, softlist<string> arg_classes) {
         (map load_class($1), arg_classes));
 }
 
-# reads the file in a method that Java calls, and in its destructor if it has a results queue for it
+# reads the file in a method that Java calls, and in its destructor if it has a results queue for it; the destructor
+# pushes the ID of the thread that ran it with the result
 class SecretReader {
     private {
         string path;
@@ -94,7 +96,7 @@ class SecretReader {
 
     destructor() {
         if (destructor_results) {
-            destructor_results.push(read_file(path));
+            destructor_results.push({\"tid\": gettid(), \"result\": read_file(path)});
         }
     }
 
@@ -115,12 +117,19 @@ SecretReader sub run_method_in_java_thread(string path, Queue results, string ho
     return r;
 }
 
-# hands an object to Java, which destroys it in a new Java thread; returns the object, which must stay alive until
-# then
-SecretReader sub destroy_in_java_thread(string path, Queue results) {
-    SecretReader r(path, new Queue(), results);
-    callbacks_method(\"destroyInThread\", \"org/qore/jni/QoreObjectBase\").invoke(NOTHING, r);
-    return r;
+# returns an object that reads the file in its destructor and pushes the result to the queue
+SecretReader sub make_destroy_reader(string path, Queue results) {
+    return new SecretReader(path, new Queue(), results);
+}
+
+# hands an object to Java, which destroys it in a new Java thread once the caller counts down the latch returned.
+# Java holds only a weak reference to the object, so the caller must hold the object until Java has destroyed it, or
+# it would be destroyed on the caller's thread when its last strong reference is released
+object sub destroy_in_java_thread(object r) {
+    CountDownLatch latch(1);
+    callbacks_method(\"destroyInThread\", (\"org/qore/jni/QoreObjectBase\",
+        \"java/util/concurrent/CountDownLatch\")).invoke(NOTHING, (r, latch));
+    return latch;
 }
 
 # hands a proxy to Java, which calls it in a new Java thread; returns the handler, which must stay alive until then
@@ -149,6 +158,7 @@ code sub get(string name) {
         case \"run_closure_in_java_thread\": return \\run_closure_in_java_thread();
         case \"make_handler\": return \\make_handler();
         case \"run_method_in_java_thread\": return \\run_method_in_java_thread();
+        case \"make_destroy_reader\": return \\make_destroy_reader();
         case \"destroy_in_java_thread\": return \\destroy_in_java_thread();
     }
     throw \"UNKNOWN-FUNCTION\", name;
@@ -275,13 +285,37 @@ auto sub run(code c, ...) {
     testObjectDestroy() {
         Program u = getTrusted();
         Program p = getSandboxed();
-        Queue results();
-        object r = call(u, NOTHING, "destroy_in_java_thread", secret, results);
-        assertEq(SecretContent, results.get(CallbackTimeout), "unsandboxed");
-        delete r;
-        r = call(u, p, "destroy_in_java_thread", secret, results);
-        assertEq("FILESYSTEM-ACCESS-DENIED", results.get(CallbackTimeout));
-        delete r;
+        # unsandboxed: the destructor reads the file; handed to Java by trusted code for the sandboxed code: the
+        # destructor runs under the sandbox of the sandboxed code
+        foreach hash<auto> i in (
+                {"label": "unsandboxed", "result": SecretContent},
+                {"label": "sandboxed", "result": "FILESYSTEM-ACCESS-DENIED", "sandbox": p},
+            ) {
+            Queue results();
+            # the object is created by unsandboxed code in both cases, so no sandbox is captured with the object
+            # itself: only the sandbox that Java's handle to the object captures when the object is handed to Java
+            # can govern its destructor on Java's thread.
+            # Java holds only a weak reference to the object, so the test holds a strong reference until Java's thread
+            # has destroyed it; otherwise the object would be destroyed on this thread when it is released.  The
+            # variable is untyped, as it refers to a deleted object once Java has destroyed it; it is never deleted
+            # here
+            auto r = call(u, NOTHING, "make_destroy_reader", secret, results);
+            object latch = call(u, i.sandbox, "destroy_in_java_thread", r);
+            # Java's thread waits for the latch; count it down also if an assertion fails before the explicit
+            # countdown; counting down again has no effect
+            on_exit {
+                latch.countDown();
+            }
+            assertEq("SecretReader", r.className(), i.label + " (alive until Java destroys it)");
+            # let Java's thread destroy the object
+            latch.countDown();
+            hash<auto> h = results.get(CallbackTimeout);
+            # the destructor ran on Java's thread, not on this one
+            assertNeq(gettid(), h.tid, i.label + " (thread)");
+            assertEq(i.result, h.result, i.label);
+            # releasing the reference to the deleted object raises no exception
+            remove r;
+        }
     }
 
     testRelease() {
