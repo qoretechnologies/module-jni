@@ -94,11 +94,17 @@ code sub make_capability(string cmd) {
         assertSandboxRefused(runAs(True, body, \desc), desc, label + ": sandboxed", option);
     }
 
-    #! Asserts that a sandboxed run was refused: by the check, naming the option, or, where a sandbox refuses
-    #! uncontrolled APIs at run time (qore#5741), by the core before the check is reached
+    #! Asserts that a sandboxed run was refused: by the check, naming the option, or before the check is reached:
+    #! where a sandbox refuses uncontrolled APIs at run time (qore#5741), by the core, and in the constructor of a
+    #! connection or data provider of an app with external I/O that the sandbox does not control, by the app's
+    #! refusal of sandboxed callers (DataProviderActionCatalog::checkSandboxAccess())
     private assertSandboxRefused(string err, *string desc, string label, *string option) {
         if (err == "INVALID-FUNCTION-ACCESS") {
             assertRegex("uncontrolled API", desc, label + ": refused as an uncontrolled API");
+            return;
+        }
+        if (err == "APP-SANDBOX-ACCESS-DENIED") {
+            assertRegex("not declared sandbox-aware", desc, label + ": refused by the app");
             return;
         }
         assertEq("JNI-SANDBOX-ERROR", err, label);
@@ -210,25 +216,28 @@ code sub make_capability(string cmd) {
             checkOption(p.name + ": data provider of the connection", Opt, sprintf(root, Opt, Other));
             # it is a connection option only: a provider does not accept it from any caller
             string direct = sprintf("%s%s), {%s%s%y: %y});", prefix, conn, p.args, sep, Opt, Other);
-            foreach bool sandboxed in ((True, False)) {
+            {
                 string desc;
-                assertEq("CONSTRUCTOR-ERROR", runAs(sandboxed, direct, \desc), sprintf("%s: provider option: %s", p.name,
-                    sandboxed ? "sandboxed" : "trusted"));
+                assertEq("CONSTRUCTOR-ERROR", runAs(False, direct, \desc), p.name + ": provider option: trusted");
                 assertRegex(Opt, desc, p.name + ": provider option: named");
+                # sandboxed code cannot create the provider at all: the app refuses it before the options are read
+                assertEq("APP-SANDBOX-ACCESS-DENIED", runAs(True, direct, \desc), p.name
+                    + ": provider option: sandboxed");
             }
             checkAllowed(p.name + ": connection option, default", sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn,
                 Opt, Default, p.args));
             checkAllowed(p.name + ": data provider of the connection, default", sprintf(root, Opt, Default));
         }
 
-        # a connection that trusted code configured does not let sandboxed code use the command
+        # a connection that trusted code configured does not let sandboxed code use the command: the app refuses
+        # sandboxed code a provider before the connection's options are read
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(new SandboxManager());
         map p.loadModule($1), Modules;
         p.parse("sub run(KafkaDataProvider::KafkaConnection c) { new KafkaDataProvider::KafkaConsumerDataProvider(c, "
             "{\"topics\": (\"t\",)}); }", "jni-class-options-kinit-connection");
-        assertThrows("JNI-SANDBOX-ERROR", Opt, \p.callFunction(), ("run", tp.callFunction("make_connection", Other)),
-            "trusted connection");
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "not declared sandbox-aware", \p.callFunction(),
+            ("run", tp.callFunction("make_connection", Other)), "trusted connection");
 
         # through a policy barrier and a capability
         string check = kafkaCheck(Opt, Other);

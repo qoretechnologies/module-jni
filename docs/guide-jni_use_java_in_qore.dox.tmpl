@@ -293,7 +293,11 @@ public class Fetcher {
     options of a \c Datasource constructor or connection string, or, for every connection of a \c DatasourcePool, by
     the code that created the pool (copies keep it), and not by the code that opens the connection.  So a datasource
     whose classpath sandboxed or restricted code set is refused (\c JNI-SANDBOX-ERROR) also when trusted code opens it,
-    and a trusted datasource or pool is not refused when a connection is opened on a sandboxed caller's thread.  The
+    and the option of a trusted datasource or pool is not refused when a connection is opened on a restricted caller's
+    thread.  The jdbc driver itself does not connect for code that a sandbox that does not allow uncontrolled APIs
+    governs (\c NETWORK-ACCESS-DENIED, see the jdbc database driver below): a connection opened for sandboxed code, also
+    by a trusted pool on its thread, and a connection of a datasource object that sandboxed code created or copied,
+    whoever opens it, are refused before the option is judged.  The
     classpath entries are checked against the filesystem policy of the code that set the option, not of the code that
     opens the connection: the code that configures a datasource reads only what its own policy allows.  The module
     hash reports this with \c "jdbc_option_setter" in its \c "info" key; with an older %Qore library the option is
@@ -338,7 +342,10 @@ public class Fetcher {
     <b>Options that load Java code:</b> an option that names a Java class to load or instantiate, a classpath to add,
     or a value that Java compiles, deserializes or uses to select a component that loads classes, is refused with
     \c JNI-SANDBOX-ERROR to sandboxed code, also through a policy barrier or a system-policy capability, before it is
-    used.  The run-time boundary is the sandbox (a \c Qore::SandboxManager), as for all module code: module code runs
+    used.  The connections and data providers of these apps declare \c external_io, so their constructors refuse
+    sandboxed code first (\c APP-SANDBOX-ACCESS-DENIED); the option checks apply where that refusal does not, for
+    example to the static option checks that a module or a capability calls and to an object that trusted code
+    created.  The run-time boundary is the sandbox (a \c Qore::SandboxManager), as for all module code: module code runs
     with its own Program's parse options, and a caller's parse options restrict it only when the caller is
     sandboxed, so a Program that is restricted only with parse options (ex: \c PO_NO_UNCONTROLLED_APIS) is not
     refused these options at run time when it uses a provider module that trusted code loaded.  A host that runs

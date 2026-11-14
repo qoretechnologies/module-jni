@@ -236,13 +236,16 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
     }
 
     jdbcOptionTest() {
-        # the classpath option of the jdbc database driver follows the rule of add-classpath for the code that sets it
+        # the classpath option of the jdbc database driver follows the rule of add-classpath for the code that sets it;
+        # sandboxed code that opens the connection itself is refused the connection first, as the jdbc driver does not
+        # connect for code that a sandbox governs (qore#5747); a classpath that sandboxed code sets for trusted code to
+        # open is tested in jni-jdbc-option-setter.qtest
         string src = "string sub open(string cp) { Datasource ds(\"jdbc:u/p@jdbc:qore-none://x{classpath=\" + cp "
             "+ \"}\"); try { ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }";
         foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
                 {"kind": "no-filesystem", "expected": "JNI-SANDBOX-ERROR"},
                 {"kind": "no-uncontrolled", "expected": "JNI-SANDBOX-ERROR"},
-                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+                {"kind": "sandboxed", "expected": "NETWORK-ACCESS-DENIED"}) {
             Program p = getIssuer(c.kind);
             p.parse("%requires jni\n" + src, "jni-module-cmd-issuer-jdbc-" + c.kind);
             assertEq(c.expected, p.callFunction("open", "/nonexistent-qore-test-dir"), c.kind);
@@ -284,11 +287,12 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         }
         # library module code that sets the jdbc classpath option is judged by the sandbox only, not by the parse options
         # that its Program inherited from the code that loaded it first (for example a %no-filesystem loader);
-        # JNI-ERROR is the error of the jdbc driver that is not found after the option was accepted
+        # JNI-ERROR is the error of the jdbc driver that is not found after the option was accepted; the jdbc driver
+        # does not connect for a sandboxed caller at all (qore#5747), which refuses it before the option is processed
         foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
                 {"kind": "no-filesystem", "expected": "JNI-ERROR"},
                 {"kind": "no-uncontrolled", "expected": "JNI-ERROR"},
-                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+                {"kind": "sandboxed", "expected": "NETWORK-ACCESS-DENIED"}) {
             assertEq(c.expected, runLibrary(c.kind, "jdbc").split(":")[0], c.kind + " first loader");
         }
     }

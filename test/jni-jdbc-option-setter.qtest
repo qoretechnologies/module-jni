@@ -256,6 +256,21 @@ list<string> sub loader_urls() {
         return "JNI-ERROR";
     }
 
+    #! Returns True if the jdbc driver refuses to connect for the code of the kind given (qore#5747)
+    /** the driver refuses to connect, before it processes any option, for code that a sandbox that does not trust it
+        with uncontrolled APIs governs: code of the sandboxed Program, also when it opens a datasource that trusted
+        code configured, a pool that grows on its thread, and a datasource object that its Program created or copied,
+        whoever opens it; without the uncontrolled-API policy of sandboxes, every governing sandbox
+    */
+    private static bool connectRefused(string kind) {
+        return kind == "sandboxed" || (kind == "trusted-sandbox" && !hasUncontrolledApiPolicy());
+    }
+
+    #! Returns the result of a connection for the code of the kind \a connecting with the option set by \a setter
+    private string expectedConnect(string connecting, string setter, string entry) {
+        return connectRefused(connecting) ? "NETWORK-ACCESS-DENIED" : expectedFor(setter, entry);
+    }
+
     #! the classpath entries of the test: one in the allowed directory, one in the denied directory
     private list<string> entries() {
         return (allowed + DirSep + "driver.jar", denied + DirSep + "driver.jar");
@@ -279,13 +294,14 @@ list<string> sub loader_urls() {
         # the code that sets the option opens the connection: the same result with every Qore library
         foreach string kind in (keys Kinds) {
             foreach string entry in (entries()) {
-                assertEq(expectedFor(kind, entry), pgms{kind}.callFunction("open_new", entry), kind + ": " + entry);
+                assertEq(expectedConnect(kind, kind, entry), pgms{kind}.callFunction("open_new", entry),
+                    kind + ": " + entry);
             }
         }
         # restricted code cannot create a pool with a classpath either: the pool opens its first connection
         foreach string kind in (Refused) {
-            assertEq("JNI-SANDBOX-ERROR", pgms{kind}.callFunction("make_pool", get_script_dir() + "qore-jni-test.jar"),
-                kind + ": a pool");
+            assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : "JNI-SANDBOX-ERROR",
+                pgms{kind}.callFunction("make_pool", get_script_dir() + "qore-jni-test.jar"), kind + ": a pool");
         }
     }
 
@@ -301,10 +317,10 @@ list<string> sub loader_urls() {
                 ds.setOption("classpath", NoSuchEntry);
                 assertEq("JNI-ERROR", open(ds), kind + ": set again by trusted code");
 
-                # the code of the kind creates the datasource with the option
-                assertEq(expectedFor(kind, entry), open(pgms{kind}.callFunction("make", entry)),
+                # the code of the kind creates the datasource with the option; the datasource object is its code's
+                assertEq(expectedConnect(kind, kind, entry), open(pgms{kind}.callFunction("make", entry)),
                     kind + ": connection string: " + entry);
-                assertEq(expectedFor(kind, entry), open(pgms{kind}.callFunction("make_hash", entry)),
+                assertEq(expectedConnect(kind, kind, entry), open(pgms{kind}.callFunction("make_hash", entry)),
                     kind + ": constructor hash: " + entry);
             }
         }
@@ -316,12 +332,13 @@ list<string> sub loader_urls() {
             foreach string entry in (entries()) {
                 # trusted code copies a datasource that the code of the kind configured
                 Datasource configured = pgms{kind}.callFunction("make", entry);
-                assertEq(expectedFor(kind, entry), open(configured.copy()), kind + ": a trusted copy: " + entry);
+                assertEq(expectedConnect(kind, kind, entry), open(configured.copy()), kind + ": a trusted copy: "
+                    + entry);
             }
             # the code of the kind copies a datasource that trusted code configured
             Datasource trusted("jdbc:u/p@jdbc:qore-none://x{classpath=" + NoSuchEntry + "}");
-            assertEq("JNI-ERROR", open(pgms{kind}.callFunction("copy_ds", trusted)), kind + ": its copy of a trusted "
-                "datasource");
+            assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : "JNI-ERROR",
+                open(pgms{kind}.callFunction("copy_ds", trusted)), kind + ": its copy of a trusted datasource");
         }
     }
 
@@ -332,7 +349,8 @@ list<string> sub loader_urls() {
             # that its own policy denies
             foreach string entry in ((NoSuchEntry,) + entries()) {
                 Datasource ds("jdbc:u/p@jdbc:qore-none://x{classpath=" + entry + "}");
-                assertEq("JNI-ERROR", pgms{kind}.callFunction("open", ds), kind + ": " + entry);
+                assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : "JNI-ERROR",
+                    pgms{kind}.callFunction("open", ds), kind + ": " + entry);
             }
         }
     }
@@ -465,9 +483,15 @@ list<string> sub loader_urls() {
                 background q.push(pgms{kind}.callFunction("pool_read", pool));
                 rv = q.get();
             }
-            assertEq(1, rv, kind + ": the connection that the pool opened on the thread of the code");
-            # the fixture driver connected twice: the first connection and the new one
-            assertEq(2, (select JdbcTransactionDriver::events(), $1 == "connect").size(), kind + ": connections");
+            if (connectRefused(kind)) {
+                # the driver does not connect for the code on its thread; the classpath is not the reason
+                assertEq("NETWORK-ACCESS-DENIED", rv, kind + ": the pool does not connect on the thread of the code");
+                assertEq(1, (select JdbcTransactionDriver::events(), $1 == "connect").size(), kind + ": connections");
+            } else {
+                assertEq(1, rv, kind + ": the connection that the pool opened on the thread of the code");
+                # the fixture driver connected twice: the first connection and the new one
+                assertEq(2, (select JdbcTransactionDriver::events(), $1 == "connect").size(), kind + ": connections");
+            }
             # the current behavior (see the jdbc driver guide): the classpath of every connection of the pool is
             # added to the class loader of the Program that created the pool, not of the code that opened the
             # connection
@@ -487,7 +511,8 @@ list<string> sub loader_urls() {
             string exp = expectedFor("trusted-sandbox", entry);
             assertEq(exp, open(ds.copy()), "opened by trusted code: " + entry);
             foreach string kind in (keys Kinds) {
-                assertEq(exp, pgms{kind}.callFunction("open", ds.copy()), "opened by " + kind + " code: " + entry);
+                assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : exp, pgms{kind}.callFunction("open", ds.copy()),
+                    "opened by " + kind + " code: " + entry);
             }
         }
 
