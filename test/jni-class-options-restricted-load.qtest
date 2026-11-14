@@ -1,0 +1,41 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires QUnit
+
+%exec-class JniClassOptionsRestrictedLoadTest
+
+#! Pins the load-time rule for Programs restricted only with parse options (qore#5742)
+/** Module code is checked against parse options when the module is loaded; at run time only sandbox restrictions
+    apply to it.  This test loads no provider module itself, so each restricted Program here is the first to load it:
+    the load is refused.  (A restricted Program that uses a module that trusted code loaded runs it with the module's
+    own options; that case is not a run-time boundary and is not tested.)
+*/
+class JniClassOptionsRestrictedLoadTest inherits QUnit::Test {
+    private:internal {
+        const Modules = ("JdbcDataProvider", "JakartaJmsDataProvider", "KafkaDataProvider", "CamelDataProvider",
+            "JasperReportsDataProvider", "FlywayDataProvider");
+    }
+
+    constructor() : QUnit::Test("JNI class options restricted load", "1.0", \ARGV) {
+        addTestCase("a restricted Program that loads a provider module first is refused at load", \loadTest());
+        set_return_value(main());
+    }
+
+    loadTest() {
+        foreach string mod in (Modules) {
+            Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+            try {
+                p.loadModule(mod);
+                fail(mod + ": the load was not refused");
+            } catch (hash<ExceptionInfo> ex) {
+                # refused when the module's code is parsed, or when its initialization creates a Java object
+                assertTrue(inlist(ex.err, ("PARSE-EXCEPTION", "ILLEGAL-CLASS-INSTANTIATION")),
+                    mod + ": refused at load: " + ex.err);
+            }
+        }
+    }
+}

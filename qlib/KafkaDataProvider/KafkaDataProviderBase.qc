@@ -28,6 +28,56 @@ public namespace KafkaDataProvider {
 /**
 */
 public class KafkaDataProviderBase inherits AbstractDataProvider {
+    public {
+        #! The client options that name a class for the Kafka client to instantiate, with Kafka's own classes, which
+        #! every caller may use (the connection sets them as defaults); see checkClassOptions()
+        const ClassOptions = {
+            "ssl.engine.factory.class": {
+                "org.apache.kafka.common.security.ssl.DefaultSslEngineFactory": True,
+            },
+            "sasl.client.callback.handler.class": {},
+            "sasl.login.callback.handler.class": {},
+            "sasl.login.class": {},
+        };
+
+        #! The client options that name a command for the Kafka client to run, with the values that every caller may
+        #! use (the connection sets its default); see checkClassOptions()
+        const CommandOptions = {
+            "sasl.kerberos.kinit.cmd": {
+                "/usr/bin/kinit": True,
+            },
+        };
+
+        #! The serializer and deserializer options; see checkClassOptions()
+        const SerdeOptions = (
+            "key.serializer",
+            "value.serializer",
+            "key.deserializer",
+            "value.deserializer",
+        );
+
+        #! Kafka's own serializers and deserializers, which every caller may use
+        const BuiltinSerdeClasses = map {"org.apache.kafka.common.serialization." + $1: True}, (
+            "StringSerializer", "StringDeserializer", "ByteArraySerializer", "ByteArrayDeserializer",
+            "ByteBufferSerializer", "ByteBufferDeserializer", "BytesSerializer", "BytesDeserializer",
+            "IntegerSerializer", "IntegerDeserializer", "LongSerializer", "LongDeserializer",
+            "ShortSerializer", "ShortDeserializer", "FloatSerializer", "FloatDeserializer",
+            "DoubleSerializer", "DoubleDeserializer", "UUIDSerializer", "UUIDDeserializer",
+            "VoidSerializer", "VoidDeserializer", "BooleanSerializer", "BooleanDeserializer",
+        );
+
+        #! Kafka's own login modules, which every caller may name in \c sasl.jaas.config
+        const BuiltinLoginModules = {
+            "org.apache.kafka.common.security.plain.PlainLoginModule": True,
+            "org.apache.kafka.common.security.scram.ScramLoginModule": True,
+            "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule": True,
+        };
+
+        #! One JAAS entry and nothing else: LoginModuleClass Flag (Name=Value)* ; with optionally quoted values
+        const JaasEntryRegex = "^\\s*([A-Za-z_$][A-Za-z0-9_$.]*)\\s+(?:required|requisite|sufficient|optional)"
+            "(?:\\s+[A-Za-z_][A-Za-z0-9_.]*\\s*=\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s;\"=]+))*\\s*;\\s*$";
+    }
+
     private {
         KafkaConnection conn;
 
@@ -152,6 +202,49 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
     */
     static removeAsyncApiOptions(reference<hash<auto>> opts) {
         remove opts{"asyncapi", "asyncapi_channel", "validator"};
+    }
+
+    #! Refuses the client options that make the Kafka client load a class to code that may not load arbitrary classes
+    /** Called with the options of the connection and the provider before the Kafka client is created (qore#5742).
+        For code that a sandbox governs, or that does not allow uncontrolled APIs (see
+        \c Jni::org::qore::jni::check_class_option()):
+        - the options that name a class (@ref ClassOptions) are refused if they are set
+        - a serializer or deserializer must be one of Kafka's own (@ref BuiltinSerdeClasses)
+        - \c sasl.jaas.config must be a single entry for one of Kafka's own login modules
+          (@ref BuiltinLoginModules), as it names the login module class to instantiate
+
+        Trusted code is not restricted.
+
+        @param opts the client options
+
+        @throw JNI-SANDBOX-ERROR the caller may not load arbitrary classes, and an option names a class
+    */
+    static checkClassOptions(hash<auto> opts) {
+        foreach hash<auto> i in (ClassOptions.pairIterator()) {
+            if (opts{i.key}.val() && !i.value{opts{i.key}}) {
+                Jni::org::qore::jni::check_class_option("kafka", i.key);
+            }
+        }
+        # the Kafka client runs this command in Java, outside of the process controls of Qore (qore#5743)
+        foreach hash<auto> i in (CommandOptions.pairIterator()) {
+            if (opts{i.key}.val() && !i.value{opts{i.key}}) {
+                Jni::org::qore::jni::check_class_option("kafka", i.key, "names a command for the Kafka client to run");
+            }
+        }
+        foreach string opt in (SerdeOptions) {
+            if (opts{opt}.val() && !BuiltinSerdeClasses{opts{opt}}) {
+                Jni::org::qore::jni::check_class_option("kafka", opt);
+            }
+        }
+        if (opts."sasl.jaas.config".val() && !KafkaDataProviderBase::isBuiltinJaasConfig(opts."sasl.jaas.config")) {
+            Jni::org::qore::jni::check_class_option("kafka", "sasl.jaas.config");
+        }
+    }
+
+    #! Returns @ref True if the JAAS configuration is a single entry for one of Kafka's own login modules
+    private static bool isBuiltinJaasConfig(string config) {
+        *list<*string> m = regex_extract(config, JaasEntryRegex);
+        return m && BuiltinLoginModules{m[0]};
     }
 
     private static AsyncApi::AsyncApi3Schema loadAsyncApiValidator(string validator) {

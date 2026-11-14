@@ -10,6 +10,14 @@
       sandbox policy governs, because the sandbox network policy cannot be applied to the destinations that a JDBC
       driver resolves and discovers in Java (see @ref jni_sandbox)
 
+    - <b>Security</b>: the options of the JDBC, Jakarta JMS, Kafka, Camel, JasperReports and Flyway providers that
+      name a Java class to load, a classpath to add, or code that Java compiles are refused with
+      \c JNI-SANDBOX-ERROR to sandboxed code; added \c Jni::org::qore::jni::check_class_option() for modules
+      (see @ref jni_sandbox)
+
+    - <b>Security</b>: a Kafka \c sasl.kerberos.kinit.cmd option other than the default, which names a command that
+      the Kafka client runs, is refused with \c JNI-SANDBOX-ERROR to sandboxed code (see @ref jni_sandbox)
+
     - fixed calling Java varargs methods with the variable arguments as separate arguments (ex:
       <tt>m.invoke(NOTHING, a, b)</tt> for \c java.lang.reflect.Method.invoke(), <tt>String::format("%s %s", a,
       b)</tt>, <tt>Arrays::asList(a, b, c)</tt>): with \c %%strict-args (in \c %%modern) more than one of them

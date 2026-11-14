@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The ICS data provider never makes ical4j fetch a timezone definition over the network, whatever timezones a document
+# names: such a fetch would be I/O that no sandbox policy sees. ical4j 4 fetches a definition only when code looks the
+# timezone up in its TimeZoneRegistry, which the provider does not do: it resolves timezones through java.time and the
+# document's own VTIMEZONE components.
+#
+# A local listener stands in for the timezone update server. ical4j's update scheme, host and port are pointed at it
+# with Java system properties before ical4j is first used; the test runs in a process of its own, because ical4j reads
+# its configuration once for each class loader. A fetch is synchronous, and the connection waits on the listener until
+# it is accepted, so the check after each operation does not wait. The last case is a positive control: a registry
+# lookup in a class loader of its own does fetch, so a passing run shows that a fetch would have been detected.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires QUnit
+%requires jni
+%requires IcsDataProvider
+%module-cmd(jni) import java.lang.System
+
+%exec-class IcsTimezoneUpdateTest
+
+class IcsTimezoneUpdateTest inherits QUnit::Test {
+    private {
+        #! the listener that stands in for the timezone update server
+        Socket server();
+    }
+
+    private:internal {
+        #! the jars of ical4j and its dependencies, for the class loader of the positive control
+        const Ical4jJars = ("ical4j-4.0.8.jar", "commons-codec-1.17.0.jar", "commons-lang3-3.14.0.jar",
+            "slf4j-api-2.0.12.jar", "slf4j-nop-2.0.12.jar", "threeten-extra-1.8.0.jar");
+
+        #! the timezone IDs that a document names: standard, Windows, prefixed, vendor-qualified and unknown forms
+        const TzIds = ("Europe/London", "Eastern Standard Time", "/Europe/Paris",
+            "/softwarestudio.org/Olson_20011030_5/America/New_York", "US-Eastern", "Mitteleuropaeische Zeit",
+            "Etc/GMT+5", "Asia/Kolkata");
+    }
+
+    constructor() : QUnit::Test("ICS timezone update", "1.0", \ARGV) {
+        # before ical4j is first used: send its timezone updates to the listener, with short timeouts
+        server.bind("127.0.0.1:0", True);
+        server.listen();
+        System::setProperty("net.fortuna.ical4j.timezone.update.scheme", "http");
+        System::setProperty("net.fortuna.ical4j.timezone.update.host", "127.0.0.1");
+        System::setProperty("net.fortuna.ical4j.timezone.update.port", sprintf("%d", server.getSocketInfo().port));
+        System::setProperty("net.fortuna.ical4j.timezone.update.timeout.connect", "1000");
+        System::setProperty("net.fortuna.ical4j.timezone.update.timeout.read", "1");
+
+        addTestCase("timezones that the document does not define are not fetched", \undefinedTimezoneTest());
+        addTestCase("a recurring event with timezones does not fetch", \recurrenceTest());
+        addTestCase("a document VTIMEZONE's TZURL is not fetched", \tzurlTest());
+        addTestCase("writing does not fetch", \writeTest());
+        addTestCase("a registry lookup fetches (positive control)", \positiveControlTest());
+        set_return_value(main());
+    }
+
+    #! Returns a calendar with the components given
+    private static binary calendar(string components) {
+        return binary("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Qore//IcsTimezoneUpdate//EN\r\n" + components
+            + "END:VCALENDAR\r\n");
+    }
+
+    #! Parses the calendar with the data provider; returns its records
+    private static list<hash<auto>> parse(binary data) {
+        IcsReadDataProvider dp({"data": data});
+        return map $1, dp.searchRecords();
+    }
+
+    #! Asserts that no connection waits on the listener; a zero timeout does not wait
+    private checkNoFetch(string label) {
+        *Socket conn = server.accept(0);
+        assertEq(NOTHING, conn, label + ": no connection to the timezone update server");
+    }
+
+    undefinedTimezoneTest() {
+        foreach string tzid in (TzIds) {
+            list<hash<auto>> records = parse(calendar(sprintf("BEGIN:VEVENT\r\nUID:%s@test.example.com\r\n"
+                "DTSTAMP:20260101T000000Z\r\nDTSTART;TZID=%s:20260601T090000\r\nSUMMARY:x\r\nEND:VEVENT\r\n", tzid,
+                tzid)));
+            assertEq(1, records.size(), tzid);
+            checkNoFetch(tzid);
+        }
+        # a standard ID is resolved from the definitions of java.time: 09:00 in London in summer is 08:00 UTC
+        list<hash<auto>> records = parse(calendar("BEGIN:VEVENT\r\nUID:london@test.example.com\r\n"
+            "DTSTAMP:20260101T000000Z\r\nDTSTART;TZID=Europe/London:20260601T090000\r\nSUMMARY:x\r\nEND:VEVENT\r\n"));
+        assertEq(2026-06-01T08:00:00Z, records[0].dtstart, "Europe/London");
+    }
+
+    recurrenceTest() {
+        list<hash<auto>> records = parse(calendar("BEGIN:VEVENT\r\nUID:rrule@test.example.com\r\n"
+            "DTSTAMP:20260101T000000Z\r\nDTSTART;TZID=America/Chicago:20260601T090000\r\nRRULE:FREQ=WEEKLY;COUNT=3\r\n"
+            "EXDATE;TZID=America/Chicago:20260608T090000\r\nSUMMARY:x\r\nEND:VEVENT\r\n"));
+        assertEq(1, records.size());
+        checkNoFetch("RRULE and EXDATE");
+    }
+
+    tzurlTest() {
+        int port = server.getSocketInfo().port;
+        foreach string tzid in (("Custom/Zone", "Europe/Berlin")) {
+            list<hash<auto>> records = parse(calendar(sprintf("BEGIN:VTIMEZONE\r\nTZID:%s\r\n"
+                "TZURL:http://127.0.0.1:%d/zoneinfo/%s\r\nBEGIN:STANDARD\r\nDTSTART:19700101T000000\r\n"
+                "TZOFFSETFROM:+0100\r\nTZOFFSETTO:+0100\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
+                "BEGIN:VEVENT\r\nUID:tzurl@test.example.com\r\nDTSTAMP:20260101T000000Z\r\n"
+                "DTSTART;TZID=%s:20260601T090000\r\nSUMMARY:x\r\nEND:VEVENT\r\n", tzid, port, tzid, tzid)));
+            # the document's own definition is used: +01:00 all year
+            assertEq(2026-06-01T08:00:00Z, records[0].dtstart, tzid);
+            checkNoFetch("TZURL of " + tzid);
+        }
+    }
+
+    writeTest() {
+        IcsWriteDataProvider dp();
+        dp.createRecord({
+            "uid": "write@test.example.com",
+            "summary": "Write",
+            "dtstart": 2026-06-01T09:00:00+01:00,
+            "dtend": 2026-06-01T10:00:00+01:00,
+        });
+        assertTrue(dp.getData().size() > 0, "the calendar is written");
+        checkNoFetch("write");
+    }
+
+    positiveControlTest() {
+        # ical4j in a class loader of its own, configured by the same system properties
+        Program p(PO_NEW_STYLE);
+        string jar_dir = get_script_dir() + "../qlib/IcsDataProvider/jar/";
+        string src = "%requires jni\n" + (foldl $1 + $2, (map sprintf("%%module-cmd(jni) add-classpath %s%s\n", jar_dir,
+            $1), Ical4jJars)) + "%module-cmd(jni) import net.fortuna.ical4j.model.TimeZoneRegistryFactory\n"
+            "auto sub lookup() { return TimeZoneRegistryFactory::getInstance().createRegistry()"
+            ".getTimeZone(\"Europe/London\"); }\n";
+        p.parse(src, "ics-timezone-update-control");
+        p.callFunction("lookup");
+        *Socket conn = server.accept(0);
+        assertTrue(exists conn, "a registry lookup connects to the listener, so a fetch is detected");
+        if (conn) {
+            string request = conn.recv(-1, 1s);
+            assertRegex("^GET .*Europe/London", request, "the request is ical4j's timezone update");
+            conn.close();
+        }
+    }
+}

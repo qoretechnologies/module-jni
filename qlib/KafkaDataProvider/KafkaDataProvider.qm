@@ -146,6 +146,10 @@ module KafkaDataProvider {
     @section kafkadataprovider_relnotes Release Notes
 
     @subsection kafkadataprovider_v2_1 KafkaDataProvider v2.1
+    - the client options that name a class other than Kafka's own (the \c *.class options, serializers and
+      deserializers, and \c sasl.jaas.config login modules) are refused to sandboxed code (\c JNI-SANDBOX-ERROR)
+    - the \c sasl.kerberos.kinit.cmd client option, which names a command that the Kafka client runs, is refused to
+      sandboxed code (\c JNI-SANDBOX-ERROR) unless it is the default \c /usr/bin/kinit
     - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
       presentation keeps its original producer identity, including HTTP/REST options and allowed values
     - added record headers: the producer sends the \c headers of a request (a string value as its UTF-8 bytes, a

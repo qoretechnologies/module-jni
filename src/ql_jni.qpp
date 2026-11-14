@@ -181,6 +181,44 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
     return QoreValue();
 }
 
+//! Refuses an option that makes Java load a class or extend the classpath to sandboxed code
+/** Data provider and connection modules call this before they act on an option that names a Java class to load or
+    instantiate (a JDBC driver class, a JMS connection factory class, a Kafka handler class, ...), or a classpath to
+    add.  Such an option lets whoever sets it run Java code that the sandbox does not control, so it is refused to
+    code that a sandbox governs, also through a policy barrier or a system-policy capability.
+
+    The sandbox is the run-time boundary for module code: module code runs with its own Program's parse options, and
+    with its caller's only when the caller is sandboxed, so a Program that is restricted only with parse options is
+    not refused by this check.  Trusted code is not refused.
+
+    The same applies to a value that makes Java load or compile code in another way (a report template that is
+    compiled, an endpoint URI that selects a component that loads classes); @p what then describes it.
+
+    @param provider the data provider, connection or app that uses the option, for the error
+    @param option the name of the option, for the error
+    @param what what the option does, for the error; by default, that it names a Java class or classpath to load
+
+    @throw JNI-SANDBOX-ERROR the caller is sandboxed
+
+    @par Example:
+    @code{.py}
+if (copts.driver_class) {
+    Jni::org::qore::jni::check_class_option("jdbc-dp", "driver_class");
+}
+    @endcode
+
+    @since jni 3.0
+ */
+nothing check_class_option(string provider, string option, *string what) [flags=NAMED_ARGS] {
+    const char* desc = what ? what->c_str() : "names a Java class or classpath to load";
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+    if (governing) {
+        xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which sandboxed code cannot use",
+            provider->c_str(), option->c_str(), desc);
+    }
+    return QoreValue();
+}
+
 //! Loads a Java class with the given name.
 /**
     @param class_name the name of the class to load in internal (\c "java/lang/String") format
