@@ -33,8 +33,9 @@
       the code that set it (with \c Datasource::setOption(), a constructor or connection string, or the code that
       created a \c DatasourcePool), not by the code that opens the connection: trusted code that opens a datasource
       whose classpath sandboxed code set is refused it, the option of a trusted pool that grows on a restricted
-      caller's thread is not refused (the driver does not connect for sandboxed code at all, which refuses such a
-      connection with \c NETWORK-ACCESS-DENIED first), and the classpath entries are checked against the filesystem policy of the code that set the option;
+      caller's thread is not refused (the driver does not connect at all for code that a sandbox that does not allow
+      uncontrolled APIs governs, which refuses such a connection with \c NETWORK-ACCESS-DENIED first), and the
+      classpath entries are checked against the filesystem policy of the code that set the option;
       the module hash reports this with \c "jdbc_option_setter" in its \c "info" key (see @ref jdbc_option_classpath);
       the jars are added to the class loader of the %Program that the datasource or pool object belongs to, not of
       the code that opens the connection; a value set on an open connection is judged by its setter also when it

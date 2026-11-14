@@ -8,6 +8,7 @@
 # usage: jni-cmd-issuer-library.q <kind> <case>
 #   kind: trusted | no-uncontrolled | no-filesystem | no-embedded | sandboxed
 #   case: cmd (JniCmdIssuerFixture issues add-classpath) | jdbc (JniJdbcOptionFixture sets the jdbc classpath option)
+#         | jdbc-set (JniJdbcOptionFixture sets the option of a datasource that this script then opens)
 #         | directive (loads JniCmdDirectiveFixture, which has a jni directive)
 
 %modern
@@ -50,6 +51,21 @@ try {
                 "jni-cmd-issuer-library-jdbc");
             printf("%s\n", p.callFunction("run"));
             break;
+        case "jdbc-set": {
+            # the library module's code sets the option for the code of the kind; this trusted script opens it
+            p.loadModule("JniJdbcOptionFixture");
+            p.parse("sub run(Datasource ds) { JniJdbcOptionFixture::setJdbcClasspath(ds, "
+                "\"/nonexistent-qore-test-dir\"); }", "jni-cmd-issuer-library-jdbc-set");
+            Datasource ds("jdbc:u/p@jdbc:qore-none://x");
+            p.callFunction("run", ds);
+            try {
+                ds.open();
+                printf("ok\n");
+            } catch (hash<ExceptionInfo> ex) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+            break;
+        }
         case "directive":
             p.loadModule("JniCmdDirectiveFixture");
             printf("ok\n");

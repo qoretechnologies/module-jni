@@ -335,6 +335,13 @@ list<string> sub loader_urls() {
                 assertEq(expectedConnect(kind, kind, entry), open(configured.copy()), kind + ": a trusted copy: "
                     + entry);
             }
+            # the code of the kind sets the option on a datasource that trusted code created; trusted code copies it:
+            # the copy keeps the setter
+            foreach string entry in (entries()) {
+                Datasource ds("jdbc:u/p@jdbc:qore-none://x");
+                pgms{kind}.callFunction("set_classpath", ds, entry);
+                assertEq(expectedFor(kind, entry), open(ds.copy()), kind + ": a trusted copy of its setting: " + entry);
+            }
             # the code of the kind copies a datasource that trusted code configured
             Datasource trusted("jdbc:u/p@jdbc:qore-none://x{classpath=" + NoSuchEntry + "}");
             assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : "JNI-ERROR",
@@ -511,8 +518,8 @@ list<string> sub loader_urls() {
             string exp = expectedFor("trusted-sandbox", entry);
             assertEq(exp, open(ds.copy()), "opened by trusted code: " + entry);
             foreach string kind in (keys Kinds) {
-                assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : exp, pgms{kind}.callFunction("open", ds.copy()),
-                    "opened by " + kind + " code: " + entry);
+                assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : exp,
+                    pgms{kind}.callFunction("open", ds.copy()), "opened by " + kind + " code: " + entry);
             }
         }
 

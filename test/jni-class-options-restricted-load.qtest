@@ -38,7 +38,8 @@ class JniClassOptionsRestrictedLoadTest inherits QUnit::Test {
                 if (ex.err == "JNI-SANDBOX-ERROR") {
                     assertRegex("module command .* cannot be used in a Program that does not allow uncontrolled APIs",
                         ex.desc, mod + ": refused at load by the jni module");
-                    assertFalse(get_module_hash().jni.api_major > 2 || get_module_hash().jni.api_minor >= 3,
+                    hash<auto> jh = get_module_hash().jni;
+                    assertFalse(jh.api_major > 2 || (jh.api_major == 2 && jh.api_minor >= 3),
                         mod + ": only before module API 2.3");
                     continue;
                 }

@@ -25,4 +25,9 @@ public string sub openJdbc(string cp) {
         return ex.err;
     }
 }
+
+#! Sets the jdbc classpath option of a Datasource that other code created from this module's code
+public sub setJdbcClasspath(Datasource ds, string cp) {
+    ds.setOption("classpath", cp);
+}
 }

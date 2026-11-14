@@ -295,6 +295,18 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
                 {"kind": "sandboxed", "expected": "NETWORK-ACCESS-DENIED"}) {
             assertEq(c.expected, runLibrary(c.kind, "jdbc").split(":")[0], c.kind + " first loader");
         }
+        # the option that library code sets for a sandboxed caller is refused also when trusted code opens the
+        # connection, as the jdbc driver judges it by the code that set it (qore#5741)
+        if (!(get_module_hash().jni.info.jdbc_option_setter ?? False)) {
+            return;
+        }
+        foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
+                {"kind": "no-filesystem", "expected": "JNI-ERROR"},
+                {"kind": "no-uncontrolled", "expected": "JNI-ERROR"},
+                {"kind": "sandboxed", "expected": "JNI-SANDBOX-ERROR"}) {
+            assertEq(c.expected, runLibrary(c.kind, "jdbc-set").split(":")[0], c.kind + " first loader: set for "
+                "trusted code to open");
+        }
     }
 
     libraryDirectiveTest() {
