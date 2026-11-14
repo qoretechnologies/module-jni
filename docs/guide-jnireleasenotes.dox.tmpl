@@ -14,6 +14,28 @@
     - <b>Security</b>: a Kafka \c sasl.kerberos.kinit.cmd option other than the default, which names a command that
       the Kafka client runs, is refused with \c JNI-SANDBOX-ERROR to sandboxed code (see @ref jni_sandbox)
 
+    - fixed calling Java varargs methods with the variable arguments as separate arguments (ex:
+      <tt>m.invoke(NOTHING, a, b)</tt> for \c java.lang.reflect.Method.invoke(), <tt>String::format("%s %s", a,
+      b)</tt>, <tt>Arrays::asList(a, b, c)</tt>): with \c %%strict-args (in \c %%modern) more than one of them
+      matched no variant, and otherwise the first was passed as an array nested in the array (\c [[a], \c b]), which
+      Java rejected with \c "argument type mismatch" or used as the wrong value; a varargs method now has a variant
+      taking the variable arguments as separate arguments, which are packed into the array as in Java, and its
+      variant taking the array declares it as a <tt>*list&lt;T&gt;</tt> instead of a <tt>softlist&lt;T&gt;</tt>, as
+      a single value is a separate variable argument; a single Java array of the array's class is the array, and a
+      Java method with fixed parameters for the same number of arguments, also of a parent class, is called
+      instead, as in Java; an abstract varargs method (ex: \c java.nio.file.FileSystem.getPath()) has a concrete
+      variant for the variable arguments as separate arguments, and keeps the <tt>softlist&lt;T&gt;</tt> that a
+      %Qore class implementing it declares; a %Qore method overriding a varargs method of a Java interface may
+      declare the array as <tt>*list&lt;T&gt;</tt> or <tt>softlist&lt;T&gt;</tt> (see @ref jni_array_varargs);
+      <b>signature change:</b> the %Qore signatures of Java varargs methods and constructors changed (the array is
+      <tt>*list&lt;T&gt;</tt>, and variants for separate arguments and for a
+      @ref Jni::org::qore::jni::JavaArray "JavaArray" were added), so AOT-compiled programs and generated
+      documentation that captured the former <tt>softlist&lt;T&gt;</tt> signatures differ and must be rebuilt;
+      remaining limitations: a default method of a Java interface, and the variant for separate arguments of an
+      abstract method, cannot be called on an object of a %Qore class implementing the interface, the elements of a
+      \c byte... array cannot be given as a list, a \c JavaArray is not taken for the typed array of an abstract
+      method, only one variant per method name takes a \c JavaArray, and a parent's method with fixed parameters of
+      other %Qore types (ex: \c A.m(CharSequence) for \c B.m(String...)) is not preferred as Java does
     - <b>Security</b>: added @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the sandbox
       network and filesystem policy of the %Qore code that called into Java to the I/O that Java code makes itself,
       which %Qore does not see: \c checkNetworkAccess() resolves a host name once with the %Qore resolver, checks

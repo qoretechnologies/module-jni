@@ -28,6 +28,7 @@
 #include "JavaToQore.h"
 #include "QoreToJava.h"
 #include "QoreJniClassMap.h"
+#include "Array.h"
 
 namespace jni {
 
@@ -144,15 +145,9 @@ std::vector<jvalue> BaseMethod::convertArgs(Env& env, const QoreListNode* args, 
 
     std::vector<jvalue> jargs(paramCount);
     for (size_t index = 0; index < paramCount; ++index) {
-        // process varargs with remaining arguments or with a single argument if appropriate
-        if (varargs && (index == (paramCount - 1))
-            && !(argCount == paramCount && args->retrieveEntry(index + arg_offset).getType() == NT_LIST)) {
-            // get array component type
-            Env env;
-            LocalReference<jclass> ccls = env.callObjectMethod(paramTypes[index].second,
-                Globals::methodClassGetComponentType, nullptr).as<jclass>();
-
-            jargs[index].l = Array::toObjectArray(args, ccls, index + arg_offset, jpc).release();
+        // the variable arguments are passed as an array
+        if (varargs && (index == (paramCount - 1))) {
+            jargs[index].l = getVarargsArray(env, args, arg_offset, argCount, jpc);
             break;
         }
         assert(!args || args->empty() || (index < argCount));
@@ -229,16 +224,10 @@ LocalReference<jobjectArray> BaseMethod::convertArgsToArray(Env& env, const Qore
     LocalReference<jobjectArray> jargs =
         env.newObjectArray(paramCount + array_offset, Globals::classObject).as<jobjectArray>();
     for (size_t index = 0; index < paramCount; ++index) {
-        // process varargs with remaining arguments or with a single argument if appropriate
-        if (varargs && args && (index == (paramCount - 1))
-            && !(argCount == paramCount && args->retrieveEntry(index + arg_offset).getType() == NT_LIST)) {
-            // get array component type
-            Env env;
-            LocalReference<jclass> ccls = env.callObjectMethod(paramTypes[index].second,
-                Globals::methodClassGetComponentType, nullptr).as<jclass>();
-
-            env.setObjectArrayElement(jargs, index + array_offset,
-                Array::toObjectArray(args, ccls, index + arg_offset, jpc).release());
+        // the variable arguments are passed as an array
+        if (varargs && (index == (paramCount - 1))) {
+            LocalReference<jobject> array(getVarargsArray(env, args, arg_offset, argCount, jpc));
+            env.setObjectArrayElement(jargs, index + array_offset, array);
             break;
         }
         assert(!args || args->empty() || (index < argCount));
@@ -248,6 +237,78 @@ LocalReference<jobjectArray> BaseMethod::convertArgsToArray(Env& env, const Qore
     }
 
     return jargs;
+}
+
+//! Returns true if a single argument given for the variable arguments of a varargs method is the array itself
+/** As in Java, where a single argument of the array's type is passed as the array: a list, which is converted to
+    the array, a binary for a \c byte[] array, or a Java array object (including a
+    @ref Jni::org::qore::jni::JavaArray "JavaArray") that is an instance of the array's class.  Any other argument
+    is the first element of the array.
+*/
+static bool jni_is_varargs_array_arg(Env& env, const QoreValue& v, jclass array_cls) {
+    switch (v.getType()) {
+        case NT_LIST:
+            return true;
+
+        case NT_BINARY: {
+            LocalReference<jclass> ccls = env.callObjectMethod(array_cls, Globals::methodClassGetComponentType,
+                nullptr).as<jclass>();
+            return Globals::getType(ccls) == Type::Byte;
+        }
+
+        case NT_OBJECT: {
+            const QoreObject* o = v.get<const QoreObject>();
+            ExceptionSink xsink;
+            LocalReference<jobject> jobj;
+            {
+                TryPrivateDataRefHolder<QoreJniPrivateData> jo(o, CID_OBJECT, &xsink);
+                if (jo) {
+                    jobj = jo->makeLocal();
+                }
+            }
+            if (!jobj && !xsink) {
+                TryPrivateDataRefHolder<ObjectBase> ja(o, CID_JAVAARRAY, &xsink);
+                if (ja) {
+                    jobj = ja->makeLocal();
+                }
+            }
+            if (xsink) {
+                throw XsinkException(xsink);
+            }
+            return jobj && env.isInstanceOf(jobj, array_cls);
+        }
+
+        default:
+            break;
+    }
+    return false;
+}
+
+jobject BaseMethod::getVarargsArray(Env& env, const QoreListNode* args, size_t arg_offset, size_t argCount,
+        JniExternalProgramData* jpc) const {
+    assert(varargs && !paramTypes.empty());
+    size_t index = paramTypes.size() - 1;
+    jclass array_cls = paramTypes[index].second;
+
+    if (argCount == paramTypes.size()) {
+        assert(args);
+        QoreValue v = args->retrieveEntry(index + arg_offset);
+        if (jni_is_varargs_array_arg(env, v, array_cls)) {
+            return QoreToJava::toObject(env, v, array_cls, jpc);
+        }
+        // no value is no variable arguments: Java passes an empty array then
+        if (v.isNothing()) {
+            argCount = index;
+        }
+    }
+
+    LocalReference<jclass> ccls = env.callObjectMethod(array_cls, Globals::methodClassGetComponentType,
+        nullptr).as<jclass>();
+    if (argCount <= index) {
+        return Array::getNew(Globals::getType(ccls), ccls, 0).release();
+    }
+    // pack the remaining arguments into the array
+    return Array::toObjectArray(args, ccls, index + arg_offset, jpc).release();
 }
 
 void BaseMethod::doObjectException(Env& env, jobject object) const {
@@ -435,9 +496,16 @@ int BaseMethod::getParamTypes(Env& env, type_vec_t& paramTypeInfo, type_vec_t& a
         const QoreTypeInfo* altType = nullptr;
 
         // the variable arguments of a varargs method are an array that Java passes empty when there are none, so the
-        // parameter takes no value as an empty array (a soft list, as in Java, not null)
-        const QoreTypeInfo* ti = clsmap.getQoreType(i.second, altType, pgm, (varargs && j == e - 1)
-            ? QoreJniClassMap::JavaTypeUse::VarargsParam : QoreJniClassMap::JavaTypeUse::Param);
+        // parameter takes no value as an empty array, not null; a method that can be called takes the array
+        // without converting a single value to a list, as a single value is a variable argument given as a separate
+        // argument (see jni_add_loose_varargs_variants() in QoreJniClassMap.cpp), and an abstract method keeps the
+        // soft list that a %Qore class implementing it declares
+        QoreJniClassMap::JavaTypeUse use = QoreJniClassMap::JavaTypeUse::Param;
+        if (varargs && j == e - 1) {
+            use = isAbstract() ? QoreJniClassMap::JavaTypeUse::VarargsParam
+                : QoreJniClassMap::JavaTypeUse::VarargsArrayParam;
+        }
+        const QoreTypeInfo* ti = clsmap.getQoreType(i.second, altType, pgm, use);
         paramTypeInfo.push_back(ti);
 
         //paramTypeInfo.push_back(clsmap.getQoreType(i.second, altType, pgm));
@@ -459,6 +527,15 @@ int BaseMethod::getParamTypes(Env& env, type_vec_t& paramTypeInfo, type_vec_t& a
     }
 
     return 0;
+}
+
+const QoreTypeInfo* BaseMethod::getVarargsElementTypeInfo(QoreJniClassMap& clsmap, QoreProgram* pgm) {
+    assert(varargs && !paramTypes.empty());
+    if (isPrivate()) {
+        // see getParamTypes()
+        return autoTypeInfo;
+    }
+    return clsmap.getVarargsElementType(paramTypes.back().second, pgm);
 }
 
 const QoreTypeInfo* BaseMethod::getReturnTypeInfo(QoreJniClassMap& clsmap, QoreProgram* pgm) {

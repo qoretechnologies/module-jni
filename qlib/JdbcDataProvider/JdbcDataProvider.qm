@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 1.0
+%requires qore >= 3.0
 %modern
 
 # import custom JDBC helper JAR: must be added to the global classloader
@@ -130,6 +130,9 @@ module JdbcDataProvider {
             ),
         });
     };
+    # PROCESS_CONTROL: its init registers connection scheme and data provider factory (process-wide registrations)
+    # (a Program restricted like a Qorus interface can load the module only when it declares them; Qore #5803)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage JdbcDataProvider Module
