@@ -6,6 +6,10 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: the \c jdbc database driver raises \c NETWORK-ACCESS-DENIED when it connects for code that a
+      sandbox policy governs, because the sandbox network policy cannot be applied to the destinations that a JDBC
+      driver resolves and discovers in Java (see @ref jni_sandbox)
+
     - <b>Security</b>: the options of the JDBC, Jakarta JMS, Kafka, Camel, JasperReports and Flyway providers that
       name a Java class to load, a classpath to add, or code that Java compiles are refused with
       \c JNI-SANDBOX-ERROR to sandboxed code; added \c Jni::org::qore::jni::check_class_option() for modules
