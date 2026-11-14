@@ -131,6 +131,9 @@ module MqttDataProvider {
             "output_type": MqttMessageDataType,
         });
     };
+    # PROCESS_CONTROL: its init registers connection scheme and data provider factory (process-wide registrations)
+    # (a Program restricted like a Qorus interface can load the module only when it declares them; Qore #5803)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage MqttDataProvider Module

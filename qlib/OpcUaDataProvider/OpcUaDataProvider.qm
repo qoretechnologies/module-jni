@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 2.0
+%requires qore >= 3.0
 %modern
 
 # import Eclipse Milo OPC UA SDK JARs (1.1.4): must be added to the global classloader
@@ -437,6 +437,9 @@ module OpcUaDataProvider {
             "output_type": OpcUaServerStatusDataType,
         });
     };
+    # PROCESS_CONTROL: its init registers connection scheme and data provider factory (process-wide registrations)
+    # (a Program restricted like a Qorus interface can load the module only when it declares them; Qore #5803)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage OpcUaDataProvider Module

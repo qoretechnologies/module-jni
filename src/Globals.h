@@ -109,6 +109,7 @@ public:
     DLLLOCAL static jmethodID methodClassGetModifiers;                            // int Class.getModifiers()
     DLLLOCAL static jmethodID methodClassIsPrimitive;                             // boolean Class.isPrimitive()
     DLLLOCAL static jmethodID methodClassGetDeclaredMethods;                      // Method[] Class.getDeclaredMethods()
+    DLLLOCAL static jmethodID methodClassGetMethods;                              // Method[] Class.getMethods()
     DLLLOCAL static jmethodID methodClassGetCanonicalName;                        // String Class.getCanonicalName()
     DLLLOCAL static jmethodID methodClassGetDeclaredField;                        // Field Class.getField()
     DLLLOCAL static jmethodID methodClassIsAssignableFrom;                        // boolean Class.isAsignableFrom(Class)
