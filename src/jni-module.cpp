@@ -488,11 +488,11 @@ static QoreNamespace* jni_find_create_java_namespace_intern(QoreString& arg, Qor
     - the Program that the classes are imported into: if it has \c PO_NO_UNCONTROLLED_APIS, no code can give it Java
       classes, whoever calls the loader (trusted code calling Python code in a standalone Program that does not allow
       uncontrolled APIs, for example)
-    - the code that imports them: with module API 2.2 it is judged as the issuer of a module command is, with
+    - the code that imports them: with module API 2.3 it is judged as the issuer of a module command is, with
       QoreModuleCommandRestrictions::getCallerRestrictions() (as the \c classpath option of the \c jdbc driver is):
       within a module command, its issuer; otherwise the code that calls into the loader, where the code of a library
       module has no parse options, only the sandbox that governs it, so the parse options that its Program inherited
-      from the code that loaded it do not refuse it.  Before module API 2.2, the sandbox that governs the calling code
+      from the code that loaded it do not refuse it.  Before module API 2.3, the sandbox that governs the calling code
       is used.
 
     Called on the thread of the exported function, which %Qore knows (the Python code runs in a %Qore call).
@@ -644,7 +644,7 @@ static bool jni_check_target_options() {
     return !ctx || ctx->getIssuerProgram() != ctx->getTargetProgram();
 }
 #else
-//! Before module API 2.2, the target-side checks are the only checks
+//! Before module API 2.3, the target-side checks are the only checks
 static bool jni_check_target_options() {
     return true;
 }
