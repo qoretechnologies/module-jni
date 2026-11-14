@@ -23,7 +23,7 @@
 */
 
 # minimum required Qore version
-%requires qore >= 1.0
+%requires qore >= 3.0
 %modern
 
 # supports using the DataProvider module
@@ -224,6 +224,9 @@ module OdtDataProvider {
             ),
         });
     };
+    # PROCESS_CONTROL: its init registers data provider factory (process-wide registrations)
+    # (a Program restricted like a Qorus interface can load the module only when it declares them; Qore #5803)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage OdtDataProvider Module
