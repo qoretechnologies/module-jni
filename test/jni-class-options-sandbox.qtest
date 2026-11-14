@@ -93,6 +93,38 @@ string sub get_context(object c) {
     }
 
     #! Runs the code in a new Program, sandboxed or not; returns the error code, or "ok"
+    #! Returns True if the Qore library refuses uncontrolled APIs to sandboxed code at run time (qore#5741)
+    /** SandboxManager::setUncontrolledApiPolicy() predates the run-time refusal, so it is detected with a builtin of
+        the Qore library in the uncontrolled-API domain that sandboxed code could call before
+    */
+    private static bool uncontrolledRefused() {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        p.parse("sub run() { SandboxManager::callWithSystemPolicy(sub () {}); }", "jni-class-options-probe");
+        try {
+            p.callFunction("run");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "INVALID-FUNCTION-ACCESS") {
+                rethrow;
+            }
+            return True;
+        }
+        return False;
+    }
+
+    #! Asserts the result of sandboxed code that calls SandboxManager::callWithSystemPolicy() itself
+    /** a Qore library that refuses uncontrolled APIs at run time refuses the call itself; otherwise the option check
+        refuses the option under the barrier
+    */
+    private assertBarrierRefused(string err, *string desc, string label, *string option) {
+        if (uncontrolledRefused()) {
+            assertEq("INVALID-FUNCTION-ACCESS", err, label + ": the barrier is an uncontrolled API: " + desc);
+            assertRegex("uncontrolled API", desc, label + ": refused as an uncontrolled API");
+            return;
+        }
+        assertSandboxRefused(err, desc, label, option);
+    }
+
     private static string runAs(bool sandboxed, string body, *reference<string> desc) {
         Program p(PO_NEW_STYLE);
         if (sandboxed) {
@@ -304,7 +336,7 @@ string sub get_context(object c) {
         # through a policy barrier and a capability
         string check = kafkaCheck(Opt, Other);
         string desc;
-        assertSandboxRefused(runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});", \desc), desc,
+        assertBarrierRefused(runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});", \desc), desc,
             "policy barrier", Opt);
         code cap = tp.callFunction("make_capability", Other);
         Program cp(PO_NEW_STYLE);
@@ -371,14 +403,20 @@ string sub get_context(object c) {
             (*string err, *string desc) = (sp.callFunction("send", producer[1], endpoint) =~ x/^([^:]+): (.*)$/s);
             assertSandboxRefused(err ?? "ok", desc, endpoint + ": sandboxed send with a trusted producer", "endpoint");
         }
-        # the endpoints that the check allows are sent to
+        # the endpoints that the check allows pass it: the producer then sends to them, unless the Qore library
+        # refuses uncontrolled APIs to sandboxed code at run time (qore#5741), which refuses the producer's Java call
+        # for the sandboxed caller (camelTest covers the direct endpoint, whose send without a consumer waits)
+        bool refused = uncontrolledRefused();
         foreach string endpoint in ("seda:qoretest-trusted-obj", "log:qoretest-trusted-obj",
                 "mock:qoretest-trusted-obj") {
-            assertEq("ok", sp.callFunction("send", producer[1], endpoint), endpoint + ": an allowed endpoint");
+            string rv = sp.callFunction("send", producer[1], endpoint);
+            if (refused) {
+                assertRegex("^INVALID-FUNCTION-ACCESS: .*uncontrolled API", rv, endpoint + ": an allowed endpoint: "
+                    "the Java call is refused");
+            } else {
+                assertEq("ok", rv, endpoint + ": an allowed endpoint");
+            }
         }
-        # a direct endpoint is allowed too; with no consumer, Camel fails the send, not the check
-        assertRegex("^JNI-ERROR: .*CamelExecutionException", sp.callFunction("send", producer[1],
-            "direct:qoretest-trusted-obj"), "an allowed direct endpoint with no consumer");
         # the trusted code itself may use the endpoint that sandboxed code is refused (a queue of its own, so that
         # its size does not conflict with a queue that another send created)
         try {
@@ -456,7 +494,7 @@ string sub get_context(object c) {
     barrierTest() {
         string check = "Jni::org::qore::jni::check_class_option(\"qore-test\", \"placeholder\");";
         string desc;
-        assertSandboxRefused(runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});", \desc), desc,
+        assertBarrierRefused(runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});", \desc), desc,
             "policy barrier");
         code cap = SandboxManager::createSystemPolicyCall(sub () {
             Jni::org::qore::jni::check_class_option("qore-test", "placeholder");
