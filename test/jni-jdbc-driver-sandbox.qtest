@@ -108,6 +108,8 @@ string sub module_cmd(string cmd) {
 
     constructor() : QUnit::Test("JNI jdbc driver sandbox", "1.0", \ARGV) {
         addTestCase("the module reports the sandboxed drivers", \infoTest());
+        # first: the first restricted SingleStore connection of this process creates its key store directory
+        addTestCase("SingleStore: a key store directory with group access is not used", \ssKeyStorePermissionTest());
         addTestCase("Redshift: an allowed destination connects through the guard", \rsAllowedTest());
         addTestCase("Redshift: a denied destination is refused", \rsDeniedTest());
         addTestCase("Redshift: failover to a denied host is refused", \rsFailoverTest());
@@ -136,7 +138,6 @@ string sub module_cmd(string cmd) {
         addTestCase("SingleStore: connect-time SQL from options is screened", \ssConnectSqlTest());
         addTestCase("SingleStore: TLS is verify-full", \ssTlsTest());
         addTestCase("SingleStore: the JVM's client key is not presented", \ssClientKeyTest());
-        addTestCase("SingleStore: a key store directory with group access is not used", \ssKeyStorePermissionTest());
         addTestCase("SingleStore: an empty user is refused", \ssUserTest());
         addTestCase("a URL that restricted code set restricts the connection", \urlSetterTest());
         addTestCase("a URL set under a barrier or by a capability does not", \urlSetterBarrierTest());
@@ -933,34 +934,42 @@ string sub module_cmd(string cmd) {
 
     ssKeyStorePermissionTest() {
         checkSkip(ss_jar, "singlestore");
+        # the JVM's client key store, which the driver presents to every server without a keyStore option
+        System::setProperty("javax.net.ssl.keyStore", get_script_dir() + "jdbc-fake-server.p12");
+        on_exit System::clearProperty("javax.net.ssl.keyStore");
+        System::setProperty("javax.net.ssl.keyStorePassword", "qore-fake");
+        on_exit System::clearProperty("javax.net.ssl.keyStorePassword");
+        System::setProperty("javax.net.ssl.keyStoreType", "PKCS12");
+        on_exit System::clearProperty("javax.net.ssl.keyStoreType");
         FakeDbServer s = server("mysql-ok");
         int port = s.getPort();
+        # the detector: a trusted connection presents the JVM's client certificate
+        assertEq("ok", trusted().callFunction("open_db", ssUrl(port, "db", "&sslMode=verify-full")), "trusted");
+        assertEq(1, s.clientCertificates(), "trusted: the JVM's client certificate");
+        # this case runs first, so the first restricted SingleStore connection of this process creates its key store
+        # directory: the one new entry of the temporary directory; only that one is changed, not the directories of
+        # other processes
+        list<string> listed = emptyKeyStores();
         Program p = sandboxed(port);
         assertEq("ok", p.callFunction("open_db", ssUrl(port)), "restricted");
+        assertEq(1, s.clientCertificates(), "restricted: no client certificate");
+        list<string> created = select emptyKeyStores(), !inlist($1, listed);
+        assertEq(1, created.size(), "the first restricted connection created one directory");
+        string dir = dirname(created[0]);
+        assertEq(0700, hstat(dir).mode & 0777, "the directory is owner-only");
+        int inode = hstat(dir).inode;
+        # the directory, with its inode, gives the group access: it is not used again
+        on_exit try { chmod(dir, 0700); } catch () {}
+        chmod(dir, 0750);
         list<string> before = emptyKeyStores();
-        assertTrue(before.size() > 0, "the empty key store was found");
-        # the module's own directory, with its inode, gives the group access: it is not used again
-        on_exit {
-            foreach string f in (before) {
-                try { chmod(dirname(f), 0700); } catch () {}
-            }
-        }
-        hash<string, int> inodes;
-        foreach string f in (before) {
-            string dir = dirname(f);
-            inodes{dir} = hstat(dir).inode;
-            chmod(dir, 0750);
-        }
         assertEq("ok", p.callFunction("open_db", ssUrl(port)), "restricted after the chmod");
-        assertEq(0, s.clientCertificates(), "no client certificate");
-        list<string> after = emptyKeyStores();
-        assertTrue(after.size() > before.size(), "a new directory was created");
-        foreach string f in (before) {
-            string dir = dirname(f);
-            hash<auto> st = hstat(dir);
-            assertEq(inodes{dir}, st.inode, "the directory keeps its inode");
-            assertEq(0750, st.mode & 0777, "the 0750 directory is left as it is");
-        }
+        assertEq(1, s.clientCertificates(), "restricted after the chmod: no client certificate");
+        list<string> added = select emptyKeyStores(), !inlist($1, before);
+        assertEq(1, added.size(), "exactly one new directory was created");
+        assertEq(0700, hstat(dirname(added[0])).mode & 0777, "the new directory is owner-only");
+        hash<auto> st = hstat(dir);
+        assertEq(inode, st.inode, "the directory keeps its inode");
+        assertEq(0750, st.mode & 0777, "the 0750 directory is left as it is");
     }
 
     #! returns the files of the module's empty client key stores in the JVM's temporary directory

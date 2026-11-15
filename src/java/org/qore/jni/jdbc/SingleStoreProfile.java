@@ -519,8 +519,8 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         (\c Files.createTempDirectory(): a random name, accessible by its owner only), made sure of for every
         restricted connection:
         - the directory is used again only if it is still the directory that this process created: the same file
-          key (without links), the same owner, and no access for the group or others; otherwise (ex: a temporary file cleaner
-          removed it and another user created one with the name) a new directory is created
+          key (without links), the same owner, and no access for the group or others; otherwise (ex: a temporary
+          file cleaner removed it and another user created one with the name) a new directory is created
         - the file must be a regular file (without links) of the expected size with the expected contents, read
           through a bounded channel; otherwise it is written again atomically from the expected contents.  Only this
           process's user can create entries in the directory, so a file of another kind cannot replace it between
@@ -529,16 +529,18 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         replaced while the driver reads it.  The driver reads the file on each handshake, so a file that is removed
         later makes TLS fail (closed) until the next restricted connection writes it again.
 
-        The residual risks, all local and of this process's user or of availability only:
+        The residual risks, all local:
         - this process's user can make the reuse check accept another directory (a reused inode, or NTFS creation
           time tunneling); the owner check is the barrier against other users
         - a reconnect of a connection that was idle for long reads the path of its open without checking it again:
           if a temporary file cleaner removed the directory and another user created the path, the reconnect reads
-          their file; the JVM's key cannot leak (the password is fixed and the forced store is not the JVM's), but a
-          FIFO there would block the connection.  Keeping the store outside a cleaned /tmp is a possible follow-up
-        - the same window as for a reconnect exists in this method, between isOwnKeyStoreDir() and the content
-          check or the write: a directory that a cleaner removed and another user created in between is read or
-          written; the JVM's key cannot leak, and at worst the connection fails or blocks on a FIFO
+          that user's file: it can fail, block on a FIFO, or present a client certificate of a key store that the
+          other user put there; the JVM's key cannot leak (the forced store is never the JVM's).  Keeping the store
+          outside a cleaned /tmp is a possible follow-up
+        - the same window exists in this method, between isOwnKeyStoreDir() and the content check or the write: in
+          a directory that a cleaner removed and another user created in between, the other user can also swap in a
+          key store of their own after the content check, so the connection presents their client certificate; the
+          JVM's key cannot leak, and otherwise the connection fails or blocks on a FIFO
         - a FIFO that this process's user puts in place between the type check and the open blocks this static
           synchronized method (availability only)
         - a file system that ignores permissions (vfat, NTFS with a umask) fails the permission check, so a new
