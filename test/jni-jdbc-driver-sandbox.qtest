@@ -138,6 +138,7 @@ string sub module_cmd(string cmd) {
         addTestCase("SingleStore: the JVM's client key is not presented", \ssClientKeyTest());
         addTestCase("SingleStore: an empty user is refused", \ssUserTest());
         addTestCase("a URL that restricted code set restricts the connection", \urlSetterTest());
+        addTestCase("a URL set under a barrier or by a capability does not", \urlSetterBarrierTest());
         addTestCase("a restricted connection stays restricted when it reconnects", \reconnectTest());
         addTestCase("SQL of sandboxed code on a trusted SingleStore connection is screened", \trustedSharedTest());
         addTestCase("the connect targets for the Qore sandbox check", \connectTargetsTest());
@@ -688,6 +689,9 @@ string sub module_cmd(string cmd) {
             "user", (s,), "no user");
         assertRefused(p.callFunction("open_nouser", sprintf("jdbc:redshift://127.0.0.1:%d/dev?user=", s.getPort())),
             Denied, "user", (s,), "an empty user");
+        # uid is not the user that the driver sends: the driver's default user (the process owner) would be sent
+        assertRefused(p.callFunction("open_nouser", sprintf("jdbc:redshift://127.0.0.1:%d/dev?uid=x", s.getPort())),
+            Denied, "uid|user", (s,), "uid only");
         # the user as an option
         assertReached(p.callFunction("open_nouser", sprintf("jdbc:redshift://127.0.0.1:%d/dev?user=u", s.getPort())),
             "SSL", s, "the user in the URL");
@@ -739,6 +743,81 @@ string sub module_cmd(string cmd) {
             assertNRegex("NETWORK-ACCESS-DENIED", ex.err, "a trusted URL is not restricted");
         }
         assertEq(1, other.acceptCount(), "the trusted URL connects");
+    }
+
+    urlSetterBarrierTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-ok");
+        int port = s.getPort();
+        # a plain URL: a restricted connection is forced to verify-full TLS, which fails with the fake server's
+        # certificate, and an unrestricted one connects
+        string url = sprintf("jdbc:singlestore://127.0.0.1:%d/db", port);
+        hash<auto> h = {"type": "jdbc", "user": "u", "pass": "pw", "db": "jdbc:qore-none:x"};
+        # trusted code that runs code for sandboxed code under a policy barrier or as a system-policy capability
+        Program t(PO_NEW_STYLE);
+        t.parse("code sub barrier(code c) { return sub () { SandboxManager::callWithSystemPolicy(c); }; }\n"
+            "code sub capability(code c) { return SandboxManager::createSystemPolicyCall(c); }\n"
+            "code sub opener(string url, reference<string> r) { return sub () { try { Datasource ds({\"type\": "
+            "\"jdbc\", \"user\": \"u\", \"pass\": \"pw\", \"db\": url}); ds.open(); ds.close(); r = \"ok\"; } catch "
+            "(hash<ExceptionInfo> ex) { r = \"error\"; } }; }\n"
+            "code sub setter(Datasource ds, string url) { return sub () { ds.setOption(\"url\", url); }; }",
+            "jni-jdbc-driver-sandbox-barrier");
+        Program p = sandboxed(port, "nothing sub call(code c) { c(); }");
+        # the URL's setter is judged as the thread is when it opens the connection in the same context
+        foreach string kind in (("barrier", "capability")) {
+            string thread_result;
+            p.callFunction("call", t.callFunction(kind, t.callFunction("opener", url, \thread_result)));
+            Datasource ds(h);
+            p.callFunction("call", t.callFunction(kind, t.callFunction("setter", ds, url)));
+            assertEq(url, ds.getOptionHash().url, kind + ": the url was set");
+            string setter_result;
+            try {
+                ds.open();
+                ds.close();
+                setter_result = "ok";
+            } catch (hash<ExceptionInfo> ex) {
+                setter_result = "error";
+            }
+            assertEq(thread_result, setter_result, kind + ": the setter is judged as the thread is");
+        }
+        # the capability is not governed: neither the thread nor the setter is restricted
+        {
+            Datasource ds(h);
+            p.callFunction("call", t.callFunction("capability", t.callFunction("setter", ds, url)));
+            ds.open();
+            ds.close();
+        }
+        # a limits-only sandbox (uncontrolled APIs allowed): the URL that its code sets does not restrict the
+        # connection, also when a refusing sandbox governs the code that calls it
+        SandboxManager lim();
+        if (!lim.hasCallableMethod("setUncontrolledApiPolicy")) {
+            return;
+        }
+        lim.setNetworkDefaultPolicy(True);
+        call_object_method(lim, "setUncontrolledApiPolicy", True);
+        Program l(PO_NEW_STYLE);
+        l.setSandboxManager(lim);
+        l.parse("code sub setter(Datasource ds, string url) { return sub () { ds.setOption(\"url\", url); }; }",
+            "jni-jdbc-driver-sandbox-limits");
+        {
+            Datasource ds(h);
+            l.callFunction("setter", ds, url)();
+            ds.open();
+            ds.close();
+        }
+        string thread_result;
+        p.callFunction("call", t.callFunction("barrier", t.callFunction("opener", url, \thread_result)));
+        Datasource ds(h);
+        p.callFunction("call", t.callFunction("barrier", l.callFunction("setter", ds, url)));
+        string setter_result;
+        try {
+            ds.open();
+            ds.close();
+            setter_result = "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            setter_result = "error";
+        }
+        assertEq(thread_result, setter_result, "limits-only inside a barrier for sandboxed code");
     }
 
     ssDatabaseTest() {
@@ -808,6 +887,51 @@ string sub module_cmd(string cmd) {
         assertEq("ok", sandboxed(port).callFunction("open_db", ssUrl(port)), "restricted");
         assertEq(2, s.tlsHandshakes(), "restricted: TLS");
         assertEq(1, s.clientCertificates(), "restricted: no client certificate");
+        # the module's empty key store is deleted: the next restricted connection recreates it
+        int deleted = deleteEmptyKeyStores();
+        assertTrue(deleted > 0, "the empty key store was found");
+        assertEq("ok", sandboxed(port).callFunction("open_db", ssUrl(port)), "restricted after the deletion");
+        assertEq(3, s.tlsHandshakes(), "restricted after the deletion: TLS");
+        assertEq(1, s.clientCertificates(), "restricted after the deletion: no client certificate");
+        # its contents are replaced: they are restored
+        assertTrue(overwriteEmptyKeyStores() > 0, "the empty key store was overwritten");
+        assertEq("ok", sandboxed(port).callFunction("open_db", ssUrl(port)), "restricted after the overwrite");
+        assertEq(1, s.clientCertificates(), "restricted after the overwrite: no client certificate");
+    }
+
+    #! returns the files of the module's empty client key stores in the JVM's temporary directory
+    private static list<string> emptyKeyStores() {
+        string tmp = System::getProperty("java.io.tmpdir");
+        list<string> rv = ();
+        Dir d();
+        d.chdir(tmp);
+        foreach string dn in (d.listDirs("^qore-jni-jdbc-keystore-")) {
+            string f = tmp + DirSep + dn + DirSep + "empty.p12";
+            if (is_file(f)) {
+                rv += f;
+            }
+        }
+        return rv;
+    }
+
+    #! deletes the module's empty key stores and returns how many were deleted
+    private static int deleteEmptyKeyStores() {
+        list<string> l = emptyKeyStores();
+        map unlink($1), l;
+        return l.size();
+    }
+
+    #! replaces the contents of the module's empty key stores with the test's key store, which has a client key
+    private static int overwriteEmptyKeyStores() {
+        list<string> l = emptyKeyStores();
+        binary key = ReadOnlyFile::readBinaryFile(get_script_dir() + "jdbc-fake-server.p12");
+        foreach string f in (l) {
+            File out();
+            out.open2(f, O_WRONLY | O_TRUNC);
+            out.write(key);
+            out.close();
+        }
+        return l.size();
     }
 
     reconnectTest() {

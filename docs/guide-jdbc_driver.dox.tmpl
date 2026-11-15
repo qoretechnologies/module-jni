@@ -414,8 +414,9 @@ foreach hash<auto> column in (result.schemaV2()) {
       \c raiseExceptionOnSilentRollback, \c readOnly, \c readOnlyMode, \c receiveBufferSize, \c rewriteBatchedInserts,
       \c rewriteBatchedInsertsSize, \c sendBufferSize, \c socketTimeout, \c ssl (\c true only), \c sslmode
       (\c verify-full only, <b>PROVISIONAL</b>), \c statementCloseTimeout, \c stringtype, \c targetServerType,
-      \c tcpKeepAlive, \c user, \c password, \c UID, \c PWD, \c DBNAME; the user must be given (the driver's
-      default is the name of the process owner)
+      \c tcpKeepAlive, \c user, \c password, \c PWD, \c DBNAME; \c user must be given and not empty, and it must be
+      the user of the driver's parse (the driver's default is the name of the process owner, and it does not send
+      \c UID, which is refused)
     - <b>SingleStore</b>: \c user, \c password, \c autocommit, \c useMysqlMetadata, \c useMysqlVersion,
       \c nullDatabaseMeansCurrent, \c initSql, \c defaultFetchSize,
       \c maxQuerySizeToLog, \c maxAllowedPacket, \c geometryDefaultType, \c transactionIsolation, \c connectTimeout,
@@ -458,9 +459,11 @@ foreach hash<auto> column in (result.schemaV2()) {
     sends a clear-text password only over TLS, which is \c verify-full for restricted connections, so it reaches only
     the checked destination.  Without a \c keyStore option the driver presents the JVM's client key store
     (\c javax.net.ssl.keyStore) to every server, on every TLS handshake (also for reconnects, transaction replay and
-    query cancels), so a restricted connection is forced to use an empty PKCS12 key store that the module creates
-    once per process (a new file with a random name, readable by its owner only), and the system property is never
-    read.  Certificate validation follows the JVM's configuration: with settings such as
+    query cancels), so a restricted connection is forced to use an empty PKCS12 key store of the module (the file
+    \c empty.p12 in a new directory of the process with a random name, accessible by its owner only), and the system
+    property is never read.  The file is checked for every restricted connection and written again atomically if it
+    is missing or changed (and its directory created again if it is missing); a file that is removed later makes the
+    next TLS handshakes of the open connections fail, closed.  Certificate validation follows the JVM's configuration: with settings such as
     \c com.sun.security.enableAIAcaIssuers or OCSP and CRL distribution point checking, TLS validation fetches URLs
     from the server's certificate, outside the sandbox; these settings are trusted configuration of the JVM.
 
