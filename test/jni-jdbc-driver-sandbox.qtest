@@ -897,6 +897,33 @@ string sub module_cmd(string cmd) {
         assertTrue(overwriteEmptyKeyStores() > 0, "the empty key store was overwritten");
         assertEq("ok", sandboxed(port).callFunction("open_db", ssUrl(port)), "restricted after the overwrite");
         assertEq(1, s.clientCertificates(), "restricted after the overwrite: no client certificate");
+        # the directory is replaced by another one with the same name (ex: a temporary file cleaner removed it and
+        # someone created it again), which cannot be written and holds a key store with a client key: it is not used
+        list<string> dirs = map dirname($1), emptyKeyStores();
+        assertTrue(dirs.size() > 0, "the empty key store directory was found");
+        binary key = ReadOnlyFile::readBinaryFile(get_script_dir() + "jdbc-fake-server.p12");
+        foreach string dir in (dirs) {
+            unlink(dir + DirSep + "empty.p12");
+            rmdir(dir);
+            mkdir(dir, 0700);
+            File out();
+            out.open2(dir + DirSep + "empty.p12", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+            out.write(key);
+            out.close();
+            chmod(dir, 0500);
+        }
+        on_exit {
+            foreach string dir in (dirs) {
+                chmod(dir, 0700);
+                unlink(dir + DirSep + "empty.p12");
+                rmdir(dir);
+            }
+        }
+        assertEq("ok", sandboxed(port).callFunction("open_db", ssUrl(port)), "restricted after the replacement");
+        assertEq(1, s.clientCertificates(), "restricted after the replacement: no client certificate");
+        foreach string dir in (dirs) {
+            assertEq(key, ReadOnlyFile::readBinaryFile(dir + DirSep + "empty.p12"), "the replaced directory is not used");
+        }
     }
 
     #! returns the files of the module's empty client key stores in the JVM's temporary directory
