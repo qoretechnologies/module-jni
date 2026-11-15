@@ -56,22 +56,23 @@ static inline bool jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Purpos
 #endif
 }
 
-// _QORE_HAS_SANDBOX_RESTRICTS_API: the restriction API of sandboxes, QoreSandboxManager::restricts() and
-// QoreSandboxManager::trustsUncontrolledApis(), which aggregate over the members of a composition of sandboxes
+// _QORE_HAS_SANDBOX_RESTRICTS_API: the sandbox API that has QoreSandboxManager::trustsUncontrolledApis(), which
+// aggregates over the members of a composition of sandboxes
 #ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
 //! Returns true if uncontrolled code is refused to the calling code
 /** Uncontrolled code (a JDBC driver, a Java class that an option names) runs in Java, where no sandbox policy or limit
-    applies to its I/O, threads or memory.  It is refused iff the governing sandbox does not trust the code with
-    uncontrolled APIs and restricts anything (its network, its filesystem, including a sandbox root, or with a
-    resource limit):
-    <tt>!QoreSandboxManager::trustsUncontrolledApis() && QoreSandboxManager::restricts()</tt>.  For a composition of
-    sandboxes, which governs code when more than one Program's manager is on the thread's stack, the restriction is
-    the OR over the members and the trust the AND.  A manager that restricts nothing (an allow-all manager, which
-    Qorus attaches to every trusted interface Program for interruptible I/O), and a composition of such managers, do
-    not refuse it.  The parse options and functional domains of the calling Program are not judged here.
+    applies to its I/O, threads or memory, and can reach any Java API, also one that changes the state of the whole
+    JVM.  It is refused unless the governing sandbox trusts the code with uncontrolled APIs
+    (QoreSandboxManager::trustsUncontrolledApis()), whatever the sandbox restricts: a sandbox that restricts nothing
+    but does not trust the code (an allow-all manager without SandboxManager::setUncontrolledApiPolicy()) refuses it,
+    as the Qore library refuses such code every uncontrolled API.  For a composition of sandboxes, which governs code
+    when more than one Program's manager is on the thread's stack, the trust is the AND over the members, so the code
+    is allowed only if every member trusts it.  The parse options and functional domains of the calling Program are
+    not judged here.
 
-    Fails closed: code that is restricted (jni_sandbox_restricts_caller()) but whose governing manager cannot be
-    resolved is refused.
+    Code that no sandbox governs, and code under a system-policy barrier or capability of trusted code (resolved with
+    QoreSandboxManagerHelper::Policy), has no governing manager and is not refused; code that is restricted
+    (jni_sandbox_restricts_caller()) but has no governing manager is refused (fail closed).
 
     @param purpose how the governing sandbox is resolved (see QoreSandboxManagerHelper); QoreSandboxManagerHelper::Policy
     honours a policy barrier and a system-policy capability of trusted code
@@ -81,7 +82,7 @@ static inline bool jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelpe
     if (!governing) {
         return jni_sandbox_restricts_caller(purpose);
     }
-    return !governing->trustsUncontrolledApis() && governing->restricts();
+    return !governing->trustsUncontrolledApis();
 }
 #endif
 

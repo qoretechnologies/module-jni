@@ -329,7 +329,7 @@ public class Fetcher {
     connects or reconnects for code that a sandbox network policy restricts (the default network policy denies, or an
     allowed or denied IP range or an allowed port rule is set), whatever the destination and whatever the policy
     allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A sandbox manager that restricts no network access, such as an allow-all manager, does not refuse the driver
-    (with the restriction API of sandboxes, the rule below applies instead).  A
+    (with the sandbox trust API, the rule below applies instead).  A
     connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect; trusted
     code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data provider
     (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to sandboxed
@@ -350,16 +350,17 @@ public class Fetcher {
     around it runs it with the system policy.  A capability from \c SandboxManager::createSystemPolicyCall(), which
     trusted code registers before it runs sandboxed code, masks the provenance as well.
 
-    <b>The rule with the restriction API of sandboxes:</b> with a %Qore library that has
-    \c QoreSandboxManager::restricts() and \c QoreSandboxManager::trustsUncontrolledApis() (the jni module reports it
-    with the \c sandbox_restricts_api key of its \c info hash in \c get_module_hash()), the \c jdbc driver and
-    \c Jni::org::qore::jni::check_class_option() refuse code iff its governing sandbox does not trust it with
-    uncontrolled APIs and restricts anything: its network, its filesystem (a default policy that denies, an allowed
-    or denied path rule, or a sandbox root) or with a resource limit (threads, wall time, CPU time, stack size or
-    memory), because the Java code that they let run does I/O and uses threads and memory that the sandbox does not
-    control.  For code that more than one sandbox governs (a composition of sandboxes, for example when a callback or
-    closure of one sandboxed %Program runs code of another), a sandbox restricts if any of them does and trusts the
-    code only if all of them do, so a composition of allow-all managers does not refuse it.  The governing sandbox is
+    <b>The rule with the sandbox trust API:</b> with a %Qore library that has
+    \c QoreSandboxManager::trustsUncontrolledApis() (the jni module reports it with the \c sandbox_restricts_api key
+    of its \c info hash in \c get_module_hash()), the \c jdbc driver and \c Jni::org::qore::jni::check_class_option()
+    refuse code unless its governing sandbox trusts it with uncontrolled APIs
+    (\c SandboxManager::setUncontrolledApiPolicy()), whatever the sandbox restricts: a sandbox that restricts nothing
+    (an allow-all manager) but does not trust the code refuses them as well, because the Java code that they let run
+    does I/O, uses threads and memory, and changes the state of the whole JVM, none of which the sandbox controls, as
+    the %Qore library refuses such code every other uncontrolled API.  A host that governs trusted code with a sandbox
+    only for its interrupts or limits sets \c SandboxManager::setUncontrolledApiPolicy() on it.  For code that more
+    than one sandbox governs (a composition of sandboxes, for example when a callback or closure of one sandboxed
+    %Program runs code of another), the sandbox trusts the code only if every member does.  The governing sandbox is
     resolved as for a policy check (\c QoreSandboxManagerHelper::Policy), so neither check applies inside
     \c SandboxManager::callWithSystemPolicy() or a \c SandboxManager::createSystemPolicyCall() capability (see
     above): this is intended, as a system-policy call is an explicit, trusted capability in which trusted code acts
@@ -368,16 +369,20 @@ public class Fetcher {
     keeps its own rule (see @ref jdbc_option_classpath): it is judged by the restrictions of the code that set it, as
     a module command is, which a barrier does not lift.
 
-    Without the restriction API, module code cannot judge a composition of sandboxes, so the \c jdbc driver is
+    The values that choose the destination of a \c jdbc connection, the \c url option and the database name, can
+    carry driver properties that make a JDBC driver instantiate classes, so they are judged by the code that set them
+    as well, not only by the code that opens the connection (see @ref jdbc_option_url).
+
+    Without the sandbox trust API, module code cannot judge a composition of sandboxes, so the \c jdbc driver is
     refused for code that a sandbox network policy restricts, as described above (this also refuses code that two
     allow-all managers govern together, whose composition reports a configuration that denies), and the options for
     code that any sandbox governs, also through a policy barrier or a system-policy capability.
 
     <b>Options that load Java code:</b> an option that names a Java class to load or instantiate, a classpath to add,
     or a value that Java compiles, deserializes or uses to select a component that loads classes, is refused with
-    \c JNI-SANDBOX-ERROR to sandboxed code, before it is used: without the restriction API of sandboxes also through
-    a policy barrier or a system-policy capability, and with it, only to code that a governing sandbox restricts and
-    does not trust with uncontrolled APIs (see above).  The connections and data providers of these apps declare
+    \c JNI-SANDBOX-ERROR to sandboxed code, before it is used: without the sandbox trust API also through a policy
+    barrier or a system-policy capability, and with it, to code that its governing sandbox does not trust with
+    uncontrolled APIs (see above).  The connections and data providers of these apps declare
     \c external_io, so their constructors refuse
     sandboxed code first (\c APP-SANDBOX-ACCESS-DENIED); the option checks apply where that refusal does not, for
     example to the static option checks that a module or a capability calls and to an object that trusted code
@@ -410,10 +415,10 @@ public class Fetcher {
     |FlywayDataProvider|\c locations other than directories (ex: \c classpath:), and a \c url with driver \
       properties
 
-    Modules check their own options with \c Jni::org::qore::jni::check_class_option().  With the restriction API of
-    sandboxes, code that a host governs with a sandbox that trusts it with uncontrolled APIs
-    (\c SandboxManager::setUncontrolledApiPolicy()), or with one that restricts nothing, may use these options;
-    without it, any governing sandbox refuses them.
+    Modules check their own options with \c Jni::org::qore::jni::check_class_option().  With the sandbox trust API,
+    code that a host governs with a sandbox that trusts it with uncontrolled APIs
+    (\c SandboxManager::setUncontrolledApiPolicy()) may use these options; without it, any governing sandbox refuses
+    them.
 
     The Kafka \c sasl.kerberos.kinit.cmd option names a command that the Kafka client runs in Java, outside of the
     process controls of %Qore.  It is trusted configuration: code that no sandbox governs can set it, so an application

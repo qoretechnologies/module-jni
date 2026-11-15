@@ -51,7 +51,7 @@ private:internal JavaArray::constructor() {
 /**
     @return the class of the object
  */
-Class JavaArray::getClass() {
+Class JavaArray::getClass() [dom=UNCONTROLLED_API] {
     try {
         jni::Env env;
         return new QoreObject(QC_CLASS, qore_get_call_program_context(),
@@ -155,7 +155,7 @@ JavaArray a = JavaArray::get(binary_value: bin);
 
     @since jni 1.1
 */
-static JavaArray JavaArray::get(binary binary_value) [flags=CONSTANT,NAMED_ARGS] {
+static JavaArray JavaArray::get(binary binary_value) [dom=UNCONTROLLED_API;flags=CONSTANT,NAMED_ARGS] {
     Env env;
     return new QoreObject(QC_JAVAARRAY, qore_get_call_program_context(),
         new Array(QoreToJava::makeByteArray(env, *binary_value)));

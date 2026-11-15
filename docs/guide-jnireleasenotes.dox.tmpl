@@ -66,19 +66,29 @@
     - <b>Security</b>: the \c jdbc database driver raises \c NETWORK-ACCESS-DENIED when it connects for code that a
       sandbox network policy restricts (a default network policy that denies, or any allowed or denied IP range or
       allowed port rule; a sandbox manager that restricts nothing does not refuse the driver), because the sandbox network policy cannot be applied to the destinations that a JDBC
-      driver resolves and discovers in Java; with a %Qore library that has the restriction API of sandboxes
-      (\c QoreSandboxManager::restricts(); jni module info key \c sandbox_restricts_api), it is refused for code
-      that a governing sandbox restricts in any way (its network, its filesystem, including a sandbox root, or with a
-      resource limit) and does not trust with uncontrolled APIs, as aggregated over the members of a composition of
-      sandboxes, because the driver is uncontrolled Java code whose other I/O, threads and memory the sandbox does
-      not control either (see @ref jni_sandbox)
+      driver resolves and discovers in Java; with a %Qore library that has the sandbox trust API
+      (\c QoreSandboxManager::trustsUncontrolledApis(); jni module info key \c sandbox_restricts_api), it is refused
+      for code that its governing sandbox does not trust with uncontrolled APIs, whatever the sandbox restricts (every
+      member of a composition of sandboxes must trust the code), because the driver is uncontrolled Java code whose
+      other I/O, threads, memory and JVM-wide changes the sandbox does not control either (see @ref jni_sandbox)
+
+    - <b>Security</b>: the \c url option and the database name of a \c jdbc datasource, which choose the destination
+      and can carry driver properties, are judged by the code that set them: trusted code that opens a datasource
+      whose url sandboxed code set is refused with \c JNI-SANDBOX-ERROR (with a %Qore library that records the
+      setters of datasource options); the database name with a %Qore library that records the code that chose a
+      connection (see @ref jdbc_option_url)
+
+    - <b>Security</b>: \c Jni::org::qore::jni::kotlin_scripting_available(),
+      \c Jni::org::qore::jni::kotlin_scripting_retry(), \c Jni::org::qore::jni::new_array(),
+      \c Jni::org::qore::jni::JavaArray::getClass() and the static \c Jni::org::qore::jni::JavaArray::get() for a
+      binary are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), as they initialize Java classes, allocate Java memory or
+      return Java classes
 
     - <b>Security</b>: the options of the JDBC, Jakarta JMS, Kafka, Camel, JasperReports and Flyway providers that
       name a Java class to load, a classpath to add, or code that Java compiles are refused with
       \c JNI-SANDBOX-ERROR to sandboxed code; added \c Jni::org::qore::jni::check_class_option() for modules;
-      with the restriction API of sandboxes, only to code that a governing sandbox (resolved for a policy check)
-      restricts in any way and does not trust with uncontrolled APIs, as for the \c jdbc driver (see
-      @ref jni_sandbox)
+      with the sandbox trust API, to code that its governing sandbox (resolved for a policy check) does not trust with
+      uncontrolled APIs, whatever the sandbox restricts, as for the \c jdbc driver (see @ref jni_sandbox)
 
     - <b>Security</b>: a Kafka \c sasl.kerberos.kinit.cmd option other than the default, which names a command that
       the Kafka client runs, is refused with \c JNI-SANDBOX-ERROR to sandboxed code (see @ref jni_sandbox)

@@ -1,0 +1,188 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The values that choose the destination of a jdbc connection, the url option and the database name, carry the driver
+# properties that make a JDBC driver instantiate classes; they are judged by the code that set them, as the classpath
+# option is, not only by the code that opens the connection: trusted code that opens a datasource that sandboxed code
+# configured is refused (JNI-SANDBOX-ERROR) if the sandbox of the code that set the value does not trust it with
+# uncontrolled APIs (without the sandbox API that has QoreSandboxManager::trustsUncontrolledApis(): if its network
+# policy restricts it, as for the code that opens a connection)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+
+%exec-class JniJdbcUrlSetterTest
+
+class JniJdbcUrlSetterTest inherits QUnit::Test {
+    private:internal {
+        #! the url of the datasources of the test, which no driver accepts
+        const Url = "jdbc:u/p@ignored";
+
+        #! a url option with driver properties that name a class for the driver to instantiate
+        const UrlOption = "qore-none://127.0.0.1:1/x?socketFactory=org.example.QoreTestPlaceholder";
+
+        #! a database name with the same driver properties
+        const DbName = "jdbc:" + UrlOption;
+
+        #! the error of a connection that was not refused: the driver manager finds no driver for the URL
+        const NoDriverDesc = "java.sql.SQLException: No suitable driver found for jdbc:qore-none:";
+
+        #! the error of a value that code chose that may not choose the destination
+        const Refused = "JNI-SANDBOX-ERROR";
+
+        #! the code of the Programs that set the values
+        const SetterSource = "
+nothing sub set_url(Datasource ds, string url) {
+    ds.setOption(\"url\", url);
+}
+
+nothing sub set_db(Datasource ds, string db) {
+    ds.setDBName(db);
+}
+";
+    }
+
+    constructor() : QUnit::Test("JNI jdbc url and database name setter", "1.0", \ARGV) {
+        addTestCase("the url option is judged by the code that set it", \urlTest());
+        addTestCase("the database name is judged by the code that set it", \dbNameTest());
+        set_return_value(main());
+    }
+
+    #! returns True if the jni module judges the jdbc options by the code that set them (qore#5741)
+    private static bool setterAware() {
+        *hash<auto> info = get_module_hash().jni.info;
+        return info.jdbc_option_setter ?? False;
+    }
+
+    #! returns True if the jni module judges the code that chose a jdbc connection (qore#6142)
+    private static bool choosersAware() {
+        *hash<auto> info = get_module_hash().jni.info;
+        return info.jdbc_connect_choosers ?? False;
+    }
+
+    #! returns True if the jni module refuses the jdbc driver unless the sandbox trusts the code
+    private static bool trustOnly() {
+        *hash<auto> info = get_module_hash().jni.info;
+        return info.sandbox_restricts_api ?? False;
+    }
+
+    #! returns a Program with the sandbox given that sets the values of a datasource
+    private static Program getSetter(SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse(SetterSource, "jni-jdbc-url-setter");
+        return p;
+    }
+
+    #! returns an allow-all manager, which restricts nothing
+    private static SandboxManager allowAll(bool trusting = False) {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        if (trusting) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
+        return sm;
+    }
+
+    #! returns True if the Qore library has the uncontrolled-API policy of sandboxes
+    private static bool hasPolicy() {
+        return (new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy");
+    }
+
+    #! opens the datasource as trusted code; returns the error, with "NO-DRIVER" for a connection that was not refused
+    private static string open(Datasource ds) {
+        try {
+            ds.open();
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "JNI-ERROR" && ex.desc.equalPartial(NoDriverDesc)) {
+                return "NO-DRIVER";
+            }
+            return ex.err + ": " + ex.desc;
+        }
+    }
+
+    #! asserts that trusted code that opens the datasource is refused for the code that set the value
+    private assertRefused(Datasource ds, string label) {
+        try {
+            ds.open();
+            fail(label + ": not refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(Refused, ex.err, label + ": " + ex.desc);
+            assertRegex("does not trust with uncontrolled APIs", ex.desc, label + ": the rule");
+        }
+    }
+
+    urlTest() {
+        # trusted code sets the url option: the connection is not refused
+        {
+            Datasource ds(Url);
+            ds.setOption("url", UrlOption);
+            assertEq("NO-DRIVER", open(ds), "a trusted setter");
+        }
+        if (!setterAware()) {
+            testSkip("the jni module was built for a Qore library that does not record the setters of datasource "
+                "options");
+        }
+        # a default sandbox (restricts everything, does not trust the code) sets it: refused to trusted code
+        {
+            Datasource ds(Url);
+            getSetter(new SandboxManager()).callFunction("set_url", ds, UrlOption);
+            assertRefused(ds, "a default sandbox");
+            # the same datasource with a url that trusted code sets again connects
+            ds.setOption("url", UrlOption);
+            assertEq("NO-DRIVER", open(ds), "set again by trusted code");
+        }
+        # a sandbox that restricts nothing but does not trust the code: refused with the sandbox API that judges the
+        # trust of the code; without it, only a network policy that restricts refuses it
+        {
+            Datasource ds(Url);
+            getSetter(allowAll()).callFunction("set_url", ds, UrlOption);
+            if (trustOnly()) {
+                assertRefused(ds, "an allow-all sandbox");
+            } else {
+                assertEq("NO-DRIVER", open(ds), "an allow-all sandbox");
+            }
+        }
+        # a sandbox that trusts the code: not refused
+        if (hasPolicy()) {
+            Datasource ds(Url);
+            SandboxManager sm = allowAll(True);
+            if (trustOnly()) {
+                # whatever the sandbox restricts
+                sm.setNetworkDefaultPolicy(False);
+            }
+            getSetter(sm).callFunction("set_url", ds, UrlOption);
+            assertEq("NO-DRIVER", open(ds), "a trusting sandbox");
+        }
+    }
+
+    dbNameTest() {
+        # trusted code sets the database name: the connection is not refused
+        {
+            Datasource ds(Url);
+            ds.setDBName(DbName);
+            assertEq("NO-DRIVER", open(ds), "a trusted setter");
+        }
+        # a default sandbox sets it: refused with a Qore library that records the code that chose a connection
+        # (qore#6142); without it, the database name has no recorded setter and is judged only by the code that opens
+        # the connection (a gap that is documented)
+        Datasource ds(Url);
+        getSetter(new SandboxManager()).callFunction("set_db", ds, DbName);
+        if (choosersAware()) {
+            assertRefused(ds, "a default sandbox");
+        } else {
+            assertEq("NO-DRIVER", open(ds), "a default sandbox, without a record of the setter");
+        }
+        if (choosersAware() && hasPolicy()) {
+            Datasource tds(Url);
+            getSetter(allowAll(True)).callFunction("set_db", tds, DbName);
+            assertEq("NO-DRIVER", open(tds), "a trusting sandbox");
+        }
+    }
+}

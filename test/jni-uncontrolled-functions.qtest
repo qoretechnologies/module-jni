@@ -2,9 +2,10 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# The jni functions that load, define or run Java code or return the class loader, and the JavaArray methods that run
-# the toString() methods of Java elements, are uncontrolled APIs, as the Java classes that they give access to are
-# (qore#5741)
+# The jni functions that load, define or run Java code, initialize the Kotlin script engine, create Java arrays or
+# return the class loader, and the JavaArray methods that run the toString() methods of Java elements, return the class
+# of an array or convert a binary to a Java array, are uncontrolled APIs, as the Java classes that they give access
+# to are (qore#5741)
 
 %modern
 %no-child-restrictions
@@ -64,6 +65,26 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
                 "name": "JavaArray::deepToString",
                 "call": "Jni::org::qore::jni::JavaArray a; a.deepToString();",
             },
+            "kotlin_scripting_available": {
+                "name": "kotlin_scripting_available",
+                "call": "Jni::org::qore::jni::kotlin_scripting_available();",
+            },
+            "kotlin_scripting_retry": {
+                "name": "kotlin_scripting_retry",
+                "call": "Jni::org::qore::jni::kotlin_scripting_retry();",
+            },
+            "new_array": {
+                "name": "new_array",
+                "call": "auto c; Jni::org::qore::jni::new_array(c, 1);",
+            },
+            "JavaArray::getClass": {
+                "name": "JavaArray::getClass",
+                "call": "Jni::org::qore::jni::JavaArray a; a.getClass();",
+            },
+            "JavaArray::get(binary)": {
+                "name": "JavaArray::get",
+                "call": "binary b; Jni::org::qore::jni::JavaArray::get(b);",
+            },
         };
 
         #! the functions that are not uncontrolled APIs: checks and information
@@ -77,6 +98,7 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
         addTestCase("trusted code can call them", \trustedTest());
         addTestCase("checks are not uncontrolled APIs", \checkTest());
         addTestCase("a default sandbox does not allow calling them", \sandboxedTest());
+        addTestCase("a sandbox that trusts the code allows calling them", \trustingTest());
         set_return_value(main());
     }
 
@@ -125,6 +147,11 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
             "invoke_nonvirtual": auto sub () { return Jni::org::qore::jni::invoke_nonvirtual(get_ptr, loader); },
             "JavaArray::toString": auto sub () { return array.toString(); },
             "JavaArray::deepToString": auto sub () { return array.deepToString(); },
+            "kotlin_scripting_available": auto sub () { return Jni::org::qore::jni::kotlin_scripting_available(); },
+            "kotlin_scripting_retry": auto sub () { return Jni::org::qore::jni::kotlin_scripting_retry(); },
+            "new_array": auto sub () { return Jni::org::qore::jni::new_array(runnable, 3); },
+            "JavaArray::getClass": auto sub () { return array.getClass(); },
+            "JavaArray::get(binary)": auto sub () { return Jni::org::qore::jni::JavaArray::get(<0102>); },
         };
     }
 
@@ -181,6 +208,27 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
             },
             "JavaArray::deepToString": {
                 "result": sub (auto v) { assertEq("[null]", v, "JavaArray::deepToString"); },
+            },
+            "kotlin_scripting_available": {
+                "result": sub (auto v) { assertEq(Type::Boolean, v.type(), "kotlin_scripting_available"); },
+            },
+            "kotlin_scripting_retry": {
+                "result": sub (auto v) { assertEq(Type::Boolean, v.type(), "kotlin_scripting_retry"); },
+            },
+            "new_array": {
+                "result": sub (auto v) {
+                    assertEq(3, v.length(), "new_array: the length");
+                    assertEq("[Ljava.lang.Runnable;", v.getClass().getName(), "new_array: the class");
+                },
+            },
+            "JavaArray::getClass": {
+                "result": sub (auto v) { assertEq("[Ljava.lang.String;", v.getName(), "JavaArray::getClass"); },
+            },
+            "JavaArray::get(binary)": {
+                "result": sub (auto v) {
+                    assertEq("[B", v.getClass().getName(), "JavaArray::get(binary): a byte[]");
+                    assertEq(2, v.length(), "JavaArray::get(binary): the length");
+                },
             },
         };
     }
@@ -283,6 +331,35 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
                 # the refused call is the tagged one, not another call that the closure makes
                 assertRegex("'([A-Za-z:]+::)?" + Calls{i.key}.name + "\\(", ex.desc, i.key + " (function)");
             }
+        }
+    }
+
+    #! a sandbox that trusts the code with uncontrolled APIs allows it every call (SandboxManager::setUncontrolledApiPolicy())
+    trustingTest() {
+        SandboxManager sm();
+        if (!sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            testSkip("the Qore library has no uncontrolled-API policy of sandboxes");
+        }
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("auto sub through(code c) { return c(); }\n", "jni-uncontrolled-functions-trusting");
+        hash<string, code> calls = getRunCalls();
+        hash<string, hash<auto>> checks = getRunChecks();
+        foreach hash<auto> i in (calls.pairIterator()) {
+            hash<auto> check = checks{i.key};
+            auto v;
+            try {
+                v = p.callFunction("through", i.value);
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(exists check.error && check.error(ex), i.key + ": " + ex.err + ": " + ex.desc);
+                continue;
+            }
+            if (!check.result) {
+                fail(i.key + ": no exception");
+                continue;
+            }
+            check.result(v);
         }
     }
 }

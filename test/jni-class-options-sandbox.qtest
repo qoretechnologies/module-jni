@@ -12,8 +12,9 @@
 %exec-class JniClassOptionsSandboxTest
 
 #! Provider options checked with check_class_option() are refused to sandboxed callers (qore#5742)
-/** With the restriction API of sandboxes (jni module info key "sandbox_restricts_api"), only to callers that a governing
-    sandbox (resolved for a policy check) restricts in any way and does not trust with uncontrolled APIs
+/** With the sandbox API that has QoreSandboxManager::trustsUncontrolledApis() (jni module info key
+    "sandbox_restricts_api"), to callers that the governing sandbox (resolved for a policy check) does not trust with
+    uncontrolled APIs, whatever it restricts; without it, to callers that any sandbox governs
 */
 class JniClassOptionsSandboxTest inherits QUnit::Test {
     private:internal {
@@ -92,11 +93,14 @@ string sub get_context(object c) {
         addTestCase("flyway options", \flywayTest());
         addTestCase("barrier and capability", \barrierTest());
         addTestCase("a sandbox that trusts the code with uncontrolled APIs does not refuse it", \trustedSandboxTest());
-        addTestCase("every kind of sandbox restriction refuses the option", \restrictsApiTest());
-        addTestCase("a sandbox that trusts the code allows the option despite its restrictions",
+        addTestCase("a sandbox that does not trust the code refuses the option whatever it restricts",
+            \restrictsApiTest());
+        addTestCase("a sandbox that trusts the code allows the option whatever it restricts",
             \restrictsApiTrustTest());
         addTestCase("compositions of sandboxes", \restrictsApiCompositionTest());
-        addTestCase("allow-all composition allows the option (develop #208 refusal)", \allowAllCompositionTest());
+        addTestCase("a composition of trusting allow-all managers allows the option", \trustingCompositionTest());
+        addTestCase("a trusted Camel producer used under an allow-all sandbox that does not trust the code",
+            \allowAllCamelTest());
         addTestCase("trusted code in a system-policy call may use the option for a sandboxed caller",
             \restrictsApiSystemPolicyTest());
         set_return_value(main());
@@ -518,17 +522,13 @@ string sub get_context(object c) {
             assertThrows("JNI-SANDBOX-ERROR", \p.callFunction(), "run", "a trusting sandbox, without the API");
             assertThrows("JNI-SANDBOX-ERROR", \kp.callFunction(), "run", "a trusting sandbox, without the API: kafka");
         }
-        # the default sandbox, with the same filesystem and network policy, restricts nothing: without the restriction
-        # API it still refuses it, with it, it does not
+        # the default sandbox, with the same filesystem and network policy, restricts nothing but does not trust the
+        # code: it refuses it
         SandboxManager deny = allowAll();
         Program dp(PO_NEW_STYLE);
         dp.setSandboxManager(deny);
         dp.parse("sub run() {\n" + check + "\n}\n", "jni-class-options-default-sandbox");
-        if (restrictsApi()) {
-            assertEq(NOTHING, dp.callFunction("run"), "an allow-all sandbox that does not trust the code");
-        } else {
-            assertThrows("JNI-SANDBOX-ERROR", \dp.callFunction(), "run", "the default sandbox");
-        }
+        assertThrows("JNI-SANDBOX-ERROR", \dp.callFunction(), "run", "an allow-all sandbox that does not trust the code");
         # one that does not trust the code and restricts it refuses it
         SandboxManager rsm = allowAll();
         rsm.blockPrivateNetworks();
@@ -635,19 +635,19 @@ string sub get_context(object c) {
 
     restrictsApiTest() {
         skipIfNoRestrictsApi();
-        # an allow-all manager allows the option, also with an allowed host pattern, which matters only with a default
-        # policy that denies
-        assertEq("ok", checkResult(allowAll()), "allow-all");
+        # a sandbox that restricts nothing but does not trust the code refuses the option: an allow-all manager, also
+        # with an allowed host pattern
+        assertEq("JNI-SANDBOX-ERROR", checkResult(allowAll()), "allow-all");
         SandboxManager sm = allowAll();
         sm.addNetworkAllowedHost("*.example.com");
-        assertEq("ok", checkResult(sm), "allowed host only");
-        # every dimension refuses it alone
+        assertEq("JNI-SANDBOX-ERROR", checkResult(sm), "allowed host only");
+        # whatever it restricts
         foreach hash<auto> r in (restrictions()) {
             assertEq("JNI-SANDBOX-ERROR", checkResult(restricted(r)), r.name);
         }
         # the refusal names the rule
-        assertThrows("JNI-SANDBOX-ERROR", "restricts and does not trust with uncontrolled APIs", \checkUnder(),
-            restricted(restrictions()[0]));
+        assertThrows("JNI-SANDBOX-ERROR", "code that a sandbox does not trust with uncontrolled APIs", \checkUnder(),
+            allowAll());
     }
 
     restrictsApiTrustTest() {
@@ -677,8 +677,12 @@ string sub get_context(object c) {
 
     restrictsApiCompositionTest() {
         skipIfNoRestrictsApi();
-        # a composition restricts if any member does, and trusts the code only if every member does
-        assertEq("ok", composed(allowAll(), allowAll()), "allow-all members");
+        # a composition trusts the code only if every member does, whatever the members restrict
+        assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), allowAll()), "allow-all members that do not trust the code");
+        assertEq("ok", composed(trusting(), trusting()), "allow-all members that trust the code");
+        assertEq("JNI-SANDBOX-ERROR", composed(trusting(), allowAll()), "one member that does not trust the code");
+        assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), trusting()), "one member that does not trust the code, "
+            "inner");
         foreach hash<auto> r in (restrictions()) {
             assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), restricted(r)), r.name + ": restricting inner member");
             assertEq("JNI-SANDBOX-ERROR", composed(restricted(r), allowAll()), r.name + ": restricting outer member");
@@ -743,14 +747,41 @@ code sub make_capability() {
         }
     }
 
-    #! code that two allow-all sandboxes govern together may use the option (as for the jdbc driver; develop #208)
+    #! code that two allow-all sandboxes that trust it govern together may use the option
     /** a closure of one allow-all sandboxed Program calls another allow-all sandboxed Program, so the governing
-        sandbox is the composition of two allow-all managers; it restricts nothing, so the option check does not
-        refuse it.  Without the restriction API of sandboxes, any governing sandbox refuses the option
+        sandbox is the composition of two allow-all managers.  With the API, the option is allowed if every member
+        trusts the code, and refused if a member does not trust it; without it, any governing sandbox refuses the
+        option, as develop intends
     */
-    allowAllCompositionTest() {
-        string expected = restrictsApi() ? "ok" : "JNI-SANDBOX-ERROR";
-        assertEq(expected, checkResult(allowAll()), "one allow-all manager");
-        assertEq(expected, composed(allowAll(), allowAll()), "a composition of two allow-all managers");
+    trustingCompositionTest() {
+        if ((new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
+            string expected = restrictsApi() ? "ok" : "JNI-SANDBOX-ERROR";
+            assertEq(expected, checkResult(trusting()), "one trusting allow-all manager");
+            assertEq(expected, composed(trusting(), trusting()), "a composition of two trusting allow-all managers");
+        }
+        assertEq("JNI-SANDBOX-ERROR", checkResult(allowAll()), "one allow-all manager");
+        assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), allowAll()), "a composition of two allow-all managers");
+    }
+
+    #! a Camel producer that trusted code created, used by code under an allow-all sandbox that does not trust it
+    /** the creator passed the app's check of the caller, and the object is not checked again when it is used, so the
+        endpoint check of the producer is the only check of the endpoint: endpoints that run a process or Java code
+        are refused to code that its sandbox does not trust, also when the sandbox restricts nothing
+    */
+    allowAllCamelTest() {
+        Program tp(PO_NEW_STYLE);
+        map tp.loadModule($1), Modules;
+        tp.parse(TrustedCamelCode, "jni-class-options-allow-all-camel-trusted");
+        list<object> producer = tp.callFunction("make_producer");
+        on_exit delete producer[0];
+
+        Program sp(PO_NEW_STYLE);
+        sp.setSandboxManager(allowAll());
+        sp.parse(SandboxedUseCode, "jni-class-options-allow-all-camel");
+        foreach string endpoint in ("exec:/bin/true", "bean:qoreTestBean?method=run",
+                "language:simple:qore-test") {
+            (*string err, *string desc) = (sp.callFunction("send", producer[1], endpoint) =~ x/^([^:]+): (.*)$/s);
+            assertSandboxRefused(err ?? "ok", desc, endpoint + ": an allow-all sandbox", "endpoint");
+        }
     }
 }

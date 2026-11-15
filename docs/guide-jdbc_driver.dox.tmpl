@@ -433,4 +433,22 @@ foreach hash<auto> column in (result.schemaV2()) {
 
     @note the initial \c jdbc: in the url option is optional; if missing, then it is added automatically by the %Qore
     jdbc driver when the internal URL string is passed to the internal Java JDBC call.
+
+    <b>The code that chose the URL:</b> the \c url option and the database name choose the destination of a
+    connection and can carry driver properties that make a JDBC driver instantiate classes (ex: a socket factory
+    class).  Like the \c classpath option (see @ref jdbc_option_classpath), they are judged by the code that set them,
+    not only by the code that opens the connection, which can be trusted code that opens a datasource that sandboxed
+    code configured: a connection is refused with \c JNI-SANDBOX-ERROR, also when trusted code opens it, if the code
+    that set the value is governed by a sandbox that does not trust it with uncontrolled APIs (without the sandbox
+    trust API of %Qore: a sandbox whose network policy restricts it).  As for the code that opens a connection, the
+    sandbox is resolved for a policy check: trusted code that set the value inside
+    \c SandboxManager::callWithSystemPolicy() or a \c SandboxManager::createSystemPolicyCall() capability on behalf of
+    a sandboxed caller is not refused (unlike the \c classpath option, which is judged as a module command is).
+    - the \c url option is judged by its setter with a %Qore library that records the setters of datasource options
+    - the database name (the \c db of a datasource, \c Datasource::setDBName() and the database of a connection
+      string), and the creators of the datasource and the setters of its other connection values, are judged with a
+      %Qore library that records the code that chose a connection (the \c jdbc_connect_choosers key of the
+      \c info hash of the jni module in \c get_module_hash()); with a %Qore library that does not, the database name
+      is judged only by the code that opens the connection, so trusted code must not open a datasource whose
+      database name less trusted code set
 */

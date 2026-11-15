@@ -115,11 +115,18 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
     }
     info->setKeyValue("jdbc_option_setter", true, nullptr);
 #endif
+#ifdef _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS
+    // "jdbc_connect_choosers": the jdbc driver judges the code that chose a connection, also the code that set its
+    // database name (qore#6142, QoreJdbcConnection::checkChoosers())
+    if (!info) {
+        info = new QoreHashNode(autoTypeInfo);
+    }
+    info->setKeyValue("jdbc_connect_choosers", true, nullptr);
+#endif
 #ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
-    // "sandbox_restricts_api": uncontrolled code (the jdbc driver, check_class_option()) is refused only to code that
-    // a governing sandbox restricts and does not trust with uncontrolled APIs, as aggregated over compositions by
-    // QoreSandboxManager::restricts() and QoreSandboxManager::trustsUncontrolledApis()
-    // (jni_sandbox_refuses_uncontrolled_code())
+    // "sandbox_restricts_api": uncontrolled code (the jdbc driver, check_class_option()) is refused unless the
+    // governing sandbox trusts the code with uncontrolled APIs, as aggregated over compositions by
+    // QoreSandboxManager::trustsUncontrolledApis() (jni_sandbox_refuses_uncontrolled_code())
     if (!info) {
         info = new QoreHashNode(autoTypeInfo);
     }
@@ -534,9 +541,9 @@ static bool jni_exported_import_allowed(const QoreProgram* pgm, std::string& ref
     }
     return true;
 #else
-    // trust only, not QoreSandboxManager::restricts(): importing a Java class is a direct use of an uncontrolled API,
-    // which the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing but does not trust the
-    // code still refuses it
+    // trust only, as for the jdbc driver and check_class_option(): importing a Java class is a direct use of an
+    // uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing but does
+    // not trust the code still refuses it
     if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         refused = "sandboxed code cannot import Java classes";
         return false;
@@ -756,9 +763,9 @@ static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, 
         throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command %s, so it cannot be used in a Program "
             "that does not allow uncontrolled APIs", cmd, what);
     }
-    // trust only, not QoreSandboxManager::restricts(): the module command is a direct use of an uncontrolled API, which
-    // the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing but does not trust the code
-    // still refuses it
+    // trust only, as for the jdbc driver and check_class_option(): the module command is a direct use of an
+    // uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing but does
+    // not trust the code still refuses it
     if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"%s\" module command, which %s",
             cmd, what);
@@ -1006,9 +1013,9 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
     // a sandboxed Program defines classes only in its own loader: in the loader of another Program, its byte code
     // would become the class that the other Program, and every Program that it serves, loads under that name
     if (!env.isSameObject(define_loader, jpc->getClassLoader())) {
-        // trust only, not QoreSandboxManager::restricts(): defining a class in another Program's loader is a direct use
-        // of an uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that restricts
-        // nothing but does not trust the code still refuses it
+        // trust only, as for the jdbc driver and check_class_option(): defining a class in another Program's loader is
+        // a direct use of an uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that
+        // restricts nothing but does not trust the code still refuses it
         if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
             throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"define-class\" module "
                 "command to define class '%s', which belongs to another Program", binary_name.c_str());

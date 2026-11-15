@@ -3,12 +3,11 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 # The jdbc database driver is uncontrolled Java code: it resolves and connects to its destinations in Java, where the
-# sandbox network policy cannot be applied to them (qore#5747), and does its other I/O there too.  With the restriction
-# API of sandboxes (jni module info key "sandbox_restricts_api"), it is refused to code that a governing sandbox
-# restricts in any way (network, filesystem, resource limits) and does not trust with uncontrolled APIs; without it,
-# to code that a sandbox network policy restricts.  A SandboxManager that is attached but restricts nothing (an
-# allow-all manager, which Qorus attaches to every trusted interface for interruptible I/O) does not restrict the
-# code, and the driver connects for it
+# sandbox network policy cannot be applied to them (qore#5747), and does its other I/O there too.  With the sandbox
+# API that has QoreSandboxManager::trustsUncontrolledApis() (jni module info key "sandbox_restricts_api"), it is
+# refused unless the governing sandbox trusts the code with uncontrolled APIs (every member of a composition), whatever
+# the sandbox restricts; without it, it is refused to code that a sandbox network policy restricts, so a SandboxManager
+# that is attached but restricts nothing (an allow-all manager) does not refuse it
 
 %modern
 %no-child-restrictions
@@ -23,8 +22,24 @@ class JniJdbcNetworkSandboxTest inherits QUnit::Test {
         #! no driver accepts this URL, so a connection that is not refused fails with the driver's error
         const Url = "jdbc:u/p@ignored{url=qore-none://127.0.0.1:1/x}";
 
-        #! the error of a connection that was not refused
-        const NoDriver = "JNI-ERROR";
+        #! the result of a connection that was not refused: the driver manager finds no driver for the URL
+        /** reported by result_err() (ErrSource) for a JNI-ERROR whose description is the driver manager's, so that
+            any other JNI-ERROR does not count as a connection that was not refused
+        */
+        const NoDriver = "NO-DRIVER";
+
+        #! the description of the error of a connection that was not refused
+        const NoDriverDesc = "java.sql.SQLException: No suitable driver found for jdbc:";
+
+        #! the code that every Program of the test has: the result of an error of a connection
+        const ErrSource = "
+string sub result_err(hash<ExceptionInfo> ex) {
+    if (ex.err == \"JNI-ERROR\") {
+        return ex.desc.equalPartial(\"" + NoDriverDesc + "\") ? \"" + NoDriver + "\" : ex.err + \": \" + ex.desc;
+    }
+    return ex.err;
+}
+";
 
         const Denied = "NETWORK-ACCESS-DENIED";
 
@@ -36,7 +51,7 @@ string sub open_url(string url) {
         ds.open();
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 ";
@@ -48,7 +63,7 @@ string sub open_pool(string url) {
         DatasourcePool dsp(url);
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 ";
@@ -59,7 +74,7 @@ string sub open_barrier(string url) {
     try {
         return SandboxManager::callWithSystemPolicy(\\open_url(), url);
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 
@@ -74,7 +89,7 @@ string sub connect_socket() {
         s.connect(\"127.0.0.1:1\", 1s);
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 
@@ -82,7 +97,7 @@ string sub socket_barrier() {
     try {
         return SandboxManager::callWithSystemPolicy(\\connect_socket());
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 ";
@@ -92,7 +107,7 @@ string sub socket_barrier() {
         addTestCase("sandboxed code cannot connect", \sandboxedTest());
         addTestCase("a sandbox that restricts the network and allows the destination does not allow the connection",
             \allowedPolicyTest());
-        addTestCase("an allow-all manager does not restrict the connection", \allowAllTest());
+        addTestCase("an allow-all manager: trusted, and without the API", \allowAllTest());
         addTestCase("every kind of network restriction refuses the connection", \restrictingPolicyTest());
         addTestCase("a restricting policy refuses a pool and a trusted Datasource", \restrictingPoolTest());
         addTestCase("sandboxed code cannot use a pool", \poolTest());
@@ -102,10 +117,10 @@ string sub socket_barrier() {
         addTestCase("a trusted Datasource used by sandboxed code", \trustedDatasourceTest());
         addTestCase("the options are not processed for a refused connection", \optionsTest());
         addTestCase("a sandbox that trusts the code with uncontrolled APIs does not refuse it", \trustedSandboxTest());
-        addTestCase("every kind of sandbox restriction refuses the connection", \restrictsApiTest());
-        addTestCase("a sandbox that trusts the code connects despite its restrictions", \restrictsApiTrustTest());
+        addTestCase("a sandbox that does not trust the code refuses it whatever it restricts", \restrictsApiTest());
+        addTestCase("a sandbox that trusts the code connects whatever it restricts", \restrictsApiTrustTest());
         addTestCase("compositions of sandboxes", \restrictsApiCompositionTest());
-        addTestCase("allow-all composition connects (develop #208 refusal)", \allowAllCompositionTest());
+        addTestCase("a composition of trusting allow-all managers connects", \trustingCompositionTest());
         addTestCase("trusted code in a system-policy call connects for a sandboxed caller",
             \restrictsApiSystemPolicyTest());
         set_return_value(main());
@@ -130,14 +145,14 @@ string sub socket_barrier() {
     private static Program getSandboxed(string source, *SandboxManager sm) {
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(sm ?? new SandboxManager());
-        p.parse(source, "jni-jdbc-network-sandboxed");
+        p.parse(ErrSource + source, "jni-jdbc-network-sandboxed");
         return p;
     }
 
     #! Returns a trusted Program with the code given
     private static Program getTrusted(string source) {
         Program p(PO_NEW_STYLE);
-        p.parse(source, "jni-jdbc-network-trusted");
+        p.parse(ErrSource + source, "jni-jdbc-network-trusted");
         return p;
     }
 
@@ -162,17 +177,17 @@ string sub socket_barrier() {
         sm.setNetworkDefaultPolicy(True);
         call_object_method(sm, "setUncontrolledApiPolicy", True);
         assertEq(NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "a trusting sandbox");
-        # a sandbox that does not trust the code and restricts nothing (an allow-all manager) does not refuse it
-        # either
-        assertEq(NoDriver, getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url),
+        # a sandbox that does not trust the code and restricts nothing (an allow-all manager) refuses it with the API
+        # (trust only); without it, only a network policy that restricts refuses it
+        assertEq(allowAllResult(), getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url),
             "an allow-all sandbox that does not trust the code");
         # one that does not trust the code and restricts its network refuses it
         SandboxManager deny = allowAll();
         deny.blockPrivateNetworks();
         assertEq(Denied, getSandboxed(OpenSource, deny).callFunction("open_url", Url),
             "a restricting sandbox that does not trust the code");
-        # a trusting sandbox that restricts the network: the trust of the sandbox exempts the code only with the
-        # restriction API; without it, the network policy decides, as for any sandbox
+        # a trusting sandbox that restricts the network: the trust of the sandbox exempts the code only with the API;
+        # without it, the network policy decides, as for any sandbox
         SandboxManager tsm = allowAll();
         tsm.blockPrivateNetworks();
         call_object_method(tsm, "setUncontrolledApiPolicy", True);
@@ -188,7 +203,7 @@ string sub socket_barrier() {
         assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url));
     }
 
-    #! returns an allow-all manager, as Qorus attaches to its trusted interfaces
+    #! returns an allow-all manager, which restricts nothing and does not trust the code with uncontrolled APIs
     private static SandboxManager allowAll() {
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(True);
@@ -196,19 +211,32 @@ string sub socket_barrier() {
         return sm;
     }
 
+    #! the result of a connection for code that an allow-all manager that does not trust it governs
+    /** with the API, the driver is refused to code that its sandbox does not trust, whatever the sandbox restricts;
+        without it, only a network policy that restricts refuses it
+    */
+    private static string allowAllResult() {
+        return restrictsApi() ? Denied : NoDriver;
+    }
+
     allowAllTest() {
-        # the connection is not refused: it fails with the error of the missing driver, as for code with no manager
-        assertEq(NoDriver, getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url));
-        assertEq(NoDriver, getSandboxed(PoolSource, allowAll()).callFunction("open_pool", Url), "pool");
+        # without the API, an allow-all manager does not refuse the connection: it fails with the error of the missing
+        # driver, as for code with no manager; with the API, it refuses it unless it trusts the code
+        assertEq(allowAllResult(), getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url));
+        assertEq(allowAllResult(), getSandboxed(PoolSource, allowAll()).callFunction("open_pool", Url), "pool");
         # a connection to a closed local port fails with the driver's error
-        assertEq(NoDriver, getSandboxed(OpenSource, allowAll()).callFunction("open_url",
+        assertEq(allowAllResult(), getSandboxed(OpenSource, allowAll()).callFunction("open_url",
             "jdbc:u/p@ignored{url=qore-none://127.0.0.1:9/x}"), "closed port");
-        # without the restriction API, only the network policy counts: a restricted filesystem does not refuse a
-        # connection; with it, a restricted filesystem refuses it (restrictsApiTest())
+        # without the API, only the network policy counts: a restricted filesystem does not refuse a connection
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(True);
-        assertEq(restrictsApi() ? Denied : NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url),
+        assertEq(allowAllResult(), getSandboxed(OpenSource, sm).callFunction("open_url", Url),
             "network allow-all only");
+        if (restrictsApi()) {
+            # an allow-all manager that trusts the code connects
+            assertEq(NoDriver, getSandboxed(OpenSource, trusting()).callFunction("open_url", Url), "trusting");
+            assertEq(NoDriver, getSandboxed(PoolSource, trusting()).callFunction("open_pool", Url), "trusting pool");
+        }
     }
 
     restrictingPolicyTest() {
@@ -260,12 +288,12 @@ string sub open_ds(Datasource ds) {
         ds.open();
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 ";
         assertEq(Denied, getSandboxed(src, sm).callFunction("open_ds", ds), "restricting");
-        assertEq(NoDriver, getSandboxed(src, allowAll()).callFunction("open_ds", ds), "allow-all");
+        assertEq(allowAllResult(), getSandboxed(src, allowAll()).callFunction("open_ds", ds), "allow-all");
     }
 
     poolTest() {
@@ -284,7 +312,7 @@ string sub run(string url) {
     try {
         return SandboxManager::callWithSystemPolicy(\\open_url(), url);
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err + \": \" + ex.desc;
+        return ex.err == \"JNI-ERROR\" ? result_err(ex) : ex.err + \": \" + ex.desc;
     }
 }
 
@@ -359,7 +387,7 @@ string sub open_ds(Datasource ds) {
         ds.open();
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 ");
@@ -369,7 +397,8 @@ string sub open_ds(Datasource ds) {
             ds.open();
             fail("the connection was not refused by the missing driver");
         } catch (hash<ExceptionInfo> ex) {
-            assertEq(NoDriver, ex.err, "trusted code after the refusal");
+            assertEq("JNI-ERROR", ex.err, "trusted code after the refusal");
+            assertTrue(ex.desc.equalPartial(NoDriverDesc), "trusted code after the refusal: " + ex.desc);
         }
     }
 
@@ -383,7 +412,7 @@ string sub open_options() {
         ds.open();
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 ";
@@ -437,19 +466,18 @@ string sub open_options() {
 
     restrictsApiTest() {
         skipIfNoRestrictsApi();
-        # an allow-all manager connects, also with an allowed host pattern, which matters only with a default policy
-        # that denies
-        assertEq(NoDriver, getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url), "allow-all");
+        # a sandbox that restricts nothing but does not trust the code refuses it: an allow-all manager, also with an
+        # allowed host pattern, and with a cleared interrupt request
+        assertEq(Denied, getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url), "allow-all");
         SandboxManager sm = allowAll();
         sm.addNetworkAllowedHost("*.example.com");
-        assertEq(NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "allowed host only");
-        # an interrupt request is no restriction
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "allowed host only");
         sm = allowAll();
         sm.requestInterrupt();
         sm.clearInterrupt();
-        assertEq(NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "interrupt cleared");
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "interrupt cleared");
 
-        # every dimension refuses it alone, also a pool and a Datasource that trusted code made
+        # whatever it restricts, also a pool and a Datasource that trusted code made
         Datasource ds(Url);
         string src = OpenSource + PoolSource + "
 string sub open_ds(Datasource ds) {
@@ -457,7 +485,7 @@ string sub open_ds(Datasource ds) {
         ds.open();
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return result_err(ex);
     }
 }
 ";
@@ -470,12 +498,12 @@ string sub open_ds(Datasource ds) {
         # the refusal names the rule
         try {
             Datasource rds(Url);
-            Program p = getSandboxed("sub run(Datasource ds) { ds.open(); }", restricted(restrictions()[0]));
+            Program p = getSandboxed("sub run(Datasource ds) { ds.open(); }", allowAll());
             p.callFunction("run", rds);
             fail("not refused");
         } catch (hash<ExceptionInfo> ex) {
             assertEq(Denied, ex.err);
-            assertRegex("restricts and does not trust with uncontrolled APIs", ex.desc);
+            assertRegex("code that a sandbox does not trust with uncontrolled APIs", ex.desc);
         }
     }
 
@@ -512,7 +540,7 @@ string sub open_ds(Datasource ds) {
             SandboxManager outer = allowAll();
             outer.addFilesystemDeniedPath("/etc");
             Program ip = getSandboxed("string sub rd() { try { ReadOnlyFile f(\"/etc/passwd\"); return \"ok\"; } "
-                "catch (hash<ExceptionInfo> ex) { return ex.err; } }", allowAll());
+                "catch (hash<ExceptionInfo> ex) { return result_err(ex); } }", allowAll());
             Program op = getSandboxed("code sub make(Program p) { return string sub () { "
                 "return p.callFunction(\"rd\"); }; }", outer);
             code c = op.callFunction("make", ip);
@@ -520,8 +548,11 @@ string sub open_ds(Datasource ds) {
             assertEq("ok", ip.callFunction("rd"), "the inner member alone");
         }
         skipIfNoRestrictsApi();
-        # a composition restricts if any member does, and trusts the code only if every member does
-        assertEq(NoDriver, composed(allowAll(), allowAll()), "allow-all members");
+        # a composition trusts the code only if every member does, whatever the members restrict
+        assertEq(Denied, composed(allowAll(), allowAll()), "allow-all members that do not trust the code");
+        assertEq(NoDriver, composed(trusting(), trusting()), "allow-all members that trust the code");
+        assertEq(Denied, composed(trusting(), allowAll()), "one allow-all member that does not trust the code");
+        assertEq(Denied, composed(allowAll(), trusting()), "one allow-all member that does not trust the code, inner");
         foreach hash<auto> r in (restrictions()) {
             assertEq(Denied, composed(allowAll(), restricted(r)), r.name + ": restricting inner member");
             assertEq(Denied, composed(restricted(r), allowAll()), r.name + ": restricting outer member");
@@ -571,20 +602,26 @@ string sub call_cap(code c) { return c(); }
         }
     }
 
-    #! code that two allow-all sandboxes govern together connects (the refusal of develop #208)
+    #! code that two allow-all sandboxes that trust it govern together connects
     /** a closure of one allow-all sandboxed Program calls another allow-all sandboxed Program, so the governing
-        sandbox is the composition of two allow-all managers, as when Qorus runs the callbacks, closures and mappers of
-        one trusted interface Program, each of which has an allow-all manager, with the code of another on the stack.
-        The composition restricts nothing, so the jdbc driver connects: it fails for the missing driver.
+        sandbox is the composition of two allow-all managers, as when the callbacks, closures and mappers of one
+        interface Program, each of which has an allow-all manager, run with the code of another on the stack.  With the
+        API, the composition trusts the code if every member trusts it, so the jdbc driver connects (it fails for the
+        missing driver), and it refuses it if a member does not trust it.
 
-        Without the restriction API of sandboxes, module code cannot read the members of a composition, whose own
-        configuration denies the network, so the driver refuses it (NETWORK-ACCESS-DENIED), as develop #208 does; the
-        restriction API (QoreSandboxManager::restricts(), the OR over the members) fixes it
+        Without the API, module code cannot read the members of a composition, whose own configuration denies the
+        network, so the driver refuses it (NETWORK-ACCESS-DENIED), also when every member restricts nothing and
+        trusts the code: develop's network check (#208) refuses such a composition
     */
-    allowAllCompositionTest() {
-        # each manager alone connects
-        assertEq(NoDriver, getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url), "one allow-all manager");
-        assertEq(restrictsApi() ? NoDriver : Denied, composed(allowAll(), allowAll()),
-            "a composition of two allow-all managers");
+    trustingCompositionTest() {
+        bool policy = (new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy");
+        if (policy) {
+            # each manager alone connects
+            assertEq(NoDriver, getSandboxed(OpenSource, trusting()).callFunction("open_url", Url),
+                "one trusting allow-all manager");
+            assertEq(restrictsApi() ? NoDriver : Denied, composed(trusting(), trusting()),
+                "a composition of two trusting allow-all managers");
+        }
+        assertEq(Denied, composed(allowAll(), allowAll()), "a composition of two allow-all managers");
     }
 }
