@@ -382,7 +382,7 @@ void setup_jdbc_driver() {
     methods.add(QDBI_METHOD_OPT_SET, jdbc_opt_set);
     methods.add(QDBI_METHOD_OPT_GET, jdbc_opt_get);
 
-#if defined(QDBI_METHOD_GET_CONNECT_TARGETS) && defined(QORE_JNI_JDBC_SANDBOX_DRIVERS)
+#ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
     // the destinations of a connection for Qore's sandbox check (the planned Qore side of qore#5747): the URL's
     // destinations for an audited driver profile, NETWORK-ACCESS-DENIED otherwise (qore#5786); jdbc does not declare
     // DBI_CAP_LOCAL_ONLY

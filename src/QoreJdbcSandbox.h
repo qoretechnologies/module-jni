@@ -46,6 +46,12 @@
 #define QORE_JNI_JDBC_SANDBOX_DRIVERS 1
 #endif
 
+// Qore-5747 mode: with the planned Qore side of qore#5747 (QDBI_METHOD_GET_CONNECT_TARGETS), Qore's checked
+// destinations decide; only together with the per-driver enforcement, so that the driver method and the decision agree
+#if defined(QDBI_METHOD_GET_CONNECT_TARGETS) && defined(QORE_JNI_JDBC_SANDBOX_DRIVERS)
+#define QORE_JNI_JDBC_QORE_CHECKED_TARGETS 1
+#endif
+
 namespace jni {
 
 class Env;
@@ -57,14 +63,48 @@ struct JdbcConnectDecision {
     //! true if the connection is restricted: it is made only with an audited driver, through the guard
     bool restricted = false;
 
-    //! the policy that the destinations must pass, for the module-side check; null in Qore-5747 mode
+    //! the policy of the thread that the destinations must pass, for the module-side check, if it restricts it
     std::unique_ptr<QoreSandboxManagerHelper> policy;
+
+    //! the policy that restricted the connection object first (JdbcStickyRestriction), if any; not referenced here
+    QoreSandboxManager* sticky_policy = nullptr;
 
     //! the destinations that Qore checked (Qore-5747 mode: QDBI_METHOD_GET_CONNECT_TARGETS), or nullptr
     const QoreListNode* qore_checked = nullptr;
 
     //! Returns the policies that the module-side check applies
     DLLLOCAL std::vector<QoreSandboxManager*> managers() const;
+};
+
+//! Keeps a jdbc connection object restricted for its lifetime once it was restricted (qore#5786)
+/** A reconnect is decided again, for the code that runs then, but a connection object that was restricted once stays
+    restricted, also when trusted code's statement makes it reconnect: its guard is built again, and its URL and
+    destinations are checked again against the policy that restricted it first (and the thread's, if it restricts
+    the code too).  Only jdbc_connect_decision() reads or changes it.
+*/
+class JdbcStickyRestriction {
+public:
+    DLLLOCAL JdbcStickyRestriction() = default;
+
+    DLLLOCAL ~JdbcStickyRestriction() {
+        if (sm) {
+            ExceptionSink xsink;
+            sm->deref(&xsink);
+            xsink.clear();
+        }
+    }
+
+private:
+    friend int jdbc_connect_decision(Datasource* ds, JdbcStickyRestriction& sticky, JdbcConnectDecision& d,
+        ExceptionSink* xsink);
+
+    //! true once the connection object was restricted
+    bool restricted = false;
+    //! the policy that restricted it first (referenced), or nullptr (Qore-5747 mode: Qore checked it)
+    QoreSandboxManager* sm = nullptr;
+
+    JdbcStickyRestriction(const JdbcStickyRestriction&) = delete;
+    JdbcStickyRestriction& operator=(const JdbcStickyRestriction&) = delete;
 };
 
 //! Decides whether a jdbc connection is restricted, and by which policy: the only place that knows the policy source
@@ -75,17 +115,34 @@ struct JdbcConnectDecision {
     that the thread's policy allows, which is not the qore#6142 rule (the code that chose the datasource decides).
     The chooser record of qore#6142 Option A, or the Qore side of qore#5747, replaces this function only.
 
-    With a %Qore library that has \c QDBI_METHOD_GET_CONNECT_TARGETS (the planned Qore side of qore#5747), Qore
-    decides: a connection is restricted if Qore checked its destinations (\c Datasource::getCheckedConnectTargets()),
-    and the checked destinations are used.
+    With a %Qore library that has \c QDBI_METHOD_GET_CONNECT_TARGETS (the planned Qore side of qore#5747), a
+    connection is restricted if Qore checked its destinations (\c Datasource::getCheckedConnectTargets()), and the
+    checked destinations are used; without checked destinations the thread's rule above is the floor, so a missing
+    check never makes a restricted caller's connection unrestricted.
+
+    A connection object that was restricted once stays restricted (\a sticky).
 
     @param ds the datasource
+    @param sticky the restriction of the connection object, which is updated
     @param d receives the decision
     @param xsink receives the exception of a refusal
 
     @return 0 for success, -1 if an exception was raised
 */
-DLLLOCAL int jdbc_connect_decision(Datasource* ds, JdbcConnectDecision& d, ExceptionSink* xsink);
+DLLLOCAL int jdbc_connect_decision(Datasource* ds, JdbcStickyRestriction& sticky, JdbcConnectDecision& d,
+    ExceptionSink* xsink);
+
+//! Returns true if the SQL of the running code must be screened on a connection without a guard (qore#6142)
+/** PROVISIONAL, with the policy source of jdbc_connect_decision(): the code that runs on the thread is restricted.
+    A connection that trusted code opened has no guard; when restricted code uses it, the SQL check of the profile of
+    its URL applies (jdbc_check_sql_for_url()).
+*/
+DLLLOCAL bool jdbc_statement_restricted();
+
+//! Checks SQL of restricted code for a connection without a guard by the profile of its URL (qore#6142)
+/** @throw jni::Exception (JNI-SANDBOX-ERROR) the SQL is not allowed
+*/
+DLLLOCAL void jdbc_check_sql_for_url(Env& env, const char* url, const char* sql, jobject connection);
 
 //! Holds the JdbcSandboxConnect object of a restricted connection; closes its guard when it is released
 /** The guard is closed (its sockets refuse to connect, and its token is removed from the registry) when the holder
@@ -177,7 +234,7 @@ DLLLOCAL void jdbc_sandbox_init(Env& env);
 //! Releases the global references of jdbc_sandbox_init()
 DLLLOCAL void jdbc_sandbox_cleanup();
 
-#ifdef QDBI_METHOD_GET_CONNECT_TARGETS
+#ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
 //! QDBI_METHOD_GET_CONNECT_TARGETS: the destinations of a jdbc connection for Qore's sandbox check (qore#5747)
 /** Raises \c NETWORK-ACCESS-DENIED for a URL of a driver without a profile, or with an option that a restricted
     connection may not use.  Whether Qore calls this for restricted connections only is left to the qore#5747 design.

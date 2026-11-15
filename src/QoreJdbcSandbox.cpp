@@ -67,6 +67,8 @@ jmethodID methodConnect = nullptr;
 jmethodID methodCheckSql = nullptr;
 //! void close()
 jmethodID methodClose = nullptr;
+//! static void checkSqlForUrl(String, String, Object)
+jmethodID methodCheckSqlForUrl = nullptr;
 
 //! SingleStoreProfile.adapterBytes0(): the class bytes of the SingleStore adapter
 /** PROVISIONAL (design section 11, item 10): the adapter is built in to the module; see
@@ -169,7 +171,7 @@ void jdbc_pin_checked(Env& env, jobject prep, const std::vector<JniCheckedTarget
     env.callVoidMethod(prep, methodPin, &jarg);
 }
 
-#ifdef QDBI_METHOD_GET_CONNECT_TARGETS
+#ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
 //! Pins the destinations that Qore checked (Qore-5747 mode), after comparing them with the URL's destinations
 /** @return 0 for success, -1 if an exception was raised
 */
@@ -274,38 +276,74 @@ std::vector<QoreSandboxManager*> JdbcConnectDecision::managers() const {
     if (policy && *policy) {
         rv.push_back(policy->get());
     }
+    if (sticky_policy && (rv.empty() || rv[0] != sticky_policy)) {
+        rv.push_back(sticky_policy);
+    }
     return rv;
 }
 
-int jdbc_connect_decision(Datasource* ds, JdbcConnectDecision& d, ExceptionSink* xsink) {
+bool jdbc_statement_restricted() {
+    // PROVISIONAL: the policy source of jdbc_connect_decision()
+    return jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Policy);
+}
+
+void jdbc_check_sql_for_url(Env& env, const char* url, const char* sql, jobject connection) {
+    LocalReference<jstring> jurl = env.newString(url);
+    LocalReference<jstring> jsql = env.newString(sql);
+    jvalue jargs[3];
+    jargs[0].l = jurl;
+    jargs[1].l = jsql;
+    jargs[2].l = connection;
+    env.callStaticVoidMethod(classJdbcSandboxConnect, methodCheckSqlForUrl, jargs);
+}
+
+int jdbc_connect_decision(Datasource* ds, JdbcStickyRestriction& sticky, JdbcConnectDecision& d,
+        ExceptionSink* xsink) {
     d.restricted = false;
     d.policy.reset();
+    d.sticky_policy = nullptr;
     d.qore_checked = nullptr;
-#ifdef QDBI_METHOD_GET_CONNECT_TARGETS
-    // the Qore side of qore#5747: Qore checked the destinations against the policy of the code that chose them, and
-    // its decision is final
+#ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
+    // the Qore side of qore#5747: Qore checked the destinations against the policy of the code that chose them
     if (const QoreListNode* checked = ds->getCheckedConnectTargets()) {
         d.restricted = true;
         d.qore_checked = checked;
+        sticky.restricted = true;
+        return 0;
     }
-    return 0;
-#else
+    // no checked destinations: the thread's rule below is the floor
+#endif
     // PROVISIONAL (design section 6 / 11, item 1): the thread decides, until the chooser record of qore#6142 Option A
     // or the Qore side of qore#5747 replaces this function: a sandbox that does not allow uncontrolled APIs governs
     // the code that opens the connection; its network policy applies to the destinations
-    if (!jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Policy)) {
-        return 0;
+    if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Policy)) {
+        d.restricted = true;
+        d.policy.reset(new QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy));
+        if (!*d.policy) {
+            // a missing policy is not a permission
+            xsink->raiseException("NETWORK-ACCESS-DENIED", "the sandbox policy of the JDBC connection cannot be "
+                "determined");
+            return -1;
+        }
+        if (!sticky.restricted) {
+            // the connection object stays restricted, with the policy that restricted it first
+            sticky.restricted = true;
+            sticky.sm = d.policy->get();
+            sticky.sm->ref();
+        }
     }
-    d.restricted = true;
-    d.policy.reset(new QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy));
-    if (!*d.policy) {
-        // a missing policy is not a permission
-        xsink->raiseException("NETWORK-ACCESS-DENIED", "the sandbox policy of the JDBC connection cannot be "
-            "determined");
-        return -1;
+    if (sticky.restricted) {
+        // also a reconnect for other code: a connection object that was restricted once stays restricted
+        d.restricted = true;
+        d.sticky_policy = sticky.sm;
+        if (!d.policy && !sticky.sm) {
+            // restricted by Qore's check, which is not available for this connection: no policy to check against
+            xsink->raiseException("NETWORK-ACCESS-DENIED", "the JDBC connection was restricted, and its destinations "
+                "cannot be checked again for this connection");
+            return -1;
+        }
     }
     return 0;
-#endif
 }
 
 void JdbcGuardHolder::close() {
@@ -317,8 +355,9 @@ void JdbcGuardHolder::close() {
     // close() failed), which is restored afterwards
     QoreCancelDeferralHelper cancel_deferral;
     try {
-        Env env;
-        JNIEnv* jenv = Jvm::getEnv();
+        // not Env, whose constructor sets the class loader context and can raise; only attaching the thread can
+        // fail, when the JVM cannot be used at all
+        JNIEnv* jenv = Jvm::attachAndGetEnv();
         jthrowable pending = jenv->ExceptionOccurred();
         if (pending) {
             jenv->ExceptionClear();
@@ -382,7 +421,7 @@ int jdbc_prepare_guarded(Env& env, const JdbcConnectDecision& d, const char* url
         holder.reset(jdbc_prepare_java(env, url, user, pass).makeGlobal());
         std::vector<JniNetTarget> targets;
         jdbc_get_targets(env, holder.get(), targets);
-#ifdef QDBI_METHOD_GET_CONNECT_TARGETS
+#ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
         if (d.qore_checked) {
             if (jdbc_pin_qore_checked(env, holder.get(), targets, d.qore_checked, xsink)) {
                 holder.close();
@@ -420,7 +459,8 @@ void jdbc_guarded_check_sql(Env& env, const JdbcGuardHolder& holder, const char*
 }
 
 void jdbc_sandbox_init(Env& env) {
-    // in the bootstrap class loader, so that every class loader finds the same classes; superclasses first
+    // in the bootstrap class loader, so that every class loader finds the same classes, or, when the JVM started Qore
+    // (JVM-primary bootstrap), the classes of qore-jni.jar in the application class loader; superclasses first
     Globals::findDefineClass(env, "org.qore.jni.jdbc.JdbcConnectGuard", nullptr,
         java_org_qore_jni_JdbcConnectGuard_class, java_org_qore_jni_JdbcConnectGuard_class_len);
     Globals::findDefineClass(env, "org.qore.jni.jdbc.GuardedSocket", nullptr, java_org_qore_jni_GuardedSocket_class,
@@ -449,13 +489,15 @@ void jdbc_sandbox_init(Env& env) {
     methodConnect = env.getMethod(classJdbcSandboxConnect, "connect", "()Ljava/lang/AutoCloseable;");
     methodCheckSql = env.getMethod(classJdbcSandboxConnect, "checkSql", "(Ljava/lang/String;)V");
     methodClose = env.getMethod(classJdbcSandboxConnect, "close", "()V");
+    methodCheckSqlForUrl = env.getStaticMethod(classJdbcSandboxConnect, "checkSqlForUrl",
+        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/Object;)V");
 }
 
 void jdbc_sandbox_cleanup() {
     classJdbcSandboxConnect = nullptr;
 }
 
-#ifdef QDBI_METHOD_GET_CONNECT_TARGETS
+#ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
 QoreListNode* jdbc_get_connect_targets(Datasource* ds, ExceptionSink* xsink) {
     std::string url = jdbc_datasource_url(ds);
     try {

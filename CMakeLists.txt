@@ -1070,7 +1070,8 @@ generate_java(org/qore/jni/QoreClassFileLocator.java)
 generate_java(org/qore/jni/QoreJavaFileObject.java)
 generate_java(org/qore/jni/QoreJavaObjectPtr.java)
 # qore#5786: the per-driver sandbox enforcement of the jdbc driver; the classes are defined in the bootstrap class
-# loader, where every class loader finds them, and none of them may be declared sandbox-aware
+# loader, where every class loader finds them (with a JVM-primary bootstrap, they come from qore-jni.jar in the
+# application class loader), and none of them may be declared sandbox-aware
 generate_java(org/qore/jni/jdbc/JdbcConnectGuard.java)
 generate_java(org/qore/jni/jdbc/GuardedSocket.java)
 generate_java(org/qore/jni/jdbc/RedshiftGuardSocketFactory.java)

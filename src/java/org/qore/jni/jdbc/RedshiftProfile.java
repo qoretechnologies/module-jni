@@ -73,6 +73,10 @@ final class RedshiftProfile extends JdbcDriverProfile {
     private static final String SOCKET_FACTORY_ARG = "socketfactoryarg";
     private static final String INI_FILE = "inifile";
 
+    //! the forced keys, as the driver's parse gives them
+    private static final Set<String> FORCED = Set.of(SOCKET_FACTORY, SOCKET_FACTORY_ARG, INI_FILE, "sslkey",
+        "sslcert", "preferpq");
+
     //! PROVISIONAL: the only sslmode of restricted connections (design section 11, item 9)
     private static final String SSL_MODE = "verify-full";
 
@@ -170,6 +174,10 @@ final class RedshiftProfile extends JdbcDriverProfile {
             }
             checkOption(token.substring(0, pos), seen);
         }
+        if (!seen.contains("user") && !seen.contains("uid")) {
+            // the driver's default user is the name of the process owner
+            throw deny("a sandboxed Redshift connection must give its user");
+        }
         return targets;
     }
 
@@ -207,6 +215,12 @@ final class RedshiftProfile extends JdbcDriverProfile {
         // PROVISIONAL: TLS with host name validation also if the driver's default changes; the URL may give the same
         // value only
         f.setProperty("sslmode", SSL_MODE);
+        // no client key or certificate: the driver would present ~/.redshift/redshift.pk8 and redshift.crt of the
+        // process owner, and could prompt on the console for the key's password (LibPQFactory)
+        f.setProperty("sslkey", "");
+        f.setProperty("sslcert", "");
+        // no JVM-wide Security.addProvider() of BouncyCastle for post-quantum key exchange (BcProviderRegistrar)
+        f.setProperty("preferpq", "false");
         return f;
     }
 
@@ -247,8 +261,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
         }
         for (String key : res.stringPropertyNames()) {
             String lk = key.toLowerCase(Locale.ENGLISH);
-            if (!ALLOWED.contains(lk) && !PARSE_KEYS.contains(lk) && !lk.equals(SOCKET_FACTORY)
-                    && !lk.equals(SOCKET_FACTORY_ARG) && !lk.equals(INI_FILE)) {
+            if (!ALLOWED.contains(lk) && !PARSE_KEYS.contains(lk) && !FORCED.contains(lk)) {
                 throw deny("the Redshift driver's parse of the URL gives option %s, which is not allowed for "
                     + "sandboxed connections", quote(key));
             }
@@ -258,6 +271,9 @@ final class RedshiftProfile extends JdbcDriverProfile {
         requireValue(res, SOCKET_FACTORY_ARG, token);
         requireValue(res, INI_FILE, iniFile());
         requireValue(res, "iamauth", "false");
+        requireValue(res, "sslkey", "");
+        requireValue(res, "sslcert", "");
+        requireValue(res, "preferpq", "false");
         String v = res.getProperty("sslmode");
         if (!SSL_MODE.equals(v)) {
             throw deny("option sslmode value %s is not allowed for sandboxed Redshift connections; only %s is", quote(v),

@@ -74,7 +74,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
     //! the options that affect only the protocol or the session (lowercase)
     private static final Set<String> ALLOWED = lower(Set.of(
         "user", "password", "autocommit", "useMysqlMetadata", "useMysqlVersion", "nullDatabaseMeansCurrent",
-        "createDatabaseIfNotExist", "initSql", "defaultFetchSize", "maxQuerySizeToLog", "maxAllowedPacket",
+        "initSql", "defaultFetchSize", "maxQuerySizeToLog", "maxAllowedPacket",
         "geometryDefaultType", "transactionIsolation", "connectTimeout", "socketTimeout", "tcpKeepAlive",
         "tcpKeepIdle", "tcpKeepCount", "tcpKeepInterval", "tcpAbortiveClose", "useReadAheadInput", "sslMode",
         "serverSslCert", "enabledSslCipherSuites", "enabledSslProtocolSuites", "hostNameInCertificate",
@@ -89,8 +89,17 @@ final class SingleStoreProfile extends JdbcDriverProfile {
     private static final String ALLOW_LOCAL_INFILE = "allowLocalInfile";
     private static final String POOL = "pool";
     private static final String RESTRICTED_AUTH_KEY = "restrictedAuth";
+    private static final String CREATE_DATABASE = "createDatabaseIfNotExist";
+    private static final String SSL_MODE_KEY = "sslMode";
+    //! PROVISIONAL: the only TLS mode of restricted connections (design section 11, item 9)
+    static final String SSL_MODE = "verify-full";
     private static final Set<String> FORCED = lower(Set.of(SOCKET_FACTORY, ALLOW_LOCAL_INFILE, POOL,
-        RESTRICTED_AUTH_KEY, JdbcConnectGuard.PROPERTY));
+        RESTRICTED_AUTH_KEY, CREATE_DATABASE, SSL_MODE_KEY, JdbcConnectGuard.PROPERTY));
+
+    //! a database name: a plain identifier, as the driver quotes it in SQL and sends it in the handshake
+    private static final Pattern DATABASE = Pattern.compile("[A-Za-z0-9_$]{1,64}");
+    //! the value of vectorTypeOutputFormat, which the driver puts into a SET statement as given
+    private static final Pattern WORD = Pattern.compile("[A-Za-z0-9_]{1,32}");
 
     //! the adapter class of each driver class loader; defining it twice in a loader raises a LinkageError
     private static final WeakHashMap<ClassLoader, WeakReference<Class<?>>> adapters = new WeakHashMap<>();
@@ -192,11 +201,16 @@ final class SingleStoreProfile extends JdbcDriverProfile {
             }
         }
 
+        // the database: "/" up to the options
+        int q = tail.indexOf('?');
+        if (tail.startsWith("/")) {
+            checkDatabase(tail.substring(1, q < 0 ? tail.length() : q));
+        }
+
         Set<String> seen = new HashSet<>();
         for (String key : props.stringPropertyNames()) {
             checkOption(key, props.getProperty(key), seen);
         }
-        int q = tail.indexOf('?');
         if (q >= 0) {
             String args = tail.substring(q + 1);
             if (!args.isEmpty()) {
@@ -210,7 +224,19 @@ final class SingleStoreProfile extends JdbcDriverProfile {
                 }
             }
         }
+        if (!seen.contains("user")) {
+            // the driver's default user is the name of the process owner
+            throw deny("a sandboxed SingleStore connection must give its user");
+        }
         return targets;
+    }
+
+    //! checks the database of a URL: empty (none) or a plain identifier
+    private static void checkDatabase(String db) {
+        if (!db.isEmpty() && !DATABASE.matcher(db).matches()) {
+            throw deny("database %s of a sandboxed SingleStore connection must be a plain identifier "
+                + "([A-Za-z0-9_$], at most 64 characters)", quote(db));
+        }
     }
 
     //! checks an option against the allowlist, for duplicates, and its value
@@ -231,9 +257,18 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         if (value == null) {
             return;
         }
-        if ((lk.equals("initsql") || lk.equals("sessionvariables")) && hasLocalInfile(value)) {
+        // every value: the driver sends some of them as SQL during the connection (initSql, sessionVariables,
+        // vectorTypeOutputFormat)
+        if (hasLocalInfile(value)) {
             throw deny("option %s value with LOAD DATA LOCAL INFILE is not allowed for sandboxed connections, "
                 + "because the driver reads client files for it", lk);
+        }
+        if (lk.equals("vectortypeoutputformat") && !WORD.matcher(value).matches()) {
+            throw deny("option vectorTypeOutputFormat value %s of a sandboxed connection must be a word", quote(value));
+        }
+        if (lk.equals("sslmode") && !value.equals(SSL_MODE)) {
+            throw deny("option sslMode value %s is not allowed for sandboxed SingleStore connections; only %s is",
+                quote(value), SSL_MODE);
         }
         if (lk.equals("serversslcert") && !value.isEmpty() && !INLINE_PEM.matcher(value).matches()) {
             throw deny("option serverSslCert value of a sandboxed connection must be an inline PEM certificate, "
@@ -313,6 +348,8 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         f.setProperty(ALLOW_LOCAL_INFILE, "false");
         f.setProperty(POOL, "false");
         f.setProperty(RESTRICTED_AUTH_KEY, RESTRICTED_AUTH);
+        f.setProperty(CREATE_DATABASE, "false");
+        f.setProperty(SSL_MODE_KEY, SSL_MODE);
         return f;
     }
 
@@ -348,7 +385,8 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         }
         if (copy.get(JdbcConnectGuard.PROPERTY) != guard || !ADAPTER.equals(copy.get(SOCKET_FACTORY))
                 || !"false".equals(copy.get(ALLOW_LOCAL_INFILE)) || !"false".equals(copy.get(POOL))
-                || !RESTRICTED_AUTH.equals(copy.get(RESTRICTED_AUTH_KEY))) {
+                || !RESTRICTED_AUTH.equals(copy.get(RESTRICTED_AUTH_KEY)) || !"false".equals(copy.get(CREATE_DATABASE))
+                || !SSL_MODE.equals(copy.get(SSL_MODE_KEY))) {
             throw deny("the SingleStore driver's parse of the URL changes a forced option");
         }
 
@@ -370,6 +408,31 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         Properties nonMapped = (Properties)call(conf, "nonMappedOptions");
         if (nonMapped.size() != 1 || nonMapped.get(JdbcConnectGuard.PROPERTY) != guard) {
             throw deny("the SingleStore driver's parse of the URL has unknown options: %s", nonMapped.keySet());
+        }
+        if (!Boolean.FALSE.equals(call(conf, "createDatabaseIfNotExist"))) {
+            throw deny("the SingleStore driver's parse of the URL changes a forced option");
+        }
+        if (!"VERIFY_FULL".equals(String.valueOf(call(conf, "sslMode")))) {
+            throw deny("the SingleStore driver's parse of the URL gives the TLS mode %s; only %s is allowed",
+                call(conf, "sslMode"), SSL_MODE);
+        }
+        Object db = call(conf, "database");
+        if (db != null) {
+            checkDatabase(db.toString());
+        }
+        Object vf = call(conf, "vectorTypeOutputFormat");
+        if (vf != null && !WORD.matcher(vf.toString()).matches()) {
+            throw deny("option vectorTypeOutputFormat value of a sandboxed connection must be a word");
+        }
+        Object sv = call(conf, "sessionVariables");
+        if (sv != null) {
+            // the SQL as the driver builds it: "set " + Security.parseSessionVariables()
+            Class<?> sec = Class.forName("com.singlestore.jdbc.util.Security", false, driverClass.getClassLoader());
+            Object parsed = sec.getMethod("parseSessionVariables", String.class).invoke(null, sv.toString());
+            if (parsed != null && hasLocalInfile("set " + parsed)) {
+                throw deny("option sessionVariables value with LOAD DATA LOCAL INFILE is not allowed for sandboxed "
+                    + "connections, because the driver reads client files for it");
+            }
         }
         for (String m : new String[]{"initSql", "sessionVariables"}) {
             Object v = call(conf, m);
@@ -404,6 +467,18 @@ final class SingleStoreProfile extends JdbcDriverProfile {
                 rv, lexical);
         }
         return rv;
+    }
+
+    //! Refuses restricted connections while the JVM has a client key store
+    /** Without a \c keyStore option the driver presents the key of the \c javax.net.ssl.keyStore system property to
+        every server (DefaultTlsSocketPlugin.getKeyManager()), and no option turns that off.
+    */
+    @Override
+    void checkEnvironment() {
+        if (System.getProperty("javax.net.ssl.keyStore") != null) {
+            throw deny("sandboxed SingleStore connections are refused while the JVM has a client key store "
+                + "(javax.net.ssl.keyStore), which the driver would present to the server");
+        }
     }
 
     //! the driver rewrites JDBC escapes (NativeSql.parse()) before it sends the SQL and matches a file request

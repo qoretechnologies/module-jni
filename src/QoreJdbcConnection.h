@@ -197,11 +197,10 @@ public:
     //! Checks SQL before it is given to the driver of a restricted connection (SingleStore: LOAD DATA LOCAL INFILE)
     /** @throw jni::Exception (JNI-SANDBOX-ERROR) the SQL is not allowed
     */
-    DLLLOCAL void checkSql(Env& env, const char* sql) const {
-        if (guard) {
-            jdbc_guarded_check_sql(env, guard, sql);
-        }
-    }
+    /** A connection without a guard (trusted code opened it) is checked by the profile of its URL when restricted code
+        uses it (qore#6142, jdbc_statement_restricted()).
+    */
+    DLLLOCAL void checkSql(Env& env, const char* sql) const;
 
 #if 0
     DLLLOCAL DbType getDbType() const {
@@ -231,6 +230,12 @@ private:
 
     //! the connection guard of a restricted connection (qore#5786); closed when the connection is closed
     JdbcGuardHolder guard;
+
+    //! a connection object that was restricted once stays restricted, also when it reconnects (qore#5786)
+    JdbcStickyRestriction sticky;
+
+    //! the URL of the current connection
+    std::string connected_url;
 
     //! JDBC transaction mode; preserved when reconnecting before the first statement.
     bool transaction = false;

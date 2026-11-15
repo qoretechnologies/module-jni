@@ -129,7 +129,7 @@ static void jdbc_refuse_restricted(ExceptionSink* xsink) {
 
 int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
     JdbcConnectDecision d;
-    if (jdbc_connect_decision(ds, d, xsink)) {
+    if (jdbc_connect_decision(ds, sticky, d, xsink)) {
         return -1;
     }
     if (!d.restricted) {
@@ -174,7 +174,7 @@ int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
 int QoreJdbcConnection::prepareConnect(Env& env, const char* url, JdbcGuardHolder& holder, ExceptionSink* xsink) {
     assert(!holder);
     JdbcConnectDecision d;
-    if (jdbc_connect_decision(ds, d, xsink)) {
+    if (jdbc_connect_decision(ds, sticky, d, xsink)) {
         return -1;
     }
     if (!d.restricted) {
@@ -211,6 +211,7 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
     if (prepareConnect(env, url.c_str(), holder, xsink)) {
         return -1;
     }
+    connected_url = url.c_str();
 
     printd(5, "QoreJdbcConnection::connect() using URL '%s' (jpc: %p: %x) restricted: %d\n", url.c_str(), jpc,
         env.callIntMethod(jpc->getClassLoader(), jni::Globals::methodObjectHashCode, nullptr), (int)(bool)holder);
@@ -273,6 +274,19 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
         return -1;
     }
     return connectDone(env, xsink);
+}
+
+void QoreJdbcConnection::checkSql(Env& env, const char* sql) const {
+    if (guard) {
+        jdbc_guarded_check_sql(env, guard, sql);
+        return;
+    }
+#ifdef QORE_JNI_JDBC_SANDBOX_DRIVERS
+    // a connection that trusted code opened, used by restricted code (qore#6142): the SQL check of its URL's profile
+    if (connection && jdbc_statement_restricted()) {
+        jdbc_check_sql_for_url(env, connected_url.c_str(), sql, connection);
+    }
+#endif
 }
 
 int QoreJdbcConnection::connectDone(Env& env, ExceptionSink* xsink) {

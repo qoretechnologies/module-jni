@@ -40,8 +40,10 @@ import org.qore.jni.QoreException;
 
     The profiles are hard-coded: nothing can be added from %Qore or by properties.
 
-    The classes of this package are defined in the bootstrap class loader, so that every class loader finds them;
-    the \c java.sql module is not visible there, so the driver is used through reflection (see jdbcDriverClass()).
+    The classes of this package are defined in the bootstrap class loader when %Qore starts the JVM, so that every
+    class loader finds them; when the JVM starts %Qore (JVM-primary bootstrap), they come from \c qore-jni.jar in the
+    application class loader instead, the parent of the module's class loaders.  The \c java.sql module is not
+    visible to the bootstrap class loader, so the driver is used through reflection (see jdbcDriverClass()).
 */
 abstract class JdbcDriverProfile {
     //! the error of a refused connection
@@ -100,6 +102,12 @@ abstract class JdbcDriverProfile {
 
     //! Checks SQL that a restricted connection is given; nothing by default
     void checkSql(String sql) {
+    }
+
+    //! Checks the JVM-wide settings that the driver would use for a restricted connection; nothing by default
+    /** Called when the connection is prepared and again right before the driver connects.
+    */
+    void checkEnvironment() {
     }
 
     //! Returns true if checkSql() must also check the SQL as the driver rewrites it (Connection.nativeSQL())
