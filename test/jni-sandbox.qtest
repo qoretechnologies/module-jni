@@ -215,11 +215,19 @@ auto sub run(code c, ...) {
     }
 
     #! returns a sandboxed Program whose manager denies the filesystem
+    /** qore#5741 run-time refusal of uncontrolled APIs: the trusted code that the sandboxed code calls hands its Qore
+        code to Java through the uncontrolled API of the jni module, which the sandbox must allow for the case to reach
+        Java; the filesystem policy that the cases test is unchanged (the call is dynamic because the Qore library may
+        lack the rule)
+    */
     private Program getSandboxed() {
         Program p(PO_NEW_STYLE);
         p.parse(SandboxedSource, "sandboxed");
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
         p.setSandboxManager(sm);
         return p;
     }

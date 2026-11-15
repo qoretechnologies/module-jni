@@ -1834,6 +1834,12 @@ sub sandboxProbe() {
         sm.blockLocalhost();
         sm.blockPrivateNetworks();
         sm.setNetworkDefaultPolicy(True);
+        # qore#5741 run-time refusal of uncontrolled APIs: the runtime is Java code, which the sandbox must allow for
+        # its bind to reach the network check; the network policy that the case tests is unchanged (the call is dynamic
+        # because the Qore library may lack the rule)
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
 
         Program p(PO_NO_CHILD_PO_RESTRICTIONS);
         p.setScriptPath(get_script_path());

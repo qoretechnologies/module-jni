@@ -55,12 +55,24 @@ code sub make_capability(string cmd) {
         set_return_value(main());
     }
 
+    #! Allows uncontrolled APIs in the sandbox (qore#5741); dynamic because the Qore library may lack the policy
+    /** the providers are Java code, which the sandbox must allow for the sandboxed code to reach the option checks;
+        the option checks refuse sandboxed code also in a sandbox that allows uncontrolled APIs
+    */
+    private static SandboxManager allowUncontrolledApis(SandboxManager sm) {
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
+        return sm;
+    }
+
     #! Runs the code in a new Program, sandboxed or not; returns the error code, or "ok"
     private static string runAs(bool sandboxed, string body, *reference<string> desc) {
         Program p(PO_NEW_STYLE);
         if (sandboxed) {
             SandboxManager sm();
             sm.setNetworkDefaultPolicy(True);
+            allowUncontrolledApis(sm);
             p.setSandboxManager(sm);
         }
         map p.loadModule($1), Modules;
@@ -210,7 +222,7 @@ code sub make_capability(string cmd) {
 
         # a connection that trusted code configured does not let sandboxed code use the command
         Program p(PO_NEW_STYLE);
-        p.setSandboxManager(new SandboxManager());
+        p.setSandboxManager(allowUncontrolledApis(new SandboxManager()));
         map p.loadModule($1), Modules;
         p.parse("sub run(KafkaDataProvider::KafkaConnection c) { new KafkaDataProvider::KafkaConsumerDataProvider(c, "
             "{\"topics\": (\"t\",)}); }", "jni-class-options-kinit-connection");
