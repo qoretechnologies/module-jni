@@ -44,6 +44,8 @@ public class OpcUaDevicesDataProvider inherits AbstractOpcUaDataProvider {
 
     #! Creates the object from another object of the same class
     constructor(AbstractOpcUaDataProvider prev) : AbstractOpcUaDataProvider(prev) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(OpcUaDataProvider::AppName);
     }
 
     #! Returns the name of the data provider

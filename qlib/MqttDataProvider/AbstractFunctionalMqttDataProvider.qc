@@ -491,10 +491,14 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
 
     #! Creates the object from another object of the same class
     constructor(AbstractMqttDataProvider prev) : AbstractMqttDataProvider(prev) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
     }
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
         @debug {
             LoggerWrapper::debug("AbstractFunctionalMqttDataProvider::constructor() url: %y client_id: %y",
                 options.url, options.client_id);

@@ -265,6 +265,13 @@ private:
     //! Raises NETWORK-ACCESS-DENIED and returns -1 if a sandbox policy governs the calling code (qore#5747)
     DLLLOCAL static int checkSandbox(ExceptionSink* xsink);
 
+    //! Raises JNI-SANDBOX-ERROR and returns -1 if code that may not choose a JDBC destination chose this connection
+    /** Judges the code that set the values that choose the destination (the \c url option and, with a %Qore library
+        that records them, the database name and the other connection values and the creators of the datasource), not
+        the code that opens the connection; called by connect() for every connection
+    */
+    DLLLOCAL int checkChoosers(ExceptionSink* xsink);
+
     //! Parse options passed through the Datasource
     /** @param xsink exception sink
 

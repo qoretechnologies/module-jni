@@ -86,6 +86,8 @@ public class JdbcExecDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from the executor
     constructor(JdbcQueryExecutor executor) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JdbcDataProvider::AppName);
         self.executor = executor;
     }
 

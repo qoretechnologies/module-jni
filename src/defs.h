@@ -39,6 +39,60 @@
 #include <stdarg.h>
 #include <memory>
 
+//! Returns true if a sandbox that does not trust the calling code governs it
+/** With a %Qore that has the uncontrolled-API policy of sandboxes (\c SandboxManager::setUncontrolledApiPolicy()),
+    code counts as restricted only if a governing sandbox refuses uncontrolled APIs (the default), so that code that a
+    host governs with a sandbox only for its interrupts or limits, and trusts, is not refused; without it, any
+    governing sandbox restricts the code.
+
+    @param purpose how the governing sandboxes are resolved (see QoreSandboxManagerHelper)
+*/
+static inline bool jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Purpose purpose) {
+#ifdef _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY
+    return !qore_sandbox_allows_uncontrolled_apis(purpose);
+#else
+    QoreSandboxManagerHelper governing(purpose);
+    return static_cast<bool>(governing);
+#endif
+}
+
+// _QORE_HAS_SANDBOX_RESTRICTS_API: the sandbox API that has QoreSandboxManager::trustsUncontrolledApis(), which
+// aggregates over the members of a composition of sandboxes
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+//! Returns true if uncontrolled code is refused to the calling code
+/** Uncontrolled code (a JDBC driver, a Java class that an option names) runs in Java, where no sandbox policy or limit
+    applies to its I/O, threads or memory, and can reach any Java API, also one that changes the state of the whole
+    JVM.  It is refused unless the governing sandbox trusts the code with uncontrolled APIs
+    (QoreSandboxManager::trustsUncontrolledApis()), whatever the sandbox restricts: a sandbox that restricts nothing
+    but does not trust the code (an allow-all manager without SandboxManager::setUncontrolledApiPolicy()) refuses it,
+    as the Qore library refuses such code every uncontrolled API.  For a composition of sandboxes, which governs code
+    when more than one Program's manager is on the thread's stack, the trust is the AND over the members, so the code
+    is allowed only if every member trusts it.  The parse options and functional domains of the calling Program are
+    not judged here.
+
+    Code that no sandbox governs, and code under a system-policy barrier or capability of trusted code (resolved with
+    QoreSandboxManagerHelper::Policy), has no governing manager and is not refused.  The Qore library resolves a
+    governing manager for all sandboxed code, so code that is restricted (jni_sandbox_restricts_caller()) without
+    one is not expected; such code would be refused (defence in depth).
+
+    @param purpose how the governing sandbox is resolved (see QoreSandboxManagerHelper); QoreSandboxManagerHelper::Policy
+    honours a policy barrier and a system-policy capability of trusted code
+*/
+static inline bool jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Purpose purpose) {
+    QoreSandboxManagerHelper governing(purpose);
+    if (!governing) {
+        return jni_sandbox_restricts_caller(purpose);
+    }
+    return !governing->trustsUncontrolledApis();
+}
+#endif
+
+// module API 2.3 (qore#5699): module commands are judged by the restrictions of the code that issues them, and module
+// functions can judge their caller the same way
+#if QORE_MODULE_API_MAJOR > 2 || (QORE_MODULE_API_MAJOR == 2 && QORE_MODULE_API_MINOR >= 3)
+#define QORE_JNI_HAS_COMMAND_CONTEXT 1
+#endif
+
 namespace jni {
 
 /**
@@ -405,6 +459,21 @@ private:
 };
 
 } // namespace jni
+
+//! Refuses a classpath to sandboxed code where its policy does not allow it (see jni-module.cpp)
+/** @throw JNI-SANDBOX-ERROR sandboxed or restricted code changes the classpath of every Program
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
+*/
+DLLLOCAL void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const char* classpath, bool global);
+
+//! Checks the entries of a classpath against a filesystem policy (see jni-module.cpp)
+/** @param policy the policy to check the entries against; nullptr: no policy, every entry is allowed
+    @param classpath the classpath: entries separated by the system path separator or \c ';', as
+    QoreURLClassLoader.addPath() splits them
+
+    @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a classpath entry
+*/
+DLLLOCAL void jni_check_classpath_policy(QoreSandboxManager* policy, const char* classpath);
 
 extern "C" DLLEXPORT int jni_module_import(ExceptionSink* xsink, QoreProgram* pgm, const char* import);
 extern "C" DLLEXPORT QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg, QoreProgram* pgm);

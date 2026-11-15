@@ -113,6 +113,8 @@ public class PowerPointWriteDataProvider inherits DataProvider::AbstractDataProv
         @throw POWERPOINT-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(PowerPointDataProvider::AppName);
         *hash<auto> copts = checkOptions("POWERPOINT-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.stream) {
             error("POWERPOINT-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when path is given as first "
@@ -135,6 +137,8 @@ public class PowerPointWriteDataProvider inherits DataProvider::AbstractDataProv
         @throw POWERPOINT-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(OutputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(PowerPointDataProvider::AppName);
         *hash<auto> copts = checkOptions("POWERPOINT-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.path) {
             error("POWERPOINT-WRITE-OPTION-ERROR", "cannot provide \"path\" option when stream is given as first "
@@ -158,6 +162,8 @@ public class PowerPointWriteDataProvider inherits DataProvider::AbstractDataProv
         as binary
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(PowerPointDataProvider::AppName);
         *hash<auto> copts = checkOptions("POWERPOINT-WRITE-OPTION-ERROR", ConstructorOptions, options);
         if (copts.path) {
             if (copts.stream) {

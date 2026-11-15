@@ -12,6 +12,10 @@
 %exec-class JniClassOptionsSandboxTest
 
 #! Provider options checked with check_class_option() are refused to sandboxed callers (qore#5742)
+/** With the sandbox API that has QoreSandboxManager::trustsUncontrolledApis() (jni module info key
+    "sandbox_restricts_api"), to callers that the governing sandbox (resolved for a policy check) does not trust with
+    uncontrolled APIs, whatever it restricts; without it, to callers that any sandbox governs
+*/
 class JniClassOptionsSandboxTest inherits QUnit::Test {
     private:internal {
         const Modules = ("JdbcDataProvider", "JakartaJmsDataProvider", "KafkaDataProvider", "CamelDataProvider",
@@ -38,9 +42,45 @@ code sub make_capability(string cmd) {
     });
 }
 ", KinitOpt, KinitOpt, KinitOpt);
+
+        #! trusted code that creates the Camel objects that sandboxed code then uses
+        const TrustedCamelCode = "
+list<object> sub make_producer() {
+    CamelDataProvider::CamelDataProvider dp();
+    # the parent is returned too, so that it lives as long as its child
+    return (dp, dp.getChildProvider(\"producer\"));
+}
+
+CamelDataProvider::CamelConnection sub make_connection() {
+    return new CamelDataProvider::CamelConnection(\"c\", \"c\", \"camel://x\");
+}
+";
+
+        #! sandboxed code that uses objects that trusted code created
+        const SandboxedUseCode = "
+string sub send(object producer, string endpoint) {
+    try {
+        producer.doRequest({\"endpoint\": endpoint, \"body\": \"x\"});
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+
+string sub get_context(object c) {
+    try {
+        object ctx = c.get(False);
+        delete ctx;
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
     }
 
     constructor() : QUnit::Test("JNI class options sandbox", "1.0", \ARGV) {
+        addTestCase("objects that trusted code created", \trustedObjectTest());
         addTestCase("jdbc options", \jdbcTest());
         addTestCase("jms options", \jmsTest());
         addTestCase("kafka options", \kafkaTest());
@@ -52,27 +92,73 @@ code sub make_capability(string cmd) {
         addTestCase("jasperreports templates", \jasperTest());
         addTestCase("flyway options", \flywayTest());
         addTestCase("barrier and capability", \barrierTest());
+        addTestCase("a sandbox that trusts the code with uncontrolled APIs does not refuse it", \trustedSandboxTest());
+        addTestCase("a sandbox that does not trust the code refuses the option whatever it restricts",
+            \restrictsApiTest());
+        addTestCase("a sandbox that trusts the code allows the option whatever it restricts",
+            \restrictsApiTrustTest());
+        addTestCase("compositions of sandboxes", \restrictsApiCompositionTest());
+        addTestCase("a composition of trusting allow-all managers allows the option", \trustingCompositionTest());
+        addTestCase("a trusted Camel producer used under an allow-all sandbox that does not trust the code",
+            \allowAllCamelTest());
+        addTestCase("trusted code in a system-policy call may use the option for a sandboxed caller",
+            \restrictsApiSystemPolicyTest());
         set_return_value(main());
     }
 
-    #! Allows uncontrolled APIs in the sandbox (qore#5741); dynamic because the Qore library may lack the policy
-    /** the providers are Java code, which the sandbox must allow for the sandboxed code to reach the option checks;
-        the option checks refuse sandboxed code also in a sandbox that allows uncontrolled APIs
+    #! Returns True if the jni module was built with the restriction API of sandboxes (Qore batch R)
+    /** QoreSandboxManager::restricts() and QoreSandboxManager::trustsUncontrolledApis(), aggregated over the members
+        of a composition of sandboxes; the module decides this when it is built, so its own report is tested
     */
-    private static SandboxManager allowUncontrolledApis(SandboxManager sm) {
-        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
-            call_object_method(sm, "setUncontrolledApiPolicy", True);
+    private static bool restrictsApi() {
+        *hash<auto> info = get_module_hash().jni.info;
+        return info.sandbox_restricts_api ?? False;
+    }
+
+    private skipIfNoRestrictsApi() {
+        if (!restrictsApi()) {
+            testSkip("the jni module was built without the restriction API of sandboxes");
         }
-        return sm;
     }
 
     #! Runs the code in a new Program, sandboxed or not; returns the error code, or "ok"
+    #! Returns True if the Qore library refuses uncontrolled APIs to sandboxed code at run time (qore#5741)
+    /** SandboxManager::setUncontrolledApiPolicy() predates the run-time refusal, so it is detected with a builtin of
+        the Qore library in the uncontrolled-API domain that sandboxed code could call before
+    */
+    private static bool uncontrolledRefused() {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(new SandboxManager());
+        p.parse("sub run() { SandboxManager::callWithSystemPolicy(sub () {}); }", "jni-class-options-probe");
+        try {
+            p.callFunction("run");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "INVALID-FUNCTION-ACCESS") {
+                rethrow;
+            }
+            return True;
+        }
+        return False;
+    }
+
+    #! Asserts the result of sandboxed code that calls SandboxManager::callWithSystemPolicy() itself
+    /** a Qore library that refuses uncontrolled APIs at run time refuses the call itself; otherwise the option check
+        refuses the option under the barrier
+    */
+    private assertBarrierRefused(string err, *string desc, string label, *string option) {
+        if (uncontrolledRefused()) {
+            assertEq("INVALID-FUNCTION-ACCESS", err, label + ": the barrier is an uncontrolled API: " + desc);
+            assertRegex("uncontrolled API", desc, label + ": refused as an uncontrolled API");
+            return;
+        }
+        assertSandboxRefused(err, desc, label, option);
+    }
+
     private static string runAs(bool sandboxed, string body, *reference<string> desc) {
         Program p(PO_NEW_STYLE);
         if (sandboxed) {
             SandboxManager sm();
             sm.setNetworkDefaultPolicy(True);
-            allowUncontrolledApis(sm);
             p.setSandboxManager(sm);
         }
         map p.loadModule($1), Modules;
@@ -99,11 +185,55 @@ code sub make_capability(string cmd) {
         }
     }
 
+    #! Checks an option of a connection or data provider that the code creates: sandboxed code is refused the object
+    /** the connections and data providers of the apps with external I/O that the sandbox does not control refuse
+        sandboxed code in their constructors (\c APP-SANDBOX-ACCESS-DENIED), before the options are read; for
+        sandboxed code the option check is tested through the static checks of the JMS and Kafka providers and the
+        endpoint check of a Camel producer that trusted code created; the option checks of the JDBC, JasperReports
+        and Flyway constructors cannot be reached by sandboxed code, and are a second line of defence
+
+        @param trusted_desc if given, a regular expression that the trusted run's error must match
+    */
+    private checkAppOption(string label, string body, *string trusted_desc) {
+        checkAppRefused(label, body);
+        string tdesc;
+        string err = runAs(False, body, \tdesc);
+        assertTrue(err != "JNI-SANDBOX-ERROR" && err != "APP-SANDBOX-ACCESS-DENIED", label + ": trusted: " + err);
+        if (trusted_desc) {
+            assertRegex(trusted_desc, tdesc, label + ": trusted: the option was used");
+        }
+    }
+
+    #! Checks that the sandboxed run is refused by the app before the options are read
+    private checkAppRefused(string label, string body) {
+        string desc;
+        assertEq("APP-SANDBOX-ACCESS-DENIED", runAs(True, body, \desc), label + ": sandboxed");
+        assertRegex("not declared sandbox-aware", desc, label + ": sandboxed: refused by the app");
+    }
+
+    #! Checks a value that the option check allows in an object that the code creates
+    /** sandboxed code is refused the object by the app, and trusted code is refused neither the object nor the value
+    */
+    private checkAppAllowed(string label, string body) {
+        checkAppRefused(label, body);
+        string desc;
+        string err = runAs(False, body, \desc);
+        assertTrue(err != "JNI-SANDBOX-ERROR" && err != "APP-SANDBOX-ACCESS-DENIED", label + ": trusted: " + err
+            + ": " + desc);
+    }
+
     #! Checks that the sandboxed run is refused for the option
     private checkSandboxed(string label, string option, string body) {
         string desc;
-        assertEq("JNI-SANDBOX-ERROR", runAs(True, body, \desc), label + ": sandboxed");
-        assertRegex(option, desc, label + ": option named");
+        assertSandboxRefused(runAs(True, body, \desc), desc, label + ": sandboxed", option);
+    }
+
+    #! Asserts that a sandboxed run was refused by the option check, naming the option
+    private assertSandboxRefused(string err, *string desc, string label, *string option) {
+        assertEq("JNI-SANDBOX-ERROR", err, label + ": " + desc);
+        if (option) {
+            assertRegex(option, desc, label + ": option named");
+        }
     }
 
     #! Checks that neither run is refused by the check
@@ -118,16 +248,16 @@ code sub make_capability(string cmd) {
 
     jdbcTest() {
         string base = "\"url\": \"jdbc:qore-none://x\", \"user\": \"u\", \"password\": \"p\"";
-        checkOption("classpath", "classpath", "new JdbcDataProvider::JdbcDataProvider({" + base
+        checkAppOption("classpath", "new JdbcDataProvider::JdbcDataProvider({" + base
             + ", \"classpath\": \"/nonexistent-qore-test-dir\"});");
-        checkOption("driver_class", "driver_class", "new JdbcDataProvider::JdbcDataProvider({" + base
+        checkAppOption("driver_class", "new JdbcDataProvider::JdbcDataProvider({" + base
             + ", \"driver_class\": \"com.example.Placeholder\"});", "com.example.Placeholder");
         foreach string url in ("jdbc:qore-none://x?a=b", "jdbc:qore-none://x;a=b", "jdbc:qore-none://(host=x,a=b)/d",
                 "jdbc:qore-none://address=(host=x)/d") {
-            checkOption("url properties " + url, "url", sprintf("new JdbcDataProvider::JdbcDataProvider({\"url\": "
+            checkAppOption("url properties " + url, sprintf("new JdbcDataProvider::JdbcDataProvider({\"url\": "
                 "%y, \"user\": \"u\", \"password\": \"p\"});", url));
         }
-        checkAllowed("plain url", "new JdbcDataProvider::JdbcDataProvider({" + base + "});");
+        checkAppAllowed("plain url", "new JdbcDataProvider::JdbcDataProvider({" + base + "});");
     }
 
     jmsTest() {
@@ -172,11 +302,11 @@ code sub make_capability(string cmd) {
 
     kafkaClientTest() {
         string conn = "new KafkaDataProvider::KafkaConnection(\"k\", \"k\", \"kafka://127.0.0.1:1\"";
-        checkOption("consumer", "value.deserializer", "new KafkaDataProvider::KafkaConsumerDataProvider(" + conn
+        checkAppOption("consumer", "new KafkaDataProvider::KafkaConsumerDataProvider(" + conn
             + "), {\"topics\": (\"t\",), \"value.deserializer\": \"com.example.Placeholder\"});");
-        checkOption("producer", "value.serializer", "new KafkaDataProvider::KafkaProducerDataProvider(" + conn
+        checkAppOption("producer", "new KafkaDataProvider::KafkaProducerDataProvider(" + conn
             + "), {\"value.serializer\": \"com.example.Placeholder\"});");
-        checkOption("connection option", "sasl.login.class", "new KafkaDataProvider::KafkaConsumerDataProvider("
+        checkAppOption("connection option", "new KafkaDataProvider::KafkaConsumerDataProvider("
             + conn + ", {}, {\"sasl.login.class\": \"com.example.Placeholder\"}), {\"topics\": (\"t\",)});");
     }
 
@@ -204,42 +334,49 @@ code sub make_capability(string cmd) {
             # the data provider of the connection gives the connection's options to its children
             string root = conn + ", {}, {%y: %y}).getDataProvider({" + p.args + "}).getChildProviderEx("
                 + sprintf("%y", p.name) + ");";
-            checkOption(p.name + ": connection option", Opt, sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn, Opt,
+            checkAppOption(p.name + ": connection option", sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn, Opt,
                 Other, p.args));
-            checkOption(p.name + ": data provider of the connection", Opt, sprintf(root, Opt, Other));
+            checkAppOption(p.name + ": data provider of the connection", sprintf(root, Opt, Other));
             # it is a connection option only: a provider does not accept it from any caller
             string direct = sprintf("%s%s), {%s%s%y: %y});", prefix, conn, p.args, sep, Opt, Other);
-            foreach bool sandboxed in ((True, False)) {
+            {
                 string desc;
-                assertEq("CONSTRUCTOR-ERROR", runAs(sandboxed, direct, \desc), sprintf("%s: provider option: %s", p.name,
-                    sandboxed ? "sandboxed" : "trusted"));
+                assertEq("CONSTRUCTOR-ERROR", runAs(False, direct, \desc), p.name + ": provider option: trusted");
                 assertRegex(Opt, desc, p.name + ": provider option: named");
+                # sandboxed code cannot create the provider at all: the app refuses it before the options are read
+                assertEq("APP-SANDBOX-ACCESS-DENIED", runAs(True, direct, \desc), p.name
+                    + ": provider option: sandboxed");
             }
-            checkAllowed(p.name + ": connection option, default", sprintf("%s%s, {}, {%y: %y}), {%s});", prefix, conn,
-                Opt, Default, p.args));
-            checkAllowed(p.name + ": data provider of the connection, default", sprintf(root, Opt, Default));
+            checkAppAllowed(p.name + ": connection option, default", sprintf("%s%s, {}, {%y: %y}), {%s});", prefix,
+                conn, Opt, Default, p.args));
+            checkAppAllowed(p.name + ": data provider of the connection, default", sprintf(root, Opt, Default));
         }
 
-        # a connection that trusted code configured does not let sandboxed code use the command
+        # a connection that trusted code configured does not let sandboxed code use the command: the app refuses
+        # sandboxed code a provider before the connection's options are read
         Program p(PO_NEW_STYLE);
-        p.setSandboxManager(allowUncontrolledApis(new SandboxManager()));
+        p.setSandboxManager(new SandboxManager());
         map p.loadModule($1), Modules;
         p.parse("sub run(KafkaDataProvider::KafkaConnection c) { new KafkaDataProvider::KafkaConsumerDataProvider(c, "
             "{\"topics\": (\"t\",)}); }", "jni-class-options-kinit-connection");
-        assertThrows("JNI-SANDBOX-ERROR", Opt, \p.callFunction(), ("run", tp.callFunction("make_connection", Other)),
-            "trusted connection");
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", "not declared sandbox-aware", \p.callFunction(),
+            ("run", tp.callFunction("make_connection", Other)), "trusted connection");
 
         # through a policy barrier and a capability
         string check = kafkaCheck(Opt, Other);
         string desc;
-        assertEq("JNI-SANDBOX-ERROR", runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});",
-            \desc), "policy barrier");
-        assertRegex(Opt, desc, "policy barrier: option named");
+        assertBarrierRefused(runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});", \desc), desc,
+            "policy barrier", Opt);
         code cap = tp.callFunction("make_capability", Other);
         Program cp(PO_NEW_STYLE);
         cp.setSandboxManager(new SandboxManager());
         cp.parse("sub run(code c) { c(); }", "jni-class-options-kinit-capability");
-        assertThrows("JNI-SANDBOX-ERROR", Opt, \cp.callFunction(), ("run", cap), "capability");
+        if (restrictsApi()) {
+            # the check is resolved for a policy check: a capability of trusted code is subject to the system policy
+            assertEq(NOTHING, cp.callFunction("run", cap), "capability");
+        } else {
+            assertThrows("JNI-SANDBOX-ERROR", Opt, \cp.callFunction(), ("run", cap), "capability");
+        }
 
         # at run time only the sandbox restricts module code: a Program that forbids process control and has no sandbox
         # is not refused
@@ -252,11 +389,11 @@ code sub make_capability(string cmd) {
     connectionTest() {
         string jdbc = "new JdbcDataProvider::JdbcConnection(\"j\", \"j\", \"jdbc-dp://x\", {}, {\"user\": \"u\", "
             "\"password\": \"p\", \"driver_class\": \"com.example.Placeholder\"})";
-        checkOption("jdbc connection get", "driver_class", jdbc + ".get();");
-        checkOption("jdbc connection provider", "driver_class", jdbc + ".getDataProvider();");
+        checkAppOption("jdbc connection get", jdbc + ".get();");
+        checkAppOption("jdbc connection provider", jdbc + ".getDataProvider();");
         string jms = "new JakartaJmsDataProvider::JmsConnection(\"m\", \"m\", \"jms://127.0.0.1:1\", {}, "
             "{\"connection_factory_class\": \"com.example.Placeholder\"})";
-        checkOption("jms connection get", "connection_factory_class", jms + ".get();");
+        checkAppOption("jms connection get", jms + ".get();");
     }
 
     #! Returns code that sends a message to the endpoint
@@ -267,25 +404,77 @@ code sub make_capability(string cmd) {
 
     camelTest() {
         foreach string endpoint in ("seda:qoretest", "direct:qoretest", "log:qoretest", "mock:qoretest") {
-            checkAllowed(endpoint, camelSend(endpoint));
+            checkAppAllowed(endpoint, camelSend(endpoint));
         }
         foreach string endpoint in ("file:/nonexistent-qore-test-dir", "seda:qoretest?size=1", "log:x?level=INFO",
                 "direct:{{qoretest}}", "no-scheme", "seda:qoretest\n") {
-            checkOption(endpoint, "endpoint", camelSend(endpoint));
+            checkAppOption(endpoint, camelSend(endpoint));
         }
         # the connection returns the Camel context, which has no endpoint check
-        checkOption("connection get", "connection", "CamelDataProvider::CamelConnection c(\"c\", \"c\", "
+        checkAppOption("connection get", "CamelDataProvider::CamelConnection c(\"c\", \"c\", "
             "\"camel://x\"); object ctx = c.get(False); delete ctx;");
+    }
+
+    #! the option checks of objects that trusted code created, which sandboxed code then uses
+    /** the app refuses sandboxed code only the creation of its objects: the option checks refuse sandboxed code the
+        options that it gives to an object that trusted code created
+    */
+    trustedObjectTest() {
+        Program tp(PO_NEW_STYLE);
+        map tp.loadModule($1), Modules;
+        tp.parse(TrustedCamelCode, "jni-class-options-trusted-objects");
+        list<object> producer = tp.callFunction("make_producer");
+        on_exit delete producer[0];
+        object conn = tp.callFunction("make_connection");
+
+        Program sp(PO_NEW_STYLE);
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sp.setSandboxManager(sm);
+        sp.parse(SandboxedUseCode, "jni-class-options-sandboxed-use");
+
+        foreach string endpoint in ("file:/nonexistent-qore-test-dir", "seda:qoretest?size=1") {
+            (*string err, *string desc) = (sp.callFunction("send", producer[1], endpoint) =~ x/^([^:]+): (.*)$/s);
+            assertSandboxRefused(err ?? "ok", desc, endpoint + ": sandboxed send with a trusted producer", "endpoint");
+        }
+        # the endpoints that the check allows pass it: the producer then sends to them, unless the Qore library
+        # refuses uncontrolled APIs to sandboxed code at run time (qore#5741), which refuses the producer's Java call
+        # for the sandboxed caller (camelTest covers the direct endpoint, whose send without a consumer waits)
+        bool refused = uncontrolledRefused();
+        foreach string endpoint in ("seda:qoretest-trusted-obj", "log:qoretest-trusted-obj",
+                "mock:qoretest-trusted-obj") {
+            string rv = sp.callFunction("send", producer[1], endpoint);
+            if (refused) {
+                assertRegex("^INVALID-FUNCTION-ACCESS: .*uncontrolled API", rv, endpoint + ": an allowed endpoint: "
+                    "the Java call is refused");
+            } else {
+                assertEq("ok", rv, endpoint + ": an allowed endpoint");
+            }
+        }
+        # the trusted code itself may use the endpoint that sandboxed code is refused (a queue of its own, so that
+        # its size does not conflict with a queue that another send created)
+        try {
+            producer[1].doRequest({"endpoint": "seda:qoretest-trusted-sized?size=1", "body": "x"});
+        } catch (hash<ExceptionInfo> ex) {
+            fail("trusted send: " + ex.err + ": " + ex.desc);
+        }
+
+        # a connection refuses sandboxed callers its object in AbstractConnection::get() itself, before its getImpl()
+        # makes the option check, also when trusted code created it
+        (*string err, *string desc) = (sp.callFunction("get_context", conn) =~ x/^([^:]+): (.*)$/s);
+        assertEq("APP-SANDBOX-ACCESS-DENIED", err, "sandboxed get of a trusted connection");
+        assertRegex("not declared sandbox-aware", desc, "sandboxed get of a trusted connection: refused by the "
+            "connection");
     }
 
     jasperTest() {
         string cls = "JasperReportsDataProvider::JasperReportsDataProvider";
         # the trusted run of an in-memory template is not made here: it would compile the placeholder template
-        checkSandboxed("template_data", "template", "new " + cls + "({\"template_data\": <00>, \"output_format\": "
+        checkAppRefused("template_data", "new " + cls + "({\"template_data\": <00>, \"output_format\": "
             "\"pdf\"});");
-        checkOption("template option", "template", "new " + cls + "({\"template\": "
+        checkAppOption("template option", "new " + cls + "({\"template\": "
             "\"/nonexistent-qore-test-dir/x.jrxml\", \"output_format\": \"pdf\"});");
-        checkOption("template path", "template", "new " + cls + "(\"/nonexistent-qore-test-dir/x.jrxml\", "
+        checkAppOption("template path", "new " + cls + "(\"/nonexistent-qore-test-dir/x.jrxml\", "
             "\"pdf\");");
     }
 
@@ -296,26 +485,303 @@ code sub make_capability(string cmd) {
     }
 
     flywayTest() {
-        checkOption("classpath location", "locations", flywayWith("jdbc:qore-none://x", "classpath:qore/test/x"));
-        checkOption("url properties", "url", flywayWith("jdbc:qore-none://x;a=b", "/nonexistent-qore-test-dir"));
-        checkAllowed("directory location", flywayWith("jdbc:qore-none://x", "/nonexistent-qore-test-dir"));
-        checkOption("connection", "locations", "new FlywayDataProvider::FlywayConnection(\"f\", \"f\", "
+        checkAppOption("classpath location", flywayWith("jdbc:qore-none://x", "classpath:qore/test/x"));
+        checkAppOption("url properties", flywayWith("jdbc:qore-none://x;a=b", "/nonexistent-qore-test-dir"));
+        checkAppAllowed("directory location", flywayWith("jdbc:qore-none://x", "/nonexistent-qore-test-dir"));
+        checkAppOption("connection", "new FlywayDataProvider::FlywayConnection(\"f\", \"f\", "
             "\"flyway://x\", {}, {\"url\": \"jdbc:qore-none://x\", \"user\": \"u\", \"password\": \"p\", "
             "\"locations\": (\"classpath:qore/test/x\",)}).getDataProvider();");
+    }
+
+    trustedSandboxTest() {
+        # a host that governs trusted code with a sandbox only for its interrupts or limits allows uncontrolled APIs
+        # (SandboxManager::setUncontrolledApiPolicy(), a Qore with the trust policy); with the restriction API of
+        # sandboxes, that code may use the options
+        SandboxManager sm();
+        if (!sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            testSkip("the Qore library has no uncontrolled-API policy of sandboxes");
+        }
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        string check = "Jni::org::qore::jni::check_class_option(\"qore-test\", \"placeholder\");";
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("sub run() {\n" + check + "\n}\n", "jni-class-options-trusted-sandbox");
+        # the provider options too: a Kafka serializer of the caller's own
+        Program kp(PO_NEW_STYLE);
+        kp.setSandboxManager(sm);
+        kp.loadModule("KafkaDataProvider");
+        kp.parse("sub run() {\n" + kafkaCheck("value.serializer", "com.example.Placeholder") + "\n}\n",
+            "jni-class-options-trusted-sandbox-kafka");
+        if (restrictsApi()) {
+            p.callFunction("run");
+            kp.callFunction("run");
+        } else {
+            # without the restriction API, any governing sandbox refuses the options, also one that trusts the code
+            assertThrows("JNI-SANDBOX-ERROR", \p.callFunction(), "run", "a trusting sandbox, without the API");
+            assertThrows("JNI-SANDBOX-ERROR", \kp.callFunction(), "run", "a trusting sandbox, without the API: kafka");
+        }
+        # the default sandbox, with the same filesystem and network policy, restricts nothing but does not trust the
+        # code: it refuses it
+        SandboxManager deny = allowAll();
+        Program dp(PO_NEW_STYLE);
+        dp.setSandboxManager(deny);
+        dp.parse("sub run() {\n" + check + "\n}\n", "jni-class-options-default-sandbox");
+        assertThrows("JNI-SANDBOX-ERROR", \dp.callFunction(), "run", "an allow-all sandbox that does not trust the code");
+        # one that does not trust the code and restricts it refuses it
+        SandboxManager rsm = allowAll();
+        rsm.blockPrivateNetworks();
+        assertThrows("JNI-SANDBOX-ERROR", \checkUnder(), rsm, "a restricting sandbox that does not trust the code");
     }
 
     barrierTest() {
         string check = "Jni::org::qore::jni::check_class_option(\"qore-test\", \"placeholder\");";
         string desc;
-        assertEq("JNI-SANDBOX-ERROR", runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});",
-            \desc), "policy barrier");
+        assertBarrierRefused(runAs(True, "SandboxManager::callWithSystemPolicy(sub () {" + check + "});", \desc), desc,
+            "policy barrier");
         code cap = SandboxManager::createSystemPolicyCall(sub () {
             Jni::org::qore::jni::check_class_option("qore-test", "placeholder");
         });
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(new SandboxManager());
         p.parse("sub run(code c) { c(); }", "jni-class-options-capability");
-        assertThrows("JNI-SANDBOX-ERROR", \p.callFunction(), ("run", cap), "capability");
+        if (restrictsApi()) {
+            # the check is resolved for a policy check: a capability of trusted code is subject to the system policy
+            assertEq(NOTHING, p.callFunction("run", cap), "capability");
+        } else {
+            assertThrows("JNI-SANDBOX-ERROR", \p.callFunction(), ("run", cap), "capability");
+        }
         assertEq("ok", runAs(False, check), "trusted");
+    }
+
+    #! the option check of the API test cases
+    const Check = "Jni::org::qore::jni::check_class_option(\"qore-test\", \"placeholder\");";
+
+    #! Returns an allow-all manager, as Qorus attaches to its trusted interfaces
+    private static SandboxManager allowAll() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        return sm;
+    }
+
+    #! Returns a Program that the manager governs and that runs the option check
+    private static Program getChecking(SandboxManager sm) {
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("sub run() {\n" + Check + "\n}\n", "jni-class-options-restricts");
+        return p;
+    }
+
+    #! Runs the option check under the manager; throws JNI-SANDBOX-ERROR if it is refused
+    private static checkUnder(SandboxManager sm) {
+        getChecking(sm).callFunction("run");
+    }
+
+    #! Returns the error of the option check under the manager, or "ok"
+    private static string checkResult(SandboxManager sm) {
+        try {
+            checkUnder(sm);
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! Returns the restrictions of the API test cases: a description and code that applies one to an allow-all manager
+    /** each restricts one dimension only: the network, the filesystem or a resource limit
+    */
+    private static list<hash<auto>> restrictions() {
+        return (
+            {"name": "network: default deny", "set": sub (SandboxManager sm) { sm.setNetworkDefaultPolicy(False); }},
+            {"name": "network: blockPrivateNetworks", "set": sub (SandboxManager sm) { sm.blockPrivateNetworks(); }},
+            {"name": "network: denied range",
+                "set": sub (SandboxManager sm) { sm.addNetworkDeniedIPRange("203.0.113.0/24"); }},
+            {"name": "network: allowed range",
+                "set": sub (SandboxManager sm) { sm.addNetworkAllowedIPRange("10.0.0.0/8"); }},
+            {"name": "network: allowed port", "set": sub (SandboxManager sm) { sm.addNetworkAllowedPort(443); }},
+            {"name": "filesystem: default deny",
+                "set": sub (SandboxManager sm) { sm.setFilesystemDefaultPolicy(False); }},
+            {"name": "filesystem: allowed path",
+                "set": sub (SandboxManager sm) { sm.addFilesystemAllowedPath("/tmp", QSEC_READ); }},
+            {"name": "filesystem: denied path",
+                "set": sub (SandboxManager sm) { sm.addFilesystemDeniedPath("/nonexistent-qore-test-dir"); }},
+            {"name": "filesystem: sandbox root",
+                "set": sub (SandboxManager sm) { sm.setFilesystemSandboxRoot("/tmp"); }},
+            {"name": "limits: threads", "set": sub (SandboxManager sm) { sm.setMaxThreads(64); }},
+            {"name": "limits: wall time", "set": sub (SandboxManager sm) { sm.setWallTimeLimit(600000); }},
+            {"name": "limits: CPU time", "set": sub (SandboxManager sm) { sm.setCPUTimeLimit(600000); }},
+            {"name": "limits: stack size", "set": sub (SandboxManager sm) { sm.setMaxStackSize(64 * 1024 * 1024); }},
+            {"name": "limits: memory", "set": sub (SandboxManager sm) { sm.setMemoryLimit(16 * 1024 * 1024 * 1024); }},
+        );
+    }
+
+    #! Returns an allow-all manager with the restriction applied
+    private static SandboxManager restricted(hash<auto> r) {
+        SandboxManager sm = allowAll();
+        r.set(sm);
+        return sm;
+    }
+
+    #! Returns a manager that trusts the code with uncontrolled APIs
+    private static SandboxManager trusting(*SandboxManager sm) {
+        if (!sm) {
+            sm = allowAll();
+        }
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        return sm;
+    }
+
+    restrictsApiTest() {
+        skipIfNoRestrictsApi();
+        # a sandbox that restricts nothing but does not trust the code refuses the option: an allow-all manager, also
+        # with an allowed host pattern
+        assertEq("JNI-SANDBOX-ERROR", checkResult(allowAll()), "allow-all");
+        SandboxManager sm = allowAll();
+        sm.addNetworkAllowedHost("*.example.com");
+        assertEq("JNI-SANDBOX-ERROR", checkResult(sm), "allowed host only");
+        # whatever it restricts
+        foreach hash<auto> r in (restrictions()) {
+            assertEq("JNI-SANDBOX-ERROR", checkResult(restricted(r)), r.name);
+        }
+        # the refusal names the rule
+        assertThrows("JNI-SANDBOX-ERROR", "code that a sandbox does not trust with uncontrolled APIs", \checkUnder(),
+            allowAll());
+    }
+
+    restrictsApiTrustTest() {
+        skipIfNoRestrictsApi();
+        SandboxManager sm = allowAll();
+        map $1.set(sm), restrictions();
+        assertEq("ok", checkResult(trusting(sm)), "all restrictions, trusted");
+        foreach hash<auto> r in (restrictions()) {
+            assertEq("ok", checkResult(trusting(restricted(r))), r.name + ": trusted");
+        }
+    }
+
+    #! Returns the result of the option check of code that two sandboxes govern
+    /** a closure that the Program under @p outer created calls the Program under @p inner: the closure has the
+        sandbox provenance of @p outer, so the governing sandbox of the code of @p inner is the composition of both
+    */
+    private static string composed(SandboxManager outer, SandboxManager inner) {
+        Program ip = getChecking(inner);
+        Program op(PO_NEW_STYLE);
+        op.setSandboxManager(outer);
+        op.parse("code sub make(Program p) { return string sub () { try { p.callFunction(\"run\"); "
+            "return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }; }",
+            "jni-class-options-restricts-outer");
+        code c = op.callFunction("make", ip);
+        return c();
+    }
+
+    restrictsApiCompositionTest() {
+        skipIfNoRestrictsApi();
+        # a composition trusts the code only if every member does, whatever the members restrict
+        assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), allowAll()), "allow-all members that do not trust the code");
+        assertEq("ok", composed(trusting(), trusting()), "allow-all members that trust the code");
+        assertEq("JNI-SANDBOX-ERROR", composed(trusting(), allowAll()), "one member that does not trust the code");
+        assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), trusting()), "one member that does not trust the code, "
+            "inner");
+        foreach hash<auto> r in (restrictions()) {
+            assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), restricted(r)), r.name + ": restricting inner member");
+            assertEq("JNI-SANDBOX-ERROR", composed(restricted(r), allowAll()), r.name + ": restricting outer member");
+            assertEq("ok", composed(trusting(restricted(r)), trusting()), r.name + ": trusting members");
+            assertEq("JNI-SANDBOX-ERROR", composed(trusting(restricted(r)), allowAll()), r.name
+                + ": a member that does not trust the code");
+            assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), trusting(restricted(r))), r.name
+                + ": a member that does not trust the code, inner");
+        }
+    }
+
+    #! the code of a trusted Program that checks the option for its callers
+    const TrustedCheckCode = "
+string sub direct() {
+    try {
+        " + Check + "
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub barrier() {
+    try {
+        return SandboxManager::callWithSystemPolicy(\\direct());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+code sub make_capability() {
+    return SandboxManager::createSystemPolicyCall(\\direct());
+}
+";
+
+    #! trusted code that uses the option in a system-policy call on behalf of a sandboxed caller
+    /** the governing sandbox is resolved as for a policy check, so the check does not apply inside
+        SandboxManager::callWithSystemPolicy() or a SandboxManager::createSystemPolicyCall() capability: a
+        system-policy call is an explicit, trusted capability in which trusted code acts as the system for its caller.
+        As for every policy check, the code that the barrier calls is created by trusted code before it serves the
+        sandboxed caller: a callback created while serving it keeps the caller's sandbox (its provenance)
+    */
+    restrictsApiSystemPolicyTest() {
+        skipIfNoRestrictsApi();
+        Program lib(PO_NEW_STYLE);
+        lib.parse(TrustedCheckCode, "jni-class-options-system-policy-lib");
+        code direct = string sub () { return lib.callFunction("direct"); };
+        code check = \lib.callFunction();
+        code barrier = string sub () { return SandboxManager::callWithSystemPolicy(check, "direct"); };
+        # a barrier around a callback that trusted code creates while it serves the sandboxed caller
+        code provenance = string sub () { return lib.callFunction("barrier"); };
+        foreach hash<auto> r in (restrictions()) {
+            Program p(PO_NEW_STYLE);
+            p.setSandboxManager(restricted(r));
+            p.parse("string sub call(code c) { return c(); }", "jni-class-options-system-policy");
+            assertEq("JNI-SANDBOX-ERROR", p.callFunction("call", direct), r.name + ": outside a system-policy call");
+            assertEq("ok", p.callFunction("call", barrier), r.name + ": callWithSystemPolicy()");
+            assertEq("JNI-SANDBOX-ERROR", p.callFunction("call", provenance), r.name
+                + ": a callback with provenance");
+            assertEq("ok", p.callFunction("call", lib.callFunction("make_capability")), r.name
+                + ": createSystemPolicyCall()");
+        }
+    }
+
+    #! code that two allow-all sandboxes that trust it govern together may use the option
+    /** a closure of one allow-all sandboxed Program calls another allow-all sandboxed Program, so the governing
+        sandbox is the composition of two allow-all managers.  With the API, the option is allowed if every member
+        trusts the code, and refused if a member does not trust it; without it, any governing sandbox refuses the
+        option, as develop intends
+    */
+    trustingCompositionTest() {
+        if ((new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
+            string expected = restrictsApi() ? "ok" : "JNI-SANDBOX-ERROR";
+            assertEq(expected, checkResult(trusting()), "one trusting allow-all manager");
+            assertEq(expected, composed(trusting(), trusting()), "a composition of two trusting allow-all managers");
+        }
+        assertEq("JNI-SANDBOX-ERROR", checkResult(allowAll()), "one allow-all manager");
+        assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), allowAll()), "a composition of two allow-all managers");
+    }
+
+    #! a Camel producer that trusted code created, used by code under an allow-all sandbox that does not trust it
+    /** the creator passed the app's check of the caller, and the object is not checked again when it is used, so the
+        endpoint check of the producer is the only check of the endpoint: endpoints that run a process or Java code
+        are refused to code that its sandbox does not trust, also when the sandbox restricts nothing
+    */
+    allowAllCamelTest() {
+        Program tp(PO_NEW_STYLE);
+        map tp.loadModule($1), Modules;
+        tp.parse(TrustedCamelCode, "jni-class-options-allow-all-camel-trusted");
+        list<object> producer = tp.callFunction("make_producer");
+        on_exit delete producer[0];
+
+        Program sp(PO_NEW_STYLE);
+        sp.setSandboxManager(allowAll());
+        sp.parse(SandboxedUseCode, "jni-class-options-allow-all-camel");
+        foreach string endpoint in ("exec:/bin/true", "bean:qoreTestBean?method=run",
+                "language:simple:qore-test") {
+            (*string err, *string desc) = (sp.callFunction("send", producer[1], endpoint) =~ x/^([^:]+): (.*)$/s);
+            assertSandboxRefused(err ?? "ok", desc, endpoint + ": an allow-all sandbox", "endpoint");
+        }
     }
 }

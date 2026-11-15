@@ -81,6 +81,8 @@ public class EmlWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @throw EML-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         *hash<auto> copts = checkOptions("EML-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.stream) {
             error("EML-WRITE-OPTION-ERROR", "cannot provide \"stream\" option when path is given as first "
@@ -102,6 +104,8 @@ public class EmlWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @throw EML-WRITE-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(OutputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         *hash<auto> copts = checkOptions("EML-WRITE-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.path) {
             error("EML-WRITE-OPTION-ERROR", "cannot provide \"path\" option when stream is given as first "
@@ -123,6 +127,8 @@ public class EmlWriteDataProvider inherits DataProvider::AbstractDataProvider {
         @note If neither \c path nor \c stream is provided, use getData() to retrieve the EML data as binary
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         *hash<auto> copts = checkOptions("EML-WRITE-OPTION-ERROR", ConstructorOptions, options);
         if (copts.path) {
             if (copts.stream) {

@@ -353,6 +353,8 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the OdsReadDataProvider with the input data path and optionally an option hash
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdsDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         self.opts = processCellOptions(checkOptions("ODS-READ-OPTION-ERROR", ConstructorOptions, opts));
@@ -362,6 +364,8 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the OdsReadDataProvider with the input data stream and optionally an option hash
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdsDataProvider::AppName);
         i = stream;
         self.opts = processCellOptions(checkOptions("ODS-READ-OPTION-ERROR", ConstructorOptions, opts));
         name = sprintf("stream=%s", stream.uniqueHash());
@@ -371,6 +375,8 @@ public class OdsReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(OdsDataProvider::AppName);
         *hash<auto> copts = processCellOptions(checkOptions("ODS-READ-OPTION-ERROR", ConstructorOptions, options));
         sheet = copts.worksheet ?? "";
         sheet_pattern = copts.worksheet_pattern;

@@ -68,6 +68,8 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
     #! Creates the object from the arguments
     constructor(string name, string desc, string url, hash<auto> attr = {}, hash<auto> options = {},
             *LoggerInterface logger) : AbstractConnectionWithInfo(name, desc, url, attr, options, logger) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
         setRealUrl(url);
     }
 
@@ -90,6 +92,8 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
     */
     constructor(hash<auto> config, *hash<auto> attr) : AbstractConnectionWithInfo(config, attr) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
     }
 
     #! returns the string type name for the connection object

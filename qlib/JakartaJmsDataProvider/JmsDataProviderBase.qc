@@ -71,6 +71,8 @@ public class JmsDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from constructor options
     constructor(hash<auto> copts) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JakartaJmsDataProvider::AppName);
         self.copts = copts;
     }
 

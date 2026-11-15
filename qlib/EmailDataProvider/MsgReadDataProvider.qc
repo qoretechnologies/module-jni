@@ -85,6 +85,8 @@ public class MsgReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw MSG-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         checkOptions("MSG-READ-OPTION-ERROR", ConstructorOptions, opts);
@@ -97,6 +99,8 @@ public class MsgReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw MSG-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         i = stream;
         checkOptions("MSG-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("msg-stream=%s", stream.uniqueHash());
@@ -108,6 +112,8 @@ public class MsgReadDataProvider inherits DataProvider::AbstractDataProvider {
         option conflict
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         *hash<auto> copts = checkOptions("MSG-READ-OPTION-ERROR", ConstructorOptions, options);
         if (copts.path) {
             if (copts.stream) {

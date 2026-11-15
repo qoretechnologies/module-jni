@@ -32,9 +32,19 @@ class JniClassOptionsRestrictedLoadTest inherits QUnit::Test {
                 p.loadModule(mod);
                 fail(mod + ": the load was not refused");
             } catch (hash<ExceptionInfo> ex) {
-                # refused when the module's code is parsed, or when its initialization creates a Java object
+                # refused when the module's code is parsed, or when its initialization creates a Java object; with a
+                # jni module built for a module API before 2.3, which judges a module command by the Program that
+                # loads the module (qore#5699), the module's classpath commands are refused first
+                if (ex.err == "JNI-SANDBOX-ERROR") {
+                    assertRegex("module command .* cannot be used in a Program that does not allow uncontrolled APIs",
+                        ex.desc, mod + ": refused at load by the jni module");
+                    hash<auto> jh = get_module_hash().jni;
+                    assertFalse(jh.api_major > 2 || (jh.api_major == 2 && jh.api_minor >= 3),
+                        mod + ": only before module API 2.3");
+                    continue;
+                }
                 assertTrue(inlist(ex.err, ("PARSE-EXCEPTION", "ILLEGAL-CLASS-INSTANTIATION")),
-                    mod + ": refused at load: " + ex.err);
+                    mod + ": refused at load: " + ex.err + ": " + ex.desc);
             }
         }
     }

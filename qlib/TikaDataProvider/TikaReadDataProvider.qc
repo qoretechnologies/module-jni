@@ -111,6 +111,8 @@ public class TikaReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw TIKA-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(TikaDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         *hash<auto> copts = checkOptions("TIKA-READ-OPTION-ERROR", ConstructorOptions, opts);
@@ -124,6 +126,8 @@ public class TikaReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw TIKA-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(TikaDataProvider::AppName);
         i = stream;
         *hash<auto> copts = checkOptions("TIKA-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("stream=%s", stream.uniqueHash());
@@ -135,6 +139,8 @@ public class TikaReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw TIKA-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(TikaDataProvider::AppName);
         *hash<auto> copts = checkOptions("TIKA-READ-OPTION-ERROR", ConstructorOptions, options);
         metadataOnly = copts.metadata_only ?? False;
         if (copts.path) {

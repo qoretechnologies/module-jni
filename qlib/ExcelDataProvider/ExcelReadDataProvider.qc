@@ -358,6 +358,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw EXCEL-INVALID-LOCATION invalid excel location or range string
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         self.opts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, opts));
@@ -374,6 +376,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw EXCEL-INVALID-LOCATION invalid excel location or range string
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
         i = stream;
         self.opts = processCellOptions(checkOptions("EXCEL-READ-OPTION-ERROR", ConstructorOptions, opts));
         name = sprintf("stream=%s", stream.uniqueHash());
@@ -388,6 +392,8 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw EXCEL-INVALID-LOCATION invalid excel location or range string
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(ExcelDataProvider::AppName);
         @debug {
             LoggerWrapper::debug("ExcelReadDataProvider::constructor() options: %y", options);
         }

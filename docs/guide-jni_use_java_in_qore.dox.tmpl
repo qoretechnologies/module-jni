@@ -226,13 +226,141 @@ public class Fetcher {
     - no I/O is made before the check; an operation that cannot be checked is not made
 
     A Java-backed data provider or module that has not been audited is not sandbox-aware, and must not be made
-    available to sandboxed callers.
+    available to sandboxed callers.  A data provider app declares this in its \c DataProviderAppInfo (\c DataProvider
+    3.12 or later): \c external_io when its actions do I/O that the sandbox does not see, and \c sandbox_aware
+    only after the audit; data provider consumers refuse sandboxed callers an app with \c external_io and without
+    \c sandbox_aware (\c DataProviderActionCatalog::checkSandboxAccess(), \c APP-SANDBOX-ACCESS-DENIED).
+
+    <b>Data provider apps of this module:</b>
+    |!App|!Declaration|!The Java I/O that the sandbox does not see
+    |Access|\c external_io|Jackcess opens the database file named by the action's path
+    |Busylight, MQTT|\c external_io|the Paho client connects to the broker and to its failover URIs
+    |Camel|\c external_io|Camel endpoints connect to and open what their URIs name
+    |Flyway|\c external_io|the JDBC URL and the filesystem migration locations
+    |JakartaJMS|\c external_io|the provider connects to the broker URL and loads the provider classpath
+    |JasperReports|\c external_io|a report can load subreports, images and data from files and URLs
+    |JdbcDP|\c external_io|the JDBC driver connects to the destinations of the URL
+    |Kafka|\c external_io|the client connects to the bootstrap servers and to the brokers they return
+    |OpcUA|\c external_io|the client connects to the server and the endpoints it returns
+    |Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio, Word|\c external_io|Java only transforms the data, but every Java call is an uncontrolled API (\c QDOM_UNCONTROLLED_API)
+
+    No app is declared \c sandbox_aware yet: each app with \c external_io lets a Java library connect to destinations
+    that it resolves or discovers itself, or open files it finds itself, which these checks cannot cover until the
+    app is changed to make them.
+
+    The document apps (Avro, Email, Excel, ICS, ODP, ODS, ODT, PowerPoint, Tika, VCF, Visio and Word) read and write
+    only the locations that %Qore opens for them (\c FileLocationHandler), and Java only transforms the streams it is
+    given; the Excel and ODS apps also create temporary files of their own in the JVM's temporary directory, with
+    names that no caller chooses.  They declare \c external_io as well, because a governing sandbox refuses the
+    uncontrolled APIs (\c QDOM_UNCONTROLLED_API) that their Java calls are, also when library code makes them for a
+    sandboxed caller (qore#5741): declared, they refuse sandboxed callers cleanly up front instead of failing in the
+    middle of a call.
+
+    The connection and data provider classes of the modules of the apps with \c external_io refuse sandboxed code in
+    their constructors as well (\c APP-SANDBOX-ACCESS-DENIED), so that sandboxed code that loads such a module and
+    creates its classes itself, without the data provider catalog, is refused too.  A connection that trusted code
+    created refuses a sandboxed caller its I/O (\c get(), \c ping() and the other I/O methods of
+    \c ConnectionProvider::AbstractConnection, which check the module of the connection's class), so a connection
+    that a server uses on a sandboxed user's behalf is refused too.
+
+    <b>Module commands, by their issuer:</b> built for module API 2.3 (%Qore with \c QoreModuleCommandContext), the
+    module judges every command first by the restrictions of the code that issues it, which %Qore captures before it
+    switches to the Program that the command applies to (a \c %module-cmd directive, \c Program::issueModuleCmd(), or
+    a command replayed from a compiled program).  A sandboxed issuer is refused every command below; an issuer with a
+    restricting parse option is refused the commands that the option forbids (\c JNI-SANDBOX-ERROR).  With a %Qore
+    that has the uncontrolled-API policy of sandboxes (qore#5741), code governed by a sandbox that allows uncontrolled
+    APIs (\c SandboxManager::setUncontrolledApiPolicy(), for example a sandbox that a host attaches to trusted code only
+    for its interrupts or limits) is not a sandboxed issuer here, nor in the checks of sandboxed code described below;
+    the filesystem policy of the entries of a Program's classpath is still checked:
+    |!Command|!Refused to a sandboxed issuer and to
+    |\c import (also \c import \c pkg.*, whose classes are loaded when they are used)|\c PO_NO_UNCONTROLLED_APIS
+    |\c add-classpath, \c add-relative-classpath|\c PO_NO_UNCONTROLLED_APIS, \c PO_NO_FILESYSTEM
+    |\c define-class, \c define-pending-class, \c kotlin-eval|\c PO_NO_UNCONTROLLED_APIS, \c PO_NO_EMBEDDED_LOGIC
+    |\c global-add-classpath, \c global-add-relative-classpath, \c set-property, \c register-shared-class|every \
+      restricting parse option: they change state that every Program shares
+    |\c set-compat-types, \c mark-module-injected|none: they set flags of the Program the command applies to
+
+    Code of a library module (a module from the module path) has no parse options, so only a sandbox restricts the
+    commands it issues, also on behalf of a restricted caller: the provider modules of this module, which add
+    classpaths at run time, can be used by a Program restricted only with parse options, and not by sandboxed code.
+    Restricted code cannot issue a command into another, trusted Program at all (\c RUNTIME-COMMAND-ERROR).
+
+    The commands that change state that every Program shares are process-wide by design, so they are refused to
+    every restricted issuer, also to one whose parse options restrict something unrelated (ex: thread or process
+    control) and whose sandbox trusts it with uncontrolled APIs: only code with no restricting parse option, or the
+    code of a library module, may use them.  For example, the interface Programs of a server such as Qorus, which are
+    trusted but have restricting parse options, may use \c set-compat-types, \c import, \c add-classpath and the
+    \c define-class commands in their own code, but not \c set-property, \c register-shared-class or the \c global-*
+    classpath commands; the server's own code, which has no restricting parse option, issues these into the
+    interface Programs (\c Program::issueModuleCmd()).  A command issued into another Program also respects the
+    target Program's \c PO_NO_UNCONTROLLED_APIS for the commands that change the JVM or define or run Java code (the
+    \c global-* classpath commands, \c set-property, \c register-shared-class, \c define-class,
+    \c define-pending-class and \c kotlin-eval), so a host issues them before it locks a Program down.  An
+    \c import or \c add-classpath that a trusted issuer issues into a Program with \c PO_NO_UNCONTROLLED_APIS is
+    allowed: it is the trusted code's decision, and the Program's own code still cannot use the Java classes, which
+    are uncontrolled APIs.  The exported import functions (see below) judge the Program they import into as well,
+    as they can run for code that is not the issuer of a module command.
+
+    These rules apply to the module commands only: code with \c PO_NO_FILESYSTEM or \c PO_NO_EMBEDDED_LOGIC that may
+    use Java classes can still change its class loader or the JVM through Java itself; only
+    \c PO_NO_UNCONTROLLED_APIS, or a sandbox, keeps Java away from code.
+
+    The exported functions \c jni_module_import() and \c jni_module_find_create_java_namespace(), which other modules
+    (the \c python module's Java loader) call without a module command of this module, apply the rule of \c import:
+    to the issuer of the module command that they run in, if any, and otherwise, with module API 2.3, to the code that
+    calls into the loader, as for a module command issued by that code (for the code of a library module only its
+    sandbox), or, before module API 2.3, to the declared parse options of the Program they import into
+    (\c PO_NO_UNCONTROLLED_APIS) and to a sandbox that governs the calling code.  The
+    \c classpath option of the \c jdbc database driver applies the rule of \c add-classpath to the code that sets it,
+    as for a module command issued by that code: its parse options and its sandbox, and for the code of a library
+    module only its sandbox, also when a Program with \c %no-filesystem loaded the module.  These checks are also made
+    with a module API before 2.3, where the \c jdbc option is judged by the parse options of the Program of the calling
+    code and its sandbox.
+
+    The \c jdbc \c classpath option is applied when a connection is opened, which can be on another thread and for
+    other code than the code that set it (a \c DatasourcePool opens a connection on the thread that first needs one).
+    With a %Qore library that records the code that sets each datasource option (qore#5741), <b>whoever configures
+    the datasource decides</b>: the option is judged by the code that set it with \c Datasource::setOption(), with the
+    options of a \c Datasource constructor or connection string, or, for every connection of a \c DatasourcePool, by
+    the code that created the pool (copies keep it), and not by the code that opens the connection.  So a datasource
+    whose classpath sandboxed or restricted code set is refused (\c JNI-SANDBOX-ERROR) also when trusted code opens it,
+    and the option of a trusted datasource or pool is not refused when a connection is opened on a restricted caller's
+    thread.  The jdbc driver itself does not connect for code that a sandbox that does not allow uncontrolled APIs
+    governs (\c NETWORK-ACCESS-DENIED, see the jdbc database driver below): a connection opened for sandboxed code, also
+    by a trusted pool on its thread, and a connection of a datasource object that sandboxed code created or copied,
+    whoever opens it, are refused before the option is judged.  The
+    classpath entries are checked against the filesystem policy of the code that set the option, not of the code that
+    opens the connection: the code that configures a datasource reads only what its own policy allows.  The module
+    hash reports this with \c "jdbc_option_setter" in its \c "info" key; with an older %Qore library the option is
+    judged by the code that opens the connection.
+
+    <b>Module commands, by their target:</b> a module command also runs in the Program that it is issued in, also when
+    trusted code issues it with \c Program::issueModuleCmd(), so it also follows that Program's sandbox and parse
+    options.  Before module API 2.3 these are the only checks of the module commands; with module API 2.3, the parse
+    options of the target are checked only for a command that another Program issues into it, as the issuer check
+    already covers a Program's own commands (a library module's Program inherits the parse options of the code that
+    loads it, which must not refuse the module's own directives):
+    - the classpath that a sandboxed Program adds with the \c add-classpath and \c add-relative-classpath module
+      commands, and with the \c classpath option of the \c jdbc database driver, is checked against its filesystem
+      policy, entry by entry, as a read (\c FILESYSTEM-ACCESS-DENIED)
+    - the commands that change state of the JVM that every Program shares (\c global-add-classpath,
+      \c global-add-relative-classpath, \c set-property, \c register-shared-class) or that run Java code
+      (\c kotlin-eval) raise \c JNI-SANDBOX-ERROR under a sandbox that does not allow uncontrolled APIs, also through
+      a policy barrier or a system-policy capability, and in a Program with \c PO_NO_UNCONTROLLED_APIS, where the
+      module's Java classes are not available
+      either; so a sandboxed Program cannot make trusted Programs load its classes, or change how the JVM connects
+      for them (ex: \c http.proxyHost, \c javax.net.ssl.trustStore)
+    - \c define-class and \c define-pending-class raise \c JNI-SANDBOX-ERROR in a Program with
+      \c PO_NO_UNCONTROLLED_APIS, as defining a class runs its static initializer, and a Program under a sandbox that
+      does not allow uncontrolled APIs defines a class only in its own class loader: a class that belongs to another
+      Program (ex: \c qoremod.MODULE.CLASS) cannot be defined by it
 
     <b>The jdbc database driver:</b> sandboxed code cannot open JDBC \c Datasource or \c DatasourcePool connections
     for now: a \c Datasource or \c DatasourcePool that uses the \c jdbc driver raises \c NETWORK-ACCESS-DENIED when it
     connects or reconnects for code that a sandbox network policy restricts (the default network policy denies, or an
     allowed or denied IP range or an allowed port rule is set), whatever the destination and whatever the policy
-    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A sandbox manager that restricts no network access, such as an allow-all manager, does not refuse the driver.  A
+    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A sandbox manager that restricts no network access, such as an allow-all manager, does not refuse the driver
+    (with the sandbox trust API, the rule below applies instead).  A
     connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect; trusted
     code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data provider
     (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to sandboxed
@@ -240,14 +368,56 @@ public class Fetcher {
     the sandbox network policy to the destinations of individual JDBC drivers is planned separately.  The JDBC driver opens its sockets in Java, so %Qore cannot apply the policy to them: a
     host name that was checked is resolved again by the driver, and drivers connect to destinations that they discover
     themselves (failover hosts, replicas, server redirects) or that have a syntax of their own for each driver (ex:
-    Oracle TNS descriptors).  As with other policy checks, trusted code that connects under a policy barrier
-    (\c SandboxManager::callWithSystemPolicy()) or from a capability (\c SandboxManager::createSystemPolicyCall()) is
-    not refused.
+    Oracle TNS descriptors).
+
+    <b>System-policy calls and caller provenance:</b> as with other policy checks, trusted code that connects under a
+    policy barrier (\c SandboxManager::callWithSystemPolicy()) or from a capability
+    (\c SandboxManager::createSystemPolicyCall()) is not refused.  A barrier masks only the sandbox of the callers on
+    the stack, not the provenance of the code that it runs: a callback (a closure or call reference) that trusted code
+    creates while it serves a sandboxed caller keeps that caller's sandbox, so under the barrier the core still
+    applies the caller's sandbox to it, and the \c jdbc driver and the option checks refuse it as they would refuse
+    the caller (as a %Qore socket or file is refused).  A callback that trusted code created beforehand, before it
+    served the sandboxed caller (for example during its initialization), carries no such provenance, and a barrier
+    around it runs it with the system policy.  A capability from \c SandboxManager::createSystemPolicyCall(), which
+    trusted code registers before it runs sandboxed code, masks the provenance as well.
+
+    <b>The rule with the sandbox trust API:</b> with a %Qore library that has
+    \c QoreSandboxManager::trustsUncontrolledApis() (the jni module reports it with the \c sandbox_restricts_api key
+    of its \c info hash in \c get_module_hash()), the \c jdbc driver and \c Jni::org::qore::jni::check_class_option()
+    refuse code unless its governing sandbox trusts it with uncontrolled APIs
+    (\c SandboxManager::setUncontrolledApiPolicy()), whatever the sandbox restricts: a sandbox that restricts nothing
+    (an allow-all manager) but does not trust the code refuses them as well, because the Java code that they let run
+    does I/O, uses threads and memory, and changes the state of the whole JVM, none of which the sandbox controls, as
+    the %Qore library refuses such code every other uncontrolled API.  A host that governs trusted code with a sandbox
+    only for its interrupts or limits sets \c SandboxManager::setUncontrolledApiPolicy() on it.  For code that more
+    than one sandbox governs (a composition of sandboxes, for example when a callback or closure of one sandboxed
+    %Program runs code of another), the sandbox trusts the code only if every member does.  The governing sandbox is
+    resolved as for a policy check (\c QoreSandboxManagerHelper::Policy), so neither check applies inside
+    \c SandboxManager::callWithSystemPolicy() or a \c SandboxManager::createSystemPolicyCall() capability (see
+    above): this is intended, as a system-policy call is an explicit, trusted capability in which trusted code acts
+    as the system for its caller; such code must not open connections or use options on behalf of a sandboxed caller
+    that the caller's own sandbox would not allow.  The \c classpath option of the \c jdbc driver, which loads jars,
+    keeps its own rule (see @ref jdbc_option_classpath): it is judged by the restrictions of the code that set it, as
+    a module command is, which a barrier does not lift.
+
+    The values that choose the destination of a \c jdbc connection, the \c url option and the database name, can
+    carry driver properties that make a JDBC driver instantiate classes, so they are judged by the code that set them
+    as well, not only by the code that opens the connection (see @ref jdbc_option_url).
+
+    Without the sandbox trust API, module code cannot judge a composition of sandboxes, so the \c jdbc driver is
+    refused for code that a sandbox network policy restricts, as described above (this also refuses code that two
+    allow-all managers govern together, whose composition reports a configuration that denies), and the options for
+    code that any sandbox governs, also through a policy barrier or a system-policy capability.
 
     <b>Options that load Java code:</b> an option that names a Java class to load or instantiate, a classpath to add,
     or a value that Java compiles, deserializes or uses to select a component that loads classes, is refused with
-    \c JNI-SANDBOX-ERROR to sandboxed code, also through a policy barrier or a system-policy capability, before it is
-    used.  The run-time boundary is the sandbox (a \c Qore::SandboxManager), as for all module code: module code runs
+    \c JNI-SANDBOX-ERROR to sandboxed code, before it is used: without the sandbox trust API also through a policy
+    barrier or a system-policy capability, and with it, to code that its governing sandbox does not trust with
+    uncontrolled APIs (see above).  The connections and data providers of these apps declare
+    \c external_io, so their constructors refuse
+    sandboxed code first (\c APP-SANDBOX-ACCESS-DENIED); the option checks apply where that refusal does not, for
+    example to the static option checks that a module or a capability calls and to an object that trusted code
+    created.  The run-time boundary is the sandbox (a \c Qore::SandboxManager), as for all module code: module code runs
     with its own Program's parse options, and a caller's parse options restrict it only when the caller is
     sandboxed, so a Program that is restricted only with parse options (ex: \c PO_NO_UNCONTROLLED_APIS) is not
     refused these options at run time when it uses a provider module that trusted code loaded.  A host that runs
@@ -276,7 +446,10 @@ public class Fetcher {
     |FlywayDataProvider|\c locations other than directories (ex: \c classpath:), and a \c url with driver \
       properties
 
-    Modules check their own options with \c Jni::org::qore::jni::check_class_option().
+    Modules check their own options with \c Jni::org::qore::jni::check_class_option().  With the sandbox trust API,
+    code that a host governs with a sandbox that trusts it with uncontrolled APIs
+    (\c SandboxManager::setUncontrolledApiPolicy()) may use these options; without it, any governing sandbox refuses
+    them.
 
     The Kafka \c sasl.kerberos.kinit.cmd option names a command that the Kafka client runs in Java, outside of the
     process controls of %Qore.  It is trusted configuration: code that no sandbox governs can set it, so an application
