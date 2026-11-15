@@ -115,6 +115,16 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
     }
     info->setKeyValue("jdbc_option_setter", true, nullptr);
 #endif
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+    // "sandbox_restricts_api": uncontrolled code (the jdbc driver, check_class_option()) is refused only to code that
+    // a governing sandbox restricts and does not trust with uncontrolled APIs, as aggregated over compositions by
+    // QoreSandboxManager::restricts() and QoreSandboxManager::trustsUncontrolledApis()
+    // (jni_sandbox_refuses_uncontrolled_code())
+    if (!info) {
+        info = new QoreHashNode(autoTypeInfo);
+    }
+    info->setKeyValue("sandbox_restricts_api", true, nullptr);
+#endif
     mod_info.info = info;
 }
 

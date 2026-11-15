@@ -328,7 +328,8 @@ public class Fetcher {
     for now: a \c Datasource or \c DatasourcePool that uses the \c jdbc driver raises \c NETWORK-ACCESS-DENIED when it
     connects or reconnects for code that a sandbox network policy restricts (the default network policy denies, or an
     allowed or denied IP range or an allowed port rule is set), whatever the destination and whatever the policy
-    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A sandbox manager that restricts no network access, such as an allow-all manager, does not refuse the driver.  A
+    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A sandbox manager that restricts no network access, such as an allow-all manager, does not refuse the driver
+    (with the restriction API of sandboxes, the rule below applies instead).  A
     connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect; trusted
     code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data provider
     (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to sandboxed
@@ -340,10 +341,34 @@ public class Fetcher {
     (\c SandboxManager::callWithSystemPolicy()) or from a capability (\c SandboxManager::createSystemPolicyCall()) is
     not refused.
 
+    <b>The rule with the restriction API of sandboxes:</b> with a %Qore library that has
+    \c QoreSandboxManager::restricts() and \c QoreSandboxManager::trustsUncontrolledApis() (the jni module reports it
+    with the \c sandbox_restricts_api key of its \c info hash in \c get_module_hash()), the \c jdbc driver and
+    \c Jni::org::qore::jni::check_class_option() refuse code iff its governing sandbox does not trust it with
+    uncontrolled APIs and restricts anything: its network, its filesystem (a default policy that denies, an allowed
+    or denied path rule, or a sandbox root) or with a resource limit (threads, wall time, CPU time, stack size or
+    memory), because the Java code that they let run does I/O and uses threads and memory that the sandbox does not
+    control.  For code that more than one sandbox governs (a composition of sandboxes, for example when a callback or
+    closure of one sandboxed %Program runs code of another), a sandbox restricts if any of them does and trusts the
+    code only if all of them do, so a composition of allow-all managers does not refuse it.  The governing sandbox is
+    resolved as for a policy check (\c QoreSandboxManagerHelper::Policy), so neither check applies inside
+    \c SandboxManager::callWithSystemPolicy() or a \c SandboxManager::createSystemPolicyCall() capability: this is
+    intended, as a system-policy call is an explicit, trusted capability in which trusted code acts as the system for
+    its caller, as with every other policy check; such code must not open connections or use options on behalf of a
+    sandboxed caller that the caller's own sandbox would not allow.  As for every policy check, the code that the
+    barrier calls must be created by trusted code before it serves the sandboxed caller: a callback that it creates
+    while it serves the caller keeps the caller's sandbox, which then still applies under the barrier.  The
+    \c classpath option of the \c jdbc driver, which loads jars, keeps its own rule (see @ref jdbc_option_classpath): it is
+    judged by the restrictions of the code that set it, as a module command is, which a barrier does not lift.  Without the restriction API, the \c jdbc driver
+    is refused for code that a sandbox network policy restricts, as described above, and the options for code that a
+    sandbox that does not trust it with uncontrolled APIs governs, also through a policy barrier or a system-policy
+    capability.
+
     <b>Options that load Java code:</b> an option that names a Java class to load or instantiate, a classpath to add,
     or a value that Java compiles, deserializes or uses to select a component that loads classes, is refused with
-    \c JNI-SANDBOX-ERROR to sandboxed code, also through a policy barrier or a system-policy capability, before it is
-    used.  The connections and data providers of these apps declare \c external_io, so their constructors refuse
+    \c JNI-SANDBOX-ERROR to sandboxed code, before it is used: without the restriction API of sandboxes also through
+    a policy barrier or a system-policy capability, and with it, only to code that a governing sandbox restricts and
+    does not trust with uncontrolled APIs (see above).  The connections and data providers of these apps declare \c external_io, so their constructors refuse
     sandboxed code first (\c APP-SANDBOX-ACCESS-DENIED); the option checks apply where that refusal does not, for
     example to the static option checks that a module or a capability calls and to an object that trusted code
     created.  The run-time boundary is the sandbox (a \c Qore::SandboxManager), as for all module code: module code runs

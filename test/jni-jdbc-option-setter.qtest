@@ -257,13 +257,16 @@ list<string> sub loader_urls() {
     }
 
     #! Returns True if the jdbc driver refuses to connect for the code of the kind given (qore#5747)
-    /** the driver refuses to connect, before it processes any option, for code that a sandbox that does not trust it
-        with uncontrolled APIs governs: code of the sandboxed Program, also when it opens a datasource that trusted
-        code configured, a pool that grows on its thread, and a datasource object that its Program created or copied,
-        whoever opens it; without the uncontrolled-API policy of sandboxes, every governing sandbox
+    /** the driver refuses to connect, before it processes any option, for code of the sandboxed Program (whose
+        default sandbox restricts everything and does not trust it with uncontrolled APIs), also when it opens a
+        datasource that trusted code configured, a pool that grows on its thread, and a datasource object that its
+        Program created or copied, whoever opens it.  It does not refuse the code of the trusted-sandbox Program:
+        with the restriction API of sandboxes, its sandbox trusts it; without it, the driver is refused only for code
+        that a sandbox network policy restricts, and that sandbox allows the network (its classpath option is then
+        refused by the option check where the sandbox cannot trust it; see expectedFor())
     */
     private static bool connectRefused(string kind) {
-        return kind == "sandboxed" || (kind == "trusted-sandbox" && !hasUncontrolledApiPolicy());
+        return kind == "sandboxed";
     }
 
     #! Returns the result of a connection for the code of the kind \a connecting with the option set by \a setter

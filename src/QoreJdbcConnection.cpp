@@ -114,6 +114,7 @@ int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {
     return connect(env, xsink);
 }
 
+#ifndef _QORE_HAS_SANDBOX_RESTRICTS_API
 //! Returns true if the network policy of the manager restricts network access in any way
 /** A manager that is attached to a Program does not restrict it by itself: an allow-all manager (the default network
     policy allows, and no host, range or port rule is set) restricts nothing, and Qorus attaches one to every trusted
@@ -147,26 +148,38 @@ static bool network_policy_restricts(QoreSandboxManager& manager) {
     }
     return false;
 }
+#endif
 
 int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
-    // the JDBC driver resolves and connects to its destinations in Java and discovers some of them itself (failover
-    // hosts, redirects), so the sandbox network policy cannot be applied to them (qore#5747). The connection is refused
-    // only when both of these hold:
-    // - a sandbox that does not trust the code with uncontrolled APIs governs it: a policy check, so a system-policy
-    //   capability of trusted code connects, and so does code under a sandbox that trusts it (qore#5741);
-    // - the network policy of the governing sandbox restricts access. A manager that restricts nothing (an allow-all
-    //   manager, which Qorus attaches to every trusted interface Program for interruptible I/O) is no restriction.
-    if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Policy)) {
-        // a restricting sandbox without a governing manager cannot be judged: it is refused (fail closed)
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
-        if (governing && !network_policy_restricts(*governing.get())) {
-            return 0;
-        }
+    // the JDBC driver is uncontrolled Java code: it resolves and connects to its destinations in Java and discovers
+    // some of them itself (failover hosts, redirects), so the sandbox network policy cannot be applied to them
+    // (qore#5747), and it can do file I/O, start threads and allocate memory that no sandbox policy or limit applies
+    // to
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+    // the connection is refused iff the governing sandbox (resolved for a policy check, so a system-policy capability
+    // of trusted code connects) does not trust the code with uncontrolled APIs AND restricts anything: its network,
+    // its filesystem or with a resource limit (jni_sandbox_refuses_uncontrolled_code()).  A manager that restricts
+    // nothing (an allow-all manager, which Qorus attaches to every trusted interface Program for interruptible I/O),
+    // and a composition of such managers, are no restriction
+    if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
+        xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
+            "restricts and does not trust with uncontrolled APIs, because the JDBC driver is uncontrolled Java code: "
+            "it resolves and connects to its destinations, and does its other I/O, in Java, where the sandbox policy "
+            "and limits cannot be applied to it");
+        return -1;
+    }
+#else
+    // without the restriction API of sandboxes, which aggregates over the members of a composition of sandboxes, the
+    // connection is refused for code that a network policy restricts.  A manager that restricts nothing (an allow-all
+    // manager) is no restriction: the code is not governed by a policy, and the driver connects for it
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
+    if (governing && network_policy_restricts(*governing.get())) {
         xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
             "network policy restricts, because the JDBC driver resolves and connects to its destinations in Java, "
             "where the sandbox network policy cannot be applied to them");
         return -1;
     }
+#endif
     return 0;
 }
 

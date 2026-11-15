@@ -56,6 +56,35 @@ static inline bool jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Purpos
 #endif
 }
 
+// _QORE_HAS_SANDBOX_RESTRICTS_API: the restriction API of sandboxes, QoreSandboxManager::restricts() and
+// QoreSandboxManager::trustsUncontrolledApis(), which aggregate over the members of a composition of sandboxes
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+//! Returns true if uncontrolled code is refused to the calling code
+/** Uncontrolled code (a JDBC driver, a Java class that an option names) runs in Java, where no sandbox policy or limit
+    applies to its I/O, threads or memory.  It is refused iff the governing sandbox does not trust the code with
+    uncontrolled APIs and restricts anything (its network, its filesystem, including a sandbox root, or with a
+    resource limit):
+    <tt>!QoreSandboxManager::trustsUncontrolledApis() && QoreSandboxManager::restricts()</tt>.  For a composition of
+    sandboxes, which governs code when more than one Program's manager is on the thread's stack, the restriction is
+    the OR over the members and the trust the AND.  A manager that restricts nothing (an allow-all manager, which
+    Qorus attaches to every trusted interface Program for interruptible I/O), and a composition of such managers, do
+    not refuse it.  The parse options and functional domains of the calling Program are not judged here.
+
+    Fails closed: code that is restricted (jni_sandbox_restricts_caller()) but whose governing manager cannot be
+    resolved is refused.
+
+    @param purpose how the governing sandbox is resolved (see QoreSandboxManagerHelper); QoreSandboxManagerHelper::Policy
+    honours a policy barrier and a system-policy capability of trusted code
+*/
+static inline bool jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Purpose purpose) {
+    QoreSandboxManagerHelper governing(purpose);
+    if (!governing) {
+        return jni_sandbox_restricts_caller(purpose);
+    }
+    return !governing->trustsUncontrolledApis() && governing->restricts();
+}
+#endif
+
 // module API 2.3 (qore#5699): module commands are judged by the restrictions of the code that issues them, and module
 // functions can judge their caller the same way
 #if QORE_MODULE_API_MAJOR > 2 || (QORE_MODULE_API_MAJOR == 2 && QORE_MODULE_API_MINOR >= 3)

@@ -185,7 +185,12 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
 /** Data provider and connection modules call this before they act on an option that names a Java class to load or
     instantiate (a JDBC driver class, a JMS connection factory class, a Kafka handler class, ...), or a classpath to
     add.  Such an option lets whoever sets it run Java code that the sandbox does not control, so it is refused to
-    code that a sandbox governs, also through a policy barrier or a system-policy capability.
+    code that a sandbox governs.  With the restriction API of sandboxes (module info key \c sandbox_restricts_api),
+    it is refused only if the governing sandbox (resolved for a policy check, so a system-policy capability of
+    trusted code is not refused) does not trust the code with uncontrolled APIs and restricts anything (its network,
+    its filesystem, or with a resource limit); a sandbox that restricts nothing (an allow-all manager), and a
+    composition of such sandboxes, do not refuse it.  Without it, it is refused to code that a sandbox that does not
+    trust it with uncontrolled APIs governs, also through a policy barrier or a system-policy capability.
 
     The sandbox is the run-time boundary for module code: module code runs with its own Program's parse options, and
     with its caller's only when the caller is sandboxed, so a Program that is restricted only with parse options is
@@ -211,12 +216,22 @@ if (copts.driver_class) {
  */
 nothing check_class_option(string provider, string option, *string what) [flags=NAMED_ARGS] {
     const char* desc = what ? what->c_str() : "names a Java class or classpath to load";
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+    // only a governing sandbox that does not trust the code with uncontrolled APIs and restricts anything refuses it,
+    // as for the jdbc driver: the Java code that the option loads is not subject to the sandbox's policy or limits
+    // (jni_sandbox_refuses_uncontrolled_code())
+    if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
+        xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which code that a sandbox restricts and does "
+            "not trust with uncontrolled APIs cannot use", provider->c_str(), option->c_str(), desc);
+    }
+#else
     // seen through a policy barrier and a system-policy capability, so that the check fails closed; only a sandbox
     // that does not trust the code with uncontrolled APIs refuses it
     if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which sandboxed code cannot use",
             provider->c_str(), option->c_str(), desc);
     }
+#endif
     return QoreValue();
 }
 

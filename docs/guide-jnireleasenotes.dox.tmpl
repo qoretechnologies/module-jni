@@ -66,12 +66,19 @@
     - <b>Security</b>: the \c jdbc database driver raises \c NETWORK-ACCESS-DENIED when it connects for code that a
       sandbox network policy restricts (a default network policy that denies, or any allowed or denied IP range or
       allowed port rule; a sandbox manager that restricts nothing does not refuse the driver), because the sandbox network policy cannot be applied to the destinations that a JDBC
-      driver resolves and discovers in Java (see @ref jni_sandbox)
+      driver resolves and discovers in Java; with a %Qore library that has the restriction API of sandboxes
+      (\c QoreSandboxManager::restricts(); jni module info key \c sandbox_restricts_api), it is refused for code
+      that a governing sandbox restricts in any way (its network, its filesystem, including a sandbox root, or with a
+      resource limit) and does not trust with uncontrolled APIs, as aggregated over the members of a composition of
+      sandboxes, because the driver is uncontrolled Java code whose other I/O, threads and memory the sandbox does
+      not control either (see @ref jni_sandbox)
 
     - <b>Security</b>: the options of the JDBC, Jakarta JMS, Kafka, Camel, JasperReports and Flyway providers that
       name a Java class to load, a classpath to add, or code that Java compiles are refused with
-      \c JNI-SANDBOX-ERROR to sandboxed code; added \c Jni::org::qore::jni::check_class_option() for modules
-      (see @ref jni_sandbox)
+      \c JNI-SANDBOX-ERROR to sandboxed code; added \c Jni::org::qore::jni::check_class_option() for modules;
+      with the restriction API of sandboxes, only to code that a governing sandbox (resolved for a policy check)
+      restricts in any way and does not trust with uncontrolled APIs, as for the \c jdbc driver (see
+      @ref jni_sandbox)
 
     - <b>Security</b>: a Kafka \c sasl.kerberos.kinit.cmd option other than the default, which names a command that
       the Kafka client runs, is refused with \c JNI-SANDBOX-ERROR to sandboxed code (see @ref jni_sandbox)
