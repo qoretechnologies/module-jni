@@ -88,6 +88,11 @@ nothing sub call_barrier(code setter, Datasource ds, string v) {
     SandboxManager::callWithSystemPolicy(sub () { setter(ds, v); });
 }
 
+# returns a closure of this Program's code that calls the code given
+code sub wrap(code c) {
+    return sub (Datasource ds, string v) { c(ds, v); };
+}
+
 # the code of the calling Program: calls the setter given, which can be code of another Program
 nothing sub call(code setter, Datasource ds, string v) {
     setter(ds, v);
@@ -304,6 +309,27 @@ DatasourcePool sub new_pool(string url) {
             caller.callFunction("call", trusting.getCallReference("set_db_barrier_init"), dds, DbName);
             assertEq("NO-DRIVER", open(dds), "a trusting Program's barrier for a non-trusting caller: the database "
                 "name");
+        }
+
+        # a capability of trusted code, called by a closure of a caller whose sandbox does not trust its code, calls a
+        # setter of a Program whose sandbox trusts it: resolved for every purpose, the setter is governed by the
+        # caller's sandbox too (the closure's provenance), while for a policy check the capability's boundary leaves
+        # only the trusting Program's manager; the setter is judged as that code would be if it opened the connection
+        # itself, which is not refused
+        if (hasPolicy()) {
+            SandboxManager sm = allowAll(True);
+            if (trustOnly()) {
+                # whatever the sandbox restricts
+                sm.setNetworkDefaultPolicy(False);
+            }
+            Program trusting = getSetter(sm);
+            code tref = trusting.getCallReference("set_url");
+            code cap = SandboxManager::createSystemPolicyCall(sub (Datasource ds, string url) { tref(ds, url); });
+            code sc = caller.callFunction("wrap", cap);
+            Datasource ds(Url);
+            sc(ds, UrlOption);
+            assertEq("NO-DRIVER", open(ds), "a trusting Program's setter called by a capability for a non-trusting "
+                "caller's closure");
         }
 
         # trusted code of a Program that no sandbox governs sets the url inside a barrier for a sandboxed caller,
