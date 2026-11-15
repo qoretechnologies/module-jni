@@ -399,6 +399,8 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         if (copy.get(JdbcConnectGuard.PROPERTY) != guard || !ADAPTER.equals(copy.get(SOCKET_FACTORY))
                 || !"false".equals(copy.get(ALLOW_LOCAL_INFILE)) || !"false".equals(copy.get(POOL))
                 || !RESTRICTED_AUTH.equals(copy.get(RESTRICTED_AUTH_KEY)) || !"false".equals(copy.get(CREATE_DATABASE))
+                // the key store that force() made sure of must still be the current one: a concurrent restricted
+                // connection that created it again in between makes this check refuse the connection (fail closed)
                 || !SSL_MODE.equals(copy.get(SSL_MODE_KEY)) || !forced.get(KEY_STORE).equals(emptyKeyStore())
                 || !forced.get(KEY_STORE).equals(copy.get(KEY_STORE))
                 || !EMPTY_KEY_STORE_PASSWORD.equals(copy.get(KEY_STORE_PASSWORD))
@@ -500,6 +502,12 @@ final class SingleStoreProfile extends JdbcDriverProfile {
     private static byte[] emptyKeyStoreBytes;
     //! the directory of the module's empty client key store
     private static java.nio.file.Path emptyKeyStoreDir;
+    //! the identity of the directory when it was created (its file key, or its creation time without one)
+    private static Object emptyKeyStoreDirKey;
+    //! the owner of the directory when it was created: this process's user
+    private static java.nio.file.attribute.UserPrincipal emptyKeyStoreDirOwner;
+    //! the paths registered with deleteOnExit()
+    private static final java.util.Set<java.nio.file.Path> emptyKeyStoreExitPaths = new java.util.HashSet<>();
     //! the URI of the module's empty client key store, as it was last made sure of
     private static String emptyKeyStore;
 
@@ -509,8 +517,16 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         transaction replay and query cancels); with the forced \c keyStore, the system property is never read.  The
         store has no entries; it is the file \c empty.p12 in a new directory of this process
         (\c Files.createTempDirectory(): a random name, accessible by its owner only), made sure of for every
-        restricted connection: a missing directory is created again, and a missing or changed file is written again
-        atomically from the expected contents.  The driver reads the file on each handshake, so a file that is removed
+        restricted connection:
+        - the directory is used again only if it is still the directory that this process created: the same file
+          key (without links), the same owner, and no access for others; otherwise (ex: a temporary file cleaner
+          removed it and another user created one with the name) a new directory is created
+        - the file must be a regular file (without links) of the expected size with the expected contents, read
+          through a bounded channel; otherwise it is written again atomically from the expected contents.  Only this
+          process's user can create entries in the directory, so a file of another kind cannot replace it between
+          the check and the read
+        Every failure refuses the connection (fails closed), also a sharing violation on Windows when the file is
+        replaced while the driver reads it.  The driver reads the file on each handshake, so a file that is removed
         later makes TLS fail (closed) until the next restricted connection writes it again.
     */
     static synchronized String ensureEmptyKeyStore() {
@@ -522,14 +538,19 @@ final class SingleStoreProfile extends JdbcDriverProfile {
                 ks.store(bo, EMPTY_KEY_STORE_PASSWORD.toCharArray());
                 emptyKeyStoreBytes = bo.toByteArray();
             }
-            if (emptyKeyStoreDir == null || !java.nio.file.Files.isDirectory(emptyKeyStoreDir,
-                    java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-                emptyKeyStoreDir = java.nio.file.Files.createTempDirectory("qore-jni-jdbc-keystore-");
-                emptyKeyStoreDir.toFile().deleteOnExit();
+            if (!isOwnKeyStoreDir()) {
+                java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("qore-jni-jdbc-keystore-");
+                java.nio.file.attribute.BasicFileAttributes a = java.nio.file.Files.readAttributes(dir,
+                    java.nio.file.attribute.BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                emptyKeyStoreDirKey = a.fileKey() != null ? a.fileKey() : a.creationTime();
+                emptyKeyStoreDirOwner = ownerOf(dir);
+                emptyKeyStoreDir = dir;
+                // the file is deleted before its directory: deleteOnExit() deletes in the reverse order
+                registerDeleteOnExit(dir);
+                registerDeleteOnExit(dir.resolve("empty.p12"));
             }
             java.nio.file.Path f = emptyKeyStoreDir.resolve("empty.p12");
-            if (!java.nio.file.Files.isRegularFile(f, java.nio.file.LinkOption.NOFOLLOW_LINKS)
-                    || !java.util.Arrays.equals(java.nio.file.Files.readAllBytes(f), emptyKeyStoreBytes)) {
+            if (!hasExpectedContents(f)) {
                 java.nio.file.Path tmp = java.nio.file.Files.createTempFile(emptyKeyStoreDir, "empty-", ".tmp");
                 try {
                     java.nio.file.Files.write(tmp, emptyKeyStoreBytes);
@@ -538,8 +559,6 @@ final class SingleStoreProfile extends JdbcDriverProfile {
                 } finally {
                     java.nio.file.Files.deleteIfExists(tmp);
                 }
-                // deleted before its directory, which was registered first
-                f.toFile().deleteOnExit();
             }
             emptyKeyStore = f.toUri().toString();
             return emptyKeyStore;
@@ -547,6 +566,82 @@ final class SingleStoreProfile extends JdbcDriverProfile {
             throw sandboxError("the empty client key store of sandboxed SingleStore connections cannot be "
                 + "created: %s", describe(e));
         }
+    }
+
+    //! Registers a path with deleteOnExit() once
+    private static void registerDeleteOnExit(java.nio.file.Path p) {
+        if (emptyKeyStoreExitPaths.add(p)) {
+            p.toFile().deleteOnExit();
+        }
+    }
+
+    //! Returns the owner of a path (without links), or null if the file system has no owners
+    private static java.nio.file.attribute.UserPrincipal ownerOf(java.nio.file.Path p) throws java.io.IOException {
+        try {
+            return java.nio.file.Files.getOwner(p, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        } catch (UnsupportedOperationException e) {
+            return null;
+        }
+    }
+
+    //! Returns true if the key store directory is still the one that this process created
+    private static boolean isOwnKeyStoreDir() throws java.io.IOException {
+        java.nio.file.Path dir = emptyKeyStoreDir;
+        if (dir == null) {
+            return false;
+        }
+        java.nio.file.attribute.BasicFileAttributes a;
+        try {
+            a = java.nio.file.Files.readAttributes(dir, java.nio.file.attribute.BasicFileAttributes.class,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        } catch (java.nio.file.NoSuchFileException e) {
+            return false;
+        }
+        Object key = a.fileKey() != null ? a.fileKey() : a.creationTime();
+        if (!a.isDirectory() || !key.equals(emptyKeyStoreDirKey)) {
+            return false;
+        }
+        java.nio.file.attribute.UserPrincipal owner = ownerOf(dir);
+        if (owner == null ? emptyKeyStoreDirOwner != null : !owner.equals(emptyKeyStoreDirOwner)) {
+            return false;
+        }
+        // no access for the group or others, where the file system has POSIX permissions
+        try {
+            java.util.Set<java.nio.file.attribute.PosixFilePermission> perms =
+                java.nio.file.Files.getPosixFilePermissions(dir, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+            for (java.nio.file.attribute.PosixFilePermission perm : perms) {
+                if (!perm.name().startsWith("OWNER_")) {
+                    return false;
+                }
+            }
+        } catch (UnsupportedOperationException e) {
+            // no POSIX permissions (Windows: the directory's ACL is the creator's)
+        }
+        return true;
+    }
+
+    //! Returns true if the key store file is a regular file with the expected contents
+    private static boolean hasExpectedContents(java.nio.file.Path f) throws java.io.IOException {
+        java.nio.file.attribute.BasicFileAttributes a;
+        try {
+            a = java.nio.file.Files.readAttributes(f, java.nio.file.attribute.BasicFileAttributes.class,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        } catch (java.nio.file.NoSuchFileException e) {
+            return false;
+        }
+        if (!a.isRegularFile() || a.size() != emptyKeyStoreBytes.length) {
+            return false;
+        }
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(emptyKeyStoreBytes.length + 1);
+        try (java.nio.channels.SeekableByteChannel ch = java.nio.file.Files.newByteChannel(f,
+                java.nio.file.StandardOpenOption.READ, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            while (buf.hasRemaining() && ch.read(buf) >= 0) {
+            }
+        } catch (java.nio.file.NoSuchFileException e) {
+            return false;
+        }
+        return buf.position() == emptyKeyStoreBytes.length
+            && java.util.Arrays.equals(java.util.Arrays.copyOf(buf.array(), buf.position()), emptyKeyStoreBytes);
     }
 
     //! Returns the URI of the module's empty client key store, as ensureEmptyKeyStore() last made sure of it

@@ -30,6 +30,7 @@
 #include "QoreJdbcDriver.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <strings.h>
 
@@ -447,7 +448,12 @@ int jdbc_connect_decision(Datasource* ds, JdbcStickyRestriction& sticky, JdbcCon
     // the code that opens the connection; its network policy applies to the destinations
     if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Policy)) {
         d.restricted = true;
-        d.policy.reset(new QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy));
+        try {
+            d.policy.reset(new QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy));
+        } catch (const std::bad_alloc&) {
+            xsink->outOfMemory();
+            return -1;
+        }
         if (!*d.policy) {
             // a missing policy is not a permission
             xsink->raiseException("NETWORK-ACCESS-DENIED", "the sandbox policy of the JDBC connection cannot be "
