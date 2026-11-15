@@ -96,6 +96,7 @@ string sub get_context(object c) {
         addTestCase("a sandbox that trusts the code allows the option despite its restrictions",
             \restrictsApiTrustTest());
         addTestCase("compositions of sandboxes", \restrictsApiCompositionTest());
+        addTestCase("allow-all composition allows the option (develop #208 refusal)", \allowAllCompositionTest());
         addTestCase("trusted code in a system-policy call may use the option for a sandboxed caller",
             \restrictsApiSystemPolicyTest());
         set_return_value(main());
@@ -490,7 +491,8 @@ string sub get_context(object c) {
 
     trustedSandboxTest() {
         # a host that governs trusted code with a sandbox only for its interrupts or limits allows uncontrolled APIs
-        # (SandboxManager::setUncontrolledApiPolicy(), a Qore with the trust policy); that code may use the options
+        # (SandboxManager::setUncontrolledApiPolicy(), a Qore with the trust policy); with the restriction API of
+        # sandboxes, that code may use the options
         SandboxManager sm();
         if (!sm.hasCallableMethod("setUncontrolledApiPolicy")) {
             testSkip("the Qore library has no uncontrolled-API policy of sandboxes");
@@ -502,14 +504,20 @@ string sub get_context(object c) {
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(sm);
         p.parse("sub run() {\n" + check + "\n}\n", "jni-class-options-trusted-sandbox");
-        p.callFunction("run");
         # the provider options too: a Kafka serializer of the caller's own
         Program kp(PO_NEW_STYLE);
         kp.setSandboxManager(sm);
         kp.loadModule("KafkaDataProvider");
         kp.parse("sub run() {\n" + kafkaCheck("value.serializer", "com.example.Placeholder") + "\n}\n",
             "jni-class-options-trusted-sandbox-kafka");
-        kp.callFunction("run");
+        if (restrictsApi()) {
+            p.callFunction("run");
+            kp.callFunction("run");
+        } else {
+            # without the restriction API, any governing sandbox refuses the options, also one that trusts the code
+            assertThrows("JNI-SANDBOX-ERROR", \p.callFunction(), "run", "a trusting sandbox, without the API");
+            assertThrows("JNI-SANDBOX-ERROR", \kp.callFunction(), "run", "a trusting sandbox, without the API: kafka");
+        }
         # the default sandbox, with the same filesystem and network policy, restricts nothing: without the restriction
         # API it still refuses it, with it, it does not
         SandboxManager deny = allowAll();
@@ -733,5 +741,16 @@ code sub make_capability() {
             assertEq("ok", p.callFunction("call", lib.callFunction("make_capability")), r.name
                 + ": createSystemPolicyCall()");
         }
+    }
+
+    #! code that two allow-all sandboxes govern together may use the option (as for the jdbc driver; develop #208)
+    /** a closure of one allow-all sandboxed Program calls another allow-all sandboxed Program, so the governing
+        sandbox is the composition of two allow-all managers; it restricts nothing, so the option check does not
+        refuse it.  Without the restriction API of sandboxes, any governing sandbox refuses the option
+    */
+    allowAllCompositionTest() {
+        string expected = restrictsApi() ? "ok" : "JNI-SANDBOX-ERROR";
+        assertEq(expected, checkResult(allowAll()), "one allow-all manager");
+        assertEq(expected, composed(allowAll(), allowAll()), "a composition of two allow-all managers");
     }
 }

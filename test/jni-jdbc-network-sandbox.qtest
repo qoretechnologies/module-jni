@@ -105,6 +105,7 @@ string sub socket_barrier() {
         addTestCase("every kind of sandbox restriction refuses the connection", \restrictsApiTest());
         addTestCase("a sandbox that trusts the code connects despite its restrictions", \restrictsApiTrustTest());
         addTestCase("compositions of sandboxes", \restrictsApiCompositionTest());
+        addTestCase("allow-all composition connects (develop #208 refusal)", \allowAllCompositionTest());
         addTestCase("trusted code in a system-policy call connects for a sandboxed caller",
             \restrictsApiSystemPolicyTest());
         set_return_value(main());
@@ -277,19 +278,52 @@ string sub open_ds(Datasource ds) {
     }
 
     ownBarrierTest() {
-        # a barrier stops at the Program of the call, whose own sandbox still applies; where a sandbox refuses
-        # uncontrolled APIs at run time (qore#5741), the sandboxed code cannot establish the barrier at all
-        Program p = getSandboxed(OpenSource + "
+        # the error of the barrier itself, if any, with its description; open_url() returns the connection's error
+        string src = OpenSource + "
 string sub run(string url) {
     try {
         return SandboxManager::callWithSystemPolicy(\\open_url(), url);
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return ex.err + \": \" + ex.desc;
     }
 }
-");
-        string err = p.callFunction("run", Url);
-        assertTrue(inlist(err, (Denied, "INVALID-FUNCTION-ACCESS")), "refused: " + err);
+
+sub probe() {
+    SandboxManager::callWithSystemPolicy(sub () {});
+}
+";
+        # a sandbox that allows uncontrolled APIs (qore#5741; the call is dynamic because the Qore library may lack
+        # the policy) lets the code establish the barrier: the barrier stops at the Program of the call, whose own
+        # sandbox still applies
+        SandboxManager sm();
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
+        # with the restriction API of sandboxes, the trusting sandbox does not refuse the driver (the Program's own
+        # sandbox governs the code in its barrier), which then fails for the missing driver; without it, the network
+        # policy of the sandbox refuses it
+        assertEq(restrictsApi() ? NoDriver : Denied, getSandboxed(src, sm).callFunction("run", Url),
+            "barrier established");
+
+        # a default sandbox: a Qore library that refuses uncontrolled APIs at run time (qore#5741) refuses the barrier
+        # itself to the sandboxed code; without the refusal, the barrier stops at the Program of the call as above
+        Program p = getSandboxed(src);
+        bool refused;
+        try {
+            p.callFunction("probe");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "INVALID-FUNCTION-ACCESS") {
+                rethrow;
+            }
+            refused = True;
+        }
+        string rv = p.callFunction("run", Url);
+        if (refused) {
+            assertRegex("^INVALID-FUNCTION-ACCESS: .*does not allow access to uncontrolled API "
+                "method '.*SandboxManager::callWithSystemPolicy\\(", rv, "default sandbox: the barrier is refused");
+        } else {
+            assertEq(Denied, rv, "default sandbox");
+        }
     }
 
     trustedCalleeTest() {
@@ -535,5 +569,22 @@ string sub call_cap(code c) { return c(); }
             assertEq(NoDriver, p.callFunction("call_cap", lib.callFunction("make_capability", url)), r.name
                 + ": createSystemPolicyCall()");
         }
+    }
+
+    #! code that two allow-all sandboxes govern together connects (the refusal of develop #208)
+    /** a closure of one allow-all sandboxed Program calls another allow-all sandboxed Program, so the governing
+        sandbox is the composition of two allow-all managers, as when Qorus runs the callbacks, closures and mappers of
+        one trusted interface Program, each of which has an allow-all manager, with the code of another on the stack.
+        The composition restricts nothing, so the jdbc driver connects: it fails for the missing driver.
+
+        Without the restriction API of sandboxes, module code cannot read the members of a composition, whose own
+        configuration denies the network, so the driver refuses it (NETWORK-ACCESS-DENIED), as develop #208 does; the
+        restriction API (QoreSandboxManager::restricts(), the OR over the members) fixes it
+    */
+    allowAllCompositionTest() {
+        # each manager alone connects
+        assertEq(NoDriver, getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url), "one allow-all manager");
+        assertEq(restrictsApi() ? NoDriver : Denied, composed(allowAll(), allowAll()),
+            "a composition of two allow-all managers");
     }
 }

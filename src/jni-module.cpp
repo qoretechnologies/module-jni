@@ -534,6 +534,9 @@ static bool jni_exported_import_allowed(const QoreProgram* pgm, std::string& ref
     }
     return true;
 #else
+    // trust only, not QoreSandboxManager::restricts(): importing a Java class is a direct use of an uncontrolled API,
+    // which the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing but does not trust the
+    // code still refuses it
     if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         refused = "sandboxed code cannot import Java classes";
         return false;
@@ -753,6 +756,9 @@ static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, 
         throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command %s, so it cannot be used in a Program "
             "that does not allow uncontrolled APIs", cmd, what);
     }
+    // trust only, not QoreSandboxManager::restricts(): the module command is a direct use of an uncontrolled API, which
+    // the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing but does not trust the code
+    // still refuses it
     if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
         throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"%s\" module command, which %s",
             cmd, what);
@@ -1000,6 +1006,9 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
     // a sandboxed Program defines classes only in its own loader: in the loader of another Program, its byte code
     // would become the class that the other Program, and every Program that it serves, loads under that name
     if (!env.isSameObject(define_loader, jpc->getClassLoader())) {
+        // trust only, not QoreSandboxManager::restricts(): defining a class in another Program's loader is a direct use
+        // of an uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that restricts
+        // nothing but does not trust the code still refuses it
         if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
             throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"define-class\" module "
                 "command to define class '%s', which belongs to another Program", binary_name.c_str());

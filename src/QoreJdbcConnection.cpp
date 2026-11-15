@@ -348,6 +348,9 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                     "which code that does not allow uncontrolled APIs or the filesystem cannot use", JDBC_OPT_CLASSPATH);
                 return -1;
             }
+            // trust only, not QoreSandboxManager::restricts(): adding to the classpath is a direct use of an
+            // uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing
+            // but does not trust the code still refuses it
             if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
                 xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
                     "which sandboxed code cannot use", JDBC_OPT_CLASSPATH);
