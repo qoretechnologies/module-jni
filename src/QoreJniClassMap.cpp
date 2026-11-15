@@ -27,6 +27,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <algorithm>
 #include <set>
@@ -4451,7 +4452,20 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
         // issue #3585: set context for external java threads; this attaches the thread to the JVM, which raises an
         // exception when the thread is cancelled or cannot be attached
         JniExternalProgramData::setContext(pgm);
-        QoreProgramContextHelper pch(pgm);
+        // issues qore#6183 and qore#6185: the call runs in the object's Program, so the Program is entered when it is
+        // not the current one: the entry switches the thread's local data to the Program's (which Qore code that Java
+        // calls back during the call uses), records the calling code for sandbox resolution, holds the Program's
+        // thread count for the call, and runs the Program's entry handler; it raises PROGRAM-ERROR before Java runs
+        // if the Program is being torn down or parsed by another thread; a call within the Program costs only the
+        // comparison; the entry is left when epch is destroyed, also when an exception propagates (a C++ exception
+        // from the entry itself leaves epch empty)
+        std::optional<QoreExternalProgramContextHelper> epch;
+        if (pgm && pgm != ::getProgram()) {
+            epch.emplace(xsink, pgm);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
         return m->invoke(jd->getObject(), args, pgm);
     } catch (jni::Exception& e) {
         e.convert(xsink);
