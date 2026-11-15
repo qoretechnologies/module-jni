@@ -94,24 +94,11 @@ string sub socket_barrier() {
     }
 
     #! Returns a sandboxed Program with the code given
-    /** qore#5741 run-time refusal of uncontrolled APIs: the sandbox allows uncontrolled APIs, so that the sandboxed
-        code reaches the jdbc driver's network check (and SandboxManager::callWithSystemPolicy()); its network policy
-        stays as given, and is what the cases test
-    */
     private static Program getSandboxed(string source, *SandboxManager sm) {
         Program p(PO_NEW_STYLE);
-        sm = sm ?? new SandboxManager();
-        allowUncontrolledApis(sm);
-        p.setSandboxManager(sm);
+        p.setSandboxManager(sm ?? new SandboxManager());
         p.parse(source, "jni-jdbc-network-sandboxed");
         return p;
-    }
-
-    #! Allows uncontrolled APIs in the sandbox (qore#5741); dynamic because the Qore library may lack the policy
-    private static allowUncontrolledApis(SandboxManager sm) {
-        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
-            call_object_method(sm, "setUncontrolledApiPolicy", True);
-        }
     }
 
     #! Returns a trusted Program with the code given
@@ -226,13 +213,48 @@ string sub open_ds(Datasource ds) {
     }
 
     ownBarrierTest() {
-        # a barrier stops at the Program of the call, whose own sandbox still applies
-        Program p = getSandboxed(OpenSource + "
+        # the error of the barrier itself, if any, with its description; open_url() returns the connection's error
+        string src = OpenSource + "
 string sub run(string url) {
-    return SandboxManager::callWithSystemPolicy(\\open_url(), url);
+    try {
+        return SandboxManager::callWithSystemPolicy(\\open_url(), url);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
 }
-");
-        assertEq(Denied, p.callFunction("run", Url));
+
+sub probe() {
+    SandboxManager::callWithSystemPolicy(sub () {});
+}
+";
+        # a sandbox that allows uncontrolled APIs (qore#5741; the call is dynamic because the Qore library may lack
+        # the policy) lets the code establish the barrier: the barrier stops at the Program of the call, whose own
+        # sandbox still applies
+        SandboxManager sm();
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
+        assertEq(Denied, getSandboxed(src, sm).callFunction("run", Url), "barrier established");
+
+        # a default sandbox: a Qore library that refuses uncontrolled APIs at run time (qore#5741) refuses the barrier
+        # itself to the sandboxed code; without the refusal, the barrier stops at the Program of the call as above
+        Program p = getSandboxed(src);
+        bool refused;
+        try {
+            p.callFunction("probe");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "INVALID-FUNCTION-ACCESS") {
+                rethrow;
+            }
+            refused = True;
+        }
+        string rv = p.callFunction("run", Url);
+        if (refused) {
+            assertRegex("^INVALID-FUNCTION-ACCESS: .*does not allow access to uncontrolled API "
+                "method '.*SandboxManager::callWithSystemPolicy\\(", rv, "default sandbox: the barrier is refused");
+        } else {
+            assertEq(Denied, rv, "default sandbox");
+        }
     }
 
     trustedCalleeTest() {

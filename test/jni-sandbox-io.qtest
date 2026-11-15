@@ -46,7 +46,8 @@ class JniSandboxIoTest inherits QUnit::Test {
         addTestCase("a policy is shared between Java threads", \testConcurrent());
         addTestCase("a Qore callback on a Java thread checks with its sandbox", \testCallback());
         addTestCase("the checked address is the address connected to", \testConnect());
-        addTestCase("a default sandbox does not allow calling Java", \testUncontrolledApiRefused());
+        addTestCase("a default sandbox refuses calls to Java where the Qore library refuses uncontrolled APIs",
+            \testUncontrolledApiRefused());
         set_return_value(main());
     }
 
@@ -543,10 +544,15 @@ sub probe() { SandboxManager::callWithSystemPolicy(sub () {}); }", "jni-sandbox-
         };
         if (refused) {
             # the core refuses the call before Java runs: the static check would raise NETWORK-ACCESS-DENIED, as the
-            # default sandbox denies the network
+            # default sandbox denies the network; the refusal names the Java method that was refused
+            hash<string, string> refused_api = {
+                "a static method": "SandboxIo::checkNetwork\\(",
+                "a constructor": "StringBuilder::constructor\\(",
+                "the capture of a policy": "SandboxIo::capture\\(",
+            };
             foreach hash<auto> i in (calls.pairIterator()) {
                 assertDenied("INVALID-FUNCTION-ACCESS", sub () { p.callFunction("through", i.value); },
-                    "does not allow access to uncontrolled API", i.key);
+                    "does not allow access to uncontrolled API method '.*" + refused_api{i.key}, i.key);
             }
         } else {
             # a Qore library without the run-time refusal: the calls reach Java, where the default sandbox's network
