@@ -23,7 +23,8 @@ import java.util.zip.ZipEntry;
 
 //! Java helpers of the jdbc sandbox tests (qore#5786), called by trusted test code only
 /** The helpers take the guarded sockets as plain sockets, so that they do not depend on the classes of the jni
-    module's org.qore.jni.jdbc package.
+    module's org.qore.jni.jdbc package at compile time; emptyKeyStoreFile() and emptyKeyStoreBytes() read the state
+    of its package-private SingleStoreProfile by reflection.
 */
 public final class JdbcGuardTestHelper {
     private JdbcGuardTestHelper() {
@@ -225,13 +226,10 @@ public final class JdbcGuardTestHelper {
     */
     public static String emptyKeyStoreFile() throws Exception {
         Class<?> c = Class.forName("org.qore.jni.jdbc.SingleStoreProfile");
-        java.lang.reflect.Field f = c.getDeclaredField("emptyKeyStore");
-        f.setAccessible(true);
-        Object uri;
-        // the field is guarded by the class's lock (static synchronized methods)
-        synchronized (c) {
-            uri = f.get(null);
-        }
+        // the profile's own static synchronized accessor, with its locking
+        java.lang.reflect.Method m = c.getDeclaredMethod("emptyKeyStore");
+        m.setAccessible(true);
+        Object uri = m.invoke(null);
         return uri == null ? null : java.nio.file.Paths.get(java.net.URI.create(uri.toString())).toString();
     }
 
@@ -240,6 +238,7 @@ public final class JdbcGuardTestHelper {
         Class<?> c = Class.forName("org.qore.jni.jdbc.SingleStoreProfile");
         java.lang.reflect.Field f = c.getDeclaredField("emptyKeyStoreBytes");
         f.setAccessible(true);
+        // no accessor: the field is guarded by the class's lock (its static synchronized methods)
         synchronized (c) {
             byte[] b = (byte[])f.get(null);
             return b == null ? null : b.clone();

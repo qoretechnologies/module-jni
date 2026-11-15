@@ -472,7 +472,8 @@ foreach hash<auto> column in (result.schemaV2()) {
     connection makes sure of the store, between the check of the directory and the check or write of the file, so if
     a temporary file cleaner removed the directory and another user created the path, the connection reads that
     user's file: the connection can fail, block on a FIFO, or present a client certificate of a key store that the
-    other user put there after the check, but the JVM's key cannot leak (keeping the store outside a cleaned /tmp is
+    other user put there (at any time for a reconnect, which checks nothing, and after the check when a restricted
+    connection makes sure of the store), but the JVM's key cannot leak (keeping the store outside a cleaned /tmp is
     a possible follow-up); a FIFO that the process's own user swaps in between the check and the read blocks the
     connections that are being prepared; and a file system that ignores permissions (vfat, NTFS with a umask) creates
     a new directory for every restricted connection and can refuse a concurrent one.  Certificate validation follows

@@ -104,6 +104,8 @@ string sub module_cmd(string cmd) {
         bool supported;
         #! the fake servers to close
         list<FakeDbServer> servers = ();
+        #! the values of the JVM's key store properties before setJvmKeyStore()
+        *hash<auto> saved_key_store;
     }
 
     constructor() : QUnit::Test("JNI jdbc driver sandbox", "1.0", \ARGV) {
@@ -872,12 +874,8 @@ string sub module_cmd(string cmd) {
     ssClientKeyTest() {
         checkSkip(ss_jar, "singlestore");
         # the JVM's client key store, which the driver presents to every server without a keyStore option
-        System::setProperty("javax.net.ssl.keyStore", get_script_dir() + "jdbc-fake-server.p12");
-        on_exit System::clearProperty("javax.net.ssl.keyStore");
-        System::setProperty("javax.net.ssl.keyStorePassword", "qore-fake");
-        on_exit System::clearProperty("javax.net.ssl.keyStorePassword");
-        System::setProperty("javax.net.ssl.keyStoreType", "PKCS12");
-        on_exit System::clearProperty("javax.net.ssl.keyStoreType");
+        setJvmKeyStore();
+        on_exit restoreJvmKeyStore();
         FakeDbServer s = server("mysql-ok");
         int port = s.getPort();
         # a trusted connection presents it: the server sees a client certificate
@@ -906,45 +904,37 @@ string sub module_cmd(string cmd) {
         assertEq(1, s.clientCertificates(), "restricted after the overwrite: no client certificate");
         # the directory is replaced by another one with the same name (ex: a temporary file cleaner removed it and
         # someone created it again), which cannot be written and holds a key store with a client key: it is not used
-        list<string> dirs = (dirname(ownEmptyKeyStore()),);
+        string dir = dirname(ownEmptyKeyStore());
         binary key = ReadOnlyFile::readBinaryFile(get_script_dir() + "jdbc-fake-server.p12");
         # registered first, so that a failure part of the way still restores and removes everything
         on_exit {
-            foreach string dir in (dirs) {
-                foreach string d in ((dir, dir + ".old")) {
-                    try { chmod(d, 0700); } catch () {}
-                    try { unlink(d + DirSep + "empty.p12"); } catch () {}
-                    try { rmdir(d); } catch () {}
-                }
+            foreach string d in ((dir, dir + ".old")) {
+                try { chmod(d, 0700); } catch () {}
+                try { unlink(d + DirSep + "empty.p12"); } catch () {}
+                try { rmdir(d); } catch () {}
             }
         }
-        foreach string dir in (dirs) {
-            # the old directory is renamed away, not removed: its inode stays in use, so the new directory cannot
-            # get the same one (ext4 reuses a freed inode at once, which would make it the "same" directory)
-            rename(dir, dir + ".old");
-            mkdir(dir, 0700);
+        # the old directory is renamed away, not removed: its inode stays in use, so the new directory cannot get the
+        # same one (ext4 reuses a freed inode at once, which would make it the "same" directory)
+        rename(dir, dir + ".old");
+        mkdir(dir, 0700);
+        {
             File out();
             out.open2(dir + DirSep + "empty.p12", O_CREAT | O_WRONLY | O_TRUNC, 0600);
             out.write(key);
             out.close();
-            chmod(dir, 0500);
         }
+        chmod(dir, 0500);
         assertEq("ok", sandboxed(port).callFunction("open_db", ssUrl(port)), "restricted after the replacement");
         assertEq(1, s.clientCertificates(), "restricted after the replacement: no client certificate");
-        foreach string dir in (dirs) {
-            assertEq(key, ReadOnlyFile::readBinaryFile(dir + DirSep + "empty.p12"), "the replaced directory is not used");
-        }
+        assertEq(key, ReadOnlyFile::readBinaryFile(dir + DirSep + "empty.p12"), "the replaced directory is not used");
     }
 
     ssKeyStorePermissionTest() {
         checkSkip(ss_jar, "singlestore");
         # the JVM's client key store, which the driver presents to every server without a keyStore option
-        System::setProperty("javax.net.ssl.keyStore", get_script_dir() + "jdbc-fake-server.p12");
-        on_exit System::clearProperty("javax.net.ssl.keyStore");
-        System::setProperty("javax.net.ssl.keyStorePassword", "qore-fake");
-        on_exit System::clearProperty("javax.net.ssl.keyStorePassword");
-        System::setProperty("javax.net.ssl.keyStoreType", "PKCS12");
-        on_exit System::clearProperty("javax.net.ssl.keyStoreType");
+        setJvmKeyStore();
+        on_exit restoreJvmKeyStore();
         FakeDbServer s = server("mysql-ok");
         int port = s.getPort();
         # the detector: a trusted connection presents the JVM's client certificate
@@ -952,6 +942,7 @@ string sub module_cmd(string cmd) {
         assertEq(1, s.clientCertificates(), "trusted: the JVM's client certificate");
         Program p = sandboxed(port);
         assertEq("ok", p.callFunction("open_db", ssUrl(port)), "restricted");
+        assertEq(2, s.tlsHandshakes(), "restricted: TLS");
         assertEq(1, s.clientCertificates(), "restricted: no client certificate");
         # this process's directory, from the module's state
         string old_file = ownEmptyKeyStore();
@@ -962,6 +953,7 @@ string sub module_cmd(string cmd) {
         on_exit try { chmod(dir, 0700); } catch () {}
         chmod(dir, 0750);
         assertEq("ok", p.callFunction("open_db", ssUrl(port)), "restricted after the chmod");
+        assertEq(3, s.tlsHandshakes(), "restricted after the chmod: TLS");
         assertEq(1, s.clientCertificates(), "restricted after the chmod: no client certificate");
         string new_file = ownEmptyKeyStore();
         string new_dir = dirname(new_file);
@@ -972,6 +964,29 @@ string sub module_cmd(string cmd) {
         hash<auto> st = hstat(dir);
         assertEq(inode, st.inode, "the directory keeps its inode");
         assertEq(0750, st.mode & 0777, "the 0750 directory is left as it is");
+    }
+
+    #! sets the JVM's client key store to the test's key store, which has a client key
+    private setJvmKeyStore() {
+        hash<string, string> values = {
+            "javax.net.ssl.keyStore": get_script_dir() + "jdbc-fake-server.p12",
+            "javax.net.ssl.keyStorePassword": "qore-fake",
+            "javax.net.ssl.keyStoreType": "PKCS12",
+        };
+        saved_key_store = map {$1: System::getProperty($1)}, keys values;
+        map System::setProperty($1.key, $1.value), values.pairIterator();
+    }
+
+    #! restores the JVM's key store properties as they were before setJvmKeyStore()
+    private restoreJvmKeyStore() {
+        foreach hash<auto> i in (saved_key_store.pairIterator()) {
+            if (exists i.value) {
+                System::setProperty(i.key, i.value);
+            } else {
+                System::clearProperty(i.key);
+            }
+        }
+        remove saved_key_store;
     }
 
     #! returns the file of this process's empty client key store, from the jni module's state
