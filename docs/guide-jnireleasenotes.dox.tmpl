@@ -73,7 +73,10 @@
       every socket of the driver goes through the module's socket factory, which connects only to the checked
       addresses; the driver is loaded in its exact audited version from the classpath of every Program, never
       through \c DriverManager.  The policy source is PROVISIONAL (the code that runs on the thread).  The module hash
-      reports the drivers with \c "jdbc_sandbox_drivers" in its \c "info" key (see @ref jdbc_sandbox_connections)
+      reports the drivers with \c "jdbc_sandbox_drivers" in its \c "info" key (see @ref jdbc_sandbox_connections).
+      PROVISIONAL / BLOCKED: restricted callers' SQL on a connection that trusted code opened is screened only for
+      SingleStore URLs; with other drivers (ex: MariaDB or MySQL with LOCAL INFILE allowed, H2, SQLite, Derby),
+      sandboxed code that is handed a trusted connection can read files or run code, as before (qore#6142)
 
     - <b>Security</b>: the options of the JDBC, Jakarta JMS, Kafka, Camel, JasperReports and Flyway providers that
       name a Java class to load, a classpath to add, or code that Java compiles are refused with

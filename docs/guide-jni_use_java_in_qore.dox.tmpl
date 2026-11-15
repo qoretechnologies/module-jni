@@ -354,7 +354,13 @@ public class Fetcher {
     connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect, with
     the SQL screen of its driver's profile (SingleStore: \c LOAD \c DATA \c LOCAL \c INFILE) for sandboxed callers;
     that it is otherwise not restricted is qore#6142, and trusted code that must not let sandboxed code use a
-    database does not give it the \c Datasource.  The JDBC data
+    database does not give it the \c Datasource.  <b>PROVISIONAL / BLOCKED:</b> restricted callers' SQL on a connection that trusted code opened is
+    screened only for SingleStore URLs.  With other JDBC drivers (ex: MariaDB or MySQL with \c LOAD \c DATA
+    \c LOCAL \c INFILE allowed, H2's \c FILE_READ or \c CREATE \c ALIAS, SQLite or Derby), sandboxed code that is
+    handed a trusted connection can read files or run code, exactly as before qore#5786; whether such a connection
+    must refuse restricted callers is the decision of qore#6142.  A connection whose \c url option
+    restricted code set is restricted also when trusted code opens it (<b>PROVISIONAL</b>); other parameters that
+    restricted code chose, such as the database name, need qore#6142 Option A or the Qore side of qore#5747.  The JDBC data
     provider (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to
     sandboxed code as an \c external_io app.  As with other policy checks, trusted code that connects under a policy
     barrier (\c SandboxManager::callWithSystemPolicy()) or from a capability

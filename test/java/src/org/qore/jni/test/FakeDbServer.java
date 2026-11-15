@@ -39,6 +39,7 @@ public final class FakeDbServer implements AutoCloseable {
     private volatile boolean closing = false;
     private javax.net.ssl.SSLContext tlsContext;
     private int tlsHandshakes = 0;
+    private int clientCertificates = 0;
     private long infileBytes = 0;
     private int infileRequests = 0;
     private String infileName = "/etc/hostname";
@@ -117,8 +118,33 @@ public final class FakeDbServer implements AutoCloseable {
             javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
         kmf.init(ks, password.toCharArray());
         javax.net.ssl.SSLContext ctx = javax.net.ssl.SSLContext.getInstance("TLS");
-        ctx.init(kmf.getKeyManagers(), null, null);
+        // every client certificate is accepted, so that the test sees whether the client presented one
+        javax.net.ssl.TrustManager[] any = {new AnyClientTrustManager()};
+        ctx.init(kmf.getKeyManagers(), any, null);
         tlsContext = ctx;
+    }
+
+    //! Accepts every client certificate (test only)
+    private static final class AnyClientTrustManager implements javax.net.ssl.X509TrustManager {
+        @Override
+        public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {
+        }
+
+        @Override
+        public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType)
+                throws java.security.cert.CertificateException {
+            throw new java.security.cert.CertificateException("not a client");
+        }
+
+        @Override
+        public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+            return new java.security.cert.X509Certificate[0];
+        }
+    }
+
+    //! Returns the number of TLS handshakes in which the client presented a certificate
+    public synchronized int clientCertificates() {
+        return clientCertificates;
     }
 
     //! Returns the number of TLS handshakes made in the mysql modes
@@ -335,9 +361,20 @@ public final class FakeDbServer implements AutoCloseable {
             javax.net.ssl.SSLSocket ssl = (javax.net.ssl.SSLSocket)tls.getSocketFactory().createSocket(s,
                 s.getInetAddress().getHostAddress(), s.getPort(), true);
             ssl.setUseClientMode(false);
+            // a client certificate is requested, not required; any is accepted, and it is recorded
+            ssl.setWantClientAuth(true);
             ssl.startHandshake();
+            boolean cert;
+            try {
+                cert = ssl.getSession().getPeerCertificates().length > 0;
+            } catch (javax.net.ssl.SSLPeerUnverifiedException e) {
+                cert = false;
+            }
             synchronized (this) {
                 ++tlsHandshakes;
+                if (cert) {
+                    ++clientCertificates;
+                }
             }
             in = new DataInputStream(ssl.getInputStream());
             out = ssl.getOutputStream();

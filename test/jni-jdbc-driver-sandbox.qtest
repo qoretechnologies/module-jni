@@ -134,7 +134,10 @@ string sub module_cmd(string cmd) {
         addTestCase("Redshift: the user must be given", \rsUserTest());
         addTestCase("SingleStore: the database must be a plain identifier", \ssDatabaseTest());
         addTestCase("SingleStore: connect-time SQL from options is screened", \ssConnectSqlTest());
-        addTestCase("SingleStore: TLS is verify-full without a JVM client key", \ssTlsTest());
+        addTestCase("SingleStore: TLS is verify-full", \ssTlsTest());
+        addTestCase("SingleStore: the JVM's client key is not presented", \ssClientKeyTest());
+        addTestCase("SingleStore: an empty user is refused", \ssUserTest());
+        addTestCase("a URL that restricted code set restricts the connection", \urlSetterTest());
         addTestCase("a restricted connection stays restricted when it reconnects", \reconnectTest());
         addTestCase("SQL of sandboxed code on a trusted SingleStore connection is screened", \trustedSharedTest());
         addTestCase("the connect targets for the Qore sandbox check", \connectTargetsTest());
@@ -683,9 +686,59 @@ string sub module_cmd(string cmd) {
             "ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }");
         assertRefused(p.callFunction("open_nouser", sprintf("jdbc:redshift://127.0.0.1:%d/dev", s.getPort())), Denied,
             "user", (s,), "no user");
+        assertRefused(p.callFunction("open_nouser", sprintf("jdbc:redshift://127.0.0.1:%d/dev?user=", s.getPort())),
+            Denied, "user", (s,), "an empty user");
         # the user as an option
         assertReached(p.callFunction("open_nouser", sprintf("jdbc:redshift://127.0.0.1:%d/dev?user=u", s.getPort())),
             "SSL", s, "the user in the URL");
+    }
+
+    ssUserTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-ok");
+        int port = s.getPort();
+        # the driver sends the name of the process owner for a user that is empty or not given
+        Program p = sandboxed(port, "string sub open_nouser(string url) { try { Datasource ds({\"type\": \"jdbc\", "
+            "\"db\": url}); ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + "
+            "ex.desc; } }");
+        foreach string arg in (("&user=", "&user=&password=x", "")) {
+            assertRefused(p.callFunction("open_nouser", ssUrl(port, "db", arg)), Denied, "user", (s,), "user: " + arg);
+        }
+        assertEq("ok", p.callFunction("open_nouser", ssUrl(port, "db", "&user=u")), "a user in the URL");
+    }
+
+    urlSetterTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-ok");
+        FakeDbServer other = server("mysql-ok", "127.0.0.2");
+        int port = s.getPort();
+        Program p = sandboxed(port, "nothing sub set_url(Datasource ds, string url) { ds.setOption(\"url\", url); }");
+        hash<auto> h = {"type": "jdbc", "user": "u", "pass": "pw", "db": "jdbc:qore-none:x"};
+        # restricted code sets the URL of a trusted datasource, and trusted code opens it: the connection is
+        # restricted by the setter's sandbox
+        Datasource ds(h);
+        p.callFunction("set_url", ds, ssUrl(port));
+        ds.open();
+        on_exit ds.close();
+        assertEq(1, s.tlsHandshakes(), "restricted: TLS with verify-full");
+        # another destination than the setter's sandbox allows
+        Datasource ds2(h);
+        p.callFunction("set_url", ds2, sprintf("jdbc:singlestore://127.0.0.2:%d/db", other.getPort()));
+        assertThrows("NETWORK-ACCESS-DENIED", "127\\.0\\.0\\.2", \ds2.open());
+        assertEq(0, other.acceptCount(), "no connection to the denied destination");
+        # a driver without a profile
+        Datasource ds3(h);
+        p.callFunction("set_url", ds3, sprintf("jdbc:postgresql://127.0.0.1:%d/db", port));
+        assertThrows("NETWORK-ACCESS-DENIED", "not supported", \ds3.open());
+        # trusted code sets the URL again: the last setter decides
+        ds3.setOption("url", sprintf("jdbc:singlestore://127.0.0.2:%d/db", other.getPort()));
+        try {
+            ds3.open();
+            ds3.close();
+        } catch (hash<ExceptionInfo> ex) {
+            assertNRegex("NETWORK-ACCESS-DENIED", ex.err, "a trusted URL is not restricted");
+        }
+        assertEq(1, other.acceptCount(), "the trusted URL connects");
     }
 
     ssDatabaseTest() {
@@ -734,10 +787,27 @@ string sub module_cmd(string cmd) {
                 mode);
         }
         assertEq("ok", p.callFunction("open_db", ssUrl(port, "db", "&sslMode=verify-full")), "verify-full");
-        # the JVM's client key store would be presented to the server
+    }
+
+    ssClientKeyTest() {
+        checkSkip(ss_jar, "singlestore");
+        # the JVM's client key store, which the driver presents to every server without a keyStore option
         System::setProperty("javax.net.ssl.keyStore", get_script_dir() + "jdbc-fake-server.p12");
         on_exit System::clearProperty("javax.net.ssl.keyStore");
-        assertRefused(p.callFunction("open_db", ssUrl(port)), Denied, "javax.net.ssl.keyStore", (), "JVM key store");
+        System::setProperty("javax.net.ssl.keyStorePassword", "qore-fake");
+        on_exit System::clearProperty("javax.net.ssl.keyStorePassword");
+        System::setProperty("javax.net.ssl.keyStoreType", "PKCS12");
+        on_exit System::clearProperty("javax.net.ssl.keyStoreType");
+        FakeDbServer s = server("mysql-ok");
+        int port = s.getPort();
+        # a trusted connection presents it: the server sees a client certificate
+        assertEq("ok", trusted().callFunction("open_db", ssUrl(port, "db", "&sslMode=verify-full")), "trusted");
+        assertEq(1, s.tlsHandshakes(), "trusted: TLS");
+        assertEq(1, s.clientCertificates(), "trusted: the JVM's client certificate");
+        # a restricted connection is made, and presents no client certificate
+        assertEq("ok", sandboxed(port).callFunction("open_db", ssUrl(port)), "restricted");
+        assertEq(2, s.tlsHandshakes(), "restricted: TLS");
+        assertEq(1, s.clientCertificates(), "restricted: no client certificate");
     }
 
     reconnectTest() {

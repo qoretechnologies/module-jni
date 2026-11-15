@@ -358,8 +358,12 @@ foreach hash<auto> column in (result.schemaV2()) {
     it, or reopens it after a lost connection (<b>PROVISIONAL</b>: this is the policy of the thread; the chooser
     record of qore#6142, or the Qore side of qore#5747, replaces it).  A connection object that was restricted once
     stays restricted for its lifetime: when trusted code's statement makes it reconnect, its guard is built again and
-    its URL, options and destinations are checked again against the policy that restricted it first.  A trusted
-    connection is not changed, except that SQL that restricted code gives it is screened (see below).
+    its URL, options and destinations are checked again against the policy that restricted it first.  A connection is
+    also restricted if restricted code set its \c url option (the recorded setter of the option, qore#5741), also
+    when trusted code opens it, and its destinations must also pass that code's sandbox (<b>PROVISIONAL</b>); a
+    database name or another parameter that is not an option and that restricted code chose still needs the chooser
+    record of qore#6142 Option A or the Qore side of qore#5747.  A trusted connection is not changed, except that the
+    SQL that restricted code gives a SingleStore connection is screened (see below).
     A restricted connection is allowed only if:
     - its URL names one of the audited JDBC drivers below, which are reported by the \c "jdbc_sandbox_drivers" key of
       the \c "info" hash of the module (\c get_module_hash()); every other driver is refused
@@ -443,12 +447,20 @@ foreach hash<auto> column in (result.schemaV2()) {
     trusted code opened (without a guard) is screened in the same way; that such a connection is not restricted
     otherwise is qore#6142.
 
+    <b>PROVISIONAL / BLOCKED:</b> restricted callers' SQL on a connection that trusted code opened is
+    screened only for SingleStore URLs.  With other JDBC drivers (ex: MariaDB or MySQL with \c LOAD \c DATA
+    \c LOCAL \c INFILE allowed, H2's \c FILE_READ or \c CREATE \c ALIAS, SQLite or Derby), sandboxed code that is
+    handed a trusted connection can read files or run code, exactly as before qore#5786; whether such a connection
+    must refuse restricted callers is the decision of qore#6142.
+
     SingleStore authentication and TLS: \c restrictedAuth applies to the plugins that a server switches to, not to
     the plugin of the server's first handshake, so a server can still choose \c mysql_clear_password; the driver
     sends a clear-text password only over TLS, which is \c verify-full for restricted connections, so it reaches only
-    the checked destination.  The driver presents the JVM's client key store (\c javax.net.ssl.keyStore) to every
-    server and no option turns that off, so restricted SingleStore connections are refused while that system property
-    is set.  Certificate validation follows the JVM's configuration: with settings such as
+    the checked destination.  Without a \c keyStore option the driver presents the JVM's client key store
+    (\c javax.net.ssl.keyStore) to every server, on every TLS handshake (also for reconnects, transaction replay and
+    query cancels), so a restricted connection is forced to use an empty PKCS12 key store that the module creates
+    once per process (a new file with a random name, readable by its owner only), and the system property is never
+    read.  Certificate validation follows the JVM's configuration: with settings such as
     \c com.sun.security.enableAIAcaIssuers or OCSP and CRL distribution point checking, TLS validation fetches URLs
     from the server's certificate, outside the sandbox; these settings are trusted configuration of the JVM.
 
@@ -494,7 +506,9 @@ Datasource ds({"type": "jdbc", "user": "user", "pass": "pass",
     (compiled out with today's %Qore); the reconnect rule in Qore-5747 mode; the empty INI file on Windows; exact
     audited versions or ranges; the error codes; caps for \c fetchRingBufferSize, \c maxResultBuffer and
     \c retriesAllDown; the authentication plugins and TLS modes allowed for sandboxed callers; defining the
-    SingleStore adapter in the vendor package; and the licence of the SingleStore driver (LGPL-2.1) for the tests.
+    SingleStore adapter in the vendor package; the licence of the SingleStore driver (LGPL-2.1) for the tests; and
+    whether a trusted connection that sandboxed code uses must refuse restricted callers' SQL for drivers without a
+    profile (qore#6142, see above).
 
     @section jdbc_driver_options jdbc DBI Driver Options
 
