@@ -94,11 +94,24 @@ string sub socket_barrier() {
     }
 
     #! Returns a sandboxed Program with the code given
+    /** qore#5741 run-time refusal of uncontrolled APIs: the sandbox allows uncontrolled APIs, so that the sandboxed
+        code reaches the jdbc driver's network check (and SandboxManager::callWithSystemPolicy()); its network policy
+        stays as given, and is what the cases test
+    */
     private static Program getSandboxed(string source, *SandboxManager sm) {
         Program p(PO_NEW_STYLE);
-        p.setSandboxManager(sm ?? new SandboxManager());
+        sm = sm ?? new SandboxManager();
+        allowUncontrolledApis(sm);
+        p.setSandboxManager(sm);
         p.parse(source, "jni-jdbc-network-sandboxed");
         return p;
+    }
+
+    #! Allows uncontrolled APIs in the sandbox (qore#5741); dynamic because the Qore library may lack the policy
+    private static allowUncontrolledApis(SandboxManager sm) {
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
     }
 
     #! Returns a trusted Program with the code given
