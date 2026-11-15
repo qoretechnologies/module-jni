@@ -4457,7 +4457,8 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
         // calls back during the call uses), records the calling code for sandbox resolution, holds the Program's
         // thread count for the call, and runs the Program's entry handler; it raises PROGRAM-ERROR before Java runs
         // if the Program is being torn down or parsed by another thread; a call within the Program costs only the
-        // comparison
+        // comparison; the entry is left when epch is destroyed, also when an exception propagates (a C++ exception
+        // from the entry itself leaves epch empty)
         std::optional<QoreExternalProgramContextHelper> epch;
         if (pgm && pgm != ::getProgram()) {
             epch.emplace(xsink, pgm);
@@ -4468,9 +4469,6 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
         return m->invoke(jd->getObject(), args, pgm);
     } catch (jni::Exception& e) {
         e.convert(xsink);
-        return QoreValue();
-    } catch (std::bad_alloc&) {
-        xsink->outOfMemory();
         return QoreValue();
     }
 }
