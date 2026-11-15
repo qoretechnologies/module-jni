@@ -4,7 +4,8 @@
 
 # The jni functions that load, define or run Java code, initialize the Kotlin script engine, create Java arrays or
 # return the class loader, and the JavaArray methods that run the toString() methods of Java elements, return the class
-# of an array or convert a binary to a Java array, are uncontrolled APIs, as the Java classes that they give access
+# of an array or convert a binary to a Java array, and the constructor of QoreInvocationHandler, which creates a Java
+# object, are uncontrolled APIs, as the Java classes that they give access
 # to are (qore#5741)
 
 %modern
@@ -85,6 +86,10 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
                 "name": "JavaArray::get",
                 "call": "binary b; Jni::org::qore::jni::JavaArray::get(b);",
             },
+            "QoreInvocationHandler::constructor": {
+                "name": "QoreInvocationHandler::constructor",
+                "call": "auto d; new Jni::org::qore::jni::QoreInvocationHandler(d);",
+            },
         };
 
         #! the functions that are not uncontrolled APIs: checks and information
@@ -120,7 +125,8 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
     */
     private static hash<string, code> getRunCalls() {
         Jni::java::lang::Class runnable = Jni::org::qore::jni::load_class("java/lang/Runnable");
-        Jni::org::qore::jni::QoreInvocationHandler handler(auto sub (auto m, *list<auto> args) {});
+        code dispatcher = auto sub (auto m, *list<auto> args) {};
+        Jni::org::qore::jni::QoreInvocationHandler handler(dispatcher);
         Jni::java::lang::Object loader = Jni::org::qore::jni::get_class_loader();
         # a method of the module's own class loader class: invoke_nonvirtual() needs access to its declaring class
         Jni::java::lang::reflect::Method get_ptr = Jni::org::qore::jni::load_class("org/qore/jni/QoreURLClassLoader")
@@ -152,6 +158,9 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
             "new_array": auto sub () { return Jni::org::qore::jni::new_array(runnable, 3); },
             "JavaArray::getClass": auto sub () { return array.getClass(); },
             "JavaArray::get(binary)": auto sub () { return Jni::org::qore::jni::JavaArray::get(<0102>); },
+            "QoreInvocationHandler::constructor": auto sub () {
+                return new Jni::org::qore::jni::QoreInvocationHandler(dispatcher);
+            },
         };
     }
 
@@ -228,6 +237,15 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
                 "result": sub (auto v) {
                     assertEq("[B", v.getClass().getName(), "JavaArray::get(binary): a byte[]");
                     assertEq(2, v.length(), "JavaArray::get(binary): the length");
+                },
+            },
+            "QoreInvocationHandler::constructor": {
+                "result": sub (auto v) {
+                    assertTrue(v instanceof Jni::org::qore::jni::QoreInvocationHandler,
+                        "QoreInvocationHandler::constructor: a handler");
+                    # the handler is usable: it implements an interface
+                    assertTrue(runnable.isInstance(Jni::org::qore::jni::implement_interface(v, runnable)),
+                        "QoreInvocationHandler::constructor: implements an interface");
                 },
             },
         };

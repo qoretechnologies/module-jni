@@ -91,9 +91,9 @@
 
     - <b>Security</b>: \c Jni::org::qore::jni::kotlin_scripting_available(),
       \c Jni::org::qore::jni::kotlin_scripting_retry(), \c Jni::org::qore::jni::new_array(),
-      \c Jni::org::qore::jni::JavaArray::getClass() and the static \c Jni::org::qore::jni::JavaArray::get() for a
-      binary are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), as they initialize Java classes, allocate Java memory or
-      return Java classes
+      \c Jni::org::qore::jni::JavaArray::getClass(), the static \c Jni::org::qore::jni::JavaArray::get() for a
+      binary and the constructor of \c Jni::org::qore::jni::QoreInvocationHandler are uncontrolled APIs
+      (\c QDOM_UNCONTROLLED_API), as they initialize Java classes, allocate Java memory or return Java classes
 
     - <b>Security</b>: the options of the JDBC, Jakarta JMS, Kafka, Camel, JasperReports and Flyway providers that
       name a Java class to load, a classpath to add, or code that Java compiles are refused with

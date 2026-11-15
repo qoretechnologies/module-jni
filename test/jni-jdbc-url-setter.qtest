@@ -43,12 +43,89 @@ nothing sub set_url(Datasource ds, string url) {
 nothing sub set_db(Datasource ds, string db) {
     ds.setDBName(db);
 }
+
+# sets the value inside a system-policy barrier of this Program's code, with a call of a function of this Program
+nothing sub set_url_barrier(Datasource ds, string url) {
+    SandboxManager::callWithSystemPolicy(\\set_url(), (ds, url));
+}
+
+nothing sub set_db_barrier(Datasource ds, string db) {
+    SandboxManager::callWithSystemPolicy(\\set_db(), (ds, db));
+}
+
+# references that trusted initialization creates (init_refs()), which are not created for a caller
+our code url_setter_ref;
+our code db_setter_ref;
+
+nothing sub init_refs() {
+    url_setter_ref = \\set_url();
+    db_setter_ref = \\set_db();
+}
+
+# sets the value inside a system-policy barrier with a reference that trusted initialization created
+nothing sub set_url_barrier_init(Datasource ds, string url) {
+    SandboxManager::callWithSystemPolicy(url_setter_ref, (ds, url));
+}
+
+nothing sub set_db_barrier_init(Datasource ds, string db) {
+    SandboxManager::callWithSystemPolicy(db_setter_ref, (ds, db));
+}
+
+# sets the value inside a system-policy barrier with a closure that this Program's code creates in the call: a
+# closure created while a sandboxed caller is served has the caller's sandbox (provenance)
+nothing sub set_url_barrier_closure(Datasource ds, string url) {
+    SandboxManager::callWithSystemPolicy(sub () { ds.setOption(\"url\", url); });
+}
+
+# returns a closure of this Program's code that calls a setter of the Program given: the sandbox of this Program
+# governs the call with the sandbox of the other Program (a composition)
+code sub make_via(Program p, string f) {
+    return sub (Datasource ds, string v) { p.callFunction(f, ds, v); };
+}
+
+# calls a setter that other code chose inside a system-policy barrier of this Program's code
+nothing sub call_barrier(code setter, Datasource ds, string v) {
+    SandboxManager::callWithSystemPolicy(sub () { setter(ds, v); });
+}
+
+# the code of the calling Program: calls the setter given, which can be code of another Program
+nothing sub call(code setter, Datasource ds, string v) {
+    setter(ds, v);
+}
+
+# returns closures of this Program's code that set the values
+code sub get_url_setter() {
+    return sub (Datasource ds, string url) { ds.setOption(\"url\", url); };
+}
+
+code sub get_db_setter() {
+    return sub (Datasource ds, string db) { ds.setDBName(db); };
+}
+
+# creates datasources whose url option this Program's code chose when it created them
+Datasource sub new_with_hash(string url) {
+    return new Datasource({\"type\": \"jdbc\", \"db\": \"ignored\", \"options\": {\"url\": url}});
+}
+
+Datasource sub new_with_string(string url) {
+    return new Datasource(\"jdbc:u/p@ignored{url=\" + url + \"}\");
+}
+
+DatasourcePool sub new_pool(string url) {
+    return new DatasourcePool(\"jdbc:u/p@ignored{url=\" + url + \",min=1,max=1}\");
+}
 ";
+
+        #! a url option without driver properties, which the connection string syntax can carry
+        const PlainUrlOption = "qore-none://127.0.0.1:1/x";
     }
 
     constructor() : QUnit::Test("JNI jdbc url and database name setter", "1.0", \ARGV) {
         addTestCase("the url option is judged by the code that set it", \urlTest());
         addTestCase("the database name is judged by the code that set it", \dbNameTest());
+        addTestCase("a value set inside a system-policy barrier or capability", \barrierTest());
+        addTestCase("a value set by a composition of sandboxes", \compositionTest());
+        addTestCase("a url given when the datasource or pool is created", \constructionTest());
         set_return_value(main());
     }
 
@@ -75,6 +152,13 @@ nothing sub set_db(Datasource ds, string db) {
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(sm);
         p.parse(SetterSource, "jni-jdbc-url-setter");
+        return p;
+    }
+
+    #! returns a Program without a sandbox that sets the values of a datasource
+    private static Program getTrustedSetter() {
+        Program p(PO_NEW_STYLE);
+        p.parse(SetterSource, "jni-jdbc-url-setter-trusted");
         return p;
     }
 
@@ -183,6 +267,185 @@ nothing sub set_db(Datasource ds, string db) {
             Datasource tds(Url);
             getSetter(allowAll(True)).callFunction("set_db", tds, DbName);
             assertEq("NO-DRIVER", open(tds), "a trusting sandbox");
+        }
+    }
+
+    #! a value set inside a system-policy barrier or capability is judged by the code that set it there
+    /** The setter's sandbox is resolved for every purpose when it sets the value, which sees a caller beyond a barrier;
+        its policy manager stops at the barrier: trusted code that sets a value inside a barrier or capability is
+        judged as it would be if it opened the connection itself, while sandboxed code called inside a barrier is
+        still judged by its own sandbox
+    */
+    barrierTest() {
+        if (!setterAware()) {
+            testSkip("the jni module was built for a Qore library that does not record the setters of datasource "
+                "options");
+        }
+        Program caller = getSetter(new SandboxManager());
+
+        # trusted code of a Program whose sandbox trusts it sets the url inside a barrier for a caller whose sandbox
+        # does not trust its code: not refused, as the same code opening the connection is not
+        if (hasPolicy()) {
+            SandboxManager sm = allowAll(True);
+            if (trustOnly()) {
+                # whatever the sandbox restricts
+                sm.setNetworkDefaultPolicy(False);
+            }
+            Program trusting = getSetter(sm);
+            # with references that the Program's initialization created, so that only the rule for the setter's
+            # sandbox decides, not the provenance of a reference created for the caller
+            trusting.callFunction("init_refs");
+            Datasource ds(Url);
+            caller.callFunction("call", trusting.getCallReference("set_url_barrier_init"), ds, UrlOption);
+            assertEq("NO-DRIVER", open(ds), "a trusting Program's barrier for a non-trusting caller");
+            # the database name: judged by the same rule with a Qore library that records the code that chose a
+            # connection, and only by the code that opens the connection without it
+            Datasource dds(Url);
+            caller.callFunction("call", trusting.getCallReference("set_db_barrier_init"), dds, DbName);
+            assertEq("NO-DRIVER", open(dds), "a trusting Program's barrier for a non-trusting caller: the database "
+                "name");
+        }
+
+        # trusted code of a Program that no sandbox governs sets the url inside a barrier for a sandboxed caller,
+        # with a reference that trusted initialization created: no policy manager governs the setter, which is not
+        # refused
+        {
+            Program trusted = getTrustedSetter();
+            trusted.callFunction("init_refs");
+            Datasource ds(Url);
+            caller.callFunction("call", trusted.getCallReference("set_url_barrier_init"), ds, UrlOption);
+            assertEq("NO-DRIVER", open(ds), "a trusted Program's barrier for a sandboxed caller");
+            # but a reference or a closure that its code creates while it serves the sandboxed caller has the
+            # caller's sandbox (provenance), which the barrier does not remove: refused
+            foreach string f in ("set_url_barrier", "set_url_barrier_closure") {
+                Datasource cds(Url);
+                caller.callFunction("call", trusted.getCallReference(f), cds, UrlOption);
+                assertRefused(cds, f + ": code created for a sandboxed caller, called inside a barrier");
+            }
+        }
+
+        # a system-policy capability of trusted code sets the url for a sandboxed caller that calls it
+        {
+            code cap = SandboxManager::createSystemPolicyCall(sub (Datasource ds, string url) {
+                ds.setOption("url", url);
+            });
+            Datasource ds(Url);
+            caller.callFunction("call", cap, ds, UrlOption);
+            assertEq("NO-DRIVER", open(ds), "a capability called by a sandboxed caller");
+        }
+
+        # sandboxed code called inside a barrier of trusted code still has its own sandbox: refused
+        {
+            Program trusted = getTrustedSetter();
+            Datasource ds(Url);
+            trusted.callFunction("call_barrier", caller.callFunction("get_url_setter"), ds, UrlOption);
+            assertRefused(ds, "a sandboxed closure called inside a barrier");
+            Datasource dds(Url);
+            trusted.callFunction("call_barrier", caller.callFunction("get_db_setter"), dds, DbName);
+            if (choosersAware()) {
+                assertRefused(dds, "a sandboxed closure called inside a barrier: the database name");
+            } else {
+                assertEq("NO-DRIVER", open(dds), "a sandboxed closure called inside a barrier: the database name, "
+                    "without a record of the setter");
+            }
+        }
+    }
+
+    #! a value set while the sandboxes of more than one Program govern is judged by all of them
+    /** The trust is the AND over the members of the composition: a setter is trusted only if every member trusts it;
+        without the sandbox API that judges the trust of the code, the module cannot judge the network policy of a
+        composition, which is not an allow-all one, so a setter that a composition does not trust is refused (as the
+        code that opens a connection is)
+    */
+    compositionTest() {
+        if (!setterAware()) {
+            testSkip("the jni module was built for a Qore library that does not record the setters of datasource "
+                "options");
+        }
+        if (!hasPolicy()) {
+            testSkip("the Qore library has no uncontrolled-API policy of sandboxes");
+        }
+        Program trusting = getSetter(allowAll(True));
+        Program other_trusting = getSetter(allowAll(True));
+        Program non_trusting = getSetter(allowAll());
+
+        # a trusting member with a non-trusting one, in both orders
+        foreach list<auto> i in ((trusting, non_trusting, "trusting outside"),
+            (non_trusting, trusting, "non-trusting outside")) {
+            Program outer = i[0];
+            Program inner = i[1];
+            string label = "a composition, " + i[2];
+            Datasource ds(Url);
+            code via = outer.callFunction("make_via", inner, "set_url");
+            via(ds, UrlOption);
+            assertRefused(ds, label);
+            # the database name is judged by its setter with a Qore library that records the code that chose a
+            # connection, and only by the code that opens the connection without it
+            Datasource dds(Url);
+            code via_db = outer.callFunction("make_via", inner, "set_db");
+            via_db(dds, DbName);
+            if (choosersAware()) {
+                assertRefused(dds, label + ": the database name");
+            } else {
+                assertEq("NO-DRIVER", open(dds), label + ": the database name");
+            }
+        }
+
+        # two trusting members: not refused; the setter is not sandboxed when every member trusts it, so its policy
+        # manager is not judged, also without the sandbox trust API
+        Datasource ds(Url);
+        code via = trusting.callFunction("make_via", other_trusting, "set_url");
+        via(ds, UrlOption);
+        assertEq("NO-DRIVER", open(ds), "a composition of trusting sandboxes");
+    }
+
+    #! a url option given when a datasource or pool is created is judged by the code that created it
+    constructionTest() {
+        # trusted code creates them: not refused
+        {
+            Datasource ds({"type": "jdbc", "db": "ignored", "options": {"url": PlainUrlOption}});
+            assertEq("NO-DRIVER", open(ds), "a constructor hash of trusted code");
+            Datasource sds("jdbc:u/p@ignored{url=" + PlainUrlOption + "}");
+            assertEq("NO-DRIVER", open(sds), "a connection string of trusted code");
+            try {
+                DatasourcePool pool("jdbc:u/p@ignored{url=" + PlainUrlOption + ",min=1,max=1}");
+                fail("a pool of trusted code: no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("JNI-ERROR", ex.err, "a pool of trusted code: " + ex.desc);
+                assertTrue(ex.desc.equalPartial(NoDriverDesc), "a pool of trusted code: no driver: " + ex.desc);
+            }
+        }
+        if (!setterAware()) {
+            testSkip("the jni module was built for a Qore library that does not record the setters of datasource "
+                "options");
+        }
+        # a default sandbox creates them: a datasource that sandboxed code created, or a copy of it, cannot connect,
+        # whoever opens it (its methods run with the sandbox of the code that created it); the pool, which connects
+        # when it is created, is refused to its creator
+        Program caller = getSetter(new SandboxManager());
+        foreach string f in ("new_with_hash", "new_with_string") {
+            Datasource ds = caller.callFunction(f, PlainUrlOption);
+            try {
+                ds.open();
+                fail(f + ": not refused");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("NETWORK-ACCESS-DENIED", ex.err, f + ": " + ex.desc);
+            }
+            # a copy that trusted code makes keeps the sandbox of the code that created the original
+            Datasource copy = ds.copy();
+            try {
+                copy.open();
+                fail(f + ": a copy made by trusted code: not refused");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("NETWORK-ACCESS-DENIED", ex.err, f + ": a copy made by trusted code: " + ex.desc);
+            }
+        }
+        try {
+            caller.callFunction("new_pool", PlainUrlOption);
+            fail("a pool of a default sandbox: no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            # the code that opens the connection, which is the pool's creator, is refused
+            assertEq("NETWORK-ACCESS-DENIED", ex.err, "a pool of a default sandbox: " + ex.desc);
         }
     }
 }

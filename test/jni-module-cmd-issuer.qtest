@@ -51,11 +51,43 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
             "set-compat-types true": {"refused": (), "allowed": ("ok",)},
             "mark-module-injected QoreTestIssuerPlaceholder": {"refused": (), "allowed": ("ok",)},
         };
+
+        #! the parse options of a Qorus workflow interface Program that is not sandboxed (Qorus' CommonParseOptions
+        #! with PO_NO_GLOBAL_VARS): restricting (thread and process control), but without PO_NO_FILESYSTEM,
+        #! PO_NO_UNCONTROLLED_APIS or PO_NO_EMBEDDED_LOGIC
+        const QorusWorkflowParseOptions = PO_MODERN | PO_REQUIRE_OUR | PO_NO_TOP_LEVEL_STATEMENTS
+            | PO_NO_THREAD_CONTROL | PO_NO_PROCESS_CONTROL | PO_NO_INHERIT_USER_FUNC_VARIANTS
+            | PO_NO_INHERIT_GLOBAL_VARS | PO_NO_INHERIT_USER_CLASSES | PO_NO_INHERIT_USER_HASHDECLS
+            | PO_ALLOW_WEAK_REFERENCES | PO_NO_INHERIT_PROGRAM_DATA | PO_NO_GLOBAL_VARS;
+
+        #! the parse options of a Qorus service or job interface Program that is not sandboxed (CommonParseOptions)
+        const QorusServiceParseOptions = QorusWorkflowParseOptions & ~PO_NO_GLOBAL_VARS;
+
+        #! the parse options of a sandboxed Qorus interface Program (QorusSandboxParseOptions with PO_NO_MODULES)
+        const QorusSandboxedParseOptions = (PO_LOCKDOWN & ~PO_NO_THREAD_CLASSES) | PO_NO_UNCONTROLLED_APIS;
+
+        #! the module commands that Qorus interface code and the Qorus server use in an interface Program
+        const QorusInterfaceCommands = (
+            "set-compat-types false",
+            "import java.lang.StringBuilder",
+            "add-classpath /nonexistent-qore-test-dir",
+            # the argument is not valid byte code, but a pending class is only defined when it is used
+            "define-pending-class qore.QoreTestIssuerQorusPlaceholder AAAA",
+        );
+
+        #! the module commands that change state of the JVM that every Program shares: refused to the code of a
+        #! trusted Qorus interface, whose parse options restrict it, allowed to Qorus' own code
+        const QorusProcessWideCommands = (
+            "set-property org.qore.test.issuer.qorus value",
+            "global-add-classpath /nonexistent-qore-test-dir",
+            "register-shared-class qore.QoreTestIssuerQorusPlaceholder",
+        );
     }
 
     constructor() : QUnit::Test("JNI module command issuer", "1.0", \ARGV) {
         addTestCase("a directive is judged by the restrictions of its Program", \directiveTest());
         addTestCase("a command issued at run time is judged by its issuer", \runtimeTest());
+        addTestCase("the module commands of a Qorus interface", \qorusPatternTest());
         addTestCase("a command issued by library module code is judged by the sandbox only", \libraryTest());
         addTestCase("a library module's own directive is judged by the sandbox only", \libraryDirectiveTest());
         addTestCase("the jdbc classpath option follows the rule of add-classpath", \jdbcOptionTest());
@@ -334,6 +366,136 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         # code, with no sandbox, also when restricted or sandboxed code loads it first: every loader loads it
         foreach string kind in (keys Kinds) {
             assertEq("ok", runLibrary(kind, "directive"), kind + " first loader");
+        }
+    }
+
+    #! returns a Program with the parse options given (by default those of a Qorus workflow interface) and the
+    #! sandbox of a trusted Qorus interface: an allow-all manager, which trusts the code if trusting is True
+    private static Program getQorusInterface(bool trusting, int po = QorusWorkflowParseOptions) {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        if (trusting) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
+        Program p(po);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! returns the error of parsing a module command directive in the Program given, or "ok"
+    private static string parseCmd(Program p, string cmd, *reference<string> desc) {
+        try {
+            p.parse("%requires jni\n%module-cmd(jni) " + cmd + "\n", "jni-module-cmd-issuer-qorus");
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+            return ex.err;
+        }
+    }
+
+    #! returns the error of a module command that the code of this Program issues in the Program given, or "ok"
+    private static string issueCmd(Program p, string cmd) {
+        try {
+            p.issueModuleCmd("jni", cmd);
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! the module commands of a Qorus interface that is not sandboxed: its Program has restricting parse options
+    #! (thread and process control), but not the ones that refuse the commands it uses
+    qorusPatternTest() {
+        if (!issuerAware()) {
+            testSkip("the jni module was built for a module API before 2.3");
+        }
+        if (!(new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
+            testSkip("the Qore library has no uncontrolled-API policy of sandboxes");
+        }
+        on_exit Jni::java::lang::System::clearProperty("org.qore.test.issuer.qorus");
+        # the directives of the interface code of workflows, services and jobs: allowed
+        foreach int po in (QorusWorkflowParseOptions, QorusServiceParseOptions) {
+            foreach string cmd in (QorusInterfaceCommands) {
+                string desc;
+                assertEq("ok", parseCmd(getQorusInterface(True, po), cmd, \desc),
+                    sprintf("a Qorus interface (%x): %s: %s", po, cmd, desc));
+            }
+            # the commands that change state of the JVM that every Program shares are refused to the interface code:
+            # its parse options restrict it (thread and process control), and such a command is refused to every
+            # restricted issuer; the error says why
+            foreach string cmd in (QorusProcessWideCommands) {
+                string desc;
+                assertEq("JNI-SANDBOX-ERROR", parseCmd(getQorusInterface(True, po), cmd, \desc),
+                    sprintf("a Qorus interface (%x): %s", po, cmd));
+                assertRegex("cannot use the \"" + cmd.split(" ")[0] + "\" module command.*the code that issued the "
+                    "command has parse options that forbid", desc, "a Qorus interface: " + cmd + ": the reason");
+            }
+        }
+        # a Qorus system service, whose Program has no restricting parse options: every command is allowed
+        foreach string cmd in (QorusInterfaceCommands + QorusProcessWideCommands) {
+            string desc;
+            assertEq("ok", parseCmd(getQorusInterface(True, 0), cmd, \desc), "a Qorus system service: " + cmd + ": "
+                + desc);
+        }
+        # a sandboxed Qorus interface, with the sandbox policy of Qorus' sandboxed interfaces, cannot load the module
+        # at all: the core refuses it the module before the jni module can judge a command
+        {
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(False);
+            sm.setNetworkDefaultPolicy(True);
+            sm.blockPrivateNetworks();
+            Program p(QorusSandboxedParseOptions);
+            p.setSandboxManager(sm);
+            string desc;
+            assertEq("PARSE-EXCEPTION", parseCmd(p, "set-compat-types false", \desc), "a sandboxed Qorus interface");
+            assertRegex("PO_NO_MODULES", desc, "a sandboxed Qorus interface: the reason");
+        }
+        # the commands that the server's code issues into the interface Program: allowed
+        {
+            Program p = getQorusInterface(True);
+            p.loadModule("jni");
+            foreach string cmd in (QorusInterfaceCommands) {
+                p.issueModuleCmd("jni", cmd);
+            }
+            # the import command runs (it is not refused): a class that does not exist is not found
+            try {
+                p.issueModuleCmd("jni", "import org.qore.test.QoreTestIssuerNoSuchClass");
+                fail("a Qorus interface: an import of a class that does not exist: no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("JNI-ERROR", ex.err, "a Qorus interface: an import of a class that does not exist");
+                assertRegex("ClassNotFoundException", ex.desc, "a Qorus interface: the import ran");
+            }
+        }
+        # the code of the Qorus server issues commands in locked-down Programs (mappers): a command of the Program's
+        # own classpath and an import are allowed; a command that changes the classpath of every Program is refused
+        # in a Program that does not allow uncontrolled APIs (Qorus issues it before it locks a Program down, and the
+        # lockdown options of a Program with Java, Python or Kotlin field code allow uncontrolled APIs)
+        {
+            Program p(PO_LOCKDOWN & ~PO_NO_MODULES);
+            p.loadModule("jni");
+            assertEq("ok", issueCmd(p, "add-classpath /nonexistent-qore-test-dir"), "a lockdown Program: add-classpath");
+            assertEq("ok", issueCmd(p, "import java.lang.StringBuilder"), "a lockdown Program: import");
+            assertEq("JNI-SANDBOX-ERROR", issueCmd(p, "global-add-classpath /nonexistent-qore-test-dir"),
+                "a lockdown Program: global-add-classpath");
+            Program fp(PO_LOCKDOWN & ~(PO_NO_MODULES | PO_NO_UNCONTROLLED_APIS));
+            fp.loadModule("jni");
+            assertEq("ok", issueCmd(fp, "global-add-classpath /nonexistent-qore-test-dir"),
+                "a lockdown Program that allows uncontrolled APIs: global-add-classpath");
+        }
+        # a Qorus interface whose sandbox does not trust the code (a Qorus without the uncontrolled-API policy of
+        # trusted interfaces): only the commands that change the Program's own flags are allowed
+        foreach string cmd in (QorusInterfaceCommands) {
+            Program p = getQorusInterface(False);
+            string err;
+            try {
+                p.parse("%requires jni\n%module-cmd(jni) " + cmd + "\n", "jni-module-cmd-issuer-qorus-untrusted");
+                err = "ok";
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            assertEq(cmd =~ /^set-compat-types/ ? "ok" : "JNI-SANDBOX-ERROR", err,
+                "a Qorus interface without the trust policy: " + cmd);
         }
     }
 }

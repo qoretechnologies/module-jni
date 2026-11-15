@@ -46,6 +46,10 @@ qclass QoreInvocationHandler [arg=jni::InvocationHandler* handler; ns=Jni::org::
 /**
     @param dispatcher a function that implements the dispatching, see example
 
+    @note The handler creates a Java object, which uses JVM memory that no sandbox limit applies to, so the
+    constructor is an uncontrolled API (\c QDOM_UNCONTROLLED_API) as \c implement_interface() is, which the handler is
+    used with; see @ref jni_sandbox
+
     @par Example:
     @code{.py}
     QoreInvocationHandler h(any sub(Jni::Method m, *list args) {
@@ -53,7 +57,7 @@ qclass QoreInvocationHandler [arg=jni::InvocationHandler* handler; ns=Jni::org::
     });
     @endcode
  */
-QoreInvocationHandler::constructor(code dispatcher) [flags=NAMED_ARGS] {
+QoreInvocationHandler::constructor(code dispatcher) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         self->setPrivate(CID_QOREINVOCATIONHANDLER, new jni::InvocationHandler(dispatcher));
     } catch (jni::Exception &e) {

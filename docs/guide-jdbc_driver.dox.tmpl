@@ -443,7 +443,12 @@ foreach hash<auto> column in (result.schemaV2()) {
     trust API of %Qore: a sandbox whose network policy restricts it).  As for the code that opens a connection, the
     sandbox is resolved for a policy check: trusted code that set the value inside
     \c SandboxManager::callWithSystemPolicy() or a \c SandboxManager::createSystemPolicyCall() capability on behalf of
-    a sandboxed caller is not refused (unlike the \c classpath option, which is judged as a module command is).
+    a sandboxed caller is not refused (unlike the \c classpath option, which is judged as a module command is), nor
+    is the code of a %Program whose sandbox trusts it that set the value inside such a barrier for a caller that its
+    sandbox does not trust; sandboxed code that is called inside a barrier (ex: a closure of a sandboxed %Program) is
+    still judged by its own sandbox and is refused, and so is a call reference or closure that trusted code creates
+    while it serves a sandboxed caller, which has the caller's sandbox (provenance) that the barrier does not remove:
+    trusted code that sets such a value inside a barrier uses a reference that it created at its initialization.
     - the \c url option is judged by its setter with a %Qore library that records the setters of datasource options
     - the database name (the \c db of a datasource, \c Datasource::setDBName() and the database of a connection
       string), and the creators of the datasource and the setters of its other connection values, are judged with a

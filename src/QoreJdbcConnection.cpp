@@ -237,8 +237,18 @@ int QoreJdbcConnection::checkChoosers(ExceptionSink* xsink) {
             // without a policy manager is trusted code that set the value under a system-policy barrier or
             // capability on behalf of a sandboxed caller, which is not refused, as the record of the code that chose a
             // connection does not refuse it either (QoreDatasourceConnectChoosers::allowsUncontrolledApis()); unlike
-            // the classpath option, which is judged as a module command is, through a barrier
-            if (jdbc_chooser_refused(!setter.isSandboxed() || !mgr, *mgr)) {
+            // the classpath option, which is judged as a module command is, through a barrier; the setter's sandbox
+            // was resolved for every purpose when it set the value, which sees a caller beyond a barrier, while its
+            // policy manager stops at the barrier: trusted code of a Program whose sandbox trusts it, which set the
+            // value inside a barrier for a caller that its sandbox does not trust, is trusted by its policy manager
+            // and is not refused, as it would not be if it opened the connection itself
+            bool trusted = !setter.isSandboxed() || !mgr;
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+            if (!trusted) {
+                trusted = mgr->trustsUncontrolledApis();
+            }
+#endif
+            if (jdbc_chooser_refused(trusted, *mgr)) {
                 xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option chooses the destination of the "
                     "connection, which code that a sandbox does not trust with uncontrolled APIs cannot choose",
                     JDBC_OPT_URL);

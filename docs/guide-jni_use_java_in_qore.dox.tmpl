@@ -285,6 +285,22 @@ public class Fetcher {
     classpaths at run time, can be used by a Program restricted only with parse options, and not by sandboxed code.
     Restricted code cannot issue a command into another, trusted Program at all (\c RUNTIME-COMMAND-ERROR).
 
+    The commands that change state that every Program shares are process-wide by design, so they are refused to
+    every restricted issuer, also to one whose parse options restrict something unrelated (ex: thread or process
+    control) and whose sandbox trusts it with uncontrolled APIs: only code with no restricting parse option, or the
+    code of a library module, may use them.  For example, the interface Programs of a server such as Qorus, which are
+    trusted but have restricting parse options, may use \c set-compat-types, \c import, \c add-classpath and the
+    \c define-class commands in their own code, but not \c set-property, \c register-shared-class or the \c global-*
+    classpath commands; the server's own code, which has no restricting parse option, issues these into the
+    interface Programs (\c Program::issueModuleCmd()).  A command issued into another Program also respects the
+    target Program's \c PO_NO_UNCONTROLLED_APIS for the commands that change the JVM or define or run Java code (the
+    \c global-* classpath commands, \c set-property, \c register-shared-class, \c define-class,
+    \c define-pending-class and \c kotlin-eval), so a host issues them before it locks a Program down.  An
+    \c import or \c add-classpath that a trusted issuer issues into a Program with \c PO_NO_UNCONTROLLED_APIS is
+    allowed: it is the trusted code's decision, and the Program's own code still cannot use the Java classes, which
+    are uncontrolled APIs.  The exported import functions (see below) judge the Program they import into as well,
+    as they can run for code that is not the issuer of a module command.
+
     These rules apply to the module commands only: code with \c PO_NO_FILESYSTEM or \c PO_NO_EMBEDDED_LOGIC that may
     use Java classes can still change its class loader or the JVM through Java itself; only
     \c PO_NO_UNCONTROLLED_APIS, or a sandbox, keeps Java away from code.

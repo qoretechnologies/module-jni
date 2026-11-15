@@ -71,8 +71,9 @@ static inline bool jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Purpos
     not judged here.
 
     Code that no sandbox governs, and code under a system-policy barrier or capability of trusted code (resolved with
-    QoreSandboxManagerHelper::Policy), has no governing manager and is not refused; code that is restricted
-    (jni_sandbox_restricts_caller()) but has no governing manager is refused (fail closed).
+    QoreSandboxManagerHelper::Policy), has no governing manager and is not refused.  The Qore library resolves a
+    governing manager for all sandboxed code, so code that is restricted (jni_sandbox_restricts_caller()) without
+    one is not expected; such code would be refused (defence in depth).
 
     @param purpose how the governing sandbox is resolved (see QoreSandboxManagerHelper); QoreSandboxManagerHelper::Policy
     honours a policy barrier and a system-policy capability of trusted code
