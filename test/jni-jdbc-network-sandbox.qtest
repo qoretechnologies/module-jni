@@ -2,8 +2,10 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# The jdbc database driver is refused to code that a sandbox policy governs: the JDBC driver resolves and connects to its
-# destinations in Java, where the sandbox network policy cannot be applied to them (qore#5747)
+# The jdbc database driver is refused to code that a sandbox policy governs with every JDBC driver that has no audited
+# sandbox profile: such a driver resolves and connects to its destinations in Java, where the sandbox network policy
+# cannot be applied to them (qore#5747); the audited Amazon Redshift and SingleStore drivers are tested in
+# jni-jdbc-driver-sandbox.qtest (qore#5786).  The URLs of this test name no audited driver.
 
 %modern
 %no-child-restrictions
@@ -113,7 +115,7 @@ string sub socket_barrier() {
 
     sandboxedTest() {
         Program p = getSandboxed(OpenSource);
-        # the destinations are not parsed: the form of the URL does not matter
+        # a driver without an audited profile: the destinations are not parsed, and the form of the URL does not matter
         foreach string url in (Url, "jdbc:u/p@qore-none:x", "jdbc:u/p@ignored{url=qore-none://db1:1;db2:2/x}",
                 "jdbc:u/p@ignored{url=qore-none:mem:x}") {
             assertEq(Denied, p.callFunction("open_url", url), url);

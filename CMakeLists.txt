@@ -1290,6 +1290,9 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
     test/java/src/org/qore/jni/test/SandboxIo.java
+    test/java/src/org/qore/jni/test/FakeDbServer.java
+    test/java/src/org/qore/jni/test/JdbcGuardTestHelper.java
+    test/java/src/org/qore/jni/test/RecordingSocketFactory.java
     test/java/src/org/qore/jni/test/ExceptionLocations.java
     test/java/src/org/qore/jni/test/Fields.java
     test/java/src/org/qore/jni/test/FinalFields.java
@@ -1352,6 +1355,28 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar ${CMAKE_SOURCE_DIR}/test
 )
 
+# qore#5786: classes with the names of the audited JDBC drivers and of the jni module's guard classes, in another
+# version and without any checks; the jdbc sandbox tests make sure that a restricted connection never uses them
+set(JAVA_TEST_JDBC_FAKES_SRC
+    test/java/jdbc-fakes/com/amazon/redshift/Driver.java
+    test/java/jdbc-fakes/com/amazon/redshift/util/DriverInfo.java
+    test/java/jdbc-fakes/com/singlestore/jdbc/Driver.java
+    test/java/jdbc-fakes/com/singlestore/jdbc/util/Version.java
+    test/java/jdbc-fakes/com/singlestore/jdbc/util/VersionFactory.java
+    test/java/jdbc-fakes/com/singlestore/jdbc/util/QoreGuardSocketFactory.java
+    test/java/jdbc-fakes/org/qore/jni/jdbc/RedshiftGuardSocketFactory.java
+    test/java/jdbc-fakes/org/qore/jni/jdbc/JdbcConnectGuard.java
+)
+
+add_jar(qore-jni-test-jdbc-fakes ${JAVA_TEST_JDBC_FAKES_SRC})
+
+add_dependencies(qore-jni-test qore-jni-test-jdbc-fakes)
+
+add_custom_command(
+    TARGET qore-jni-test-jdbc-fakes
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test-jdbc-fakes.jar ${CMAKE_SOURCE_DIR}/test
+)
 
 set(QPP_SRC
     src/ql_jni.qpp

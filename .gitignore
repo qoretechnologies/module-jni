@@ -8,6 +8,7 @@ build-debug/
 .vscode/
 
 test/qore-jni-test.jar
+test/qore-jni-test-jdbc-fakes.jar
 
 # Build artifacts - compiled Java classes and generated JARs in dataprovider directories
 # Only ignore built qore-dataprovider-*.jar files; dependency JARs are tracked and needed for the build

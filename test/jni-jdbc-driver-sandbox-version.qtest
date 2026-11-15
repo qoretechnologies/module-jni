@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A restricted jdbc connection uses only the audited driver versions (qore#5786): this test puts drivers of other
+# versions on the classpath of every Program, which is where a restricted connection loads its driver from
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+
+%module-cmd(jni) global-add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) global-add-relative-classpath qore-jni-test-jdbc-fakes.jar
+%module-cmd(jni) import org.qore.jni.test.FakeDbServer
+
+%exec-class JniJdbcDriverSandboxVersionTest
+
+class JniJdbcDriverSandboxVersionTest inherits QUnit::Test {
+    private:internal {
+        const Source = "
+string sub open_db(string url) {
+    try {
+        Datasource ds({\"type\": \"jdbc\", \"user\": \"u\", \"pass\": \"pw\", \"db\": url});
+        ds.open();
+        ds.close();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("JNI jdbc driver sandbox versions", "1.0", \ARGV) {
+        addTestCase("a driver of another version is refused", \versionTest());
+        addTestCase("a trusted connection uses the driver it finds", \trustedTest());
+        set_return_value(main());
+    }
+
+    private static Program sandboxed(int port) {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedHost("127.0.0.1");
+        sm.addNetworkAllowedPort(port, QSEC_NET_TCP);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse(Source, "jni-jdbc-driver-sandbox-version");
+        return p;
+    }
+
+    versionTest() {
+        *hash<auto> info = get_module_hash().jni.info;
+        if (!info.jdbc_option_setter || !info.uncontrolled_api_policy) {
+            testSkip("the jni module was built without the prerequisites of the per-driver jdbc sandbox enforcement");
+        }
+        FakeDbServer pg("pg", "127.0.0.1");
+        on_exit pg.close();
+        FakeDbServer mys("mysql", "127.0.0.1");
+        on_exit mys.close();
+        string r = sandboxed(pg.getPort()).callFunction("open_db", sprintf("jdbc:redshift://127.0.0.1:%d/dev",
+            pg.getPort()));
+        assertRegex("^NETWORK-ACCESS-DENIED: .*version 2\\.2\\.0", r, "redshift");
+        r = sandboxed(mys.getPort()).callFunction("open_db", sprintf("jdbc:singlestore://127.0.0.1:%d/db",
+            mys.getPort()));
+        assertRegex("^NETWORK-ACCESS-DENIED: .*version 1\\.2\\.11", r, "singlestore");
+        assertEq(0, pg.acceptCount());
+        assertEq(0, mys.acceptCount());
+    }
+
+    trustedTest() {
+        # DriverManager finds the drivers that are loaded
+        load_class("com.amazon.redshift.Driver");
+        Program p(PO_NEW_STYLE);
+        p.parse(Source, "jni-jdbc-driver-sandbox-version-trusted");
+        assertRegex("QORE-FAKE-DRIVER-USED: redshift", p.callFunction("open_db", "jdbc:redshift://127.0.0.1:1/dev"));
+    }
+}

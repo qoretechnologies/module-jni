@@ -1,0 +1,328 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The Java side of the jdbc driver's per-driver sandbox enforcement (qore#5786): the connection guard, its sockets,
+# the Redshift socket factory, and the driver and class identity checks, called from trusted code
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+%requires Util
+
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.FakeDbServer
+%module-cmd(jni) import org.qore.jni.test.JdbcGuardTestHelper
+%module-cmd(jni) import org.qore.jni.jdbc.JdbcConnectGuard
+%module-cmd(jni) import org.qore.jni.jdbc.RedshiftGuardSocketFactory
+%module-cmd(jni) import org.qore.jni.jdbc.JdbcSandboxConnect
+%module-cmd(jni) import java.util.Properties
+
+%exec-class JniJdbcConnectGuardTest
+
+class JniJdbcConnectGuardTest inherits QUnit::Test {
+    private {
+        #! the fake servers to close
+        list<FakeDbServer> servers = ();
+        *string rs_jar;
+        *string ss_jar;
+        string fakes;
+    }
+
+    constructor() : QUnit::Test("JNI jdbc connect guard", "1.0", \ARGV) {
+        addTestCase("a pinned name connects to its checked address only", \pinnedNameTest());
+        addTestCase("a destination that was not checked is refused", \unpinnedTest());
+        addTestCase("an address literal must have been checked with its port", \literalTest());
+        addTestCase("host names are normalized", \normalizeTest());
+        addTestCase("other address types and bind are refused", \addressTypeTest());
+        addTestCase("the next checked address is tried after an unreachable one", \nextAddressTest());
+        addTestCase("sockets work on threads without a Qore caller", \threadTest());
+        addTestCase("a closed guard refuses every socket", \closedTest());
+        addTestCase("the Redshift factory finds its guard by token", \registryTest());
+        addTestCase("the SingleStore binding requires the guard object", \bindingTest());
+        addTestCase("a connection that did not use the guard is closed and refused", \guardUsedTest());
+        addTestCase("the driver must come from the given loader in the audited version", \driverLoaderTest());
+        addTestCase("the classes the driver loads by name must be the module's", \classIdentityTest());
+        addTestCase("the SingleStore adapter refuses a guard forged in the URL", \forgedAdapterTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        rs_jar = ENV.QORE_JDBC_REDSHIFT_JAR;
+        if (rs_jar && !is_file(rs_jar)) {
+            remove rs_jar;
+        }
+        ss_jar = ENV.QORE_JDBC_SINGLESTORE_JAR;
+        if (ss_jar && !is_file(ss_jar)) {
+            remove ss_jar;
+        }
+        fakes = get_script_dir() + "qore-jni-test-jdbc-fakes.jar";
+    }
+
+    globalTearDown() {
+        foreach FakeDbServer s in (servers) {
+            s.close();
+        }
+    }
+
+    private FakeDbServer server(string mode = "mysql", string addr = "127.0.0.1") {
+        FakeDbServer s(mode, addr);
+        servers += s;
+        return s;
+    }
+
+    #! returns a guard that pins the given host names and ports to their addresses
+    private static JdbcConnectGuard guard(list<string> hosts, list<int> ports, list<list<string>> addrs) {
+        return JdbcConnectGuard::forTargets(hosts, ports, addrs);
+    }
+
+    pinnedNameTest() {
+        FakeDbServer s1 = server();
+        FakeDbServer s2 = server("mysql", "127.0.0.2");
+        JdbcConnectGuard g = guard(("allowed",), (s1.getPort(),), (("127.0.0.1",),));
+        object sock = g.newSocket();
+        on_exit sock.close();
+        # the driver resolved the name to another address (DNS rebinding): the guard connects to the checked one
+        assertEq("ok", JdbcGuardTestHelper::connectResolved(sock, "allowed", "127.0.0.2", s1.getPort(), 5000));
+        assertEq("127.0.0.1", JdbcGuardTestHelper::remoteAddress(sock));
+        # the socket is usable: the fake server's error packet is read through it
+        assertTrue(JdbcGuardTestHelper::read(sock, 4) == 4, "read through the socket");
+        assertEq(1, s1.acceptCount());
+        assertEq(0, s2.acceptCount());
+        assertEq(1, g.socketCount());
+        assertEq(NOTHING, g.lastRefusal());
+    }
+
+    unpinnedTest() {
+        FakeDbServer s = server();
+        JdbcConnectGuard g = guard(("allowed",), (s.getPort(),), (("127.0.0.1",),));
+        foreach list<auto> c in ((("other", s.getPort()), ("allowed", s.getPort() + 1), ("localhost", s.getPort()))) {
+            object sock = g.newSocket();
+            on_exit sock.close();
+            string r = JdbcGuardTestHelper::connectUnresolved(sock, c[0], c[1], 5000);
+            assertRegex("NETWORK-ACCESS-DENIED", r, c[0]);
+            assertRegex(c[0], g.lastRefusal(), c[0] + ": the last refusal");
+        }
+        assertEq(0, s.acceptCount());
+        assertEq(0, g.socketCount());
+    }
+
+    literalTest() {
+        FakeDbServer s = server();
+        FakeDbServer s2 = server("mysql", "127.0.0.2");
+        JdbcConnectGuard g = guard(("allowed",), (s.getPort(),), (("127.0.0.1",),));
+        # a checked address with its port: the SingleStore cancel connects to the address of the current socket
+        object sock = g.newSocket();
+        on_exit sock.close();
+        assertEq("ok", JdbcGuardTestHelper::connectUnresolved(sock, "127.0.0.1", s.getPort(), 5000));
+        # an address that was not checked, and a checked address with another port
+        foreach list<auto> c in ((("127.0.0.2", s2.getPort()), ("127.0.0.1", s2.getPort()))) {
+            object other = g.newSocket();
+            on_exit other.close();
+            assertRegex("NETWORK-ACCESS-DENIED", JdbcGuardTestHelper::connectUnresolved(other, c[0], c[1], 5000),
+                sprintf("%s:%d", c[0], c[1]));
+        }
+        assertEq(1, s.acceptCount());
+        assertEq(0, s2.acceptCount());
+    }
+
+    normalizeTest() {
+        FakeDbServer s = server();
+        JdbcConnectGuard g = guard(("allowed.example", "::1"), (s.getPort(), s.getPort()),
+            (("127.0.0.1",), ("127.0.0.1",)));
+        foreach string host in (("ALLOWED.Example", "[::1]")) {
+            object sock = g.newSocket();
+            on_exit sock.close();
+            assertEq("ok", JdbcGuardTestHelper::connectUnresolved(sock, host, s.getPort(), 5000), host);
+        }
+        assertEq(2, s.acceptCount());
+    }
+
+    addressTypeTest() {
+        JdbcConnectGuard g = guard(("allowed",), (1,), (("127.0.0.1",),));
+        object sock = g.newSocket();
+        on_exit sock.close();
+        assertRegex("NETWORK-ACCESS-DENIED", JdbcGuardTestHelper::connectUnix(sock, "/tmp/qore-jdbc-guard-test"));
+        object b = g.newSocket();
+        on_exit b.close();
+        assertRegex("NETWORK-ACCESS-DENIED", JdbcGuardTestHelper::bind(b, "127.0.0.1", 0), "bind to an address");
+        object n = g.newSocket();
+        on_exit n.close();
+        assertEq("ok", JdbcGuardTestHelper::bind(n, NOTHING, 0), "bind(null)");
+    }
+
+    nextAddressTest() {
+        FakeDbServer s = server();
+        # nothing listens on 127.0.0.3 with this port: the connection is refused there, and the next address is used
+        JdbcConnectGuard g = guard(("multi",), (s.getPort(),), (("127.0.0.3", "127.0.0.1"),));
+        object sock = g.newSocket();
+        on_exit sock.close();
+        assertEq("ok", JdbcGuardTestHelper::connectUnresolved(sock, "multi", s.getPort(), 5000));
+        assertEq("127.0.0.1", JdbcGuardTestHelper::remoteAddress(sock));
+        assertEq(1, s.acceptCount());
+    }
+
+    threadTest() {
+        FakeDbServer s = server();
+        JdbcConnectGuard g = guard(("allowed",), (s.getPort(),), (("127.0.0.1",),));
+        foreach string kind in (("platform", "virtual", "timer")) {
+            object sock = g.newSocket();
+            on_exit sock.close();
+            assertEq("ok", JdbcGuardTestHelper::connectOnThread(sock, "allowed", s.getPort(), kind), kind);
+        }
+        assertEq(3, s.acceptCount());
+    }
+
+    closedTest() {
+        FakeDbServer s = server();
+        JdbcConnectGuard g = guard(("allowed",), (s.getPort(),), (("127.0.0.1",),));
+        object before = g.newSocket();
+        on_exit before.close();
+        assertFalse(g.isClosed());
+        g.close();
+        assertTrue(g.isClosed());
+        object after = g.newSocket();
+        on_exit after.close();
+        foreach object sock in ((before, after)) {
+            assertRegex("NETWORK-ACCESS-DENIED.*closed",
+                JdbcGuardTestHelper::connectUnresolved(sock, "allowed", s.getPort(), 5000));
+        }
+        assertEq(0, s.acceptCount());
+    }
+
+    registryTest() {
+        FakeDbServer s = server();
+        JdbcConnectGuard g = guard(("allowed",), (s.getPort(),), (("127.0.0.1",),));
+        int count = JdbcConnectGuard::registeredCount();
+        string token = g.register();
+        assertRegex("^[0-9a-f]{32}$", token, "128 bits as hex");
+        assertTrue(JdbcConnectGuard::isRegistered(token));
+        assertEq(count + 1, JdbcConnectGuard::registeredCount());
+        Properties props();
+        props.setProperty("socketfactoryarg", token);
+        RedshiftGuardSocketFactory f(props);
+        object sock = f.createSocket();
+        on_exit sock.close();
+        assertEq("ok", JdbcGuardTestHelper::connectUnresolved(sock, "allowed", s.getPort(), 5000));
+        # another token, and no token
+        Properties other();
+        other.setProperty("socketfactoryarg", "00000000000000000000000000000000");
+        assertThrows("JNI-ERROR", "IllegalStateException", sub () { new RedshiftGuardSocketFactory(other); });
+        assertThrows("JNI-ERROR", "IllegalStateException", sub () { new RedshiftGuardSocketFactory(new Properties()); });
+        g.unregister();
+        assertFalse(JdbcConnectGuard::isRegistered(token));
+        assertEq(count, JdbcConnectGuard::registeredCount());
+        assertThrows("JNI-ERROR", "IllegalStateException", sub () { new RedshiftGuardSocketFactory(props); });
+        # a factory made before keeps its guard: the closed flag stops it
+        g.close();
+        object late = f.createSocket();
+        on_exit late.close();
+        assertRegex("NETWORK-ACCESS-DENIED.*closed",
+            JdbcGuardTestHelper::connectUnresolved(late, "allowed", s.getPort(), 5000));
+        assertEq(1, s.acceptCount());
+    }
+
+    bindingTest() {
+        FakeDbServer s = server();
+        JdbcConnectGuard g = guard(("allowed",), (s.getPort(),), (("127.0.0.1",),));
+        object sock = JdbcConnectGuard::socketFor(g);
+        on_exit sock.close();
+        assertEq("ok", JdbcGuardTestHelper::connectUnresolved(sock, "allowed", s.getPort(), 5000));
+        foreach auto forged in (("forged", NOTHING, new Properties())) {
+            assertThrows("JNI-ERROR", "NETWORK-ACCESS-DENIED", \JdbcConnectGuard::socketFor(), (forged,),
+                sprintf("%y", forged));
+        }
+    }
+
+    guardUsedTest() {
+        FakeDbServer s = server();
+        JdbcConnectGuard g = guard(("allowed",), (s.getPort(),), (("127.0.0.1",),));
+        object rec = JdbcGuardTestHelper::closeRecorder();
+        assertThrows("JNI-SANDBOX-ERROR", "did not use", \JdbcSandboxConnect::requireGuardUsed(), (g, rec));
+        assertTrue(rec.isClosed(), "the connection was closed");
+        object sock = g.newSocket();
+        on_exit sock.close();
+        JdbcGuardTestHelper::connectUnresolved(sock, "allowed", s.getPort(), 5000);
+        object rec2 = JdbcGuardTestHelper::closeRecorder();
+        JdbcSandboxConnect::requireGuardUsed(g, rec2);
+        assertFalse(rec2.isClosed(), "a connection that used the guard is kept");
+    }
+
+    driverLoaderTest() {
+        # the driver properties are given as a hash
+        hash<auto> props = {"user": "u"};
+        # no driver in the loader
+        object empty = JdbcGuardTestHelper::loader(());
+        assertThrows("NETWORK-ACCESS-DENIED", "not available", \JdbcSandboxConnect::prepare(),
+            (empty, "jdbc:redshift://127.0.0.1:1/dev", props));
+        assertThrows("NETWORK-ACCESS-DENIED", "not available", \JdbcSandboxConnect::prepare(),
+            (empty, "jdbc:singlestore://127.0.0.1:1/db", props));
+        # a driver of another version
+        object old = JdbcGuardTestHelper::loader((fakes,));
+        assertThrows("NETWORK-ACCESS-DENIED", "version 2\\.2\\.0", \JdbcSandboxConnect::prepare(),
+            (old, "jdbc:redshift://127.0.0.1:1/dev", props));
+        assertThrows("NETWORK-ACCESS-DENIED", "version 1\\.2\\.11", \JdbcSandboxConnect::prepare(),
+            (old, "jdbc:singlestore://127.0.0.1:1/db", props));
+        if (!rs_jar || !ss_jar) {
+            testSkip("set QORE_JDBC_REDSHIFT_JAR and QORE_JDBC_SINGLESTORE_JAR to the jars of the audited drivers");
+        }
+        # the audited versions: the targets come from the driver's own parse
+        object loader = JdbcGuardTestHelper::loader((rs_jar, ss_jar));
+        object c = JdbcSandboxConnect::prepare(loader, "jdbc:redshift://127.0.0.1:5439,Db1.Example:1/dev", props);
+        on_exit c.close();
+        assertEq("redshift", c.getProfileName());
+        assertEq(("127.0.0.1", "db1.example"), c.getTargetHosts());
+        assertEq((5439, 1), c.getTargetPorts());
+        object c2 = JdbcSandboxConnect::prepare(loader, "jdbc:singlestore:sequential://127.0.0.1,[::1]:3307/db",
+            props);
+        on_exit c2.close();
+        assertEq("singlestore", c2.getProfileName());
+        assertEq(("127.0.0.1", "::1"), c2.getTargetHosts());
+        assertEq((3306, 3307), c2.getTargetPorts());
+        # the adapter is defined once per loader
+        object c3 = JdbcSandboxConnect::prepare(loader, "jdbc:singlestore://127.0.0.1/db", props);
+        on_exit c3.close();
+        assertEq(loader.toString(), JdbcGuardTestHelper::loaderOf("com.singlestore.jdbc.util.QoreGuardSocketFactory",
+            loader), "the adapter is defined in the driver's loader");
+        # a connection that was prepared but not pinned connects nowhere
+        assertThrows("NETWORK-ACCESS-DENIED", \c3.connect());
+    }
+
+    classIdentityTest() {
+        if (!rs_jar || !ss_jar) {
+            testSkip("set QORE_JDBC_REDSHIFT_JAR and QORE_JDBC_SINGLESTORE_JAR to the jars of the audited drivers");
+        }
+        # the driver properties are given as a hash
+        hash<auto> props = {"user": "u"};
+        # a loader whose own class of the Redshift factory's name would be loaded by the driver
+        object l = JdbcGuardTestHelper::childFirstLoader((rs_jar, fakes), (), ());
+        assertThrows("JNI-SANDBOX-ERROR", "RedshiftGuardSocketFactory", \JdbcSandboxConnect::prepare(),
+            (l, "jdbc:redshift://127.0.0.1:1/dev", props));
+        # a loader with a class of the adapter's name already loaded
+        l = JdbcGuardTestHelper::childFirstLoader((ss_jar, fakes),
+            ("com.singlestore.jdbc.util.QoreGuardSocketFactory",), ("org.qore.jni.jdbc.JdbcConnectGuard",));
+        assertThrows("JNI-SANDBOX-ERROR", "QoreGuardSocketFactory", \JdbcSandboxConnect::prepare(),
+            (l, "jdbc:singlestore://127.0.0.1:1/db", props));
+        # a loader whose own class of the guard's name the adapter would link to
+        l = JdbcGuardTestHelper::childFirstLoader((ss_jar, fakes), (), ());
+        assertThrows("JNI-SANDBOX-ERROR", "JdbcConnectGuard", \JdbcSandboxConnect::prepare(),
+            (l, "jdbc:singlestore://127.0.0.1:1/db", props));
+    }
+
+    forgedAdapterTest() {
+        if (!ss_jar) {
+            testSkip("set QORE_JDBC_SINGLESTORE_JAR to the jar of the audited driver");
+        }
+        # the driver properties are given as a hash
+        hash<auto> props = {"user": "u"};
+        object loader = JdbcGuardTestHelper::loader((ss_jar,));
+        object c = JdbcSandboxConnect::prepare(loader, "jdbc:singlestore://127.0.0.1:1/db", props);
+        on_exit c.close();
+        assertRegex("NETWORK-ACCESS-DENIED", JdbcGuardTestHelper::forgedAdapterSocket(loader,
+            "jdbc:singlestore://127.0.0.1:1/db?org.qore.jni.jdbc.guard=forged"));
+        assertRegex("NETWORK-ACCESS-DENIED", JdbcGuardTestHelper::forgedAdapterSocket(loader,
+            "jdbc:singlestore://127.0.0.1:1/db"));
+    }
+}

@@ -1,0 +1,669 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The jdbc database driver connects for sandboxed code with the audited drivers only (Amazon Redshift, SingleStore),
+# when every destination of the URL passes the sandbox network policy, and every socket of the driver goes through
+# the jni module's checking socket factory (qore#5786)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+%requires Util
+
+# the classpath of every Program: the recording socket factory is loaded by the class loader of the drivers
+%module-cmd(jni) global-add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.FakeDbServer
+%module-cmd(jni) import org.qore.jni.test.RecordingSocketFactory
+%module-cmd(jni) import org.qore.jni.test.JdbcGuardTestHelper
+%module-cmd(jni) import java.lang.System
+
+%exec-class JniJdbcDriverSandboxTest
+
+#! The jdbc driver's per-driver sandbox enforcement (qore#5786), tested against local fake servers
+/** The vendor jars are external test inputs: \c QORE_JDBC_REDSHIFT_JAR and \c QORE_JDBC_SINGLESTORE_JAR name the jars
+    of the audited versions (Redshift 2.3.0, SingleStore 1.2.12); the cases that need a jar are skipped without it.
+    Trusted test code adds them to the classpath of every Program (\c global-add-classpath), from which a restricted
+    connection loads its driver.
+
+    A connection that is allowed is shown by the fake server's accept on the expected address, and one that is
+    refused by \c NETWORK-ACCESS-DENIED and no accept on any listener.
+*/
+class JniJdbcDriverSandboxTest inherits QUnit::Test {
+    private:internal {
+        #! the code of the sandboxed Programs
+        const Source = "
+string sub open_db(string url, *hash<auto> opts) {
+    try {
+        Datasource ds({\"type\": \"jdbc\", \"user\": \"u\", \"pass\": \"pw\", \"db\": url, \"options\": opts ?? {}});
+        ds.open();
+        ds.close();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+
+# opens a connection and runs the given SQL with each method; returns the results
+list<string> sub run_sql(string url, list<string> sqls) {
+    list<string> rv = ();
+    Datasource ds({\"type\": \"jdbc\", \"user\": \"u\", \"pass\": \"pw\", \"db\": url});
+    try {
+        ds.open();
+    } catch (hash<ExceptionInfo> ex) {
+        return (ex.err + \": \" + ex.desc,);
+    }
+    on_exit ds.close();
+    foreach string sql in (sqls) {
+        foreach string m in ((\"exec\", \"select\", \"execRaw\", \"stmt\")) {
+            try {
+                switch (m) {
+                    case \"exec\": ds.exec(sql); break;
+                    case \"select\": ds.select(sql); break;
+                    case \"execRaw\": ds.execRaw(sql); break;
+                    case \"stmt\": {
+                        SQLStatement stmt(ds);
+                        on_exit stmt.close();
+                        stmt.prepareRaw(sql);
+                        stmt.exec();
+                        break;
+                    }
+                }
+                rv += m + \": ok\";
+            } catch (hash<ExceptionInfo> ex) {
+                rv += m + \": \" + ex.err + \": \" + ex.desc;
+            }
+            # every statement ends the transaction it may have started
+            try { ds.rollback(); } catch () {}
+        }
+    }
+    return rv;
+}
+
+string sub module_cmd(string cmd) {
+    try {
+        Program::issueModuleCmd(\"jni\", cmd);
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+        #! the error of a refused connection
+        const Denied = "NETWORK-ACCESS-DENIED";
+    }
+
+    private {
+        #! the Redshift jar, if any
+        *string rs_jar;
+        #! the SingleStore jar, if any
+        *string ss_jar;
+        #! true if the jni module has the per-driver enforcement
+        bool supported;
+        #! the fake servers to close
+        list<FakeDbServer> servers = ();
+    }
+
+    constructor() : QUnit::Test("JNI jdbc driver sandbox", "1.0", \ARGV) {
+        addTestCase("the module reports the sandboxed drivers", \infoTest());
+        addTestCase("Redshift: an allowed destination connects through the guard", \rsAllowedTest());
+        addTestCase("Redshift: a denied destination is refused", \rsDeniedTest());
+        addTestCase("Redshift: failover to a denied host is refused", \rsFailoverTest());
+        addTestCase("Redshift: a failover list of allowed hosts connects", \rsFailoverAllowedTest());
+        addTestCase("Redshift: URL overrides and parser tricks are refused", \rsOverrideTest());
+        addTestCase("Redshift: forbidden options are refused", \rsForbiddenTest());
+        addTestCase("Redshift: an INI file in the temporary directory is ignored", \rsIniFileTest());
+        addTestCase("Redshift: a trusted connection is unchanged", \rsTrustedTest());
+        addTestCase("SingleStore: an allowed destination connects through the guard", \ssAllowedTest());
+        addTestCase("SingleStore: a denied destination is refused", \ssDeniedTest());
+        addTestCase("SingleStore: failover to a denied host is refused", \ssFailoverTest());
+        addTestCase("SingleStore: a host list of allowed hosts connects", \ssFailoverAllowedTest());
+        addTestCase("SingleStore: URL overrides are refused", \ssOverrideTest());
+        addTestCase("SingleStore: forbidden options are refused", \ssForbiddenTest());
+        addTestCase("SingleStore: LOCAL INFILE options are refused", \ssLocalInfileOptionTest());
+        addTestCase("SingleStore: LOCAL INFILE statements are refused", \ssLocalInfileSqlTest());
+        addTestCase("SingleStore: a server's LOCAL INFILE request gets no file", \ssLocalInfileServerTest());
+        addTestCase("SingleStore: a trusted connection is unchanged", \ssTrustedTest());
+        addTestCase("an unsupported driver URL is refused", \unsupportedTest());
+        addTestCase("sandboxed code cannot change the trusted class loader", \loaderCommandTest());
+        addTestCase("classes in the sandboxed Program's loader are not used", \loaderShadowTest());
+        addTestCase("a classpath option set by sandboxed code is refused", \classpathOptionTest());
+        addTestCase("no guard is left registered", \registryTest());
+        addTestCase("the connect targets for the Qore sandbox check", \connectTargetsTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # the enforcement is built with the prerequisites of its trusted class loader rule: module commands judged by
+        # their issuer, datasource options judged by their setter (both "jdbc_option_setter"), and the run-time
+        # refusal of uncontrolled APIs ("uncontrolled_api_policy")
+        *hash<auto> info = get_module_hash().jni.info;
+        supported = info.jdbc_option_setter && info.uncontrolled_api_policy;
+        if (!supported) {
+            return;
+        }
+        rs_jar = ENV.QORE_JDBC_REDSHIFT_JAR;
+        if (rs_jar && !is_file(rs_jar)) {
+            remove rs_jar;
+        }
+        ss_jar = ENV.QORE_JDBC_SINGLESTORE_JAR;
+        if (ss_jar && !is_file(ss_jar)) {
+            remove ss_jar;
+        }
+        foreach string jar in ((rs_jar, ss_jar)) {
+            if (jar) {
+                Program::issueModuleCmd("jni", "global-add-classpath " + jar);
+            }
+        }
+    }
+
+    globalTearDown() {
+        foreach FakeDbServer s in (servers) {
+            s.close();
+        }
+    }
+
+    #! skips the case if the module or the jar are not available
+    private checkSkip(*string jar, string name) {
+        if (!supported) {
+            testSkip("the jni module was built without the prerequisites of the per-driver jdbc sandbox enforcement");
+        }
+        if (!jar) {
+            testSkip(sprintf("no %s jar: set QORE_JDBC_%s_JAR to the jar of the audited driver version", name,
+                name.upr()));
+        }
+    }
+
+    #! returns a new fake server
+    private FakeDbServer server(string mode, string addr = "127.0.0.1") {
+        FakeDbServer s(mode, addr);
+        servers += s;
+        return s;
+    }
+
+    #! returns a port with no listener
+    private static int deadPort() {
+        Socket s();
+        s.bind("127.0.0.1:0");
+        int port = s.getSocketInfo().port;
+        s.close();
+        return port;
+    }
+
+    #! returns a sandboxed Program whose sandbox allows only 127.0.0.1 with the given ports
+    private static Program sandboxed(softlist<int> ports) {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        sm.addNetworkAllowedHost("127.0.0.1");
+        foreach int port in (ports) {
+            sm.addNetworkAllowedPort(port, QSEC_NET_TCP);
+        }
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse(Source, "jni-jdbc-driver-sandboxed");
+        return p;
+    }
+
+    #! returns a trusted Program
+    private static Program trusted() {
+        Program p(PO_NEW_STYLE);
+        p.parse(Source, "jni-jdbc-driver-trusted");
+        return p;
+    }
+
+    #! asserts that the connection was refused with the given error, and that no server accepted a connection
+    private assertRefused(string result, string err, string rx, list<FakeDbServer> srvs, string label) {
+        assertRegex("^" + err + ": ", result, label + ": the error code");
+        assertRegex(rx, result, label + ": the message");
+        foreach FakeDbServer s in (srvs) {
+            assertEq(0, s.acceptCount(), label + ": no connection was made");
+        }
+    }
+
+    #! asserts that the connection reached the server on 127.0.0.1 once, through the guard
+    private assertReached(string result, string rx, FakeDbServer s, string label, int count = 1) {
+        assertNRegex("^" + Denied + ": ", result, label + ": not refused");
+        assertRegex(rx, result, label + ": the server's reply");
+        assertEq(count, s.acceptCount(), label + ": the accepts");
+        assertEq((map "127.0.0.1", xrange(count)), s.acceptAddresses(), label + ": the address");
+    }
+
+    #! returns True if Qore checks DBI connections against the sandbox (qore#5747): it has DBI_CAP_LOCAL_ONLY
+    static bool haveDbiSandboxCheck() {
+        Program p(PO_NEW_STYLE);
+        try {
+            p.parse("int sub f() { return DBI_CAP_LOCAL_ONLY; }", "check");
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    infoTest() {
+        *hash<auto> info = get_module_hash().jni.info;
+        if (!supported) {
+            testSkip("the jni module was built without the prerequisites of the per-driver jdbc sandbox enforcement");
+        }
+        assertEq(("redshift", "singlestore"), info.jdbc_sandbox_drivers);
+    }
+
+    rsAllowedTest() {
+        checkSkip(rs_jar, "redshift");
+        # the default sslmode is verify-full: the fake server does not support TLS, which the driver reports after
+        # the connection was made through the guard
+        FakeDbServer s = server("pg");
+        string url = sprintf("jdbc:redshift://127.0.0.1:%d/dev", s.getPort());
+        assertReached(sandboxed(s.getPort()).callFunction("open_db", url), "SSL", s, "single host");
+
+        # with a login timeout the driver connects on a thread of its own
+        s = server("pg");
+        url = sprintf("jdbc:redshift://127.0.0.1:%d/dev?loginTimeout=5", s.getPort());
+        assertReached(sandboxed(s.getPort()).callFunction("open_db", url), "SSL", s, "loginTimeout");
+
+        # an explicit verify-full and allowed options
+        s = server("pg");
+        url = sprintf("jdbc:redshift://127.0.0.1:%d/dev?sslmode=verify-full;ApplicationName=qore&tcpKeepAlive=true",
+            s.getPort());
+        assertReached(sandboxed(s.getPort()).callFunction("open_db", url), "SSL", s, "allowed options");
+    }
+
+    rsDeniedTest() {
+        checkSkip(rs_jar, "redshift");
+        FakeDbServer allowed = server("pg");
+        FakeDbServer other_host = server("pg", "127.0.0.2");
+        FakeDbServer other_port = server("pg");
+        Program p = sandboxed((allowed.getPort(), other_host.getPort()));
+        list<FakeDbServer> all = (allowed, other_host, other_port);
+        assertRefused(p.callFunction("open_db", sprintf("jdbc:redshift://127.0.0.2:%d/dev", other_host.getPort())),
+            Denied, "127\\.0\\.0\\.2", all, "another loopback address");
+        assertRefused(p.callFunction("open_db", sprintf("jdbc:redshift://127.0.0.1:%d/dev", other_port.getPort())),
+            Denied, "port", all, "another port");
+        assertRefused(p.callFunction("open_db", sprintf("jdbc:redshift://localhost:%d/dev", allowed.getPort())),
+            Denied, "localhost", all, "a host name that the policy does not allow");
+        assertRefused(p.callFunction("open_db", sprintf("jdbc:redshift://[::1]:%d/dev", allowed.getPort())),
+            Denied, "::1", all, "an IPv6 literal");
+    }
+
+    rsFailoverTest() {
+        checkSkip(rs_jar, "redshift");
+        FakeDbServer allowed = server("pg");
+        FakeDbServer denied = server("pg", "127.0.0.2");
+        Program p = sandboxed((allowed.getPort(), denied.getPort()));
+        string url = sprintf("jdbc:redshift://127.0.0.1:%d,127.0.0.2:%d/dev", allowed.getPort(), denied.getPort());
+        assertRefused(p.callFunction("open_db", url), Denied, "127\\.0\\.0\\.2", (allowed, denied),
+            "the second host is denied");
+        url = sprintf("jdbc:redshift://127.0.0.2:%d,127.0.0.1:%d/dev?loadBalanceHosts=true", denied.getPort(),
+            allowed.getPort());
+        assertRefused(p.callFunction("open_db", url), Denied, "127\\.0\\.0\\.2", (allowed, denied),
+            "the first host is denied");
+    }
+
+    rsFailoverAllowedTest() {
+        checkSkip(rs_jar, "redshift");
+        # the first host has no listener: the driver fails over to the second one, both through the guard
+        FakeDbServer s = server("pg");
+        int dead = deadPort();
+        string url = sprintf("jdbc:redshift://127.0.0.1:%d,127.0.0.1:%d/dev", dead, s.getPort());
+        assertReached(sandboxed((dead, s.getPort())).callFunction("open_db", url), "SSL", s, "failover");
+    }
+
+    rsOverrideTest() {
+        checkSkip(rs_jar, "redshift");
+        FakeDbServer s = server("pg");
+        FakeDbServer other = server("pg", "127.0.0.2");
+        int port = s.getPort();
+        Program p = sandboxed((port, other.getPort()));
+        string base = sprintf("jdbc:redshift://127.0.0.1:%d/dev", port);
+        string ohost = sprintf("127.0.0.2:%d", other.getPort());
+        hash<string, string> cases = {
+            "?host=": base + "?host=127.0.0.2",
+            ";host=": base + ";host=127.0.0.2",
+            "?HOST=": base + "?HOST=127.0.0.2",
+            "?port=": base + sprintf("?port=%d", other.getPort()),
+            "?socketFactory=": base + "?socketFactory=org.qore.jni.test.RecordingSocketFactory",
+            "?socketFactoryArg=": base + "?socketFactoryArg=0123456789abcdef0123456789abcdef",
+            "?IniFile=": base + "?IniFile=/dev/null",
+            "bare ?inifile": base + "?inifile",
+            "bare ;inifile": base + ";inifile",
+            "bare key": base + "?ssl",
+            "; before ?": base + ";applicationname=1?socketfactory=org.qore.jni.test.RecordingSocketFactory&host=127.0.0.2",
+            "Kelvin sign": base + "?SOCKETFACTORY=org.qore.jni.test.RecordingSocketFactory",
+            "URL-encoded key": base + "?socket%46actory=org.qore.jni.test.RecordingSocketFactory",
+            "empty key": base + "?=x",
+            "iam URL": sprintf("jdbc:redshift:iam://127.0.0.1:%d/dev", port),
+            "no host list": "jdbc:redshift:dev",
+            "empty host": sprintf("jdbc:redshift://:%d/dev", port),
+            "host with a path": sprintf("jdbc:redshift://127.0.0.1:%d/dev?x=1/..", port),
+            "unknown key": base + "?qoreUnknownOption=1",
+            "duplicate key": base + "?tcpKeepAlive=true&TCPKEEPALIVE=false",
+            "a host list in a value": base + "?ApplicationName=" + ohost,
+        };
+        foreach hash<auto> c in (cases.pairIterator()) {
+            # a value that names a destination is a value of an allowed key, which is not a destination: the case
+            # connects to the allowed host
+            if (c.key == "a host list in a value") {
+                assertReached(p.callFunction("open_db", c.value), "SSL", s, c.key);
+                continue;
+            }
+            assertRefused(p.callFunction("open_db", c.value), Denied, ".", (s, other), c.key);
+        }
+    }
+
+    rsForbiddenTest() {
+        checkSkip(rs_jar, "redshift");
+        FakeDbServer s = server("pg");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        string base = sprintf("jdbc:redshift://127.0.0.1:%d/dev", port);
+        foreach string arg in (("IniSection=x", "plugin_name=com.amazon.redshift.plugin.OktaCredentialsProvider",
+                "iamauth=true", "sslrootcert=/etc/passwd", "sslfactory=javax.net.ssl.SSLSocketFactory",
+                "LogPath=/tmp", "LogLevel=6", "DSILogLevel=6", "sslcert=/etc/passwd", "sslkey=/etc/passwd",
+                "ssltruststorepath=/etc/passwd", "AuthMech=PREFER", "region=us-east-1", "idp_host=127.0.0.2",
+                # PROVISIONAL: plain TCP and verify-ca are refused for sandboxed callers (design section 11, item 9)
+                "ssl=false", "sslmode=verify-ca", "sslmode=disable")) {
+            assertRefused(p.callFunction("open_db", base + "?" + arg), Denied, "option|value", (s,), arg);
+        }
+    }
+
+    rsIniFileTest() {
+        checkSkip(rs_jar, "redshift");
+        FakeDbServer s = server("pg");
+        FakeDbServer other = server("pg", "127.0.0.2");
+        # an INI file that the driver would find in the temporary directory sets another host
+        string dir = System::getProperty("java.io.tmpdir");
+        string ini = dir + DirSep + "rsjdbc.ini";
+        if (is_file(ini)) {
+            testSkip(sprintf("%y exists already", ini));
+        }
+        File f();
+        f.open2(ini, O_CREAT | O_WRONLY | O_TRUNC);
+        on_exit unlink(ini);
+        f.write(sprintf("[DRIVER]\nhost=127.0.0.2\nport=%d\nLogLevel=6\n", other.getPort()));
+        f.close();
+        string url = sprintf("jdbc:redshift://127.0.0.1:%d/dev", s.getPort());
+        assertReached(sandboxed((s.getPort(), other.getPort())).callFunction("open_db", url), "SSL", s,
+            "the INI file is not read");
+        assertEq(0, other.acceptCount(), "the host of the INI file is not used");
+    }
+
+    rsTrustedTest() {
+        checkSkip(rs_jar, "redshift");
+        # options that a sandboxed connection may not use, a destination that the test's sandboxes deny, and the
+        # driver's own URL rules: the connection reaches the server, and the factory of the URL sees no forced
+        # property
+        FakeDbServer s = server("pg", "127.0.0.2");
+        string url = sprintf("jdbc:redshift://127.0.0.2:%d/dev?ssl=false&socketFactory="
+            "org.qore.jni.test.RecordingSocketFactory", s.getPort());
+        string result = trusted().callFunction("open_db", url);
+        assertRegex("qore-fake-pg", result, "the server's error");
+        assertEq(1, s.acceptCount());
+        list<string> kl = RecordingSocketFactory::lastKeys();
+        assertTrue(inlist("socketfactory", kl), "the factory of the URL: " + kl.join(","));
+        assertFalse(inlist("socketfactoryarg", kl), "no token: " + kl.join(","));
+        assertFalse(inlist("inifile", kl), "no INI file: " + kl.join(","));
+        assertTrue(inlist("user=u", s.getStartupParams()), "the startup message");
+    }
+
+    ssAllowedTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql");
+        string url = sprintf("jdbc:singlestore://127.0.0.1:%d/db", s.getPort());
+        assertReached(sandboxed(s.getPort()).callFunction("open_db", url), "qore-fake-mysql", s, "single host");
+
+        # a server that accepts the connection: the connection is opened, and a statement reaches the server
+        s = server("mysql-ok");
+        url = sprintf("jdbc:singlestore://127.0.0.1:%d/db?connectTimeout=5000&useServerPrepStmts=false", s.getPort());
+        Program p = sandboxed(s.getPort());
+        assertEq("ok", p.callFunction("open_db", url), "the connection is opened");
+        list<string> results = p.callFunction("run_sql", url, ("select 1",));
+        assertEq(4, results.size());
+        foreach string r in (results) {
+            assertRegex("qore-fake-mysql-query", r, "the statement reached the server");
+        }
+
+        # the address=() syntax
+        s = server("mysql");
+        url = sprintf("jdbc:singlestore://address=(host=127.0.0.1)(port=%d)/db", s.getPort());
+        assertReached(sandboxed(s.getPort()).callFunction("open_db", url), "qore-fake-mysql", s, "address=()");
+    }
+
+    ssDeniedTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer allowed = server("mysql");
+        FakeDbServer other_host = server("mysql", "127.0.0.2");
+        FakeDbServer other_port = server("mysql");
+        Program p = sandboxed((allowed.getPort(), other_host.getPort()));
+        list<FakeDbServer> all = (allowed, other_host, other_port);
+        assertRefused(p.callFunction("open_db", sprintf("jdbc:singlestore://127.0.0.2:%d/db", other_host.getPort())),
+            Denied, "127\\.0\\.0\\.2", all, "another loopback address");
+        assertRefused(p.callFunction("open_db", sprintf("jdbc:singlestore://127.0.0.1:%d/db", other_port.getPort())),
+            Denied, "port", all, "another port");
+        assertRefused(p.callFunction("open_db", sprintf("jdbc:singlestore://[::1]:%d/db", allowed.getPort())),
+            Denied, "::1", all, "an IPv6 literal");
+    }
+
+    ssFailoverTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer allowed = server("mysql");
+        FakeDbServer denied = server("mysql", "127.0.0.2");
+        Program p = sandboxed((allowed.getPort(), denied.getPort()));
+        string hosts = sprintf("127.0.0.1:%d,127.0.0.2:%d", allowed.getPort(), denied.getPort());
+        foreach string mode in (("", "sequential:", "loadbalance:")) {
+            assertRefused(p.callFunction("open_db", sprintf("jdbc:singlestore:%s//%s/db", mode, hosts)), Denied,
+                "127\\.0\\.0\\.2", (allowed, denied), "mode " + mode);
+        }
+        string url = sprintf("jdbc:singlestore:sequential://address=(host=127.0.0.1)(port=%d),"
+            "address=(host=127.0.0.2)(port=%d)/db", allowed.getPort(), denied.getPort());
+        assertRefused(p.callFunction("open_db", url), Denied, "127\\.0\\.0\\.2", (allowed, denied), "address=()");
+    }
+
+    ssFailoverAllowedTest() {
+        checkSkip(ss_jar, "singlestore");
+        # the first host has no listener: the driver tries the next one, both through the guard
+        FakeDbServer s = server("mysql");
+        int dead = deadPort();
+        string url = sprintf("jdbc:singlestore://127.0.0.1:%d,127.0.0.1:%d/db", dead, s.getPort());
+        assertReached(sandboxed((dead, s.getPort())).callFunction("open_db", url), "qore-fake-mysql", s, "host list");
+    }
+
+    ssOverrideTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        string base = sprintf("jdbc:singlestore://127.0.0.1:%d/db", port);
+        hash<string, string> cases = {
+            "socketFactory": base + "?socketFactory=org.qore.jni.test.RecordingSocketFactory",
+            "the guard key": base + "?org.qore.jni.jdbc.guard=forged",
+            "pipe": base + "?pipe=x",
+            "localSocket": base + "?localSocket=/tmp/x",
+            "localSocketAddress": base + "?localSocketAddress=127.0.0.1",
+            "socksProxyHost": base + "?socksProxyHost=127.0.0.1&socksProxyPort=" + port,
+            "tlsSocketType": base + "?tlsSocketType=x",
+            "empty host list": "jdbc:singlestore:///db",
+            "address with other keys": sprintf("jdbc:singlestore://address=(host=127.0.0.1)(port=%d)(x=y)/db", port),
+            "address without a host": sprintf("jdbc:singlestore://address=(port=%d)/db", port),
+            "the failover alias": sprintf("jdbc:singlestore:failover://127.0.0.1:%d/db", port),
+            "the replication mode": sprintf("jdbc:singlestore:replication://127.0.0.1:%d/db", port),
+            "Kelvin sign": base + "?SOCKETFACTORY=x",
+            "empty key": base + "?=x",
+            "bare key": base + "?useCompression",
+            "unknown key": base + "?qoreUnknownOption=1",
+            "an alias": base + "?nullCatalogMeansCurrent=true",
+            "a field of the builder": base + "?_addresses=x",
+            "duplicate key": base + "?connectTimeout=1000&CONNECTTIMEOUT=2000",
+        };
+        foreach hash<auto> c in (cases.pairIterator()) {
+            assertRefused(p.callFunction("open_db", c.value), Denied, ".", (s,), c.key);
+        }
+    }
+
+    ssForbiddenTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        string base = sprintf("jdbc:singlestore://127.0.0.1:%d/db", port);
+        foreach string arg in (("allowLocalInfile=true", "allowLocalInfile=false", "credentialType=BROWSER_SSO",
+                "credentialType=ENV", "pool=true", "trustStore=http://127.0.0.2/x",
+                "serverSslCert=http://127.0.0.2/x", "serverSslCert=/etc/passwd", "keyStore=/etc/passwd",
+                "restrictedAuth=mysql_clear_password", "consoleLogFilepath=/tmp/x", "consoleLogLevel=DEBUG",
+                "clientCertificateKeyStoreUrl=/etc/passwd", "includeThreadDumpInDeadlockExceptions=true",
+                "printStackTrace=true", "servicePrincipalName=x", "registerJmxPool=true", "poolName=x")) {
+            assertRefused(p.callFunction("open_db", base + "?" + arg), Denied, "option|value", (s,), arg);
+        }
+    }
+
+    ssLocalInfileOptionTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        string base = sprintf("jdbc:singlestore://127.0.0.1:%d/db", port);
+        foreach string arg in (("initSql=LOAD DATA LOCAL INFILE '/etc/passwd' INTO TABLE t",
+                "initSql=select 1;load\tlocal\ninfile '/etc/passwd' into table t",
+                "sessionVariables=x=1,y=LOAD DATA LOCAL INFILE")) {
+            assertRefused(p.callFunction("open_db", base + "?" + arg), Denied, "LOCAL INFILE", (s,), arg);
+        }
+    }
+
+    ssLocalInfileSqlTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-ok");
+        string url = sprintf("jdbc:singlestore://127.0.0.1:%d/db?useServerPrepStmts=false", s.getPort());
+        list<string> sqls = ("LOAD DATA LOCAL INFILE '/etc/passwd' INTO TABLE t",
+            "load data local infile ? into table t",
+            "/* a comment */ LOAD\n LOCAL\tINFILE '/etc/passwd' INTO TABLE t");
+        list<string> results = sandboxed(s.getPort()).callFunction("run_sql", url, sqls);
+        assertEq(sqls.size() * 4, results.size());
+        foreach string r in (results) {
+            assertRegex("^[a-zA-Z]+: JNI-SANDBOX-ERROR: .*LOCAL INFILE", r);
+        }
+        assertEq((), s.getQueries(), "no statement reached the server");
+    }
+
+    ssLocalInfileServerTest() {
+        checkSkip(ss_jar, "singlestore");
+        # a server that requests a file in reply to the driver's own initialization query
+        FakeDbServer s = server("mysql-infile");
+        s.setInfileName("/etc/passwd");
+        string url = sprintf("jdbc:singlestore://127.0.0.1:%d/db", s.getPort());
+        string result = sandboxed(s.getPort()).callFunction("open_db", url);
+        assertNRegex("^ok$", result, "the connection fails");
+        assertEq(1, s.acceptCount(), "the connection was made through the guard");
+        assertEq(1, s.infileRequests(), "the server requested a file");
+        assertEq(0, s.infileBytes(), "no file data was sent");
+    }
+
+    ssTrustedTest() {
+        checkSkip(ss_jar, "singlestore");
+        # options that a sandboxed connection may not use and a destination that the test's sandboxes deny
+        FakeDbServer s = server("mysql", "127.0.0.2");
+        string url = sprintf("jdbc:singlestore://127.0.0.2:%d/db?allowLocalInfile=true&pool=false", s.getPort());
+        string result = trusted().callFunction("open_db", url);
+        assertRegex("qore-fake-mysql", result, "the server's error");
+        assertEq(1, s.acceptCount());
+    }
+
+    unsupportedTest() {
+        if (!supported) {
+            testSkip("the jni module was built without the prerequisites of the per-driver jdbc sandbox enforcement");
+        }
+        FakeDbServer s = server("pg");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        foreach string url in ((sprintf("jdbc:postgresql://127.0.0.1:%d/db", port),
+                sprintf("jdbc:mysql://127.0.0.1:%d/db", port), sprintf("jdbc:mariadb://127.0.0.1:%d/db", port),
+                sprintf("jdbc:Redshift://127.0.0.1:%d/db", port), "jdbc:qore-none:x")) {
+            assertRefused(p.callFunction("open_db", url), Denied, "not supported", (s,), url);
+        }
+    }
+
+    loaderCommandTest() {
+        if (!supported) {
+            testSkip("the jni module was built without the prerequisites of the per-driver jdbc sandbox enforcement");
+        }
+        string fakes = get_script_dir() + "qore-jni-test-jdbc-fakes.jar";
+        Program p = sandboxed(1);
+        # the classpath of every Program, and the sandboxed Program's own class loader
+        foreach string cmd in (("global-add-classpath " + fakes, "global-add-relative-classpath .",
+                "add-classpath " + fakes, "define-class org/qore/jni/jdbc/RedshiftGuardSocketFactory "
+                + make_base64_string(JdbcGuardTestHelper::classBytes(fakes,
+                    "org/qore/jni/jdbc/RedshiftGuardSocketFactory.class")),
+                "register-shared-class com.amazon.redshift.Driver")) {
+            assertEq("JNI-SANDBOX-ERROR", p.callFunction("module_cmd", cmd), cmd.substr(0, 40));
+        }
+        # as a parse directive
+        Program d(PO_NEW_STYLE);
+        d.setSandboxManager(new SandboxManager());
+        assertThrows("JNI-SANDBOX-ERROR", \d.parse(), ("%module-cmd(jni) global-add-classpath " + fakes + "\n",
+            "jni-jdbc-driver-sandbox-directive"));
+    }
+
+    loaderShadowTest() {
+        checkSkip(rs_jar, "redshift");
+        checkSkip(ss_jar, "singlestore");
+        string fakes = get_script_dir() + "qore-jni-test-jdbc-fakes.jar";
+        FakeDbServer rs = server("pg");
+        FakeDbServer ss = server("mysql");
+        Program p = sandboxed((rs.getPort(), ss.getPort()));
+        # trusted code (the host) puts classes with the names of the drivers and of the guard classes into the
+        # sandboxed Program's own class loader as byte code, which that loader prefers to its parent's classes
+        foreach string cls in (("com/amazon/redshift/Driver", "com/singlestore/jdbc/Driver",
+                "org/qore/jni/jdbc/RedshiftGuardSocketFactory")) {
+            p.issueModuleCmd("jni", "define-class " + cls + " "
+                + make_base64_string(JdbcGuardTestHelper::classBytes(fakes, cls + ".class")));
+        }
+        # the restricted connections load the genuine classes from the trusted class loader
+        string url = sprintf("jdbc:redshift://127.0.0.1:%d/dev", rs.getPort());
+        string result = p.callFunction("open_db", url);
+        assertNRegex("QORE-FAKE", result, "redshift: the genuine driver");
+        assertReached(result, "SSL", rs, "redshift");
+        url = sprintf("jdbc:singlestore://127.0.0.1:%d/db", ss.getPort());
+        result = p.callFunction("open_db", url);
+        assertNRegex("QORE-FAKE", result, "singlestore: the genuine driver");
+        assertReached(result, "qore-fake-mysql", ss, "singlestore");
+    }
+
+    classpathOptionTest() {
+        checkSkip(rs_jar, "redshift");
+        string fakes = get_script_dir() + "qore-jni-test-jdbc-fakes.jar";
+        FakeDbServer s = server("pg");
+        string url = sprintf("jdbc:redshift://127.0.0.1:%d/dev", s.getPort());
+        string result = sandboxed(s.getPort()).callFunction("open_db", url, {"classpath": fakes});
+        assertRegex("^JNI-SANDBOX-ERROR: .*classpath", result);
+        assertEq(0, s.acceptCount());
+    }
+
+    registryTest() {
+        checkSkip(rs_jar, "redshift");
+        checkSkip(ss_jar, "singlestore");
+        # the guards of closed and refused connections are unregistered
+        FakeDbServer ok = server("mysql-ok");
+        FakeDbServer pg = server("pg");
+        Program p = sandboxed((ok.getPort(), pg.getPort()));
+        p.callFunction("open_db", sprintf("jdbc:singlestore://127.0.0.1:%d/db", ok.getPort()));
+        p.callFunction("open_db", sprintf("jdbc:redshift://127.0.0.1:%d/dev", pg.getPort()));
+        p.callFunction("open_db", sprintf("jdbc:redshift://127.0.0.1:%d/dev?host=x", pg.getPort()));
+        # trusted code asks the registry
+        Program t(PO_NEW_STYLE);
+        t.parse("%requires jni\n%module-cmd(jni) import org.qore.jni.jdbc.JdbcConnectGuard\n"
+            "int sub count() { return JdbcConnectGuard::registeredCount(); }", "jni-jdbc-driver-registry");
+        assertEq(0, t.callFunction("count"));
+    }
+
+    connectTargetsTest() {
+        if (!supported) {
+            testSkip("the jni module was built without the prerequisites of the per-driver jdbc sandbox enforcement");
+        }
+        # QDBI_METHOD_GET_CONNECT_TARGETS: the Qore side of qore#5747; a Qore library that has it declares
+        # DBI_CAP_LOCAL_ONLY
+        if (!haveDbiSandboxCheck()) {
+            testSkip("the Qore library does not check the connect targets of DBI drivers (qore#5747)");
+        }
+        # not reached with a Qore library without the check; the mode is tested when that library is available
+        fail("the Qore side of qore#5747 is not expected yet; extend this test");
+    }
+}
