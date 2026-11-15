@@ -475,6 +475,8 @@ void QoreJdbcStatement::prepareAndBindStatement(Env& env, ExceptionSink* xsink, 
 void QoreJdbcStatement::prepareStatement(Env& env, const QoreString& str) {
     assert(!stmt);
     // no exception handling needed; calls must be wrapped in a try/catch block
+    // the SQL of a restricted connection is checked before the driver sees it (qore#5786)
+    conn->checkSql(env, str.c_str());
     std::vector<jvalue> jargs(1);
     LocalReference<jstring> jstr = env.newString(str.c_str());
     jargs[0].l = jstr;
@@ -543,6 +545,8 @@ bool QoreJdbcStatement::executeOnce(Env& env, ExceptionSink* xsink) {
         return false;
     }
     if (raw) {
+        // the SQL of a restricted connection is checked before the driver sees it (qore#5786)
+        conn->checkSql(env, raw_sql.c_str());
         std::vector<jvalue> jargs(1);
         LocalReference<jstring> jstr = env.newString(raw_sql.c_str());
         jargs[0].l = jstr;

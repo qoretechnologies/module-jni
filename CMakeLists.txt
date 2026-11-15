@@ -1069,6 +1069,16 @@ generate_java(org/qore/jni/JavaClassBuilder.java 1 2 StaticEntry)
 generate_java(org/qore/jni/QoreClassFileLocator.java)
 generate_java(org/qore/jni/QoreJavaFileObject.java)
 generate_java(org/qore/jni/QoreJavaObjectPtr.java)
+# qore#5786: the per-driver sandbox enforcement of the jdbc driver; the classes are defined in the bootstrap class
+# loader, where every class loader finds them, and none of them may be declared sandbox-aware
+generate_java(org/qore/jni/jdbc/JdbcConnectGuard.java)
+generate_java(org/qore/jni/jdbc/GuardedSocket.java)
+generate_java(org/qore/jni/jdbc/RedshiftGuardSocketFactory.java)
+generate_java(org/qore/jni/jdbc/JdbcTargets.java)
+generate_java(org/qore/jni/jdbc/JdbcDriverProfile.java)
+generate_java(org/qore/jni/jdbc/RedshiftProfile.java)
+generate_java(org/qore/jni/jdbc/SingleStoreProfile.java)
+generate_java(org/qore/jni/jdbc/JdbcSandboxConnect.java)
 add_java_source(org/qore/jni/KotlinMetadataHelper.java)
 add_java_source(org/qore/jni/KotlinScriptEngine.java)
 generate_jar(${BYTE_BUDDY_JAR} JavaJarByteBuddy)
@@ -1145,6 +1155,38 @@ set(CMAKE_JAVA_COMPILE_FLAGS -Xlint:unchecked -Xlint:deprecation -Xdiags:verbose
 add_custom_target(jni-sentinel
     DEPENDS ${JAVA_JAR_SRC} ${_qore_jni_sentinel}
 )
+
+# qore#5786: the SingleStore adapter, which the module defines at run time in the class loader of the SingleStore
+# driver (PROVISIONAL); compiled against signature-only stubs of the driver's classes, so no driver jar is needed, and
+# built in to the binary module as its class bytes only: it is not part of qore-jni.jar
+set(_ss_adapter_dir ${CMAKE_CURRENT_BINARY_DIR}/singlestore-adapter)
+set(_ss_adapter_class ${_ss_adapter_dir}/com/singlestore/jdbc/util/QoreGuardSocketFactory.class)
+set(_ss_adapter_src
+    ${CMAKE_SOURCE_DIR}/src/singlestore-adapter/src/com/singlestore/jdbc/util/QoreGuardSocketFactory.java
+)
+set(_ss_adapter_stubs
+    ${CMAKE_SOURCE_DIR}/src/singlestore-adapter/stubs/com/singlestore/jdbc/Configuration.java
+    ${CMAKE_SOURCE_DIR}/src/singlestore-adapter/stubs/com/singlestore/jdbc/util/ConfigurableSocketFactory.java
+)
+add_custom_command(
+    OUTPUT ${_ss_adapter_class}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${_ss_adapter_dir}
+    COMMAND ${Java_JAVAC_EXECUTABLE} ${CMAKE_JAVA_COMPILE_FLAGS} -implicit:none -d ${_ss_adapter_dir}
+        -cp ${CMAKE_CURRENT_BINARY_DIR} -sourcepath ${CMAKE_SOURCE_DIR}/src/singlestore-adapter/stubs
+        ${_ss_adapter_src}
+    DEPENDS jni-sentinel ${_qore_jni_sentinel} ${_ss_adapter_src} ${_ss_adapter_stubs}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+set(_ss_adapter_inc ${CMAKE_CURRENT_BINARY_DIR}/JavaClassQoreGuardSocketFactory.inc)
+add_custom_command(
+    OUTPUT ${_ss_adapter_inc}
+    COMMAND ${QORE_JNI_RUN_QORE} ${CMAKE_SOURCE_DIR}/make-inc ${_ss_adapter_class} ${_ss_adapter_inc}
+    DEPENDS ${_ss_adapter_class}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    VERBATIM
+)
+SET(QORE_INC_FILES ${QORE_INC_FILES} ${_ss_adapter_inc})
 
 add_custom_command(
     OUTPUT ${JAVA_JAR_CLASSES} ${_qore_jni_sentinel}
@@ -1310,6 +1352,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar ${CMAKE_SOURCE_DIR}/test
 )
 
+
 set(QPP_SRC
     src/ql_jni.qpp
     src/QC_JavaArray.qpp
@@ -1339,6 +1382,7 @@ set(CPP_SRC
     src/JniQoreClass.cpp
     src/QoreJdbcDriver.cpp
     src/QoreJdbcConnection.cpp
+    src/QoreJdbcSandbox.cpp
     src/QoreJdbcStatement.cpp
     src/QoreJdbcPreparedStatement.cpp
 )
@@ -1405,6 +1449,10 @@ set(QORE_DYNAMIC_API_INC_FILES
 )
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/QoreJniClassMap.cpp
     PROPERTIES OBJECT_DEPENDS "${QORE_DYNAMIC_API_INC_FILES}"
+)
+# the classes of org.qore.jni.jdbc and the SingleStore adapter's class bytes (qore#5786)
+set_source_files_properties(${CMAKE_SOURCE_DIR}/src/QoreJdbcSandbox.cpp
+    PROPERTIES OBJECT_DEPENDS "${QORE_INC_FILES}"
 )
 
 target_link_libraries(${module_name} ${JNI_LIBRARIES} ${BZIP2_LIBRARIES} ${QORE_LIBRARY})

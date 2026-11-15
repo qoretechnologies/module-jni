@@ -39,6 +39,7 @@
 #include "QoreJniClassMap.h"
 #include "GeneratedBinding.h"
 #include "JavaSandbox.h"
+#include "QoreJdbcSandbox.h"
 
 #include <thread>
 #include <unordered_map>
@@ -3784,6 +3785,9 @@ bool Globals::init() {
         java_org_qore_jni_QoreSandbox_Policy_class_len);
     jni_register_qore_sandbox_natives(env, classQoreSandbox);
 
+    // the per-driver sandbox enforcement of the jdbc driver (qore#5786)
+    jdbc_sandbox_init(env);
+
     classJavaCollectionTypes = findDefineClass(env, "org.qore.jni.JavaCollectionTypes", nullptr,
         java_org_qore_jni_JavaCollectionTypes_class, java_org_qore_jni_JavaCollectionTypes_class_len).makeGlobal();
     methodJavaCollectionTypesIsStringKeyMap = env.getStaticMethod(classJavaCollectionTypes, "isStringKeyMap",
@@ -4697,6 +4701,7 @@ void Globals::cleanup() {
     classQoreClosureMarkerImpl = nullptr;
     classQoreJavaApi = nullptr;
     classQoreSandbox = nullptr;
+    jdbc_sandbox_cleanup();
     classJavaCollectionTypes = nullptr;
     classProxy = nullptr;
     classClassLoader = nullptr;

@@ -55,6 +55,7 @@
 #include "QoreToJava.h"
 #include "Globals.h"
 #include "QoreJdbcDriver.h"
+#include "QoreJdbcSandbox.h"
 
 using namespace jni;
 
@@ -114,6 +115,19 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
         info = new QoreHashNode(autoTypeInfo);
     }
     info->setKeyValue("jdbc_option_setter", true, nullptr);
+#endif
+#ifdef QORE_JNI_JDBC_SANDBOX_DRIVERS
+    // "jdbc_sandbox_drivers": the audited JDBC drivers that the jdbc driver connects with for sandboxed code, when
+    // every destination passes the sandbox network policy (qore#5786)
+    {
+        if (!info) {
+            info = new QoreHashNode(autoTypeInfo);
+        }
+        QoreListNode* drivers = new QoreListNode(stringTypeInfo);
+        drivers->push(new QoreStringNode("redshift"), nullptr);
+        drivers->push(new QoreStringNode("singlestore"), nullptr);
+        info->setKeyValue("jdbc_sandbox_drivers", drivers, nullptr);
+    }
 #endif
     mod_info.info = info;
 }

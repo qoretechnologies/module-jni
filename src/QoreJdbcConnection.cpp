@@ -114,40 +114,120 @@ int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {
     return connect(env, xsink);
 }
 
-int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
+#ifndef QORE_JNI_JDBC_SANDBOX_DRIVERS
+//! Raises the refusal of every restricted connection without the per-driver enforcement (qore#5747)
+static void jdbc_refuse_restricted(ExceptionSink* xsink) {
     // the JDBC driver resolves and connects to its destinations in Java and discovers some of them itself (failover
     // hosts, redirects), so the sandbox network policy cannot be applied to them (qore#5747); a policy check, so a
     // system-policy capability of trusted code connects, and only a sandbox that does not trust the code with
     // uncontrolled APIs refuses it
-    if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Policy)) {
-        xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
-            "policy governs, because the JDBC driver resolves and connects to its destinations in Java, where the "
-            "sandbox network policy cannot be applied to them");
+    xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
+        "policy governs, because the JDBC driver resolves and connects to its destinations in Java, where the "
+        "sandbox network policy cannot be applied to them");
+}
+#endif
+
+int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
+    JdbcConnectDecision d;
+    if (jdbc_connect_decision(ds, d, xsink)) {
         return -1;
     }
-    return 0;
+    if (!d.restricted) {
+        return 0;
+    }
+#ifdef QORE_JNI_JDBC_SANDBOX_DRIVERS
+    // a cheap refusal of a URL without an audited driver profile, before the options are processed: the URL is the
+    // "url" option or the database name, as in connect()
+    std::string str;
+    ConstHashIterator hi(ds->getConnectOptions());
+    while (hi.next()) {
+        if (!strcasecmp(hi.getKey(), JDBC_OPT_URL) && hi.get().getType() == NT_STRING) {
+            str = hi.get().get<const QoreStringNode>()->c_str();
+        }
+    }
+    if (str.empty()) {
+        str = ds->getDBNameStr();
+    }
+    if (str.rfind("jdbc:", 0)) {
+        str.insert(0, "jdbc:");
+    }
+    try {
+        Env env;
+        if (jdbc_sandbox_supported_url(env, str.c_str())) {
+            return 0;
+        }
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+        return -1;
+    }
+    std::string scheme = jdbc_url_scheme(str.c_str());
+    xsink->raiseException("NETWORK-ACCESS-DENIED", "the JDBC driver of URL '%s' is not supported for sandboxed "
+        "connections; the jdbc driver connects for code that a sandbox governs only with the audited Amazon Redshift "
+        "and SingleStore drivers (qore#5786)", scheme.c_str());
+    return -1;
+#else
+    jdbc_refuse_restricted(xsink);
+    return -1;
+#endif
+}
+
+int QoreJdbcConnection::prepareConnect(Env& env, const char* url, JdbcGuardHolder& holder, ExceptionSink* xsink) {
+    assert(!holder);
+    JdbcConnectDecision d;
+    if (jdbc_connect_decision(ds, d, xsink)) {
+        return -1;
+    }
+    if (!d.restricted) {
+        return 0;
+    }
+#ifdef QORE_JNI_JDBC_SANDBOX_DRIVERS
+    return jdbc_prepare_guarded(env, d, url, ds->getUsernameStr(), ds->getPasswordStr(), holder, xsink);
+#else
+    jdbc_refuse_restricted(xsink);
+    return -1;
+#endif
 }
 
 int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
     assert(!connection);
-    // also for a reconnect, which can be made for other code than the code that opened the connection
-    if (checkSandbox(xsink)) {
-        return -1;
-    }
+    assert(!guard);
 
     // get URL
     const std::string& str = db.empty() ? ds->getDBNameStr() : db;
     if (str.empty()) {
+        // a restricted connection is refused first, as it is with any URL
+        if (checkSandbox(xsink)) {
+            return -1;
+        }
         xsink->raiseException("JDBC-CONNECTION-ERROR", "cannot build JDBC URL without a db name or 'url' connection "
             "option");
         return -1;
     }
     QoreStringMaker url("%s%s", !str.rfind("jdbc:", 0) ? "" : "jdbc:", str.c_str());
 
-    printd(5, "QoreJdbcConnection::connect() using URL '%s' (jpc: %p: %x)\n", url.c_str(), jpc,
-        env.callIntMethod(jpc->getClassLoader(), jni::Globals::methodObjectHashCode, nullptr));
+    // decided for every connection, also for a reconnect, which can be made for other code than the code that opened
+    // the connection: unrestricted, or restricted with the guard of its checked destinations (qore#5786)
+    JdbcGuardHolder holder;
+    if (prepareConnect(env, url.c_str(), holder, xsink)) {
+        return -1;
+    }
+
+    printd(5, "QoreJdbcConnection::connect() using URL '%s' (jpc: %p: %x) restricted: %d\n", url.c_str(), jpc,
+        env.callIntMethod(jpc->getClassLoader(), jni::Globals::methodObjectHashCode, nullptr), (int)(bool)holder);
 
     try {
+        if (holder) {
+            // the profile's exact driver from the trusted class loader, never DriverManager; every socket goes
+            // through the guard, which lives as long as the connection
+            connection = jdbc_guarded_connect(env, holder);
+            guard = std::move(holder);
+            printd(5, "QoreJdbcConnection::connect() got restricted connection: %p\n", (jobject)connection);
+            jvalue jarg;
+            jarg.z = !transaction;
+            env.callVoidMethod(connection, Globals::methodConnectionSetAutoCommit, &jarg);
+            return connectDone(env, xsink);
+        }
+
         LocalReference<jobject> props = env.newObject(Globals::classProperties, Globals::ctorProperties, nullptr);
         {
             const std::string& str = ds->getUsernameStr();
@@ -192,6 +272,10 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
         }
         return -1;
     }
+    return connectDone(env, xsink);
+}
+
+int QoreJdbcConnection::connectDone(Env& env, ExceptionSink* xsink) {
     if (qore_check_cancel(xsink, "connecting to the JDBC server")) {
         QoreCancelDeferralHelper cancel_deferral;
         try {
@@ -218,6 +302,9 @@ int QoreJdbcConnection::parseOptions(ExceptionSink* xsink) {
 }
 
 int QoreJdbcConnection::close(Env& env) {
+    // the guard of a restricted connection is closed after the connection, also if the driver's close() throws, so
+    // that a late cancel or reconnect of the driver cannot connect afterwards (qore#5786)
+    JdbcGuardHolder closing_guard = std::move(guard);
     if (!connection) {
         return 0;
     }

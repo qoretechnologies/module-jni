@@ -34,6 +34,7 @@
 #include "QoreJniClassMap.h"
 #include "JavaToQore.h"
 #include "QoreJdbcDriver.h"
+#include "QoreJdbcSandbox.h"
 
 #include <string>
 
@@ -188,6 +189,20 @@ public:
         return numeric;
     }
 
+    //! Returns true if the connection is restricted: it was made through a connection guard (qore#5786)
+    DLLLOCAL bool isGuarded() const {
+        return static_cast<bool>(guard);
+    }
+
+    //! Checks SQL before it is given to the driver of a restricted connection (SingleStore: LOAD DATA LOCAL INFILE)
+    /** @throw jni::Exception (JNI-SANDBOX-ERROR) the SQL is not allowed
+    */
+    DLLLOCAL void checkSql(Env& env, const char* sql) const {
+        if (guard) {
+            jdbc_guarded_check_sql(env, guard, sql);
+        }
+    }
+
 #if 0
     DLLLOCAL DbType getDbType() const {
         return dbtype;
@@ -213,6 +228,9 @@ private:
 
     //! Connection object
     GlobalReference<jobject> connection;
+
+    //! the connection guard of a restricted connection (qore#5786); closed when the connection is closed
+    JdbcGuardHolder guard;
 
     //! JDBC transaction mode; preserved when reconnecting before the first statement.
     bool transaction = false;
@@ -262,8 +280,25 @@ private:
 
     DLLLOCAL int connect(Env& env, ExceptionSink* xsink);
 
-    //! Raises NETWORK-ACCESS-DENIED and returns -1 if a sandbox policy governs the calling code (qore#5747)
-    DLLLOCAL static int checkSandbox(ExceptionSink* xsink);
+    //! The early check, before the options are processed: refuses a restricted connection that cannot be made
+    /** Raises NETWORK-ACCESS-DENIED and returns -1 if the connection is restricted (jdbc_connect_decision()) and the
+        URL has no audited driver profile (qore#5786), or for every restricted connection without the per-driver
+        enforcement (qore#5747), so that the classpath option does not load jars for a connection that is refused
+    */
+    DLLLOCAL int checkSandbox(ExceptionSink* xsink);
+
+    //! Prepares the connection: unrestricted, or restricted with its guard (qore#5786)
+    /** @param env the JNI environment
+        @param url the JDBC URL
+        @param holder receives the prepared restricted connection; empty if the connection is unrestricted
+        @param xsink receives the exception of a refusal
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int prepareConnect(Env& env, const char* url, JdbcGuardHolder& holder, ExceptionSink* xsink);
+
+    //! The end of a connection attempt: closes the connection if the thread was cancelled
+    DLLLOCAL int connectDone(Env& env, ExceptionSink* xsink);
 
     //! Parse options passed through the Datasource
     /** @param xsink exception sink

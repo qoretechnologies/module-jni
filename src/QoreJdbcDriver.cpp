@@ -382,6 +382,13 @@ void setup_jdbc_driver() {
     methods.add(QDBI_METHOD_OPT_SET, jdbc_opt_set);
     methods.add(QDBI_METHOD_OPT_GET, jdbc_opt_get);
 
+#if defined(QDBI_METHOD_GET_CONNECT_TARGETS) && defined(QORE_JNI_JDBC_SANDBOX_DRIVERS)
+    // the destinations of a connection for Qore's sandbox check (the planned Qore side of qore#5747): the URL's
+    // destinations for an audited driver profile, NETWORK-ACCESS-DENIED otherwise (qore#5786); jdbc does not declare
+    // DBI_CAP_LOCAL_ONLY
+    methods.add(QDBI_METHOD_GET_CONNECT_TARGETS, jdbc_get_connect_targets);
+#endif
+
     methods.registerOption(DBI_OPT_NUMBER_OPT, "when set, numeric/decimal values are returned as integers if "
         "possible, otherwise as arbitrary-precision number values; the argument is ignored; setting this option "
         "turns it on and turns off 'string-numbers' and 'numeric-numbers'");
