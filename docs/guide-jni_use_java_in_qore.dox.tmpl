@@ -340,8 +340,9 @@ public class Fetcher {
     socket (also for failover, reconnects and query cancels, on any thread) through a socket factory of this module
     that connects only to the checked addresses.  The driver is loaded from the classpath of every Program
     (\c global-add-classpath, which sandboxed code cannot change), never from the sandboxed Program's own class loader
-    and never through \c java.sql.DriverManager, and only in the exact audited version.  See
-    @ref jdbc_sandbox_connections for the rules of each driver.
+    and never through \c java.sql.DriverManager, and only in the exact audited version (Redshift 2.3.0, SingleStore
+    1.2.12).  The drivers are not shipped with this module: the user supplies their jars (the SingleStore driver is
+    LGPL-2.1; see @ref jdbc_sandbox_connections for the licences and the rules of each driver).
 
     <b>The policy source is PROVISIONAL:</b> whether a connection is restricted is decided by the code that runs on
     the thread that opens it, and its destinations are checked against that thread's sandbox network policy.  So a

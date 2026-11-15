@@ -77,7 +77,7 @@ abstract class JdbcDriverProfile {
     //! the class name of the driver
     abstract String driverClassName();
 
-    //! PROVISIONAL: the exact audited version of the driver (design section 11, item 6)
+    //! the exact audited version of the driver; other versions are refused until they are audited
     abstract String auditedVersion();
 
     //! Returns the version of the driver class
@@ -192,6 +192,20 @@ abstract class JdbcDriverProfile {
         }
         if (!HOST_NAME.matcher(host).matches() && !IPV6_BRACKETED.matcher(host).matches()) {
             throw deny("invalid host %s in a sandboxed connection URL", quote(host));
+        }
+    }
+
+    //! The most destinations (hosts of a host list) of a restricted connection
+    /** Generous: real failover lists have a handful of hosts; every destination is resolved and checked before the
+        driver runs, so the limit bounds the work that one connection attempt makes the module do.
+    */
+    static final int MAX_DESTINATIONS = 64;
+
+    //! Refuses a URL with more destinations than MAX_DESTINATIONS
+    static void checkDestinationCount(JdbcTargets targets) {
+        if (targets.size() > MAX_DESTINATIONS) {
+            throw deny("a sandboxed connection URL may name at most %d hosts; got %d", MAX_DESTINATIONS,
+                targets.size());
         }
     }
 

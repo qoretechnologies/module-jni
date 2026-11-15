@@ -59,8 +59,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
     static final String ADAPTER = "com.singlestore.jdbc.util.QoreGuardSocketFactory";
     //! the default port of the driver
     static final int DEFAULT_PORT = 3306;
-    //! PROVISIONAL: the authentication plugins of restricted connections; no clear-text or PAM plugin (design section
-    //! 11, item 9)
+    //! the authentication plugins of restricted connections; no clear-text or PAM plugin (decided, qore#5786)
     static final String RESTRICTED_AUTH = "mysql_native_password,client_ed25519";
 
     private static final Pattern URL_FORM = Pattern.compile("jdbc:singlestore:(sequential:|loadbalance:)?//(.*)",
@@ -96,7 +95,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
     private static final String KEY_STORE_TYPE = "keyStoreType";
     //! the password of the module's empty client key store
     static final String EMPTY_KEY_STORE_PASSWORD = "qore-jni-empty";
-    //! PROVISIONAL: the only TLS mode of restricted connections (design section 11, item 9)
+    //! the only TLS mode of restricted connections: TLS with host name validation (decided, qore#5786)
     static final String SSL_MODE = "verify-full";
     private static final Set<String> FORCED = lower(Set.of(SOCKET_FACTORY, ALLOW_LOCAL_INFILE, POOL,
         RESTRICTED_AUTH_KEY, CREATE_DATABASE, SSL_MODE_KEY, KEY_STORE, KEY_STORE_PASSWORD, KEY_STORE_TYPE,
@@ -133,7 +132,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
 
     @Override
     String auditedVersion() {
-        // PROVISIONAL: the exact audited version (design section 11, item 6)
+        // the exact audited version
         return "1.2.12";
     }
 
@@ -213,6 +212,8 @@ final class SingleStoreProfile extends JdbcDriverProfile {
             checkDatabase(tail.substring(1, q < 0 ? tail.length() : q));
         }
 
+        checkDestinationCount(targets);
+
         Set<String> seen = new HashSet<>();
         for (String key : props.stringPropertyNames()) {
             checkOption(key, props.getProperty(key), seen);
@@ -276,6 +277,13 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         if (lk.equals("vectortypeoutputformat") && !WORD.matcher(value).matches()) {
             throw deny("option vectorTypeOutputFormat value %s of a sandboxed connection must be a word", quote(value));
         }
+        if (lk.equals("retriesalldown")) {
+            // generous: the driver's default is 120 rounds over the hosts when all of them are down
+            if (!value.matches("[0-9]{1,9}") || Integer.parseInt(value) > MAX_RETRIES_ALL_DOWN) {
+                throw deny("option retriesAllDown value %s of a sandboxed connection must be 0 .. %d", quote(value),
+                    MAX_RETRIES_ALL_DOWN);
+            }
+        }
         if (lk.equals("sslmode") && !value.equals(SSL_MODE)) {
             throw deny("option sslMode value %s is not allowed for sandboxed SingleStore connections; only %s is",
                 quote(value), SSL_MODE);
@@ -287,16 +295,16 @@ final class SingleStoreProfile extends JdbcDriverProfile {
     }
 
     //! Returns the bytes of the adapter class
-    /** PROVISIONAL (design section 11, item 10): the adapter is built in to the module and defined at run time in the
-        driver's class loader; this is the one place to change for an adapter jar that is added to the driver's
+    /** The adapter is built in to the module and defined at run time in the driver's class loader (decided: there is
+        no adapter jar to ship); this is the one place to change for an adapter jar that is added to the driver's
         class loader instead.  The bytes are compiled against signature-only stubs of the driver's classes, so the
         build needs no driver jar.
     */
     private static native byte[] adapterBytes0();
 
     //! Returns the adapter class of the driver's class loader, defining it once per loader
-    /** PROVISIONAL (design section 11, item 10): the adapter is defined in the vendor package
-        \c com.singlestore.jdbc.util with \c MethodHandles.privateLookupIn(...).defineClass().
+    /** The adapter is defined in the vendor package \c com.singlestore.jdbc.util with
+        \c MethodHandles.privateLookupIn(...).defineClass().
 
         @param base the driver's \c ConfigurableSocketFactory class
     */
@@ -497,6 +505,12 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         }
         return rv;
     }
+
+    //! the most rounds over the hosts that a restricted connection may make when all of them are down
+    /** Generous: the driver's default is 120; a connection attempt with more would hold the caller for a long time
+        when no host is reachable.
+    */
+    static final int MAX_RETRIES_ALL_DOWN = 1000;
 
     //! the contents of the module's empty client key store
     private static byte[] emptyKeyStoreBytes;

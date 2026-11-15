@@ -32,7 +32,7 @@ import com.singlestore.jdbc.Configuration;
 import org.qore.jni.jdbc.JdbcConnectGuard;
 
 //! The socket factory of restricted SingleStore connections (qore#5786)
-/** The jni module defines this class at run time in the class loader of the SingleStore driver (PROVISIONAL, see
+/** The jni module defines this class at run time in the class loader of the SingleStore driver (see
     org.qore.jni.jdbc.SingleStoreProfile), which loads it by name for every socket and gives it the connection's
     configuration; the configuration's unmapped options hold the JdbcConnectGuard object that the module put in the
     connection's properties.  A value that a URL sets there is a String, which is refused.

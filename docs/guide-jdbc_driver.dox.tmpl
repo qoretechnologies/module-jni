@@ -373,7 +373,8 @@ foreach hash<auto> column in (result.schemaV2()) {
     - every destination of the URL (every host of a host list) passes the sandbox network policy, checked as the
       network policy of %Qore sockets: the host name is resolved once with the %Qore resolver, and every address is
       checked
-    - the driver is the exact audited version (<b>PROVISIONAL</b>), loaded from the classpath of every Program
+    - the driver is the exact audited version (Redshift 2.3.0, SingleStore 1.2.12; wider version ranges will be
+      supported as more versions are audited), loaded from the classpath of every Program
       (\c global-add-classpath, or the JVM classpath), which sandboxed code cannot change, and never through
       \c java.sql.DriverManager; the socket factory that the driver loads by name from its own class loader must be the
       module's class
@@ -390,7 +391,7 @@ foreach hash<auto> column in (result.schemaV2()) {
     |Amazon Redshift|<tt>jdbc:redshift://host[:port][,host[:port]...]/database[?options]</tt>; not \
       \c jdbc:redshift:iam: or a URL without hosts|2.3.0|\c socketFactory, \c socketFactoryArg (the connection's \
       token), \c IniFile (an empty file: no INI file is searched for; restricted Redshift connections are refused on \
-      a platform without \c /dev/null), \c sslmode=verify-full (<b>PROVISIONAL</b>), empty \c sslkey and \
+      a platform without \c /dev/null), \c sslmode=verify-full, empty \c sslkey and \
       \c sslcert (the process owner's \c ~/.redshift/redshift.pk8 is not presented, and no password is asked on \
       the console), \c preferpq=false (no JVM-wide BouncyCastle provider is installed)
     |SingleStore|<tt>jdbc:singlestore://hostlist[/database][?options]</tt>, also with \c sequential: or \
@@ -398,7 +399,7 @@ foreach hash<auto> column in (result.schemaV2()) {
       <tt>host[:port]</tt>, <tt>[v6addr][:port]</tt> or <tt>address=(host=..)(port=..)[(type=..)]</tt>; TCP only|\
       1.2.12|\c socketFactory (an adapter that the module defines in the driver's class loader), the connection's \
       guard object, \c allowLocalInfile=false, \c pool=false, \c createDatabaseIfNotExist=false, \
-      \c sslMode=verify-full (<b>PROVISIONAL</b>), \c restrictedAuth=mysql_native_password,client_ed25519
+      \c sslMode=verify-full, \c restrictedAuth=mysql_native_password,client_ed25519
 
     Allowed options (everything else is refused; the keys are matched as the driver matches them):
     - <b>Amazon Redshift</b>: \c ApplicationName, \c assumeMinServerVersion, \c autosave, \c binaryTransfer,
@@ -413,7 +414,7 @@ foreach hash<auto> column in (result.schemaV2()) {
       \c preparedStatementCacheSizeMiB, \c prepareThreshold, \c protocolVersion, \c queryGroup,
       \c raiseExceptionOnSilentRollback, \c readOnly, \c readOnlyMode, \c receiveBufferSize, \c rewriteBatchedInserts,
       \c rewriteBatchedInsertsSize, \c sendBufferSize, \c socketTimeout, \c ssl (\c true only), \c sslmode
-      (\c verify-full only, <b>PROVISIONAL</b>), \c statementCloseTimeout, \c stringtype, \c targetServerType,
+      (\c verify-full only), \c statementCloseTimeout, \c stringtype, \c targetServerType,
       \c tcpKeepAlive, \c user, \c password, \c PWD, \c DBNAME; \c user must be given and not empty, and it must be
       the user of the driver's parse (the driver's default is the name of the process owner, and it does not send
       \c UID, which is refused)
@@ -435,7 +436,7 @@ foreach hash<auto> column in (result.schemaV2()) {
     Refused classes of options: destination overrides (Redshift \c host and \c port), socket factories and class
     names, proxies, pipes and local sockets, local bind addresses, key and trust stores and certificate files,
     configuration and log files, IAM, identity provider, credential and authentication plugins (also the
-    SingleStore clear-text and PAM plugins, <b>PROVISIONAL</b>), the SingleStore pool and JMX options, and options
+    SingleStore clear-text and PAM plugins), the SingleStore pool and JMX options, and options
     that only the drivers' plugins read.
 
     The SingleStore driver serves a server's request to read a client file (\c LOAD \c DATA \c LOCAL \c INFILE)
@@ -481,12 +482,40 @@ foreach hash<auto> column in (result.schemaV2()) {
     distribution point checking, TLS validation fetches URLs from the server's certificate, outside the sandbox;
     these settings are trusted configuration of the JVM.
 
-    <b>Errors:</b> \c NETWORK-ACCESS-DENIED for a refused driver, URL, option, version or destination, and
-    \c JNI-SANDBOX-ERROR for a failed integrity check (a class of the module's name in the driver's class loader, a
-    driver that did not use the module's socket factory, a statement with \c LOAD \c DATA \c LOCAL \c INFILE).
+    <b>TLS and authentication (decided):</b> restricted connections of both drivers use TLS with \c verify-full, and
+    SingleStore's clear-text and PAM authentication plugins are not allowed: relaxing TLS or authentication would
+    let a sandboxed connection reach a server that is not the checked destination, or hand its password to one,
+    which defeats the purpose of the sandbox.  Trusted, non-sandboxed code is not affected.
+
+    <b>Errors (decided):</b> \c NETWORK-ACCESS-DENIED for a refused driver, URL, option, value, version, limit or
+    destination, and \c JNI-SANDBOX-ERROR for a failed integrity check (a class of the module's name in the driver's
+    class loader, a driver that did not use the module's socket factory, a statement with \c LOAD \c DATA
+    \c LOCAL \c INFILE); the errors of the driver itself (ex: a server that refuses the login) are raised as they
+    are for trusted connections (\c JNI-ERROR with the Java exception).
+
+    <b>Limits (decided):</b> generous, so that normal use is not refused:
+    - at most 64 hosts in the host list of a URL: real failover lists have a handful, and every host is resolved and
+      checked before the driver runs, so the limit bounds the work of one connection attempt
+    - SingleStore \c retriesAllDown at most 1000 rounds over the hosts when all of them are down (the driver's
+      default is 120): more would hold the caller for a very long time when no host is reachable
+    - no limit of the module on buffer and fetch sizes (\c fetchRingBufferSize, \c maxResultBuffer,
+      \c defaultRowFetchSize, \c maxAllowedPacket and similar) or on timeouts (\c connectTimeout, \c loginTimeout,
+      \c socketTimeout and similar): the drivers' defaults and their own limits apply, as for trusted connections,
+      so that large result sets and slow servers work; the sandbox's limits do not see the memory or the threads
+      that Java uses for them
+    - reconnects behave as for trusted connections: a connection that was restricted once stays restricted when it
+      reconnects, and its guard is built again for each connection
 
     <b>The drivers' jars</b> must be on the classpath of every Program for restricted connections: the jars of a
     \c classpath option, or of the class loader of a sandboxed Program, are not used for them.
+
+    <b>Licences (decided):</b> neither driver is shipped, downloaded or bundled by this module, its build or its
+    packages: the user supplies the jars (on the classpath of every Program; for the tests,
+    \c QORE_JDBC_REDSHIFT_JAR and \c QORE_JDBC_SINGLESTORE_JAR).  The SingleStore driver is licensed under the
+    LGPL-2.1, whose distribution obligations therefore do not apply to this module; the Amazon Redshift driver
+    (Apache-2.0) is user-supplied as well, for consistency.  The module's SingleStore adapter is compiled against
+    signature-only stubs of the driver's classes, written for this module, and is defined at run time in the
+    driver's class loader (decided: there is no adapter jar to ship).
 
     <b>The Java classes</b> of the package \c org.qore.jni.jdbc open sockets to the destinations they hold without a
     check (ex: \c JdbcConnectGuard.forTargets() is public): the package must never be declared sandbox-aware or
@@ -518,14 +547,16 @@ Datasource ds({"type": "jdbc", "user": "user", "pass": "pass",
     @endcode
     Every host of the list must pass the sandbox, or the connection is refused before any host is connected to.
 
-    <b>Open questions</b> (design section 11): whether to ship with the thread as the policy source (qore#6142); the
-    qore#5747 contract for \c QDBI_METHOD_GET_CONNECT_TARGETS, which the module implements under its \c #ifdef
-    (compiled out with today's %Qore); the reconnect rule in Qore-5747 mode; the empty INI file on Windows; exact
-    audited versions or ranges; the error codes; caps for \c fetchRingBufferSize, \c maxResultBuffer and
-    \c retriesAllDown; the authentication plugins and TLS modes allowed for sandboxed callers; defining the
-    SingleStore adapter in the vendor package; the licence of the SingleStore driver (LGPL-2.1) for the tests; and
-    whether a trusted connection that sandboxed code uses must refuse restricted callers' SQL for drivers without a
-    profile (qore#6142, see above).
+    <b>Decided:</b> the exact audited versions, TLS with \c verify-full and no clear-text or PAM plugins, the
+    adapter defined at run time, the error codes, the limits and the reconnect behaviour above, and the licences
+    (the drivers are user-supplied).
+
+    <b>Still open</b> (the feature stays <b>BLOCKED</b> on them): the policy source (qore#6142; PROVISIONAL: the
+    thread), with the rule for a \c url option that restricted code set; whether a trusted connection that sandboxed
+    code uses must refuse restricted callers' SQL for drivers without a profile (qore#6142, see above); the qore#5747
+    contract for \c QDBI_METHOD_GET_CONNECT_TARGETS, which the module implements under its \c #ifdef (compiled out
+    with today's %Qore), with the reconnect rule in Qore-5747 mode; and the empty INI file on Windows, where
+    restricted Redshift connections are refused for now.
 
     @section jdbc_driver_options jdbc DBI Driver Options
 

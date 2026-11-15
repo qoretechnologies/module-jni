@@ -1158,8 +1158,8 @@ add_custom_target(jni-sentinel
 )
 
 # qore#5786: the SingleStore adapter, which the module defines at run time in the class loader of the SingleStore
-# driver (PROVISIONAL); compiled against signature-only stubs of the driver's classes, so no driver jar is needed, and
-# built in to the binary module as its class bytes only: it is not part of qore-jni.jar
+# driver (decided: no adapter jar to ship); compiled against signature-only stubs of the driver's classes, so no
+# driver jar is needed, and built in to the binary module as its class bytes only: it is not part of qore-jni.jar
 set(_ss_adapter_dir ${CMAKE_CURRENT_BINARY_DIR}/singlestore-adapter)
 set(_ss_adapter_class ${_ss_adapter_dir}/com/singlestore/jdbc/util/QoreGuardSocketFactory.class)
 set(_ss_adapter_src

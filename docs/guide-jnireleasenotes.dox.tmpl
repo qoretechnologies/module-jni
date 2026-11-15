@@ -72,7 +72,10 @@
       The URL and options must pass the driver's allowlist, every destination is checked up front and pinned, and
       every socket of the driver goes through the module's socket factory, which connects only to the checked
       addresses; the driver is loaded in its exact audited version from the classpath of every Program, never
-      through \c DriverManager.  The policy source is PROVISIONAL (the code that runs on the thread).  The module hash
+      through \c DriverManager.  TLS is \c verify-full for both drivers, SingleStore's clear-text and PAM plugins
+      are not allowed, a host list has at most 64 hosts and SingleStore \c retriesAllDown at most 1000; the drivers
+      are not shipped: the user supplies their jars (the SingleStore driver is LGPL-2.1).  The policy source is
+      PROVISIONAL (the code that runs on the thread), and the feature is BLOCKED on qore#6142.  The module hash
       reports the drivers with \c "jdbc_sandbox_drivers" in its \c "info" key (see @ref jdbc_sandbox_connections).
       PROVISIONAL / BLOCKED: restricted callers' SQL on a connection that trusted code opened is screened only for
       SingleStore URLs; with other drivers (ex: MariaDB or MySQL with LOCAL INFILE allowed, H2, SQLite, Derby),

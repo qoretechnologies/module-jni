@@ -83,7 +83,7 @@ jmethodID methodClose = nullptr;
 jmethodID methodCheckSqlForUrl = nullptr;
 
 //! SingleStoreProfile.adapterBytes0(): the class bytes of the SingleStore adapter
-/** PROVISIONAL (design section 11, item 10): the adapter is built in to the module; see
+/** The adapter is built in to the module (decided: no adapter jar to ship); see
     SingleStoreProfile.adapterClass()
 */
 jbyteArray JNICALL jdbc_singlestore_adapter_bytes(JNIEnv* jenv, jclass) {

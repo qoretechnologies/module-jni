@@ -117,6 +117,7 @@ string sub module_cmd(string cmd) {
         addTestCase("Redshift: URL overrides and parser tricks are refused", \rsOverrideTest());
         addTestCase("Redshift: forbidden options are refused", \rsForbiddenTest());
         addTestCase("Redshift: no implicit INI file is read", \rsIniFileTest());
+        addTestCase("the limits of restricted connections are generous", \limitsTest());
         addTestCase("Redshift: a trusted connection is unchanged", \rsTrustedTest());
         addTestCase("SingleStore: an allowed destination connects through the guard", \ssAllowedTest());
         addTestCase("SingleStore: a denied destination is refused", \ssDeniedTest());
@@ -385,10 +386,37 @@ string sub module_cmd(string cmd) {
                 "iamauth=true", "sslrootcert=/etc/passwd", "sslfactory=javax.net.ssl.SSLSocketFactory",
                 "LogPath=/tmp", "LogLevel=6", "DSILogLevel=6", "sslcert=/etc/passwd", "sslkey=/etc/passwd",
                 "ssltruststorepath=/etc/passwd", "AuthMech=PREFER", "region=us-east-1", "idp_host=127.0.0.2",
-                # PROVISIONAL: plain TCP and verify-ca are refused for sandboxed callers (design section 11, item 9)
+                # plain TCP and verify-ca are refused for sandboxed callers (decided)
                 "ssl=false", "sslmode=verify-ca", "sslmode=disable")) {
             assertRefused(p.callFunction("open_db", base + "?" + arg), Denied, "option|value", (s,), arg);
         }
+    }
+
+    limitsTest() {
+        checkSkip(rs_jar, "redshift");
+        checkSkip(ss_jar, "singlestore");
+        # at most 64 hosts in a host list
+        FakeDbServer pg = server("pg");
+        string hosts = (map sprintf("127.0.0.1:%d", pg.getPort()), xrange(64)).join(",");
+        Program p = sandboxed(pg.getPort());
+        # the same host 64 times: the driver tries them through the guard (it gives up on them after the first
+        # refused TLS request, so only its own error is asserted)
+        string r = p.callFunction("open_db", sprintf("jdbc:redshift://%s/dev", hosts));
+        assertNRegex("^" + Denied + ": ", r, "64 hosts are not refused");
+        assertTrue(pg.acceptCount() >= 1, "64 hosts: the driver connected through the guard");
+        assertRefused(p.callFunction("open_db", sprintf("jdbc:redshift://%s,127.0.0.1:%d/dev", hosts, pg.getPort())),
+            Denied, "at most 64 hosts", (), "65 hosts");
+        FakeDbServer mys = server("mysql");
+        hosts = (map sprintf("127.0.0.1:%d", mys.getPort()), xrange(65)).join(",");
+        assertRefused(sandboxed(mys.getPort()).callFunction("open_db", sprintf("jdbc:singlestore://%s/db", hosts)),
+            Denied, "at most 64 hosts", (mys,), "SingleStore: 65 hosts");
+        # retriesAllDown: at most 1000 rounds (the driver's default is 120)
+        Program q = sandboxed(mys.getPort());
+        string base = sprintf("jdbc:singlestore://127.0.0.1:%d/db?retriesAllDown=", mys.getPort());
+        foreach string v in (("1001", "-1", "x")) {
+            assertRefused(q.callFunction("open_db", base + v), Denied, "retriesAllDown", (mys,), "retriesAllDown=" + v);
+        }
+        assertReached(q.callFunction("open_db", base + "1000"), "qore-fake-mysql", mys, "retriesAllDown=1000");
     }
 
     rsIniFileTest() {
@@ -945,7 +973,7 @@ string sub module_cmd(string cmd) {
         FakeDbServer s = server("mysql-ok");
         int port = s.getPort();
         Program p = sandboxed(port);
-        # PROVISIONAL: verify-full only
+        # verify-full only (decided)
         foreach string mode in (("disable", "trust", "verify-ca", "VERIFY-FULL")) {
             assertRefused(p.callFunction("open_db", ssUrl(port, "db", "&sslMode=" + mode)), Denied, "sslMode", (s,),
                 mode);

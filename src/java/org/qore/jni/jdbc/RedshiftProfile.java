@@ -77,7 +77,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
     private static final Set<String> FORCED = Set.of(SOCKET_FACTORY, SOCKET_FACTORY_ARG, INI_FILE, "sslkey",
         "sslcert", "preferpq");
 
-    //! PROVISIONAL: the only sslmode of restricted connections (design section 11, item 9)
+    //! the only sslmode of restricted connections: TLS with host name validation (decided, qore#5786)
     private static final String SSL_MODE = "verify-full";
 
     private RedshiftProfile() {
@@ -95,7 +95,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
 
     @Override
     String auditedVersion() {
-        // PROVISIONAL: the exact audited version (design section 11, item 6)
+        // the exact audited version
         return "2.3.0";
     }
 
@@ -157,6 +157,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
             checkHost(host, url);
             targets.add(host, port);
         }
+        checkDestinationCount(targets);
 
         Set<String> seen = new HashSet<>();
         for (String key : props.stringPropertyNames()) {
@@ -215,7 +216,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
         f.setProperty("socketFactory", RedshiftGuardSocketFactory.class.getName());
         f.setProperty("socketFactoryArg", token);
         f.setProperty("IniFile", iniFile());
-        // PROVISIONAL: TLS with host name validation also if the driver's default changes; the URL may give the same
+        // TLS with host name validation (decided), also if the driver's default changes; the URL may give the same
         // value only
         f.setProperty("sslmode", SSL_MODE);
         // no client key or certificate: the driver would present ~/.redshift/redshift.pk8 and redshift.crt of the
