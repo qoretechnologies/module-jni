@@ -1,0 +1,471 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.SandboxIo
+%module-cmd(jni) import java.lang.reflect.Method
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import java.util.function.Consumer
+%requires QUnit
+%requires Util
+
+%exec-class JniCrossProgramCallTest
+
+#! the source of the Program that owns the Java objects of the tests
+const OwnerSource = "
+%requires jni
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import java.util.function.Consumer
+
+# a top-level variable: thread-local, and closure-bound in the functions that use it
+string tl = \"owner\";
+our list<auto> seen = ();
+
+sub read_tl() {
+    seen += tl;
+    tl = \"written by the callback\";
+}
+
+# the policy answers in the code that Java calls back, and a closure created there that is called later
+our Queue probes();
+sub probe() {
+    probes.push({
+        \"isSandboxed\": SandboxManager::isSandboxed(),
+        \"isGoverned\": SandboxManager::isGoverned(),
+        \"later\": bool sub () { return SandboxManager::isSandboxed(); },
+    });
+}
+
+object sub make_list(int n = 1) {
+    ArrayList l();
+    for (int i = 0; i < n; ++i) {
+        l.add(\"x\");
+    }
+    return l;
+}
+
+object sub make_consumer(string what) {
+    code c = what == \"tl\" ? sub () { read_tl(); } : \\probe();
+    return cast<Consumer>(implement_interface(new QoreInvocationHandler(
+        sub (object method, *list<auto> args) { c(); }), load_class(\"java/util/function/Consumer\")));
+}
+
+# a call of the Java method made by the owner itself
+sub own_call(object l, object c) {
+    l.forEach(c);
+}
+
+int sub own_size_loop(object l, int n) {
+    int s;
+    for (int i = 0; i < n; ++i) {
+        s += l.size();
+    }
+    return s;
+}
+
+list<auto> sub get_seen() {
+    return seen;
+}
+
+*string sub get_tl() {
+    return tl;
+}
+
+sub reset() {
+    seen = ();
+    tl = \"owner\";
+}
+
+hash<auto> sub get_probe() {
+    return probes.get();
+}
+
+# a global object whose destructor blocks the Program's teardown until the test releases it
+class Blocker {
+    private {
+        Queue events;
+        Queue release;
+    }
+
+    constructor(Queue events, Queue release) {
+        self.events = events;
+        self.release = release;
+    }
+
+    destructor() {
+        events.push(\"entered\");
+        release.get();
+    }
+}
+
+our *Blocker blocker;
+sub set_blocker(Queue events, Queue release) {
+    blocker = new Blocker(events, release);
+}
+";
+
+#! the source of a Program that calls the Java methods of the owner's objects
+const CallerSource = "
+string tl = \"caller\";
+
+sub call_via_java(object l, object c) {
+    l.forEach(c);
+}
+
+*string sub get_tl() {
+    return tl;
+}
+";
+
+#! the source of a sandboxed Program that calls the Java methods of trusted objects
+const SandboxedSource = "
+sub call_via_java(object l, object c) {
+    l.forEach(c);
+}
+bool sub query_static() {
+    return SandboxIo::isSandboxed();
+}
+bool sub query_via_method(object m) {
+    return m.invoke(NOTHING);
+}
+object sub capture_static() {
+    return SandboxIo::capture();
+}
+object sub capture_via_method(object m) {
+    return m.invoke(NOTHING);
+}
+sub check_file_static(string path) {
+    SandboxIo::checkFile(path, False);
+}
+sub check_file_via_method(object m, string path) {
+    m.invoke(NOTHING, path, False);
+}
+";
+
+#! Java instance methods of an object of another Program run in that Program (qore#6183, qore#6185)
+/** A Java instance call enters the object's Program like any other call into a Program: Qore code that Java calls
+    back during the call sees the thread-local data of its own Program, the calling code stays visible to the
+    sandbox, and the Program's entry handler runs for the call
+*/
+class JniCrossProgramCallTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI cross-Program instance calls", "1.0", \ARGV) {
+        addTestCase("a callback reads and writes the owner's thread-local variables", \testThreadLocal());
+        addTestCase("a callback on a background thread uses the owner's thread-local data", \testThreadLocalThread());
+        addTestCase("a callback is governed by the sandbox of the caller", \testSandboxedCallback());
+        addTestCase("the default sandbox refuses the Java method", \testDefaultSandbox());
+        addTestCase("Java's sandbox query sees the caller's sandbox", \testJavaQuery());
+        addTestCase("Java's file check applies the caller's policy", \testJavaFileCheck());
+        addTestCase("the owner's entry handler runs once per cross-Program call", \testEntryHandler());
+        addTestCase("an exception from the entry handler stops the Java call", \testEntryHandlerException());
+        addTestCase("a Java exception leaves the owner's Program", \testJavaException());
+        addTestCase("an exception from the exit handler reaches the caller", \testExitHandlerException());
+        addTestCase("an object whose Program was deleted stays callable", \testDeletedProgram());
+        addTestCase("an object whose Program is being torn down cannot be called", \testTornDownProgram());
+        set_return_value(main());
+    }
+
+    #! returns a new owner Program
+    private Program getOwner() {
+        Program owner(PO_NEW_STYLE);
+        owner.parse(OwnerSource, "owner");
+        owner.run();
+        return owner;
+    }
+
+    #! returns a new caller Program
+    private Program getCaller() {
+        Program caller(PO_NEW_STYLE);
+        caller.parse(CallerSource, "caller");
+        caller.run();
+        return caller;
+    }
+
+    #! returns True if the core can allow uncontrolled APIs to a sandbox and refuses them at run time (qore#5741)
+    private bool hasUncontrolledApiPolicy() {
+        return (new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy");
+    }
+
+    #! returns a sandboxed Program that may use uncontrolled APIs, or skips the test on a core without the policy
+    private Program getSandboxed(*code setup) {
+        if (!hasUncontrolledApiPolicy()) {
+            testSkip("the core has no uncontrolled API policy for sandboxes (qore#5741)");
+        }
+        SandboxManager sm();
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        if (setup) {
+            setup(sm);
+        }
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse(SandboxedSource, "sandboxed");
+        return p;
+    }
+
+    testThreadLocal() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        object l = owner.callFunction("make_list");
+        object c = owner.callFunction("make_consumer", "tl");
+
+        # control: the owner calls the Java method
+        owner.callFunction("own_call", l, c);
+        assertEq(("owner",), owner.callFunction("get_seen"));
+        assertEq("written by the callback", owner.callFunction("get_tl"));
+        owner.callFunction("reset");
+
+        # another Program calls the same Java method, twice
+        caller.callFunction("call_via_java", l, c);
+        caller.callFunction("call_via_java", l, c);
+        assertEq(("owner", "written by the callback"), owner.callFunction("get_seen"),
+            "the callback reads the owner's variable");
+        assertEq("written by the callback", owner.callFunction("get_tl"), "the write reaches the owner");
+        assertEq("caller", caller.callFunction("get_tl"), "the caller's variable is not changed");
+
+        # this Program calls it
+        owner.callFunction("reset");
+        l.forEach(c);
+        assertEq(("owner",), owner.callFunction("get_seen"), "a call from the test's Program");
+        assertEq("written by the callback", owner.callFunction("get_tl"));
+    }
+
+    testThreadLocalThread() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        object l = owner.callFunction("make_list");
+        object c = owner.callFunction("make_consumer", "tl");
+
+        # on a new thread, the thread-local variables of each Program are its own for the thread
+        Queue q();
+        background sub () {
+            try {
+                caller.callFunction("call_via_java", l, c);
+                caller.callFunction("call_via_java", l, c);
+                q.push({
+                    "seen": owner.callFunction("get_seen"),
+                    "owner_tl": owner.callFunction("get_tl"),
+                    "caller_tl": caller.callFunction("get_tl"),
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        hash<auto> h = q.get();
+        assertEq(NOTHING, h.err, "no exception: " + (h.err ? sprintf("%s: %s", h.err, h.desc) : ""));
+        assertEq((NOTHING, "written by the callback"), h.seen, "the second callback reads the first one's write");
+        assertEq("written by the callback", h.owner_tl, "the write reaches the owner's data of the thread");
+        assertEq(NOTHING, h.caller_tl, "the caller's data of the thread is not changed");
+
+        # the owner's data of this thread is not changed
+        assertEq("owner", owner.callFunction("get_tl"));
+    }
+
+    testSandboxedCallback() {
+        Program sandboxed = getSandboxed();
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        object c = owner.callFunction("make_consumer", "probe");
+
+        sandboxed.callFunction("call_via_java", l, c);
+        hash<auto> h = owner.callFunction("get_probe");
+        assertTrue(h.isSandboxed, "isSandboxed() in the callback");
+        assertTrue(h.isGoverned, "isGoverned() in the callback");
+        assertTrue(h.later(), "a closure created in the callback keeps the sandbox");
+
+        # control: the owner calls the Java method
+        owner.callFunction("own_call", l, c);
+        h = owner.callFunction("get_probe");
+        assertFalse(h.isSandboxed, "isSandboxed() in the owner's call");
+        assertFalse(h.isGoverned, "isGoverned() in the owner's call");
+        assertFalse(h.later(), "a closure created in the owner's call");
+    }
+
+    testDefaultSandbox() {
+        if (!hasUncontrolledApiPolicy()) {
+            testSkip("the core has no uncontrolled API policy for sandboxes (qore#5741)");
+        }
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        object c = owner.callFunction("make_consumer", "probe");
+        Program sandboxed(PO_NEW_STYLE);
+        sandboxed.setSandboxManager(new SandboxManager());
+        sandboxed.parse(SandboxedSource, "sandboxed");
+        assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API method",
+            \sandboxed.callFunction(), ("call_via_java", l, c));
+    }
+
+    testJavaQuery() {
+        Program sandboxed = getSandboxed();
+        Method is_sandboxed = load_class("org.qore.jni.test.SandboxIo").getMethod("isSandboxed");
+        Method capture = load_class("org.qore.jni.test.SandboxIo").getMethod("capture");
+
+        assertFalse(is_sandboxed.invoke(NOTHING), "trusted");
+        assertTrue(sandboxed.callFunction("query_static"), "static: no Program switch");
+        assertTrue(sandboxed.callFunction("query_via_method", is_sandboxed), "an instance call of a trusted object");
+
+        foreach string f in ("capture_static", "capture_via_method") {
+            object policy = f == "capture_static"
+                ? sandboxed.callFunction(f)
+                : sandboxed.callFunction(f, capture);
+            on_exit policy.close();
+            # trusted code uses the Policy that the sandboxed call captured
+            assertTrue(policy.isSandboxed(), f);
+        }
+    }
+
+    testJavaFileCheck() {
+        Program sandboxed = getSandboxed(sub (SandboxManager sm) { sm.setFilesystemDefaultPolicy(False); });
+        Method check_file;
+        foreach Method m in (load_class("org.qore.jni.test.SandboxIo").getMethods()) {
+            if (m.getName() == "checkFile") {
+                check_file = m;
+                break;
+            }
+        }
+        assertEq("checkFile", check_file.getName());
+        # only the policy answer: the check does no I/O
+        string path = tmp_location() + DirSep + "jni-cross-program-call-denied";
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \sandboxed.callFunction(), ("check_file_static", path), "static");
+        string err;
+        try {
+            sandboxed.callFunction("check_file_via_method", check_file, path);
+        } catch (hash<ExceptionInfo> ex) {
+            # the exception raised by the invoked method, or Method.invoke()'s wrapper of it
+            err = ex.err;
+            for (*hash<ExceptionInfo> e = ex; e; e = e.next) {
+                if (e.err == "FILESYSTEM-ACCESS-DENIED" || e.desc =~ /FILESYSTEM-ACCESS-DENIED/) {
+                    err = "FILESYSTEM-ACCESS-DENIED";
+                    break;
+                }
+            }
+        }
+        assertEq("FILESYSTEM-ACCESS-DENIED", err, "an instance call of a trusted object");
+    }
+
+    testEntryHandler() {
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        Counter entries();
+        owner.setThreadEntryHandler(sub () { entries.inc(); });
+        on_exit owner.setThreadEntryHandler();
+
+        assertEq(1, l.size());
+        assertEq(1, entries.getCount(), "a cross-Program call enters the owner");
+        for (int i = 0; i < 5; ++i) {
+            l.size();
+        }
+        assertEq(6, entries.getCount(), "once per call");
+
+        # calls within the owner do not enter it again
+        assertEq(10, owner.callFunction("own_size_loop", l, 10));
+        assertEq(7, entries.getCount(), "the owner's own calls");
+
+        # a callback made during a cross-Program call is not another entry
+        object c = owner.callFunction("make_consumer", "tl");
+        object l3 = owner.callFunction("make_list", 3);
+        Program caller = getCaller();
+        int before = entries.getCount();
+        caller.callFunction("call_via_java", l3, c);
+        assertEq(before + 1, entries.getCount(), "one entry for a call with three callbacks");
+    }
+
+    testEntryHandlerException() {
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        bool fail_entry = True;
+        owner.setThreadEntryHandler(sub () {
+            if (fail_entry) {
+                throw "ENTRY-ERROR", "entry refused";
+            }
+        });
+        on_exit owner.setThreadEntryHandler();
+
+        assertThrows("ENTRY-ERROR", "entry refused", sub () { l.add("y"); });
+        fail_entry = False;
+        assertEq(1, l.size(), "the Java method did not run");
+    }
+
+    testJavaException() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        object l = owner.callFunction("make_list");
+        object c = owner.callFunction("make_consumer", "tl");
+        Counter entries();
+        Counter exits();
+        owner.setThreadEntryHandler(sub () { entries.inc(); }, sub (auto v) { exits.inc(); });
+        on_exit owner.setThreadEntryHandler();
+
+        # a Java exception raised in a cross-Program call leaves the owner's Program
+        assertThrows("JNI-ERROR", "IndexOutOfBoundsException", sub () { l.get(5); }, NOTHING,
+            "the Java exception reaches the caller");
+        assertEq(1, entries.getCount(), "the call entered the owner");
+        assertEq(1, exits.getCount(), "the owner was left");
+
+        # the thread's context is restored: a later cross-Program call still sees the owner's data
+        owner.callFunction("reset");
+        caller.callFunction("call_via_java", l, c);
+        assertEq(("owner",), owner.callFunction("get_seen"));
+        assertEq("caller", caller.callFunction("get_tl"));
+        assertEq(entries.getCount(), exits.getCount(), "each entry is left");
+    }
+
+    testExitHandlerException() {
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        bool fail_exit = True;
+        owner.setThreadEntryHandler(NOTHING, sub (auto v) {
+            if (fail_exit) {
+                throw "EXIT-ERROR", "exit failed";
+            }
+        });
+        on_exit owner.setThreadEntryHandler();
+
+        # the exit handler runs after the Java method, and its exception reaches the caller
+        assertThrows("EXIT-ERROR", "exit failed", sub () { l.add("y"); });
+        fail_exit = False;
+        assertEq(2, l.size(), "the Java method ran");
+    }
+
+    testDeletedProgram() {
+        Program p = getOwner();
+        object l = p.callFunction("make_list");
+        delete p;
+        # the deleted Program has no jni context any more, so the call runs in the context of the calling Program
+        # (jni_get_context()) and does not enter the deleted Program
+        assertEq(1, l.size());
+        l.add("y");
+        assertEq(2, l.size());
+    }
+
+    testTornDownProgram() {
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        # the destructor of the owner's global object reports here that the teardown has started, and the thread
+        # deleting the owner reports here if the deletion failed before
+        Queue events();
+        Queue release();
+        owner.callFunction("set_blocker", events, release);
+
+        Queue done();
+        background sub () {
+            try {
+                delete owner;
+                done.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                events.push(ex);
+                done.push(ex);
+            }
+        }();
+        on_exit release.push(True);
+        auto event = events.get();
+        assertEq("entered", event, "the teardown runs the destructor of the owner's global object");
+        if (event == "entered") {
+            assertThrows("PROGRAM-ERROR", sub () { l.size(); });
+            release.push(True);
+            assertEq(True, done.get());
+        }
+    }
+}
