@@ -34,6 +34,7 @@
 #include <set>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <condition_variable>
 
 typedef std::set<std::string> strset_t;
@@ -650,6 +651,12 @@ public:
 
     DLLLOCAL static bool compatTypes();
 
+    //! Returns true if the given Program's jni data exists (it has been created and not yet destroyed)
+    /** Reads no data of the Program, so it can be called by a thread that is not in the Program while the Program's
+        teardown destroys its jni data
+    */
+    DLLLOCAL static bool hasProgramData(const QoreProgram* pgm);
+
     // get / create JNI program data in the given Qore program
     DLLLOCAL static JniExternalProgramData* getCreateJniProgramData(QoreProgram* pgm);
 
@@ -823,6 +830,24 @@ DLLLOCAL JniExternalProgramData* jni_get_context(QoreProgram*& pgm);
 DLLLOCAL JniExternalProgramData* jni_get_context_unconditional();
 DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm);
 
+//! Enters the Program of a Java call made in another Program, before its jni data is looked up
+/** A call of a Java method of an object that the given Program owns, or of a Java closure that it created, runs in
+    that Program: when it is not the current Program, it is entered, so that its jni data cannot be destroyed while the
+    call uses it, Qore code that Java calls back during the call uses its thread-local data, and the calling code
+    stays visible to the sandbox (qore#6183, qore#6185).  A call within the Program costs only the comparison.
+
+    @param epch holds the entry for the call; it is left empty when no entry is needed
+    @param pgm the Program of the call; set to nullptr when the call is made in the context of the calling code: the
+    Program has no jni data, or it has been deleted and its jni data has been destroyed
+    @param xsink for the exception if the Program cannot be entered (PROGRAM-ERROR if it is being torn down or
+    another thread is parsing it), or if its entry handler or thread initialization code raises one
+
+    @return 0 if the call can be made, -1 if an exception has been raised
+
+    @note a C++ exception from the entry leaves \a epch empty
+*/
+DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
+        ExceptionSink* xsink);
 }
 
 #endif

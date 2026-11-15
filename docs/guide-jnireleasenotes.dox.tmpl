@@ -6,6 +6,17 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed a crash calling a Java object used as a %Qore closure (an object implementing
+      \c org.qore.jni.QoreClosureMarker) after the Program that it was returned to had been deleted: the closure kept
+      an unreferenced pointer to the Program; it now keeps the Program allocated, and is called in the context of the
+      calling code once the Program has been deleted
+    - fixed a race between a Java instance method call, or a Java callback (\c QoreInvocationHandler), and the
+      deletion of the Program in another thread: the Program's jni data was looked up before the Program was entered,
+      and the Program's teardown could destroy it in between; the Program is now entered first, and a Java object used
+      as a %Qore closure enters the Program that it was returned to in the same way when another Program calls it,
+      which runs that Program's entry handler and raises \c PROGRAM-ERROR if the Program is being torn down or is
+      being parsed by another thread (see @ref jni_callback_sandbox)
+
     - <b>Security</b>: fixed a call of an instance method of a Java object that another Program owns, which switched
       only the thread's current Program to the object's Program instead of entering it: the caller was hidden from
       the sandbox for the rest of the Java call, so that %Qore code that Java called back during the call, and

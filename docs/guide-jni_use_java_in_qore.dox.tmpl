@@ -132,15 +132,28 @@ class Outer {
     Program: Java uses the object's class map and \c ClassLoader, %Qore code of the object's Program that Java calls
     back during the call uses that Program's thread-local data, the Program's entry handler
     (\c Program::setThreadEntryHandler()) runs once around the whole Java call, and its thread initialization code
-    (\c Program::setThreadInit()) runs on a thread's first entry.  The call holds the Program's thread count like any
-    other call into the Program, so deleting the Program waits for the Java calls in progress.  The calling code stays
-    visible to the sandbox: %Qore code that Java calls back during the call is governed by the caller's sandbox, as
-    it is when the caller calls the same code directly, and so are \c org.qore.jni.QoreSandbox queries and captures
-    made by the Java code (see @ref jni_sandbox).  The call raises \c PROGRAM-ERROR, before the Java method is
-    called, if the object's Program is being torn down or is being parsed by another thread, and raises any
-    exception of the Program's entry handler.  A call within the object's own Program does not enter it again.  An
-    object whose Program has already been deleted has no Program context of its own any more: its methods run in
-    the context of the calling Program.
+    (\c Program::setThreadInit()) runs on a thread's first entry; the entry handler and the thread initialization
+    code run in the thread's current context, under the sandbox of the calling code.  The call holds the Program's
+    thread count like any other call into the Program, so deleting the Program waits for the Java calls in progress,
+    also those made by sandboxed code, which can therefore delay the deletion for as long as the Java method runs.
+    The calling code stays visible to the sandbox: %Qore code that Java calls back during the call is governed by the
+    caller's sandbox, as it is when the caller calls the same code directly, and so are
+    \c org.qore.jni.QoreSandbox queries and captures made by the Java code (see @ref jni_sandbox); the object's
+    Program's own sandbox, if it has one, governs its own code that Java calls back.  The call raises
+    \c PROGRAM-ERROR, before the Java method is called, if the object's Program is being torn down or is being parsed
+    by another thread, and raises any exception of the Program's entry handler.  A call within the object's own
+    Program does not enter it again.
+
+    A Java object used as a %Qore closure (an object of a class implementing \c org.qore.jni.QoreClosureMarker that
+    Java returns to %Qore) is called in the same way in the Program whose code it was returned to, also when
+    another Program calls it: that Program is entered for the call, with its entry handler and thread
+    initialization code, and the call raises \c PROGRAM-ERROR if the Program is being torn down or is being parsed
+    by another thread.
+
+    An object whose Program has no jni context (ex: a Java object of a Java base class), or whose Program has already
+    been deleted, so that its jni context has been destroyed, is called in the context of the calling code: the
+    jni context of the current Program, or else of the Program of the calling code, or else of the module's global
+    Java context Program, is used, and no Program is entered for the call.
 
     @subsection jni_sandbox Sandboxing Java I/O
 

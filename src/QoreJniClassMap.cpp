@@ -33,6 +33,8 @@
 #include <set>
 #include <atomic>
 #include <stdexcept>
+#include <mutex>
+#include <unordered_set>
 
 #include "defs.h"
 #include "Jvm.h"
@@ -4449,23 +4451,18 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     // always use the current object's Program, otherwise the wrong ClassLoader will be used
     QoreProgram* pgm = self->getProgram();
     try {
+        // issues qore#6183 and qore#6185: the call runs in the object's Program, which is entered first when it is not
+        // the current one (see jni_enter_call_program()); its jni data is looked up only then, as the Program's
+        // teardown can destroy the data of a Program that the thread is not in; the entry is left when epch is
+        // destroyed, also when an exception propagates
+        // a call within the object's Program costs only the comparison
+        std::optional<QoreExternalProgramContextHelper> epch;
+        if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, xsink)) {
+            return QoreValue();
+        }
         // issue #3585: set context for external java threads; this attaches the thread to the JVM, which raises an
         // exception when the thread is cancelled or cannot be attached
         JniExternalProgramData::setContext(pgm);
-        // issues qore#6183 and qore#6185: the call runs in the object's Program, so the Program is entered when it is
-        // not the current one: the entry switches the thread's local data to the Program's (which Qore code that Java
-        // calls back during the call uses), records the calling code for sandbox resolution, holds the Program's
-        // thread count for the call, and runs the Program's entry handler; it raises PROGRAM-ERROR before Java runs
-        // if the Program is being torn down or parsed by another thread; a call within the Program costs only the
-        // comparison; the entry is left when epch is destroyed, also when an exception propagates (a C++ exception
-        // from the entry itself leaves epch empty)
-        std::optional<QoreExternalProgramContextHelper> epch;
-        if (pgm && pgm != ::getProgram()) {
-            epch.emplace(xsink, pgm);
-            if (*xsink) {
-                return QoreValue();
-            }
-        }
         return m->invoke(jd->getObject(), args, pgm);
     } catch (jni::Exception& e) {
         e.convert(xsink);
@@ -4597,6 +4594,57 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
     }
 }
 
+// the Programs that have jni data: a Program's data is registered when it is created and unregistered when it is
+// destroyed, which the Program's teardown does without the Program's lock once no other thread is in the Program;
+// hasProgramData() tells a thread that is not in a Program whether its data still exists without reading the
+// Program's external data, which the teardown can be destroying at the same time
+// a plain mutex: the lock is held only for a hash lookup, and an uncontended mutex costs less than a shared one
+static std::mutex jni_pgm_data_lock;
+static std::unordered_multiset<const QoreProgram*> jni_pgm_data;
+
+static void jni_pgm_data_register(const QoreProgram* pgm) {
+    std::lock_guard<std::mutex> guard(jni_pgm_data_lock);
+    jni_pgm_data.insert(pgm);
+}
+
+static void jni_pgm_data_unregister(const QoreProgram* pgm) {
+    std::lock_guard<std::mutex> guard(jni_pgm_data_lock);
+    auto i = jni_pgm_data.find(pgm);
+    if (i != jni_pgm_data.end()) {
+        jni_pgm_data.erase(i);
+    }
+}
+
+bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
+    std::lock_guard<std::mutex> guard(jni_pgm_data_lock);
+    return jni_pgm_data.find(pgm) != jni_pgm_data.end();
+}
+
+int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
+        ExceptionSink* xsink) {
+    assert(!*xsink);
+    if (!pgm || pgm == ::getProgram()) {
+        return 0;
+    }
+    // a Program with no jni data, also one that has been deleted, whose jni data has been destroyed: the call is
+    // made in the context of the calling code, and the Program is not entered; the registry is read, not the
+    // Program's own data, which its teardown can be destroying
+    if (!JniExternalProgramData::hasProgramData(pgm)) {
+        pgm = nullptr;
+        return 0;
+    }
+    // the Program is entered before its jni data is looked up: the entry holds the Program, whose teardown destroys
+    // the data only once no thread is in it; an exception means that the Program cannot be entered (it is being torn
+    // down, or another thread is parsing it), or one raised by its entry handler or thread initialization code
+    epch.emplace(xsink, pgm);
+    if (*xsink) {
+        return -1;
+    }
+    // the data exists for the whole call: the teardown destroys it only after it has refused new entries (an entry
+    // made after the check above, once the teardown had started, has failed) and no thread is in the Program
+    return 0;
+}
+
 JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* pgm) : pgm(pgm), jni(jni) {
     assert(jni);
     Env env(false);
@@ -4629,6 +4677,7 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
     if (classpath) {
         addClasspath(classpath->c_str());
     }
+    jni_pgm_data_register(pgm);
 }
 
 JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& parent, Env& env, QoreProgram* pgm) :
@@ -4663,9 +4712,11 @@ JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& par
         jni = qjcm.copyProgramJniNs();
         pgm->getRootNS()->addNamespace(jni);
     }
+    jni_pgm_data_register(pgm);
 }
 
 JniExternalProgramData::~JniExternalProgramData() {
+    jni_pgm_data_unregister(pgm);
     // NOTE: the module root namespace cache is NOT purged here.  It is keyed by the Program that
     // owns each class (qc.getProgram()), which for a module class is the module's own Program and
     // need not have a JniExternalProgramData at all, so this destructor cannot see every entry.
@@ -4803,6 +4854,10 @@ JniExternalProgramData* JniExternalProgramData::setContext(Env& env, QoreProgram
     // issue #3199: no program is available when initializing the jni module from the command line
     // issue #3153: no context is available when called from a static method
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+#ifdef DEBUG
+    // a test gate that runs code between the lookup of the context and its use
+    dbg_jni_run_context_gate();
+#endif
     // set classloader context in new thread
     env.callVoidMethod(jpc->classLoader, Globals::methodQoreURLClassLoaderSetContext, nullptr);
     return jpc;

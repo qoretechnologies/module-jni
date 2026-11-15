@@ -28,6 +28,9 @@
 #include "Globals.h"
 #include "Method.h"
 #include "QoreToJava.h"
+#include "QoreJniClassMap.h"
+
+#include <optional>
 
 namespace jni {
 
@@ -125,13 +128,38 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
         // callback->getProgram() is unsafe: it can return a dangling pointer
         // when the callback's owning program has been destroyed.
         QoreProgram* pgm = this->pgm;
-        JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
-
-        // Set up full program context including tlpd for thread pool threads
-        QoreExternalProgramContextHelper pctx(&xsink, pgm);
-        if (xsink) {
-            QoreToJava::wrapException(xsink);
-            return nullptr;
+        // Set up full program context including tlpd for thread pool threads; the Program is entered before its jni
+        // data is looked up, as the Program's teardown can destroy the data of a Program that the thread is not in
+        std::optional<QoreExternalProgramContextHelper> pctx;
+        JniExternalProgramData* jpc = nullptr;
+        // a Program with no jni data, also one that has been deleted, whose jni data has been destroyed: the callback
+        // is made in the Program that the context falls back to, and the Program is not entered; the registry is
+        // read, not the Program's own data, which its teardown can be destroying
+        if (JniExternalProgramData::hasProgramData(pgm)) {
+            pctx.emplace(&xsink, pgm);
+            if (xsink) {
+                // the Program cannot be entered (it is being torn down, or another thread is parsing it), or its
+                // entry handler or thread initialization code raised an exception
+                QoreToJava::wrapException(xsink);
+                return nullptr;
+            }
+            // the data exists for the whole callback: the teardown destroys it only after it has refused new entries
+            // (an entry made after the check above, once the teardown had started, has failed) and no thread is in the
+            // Program
+            jpc = jni_get_context_unconditional(pgm);
+            assert(pgm == this->pgm);
+        } else {
+            pgm = nullptr;
+        }
+        if (!pgm) {
+            // the current Program, the Program of the calling code, or the global Java context Program, which do not
+            // go away while the thread is in them or the module is loaded
+            jpc = jni_get_context_unconditional(pgm);
+            pctx.emplace(&xsink, pgm);
+            if (xsink) {
+                QoreToJava::wrapException(xsink);
+                return nullptr;
+            }
         }
 
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);

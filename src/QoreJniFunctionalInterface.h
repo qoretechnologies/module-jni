@@ -38,6 +38,12 @@ class QoreJniFunctionalInterface : public ResolvedCallReferenceNode {
 public:
     DLLLOCAL QoreJniFunctionalInterface(jobject obj);
 
+    DLLLOCAL virtual ~QoreJniFunctionalInterface();
+
+    // not copyable: the destructor releases the dependency reference on src_pgm
+    QoreJniFunctionalInterface(const QoreJniFunctionalInterface&) = delete;
+    QoreJniFunctionalInterface& operator=(const QoreJniFunctionalInterface&) = delete;
+
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override;
 
     DLLLOCAL virtual QoreFunction* getFunction() const override {
@@ -55,6 +61,7 @@ private:
     GlobalReference<jobject> obj;
     SimpleRefHolder<Class> cls;
     SimpleRefHolder<BaseMethod> method;
+    //! the Program whose code created the closure; a dependency reference keeps it allocated while the closure exists
     QoreProgram* src_pgm;
 };
 }

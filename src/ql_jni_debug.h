@@ -37,6 +37,13 @@
     release builds.
 */
 DLLLOCAL void init_jni_debug_functions(QoreNamespace& ns);
+
+//! Runs the one-shot gate set with Jni::dbg_jni_set_context_gate() if it was set by the current thread
+/** Called after the jni context of a Program has been looked up and before it is used (see
+    JniExternalProgramData::setContext()), so that a test can run code exactly in that window; throws
+    jni::XsinkException if the gate's code raises an exception
+*/
+DLLLOCAL void dbg_jni_run_context_gate();
 #endif
 
 #endif // QORE_JNI_QL_JNI_DEBUG_H
