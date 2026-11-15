@@ -70,6 +70,9 @@ sig_vec_t sig_vec = {
 };
 
 static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
+#if defined(QORE_JNI_HAS_COMMAND_CONTEXT) && !defined(NDEBUG)
+static bool jni_command_rules_match_commands();
+#endif
 static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void jni_module_delete();
 static void jni_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink);
@@ -294,6 +297,11 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         return;
     }
     printd(5, "jni_module_init()\n");
+#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
+    // the issuer rules and the commands are kept in two tables: every command must have a rule and every rule a
+    // command, or a command would fall back to the rule for unlisted commands
+    assert(jni_command_rules_match_commands());
+#endif
 
     jni::jni_qore_init = true;
 
@@ -620,6 +628,21 @@ static const std::map<std::string, JniCommandIssuerRule> jni_command_issuer_rule
     {"set-property", {0, true, "sets a system property of the JVM"}},
     {"register-shared-class", {0, true, "makes the class of this Program the class of every Program"}},
 };
+
+#ifndef NDEBUG
+//! Returns true if every module command in mcmap has an issuer rule and every issuer rule a command
+static bool jni_command_rules_match_commands() {
+    if (mcmap.size() != jni_command_issuer_rules.size()) {
+        return false;
+    }
+    for (const auto& i : mcmap) {
+        if (jni_command_issuer_rules.find(i.first) == jni_command_issuer_rules.end()) {
+            return false;
+        }
+    }
+    return true;
+}
+#endif
 
 //! Refuses a module command to an issuer that may not do what it does (qore#5699)
 /** The command is judged by the restrictions of the code that issued it (QoreModuleCommandContext), which Qore
