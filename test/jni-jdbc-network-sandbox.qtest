@@ -2,8 +2,10 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# The jdbc database driver is refused to code that a sandbox policy governs: the JDBC driver resolves and connects to its
-# destinations in Java, where the sandbox network policy cannot be applied to them (qore#5747)
+# The jdbc database driver is refused to code that a sandbox network policy restricts: the JDBC driver resolves and
+# connects to its destinations in Java, where the sandbox network policy cannot be applied to them (qore#5747).  A
+# SandboxManager that is attached but restricts no network access (an allow-all manager, which Qorus attaches to every
+# trusted interface for interruptible I/O) does not restrict the code, and the driver connects for it
 
 %modern
 %no-child-restrictions
@@ -77,7 +79,11 @@ string sub socket_barrier() {
 
     constructor() : QUnit::Test("JNI jdbc network sandbox", "1.0", \ARGV) {
         addTestCase("sandboxed code cannot connect", \sandboxedTest());
-        addTestCase("a sandbox that allows the destination does not allow the connection", \allowedPolicyTest());
+        addTestCase("a sandbox that restricts the network and allows the destination does not allow the connection",
+            \allowedPolicyTest());
+        addTestCase("an allow-all manager does not restrict the connection", \allowAllTest());
+        addTestCase("every kind of network restriction refuses the connection", \restrictingPolicyTest());
+        addTestCase("a restricting policy refuses a pool and a trusted Datasource", \restrictingPoolTest());
         addTestCase("sandboxed code cannot use a pool", \poolTest());
         addTestCase("trusted code connects", \trustedTest());
         addTestCase("sandboxed code cannot establish a barrier for itself", \ownBarrierTest());
@@ -112,9 +118,89 @@ string sub socket_barrier() {
     }
 
     allowedPolicyTest() {
+        # the default policy allows every destination, but the private networks are blocked
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
         assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url));
+    }
+
+    #! returns an allow-all manager, as Qorus attaches to its trusted interfaces
+    private static SandboxManager allowAll() {
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        return sm;
+    }
+
+    allowAllTest() {
+        # the connection is not refused: it fails with the error of the missing driver, as for code with no manager
+        assertEq(NoDriver, getSandboxed(OpenSource, allowAll()).callFunction("open_url", Url));
+        assertEq(NoDriver, getSandboxed(PoolSource, allowAll()).callFunction("open_pool", Url), "pool");
+        # a connection to a closed local port fails with the driver's error
+        assertEq(NoDriver, getSandboxed(OpenSource, allowAll()).callFunction("open_url",
+            "jdbc:u/p@ignored{url=qore-none://127.0.0.1:9/x}"), "closed port");
+        # only the network policy counts: a restricted filesystem does not refuse a connection
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        assertEq(NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "network allow-all only");
+    }
+
+    restrictingPolicyTest() {
+        # default deny
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(False);
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "default deny");
+
+        # blockPrivateNetworks()
+        sm = allowAll();
+        sm.blockPrivateNetworks();
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "blockPrivateNetworks");
+
+        # a denied range
+        sm = allowAll();
+        sm.addNetworkDeniedIPRange("203.0.113.0/24");
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "denied range");
+
+        # a policy that allows only some ranges, also with the default policy allow
+        sm = allowAll();
+        sm.addNetworkAllowedIPRange("10.0.0.0/8");
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "allowed range, default allow");
+        sm = new SandboxManager();
+        sm.addNetworkAllowedIPRange("10.0.0.0/8");
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "allowed range, default deny");
+
+        # a policy that allows only some hosts
+        sm = new SandboxManager();
+        sm.addNetworkAllowedHost("*.example.com");
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "allowed host");
+
+        # a policy that allows only some ports
+        sm = allowAll();
+        sm.addNetworkAllowedPort(443);
+        assertEq(Denied, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "allowed port");
+    }
+
+    restrictingPoolTest() {
+        SandboxManager sm = allowAll();
+        sm.addNetworkDeniedIPRange("203.0.113.0/24");
+        assertEq(Denied, getSandboxed(PoolSource, sm).callFunction("open_pool", Url), "pool");
+
+        # a Datasource that trusted code made is refused for code that a restricting policy governs, and connects for
+        # code that an allow-all manager is attached to
+        Datasource ds(Url);
+        string src = "
+string sub open_ds(Datasource ds) {
+    try {
+        ds.open();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+        assertEq(Denied, getSandboxed(src, sm).callFunction("open_ds", ds), "restricting");
+        assertEq(NoDriver, getSandboxed(src, allowAll()).callFunction("open_ds", ds), "allow-all");
     }
 
     poolTest() {

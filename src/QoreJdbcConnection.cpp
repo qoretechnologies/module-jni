@@ -114,14 +114,50 @@ int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {
     return connect(env, xsink);
 }
 
+//! Returns true if the network policy of the manager restricts network access in any way
+/** A manager that is attached to a Program does not restrict it by itself: an allow-all manager (the default network
+    policy allows, and no host, range or port rule is set) restricts nothing, and Qorus attaches one to every trusted
+    interface Program for interruptible I/O.  The network policy restricts if the default policy denies, or if any
+    allowed IP range (which denies all other addresses), denied IP range or allowed port rule is set.  Allowed host
+    names are not counted: they only matter with a default policy that denies.
+
+    The policy is read from the configuration of the manager.  If the configuration cannot be read, the policy is
+    assumed to restrict (fail closed).
+*/
+static bool network_policy_restricts(QoreSandboxManager& manager) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> config(manager.network().getConfiguration(&xsink), &xsink);
+    if (xsink || !config) {
+        xsink.clear();
+        return true;
+    }
+    QoreValue policy = config->getKeyValue("default_policy");
+    if (policy.getType() != NT_STRING || policy.get<const QoreStringNode>()->compare("allow")) {
+        return true;
+    }
+    for (const char* key : {"allowed_ranges_count", "denied_ranges_count"}) {
+        QoreValue count = config->getKeyValue(key);
+        if (count.getType() != NT_INT || count.getAsBigInt()) {
+            return true;
+        }
+    }
+    QoreValue ports = config->getKeyValue("allowed_ports");
+    if (ports.getType() != NT_LIST || ports.get<const QoreListNode>()->size()) {
+        return true;
+    }
+    return false;
+}
+
 int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
     // the JDBC driver resolves and connects to its destinations in Java and discovers some of them itself (failover
-    // hosts, redirects), so the sandbox network policy cannot be applied to them (qore#5747)
+    // hosts, redirects), so the sandbox network policy cannot be applied to them (qore#5747); the connection is
+    // refused for code that a network policy restricts.  A manager that restricts nothing (an allow-all manager) is
+    // no restriction: the code is not governed by a policy, and the driver connects for it
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
-    if (governing) {
+    if (governing && network_policy_restricts(*governing.get())) {
         xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
-            "policy governs, because the JDBC driver resolves and connects to its destinations in Java, where the "
-            "sandbox network policy cannot be applied to them");
+            "network policy restricts, because the JDBC driver resolves and connects to its destinations in Java, "
+            "where the sandbox network policy cannot be applied to them");
         return -1;
     }
     return 0;

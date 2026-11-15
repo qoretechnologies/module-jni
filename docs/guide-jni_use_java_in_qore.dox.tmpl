@@ -215,8 +215,9 @@ public class Fetcher {
 
     <b>The jdbc database driver:</b> sandboxed code cannot open JDBC \c Datasource or \c DatasourcePool connections
     for now: a \c Datasource or \c DatasourcePool that uses the \c jdbc driver raises \c NETWORK-ACCESS-DENIED when it
-    connects or reconnects for code that a sandbox policy governs, whatever the destination and whatever the policy
-    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A
+    connects or reconnects for code that a sandbox network policy restricts (the default network policy denies, or an
+    allowed or denied IP range or an allowed port rule is set), whatever the destination and whatever the policy
+    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A sandbox manager that restricts no network access, such as an allow-all manager, does not refuse the driver.  A
     connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect; trusted
     code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data provider
     (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to sandboxed
