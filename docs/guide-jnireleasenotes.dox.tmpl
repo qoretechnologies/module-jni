@@ -13,9 +13,10 @@
       may use uncontrolled APIs (\c SandboxManager::setUncontrolledApiPolicy()) made the call (qore#6183); and %Qore
       code that Java called back ran with the thread-local data of the calling Program, so that a top-level variable
       of the object's Program read as \c NOTHING and a write to it was stored in the caller's data (qore#6185); the
-      call now enters the object's Program, which also runs the Program's entry handler once around the Java call,
-      and raises \c PROGRAM-ERROR before any Java code runs if the Program is being torn down or is being parsed by
-      another thread (see @ref jni_callback_sandbox); a call made in the object's own Program is unchanged
+      call now enters the object's Program, which also runs the Program's entry handler once around the Java call
+      and holds the Program's thread count for the call, and raises \c PROGRAM-ERROR before the Java method is
+      called if the Program is being torn down or is being parsed by another thread (see @ref jni_callback_sandbox);
+      a call made in the object's own Program does not enter it again
 
     - <b>Security</b>: the \c jdbc database driver raises \c NETWORK-ACCESS-DENIED when it connects for code that a
       sandbox network policy restricts (a default network policy that denies, or any allowed or denied IP range or

@@ -87,24 +87,24 @@ hash<auto> sub get_probe() {
 # a global object whose destructor blocks the Program's teardown until the test releases it
 class Blocker {
     private {
-        Counter entered;
+        Queue events;
         Queue release;
     }
 
-    constructor(Counter entered, Queue release) {
-        self.entered = entered;
+    constructor(Queue events, Queue release) {
+        self.events = events;
         self.release = release;
     }
 
     destructor() {
-        entered.dec();
+        events.push(\"entered\");
         release.get();
     }
 }
 
 our *Blocker blocker;
-sub set_blocker(Counter entered, Queue release) {
-    blocker = new Blocker(entered, release);
+sub set_blocker(Queue events, Queue release) {
+    blocker = new Blocker(events, release);
 }
 ";
 
@@ -161,6 +161,8 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         addTestCase("Java's file check applies the caller's policy", \testJavaFileCheck());
         addTestCase("the owner's entry handler runs once per cross-Program call", \testEntryHandler());
         addTestCase("an exception from the entry handler stops the Java call", \testEntryHandlerException());
+        addTestCase("a Java exception leaves the owner's Program", \testJavaException());
+        addTestCase("an exception from the exit handler reaches the caller", \testExitHandlerException());
         addTestCase("an object whose Program was deleted stays callable", \testDeletedProgram());
         addTestCase("an object whose Program is being torn down cannot be called", \testTornDownProgram());
         set_return_value(main());
@@ -386,10 +388,53 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         assertEq(1, l.size(), "the Java method did not run");
     }
 
+    testJavaException() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        object l = owner.callFunction("make_list");
+        object c = owner.callFunction("make_consumer", "tl");
+        Counter entries();
+        Counter exits();
+        owner.setThreadEntryHandler(sub () { entries.inc(); }, sub (auto v) { exits.inc(); });
+        on_exit owner.setThreadEntryHandler();
+
+        # a Java exception raised in a cross-Program call leaves the owner's Program
+        assertThrows("JNI-ERROR", "IndexOutOfBoundsException", sub () { l.get(5); }, NOTHING,
+            "the Java exception reaches the caller");
+        assertEq(1, entries.getCount(), "the call entered the owner");
+        assertEq(1, exits.getCount(), "the owner was left");
+
+        # the thread's context is restored: a later cross-Program call still sees the owner's data
+        owner.callFunction("reset");
+        caller.callFunction("call_via_java", l, c);
+        assertEq(("owner",), owner.callFunction("get_seen"));
+        assertEq("caller", caller.callFunction("get_tl"));
+        assertEq(entries.getCount(), exits.getCount(), "each entry is left");
+    }
+
+    testExitHandlerException() {
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        bool fail_exit = True;
+        owner.setThreadEntryHandler(NOTHING, sub (auto v) {
+            if (fail_exit) {
+                throw "EXIT-ERROR", "exit failed";
+            }
+        });
+        on_exit owner.setThreadEntryHandler();
+
+        # the exit handler runs after the Java method, and its exception reaches the caller
+        assertThrows("EXIT-ERROR", "exit failed", sub () { l.add("y"); });
+        fail_exit = False;
+        assertEq(2, l.size(), "the Java method ran");
+    }
+
     testDeletedProgram() {
         Program p = getOwner();
         object l = p.callFunction("make_list");
         delete p;
+        # the deleted Program has no jni context any more, so the call runs in the context of the calling Program
+        # (jni_get_context()) and does not enter the deleted Program
         assertEq(1, l.size());
         l.add("y");
         assertEq(2, l.size());
@@ -398,9 +443,11 @@ class JniCrossProgramCallTest inherits QUnit::Test {
     testTornDownProgram() {
         Program owner = getOwner();
         object l = owner.callFunction("make_list");
-        Counter entered(1);
+        # the destructor of the owner's global object reports here that the teardown has started, and the thread
+        # deleting the owner reports here if the deletion failed before
+        Queue events();
         Queue release();
-        owner.callFunction("set_blocker", entered, release);
+        owner.callFunction("set_blocker", events, release);
 
         Queue done();
         background sub () {
@@ -408,14 +455,17 @@ class JniCrossProgramCallTest inherits QUnit::Test {
                 delete owner;
                 done.push(True);
             } catch (hash<ExceptionInfo> ex) {
+                events.push(ex);
                 done.push(ex);
             }
         }();
-        on_error release.push(True);
-        # the teardown runs the destructor of the owner's global object
-        entered.waitForZero();
-        assertThrows("PROGRAM-ERROR", sub () { l.size(); });
-        release.push(True);
-        assertEq(True, done.get());
+        on_exit release.push(True);
+        auto event = events.get();
+        assertEq("entered", event, "the teardown runs the destructor of the owner's global object");
+        if (event == "entered") {
+            assertThrows("PROGRAM-ERROR", sub () { l.size(); });
+            release.push(True);
+            assertEq(True, done.get());
+        }
     }
 }

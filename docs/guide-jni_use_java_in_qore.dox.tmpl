@@ -130,13 +130,17 @@ class Outer {
     A call of an instance method of a Java object that another Program owns (ex: an object that a trusted Program
     hands to sandboxed code) enters the object's Program for the call, like a call of a %Qore function of that
     Program: Java uses the object's class map and \c ClassLoader, %Qore code of the object's Program that Java calls
-    back during the call uses that Program's thread-local data, and the Program's entry handler
-    (\c Program::setThreadEntryHandler()) runs once around the whole Java call.  The calling code stays visible to
-    the sandbox: %Qore code that Java calls back during the call is governed by the caller's sandbox, as it is when
-    the caller calls the same code directly, and so are \c org.qore.jni.QoreSandbox queries and captures made by the
-    Java code (see @ref jni_sandbox).  The call raises \c PROGRAM-ERROR, before any Java code runs, if the object's
-    Program is being torn down or is being parsed by another thread, and raises any exception of the Program's entry
-    handler.
+    back during the call uses that Program's thread-local data, the Program's entry handler
+    (\c Program::setThreadEntryHandler()) runs once around the whole Java call, and its thread initialization code
+    (\c Program::setThreadInit()) runs on a thread's first entry.  The call holds the Program's thread count like any
+    other call into the Program, so deleting the Program waits for the Java calls in progress.  The calling code stays
+    visible to the sandbox: %Qore code that Java calls back during the call is governed by the caller's sandbox, as
+    it is when the caller calls the same code directly, and so are \c org.qore.jni.QoreSandbox queries and captures
+    made by the Java code (see @ref jni_sandbox).  The call raises \c PROGRAM-ERROR, before the Java method is
+    called, if the object's Program is being torn down or is being parsed by another thread, and raises any
+    exception of the Program's entry handler.  A call within the object's own Program does not enter it again.  An
+    object whose Program has already been deleted has no Program context of its own any more: its methods run in
+    the context of the calling Program.
 
     @subsection jni_sandbox Sandboxing Java I/O
 
