@@ -294,10 +294,11 @@ public class Fetcher {
     the code that created the pool (copies keep it), and not by the code that opens the connection.  So a datasource
     whose classpath sandboxed or restricted code set is refused (\c JNI-SANDBOX-ERROR) also when trusted code opens it,
     and the option of a trusted datasource or pool is not refused when a connection is opened on a restricted caller's
-    thread.  The jdbc driver itself does not connect for code that a sandbox that does not allow uncontrolled APIs
-    governs (\c NETWORK-ACCESS-DENIED, see the jdbc database driver below): a connection opened for sandboxed code, also
-    by a trusted pool on its thread, and a connection of a datasource object that sandboxed code created or copied,
-    whoever opens it, are refused before the option is judged.  The
+    thread.  The jdbc driver itself connects for code that a sandbox that does not allow uncontrolled APIs governs
+    only with an audited JDBC driver (see the jdbc database driver below): a connection opened for sandboxed code,
+    also by a trusted pool on its thread, and a connection of a datasource object that sandboxed code created or
+    copied, whoever opens it, is refused before the option is judged if its URL names another driver
+    (\c NETWORK-ACCESS-DENIED).  The
     classpath entries are checked against the filesystem policy of the code that set the option, not of the code that
     opens the connection: the code that configures a datasource reads only what its own policy allows.  The module
     hash reports this with \c "jdbc_option_setter" in its \c "info" key; with an older %Qore library the option is
@@ -324,20 +325,39 @@ public class Fetcher {
       does not allow uncontrolled APIs defines a class only in its own class loader: a class that belongs to another
       Program (ex: \c qoremod.MODULE.CLASS) cannot be defined by it
 
-    <b>The jdbc database driver:</b> sandboxed code cannot open JDBC \c Datasource or \c DatasourcePool connections
-    for now: a \c Datasource or \c DatasourcePool that uses the \c jdbc driver raises \c NETWORK-ACCESS-DENIED when it
-    connects or reconnects for code that a sandbox policy governs, whatever the destination and whatever the policy
-    allows, before its options are processed (the \c classpath option loads jars and the JDBC drivers in them).  A
-    connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect; trusted
-    code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data provider
-    (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to sandboxed
-    code as an \c external_io app.  Applying
-    the sandbox network policy to the destinations of individual JDBC drivers is planned separately.  The JDBC driver opens its sockets in Java, so %Qore cannot apply the policy to them: a
-    host name that was checked is resolved again by the driver, and drivers connect to destinations that they discover
-    themselves (failover hosts, replicas, server redirects) or that have a syntax of their own for each driver (ex:
-    Oracle TNS descriptors).  As with other policy checks, trusted code that connects under a policy barrier
-    (\c SandboxManager::callWithSystemPolicy()) or from a capability (\c SandboxManager::createSystemPolicyCall()) is
-    not refused.
+    <b>The jdbc database driver:</b> a JDBC driver opens its sockets in Java, so %Qore cannot apply the sandbox
+    policy to them: a host name that was checked is resolved again by the driver, and drivers connect to destinations
+    that they discover themselves (failover hosts, replicas, server redirects) or that have a syntax of their own for
+    each driver (ex: Oracle TNS descriptors).  So a \c Datasource or \c DatasourcePool that uses the \c jdbc driver
+    connects for <b>restricted</b> code (code that a sandbox policy that does not allow uncontrolled APIs governs)
+    only with the audited drivers, Amazon Redshift and SingleStore (qore#5786), and only when every destination of the
+    URL passes the sandbox network policy; every other JDBC driver raises \c NETWORK-ACCESS-DENIED when it connects
+    or reconnects for restricted code, whatever the destination and whatever the policy allows, before its options are
+    processed (the \c classpath option loads jars and the JDBC drivers in them).  A restricted connection is
+    <b>checked up front, pinned, and every socket goes through the module's factory</b>: the URL and options must
+    pass the driver's allowlist, all destinations (every host of a failover list) are resolved once with the %Qore
+    resolver and checked with the rule of \c QoreSandbox.checkNetworkAccess(), and the driver is forced to open every
+    socket (also for failover, reconnects and query cancels, on any thread) through a socket factory of this module
+    that connects only to the checked addresses.  The driver is loaded from the classpath of every Program
+    (\c global-add-classpath, which sandboxed code cannot change), never from the sandboxed Program's own class loader
+    and never through \c java.sql.DriverManager, and only in the exact audited version.  See
+    @ref jdbc_sandbox_connections for the rules of each driver.
+
+    <b>The policy source is PROVISIONAL:</b> whether a connection is restricted is decided by the code that runs on
+    the thread that opens it, and its destinations are checked against that thread's sandbox network policy.  So a
+    trusted \c DatasourcePool that grows on a sandboxed thread connects only to destinations that the thread's policy
+    allows; this is not the rule of qore#6142 (the code that chose the datasource decides), which replaces it, as can
+    the Qore side of qore#5747.  This feature is <b>BLOCKED</b>: it cannot be released until the CI images carry
+    module API 2.3 and the policy source is decided.
+
+    A connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect;
+    trusted code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data
+    provider (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to
+    sandboxed code as an \c external_io app.  As with other policy checks, trusted code that connects under a policy
+    barrier (\c SandboxManager::callWithSystemPolicy()) or from a capability
+    (\c SandboxManager::createSystemPolicyCall()) is not restricted.  No class of the package \c org.qore.jni.jdbc,
+    which implements the restricted connections, may be declared sandbox-aware or made available to sandboxed code: it
+    opens sockets to the destinations it holds without a check.
 
     <b>Options that load Java code:</b> an option that names a Java class to load or instantiate, a classpath to add,
     or a value that Java compiles, deserializes or uses to select a component that loads classes, is refused with

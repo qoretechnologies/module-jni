@@ -349,6 +349,125 @@ foreach hash<auto> column in (result.schemaV2()) {
     Builds against older %Qore releases that do not expose the columnar result API keep the previous \c jdbc DBI
     behavior and do not register these native columnar DBI hooks.
 
+    @section jdbc_sandbox_connections Sandboxed Connections
+
+    <b>BLOCKED:</b> this feature (qore#5786) cannot be released until the CI images carry module API 2.3 and the
+    policy source (below) is decided.
+
+    A connection is <b>restricted</b> if a sandbox that does not allow uncontrolled APIs governs the code that opens
+    it, or reopens it after a lost connection (<b>PROVISIONAL</b>: this is the policy of the thread; the chooser
+    record of qore#6142, or the Qore side of qore#5747, replaces it).  A trusted connection is not changed in any way.
+    A restricted connection is allowed only if:
+    - its URL names one of the audited JDBC drivers below, which are reported by the \c "jdbc_sandbox_drivers" key of
+      the \c "info" hash of the module (\c get_module_hash()); every other driver is refused
+    - its URL and options pass the driver's rules: a lexical check before any code of the driver runs, and then the
+      authoritative check on the driver's own parse of the URL, with the forced properties in place, so that a
+      difference between the two parsers fails closed; the keys must be printable ASCII and may be given once only
+    - every destination of the URL (every host of a host list) passes the sandbox network policy, checked as the
+      network policy of %Qore sockets: the host name is resolved once with the %Qore resolver, and every address is
+      checked
+    - the driver is the exact audited version (<b>PROVISIONAL</b>), loaded from the classpath of every Program
+      (\c global-add-classpath, or the JVM classpath), which sandboxed code cannot change, and never through
+      \c java.sql.DriverManager; the socket factory that the driver loads by name from its own class loader must be the
+      module's class
+
+    The driver is then forced to open every socket through a socket factory of the module, also for failover,
+    reconnects, query cancels and on the driver's own threads.  Its sockets connect only to the checked addresses: a
+    host name to the addresses it was checked with (the address that the driver resolved is ignored), and an address
+    literal only if it was checked with its port; a local bind and any other destination are refused
+    (\c NETWORK-ACCESS-DENIED).  When the connection is closed, its sockets cannot connect any more.  A connection
+    whose driver did not use the factory is closed and refused (\c JNI-SANDBOX-ERROR).  Neither driver follows server
+    redirects.
+
+    |!Driver|!URL forms|!Audited version|!Forced
+    |Amazon Redshift|<tt>jdbc:redshift://host[:port][,host[:port]...]/database[?options]</tt>; not \
+      \c jdbc:redshift:iam: or a URL without hosts|2.3.0|\c socketFactory, \c socketFactoryArg (the connection's \
+      token), \c IniFile (an empty file: no INI file is searched for; restricted Redshift connections are refused on \
+      a platform without \c /dev/null)
+    |SingleStore|<tt>jdbc:singlestore://hostlist[/database][?options]</tt>, also with \c sequential: or \
+      \c loadbalance: before \c //, each host \
+      <tt>host[:port]</tt>, <tt>[v6addr][:port]</tt> or <tt>address=(host=..)(port=..)[(type=..)]</tt>; TCP only|\
+      1.2.12|\c socketFactory (an adapter that the module defines in the driver's class loader), the connection's \
+      guard object, \c allowLocalInfile=false, \c pool=false, \
+      \c restrictedAuth=mysql_native_password,client_ed25519
+
+    Allowed options (everything else is refused; the keys are matched as the driver matches them):
+    - <b>Amazon Redshift</b>: \c ApplicationName, \c assumeMinServerVersion, \c autosave, \c binaryTransfer,
+      \c binaryTransferEnable, \c binaryTransferDisable, \c blockingRowsMode, \c cancelSignalTimeout,
+      \c cleanupSavepoints, \c compression, \c connectTimeout, \c connectionTimezone, \c currentSchema,
+      \c databaseMetadataCacheFields, \c databaseMetadataCacheFieldsMiB, \c databaseMetadataCurrentDbOnly,
+      \c defaultRowFetchSize, \c disableColumnSanitiser, \c disableIsValidQuery, \c enableFetchRingBuffer,
+      \c enableGeneratedName, \c enableMultiSqlSupport, \c enableStatementCache, \c enableTableTypes,
+      \c escapeSyntaxCallMode, \c fetchRingBufferSize, \c hideUnprivilegedObjects, \c hostRecheckSeconds,
+      \c loadBalanceHosts, \c loginTimeout, \c logServerErrorDetail, \c maxResultBuffer, \c maxWarningCount,
+      \c options, \c overrideSchemaPatternType, \c preferQueryMode, \c preparedStatementCacheQueries,
+      \c preparedStatementCacheSizeMiB, \c prepareThreshold, \c protocolVersion, \c queryGroup,
+      \c raiseExceptionOnSilentRollback, \c readOnly, \c readOnlyMode, \c receiveBufferSize, \c rewriteBatchedInserts,
+      \c rewriteBatchedInsertsSize, \c sendBufferSize, \c socketTimeout, \c ssl (\c true only), \c sslmode
+      (\c verify-full only, <b>PROVISIONAL</b>), \c statementCloseTimeout, \c stringtype, \c targetServerType,
+      \c tcpKeepAlive, \c user, \c password, \c UID, \c PWD, \c DBNAME
+    - <b>SingleStore</b>: \c user, \c password, \c autocommit, \c useMysqlMetadata, \c useMysqlVersion,
+      \c nullDatabaseMeansCurrent, \c createDatabaseIfNotExist, \c initSql, \c defaultFetchSize,
+      \c maxQuerySizeToLog, \c maxAllowedPacket, \c geometryDefaultType, \c transactionIsolation, \c connectTimeout,
+      \c socketTimeout, \c tcpKeepAlive, \c tcpKeepIdle, \c tcpKeepCount, \c tcpKeepInterval, \c tcpAbortiveClose,
+      \c useReadAheadInput, \c sslMode, \c serverSslCert (an inline PEM certificate only), \c enabledSslCipherSuites,
+      \c enabledSslProtocolSuites, \c hostNameInCertificate, \c allowMultiQueries, \c useCompression,
+      \c useAffectedRows, \c disablePipeline, \c cachePrepStmts, \c prepStmtCacheSize, \c useServerPrepStmts,
+      \c sessionVariables, \c connectionAttributes, \c blankTableNameMeta, \c transformedBitIsBoolean,
+      \c yearIsDateType, \c dumpQueriesOnException, \c retriesAllDown, \c transactionReplay, \c transactionReplaySize,
+      \c useResetConnection, \c rewriteBatchedStatements, \c preserveInstants, \c enableExtendedDataTypes,
+      \c vectorTypeOutputFormat, \c vectorExtendedMetadata
+
+    Refused classes of options: destination overrides (Redshift \c host and \c port), socket factories and class
+    names, proxies, pipes and local sockets, local bind addresses, key and trust stores and certificate files,
+    configuration and log files, IAM, identity provider, credential and authentication plugins (also the
+    SingleStore clear-text and PAM plugins, <b>PROVISIONAL</b>), the SingleStore pool and JMX options, and options
+    that only the drivers' plugins read.
+
+    The SingleStore driver serves a server's request to read a client file (\c LOAD \c DATA \c LOCAL \c INFILE)
+    whatever \c allowLocalInfile says, if the SQL text matches its own \c LOAD \c DATA \c LOCAL \c INFILE pattern, so
+    every SQL text of a restricted SingleStore connection that matches \c LOAD\\s+(DATA\\s+)?LOCAL\\s+INFILE
+    (case-insensitive) is refused: in \c initSql and \c sessionVariables (\c NETWORK-ACCESS-DENIED) and in statements
+    (\c JNI-SANDBOX-ERROR, before the driver sees the SQL).
+
+    <b>Errors:</b> \c NETWORK-ACCESS-DENIED for a refused driver, URL, option, version or destination, and
+    \c JNI-SANDBOX-ERROR for a failed integrity check (a class of the module's name in the driver's class loader, a
+    driver that did not use the module's socket factory, a statement with \c LOAD \c DATA \c LOCAL \c INFILE).
+
+    <b>The drivers' jars</b> must be on the classpath of every Program for restricted connections: the jars of a
+    \c classpath option, or of the class loader of a sandboxed Program, are not used for them.
+
+    @par Example: a sandbox that allows one Redshift cluster
+    @code{.py}
+%requires jni
+%module-cmd(jni) global-add-classpath /opt/jdbc/redshift-jdbc42-2.3.0.jar
+
+SandboxManager sm();
+sm.setNetworkDefaultPolicy(False);
+sm.addNetworkAllowedHost("redshift.example.com");
+sm.addNetworkAllowedPort(5439, QSEC_NET_TCP);
+Program p(PO_NEW_STYLE);
+p.setSandboxManager(sm);
+p.parse("sub run() { Datasource ds({\"type\": \"jdbc\", \"user\": \"user\", \"pass\": \"pass\", "
+    "\"db\": \"jdbc:redshift://redshift.example.com:5439/dev\"}); printf(\"%y\\n\", ds.selectRows(\"select 1\")); }",
+    "tenant");
+p.callFunction("run");
+    @endcode
+
+    @par Example: a SingleStore host list
+    @code{.py}
+Datasource ds({"type": "jdbc", "user": "user", "pass": "pass",
+    "db": "jdbc:singlestore:sequential://db1.example.com:3306,db2.example.com:3306/app"});
+    @endcode
+    Every host of the list must pass the sandbox, or the connection is refused before any host is connected to.
+
+    <b>Open questions</b> (design section 11): whether to ship with the thread as the policy source (qore#6142); the
+    qore#5747 contract for \c QDBI_METHOD_GET_CONNECT_TARGETS, which the module implements under its \c #ifdef
+    (compiled out with today's %Qore); the reconnect rule in Qore-5747 mode; the empty INI file on Windows; exact
+    audited versions or ranges; the error codes; caps for \c fetchRingBufferSize, \c maxResultBuffer and
+    \c retriesAllDown; the authentication plugins and TLS modes allowed for sandboxed callers; defining the
+    SingleStore adapter in the vendor package; and the licence of the SingleStore driver (LGPL-2.1) for the tests.
+
     @section jdbc_driver_options jdbc DBI Driver Options
 
     The jdbc driver supports the following DBI options:
@@ -393,10 +512,13 @@ foreach hash<auto> column in (result.schemaV2()) {
     code that created the pool; a copy keeps it.  So:
     - a datasource whose \c classpath option restricted code set is refused also when trusted code opens it
     - the option of a trusted datasource or pool is not refused when a connection is opened on the thread of
-      restricted code; the driver does not connect at all for code that a sandbox that does not allow uncontrolled
-      APIs governs (\c NETWORK-ACCESS-DENIED, see @ref jni_sandbox), so a trusted pool that is shared with such
-      sandboxed code cannot open a new connection for it, and a datasource object that such code created or copied
-      cannot connect, whoever opens it
+      restricted code; the driver connects for code that a sandbox that does not allow uncontrolled APIs governs only
+      as @ref jdbc_sandbox_connections describes (\c NETWORK-ACCESS-DENIED for any other JDBC driver), so a trusted
+      pool that is shared with such sandboxed code opens a new connection for it only with an audited driver whose
+      destinations the sandbox allows; the classpath option does not decide which driver such a connection uses: the
+      driver is loaded from the classpath of every Program
+    - sandboxed code that sets the option on a datasource with an audited driver's URL is refused before any jar is
+      loaded (\c JNI-SANDBOX-ERROR)
     - the entries are checked against the filesystem policy of the code that set the option, not of the code that
       opens the connection
 

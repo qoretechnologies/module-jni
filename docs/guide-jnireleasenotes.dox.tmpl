@@ -66,6 +66,14 @@
     - <b>Security</b>: the \c jdbc database driver raises \c NETWORK-ACCESS-DENIED when it connects for code that a
       sandbox policy governs, because the sandbox network policy cannot be applied to the destinations that a JDBC
       driver resolves and discovers in Java (see @ref jni_sandbox)
+    - <b>Security</b> (<b>BLOCKED</b>: not to be released until the CI images carry module API 2.3 and the policy
+      source is decided): the \c jdbc driver allows sandboxed code to connect with Amazon Redshift and SingleStore
+      when every destination passes the sandbox network policy (qore#5786); every other JDBC driver is still refused.
+      The URL and options must pass the driver's allowlist, every destination is checked up front and pinned, and
+      every socket of the driver goes through the module's socket factory, which connects only to the checked
+      addresses; the driver is loaded in its exact audited version from the classpath of every Program, never
+      through \c DriverManager.  The policy source is PROVISIONAL (the code that runs on the thread).  The module hash
+      reports the drivers with \c "jdbc_sandbox_drivers" in its \c "info" key (see @ref jdbc_sandbox_connections)
 
     - <b>Security</b>: the options of the JDBC, Jakarta JMS, Kafka, Camel, JasperReports and Flyway providers that
       name a Java class to load, a classpath to add, or code that Java compiles are refused with
