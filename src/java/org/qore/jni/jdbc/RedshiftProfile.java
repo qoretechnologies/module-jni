@@ -204,6 +204,9 @@ final class RedshiftProfile extends JdbcDriverProfile {
         f.setProperty("socketFactory", RedshiftGuardSocketFactory.class.getName());
         f.setProperty("socketFactoryArg", token);
         f.setProperty("IniFile", iniFile());
+        // PROVISIONAL: TLS with host name validation also if the driver's default changes; the URL may give the same
+        // value only
+        f.setProperty("sslmode", SSL_MODE);
         return f;
     }
 
@@ -256,7 +259,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
         requireValue(res, INI_FILE, iniFile());
         requireValue(res, "iamauth", "false");
         String v = res.getProperty("sslmode");
-        if (v != null && !v.equals(SSL_MODE)) {
+        if (!SSL_MODE.equals(v)) {
             throw deny("option sslmode value %s is not allowed for sandboxed Redshift connections; only %s is", quote(v),
                 SSL_MODE);
         }

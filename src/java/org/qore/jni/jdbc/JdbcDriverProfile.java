@@ -102,6 +102,11 @@ abstract class JdbcDriverProfile {
     void checkSql(String sql) {
     }
 
+    //! Returns true if checkSql() must also check the SQL as the driver rewrites it (Connection.nativeSQL())
+    boolean checksNativeSql() {
+        return false;
+    }
+
     //! Returns the \c java.sql.Driver interface
     static Class<?> jdbcDriverClass() {
         try {

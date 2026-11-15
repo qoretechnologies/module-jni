@@ -535,7 +535,10 @@ string sub module_cmd(string cmd) {
         string url = sprintf("jdbc:singlestore://127.0.0.1:%d/db?useServerPrepStmts=false", s.getPort());
         list<string> sqls = ("LOAD DATA LOCAL INFILE '/etc/passwd' INTO TABLE t",
             "load data local infile ? into table t",
-            "/* a comment */ LOAD\n LOCAL\tINFILE '/etc/passwd' INTO TABLE t");
+            "/* a comment */ LOAD\n LOCAL\tINFILE '/etc/passwd' INTO TABLE t",
+            # JDBC escapes, which the driver rewrites before it sends the SQL and checks a file request against it
+            "LOAD DATA {d LOCAL} INFILE '/etc/passwd' INTO TABLE t",
+            "LOAD DATA {oj LOCAL} INFILE '/etc/passwd' INTO TABLE t");
         list<string> results = sandboxed(s.getPort()).callFunction("run_sql", url, sqls);
         assertEq(sqls.size() * 4, results.size());
         foreach string r in (results) {

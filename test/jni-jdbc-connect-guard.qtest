@@ -89,7 +89,7 @@ class JniJdbcConnectGuardTest inherits QUnit::Test {
         assertEq("127.0.0.1", JdbcGuardTestHelper::remoteAddress(sock));
         # the socket is usable: the fake server's error packet is read through it
         assertTrue(JdbcGuardTestHelper::read(sock, 4) == 4, "read through the socket");
-        assertEq(1, s1.acceptCount());
+        assertEq(1, s1.awaitAcceptCount(1, 30000));
         assertEq(0, s2.acceptCount());
         assertEq(1, g.socketCount());
         assertEq(NOTHING, g.lastRefusal());
@@ -124,7 +124,7 @@ class JniJdbcConnectGuardTest inherits QUnit::Test {
             assertRegex("NETWORK-ACCESS-DENIED", JdbcGuardTestHelper::connectUnresolved(other, c[0], c[1], 5000),
                 sprintf("%s:%d", c[0], c[1]));
         }
-        assertEq(1, s.acceptCount());
+        assertEq(1, s.awaitAcceptCount(1, 30000));
         assertEq(0, s2.acceptCount());
     }
 
@@ -137,7 +137,7 @@ class JniJdbcConnectGuardTest inherits QUnit::Test {
             on_exit sock.close();
             assertEq("ok", JdbcGuardTestHelper::connectUnresolved(sock, host, s.getPort(), 5000), host);
         }
-        assertEq(2, s.acceptCount());
+        assertEq(2, s.awaitAcceptCount(2, 30000));
     }
 
     addressTypeTest() {
@@ -161,7 +161,7 @@ class JniJdbcConnectGuardTest inherits QUnit::Test {
         on_exit sock.close();
         assertEq("ok", JdbcGuardTestHelper::connectUnresolved(sock, "multi", s.getPort(), 5000));
         assertEq("127.0.0.1", JdbcGuardTestHelper::remoteAddress(sock));
-        assertEq(1, s.acceptCount());
+        assertEq(1, s.awaitAcceptCount(1, 30000));
     }
 
     threadTest() {
@@ -172,7 +172,7 @@ class JniJdbcConnectGuardTest inherits QUnit::Test {
             on_exit sock.close();
             assertEq("ok", JdbcGuardTestHelper::connectOnThread(sock, "allowed", s.getPort(), kind), kind);
         }
-        assertEq(3, s.acceptCount());
+        assertEq(3, s.awaitAcceptCount(3, 30000));
     }
 
     closedTest() {
@@ -221,7 +221,7 @@ class JniJdbcConnectGuardTest inherits QUnit::Test {
         on_exit late.close();
         assertRegex("NETWORK-ACCESS-DENIED.*closed",
             JdbcGuardTestHelper::connectUnresolved(late, "allowed", s.getPort(), 5000));
-        assertEq(1, s.acceptCount());
+        assertEq(1, s.awaitAcceptCount(1, 30000));
     }
 
     bindingTest() {

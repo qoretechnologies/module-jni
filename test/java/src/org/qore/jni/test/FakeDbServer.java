@@ -64,6 +64,22 @@ public final class FakeDbServer implements AutoCloseable {
         return accepts.size();
     }
 
+    //! Waits until the server has accepted at least \a n connections, at most \a timeoutMs, and returns the count
+    /** A client's connect() can return before the server thread has accepted the connection: a test that does not
+        read from the server waits for the accept with this method.
+    */
+    public synchronized int awaitAcceptCount(int n, long timeoutMs) throws InterruptedException {
+        long deadline = System.nanoTime() + timeoutMs * 1000000L;
+        while (accepts.size() < n) {
+            long ms = (deadline - System.nanoTime()) / 1000000L;
+            if (ms <= 0) {
+                break;
+            }
+            wait(ms);
+        }
+        return accepts.size();
+    }
+
     //! Returns the local address of each accepted connection, in order
     public synchronized String[] acceptAddresses() {
         return accepts.toArray(new String[0]);
@@ -137,6 +153,7 @@ public final class FakeDbServer implements AutoCloseable {
             synchronized (this) {
                 accepts.add(s.getLocalAddress().getHostAddress());
                 clients.add(s);
+                notifyAll();
             }
             Thread t = new Thread(() -> {
                 try (Socket c = s) {

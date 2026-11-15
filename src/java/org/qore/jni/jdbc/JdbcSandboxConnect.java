@@ -57,6 +57,8 @@ public final class JdbcSandboxConnect implements AutoCloseable {
     private final Properties forced;
     private final JdbcConnectGuard guard;
     private final JdbcTargets targets;
+    //! the open connection (a java.sql.Connection), for checkSql()
+    private volatile AutoCloseable connection;
 
     private JdbcSandboxConnect(JdbcDriverProfile profile, Object driver, ClassLoader loader, String url,
             Properties forced, JdbcConnectGuard guard, JdbcTargets targets) {
@@ -240,6 +242,7 @@ public final class JdbcSandboxConnect implements AutoCloseable {
             throw JdbcDriverProfile.deny("the %s driver does not accept the URL", profile.name());
         }
         requireGuardUsed(guard, conn);
+        connection = conn;
         return conn;
     }
 
@@ -259,10 +262,31 @@ public final class JdbcSandboxConnect implements AutoCloseable {
     }
 
     //! Checks SQL that the connection is given (SingleStore: LOAD DATA LOCAL INFILE)
-    /** @throw QoreException JNI-SANDBOX-ERROR: the SQL is not allowed
+    /** The SQL is checked as given and as the driver rewrites it (\c Connection.nativeSQL(), the JDBC escape
+        processing that \c prepareStatement() and \c Statement.execute() apply before the SQL is sent, ex:
+        <tt>{d LOCAL}</tt> becomes \c LOCAL): the driver checks a server's file request against the rewritten text.
+
+        @throw QoreException JNI-SANDBOX-ERROR: the SQL is not allowed
     */
-    public void checkSql(String sql) {
+    public void checkSql(String sql) throws Throwable {
         profile.checkSql(sql);
+        if (!profile.checksNativeSql()) {
+            return;
+        }
+        AutoCloseable conn = connection;
+        if (conn == null) {
+            throw JdbcDriverProfile.sandboxError("the SQL of a sandboxed connection cannot be checked: the "
+                + "connection is not open");
+        }
+        String nativeSql;
+        try {
+            Class<?> cc = Class.forName("java.sql.Connection", false, ClassLoader.getPlatformClassLoader());
+            nativeSql = (String)cc.getMethod("nativeSQL", String.class).invoke(conn, sql);
+        } catch (InvocationTargetException e) {
+            // the driver cannot rewrite the SQL, so it cannot execute it either
+            throw e.getCause();
+        }
+        profile.checkSql(nativeSql);
     }
 
     //! Closes the guard: no socket of the connection can connect any more

@@ -406,6 +406,12 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         return rv;
     }
 
+    //! the driver rewrites JDBC escapes (NativeSql.parse()) before it sends the SQL and matches a file request
+    @Override
+    boolean checksNativeSql() {
+        return true;
+    }
+
     @Override
     void checkSql(String sql) {
         if (hasLocalInfile(sql)) {
