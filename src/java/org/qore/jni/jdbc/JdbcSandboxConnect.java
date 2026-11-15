@@ -95,7 +95,6 @@ public final class JdbcSandboxConnect implements AutoCloseable {
         // before any code of the driver runs
         JdbcTargets lexical = profile.lexicalCheck(url, p);
         Object driver = profile.resolveDriver(loader);
-        profile.checkEnvironment();
         JdbcConnectGuard guard = new JdbcConnectGuard();
         String token = guard.register();
         boolean ok = false;
@@ -208,7 +207,6 @@ public final class JdbcSandboxConnect implements AutoCloseable {
         if (guard.isClosed()) {
             throw JdbcDriverProfile.deny("the connection guard was closed");
         }
-        profile.checkEnvironment();
         // java.sql.Driver.connect(String, Properties), which returns a java.sql.Connection
         Method connectMethod = JdbcDriverProfile.jdbcDriverClass().getMethod("connect", String.class,
             Properties.class);

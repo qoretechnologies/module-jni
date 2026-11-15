@@ -160,7 +160,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
 
         Set<String> seen = new HashSet<>();
         for (String key : props.stringPropertyNames()) {
-            checkOption(key, seen);
+            checkOption(key, props.getProperty(key), seen);
         }
         for (String token : args.split("[;&]", -1)) {
             if (token.isEmpty()) {
@@ -172,7 +172,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
                 // the driver sets the key to "" (ex: a bare "inifile" reopens the implicit INI file search)
                 throw deny("option %s of a sandboxed connection URL has no value", quote(token));
             }
-            checkOption(token.substring(0, pos), seen);
+            checkOption(token.substring(0, pos), token.substring(pos + 1), seen);
         }
         if (!seen.contains("user") && !seen.contains("uid")) {
             // the driver's default user is the name of the process owner
@@ -182,11 +182,14 @@ final class RedshiftProfile extends JdbcDriverProfile {
     }
 
     //! checks an option key against the allowlist and for duplicates
-    private static void checkOption(String key, Set<String> seen) {
+    private static void checkOption(String key, String value, Set<String> seen) {
         checkKey(key);
         String lk = key.toLowerCase(Locale.ENGLISH);
         if (!ALLOWED.contains(lk)) {
             throw deny("option %s is not allowed for sandboxed Redshift connections", quote(key));
+        }
+        if ((lk.equals("user") || lk.equals("uid")) && (value == null || value.isEmpty())) {
+            throw deny("a sandboxed Redshift connection must give a user that is not empty");
         }
         if (!seen.add(lk)) {
             throw deny("option %s is given more than once", quote(key));

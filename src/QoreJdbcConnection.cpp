@@ -211,7 +211,6 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
     if (prepareConnect(env, url.c_str(), holder, xsink)) {
         return -1;
     }
-    connected_url = url.c_str();
 
     printd(5, "QoreJdbcConnection::connect() using URL '%s' (jpc: %p: %x) restricted: %d\n", url.c_str(), jpc,
         env.callIntMethod(jpc->getClassLoader(), jni::Globals::methodObjectHashCode, nullptr), (int)(bool)holder);
@@ -221,6 +220,7 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
             // the profile's exact driver from the trusted class loader, never DriverManager; every socket goes
             // through the guard, which lives as long as the connection
             connection = jdbc_guarded_connect(env, holder);
+            connected_url = url.c_str();
             guard = std::move(holder);
             printd(5, "QoreJdbcConnection::connect() got restricted connection: %p\n", (jobject)connection);
             jvalue jarg;
@@ -251,6 +251,7 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
 
         connection = env.callStaticObjectMethod(jpc->getDynamicApi(), jpc->getGetConnectionMethodId(), &jargs[0])
             .makeGlobal();
+        connected_url = url.c_str();
 
         printd(5, "QoreJdbcConnection::connect() got connection: %p\n", (jobject)connection);
 

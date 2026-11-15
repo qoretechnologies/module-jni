@@ -91,10 +91,16 @@ final class SingleStoreProfile extends JdbcDriverProfile {
     private static final String RESTRICTED_AUTH_KEY = "restrictedAuth";
     private static final String CREATE_DATABASE = "createDatabaseIfNotExist";
     private static final String SSL_MODE_KEY = "sslMode";
+    private static final String KEY_STORE = "keyStore";
+    private static final String KEY_STORE_PASSWORD = "keyStorePassword";
+    private static final String KEY_STORE_TYPE = "keyStoreType";
+    //! the password of the module's empty client key store
+    static final String EMPTY_KEY_STORE_PASSWORD = "qore-jni-empty";
     //! PROVISIONAL: the only TLS mode of restricted connections (design section 11, item 9)
     static final String SSL_MODE = "verify-full";
     private static final Set<String> FORCED = lower(Set.of(SOCKET_FACTORY, ALLOW_LOCAL_INFILE, POOL,
-        RESTRICTED_AUTH_KEY, CREATE_DATABASE, SSL_MODE_KEY, JdbcConnectGuard.PROPERTY));
+        RESTRICTED_AUTH_KEY, CREATE_DATABASE, SSL_MODE_KEY, KEY_STORE, KEY_STORE_PASSWORD, KEY_STORE_TYPE,
+        JdbcConnectGuard.PROPERTY));
 
     //! a database name: a plain identifier, as the driver quotes it in SQL and sends it in the handshake
     private static final Pattern DATABASE = Pattern.compile("[A-Za-z0-9_$]{1,64}");
@@ -246,6 +252,10 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         if (!ALLOWED.contains(lk)) {
             throw deny("option %s is not allowed for sandboxed SingleStore connections", quote(key));
         }
+        if (lk.equals("user") && (value == null || value.isEmpty())) {
+            // the driver sends the name of the process owner for an empty user
+            throw deny("a sandboxed SingleStore connection must give a user that is not empty");
+        }
         if (!seen.add(lk)) {
             throw deny("option %s is given more than once", quote(key));
         }
@@ -350,6 +360,9 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         f.setProperty(RESTRICTED_AUTH_KEY, RESTRICTED_AUTH);
         f.setProperty(CREATE_DATABASE, "false");
         f.setProperty(SSL_MODE_KEY, SSL_MODE);
+        f.setProperty(KEY_STORE, emptyKeyStore());
+        f.setProperty(KEY_STORE_PASSWORD, EMPTY_KEY_STORE_PASSWORD);
+        f.setProperty(KEY_STORE_TYPE, "PKCS12");
         return f;
     }
 
@@ -386,7 +399,9 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         if (copy.get(JdbcConnectGuard.PROPERTY) != guard || !ADAPTER.equals(copy.get(SOCKET_FACTORY))
                 || !"false".equals(copy.get(ALLOW_LOCAL_INFILE)) || !"false".equals(copy.get(POOL))
                 || !RESTRICTED_AUTH.equals(copy.get(RESTRICTED_AUTH_KEY)) || !"false".equals(copy.get(CREATE_DATABASE))
-                || !SSL_MODE.equals(copy.get(SSL_MODE_KEY))) {
+                || !SSL_MODE.equals(copy.get(SSL_MODE_KEY)) || !emptyKeyStore().equals(copy.get(KEY_STORE))
+                || !EMPTY_KEY_STORE_PASSWORD.equals(copy.get(KEY_STORE_PASSWORD))
+                || !"PKCS12".equals(copy.get(KEY_STORE_TYPE))) {
             throw deny("the SingleStore driver's parse of the URL changes a forced option");
         }
 
@@ -395,7 +410,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
             throw deny("the SingleStore driver's parse of the URL changes the socket factory");
         }
         for (String m : new String[]{"pipe", "localSocket", "localSocketAddress", "socksProxyHost", "trustStore",
-                "keyStore", "tlsSocketType", "credentialPlugin"}) {
+                "tlsSocketType", "credentialPlugin", "keyPassword"}) {
             if (call(conf, m) != null) {
                 throw deny("the SingleStore driver's parse of the URL sets %s, which a sandboxed connection must not "
                     + "use", m);
@@ -408,6 +423,17 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         Properties nonMapped = (Properties)call(conf, "nonMappedOptions");
         if (nonMapped.size() != 1 || nonMapped.get(JdbcConnectGuard.PROPERTY) != guard) {
             throw deny("the SingleStore driver's parse of the URL has unknown options: %s", nonMapped.keySet());
+        }
+        // the module's empty client key store, so that the JVM's (javax.net.ssl.keyStore) is never read
+        if (!emptyKeyStore().equals(call(conf, "keyStore"))
+                || !EMPTY_KEY_STORE_PASSWORD.equals(call(conf, "keyStorePassword"))
+                || !"PKCS12".equals(call(conf, "keyStoreType"))) {
+            throw deny("the SingleStore driver's parse of the URL changes the client key store");
+        }
+        Object user = call(conf, "user");
+        if (user == null || user.toString().isEmpty()) {
+            // the driver sends the name of the process owner
+            throw deny("a sandboxed SingleStore connection must give a user that is not empty");
         }
         if (!Boolean.FALSE.equals(call(conf, "createDatabaseIfNotExist"))) {
             throw deny("the SingleStore driver's parse of the URL changes a forced option");
@@ -469,16 +495,33 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         return rv;
     }
 
-    //! Refuses restricted connections while the JVM has a client key store
+    //! the module's empty client key store (a PKCS12 file), created once
+    private static String emptyKeyStore;
+
+    //! Returns the URI of the module's empty client key store, which restricted connections are forced to use
     /** Without a \c keyStore option the driver presents the key of the \c javax.net.ssl.keyStore system property to
-        every server (DefaultTlsSocketPlugin.getKeyManager()), and no option turns that off.
+        every server, read on every TLS handshake (DefaultTlsSocketPlugin.getKeyManager(): also for reconnects,
+        transaction replay and query cancels); with the forced \c keyStore, the system property is never read.  The
+        store is a new file of this process (\c Files.createTempFile(): a random name, readable by its owner only),
+        with no entries.
     */
-    @Override
-    void checkEnvironment() {
-        if (System.getProperty("javax.net.ssl.keyStore") != null) {
-            throw deny("sandboxed SingleStore connections are refused while the JVM has a client key store "
-                + "(javax.net.ssl.keyStore), which the driver would present to the server");
+    static synchronized String emptyKeyStore() {
+        if (emptyKeyStore == null) {
+            try {
+                java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
+                ks.load(null, null);
+                java.nio.file.Path p = java.nio.file.Files.createTempFile("qore-jni-jdbc-empty-", ".p12");
+                p.toFile().deleteOnExit();
+                try (java.io.OutputStream os = java.nio.file.Files.newOutputStream(p)) {
+                    ks.store(os, EMPTY_KEY_STORE_PASSWORD.toCharArray());
+                }
+                emptyKeyStore = p.toUri().toString();
+            } catch (java.io.IOException | java.security.GeneralSecurityException e) {
+                throw sandboxError("the empty client key store of sandboxed SingleStore connections cannot be "
+                    + "created: %s", describe(e));
+            }
         }
+        return emptyKeyStore;
     }
 
     //! the driver rewrites JDBC escapes (NativeSql.parse()) before it sends the SQL and matches a file request

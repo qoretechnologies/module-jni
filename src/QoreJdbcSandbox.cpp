@@ -29,8 +29,13 @@
 #include "LocalReference.h"
 #include "QoreJdbcDriver.h"
 
+#include <algorithm>
 #include <cstring>
 #include <strings.h>
+
+#ifndef _Q_WINDOWS
+#include <arpa/inet.h>
+#endif
 
 // the classes of org.qore.jni.jdbc (qore#5786), and the SingleStore adapter's class bytes
 #include "JavaClassJdbcConnectGuard.inc"
@@ -172,11 +177,40 @@ void jdbc_pin_checked(Env& env, jobject prep, const std::vector<JniCheckedTarget
 }
 
 #ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
+//! Returns true if a numeric address is one of the addresses of a destination that the module checked
+/** The addresses are compared without an IPv6 scope.
+*/
+bool jdbc_address_checked(const char* addr, const JniCheckedTarget& checked) {
+    std::string a(addr);
+    size_t pct = a.find('%');
+    if (pct != std::string::npos) {
+        a.erase(pct);
+    }
+    unsigned char buf[16];
+    size_t len;
+    if (inet_pton(AF_INET, a.c_str(), buf) == 1) {
+        len = 4;
+    } else if (inet_pton(AF_INET6, a.c_str(), buf) == 1) {
+        len = 16;
+    } else {
+        return false;
+    }
+    for (const std::string& c : checked.addrs) {
+        // 4 bytes for IPv4, 16 bytes and the scope for IPv6
+        if ((len == 4 && c.size() == 4) || (len == 16 && c.size() == 20)) {
+            if (!memcmp(c.data(), buf, len)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 //! Pins the destinations that Qore checked (Qore-5747 mode), after comparing them with the URL's destinations
 /** @return 0 for success, -1 if an exception was raised
 */
 int jdbc_pin_qore_checked(Env& env, jobject prep, const std::vector<JniNetTarget>& targets,
-        const QoreListNode* checked, ExceptionSink* xsink) {
+        const QoreListNode* checked, const std::vector<JniCheckedTarget>* module_checked, ExceptionSink* xsink) {
     if (checked->size() != targets.size()) {
         xsink->raiseException("NETWORK-ACCESS-DENIED", "the destinations of the JDBC connection changed after they "
             "were checked against the sandbox");
@@ -202,14 +236,28 @@ int jdbc_pin_qore_checked(Env& env, jobject prep, const std::vector<JniNetTarget
                 "address");
             return -1;
         }
-        LocalReference<jobjectArray> a = env.newObjectArray(static_cast<jsize>(addresses->size()), string_class);
+        std::vector<std::string> pinned;
         for (size_t j = 0; j < addresses->size(); ++j) {
             QoreValue v = addresses->retrieveEntry(j);
             if (v.getType() != NT_STRING) {
                 xsink->raiseException("NETWORK-ACCESS-DENIED", "invalid checked address of a JDBC connection");
                 return -1;
             }
-            LocalReference<jstring> s = env.newString(v.get<const QoreStringNode>()->c_str());
+            const char* addr = v.get<const QoreStringNode>()->c_str();
+            if (module_checked && !jdbc_address_checked(addr, (*module_checked)[i])) {
+                // an address that the module's policies did not allow
+                continue;
+            }
+            pinned.push_back(addr);
+        }
+        if (pinned.empty()) {
+            xsink->raiseException("NETWORK-ACCESS-DENIED", "no checked address of '%s' port %d passes every sandbox "
+                "policy of the JDBC connection", targets[i].host.c_str(), targets[i].port);
+            return -1;
+        }
+        LocalReference<jobjectArray> a = env.newObjectArray(static_cast<jsize>(pinned.size()), string_class);
+        for (size_t j = 0; j < pinned.size(); ++j) {
+            LocalReference<jstring> s = env.newString(pinned[j].c_str());
             env.setObjectArrayElement(a, static_cast<jsize>(j), s);
         }
         env.setObjectArrayElement(rv, static_cast<jsize>(i), a);
@@ -276,8 +324,14 @@ std::vector<QoreSandboxManager*> JdbcConnectDecision::managers() const {
     if (policy && *policy) {
         rv.push_back(policy->get());
     }
-    if (sticky_policy && (rv.empty() || rv[0] != sticky_policy)) {
-        rv.push_back(sticky_policy);
+    auto add = [&rv](QoreSandboxManager* sm) {
+        if (sm && std::find(rv.begin(), rv.end(), sm) == rv.end()) {
+            rv.push_back(sm);
+        }
+    };
+    add(sticky_policy);
+    for (QoreSandboxManager* sm : setter_policies.get()) {
+        add(sm);
     }
     return rv;
 }
@@ -302,13 +356,42 @@ int jdbc_connect_decision(Datasource* ds, JdbcStickyRestriction& sticky, JdbcCon
     d.restricted = false;
     d.policy.reset();
     d.sticky_policy = nullptr;
+    d.setter_policies.clear();
     d.qore_checked = nullptr;
+#ifdef QORE_JNI_JDBC_SANDBOX_DRIVERS
+    // PROVISIONAL: restricted code that set the URL (the recorded setter of the "url" option, qore#5741) restricts
+    // the connection, also when trusted code opens it; option names are matched case-insensitively, as the driver
+    // matches them
+    {
+        ConstHashIterator hi(ds->getConnectOptions());
+        while (hi.next()) {
+            if (strcasecmp(hi.getKey(), JDBC_OPT_URL)) {
+                continue;
+            }
+            QoreModuleCommandRestrictions setter;
+            if (!ds->getOptionRestrictions(hi.getKey(), setter) || !setter.isSandboxed()) {
+                continue;
+            }
+            QoreSandboxManager* sm = ds->getOptionPolicyManagerRef(hi.getKey());
+            if (!sm) {
+                // a missing policy is not a permission
+                xsink->raiseException("NETWORK-ACCESS-DENIED", "the sandbox policy of the code that set the URL of "
+                    "the JDBC connection cannot be determined");
+                return -1;
+            }
+            d.setter_policies.add(sm);
+            d.restricted = true;
+        }
+    }
+#endif
 #ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
     // the Qore side of qore#5747: Qore checked the destinations against the policy of the code that chose them
     if (const QoreListNode* checked = ds->getCheckedConnectTargets()) {
         d.restricted = true;
         d.qore_checked = checked;
         sticky.restricted = true;
+        // the policies that the module applies as well: the connection object's first, and the URL's setters'
+        d.sticky_policy = sticky.sm;
         return 0;
     }
     // no checked destinations: the thread's rule below is the floor
@@ -332,11 +415,17 @@ int jdbc_connect_decision(Datasource* ds, JdbcStickyRestriction& sticky, JdbcCon
             sticky.sm->ref();
         }
     }
+    if (d.restricted && !sticky.restricted && !d.setter_policies.get().empty()) {
+        // restricted by the URL's setter: the connection object stays restricted, with that policy
+        sticky.restricted = true;
+        sticky.sm = d.setter_policies.get()[0];
+        sticky.sm->ref();
+    }
     if (sticky.restricted) {
         // also a reconnect for other code: a connection object that was restricted once stays restricted
         d.restricted = true;
         d.sticky_policy = sticky.sm;
-        if (!d.policy && !sticky.sm) {
+        if (!d.policy && !sticky.sm && d.setter_policies.get().empty()) {
             // restricted by Qore's check, which is not available for this connection: no policy to check against
             xsink->raiseException("NETWORK-ACCESS-DENIED", "the JDBC connection was restricted, and its destinations "
                 "cannot be checked again for this connection");
@@ -423,7 +512,16 @@ int jdbc_prepare_guarded(Env& env, const JdbcConnectDecision& d, const char* url
         jdbc_get_targets(env, holder.get(), targets);
 #ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
         if (d.qore_checked) {
-            if (jdbc_pin_qore_checked(env, holder.get(), targets, d.qore_checked, xsink)) {
+            // the module's policies (the connection object's first, and the URL's setters') apply as well: only
+            // the addresses that both checked are pinned
+            std::vector<JniCheckedTarget> module_checked;
+            std::vector<QoreSandboxManager*> managers = d.managers();
+            if (!managers.empty() && jni_check_network_targets(managers, targets, module_checked, xsink)) {
+                holder.close();
+                return -1;
+            }
+            if (jdbc_pin_qore_checked(env, holder.get(), targets, d.qore_checked,
+                    managers.empty() ? nullptr : &module_checked, xsink)) {
                 holder.close();
                 return -1;
             }

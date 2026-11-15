@@ -56,6 +56,41 @@ namespace jni {
 
 class Env;
 
+//! Referenced sandbox policy managers, released when the holder is destroyed
+class JdbcPolicyRefs {
+public:
+    DLLLOCAL JdbcPolicyRefs() = default;
+
+    DLLLOCAL ~JdbcPolicyRefs() {
+        clear();
+    }
+
+    //! Takes a reference
+    DLLLOCAL void add(QoreSandboxManager* sm) {
+        assert(sm);
+        refs.push_back(sm);
+    }
+
+    DLLLOCAL void clear() {
+        for (QoreSandboxManager* sm : refs) {
+            ExceptionSink xsink;
+            sm->deref(&xsink);
+            xsink.clear();
+        }
+        refs.clear();
+    }
+
+    DLLLOCAL const std::vector<QoreSandboxManager*>& get() const {
+        return refs;
+    }
+
+private:
+    std::vector<QoreSandboxManager*> refs;
+
+    JdbcPolicyRefs(const JdbcPolicyRefs&) = delete;
+    JdbcPolicyRefs& operator=(const JdbcPolicyRefs&) = delete;
+};
+
 //! Where the policy of a jdbc connection comes from, and whether it restricts the connection (qore#5786)
 /** Made only by jdbc_connect_decision(); every caller is agnostic of where the decision comes from.
 */
@@ -68,6 +103,9 @@ struct JdbcConnectDecision {
 
     //! the policy that restricted the connection object first (JdbcStickyRestriction), if any; not referenced here
     QoreSandboxManager* sticky_policy = nullptr;
+
+    //! the policies of restricted code that set the URL of the connection (the \c url option), referenced
+    JdbcPolicyRefs setter_policies;
 
     //! the destinations that Qore checked (Qore-5747 mode: QDBI_METHOD_GET_CONNECT_TARGETS), or nullptr
     const QoreListNode* qore_checked = nullptr;
@@ -121,6 +159,11 @@ private:
     check never makes a restricted caller's connection unrestricted.
 
     A connection object that was restricted once stays restricted (\a sticky).
+
+    PROVISIONAL: a connection is also restricted if restricted code set its \c url option (the recorded setter of
+    the option, qore#5741), and its destinations must also pass that code's policy, so that restricted code cannot
+    choose a URL that trusted code then opens unrestricted.  The database name and the other parameters that are
+    not options still need the chooser record of qore#6142 Option A or the Qore side of qore#5747.
 
     @param ds the datasource
     @param sticky the restriction of the connection object, which is updated

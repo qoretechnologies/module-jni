@@ -104,12 +104,6 @@ abstract class JdbcDriverProfile {
     void checkSql(String sql) {
     }
 
-    //! Checks the JVM-wide settings that the driver would use for a restricted connection; nothing by default
-    /** Called when the connection is prepared and again right before the driver connects.
-    */
-    void checkEnvironment() {
-    }
-
     //! Returns true if checkSql() must also check the SQL as the driver rewrites it (Connection.nativeSQL())
     boolean checksNativeSql() {
         return false;
