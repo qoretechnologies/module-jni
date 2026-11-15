@@ -219,6 +219,33 @@ public final class JdbcGuardTestHelper {
         }
     }
 
+    //! Returns the file of this process's empty SingleStore client key store, or null if none was made sure of yet
+    /** Read from the jni module's own state (SingleStoreProfile.emptyKeyStore, by reflection), so that the test finds
+        this process's file and never another process's in the shared temporary directory.
+    */
+    public static String emptyKeyStoreFile() throws Exception {
+        Class<?> c = Class.forName("org.qore.jni.jdbc.SingleStoreProfile");
+        java.lang.reflect.Field f = c.getDeclaredField("emptyKeyStore");
+        f.setAccessible(true);
+        Object uri;
+        // the field is guarded by the class's lock (static synchronized methods)
+        synchronized (c) {
+            uri = f.get(null);
+        }
+        return uri == null ? null : java.nio.file.Paths.get(java.net.URI.create(uri.toString())).toString();
+    }
+
+    //! Returns the expected contents of the empty SingleStore client key store (the module's own state)
+    public static byte[] emptyKeyStoreBytes() throws Exception {
+        Class<?> c = Class.forName("org.qore.jni.jdbc.SingleStoreProfile");
+        java.lang.reflect.Field f = c.getDeclaredField("emptyKeyStoreBytes");
+        f.setAccessible(true);
+        synchronized (c) {
+            byte[] b = (byte[])f.get(null);
+            return b == null ? null : b.clone();
+        }
+    }
+
     //! Returns the bytes of an entry of a jar
     public static byte[] classBytes(String jar, String entry) throws IOException {
         try (JarFile jf = new JarFile(jar)) {
