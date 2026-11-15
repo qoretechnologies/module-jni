@@ -161,8 +161,16 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
     }
 
     #! Runs a shell command; returns its output and sets its exit status
+    #! Runs the command with stderr merged into stdout; returns the output without the JVM's own notices
+    /** The JVM prints "Picked up JAVA_TOOL_OPTIONS: ..." (or _JAVA_OPTIONS / JDK_JAVA_OPTIONS) to stderr when that
+        environment variable is set, as in CI images; those lines are not the command's output and are removed so that
+        the assertions match only what the command printed
+    */
     private static string run(string cmd, reference<int> rc) {
-        return backquote(cmd + " 2>&1", \rc);
+        string out = backquote(cmd + " 2>&1", \rc);
+        list<string> lines = select out.split("\n"),
+            !($1 =~ /^Picked up (JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS):/);
+        return lines.join("\n");
     }
 
     replayTest() {
