@@ -428,7 +428,8 @@ foreach hash<auto> column in (result.schemaV2()) {
     whatever \c allowLocalInfile says, if the SQL text matches its own \c LOAD \c DATA \c LOCAL \c INFILE pattern, so
     every SQL text of a restricted SingleStore connection that matches \c LOAD\\s+(DATA\\s+)?LOCAL\\s+INFILE
     (case-insensitive) is refused: in \c initSql and \c sessionVariables (\c NETWORK-ACCESS-DENIED) and in statements
-    (\c JNI-SANDBOX-ERROR, before the driver sees the SQL).
+    (\c JNI-SANDBOX-ERROR, before the driver sees the SQL), where the SQL is checked as given and as the driver
+    rewrites its JDBC escapes (<tt>{d LOCAL}</tt> becomes \c LOCAL).
 
     <b>Errors:</b> \c NETWORK-ACCESS-DENIED for a refused driver, URL, option, version or destination, and
     \c JNI-SANDBOX-ERROR for a failed integrity check (a class of the module's name in the driver's class loader, a
