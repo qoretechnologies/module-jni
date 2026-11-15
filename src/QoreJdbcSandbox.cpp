@@ -33,8 +33,14 @@
 #include <cstring>
 #include <strings.h>
 
-#ifndef _Q_WINDOWS
+#include <new>
+
+#ifdef _Q_WINDOWS
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
+#include <net/if.h>
 #endif
 
 // the classes of org.qore.jni.jdbc (qore#5786), and the SingleStore adapter's class bytes
@@ -178,29 +184,59 @@ void jdbc_pin_checked(Env& env, jobject prep, const std::vector<JniCheckedTarget
 
 #ifdef QORE_JNI_JDBC_QORE_CHECKED_TARGETS
 //! Returns true if a numeric address is one of the addresses of a destination that the module checked
-/** The addresses are compared without an IPv6 scope.
+/** An IPv6 address is compared with its scope: a numeric scope, or an interface name (not on Windows, where a scoped
+    address with a name is refused); no scope is scope 0.
 */
 bool jdbc_address_checked(const char* addr, const JniCheckedTarget& checked) {
     std::string a(addr);
+    uint32_t scope = 0;
     size_t pct = a.find('%');
     if (pct != std::string::npos) {
+        std::string s = a.substr(pct + 1);
         a.erase(pct);
+        if (s.empty()) {
+            return false;
+        }
+        if (strspn(s.c_str(), "0123456789") == s.size()) {
+            if (s.size() > 10) {
+                return false;
+            }
+            unsigned long long v = strtoull(s.c_str(), nullptr, 10);
+            if (v > 0xffffffffULL) {
+                return false;
+            }
+            scope = static_cast<uint32_t>(v);
+        } else {
+#ifdef _Q_WINDOWS
+            return false;
+#else
+            scope = if_nametoindex(s.c_str());
+            if (!scope) {
+                return false;
+            }
+#endif
+        }
     }
-    unsigned char buf[16];
+    unsigned char buf[20];
     size_t len;
     if (inet_pton(AF_INET, a.c_str(), buf) == 1) {
+        if (pct != std::string::npos) {
+            // an IPv4 address has no scope
+            return false;
+        }
         len = 4;
     } else if (inet_pton(AF_INET6, a.c_str(), buf) == 1) {
-        len = 16;
+        // the scope in 4 bytes, big-endian, as encode_address() encodes it
+        for (int i = 0; i < 4; ++i) {
+            buf[16 + i] = static_cast<unsigned char>((scope >> (24 - 8 * i)) & 0xff);
+        }
+        len = 20;
     } else {
         return false;
     }
     for (const std::string& c : checked.addrs) {
-        // 4 bytes for IPv4, 16 bytes and the scope for IPv6
-        if ((len == 4 && c.size() == 4) || (len == 16 && c.size() == 20)) {
-            if (!memcmp(c.data(), buf, len)) {
-                return true;
-            }
+        if (c.size() == len && !memcmp(c.data(), buf, len)) {
+            return true;
         }
     }
     return false;
@@ -368,18 +404,28 @@ int jdbc_connect_decision(Datasource* ds, JdbcStickyRestriction& sticky, JdbcCon
             if (strcasecmp(hi.getKey(), JDBC_OPT_URL)) {
                 continue;
             }
-            QoreModuleCommandRestrictions setter;
-            if (!ds->getOptionRestrictions(hi.getKey(), setter) || !setter.isSandboxed()) {
+            // the rule of the thread below (jni_sandbox_restricts_caller(Policy), as Qore's run-time refusal of
+            // uncontrolled APIs applies it), for the code that set the option: its policy manager, as a policy check
+            // made by that code would have resolved it (QoreSandboxManagerHelper::Policy), refuses uncontrolled APIs;
+            // for a composition of sandboxes, getUncontrolledApiPolicy() allows them only if every member does.
+            //
+            // No policy manager does not restrict the connection.  Datasource.h notes that nullptr is not a
+            // permission for an option that a restricted setter is refused (the classpath option), because the
+            // setter can still be sandboxed; here the question is only whether the setter's code could have used
+            // uncontrolled APIs itself, and with no policy manager it could: the manager is missing only under a
+            // trusted policy barrier (SandboxManager::callWithSystemPolicy()), in a system-policy capability, or for
+            // a Program with no governing manager, and in all three Qore lets that code call Java directly
+            ReferenceHolder<QoreSandboxManager> sm(ds->getOptionPolicyManagerRef(hi.getKey()), xsink);
+            if (!sm || sm->getUncontrolledApiPolicy()) {
                 continue;
             }
-            // the network policy that a check made by the setter would have used: none under a trusted policy barrier
-            // or in a system-policy capability, which the thread's rule below honours too (Policy purpose), so such
-            // a setter does not restrict the connection
-            QoreSandboxManager* sm = ds->getOptionPolicyManagerRef(hi.getKey());
-            if (!sm) {
-                continue;
+            try {
+                // add() releases the reference if it throws
+                d.setter_policies.add(sm.release());
+            } catch (const std::bad_alloc&) {
+                xsink->outOfMemory();
+                return -1;
             }
-            d.setter_policies.add(sm);
             d.restricted = true;
         }
     }
@@ -538,6 +584,8 @@ int jdbc_prepare_guarded(Env& env, const JdbcConnectDecision& d, const char* url
         return 0;
     } catch (jni::Exception& e) {
         e.convert(xsink);
+    } catch (const std::bad_alloc&) {
+        xsink->outOfMemory();
     }
     holder.close();
     return -1;

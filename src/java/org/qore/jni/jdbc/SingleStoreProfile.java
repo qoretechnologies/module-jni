@@ -360,7 +360,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         f.setProperty(RESTRICTED_AUTH_KEY, RESTRICTED_AUTH);
         f.setProperty(CREATE_DATABASE, "false");
         f.setProperty(SSL_MODE_KEY, SSL_MODE);
-        f.setProperty(KEY_STORE, emptyKeyStore());
+        f.setProperty(KEY_STORE, ensureEmptyKeyStore());
         f.setProperty(KEY_STORE_PASSWORD, EMPTY_KEY_STORE_PASSWORD);
         f.setProperty(KEY_STORE_TYPE, "PKCS12");
         return f;
@@ -399,7 +399,8 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         if (copy.get(JdbcConnectGuard.PROPERTY) != guard || !ADAPTER.equals(copy.get(SOCKET_FACTORY))
                 || !"false".equals(copy.get(ALLOW_LOCAL_INFILE)) || !"false".equals(copy.get(POOL))
                 || !RESTRICTED_AUTH.equals(copy.get(RESTRICTED_AUTH_KEY)) || !"false".equals(copy.get(CREATE_DATABASE))
-                || !SSL_MODE.equals(copy.get(SSL_MODE_KEY)) || !emptyKeyStore().equals(copy.get(KEY_STORE))
+                || !SSL_MODE.equals(copy.get(SSL_MODE_KEY)) || !forced.get(KEY_STORE).equals(emptyKeyStore())
+                || !forced.get(KEY_STORE).equals(copy.get(KEY_STORE))
                 || !EMPTY_KEY_STORE_PASSWORD.equals(copy.get(KEY_STORE_PASSWORD))
                 || !"PKCS12".equals(copy.get(KEY_STORE_TYPE))) {
             throw deny("the SingleStore driver's parse of the URL changes a forced option");
@@ -425,7 +426,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
             throw deny("the SingleStore driver's parse of the URL has unknown options: %s", nonMapped.keySet());
         }
         // the module's empty client key store, so that the JVM's (javax.net.ssl.keyStore) is never read
-        if (!emptyKeyStore().equals(call(conf, "keyStore"))
+        if (!forced.get(KEY_STORE).equals(call(conf, "keyStore"))
                 || !EMPTY_KEY_STORE_PASSWORD.equals(call(conf, "keyStorePassword"))
                 || !"PKCS12".equals(call(conf, "keyStoreType"))) {
             throw deny("the SingleStore driver's parse of the URL changes the client key store");
@@ -495,32 +496,61 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         return rv;
     }
 
-    //! the module's empty client key store (a PKCS12 file), created once
+    //! the contents of the module's empty client key store
+    private static byte[] emptyKeyStoreBytes;
+    //! the directory of the module's empty client key store
+    private static java.nio.file.Path emptyKeyStoreDir;
+    //! the URI of the module's empty client key store, as it was last made sure of
     private static String emptyKeyStore;
 
-    //! Returns the URI of the module's empty client key store, which restricted connections are forced to use
+    //! Makes sure that the module's empty client key store exists with its contents, and returns its URI
     /** Without a \c keyStore option the driver presents the key of the \c javax.net.ssl.keyStore system property to
         every server, read on every TLS handshake (DefaultTlsSocketPlugin.getKeyManager(): also for reconnects,
         transaction replay and query cancels); with the forced \c keyStore, the system property is never read.  The
-        store is a new file of this process (\c Files.createTempFile(): a random name, readable by its owner only),
-        with no entries.
+        store has no entries; it is the file \c empty.p12 in a new directory of this process
+        (\c Files.createTempDirectory(): a random name, accessible by its owner only), made sure of for every
+        restricted connection: a missing directory is created again, and a missing or changed file is written again
+        atomically from the expected contents.  The driver reads the file on each handshake, so a file that is removed
+        later makes TLS fail (closed) until the next restricted connection writes it again.
     */
-    static synchronized String emptyKeyStore() {
-        if (emptyKeyStore == null) {
-            try {
+    static synchronized String ensureEmptyKeyStore() {
+        try {
+            if (emptyKeyStoreBytes == null) {
                 java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
                 ks.load(null, null);
-                java.nio.file.Path p = java.nio.file.Files.createTempFile("qore-jni-jdbc-empty-", ".p12");
-                p.toFile().deleteOnExit();
-                try (java.io.OutputStream os = java.nio.file.Files.newOutputStream(p)) {
-                    ks.store(os, EMPTY_KEY_STORE_PASSWORD.toCharArray());
-                }
-                emptyKeyStore = p.toUri().toString();
-            } catch (java.io.IOException | java.security.GeneralSecurityException e) {
-                throw sandboxError("the empty client key store of sandboxed SingleStore connections cannot be "
-                    + "created: %s", describe(e));
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                ks.store(bo, EMPTY_KEY_STORE_PASSWORD.toCharArray());
+                emptyKeyStoreBytes = bo.toByteArray();
             }
+            if (emptyKeyStoreDir == null || !java.nio.file.Files.isDirectory(emptyKeyStoreDir,
+                    java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                emptyKeyStoreDir = java.nio.file.Files.createTempDirectory("qore-jni-jdbc-keystore-");
+                emptyKeyStoreDir.toFile().deleteOnExit();
+            }
+            java.nio.file.Path f = emptyKeyStoreDir.resolve("empty.p12");
+            if (!java.nio.file.Files.isRegularFile(f, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    || !java.util.Arrays.equals(java.nio.file.Files.readAllBytes(f), emptyKeyStoreBytes)) {
+                java.nio.file.Path tmp = java.nio.file.Files.createTempFile(emptyKeyStoreDir, "empty-", ".tmp");
+                try {
+                    java.nio.file.Files.write(tmp, emptyKeyStoreBytes);
+                    java.nio.file.Files.move(tmp, f, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } finally {
+                    java.nio.file.Files.deleteIfExists(tmp);
+                }
+                // deleted before its directory, which was registered first
+                f.toFile().deleteOnExit();
+            }
+            emptyKeyStore = f.toUri().toString();
+            return emptyKeyStore;
+        } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
+            throw sandboxError("the empty client key store of sandboxed SingleStore connections cannot be "
+                + "created: %s", describe(e));
         }
+    }
+
+    //! Returns the URI of the module's empty client key store, as ensureEmptyKeyStore() last made sure of it
+    static synchronized String emptyKeyStore() {
         return emptyKeyStore;
     }
 

@@ -63,7 +63,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
         "protocolversion", "querygroup", "raiseexceptiononsilentrollback", "readonly", "readonlymode",
         "receivebuffersize", "rewritebatchedinserts", "rewritebatchedinsertssize", "sendbuffersize",
         "sockettimeout", "ssl", "sslmode", "statementclosetimeout", "stringtype", "targetservertype",
-        "tcpkeepalive", "user", "password", "uid", "pwd", "dbname");
+        "tcpkeepalive", "user", "password", "pwd", "dbname");
 
     //! the keys that the driver's parse adds besides the allowed and forced ones
     private static final Set<String> PARSE_KEYS = Set.of("host", "port", "dbname", "iamauth");
@@ -174,7 +174,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
             }
             checkOption(token.substring(0, pos), token.substring(pos + 1), seen);
         }
-        if (!seen.contains("user") && !seen.contains("uid")) {
+        if (!seen.contains("user")) {
             // the driver's default user is the name of the process owner
             throw deny("a sandboxed Redshift connection must give its user");
         }
@@ -188,7 +188,7 @@ final class RedshiftProfile extends JdbcDriverProfile {
         if (!ALLOWED.contains(lk)) {
             throw deny("option %s is not allowed for sandboxed Redshift connections", quote(key));
         }
-        if ((lk.equals("user") || lk.equals("uid")) && (value == null || value.isEmpty())) {
+        if (lk.equals("user") && (value == null || value.isEmpty())) {
             throw deny("a sandboxed Redshift connection must give a user that is not empty");
         }
         if (!seen.add(lk)) {
@@ -277,6 +277,15 @@ final class RedshiftProfile extends JdbcDriverProfile {
         requireValue(res, "sslkey", "");
         requireValue(res, "sslcert", "");
         requireValue(res, "preferpq", "false");
+        // the user that the driver sends (Driver.user(): "user"; "uid" is read only on the IAM and plugin paths) must
+        // be the given one, never the default of the driver's settings (the name of the process owner): it is taken
+        // from a parse without the defaults, and must be the user of the parse with them
+        Object rp2 = rpc.getConstructor(Properties.class, Properties.class).newInstance(forced, null);
+        Properties res2 = (Properties)parse.invoke(null, url, rp2);
+        String user = res2 == null ? null : res2.getProperty("user");
+        if (user == null || user.isEmpty() || !user.equals(res.getProperty("user"))) {
+            throw deny("a sandboxed Redshift connection must give a user that is not empty");
+        }
         String v = res.getProperty("sslmode");
         if (!SSL_MODE.equals(v)) {
             throw deny("option sslmode value %s is not allowed for sandboxed Redshift connections; only %s is", quote(v),

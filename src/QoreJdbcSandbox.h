@@ -65,9 +65,18 @@ public:
         clear();
     }
 
-    //! Takes a reference
+    //! Takes a reference; the reference is released if the vector cannot grow
     DLLLOCAL void add(QoreSandboxManager* sm) {
         assert(sm);
+        try {
+            refs.reserve(refs.size() + 1);
+        } catch (...) {
+            ExceptionSink xsink;
+            sm->deref(&xsink);
+            xsink.clear();
+            throw;
+        }
+        // cannot throw after reserve()
         refs.push_back(sm);
     }
 
