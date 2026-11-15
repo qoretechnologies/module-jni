@@ -519,7 +519,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         (\c Files.createTempDirectory(): a random name, accessible by its owner only), made sure of for every
         restricted connection:
         - the directory is used again only if it is still the directory that this process created: the same file
-          key (without links), the same owner, and no access for others; otherwise (ex: a temporary file cleaner
+          key (without links), the same owner, and no access for the group or others; otherwise (ex: a temporary file cleaner
           removed it and another user created one with the name) a new directory is created
         - the file must be a regular file (without links) of the expected size with the expected contents, read
           through a bounded channel; otherwise it is written again atomically from the expected contents.  Only this
@@ -536,6 +536,9 @@ final class SingleStoreProfile extends JdbcDriverProfile {
           if a temporary file cleaner removed the directory and another user created the path, the reconnect reads
           their file; the JVM's key cannot leak (the password is fixed and the forced store is not the JVM's), but a
           FIFO there would block the connection.  Keeping the store outside a cleaned /tmp is a possible follow-up
+        - the same window as for a reconnect exists in this method, between isOwnKeyStoreDir() and the content
+          check or the write: a directory that a cleaner removed and another user created in between is read or
+          written; the JVM's key cannot leak, and at worst the connection fails or blocks on a FIFO
         - a FIFO that this process's user puts in place between the type check and the open blocks this static
           synchronized method (availability only)
         - a file system that ignores permissions (vfat, NTFS with a umask) fails the permission check, so a new
@@ -598,7 +601,8 @@ final class SingleStoreProfile extends JdbcDriverProfile {
 
     //! Returns true if the key store directory is still the one that this process created
     /** Its identity (file key, or creation time without one), its owner and, with POSIX attributes, its permissions
-        are read with one call, without links.
+        are read with one call, without links; without POSIX attributes (Windows) the basic attributes and the owner
+        take two reads.
     */
     private static boolean isOwnKeyStoreDir() throws java.io.IOException {
         java.nio.file.Path dir = emptyKeyStoreDir;

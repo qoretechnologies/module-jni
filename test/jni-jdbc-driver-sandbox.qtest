@@ -136,6 +136,7 @@ string sub module_cmd(string cmd) {
         addTestCase("SingleStore: connect-time SQL from options is screened", \ssConnectSqlTest());
         addTestCase("SingleStore: TLS is verify-full", \ssTlsTest());
         addTestCase("SingleStore: the JVM's client key is not presented", \ssClientKeyTest());
+        addTestCase("SingleStore: a key store directory with group access is not used", \ssKeyStorePermissionTest());
         addTestCase("SingleStore: an empty user is refused", \ssUserTest());
         addTestCase("a URL that restricted code set restricts the connection", \urlSetterTest());
         addTestCase("a URL set under a barrier or by a capability does not", \urlSetterBarrierTest());
@@ -930,13 +931,47 @@ string sub module_cmd(string cmd) {
         }
     }
 
+    ssKeyStorePermissionTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-ok");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        assertEq("ok", p.callFunction("open_db", ssUrl(port)), "restricted");
+        list<string> before = emptyKeyStores();
+        assertTrue(before.size() > 0, "the empty key store was found");
+        # the module's own directory, with its inode, gives the group access: it is not used again
+        on_exit {
+            foreach string f in (before) {
+                try { chmod(dirname(f), 0700); } catch () {}
+            }
+        }
+        hash<string, int> inodes;
+        foreach string f in (before) {
+            string dir = dirname(f);
+            inodes{dir} = hstat(dir).inode;
+            chmod(dir, 0750);
+        }
+        assertEq("ok", p.callFunction("open_db", ssUrl(port)), "restricted after the chmod");
+        assertEq(0, s.clientCertificates(), "no client certificate");
+        list<string> after = emptyKeyStores();
+        assertTrue(after.size() > before.size(), "a new directory was created");
+        foreach string f in (before) {
+            string dir = dirname(f);
+            hash<auto> st = hstat(dir);
+            assertEq(inodes{dir}, st.inode, "the directory keeps its inode");
+            assertEq(0750, st.mode & 0777, "the 0750 directory is left as it is");
+        }
+    }
+
     #! returns the files of the module's empty client key stores in the JVM's temporary directory
     private static list<string> emptyKeyStores() {
         string tmp = System::getProperty("java.io.tmpdir");
         list<string> rv = ();
         Dir d();
         d.chdir(tmp);
-        foreach string dn in (d.listDirs("^qore-jni-jdbc-keystore-")) {
+        # the directories that the module creates (Files.createTempDirectory(): the prefix and digits), not the
+        # ".old" directories of the replacement case
+        foreach string dn in (d.listDirs("^qore-jni-jdbc-keystore-[0-9]+$")) {
             string f = tmp + DirSep + dn + DirSep + "empty.p12";
             if (is_file(f)) {
                 rv += f;

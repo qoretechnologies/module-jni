@@ -464,13 +464,16 @@ foreach hash<auto> column in (result.schemaV2()) {
     property is never read.  The file is checked for every restricted connection and written again atomically if it
     is missing or changed (and its directory created again if it is missing); a file that is removed later makes the
     next TLS handshakes of the open connections fail, closed.  The directory is used again only if it is still the
-    one that the process created (the same file key, its owner, and no access for others); residual risks, all local
+    one that the process created (the same file key, its owner, and no access for group or others); residual risks, all local
     and of the process's own user or of availability only: the process's user can make that check accept another
     directory (a reused inode, NTFS creation time tunneling), the owner check being the barrier against other users;
     a reconnect of a connection that was idle for long reads the path of its open without checking it again, so if a
     temporary file cleaner removed the directory and another user created the path, the reconnect reads their file
     (the JVM's key cannot leak, but a FIFO there blocks the connection; keeping the store outside a cleaned /tmp is a
-    possible follow-up); a FIFO that the process's user swaps in between the check and the read blocks the
+    possible follow-up); the same window exists when a restricted connection makes sure of the store, between the
+    check of the directory and the check or write of the file, with the same consequence (the JVM's key cannot leak;
+    at worst the connection fails or blocks on a FIFO); a FIFO that the process's user swaps in between the check and
+    the read blocks the
     connections that are being prepared; and a file system that ignores permissions (vfat, NTFS with a umask)
     creates a new directory for every restricted connection and can refuse a concurrent one.  Certificate validation follows the JVM's configuration: with settings such as
     \c com.sun.security.enableAIAcaIssuers or OCSP and CRL distribution point checking, TLS validation fetches URLs
