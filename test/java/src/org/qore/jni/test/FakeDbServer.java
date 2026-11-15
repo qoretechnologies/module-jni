@@ -37,6 +37,8 @@ public final class FakeDbServer implements AutoCloseable {
     private final List<String> startupParams = new ArrayList<>();
     private final List<Socket> clients = new ArrayList<>();
     private volatile boolean closing = false;
+    private javax.net.ssl.SSLContext tlsContext;
+    private int tlsHandshakes = 0;
     private long infileBytes = 0;
     private int infileRequests = 0;
     private String infileName = "/etc/hostname";
@@ -103,6 +105,47 @@ public final class FakeDbServer implements AutoCloseable {
     //! Returns the number of bytes of file data received after LOCAL INFILE requests
     public synchronized long infileBytes() {
         return infileBytes;
+    }
+
+    //! Makes the mysql modes offer TLS with the key and certificate of a PKCS12 key store
+    public synchronized void setTls(String keyStore, String password) throws Exception {
+        java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(keyStore)) {
+            ks.load(fis, password.toCharArray());
+        }
+        javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(
+            javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(ks, password.toCharArray());
+        javax.net.ssl.SSLContext ctx = javax.net.ssl.SSLContext.getInstance("TLS");
+        ctx.init(kmf.getKeyManagers(), null, null);
+        tlsContext = ctx;
+    }
+
+    //! Returns the number of TLS handshakes made in the mysql modes
+    public synchronized int tlsHandshakes() {
+        return tlsHandshakes;
+    }
+
+    //! Closes every connection that the server accepted, as a lost connection
+    public void dropClients() {
+        List<Socket> l;
+        synchronized (this) {
+            l = new ArrayList<>(clients);
+        }
+        for (Socket c : l) {
+            try {
+                // shutdown() wakes the server thread's read and sends FIN to the client
+                c.shutdownInput();
+                c.shutdownOutput();
+            } catch (IOException e) {
+                // closed already
+            }
+            try {
+                c.close();
+            } catch (IOException e) {
+                // closed already
+            }
+        }
     }
 
     //! Sets the file name of the LOCAL INFILE request
@@ -188,7 +231,7 @@ public final class FakeDbServer implements AutoCloseable {
                 writePacket(out, 0, errorPacket("qore-fake-mysql"));
                 break;
             default:
-                handleMysql(in, out);
+                handleMysql(s, in, out);
                 break;
         }
         // let the client read the reply before the connection is closed
@@ -252,7 +295,11 @@ public final class FakeDbServer implements AutoCloseable {
         out.flush();
     }
 
-    private void handleMysql(DataInputStream in, OutputStream out) throws IOException {
+    private void handleMysql(Socket s, DataInputStream in, OutputStream out) throws IOException {
+        javax.net.ssl.SSLContext tls;
+        synchronized (this) {
+            tls = tlsContext;
+        }
         // initial handshake v10
         ByteArrayOutputStream hs = new ByteArrayOutputStream();
         hs.write(0x0a);
@@ -265,6 +312,10 @@ public final class FakeDbServer implements AutoCloseable {
         // LONG_PASSWORD | FOUND_ROWS | LONG_FLAG | CONNECT_WITH_DB | LOCAL_FILES | PROTOCOL_41 | TRANSACTIONS
         // | SECURE_CONNECTION | MULTI_STATEMENTS | MULTI_RESULTS | PLUGIN_AUTH
         int caps = 0x1 | 0x2 | 0x4 | 0x8 | 0x80 | 0x200 | 0x2000 | 0x8000 | 0x10000 | 0x20000 | 0x80000;
+        if (tls != null) {
+            // CLIENT_SSL
+            caps |= 0x800;
+        }
         writeInt(hs, 2, caps & 0xffff);
         hs.write(33);
         writeInt(hs, 2, 2);
@@ -277,9 +328,21 @@ public final class FakeDbServer implements AutoCloseable {
         hs.write(0);
         writePacket(out, 0, hs.toByteArray());
 
-        // the handshake response; any password is accepted
+        // the handshake response, or an SSL request (32 bytes) before it; any password is accepted
         int[] seq = new int[1];
-        readPacket(in, seq);
+        byte[] resp = readPacket(in, seq);
+        if (tls != null && resp.length == 32 && (resp[1] & 0x08) != 0) {
+            javax.net.ssl.SSLSocket ssl = (javax.net.ssl.SSLSocket)tls.getSocketFactory().createSocket(s,
+                s.getInetAddress().getHostAddress(), s.getPort(), true);
+            ssl.setUseClientMode(false);
+            ssl.startHandshake();
+            synchronized (this) {
+                ++tlsHandshakes;
+            }
+            in = new DataInputStream(ssl.getInputStream());
+            out = ssl.getOutputStream();
+            readPacket(in, seq);
+        }
         writePacket(out, seq[0] + 1, okPacket());
 
         boolean first = true;

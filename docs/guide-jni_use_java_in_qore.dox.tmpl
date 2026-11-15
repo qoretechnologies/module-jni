@@ -350,8 +350,11 @@ public class Fetcher {
     the Qore side of qore#5747.  This feature is <b>BLOCKED</b>: it cannot be released until the CI images carry
     module API 2.3 and the policy source is decided.
 
-    A connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect;
-    trusted code that must not let sandboxed code use a database does not give it the \c Datasource.  The JDBC data
+    A connection object that was restricted once stays restricted when it reconnects, also for trusted code.  A
+    connection that trusted code opened and then gave to sandboxed code stays usable until it must reconnect, with
+    the SQL screen of its driver's profile (SingleStore: \c LOAD \c DATA \c LOCAL \c INFILE) for sandboxed callers;
+    that it is otherwise not restricted is qore#6142, and trusted code that must not let sandboxed code use a
+    database does not give it the \c Datasource.  The JDBC data
     provider (\c JdbcDataProvider) connects through the Java API itself, not through this driver, and is refused to
     sandboxed code as an \c external_io app.  As with other policy checks, trusted code that connects under a policy
     barrier (\c SandboxManager::callWithSystemPolicy()) or from a capability

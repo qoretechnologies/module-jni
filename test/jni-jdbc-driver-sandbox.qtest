@@ -131,6 +131,12 @@ string sub module_cmd(string cmd) {
         addTestCase("classes in the sandboxed Program's loader are not used", \loaderShadowTest());
         addTestCase("a classpath option set by sandboxed code is refused", \classpathOptionTest());
         addTestCase("no guard is left registered", \registryTest());
+        addTestCase("Redshift: the user must be given", \rsUserTest());
+        addTestCase("SingleStore: the database must be a plain identifier", \ssDatabaseTest());
+        addTestCase("SingleStore: connect-time SQL from options is screened", \ssConnectSqlTest());
+        addTestCase("SingleStore: TLS is verify-full without a JVM client key", \ssTlsTest());
+        addTestCase("a restricted connection stays restricted when it reconnects", \reconnectTest());
+        addTestCase("SQL of sandboxed code on a trusted SingleStore connection is screened", \trustedSharedTest());
         addTestCase("the connect targets for the Qore sandbox check", \connectTargetsTest());
         set_return_value(main());
     }
@@ -180,7 +186,18 @@ string sub module_cmd(string cmd) {
     private FakeDbServer server(string mode, string addr = "127.0.0.1") {
         FakeDbServer s(mode, addr);
         servers += s;
+        # a restricted SingleStore connection requires TLS with verify-full: the servers that complete the handshake
+        # offer TLS with a certificate for 127.0.0.1, which the URLs of ssUrl() trust
+        if (mode == "mysql-ok" || mode == "mysql-infile") {
+            s.setTls(get_script_dir() + "jdbc-fake-server.p12", "qore-fake");
+        }
         return s;
+    }
+
+    #! returns a SingleStore URL for a fake server with TLS: the server's certificate as an inline PEM
+    private static string ssUrl(int port, string db = "db", string args = "") {
+        string pem = ReadOnlyFile::readTextFile(get_script_dir() + "jdbc-fake-server.pem");
+        return sprintf("jdbc:singlestore://127.0.0.1:%d/%s?serverSslCert=%s%s", port, db, pem, args);
     }
 
     #! returns a port with no listener
@@ -193,7 +210,7 @@ string sub module_cmd(string cmd) {
     }
 
     #! returns a sandboxed Program whose sandbox allows only 127.0.0.1 with the given ports
-    private static Program sandboxed(softlist<int> ports) {
+    private static Program sandboxed(softlist<int> ports, string extra = "") {
         SandboxManager sm();
         sm.setNetworkDefaultPolicy(False);
         sm.addNetworkAllowedHost("127.0.0.1");
@@ -202,7 +219,7 @@ string sub module_cmd(string cmd) {
         }
         Program p(PO_NEW_STYLE);
         p.setSandboxManager(sm);
-        p.parse(Source, "jni-jdbc-driver-sandboxed");
+        p.parse(Source + extra, "jni-jdbc-driver-sandboxed");
         return p;
     }
 
@@ -414,9 +431,10 @@ string sub module_cmd(string cmd) {
 
         # a server that accepts the connection: the connection is opened, and a statement reaches the server
         s = server("mysql-ok");
-        url = sprintf("jdbc:singlestore://127.0.0.1:%d/db?connectTimeout=5000&useServerPrepStmts=false", s.getPort());
+        url = ssUrl(s.getPort(), "db", "&connectTimeout=5000&useServerPrepStmts=false");
         Program p = sandboxed(s.getPort());
         assertEq("ok", p.callFunction("open_db", url), "the connection is opened");
+        assertEq(1, s.tlsHandshakes(), "with TLS");
         list<string> results = p.callFunction("run_sql", url, ("select 1",));
         assertEq(4, results.size());
         foreach string r in (results) {
@@ -532,7 +550,7 @@ string sub module_cmd(string cmd) {
     ssLocalInfileSqlTest() {
         checkSkip(ss_jar, "singlestore");
         FakeDbServer s = server("mysql-ok");
-        string url = sprintf("jdbc:singlestore://127.0.0.1:%d/db?useServerPrepStmts=false", s.getPort());
+        string url = ssUrl(s.getPort(), "db", "&useServerPrepStmts=false");
         list<string> sqls = ("LOAD DATA LOCAL INFILE '/etc/passwd' INTO TABLE t",
             "load data local infile ? into table t",
             "/* a comment */ LOAD\n LOCAL\tINFILE '/etc/passwd' INTO TABLE t",
@@ -552,7 +570,7 @@ string sub module_cmd(string cmd) {
         # a server that requests a file in reply to the driver's own initialization query
         FakeDbServer s = server("mysql-infile");
         s.setInfileName("/etc/passwd");
-        string url = sprintf("jdbc:singlestore://127.0.0.1:%d/db", s.getPort());
+        string url = ssUrl(s.getPort());
         string result = sandboxed(s.getPort()).callFunction("open_db", url);
         assertNRegex("^ok$", result, "the connection fails");
         assertEq(1, s.acceptCount(), "the connection was made through the guard");
@@ -647,7 +665,7 @@ string sub module_cmd(string cmd) {
         FakeDbServer ok = server("mysql-ok");
         FakeDbServer pg = server("pg");
         Program p = sandboxed((ok.getPort(), pg.getPort()));
-        p.callFunction("open_db", sprintf("jdbc:singlestore://127.0.0.1:%d/db", ok.getPort()));
+        p.callFunction("open_db", ssUrl(ok.getPort()));
         p.callFunction("open_db", sprintf("jdbc:redshift://127.0.0.1:%d/dev", pg.getPort()));
         p.callFunction("open_db", sprintf("jdbc:redshift://127.0.0.1:%d/dev?host=x", pg.getPort()));
         # trusted code asks the registry
@@ -655,6 +673,129 @@ string sub module_cmd(string cmd) {
         t.parse("%requires jni\n%module-cmd(jni) import org.qore.jni.jdbc.JdbcConnectGuard\n"
             "int sub count() { return JdbcConnectGuard::registeredCount(); }", "jni-jdbc-driver-registry");
         assertEq(0, t.callFunction("count"));
+    }
+
+    rsUserTest() {
+        checkSkip(rs_jar, "redshift");
+        FakeDbServer s = server("pg");
+        # the driver's default user is the name of the process owner
+        Program p = sandboxed(s.getPort(), "string sub open_nouser(string url) { try { Datasource ds({\"type\": \"jdbc\", \"db\": url}); "
+            "ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }");
+        assertRefused(p.callFunction("open_nouser", sprintf("jdbc:redshift://127.0.0.1:%d/dev", s.getPort())), Denied,
+            "user", (s,), "no user");
+        # the user as an option
+        assertReached(p.callFunction("open_nouser", sprintf("jdbc:redshift://127.0.0.1:%d/dev?user=u", s.getPort())),
+            "SSL", s, "the user in the URL");
+    }
+
+    ssDatabaseTest() {
+        checkSkip(ss_jar, "singlestore");
+        # a server that requests a file in reply to the first query, which would be the driver's CREATE DATABASE
+        FakeDbServer s = server("mysql-infile");
+        s.setInfileName("/etc/passwd");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        foreach list<string> c in ((("LOAD DATA LOCAL INFILE '/etc/passwd'", "&createDatabaseIfNotExist=true"),
+                ("x", "&createDatabaseIfNotExist=true"), ("x", "&CREATEDATABASEIFNOTEXIST=1"),
+                ("LOAD DATA LOCAL INFILE '/etc/passwd'", ""), ("a`b", ""), ("a-b", ""), ("a b", ""),
+                ("x;y", ""))) {
+            assertRefused(p.callFunction("open_db", ssUrl(port, c[0], c[1])), Denied, "database|option", (s,),
+                c[0] + c[1]);
+        }
+        assertEq(0, s.infileRequests(), "no file was requested");
+        # a plain identifier, and no database
+        FakeDbServer ok = server("mysql-ok");
+        p = sandboxed(ok.getPort());
+        assertEq("ok", p.callFunction("open_db", ssUrl(ok.getPort(), "app_db$1")), "a plain identifier");
+        assertEq("ok", p.callFunction("open_db", ssUrl(ok.getPort(), "")), "no database");
+    }
+
+    ssConnectSqlTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-infile");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        foreach string arg in (("&vectorTypeOutputFormat=JSON,x=LOAD DATA LOCAL INFILE '/etc/passwd'",
+                "&vectorTypeOutputFormat=JSON;SELECT 1", "&enableExtendedDataTypes=true&vectorTypeOutputFormat=a b",
+                "&connectionAttributes=x:LOAD DATA LOCAL INFILE", "&sessionVariables=x='LOAD DATA LOCAL INFILE'")) {
+            assertRefused(p.callFunction("open_db", ssUrl(port, "db", arg)), Denied, ".", (s,), arg);
+        }
+        assertEq(0, s.infileRequests(), "no file was requested");
+    }
+
+    ssTlsTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-ok");
+        int port = s.getPort();
+        Program p = sandboxed(port);
+        # PROVISIONAL: verify-full only
+        foreach string mode in (("disable", "trust", "verify-ca", "VERIFY-FULL")) {
+            assertRefused(p.callFunction("open_db", ssUrl(port, "db", "&sslMode=" + mode)), Denied, "sslMode", (s,),
+                mode);
+        }
+        assertEq("ok", p.callFunction("open_db", ssUrl(port, "db", "&sslMode=verify-full")), "verify-full");
+        # the JVM's client key store would be presented to the server
+        System::setProperty("javax.net.ssl.keyStore", get_script_dir() + "jdbc-fake-server.p12");
+        on_exit System::clearProperty("javax.net.ssl.keyStore");
+        assertRefused(p.callFunction("open_db", ssUrl(port)), Denied, "javax.net.ssl.keyStore", (), "JVM key store");
+    }
+
+    reconnectTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-ok");
+        int port = s.getPort();
+        Program p = sandboxed(port, "string sub open_ds(Datasource ds) { try { ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) "
+            "{ return ex.err + \": \" + ex.desc; } }\n"
+            "string sub exec_ds(Datasource ds, string sql) { try { ds.exec(sql); return \"ok\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } "
+            "on_exit try { ds.rollback(); } catch () {} }");
+        # trusted code creates the datasource, sandboxed code opens it: a restricted connection
+        Datasource ds({"type": "jdbc", "user": "u", "pass": "pw", "db": ssUrl(port, "db", "&useServerPrepStmts=false")});
+        assertEq("ok", p.callFunction("open_ds", ds));
+        assertEq(1, s.acceptCount());
+        # the connection is lost; trusted code's statement reconnects
+        s.dropClients();
+        try {
+            ds.exec("select 1");
+        } catch (hash<ExceptionInfo> ex) {
+            # the fake server's error for the statement on the new connection
+            assertRegex("qore-fake-mysql-query", ex.desc, "the statement ran on the new connection");
+        }
+        on_exit try { ds.rollback(); } catch () {}
+        assertTrue(s.awaitAcceptCount(2, 30000) >= 2, "reconnected");
+        assertEq(s.acceptCount(), s.tlsHandshakes(), "every new connection is restricted: TLS with verify-full");
+        # the new connection is still restricted: sandboxed SQL is screened
+        int queries = s.getQueries().size();
+        assertRegex("^JNI-SANDBOX-ERROR: .*LOCAL INFILE",
+            p.callFunction("exec_ds", ds, "LOAD DATA LOCAL INFILE '/etc/passwd' INTO TABLE t"));
+        assertEq(queries, s.getQueries().size(), "the statement did not reach the server");
+    }
+
+    trustedSharedTest() {
+        checkSkip(ss_jar, "singlestore");
+        FakeDbServer s = server("mysql-ok");
+        int port = s.getPort();
+        # trusted code opens the connection without TLS: not restricted (qore#6142)
+        Datasource ds({"type": "jdbc", "user": "u", "pass": "pw",
+            "db": sprintf("jdbc:singlestore://127.0.0.1:%d/db?useServerPrepStmts=false", port)});
+        ds.open();
+        on_exit ds.close();
+        assertEq(0, s.tlsHandshakes());
+        Program p = sandboxed(port, "string sub exec_ds(Datasource ds, string sql) { try { ds.exec(sql); return \"ok\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } "
+            "on_exit try { ds.rollback(); } catch () {} }");
+        foreach string sql in (("LOAD DATA LOCAL INFILE '/etc/passwd' INTO TABLE t",
+                "LOAD DATA {d LOCAL} INFILE '/etc/passwd' INTO TABLE t")) {
+            assertRegex("^JNI-SANDBOX-ERROR: .*LOCAL INFILE", p.callFunction("exec_ds", ds, sql), sql);
+        }
+        assertEq((), s.getQueries(), "no statement reached the server");
+        # trusted code's own SQL is not screened
+        try {
+            ds.exec("LOAD DATA LOCAL INFILE '/nonexistent-qore-test' INTO TABLE t");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        ds.rollback();
+        assertEq(1, s.getQueries().size(), "trusted SQL reached the server");
     }
 
     connectTargetsTest() {

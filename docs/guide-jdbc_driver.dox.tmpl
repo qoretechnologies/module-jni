@@ -356,7 +356,10 @@ foreach hash<auto> column in (result.schemaV2()) {
 
     A connection is <b>restricted</b> if a sandbox that does not allow uncontrolled APIs governs the code that opens
     it, or reopens it after a lost connection (<b>PROVISIONAL</b>: this is the policy of the thread; the chooser
-    record of qore#6142, or the Qore side of qore#5747, replaces it).  A trusted connection is not changed in any way.
+    record of qore#6142, or the Qore side of qore#5747, replaces it).  A connection object that was restricted once
+    stays restricted for its lifetime: when trusted code's statement makes it reconnect, its guard is built again and
+    its URL, options and destinations are checked again against the policy that restricted it first.  A trusted
+    connection is not changed, except that SQL that restricted code gives it is screened (see below).
     A restricted connection is allowed only if:
     - its URL names one of the audited JDBC drivers below, which are reported by the \c "jdbc_sandbox_drivers" key of
       the \c "info" hash of the module (\c get_module_hash()); every other driver is refused
@@ -383,13 +386,15 @@ foreach hash<auto> column in (result.schemaV2()) {
     |Amazon Redshift|<tt>jdbc:redshift://host[:port][,host[:port]...]/database[?options]</tt>; not \
       \c jdbc:redshift:iam: or a URL without hosts|2.3.0|\c socketFactory, \c socketFactoryArg (the connection's \
       token), \c IniFile (an empty file: no INI file is searched for; restricted Redshift connections are refused on \
-      a platform without \c /dev/null)
+      a platform without \c /dev/null), \c sslmode=verify-full (<b>PROVISIONAL</b>), empty \c sslkey and \
+      \c sslcert (the process owner's \c ~/.redshift/redshift.pk8 is not presented, and no password is asked on \
+      the console), \c preferpq=false (no JVM-wide BouncyCastle provider is installed)
     |SingleStore|<tt>jdbc:singlestore://hostlist[/database][?options]</tt>, also with \c sequential: or \
       \c loadbalance: before \c //, each host \
       <tt>host[:port]</tt>, <tt>[v6addr][:port]</tt> or <tt>address=(host=..)(port=..)[(type=..)]</tt>; TCP only|\
       1.2.12|\c socketFactory (an adapter that the module defines in the driver's class loader), the connection's \
-      guard object, \c allowLocalInfile=false, \c pool=false, \
-      \c restrictedAuth=mysql_native_password,client_ed25519
+      guard object, \c allowLocalInfile=false, \c pool=false, \c createDatabaseIfNotExist=false, \
+      \c sslMode=verify-full (<b>PROVISIONAL</b>), \c restrictedAuth=mysql_native_password,client_ed25519
 
     Allowed options (everything else is refused; the keys are matched as the driver matches them):
     - <b>Amazon Redshift</b>: \c ApplicationName, \c assumeMinServerVersion, \c autosave, \c binaryTransfer,
@@ -405,18 +410,21 @@ foreach hash<auto> column in (result.schemaV2()) {
       \c raiseExceptionOnSilentRollback, \c readOnly, \c readOnlyMode, \c receiveBufferSize, \c rewriteBatchedInserts,
       \c rewriteBatchedInsertsSize, \c sendBufferSize, \c socketTimeout, \c ssl (\c true only), \c sslmode
       (\c verify-full only, <b>PROVISIONAL</b>), \c statementCloseTimeout, \c stringtype, \c targetServerType,
-      \c tcpKeepAlive, \c user, \c password, \c UID, \c PWD, \c DBNAME
+      \c tcpKeepAlive, \c user, \c password, \c UID, \c PWD, \c DBNAME; the user must be given (the driver's
+      default is the name of the process owner)
     - <b>SingleStore</b>: \c user, \c password, \c autocommit, \c useMysqlMetadata, \c useMysqlVersion,
-      \c nullDatabaseMeansCurrent, \c createDatabaseIfNotExist, \c initSql, \c defaultFetchSize,
+      \c nullDatabaseMeansCurrent, \c initSql, \c defaultFetchSize,
       \c maxQuerySizeToLog, \c maxAllowedPacket, \c geometryDefaultType, \c transactionIsolation, \c connectTimeout,
       \c socketTimeout, \c tcpKeepAlive, \c tcpKeepIdle, \c tcpKeepCount, \c tcpKeepInterval, \c tcpAbortiveClose,
-      \c useReadAheadInput, \c sslMode, \c serverSslCert (an inline PEM certificate only), \c enabledSslCipherSuites,
+      \c useReadAheadInput, \c sslMode (\c verify-full only), \c serverSslCert (an inline PEM certificate only), \c enabledSslCipherSuites,
       \c enabledSslProtocolSuites, \c hostNameInCertificate, \c allowMultiQueries, \c useCompression,
       \c useAffectedRows, \c disablePipeline, \c cachePrepStmts, \c prepStmtCacheSize, \c useServerPrepStmts,
       \c sessionVariables, \c connectionAttributes, \c blankTableNameMeta, \c transformedBitIsBoolean,
       \c yearIsDateType, \c dumpQueriesOnException, \c retriesAllDown, \c transactionReplay, \c transactionReplaySize,
       \c useResetConnection, \c rewriteBatchedStatements, \c preserveInstants, \c enableExtendedDataTypes,
-      \c vectorTypeOutputFormat, \c vectorExtendedMetadata
+      \c vectorTypeOutputFormat (a word only), \c vectorExtendedMetadata; the user must be given, and the database
+      of the URL must be a plain identifier (\c [A-Za-z0-9_$], at most 64 characters), as the driver quotes it in SQL
+      (\c USE) and sends it in the handshake
 
     Refused classes of options: destination overrides (Redshift \c host and \c port), socket factories and class
     names, proxies, pipes and local sockets, local bind addresses, key and trust stores and certificate files,
@@ -429,7 +437,20 @@ foreach hash<auto> column in (result.schemaV2()) {
     every SQL text of a restricted SingleStore connection that matches \c LOAD\\s+(DATA\\s+)?LOCAL\\s+INFILE
     (case-insensitive) is refused: in \c initSql and \c sessionVariables (\c NETWORK-ACCESS-DENIED) and in statements
     (\c JNI-SANDBOX-ERROR, before the driver sees the SQL), where the SQL is checked as given and as the driver
-    rewrites its JDBC escapes (<tt>{d LOCAL}</tt> becomes \c LOCAL).
+    rewrites its JDBC escapes (<tt>{d LOCAL}</tt> becomes \c LOCAL).  Every option value is screened, because the
+    driver sends some of them as SQL while it connects (\c initSql, \c sessionVariables after its own parsing,
+    \c vectorTypeOutputFormat), before any statement.  SQL that restricted code gives a SingleStore connection that
+    trusted code opened (without a guard) is screened in the same way; that such a connection is not restricted
+    otherwise is qore#6142.
+
+    SingleStore authentication and TLS: \c restrictedAuth applies to the plugins that a server switches to, not to
+    the plugin of the server's first handshake, so a server can still choose \c mysql_clear_password; the driver
+    sends a clear-text password only over TLS, which is \c verify-full for restricted connections, so it reaches only
+    the checked destination.  The driver presents the JVM's client key store (\c javax.net.ssl.keyStore) to every
+    server and no option turns that off, so restricted SingleStore connections are refused while that system property
+    is set.  Certificate validation follows the JVM's configuration: with settings such as
+    \c com.sun.security.enableAIAcaIssuers or OCSP and CRL distribution point checking, TLS validation fetches URLs
+    from the server's certificate, outside the sandbox; these settings are trusted configuration of the JVM.
 
     <b>Errors:</b> \c NETWORK-ACCESS-DENIED for a refused driver, URL, option, version or destination, and
     \c JNI-SANDBOX-ERROR for a failed integrity check (a class of the module's name in the driver's class loader, a
@@ -437,6 +458,12 @@ foreach hash<auto> column in (result.schemaV2()) {
 
     <b>The drivers' jars</b> must be on the classpath of every Program for restricted connections: the jars of a
     \c classpath option, or of the class loader of a sandboxed Program, are not used for them.
+
+    <b>The Java classes</b> of the package \c org.qore.jni.jdbc open sockets to the destinations they hold without a
+    check (ex: \c JdbcConnectGuard.forTargets() is public): the package must never be declared sandbox-aware or
+    added to an allowlist of Java classes for sandboxed code.  The classes are defined in the bootstrap class loader
+    when %Qore starts the JVM, and come from \c qore-jni.jar in the application class loader when the JVM starts
+    %Qore.
 
     @par Example: a sandbox that allows one Redshift cluster
     @code{.py}
