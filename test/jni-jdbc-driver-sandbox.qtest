@@ -902,22 +902,26 @@ string sub module_cmd(string cmd) {
         list<string> dirs = map dirname($1), emptyKeyStores();
         assertTrue(dirs.size() > 0, "the empty key store directory was found");
         binary key = ReadOnlyFile::readBinaryFile(get_script_dir() + "jdbc-fake-server.p12");
+        # registered first, so that a failure part of the way still restores and removes everything
+        on_exit {
+            foreach string dir in (dirs) {
+                foreach string d in ((dir, dir + ".old")) {
+                    try { chmod(d, 0700); } catch () {}
+                    try { unlink(d + DirSep + "empty.p12"); } catch () {}
+                    try { rmdir(d); } catch () {}
+                }
+            }
+        }
         foreach string dir in (dirs) {
-            unlink(dir + DirSep + "empty.p12");
-            rmdir(dir);
+            # the old directory is renamed away, not removed: its inode stays in use, so the new directory cannot
+            # get the same one (ext4 reuses a freed inode at once, which would make it the "same" directory)
+            rename(dir, dir + ".old");
             mkdir(dir, 0700);
             File out();
             out.open2(dir + DirSep + "empty.p12", O_CREAT | O_WRONLY | O_TRUNC, 0600);
             out.write(key);
             out.close();
             chmod(dir, 0500);
-        }
-        on_exit {
-            foreach string dir in (dirs) {
-                chmod(dir, 0700);
-                unlink(dir + DirSep + "empty.p12");
-                rmdir(dir);
-            }
         }
         assertEq("ok", sandboxed(port).callFunction("open_db", ssUrl(port)), "restricted after the replacement");
         assertEq(1, s.clientCertificates(), "restricted after the replacement: no client certificate");

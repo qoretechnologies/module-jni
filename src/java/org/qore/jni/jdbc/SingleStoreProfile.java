@@ -528,6 +528,18 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         Every failure refuses the connection (fails closed), also a sharing violation on Windows when the file is
         replaced while the driver reads it.  The driver reads the file on each handshake, so a file that is removed
         later makes TLS fail (closed) until the next restricted connection writes it again.
+
+        The residual risks, all local and of this process's user or of availability only:
+        - this process's user can make the reuse check accept another directory (a reused inode, or NTFS creation
+          time tunneling); the owner check is the barrier against other users
+        - a reconnect of a connection that was idle for long reads the path of its open without checking it again:
+          if a temporary file cleaner removed the directory and another user created the path, the reconnect reads
+          their file; the JVM's key cannot leak (the password is fixed and the forced store is not the JVM's), but a
+          FIFO there would block the connection.  Keeping the store outside a cleaned /tmp is a possible follow-up
+        - a FIFO that this process's user puts in place between the type check and the open blocks this static
+          synchronized method (availability only)
+        - a file system that ignores permissions (vfat, NTFS with a umask) fails the permission check, so a new
+          directory is created for every restricted connection, and a concurrent one can be refused (closed)
     */
     static synchronized String ensureEmptyKeyStore() {
         try {
@@ -585,15 +597,34 @@ final class SingleStoreProfile extends JdbcDriverProfile {
     }
 
     //! Returns true if the key store directory is still the one that this process created
+    /** Its identity (file key, or creation time without one), its owner and, with POSIX attributes, its permissions
+        are read with one call, without links.
+    */
     private static boolean isOwnKeyStoreDir() throws java.io.IOException {
         java.nio.file.Path dir = emptyKeyStoreDir;
         if (dir == null) {
             return false;
         }
         java.nio.file.attribute.BasicFileAttributes a;
+        java.nio.file.attribute.UserPrincipal owner;
         try {
-            a = java.nio.file.Files.readAttributes(dir, java.nio.file.attribute.BasicFileAttributes.class,
-                java.nio.file.LinkOption.NOFOLLOW_LINKS);
+            try {
+                java.nio.file.attribute.PosixFileAttributes pa = java.nio.file.Files.readAttributes(dir,
+                    java.nio.file.attribute.PosixFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                // no access for the group or others
+                for (java.nio.file.attribute.PosixFilePermission perm : pa.permissions()) {
+                    if (!perm.name().startsWith("OWNER_")) {
+                        return false;
+                    }
+                }
+                a = pa;
+                owner = pa.owner();
+            } catch (UnsupportedOperationException e) {
+                // no POSIX attributes (Windows: the directory's ACL is the creator's)
+                a = java.nio.file.Files.readAttributes(dir, java.nio.file.attribute.BasicFileAttributes.class,
+                    java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                owner = ownerOf(dir);
+            }
         } catch (java.nio.file.NoSuchFileException e) {
             return false;
         }
@@ -601,23 +632,7 @@ final class SingleStoreProfile extends JdbcDriverProfile {
         if (!a.isDirectory() || !key.equals(emptyKeyStoreDirKey)) {
             return false;
         }
-        java.nio.file.attribute.UserPrincipal owner = ownerOf(dir);
-        if (owner == null ? emptyKeyStoreDirOwner != null : !owner.equals(emptyKeyStoreDirOwner)) {
-            return false;
-        }
-        // no access for the group or others, where the file system has POSIX permissions
-        try {
-            java.util.Set<java.nio.file.attribute.PosixFilePermission> perms =
-                java.nio.file.Files.getPosixFilePermissions(dir, java.nio.file.LinkOption.NOFOLLOW_LINKS);
-            for (java.nio.file.attribute.PosixFilePermission perm : perms) {
-                if (!perm.name().startsWith("OWNER_")) {
-                    return false;
-                }
-            }
-        } catch (UnsupportedOperationException e) {
-            // no POSIX permissions (Windows: the directory's ACL is the creator's)
-        }
-        return true;
+        return owner == null ? emptyKeyStoreDirOwner == null : owner.equals(emptyKeyStoreDirOwner);
     }
 
     //! Returns true if the key store file is a regular file with the expected contents

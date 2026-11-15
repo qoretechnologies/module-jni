@@ -463,7 +463,16 @@ foreach hash<auto> column in (result.schemaV2()) {
     \c empty.p12 in a new directory of the process with a random name, accessible by its owner only), and the system
     property is never read.  The file is checked for every restricted connection and written again atomically if it
     is missing or changed (and its directory created again if it is missing); a file that is removed later makes the
-    next TLS handshakes of the open connections fail, closed.  Certificate validation follows the JVM's configuration: with settings such as
+    next TLS handshakes of the open connections fail, closed.  The directory is used again only if it is still the
+    one that the process created (the same file key, its owner, and no access for others); residual risks, all local
+    and of the process's own user or of availability only: the process's user can make that check accept another
+    directory (a reused inode, NTFS creation time tunneling), the owner check being the barrier against other users;
+    a reconnect of a connection that was idle for long reads the path of its open without checking it again, so if a
+    temporary file cleaner removed the directory and another user created the path, the reconnect reads their file
+    (the JVM's key cannot leak, but a FIFO there blocks the connection; keeping the store outside a cleaned /tmp is a
+    possible follow-up); a FIFO that the process's user swaps in between the check and the read blocks the
+    connections that are being prepared; and a file system that ignores permissions (vfat, NTFS with a umask)
+    creates a new directory for every restricted connection and can refuse a concurrent one.  Certificate validation follows the JVM's configuration: with settings such as
     \c com.sun.security.enableAIAcaIssuers or OCSP and CRL distribution point checking, TLS validation fetches URLs
     from the server's certificate, outside the sandbox; these settings are trusted configuration of the JVM.
 
