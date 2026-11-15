@@ -116,7 +116,7 @@ string sub module_cmd(string cmd) {
         addTestCase("Redshift: a failover list of allowed hosts connects", \rsFailoverAllowedTest());
         addTestCase("Redshift: URL overrides and parser tricks are refused", \rsOverrideTest());
         addTestCase("Redshift: forbidden options are refused", \rsForbiddenTest());
-        addTestCase("Redshift: an INI file in the temporary directory is ignored", \rsIniFileTest());
+        addTestCase("Redshift: no implicit INI file is read", \rsIniFileTest());
         addTestCase("Redshift: a trusted connection is unchanged", \rsTrustedTest());
         addTestCase("SingleStore: an allowed destination connects through the guard", \ssAllowedTest());
         addTestCase("SingleStore: a denied destination is refused", \ssDeniedTest());
@@ -393,23 +393,105 @@ string sub module_cmd(string cmd) {
 
     rsIniFileTest() {
         checkSkip(rs_jar, "redshift");
-        FakeDbServer s = server("pg");
-        FakeDbServer other = server("pg", "127.0.0.2");
-        # an INI file that the driver would find in the temporary directory sets another host
-        string dir = System::getProperty("java.io.tmpdir");
-        string ini = dir + DirSep + "rsjdbc.ini";
-        if (is_file(ini)) {
-            testSkip(sprintf("%y exists already", ini));
+        # The driver searches for an implicit INI file (Driver.getJdbcIniFile()), after the IniFile option, in:
+        # AMAZON_REDSHIFT_JDBC_INI_FILE, the directory of the driver's jar, user.home and java.io.tmpdir (rsjdbc.ini).
+        # The case runs in child processes whose environment variable, user.home and java.io.tmpdir name a private
+        # directory of this process, so that no other process can see or remove its files, and it sees none of theirs
+        # (the directory of the driver's jar is the test environment's; the case assumes that it holds no rsjdbc.ini).
+        string priv = tmp_location() + DirSep + sprintf("qore-jni-jdbc-ini-%d-%d", getpid(),
+            now_us().durationMicroseconds());
+        mkdir(priv, 0700);
+        on_exit removeTree(priv);
+        foreach string d in (("home", "tmp", "none")) {
+            mkdir(priv + DirSep + d, 0700);
         }
-        File f();
-        f.open2(ini, O_CREAT | O_WRONLY | O_TRUNC);
-        on_exit unlink(ini);
-        f.write(sprintf("[DRIVER]\nhost=127.0.0.2\nport=%d\nLogLevel=6\n", other.getPort()));
-        f.close();
+
+        # writes the INI file of a location, whose LogLevel and LogPath make the driver write a log in the given
+        # directory if it reads the file; the keys are lowercase, as the driver looks up the keys of an INI file
+        # (it adds them to its properties without lowercasing them, and lowercases the names it looks up)
+        code write_ini = sub (string file, string logs) {
+            mkdir(logs, 0700);
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+            f.write(sprintf("[DRIVER]\nloglevel=6\nlogpath=%s\n", logs));
+            f.close();
+        };
+        # runs the child with the given INI locations; the unused ones are empty private directories
+        code run_child = string sub (string mode, string url, int port, *string env_ini, *string home, *string tmp) {
+            list<string> opts = (ENV.JAVA_TOOL_OPTIONS ?? "",
+                "-Duser.home=" + (home ?? priv + DirSep + "none"),
+                "-Djava.io.tmpdir=" + (tmp ?? priv + DirSep + "none"));
+            string cmd = sprintf("env %s JAVA_TOOL_OPTIONS=%s %s %s %s %s %d 2>&1",
+                env_ini ? "AMAZON_REDSHIFT_JDBC_INI_FILE=" + shellQuote(env_ini) : "-u AMAZON_REDSHIFT_JDBC_INI_FILE",
+                shellQuote(trim(opts.join(" "))), shellQuote(QORE_ARGV[0]),
+                shellQuote(get_script_dir() + "jni-jdbc-redshift-ini-child.q"), mode, shellQuote(url), port);
+            string out = backquote(cmd);
+            *list<*string> m = (out =~ x/^RESULT: (.*)$/m);
+            return m ? m[0] : "no result: " + out;
+        };
+        code log_count = int sub (string dir) {
+            Dir d();
+            d.chdir(dir);
+            return d.listFiles().size();
+        };
+
+        # a restricted connection with an INI file in every location: none is read
+        FakeDbServer s = server("pg");
+        string logs = priv + DirSep + "logs-sandboxed";
+        mkdir(logs, 0700);
+        foreach string file in ((priv + DirSep + "env.ini", priv + DirSep + "home" + DirSep + "rsjdbc.ini",
+                priv + DirSep + "tmp" + DirSep + "rsjdbc.ini")) {
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+            f.write(sprintf("[DRIVER]\nloglevel=6\nlogpath=%s\n", logs));
+            f.close();
+        }
         string url = sprintf("jdbc:redshift://127.0.0.1:%d/dev", s.getPort());
-        assertReached(sandboxed((s.getPort(), other.getPort())).callFunction("open_db", url), "SSL", s,
-            "the INI file is not read");
-        assertEq(0, other.acceptCount(), "the host of the INI file is not used");
+        string result = run_child("sandboxed", url, s.getPort(), priv + DirSep + "env.ini", priv + DirSep + "home",
+            priv + DirSep + "tmp");
+        assertReached(result, "SSL", s, "restricted: the connection is made");
+        assertEq(0, log_count(logs), "restricted: no INI file is read");
+
+        # the detector: a trusted connection reads the INI file of each location
+        foreach string loc in (("env", "home", "tmp")) {
+            string dir = priv + DirSep + "logs-" + loc;
+            string file;
+            switch (loc) {
+                case "env": file = priv + DirSep + "env-" + loc + ".ini"; break;
+                case "home": file = priv + DirSep + "home-" + loc + DirSep + "rsjdbc.ini"; break;
+                case "tmp": file = priv + DirSep + "tmp-" + loc + DirSep + "rsjdbc.ini"; break;
+            }
+            if (loc != "env") {
+                mkdir(dirname(file), 0700);
+            }
+            write_ini(file, dir);
+            FakeDbServer t = server("pg");
+            string turl = sprintf("jdbc:redshift://127.0.0.1:%d/dev?ssl=false", t.getPort());
+            string r = run_child("trusted", turl, t.getPort(), loc == "env" ? file : NOTHING,
+                loc == "home" ? dirname(file) : NOTHING, loc == "tmp" ? dirname(file) : NOTHING);
+            assertRegex("qore-fake-pg", r, loc + ": the trusted connection reached the server");
+            assertTrue(log_count(dir) > 0, loc + ": the trusted connection read the INI file");
+        }
+    }
+
+    #! returns a string quoted for the shell
+    private static string shellQuote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    #! removes a directory tree of this test
+    private static removeTree(string dir) {
+        Dir d();
+        if (!d.chdir(dir)) {
+            return;
+        }
+        foreach string f in (d.listFiles()) {
+            unlink(dir + DirSep + f);
+        }
+        foreach string sub_dir in (d.listDirs()) {
+            removeTree(dir + DirSep + sub_dir);
+        }
+        rmdir(dir);
     }
 
     rsTrustedTest() {
