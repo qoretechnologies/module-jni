@@ -281,68 +281,16 @@ static jobjectArray JNICALL qore_sandbox_check_network_access(JNIEnv* jenv, jcla
         }
         // QoreSandbox removes the brackets of an IPv6 address literal, so that the returned addresses carry the
         // address itself as their host name
-        std::string host = get_bytes(env, jhost);
-        if (host.empty()) {
-            xsink->raiseException(JNI_SANDBOX_ERROR, "the host must not be empty");
+        std::vector<JniNetTarget> targets(1);
+        targets[0].host = get_bytes(env, jhost);
+        targets[0].port = port;
+        targets[0].proto = proto;
+        std::vector<JniCheckedTarget> checked;
+        if (jni_check_network_targets(scope.managers(), targets, checked, xsink)) {
             return nullptr;
         }
-        // port 0 is no destination, and the policy does not restrict it: a check for it would allow every port
-        if (port < 1 || port > 65535) {
-            xsink->raiseException(JNI_SANDBOX_ERROR, "port %d is outside the valid range 1..65535", (int)port);
-            return nullptr;
-        }
-        if (proto != QSEC_NET_TCP && proto != QSEC_NET_UDP) {
-            xsink->raiseException(JNI_SANDBOX_ERROR, "invalid protocol %d; expecting QoreSandbox.TCP or "
-                "QoreSandbox.UDP", (int)proto);
-            return nullptr;
-        }
-        const char* proto_name = proto == QSEC_NET_TCP ? "TCP" : "UDP";
-
-        std::vector<QoreSandboxManager*> managers = scope.managers();
-        // a host name that a policy denies whatever it resolves to is not looked up
-        for (QoreSandboxManager* sm : managers) {
-            if (!sm->network().checkHostname(host.c_str(), port, proto)) {
-                xsink->raiseException("NETWORK-ACCESS-DENIED", "%s connection to '%s' port %d denied by the sandbox "
-                    "network policy", proto_name, host.c_str(), (int)port);
-                return nullptr;
-            }
-        }
-
-        // the Qore resolver, so that the host name resolves as it does for Qore sockets
-        QoreAddrInfo ai;
-        std::string service = std::to_string(port);
-        if (ai.getInfo(xsink, host.c_str(), service.c_str(), Q_AF_UNSPEC, 0,
-                proto == QSEC_NET_TCP ? SOCK_STREAM : SOCK_DGRAM)) {
-            return nullptr;
-        }
-
-        // every address is checked, with the host name so that allowed host patterns apply, because the caller can
-        // connect to any of them
-        std::vector<std::string> addrs;
-        std::unordered_set<std::string> seen;
-        std::string addr;
-        unsigned count = 0;
-        for (const struct addrinfo* p = ai.getAddrInfo(); p; p = p->ai_next) {
-            if (!(++count % 100) && qore_check_cancel(xsink, "checking the addresses of a host for the sandbox")) {
-                return nullptr;
-            }
-            if (!encode_address(*p, addr)) {
-                continue;
-            }
-            for (QoreSandboxManager* sm : managers) {
-                if (!sm->checkNetworkAccess(host.c_str(), p->ai_addr, p->ai_addrlen, proto, xsink)) {
-                    return nullptr;
-                }
-            }
-            // the addresses are returned once each, in the order of the resolver
-            if (seen.insert(addr).second) {
-                addrs.push_back(addr);
-            }
-        }
-        if (addrs.empty()) {
-            xsink->raiseException(JNI_SANDBOX_ERROR, "host '%s' has no IPv4 or IPv6 address", host.c_str());
-            return nullptr;
-        }
+        assert(checked.size() == 1);
+        const std::vector<std::string>& addrs = checked[0].addrs;
 
         LocalReference<jclass> byte_array_class = env.findClass("[B");
         LocalReference<jobjectArray> rv = env.newObjectArray(static_cast<jsize>(addrs.size()), byte_array_class);
@@ -432,6 +380,80 @@ JNINativeMethod qoreSandboxNativeMethods[] = {
 };
 
 } // namespace
+
+int jni_check_network_targets(const std::vector<QoreSandboxManager*>& managers,
+        const std::vector<JniNetTarget>& targets, std::vector<JniCheckedTarget>& out, ExceptionSink* xsink) {
+    std::vector<JniCheckedTarget> rv;
+    rv.reserve(targets.size());
+    for (const JniNetTarget& t : targets) {
+        const std::string& host = t.host;
+        if (host.empty()) {
+            xsink->raiseException(JNI_SANDBOX_ERROR, "the host must not be empty");
+            return -1;
+        }
+        // port 0 is no destination, and the policy does not restrict it: a check for it would allow every port
+        if (t.port < 1 || t.port > 65535) {
+            xsink->raiseException(JNI_SANDBOX_ERROR, "port %d is outside the valid range 1..65535", t.port);
+            return -1;
+        }
+        if (t.proto != QSEC_NET_TCP && t.proto != QSEC_NET_UDP) {
+            xsink->raiseException(JNI_SANDBOX_ERROR, "invalid protocol %d; expecting QoreSandbox.TCP or "
+                "QoreSandbox.UDP", t.proto);
+            return -1;
+        }
+        const char* proto_name = t.proto == QSEC_NET_TCP ? "TCP" : "UDP";
+
+        // a host name that a policy denies whatever it resolves to is not looked up
+        for (QoreSandboxManager* sm : managers) {
+            if (!sm->network().checkHostname(host.c_str(), t.port, t.proto)) {
+                xsink->raiseException("NETWORK-ACCESS-DENIED", "%s connection to '%s' port %d denied by the sandbox "
+                    "network policy", proto_name, host.c_str(), t.port);
+                return -1;
+            }
+        }
+
+        // the Qore resolver, so that the host name resolves as it does for Qore sockets
+        QoreAddrInfo ai;
+        std::string service = std::to_string(t.port);
+        if (ai.getInfo(xsink, host.c_str(), service.c_str(), Q_AF_UNSPEC, 0,
+                t.proto == QSEC_NET_TCP ? SOCK_STREAM : SOCK_DGRAM)) {
+            return -1;
+        }
+
+        // every address is checked, with the host name so that allowed host patterns apply, because the caller can
+        // connect to any of them
+        JniCheckedTarget c;
+        c.host = host;
+        c.port = t.port;
+        std::unordered_set<std::string> seen;
+        std::string addr;
+        unsigned count = 0;
+        for (const struct addrinfo* p = ai.getAddrInfo(); p; p = p->ai_next) {
+            if (!(++count % 100) && qore_check_cancel(xsink, "checking the addresses of a host for the sandbox")) {
+                return -1;
+            }
+            if (!encode_address(*p, addr)) {
+                continue;
+            }
+            for (QoreSandboxManager* sm : managers) {
+                if (!sm->checkNetworkAccess(host.c_str(), p->ai_addr, p->ai_addrlen, t.proto, xsink)) {
+                    return -1;
+                }
+            }
+            // the addresses are returned once each, in the order of the resolver
+            if (seen.insert(addr).second) {
+                c.addrs.push_back(addr);
+            }
+        }
+        if (c.addrs.empty()) {
+            xsink->raiseException(JNI_SANDBOX_ERROR, "host '%s' has no IPv4 or IPv6 address", host.c_str());
+            return -1;
+        }
+        rv.push_back(std::move(c));
+    }
+    out = std::move(rv);
+    return 0;
+}
 
 void jni_register_qore_sandbox_natives(Env& env, jclass cls) {
     env.registerNatives(cls, qoreSandboxNativeMethods, sizeof(qoreSandboxNativeMethods) / sizeof(JNINativeMethod));

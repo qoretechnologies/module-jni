@@ -32,11 +32,54 @@
 #define QORE_JNI_JAVASANDBOX_H_
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include <jni.h>
+
+#include <string>
+#include <vector>
 
 namespace jni {
 
 class Env;
+
+//! A network destination to check against the sandbox policy
+struct JniNetTarget {
+    //! the host name or address literal, without IPv6 brackets
+    std::string host;
+    //! the port, 1 .. 65535
+    int port = 0;
+    //! the protocol: QSEC_NET_TCP or QSEC_NET_UDP
+    int proto = QSEC_NET_TCP;
+};
+
+//! A network destination that passed the sandbox policy, with the addresses that were checked
+struct JniCheckedTarget {
+    //! the host name or address literal, as checked
+    std::string host;
+    //! the port
+    int port = 0;
+    //! the checked addresses, in the order of the resolver, once each: 4 bytes for IPv4, 16 bytes and the scope ID
+    //! in 4 bytes (big-endian) for IPv6, as org.qore.jni.QoreSandbox decodes them
+    std::vector<std::string> addrs;
+};
+
+//! Checks network destinations against sandbox policies, as Qore sockets are checked, and returns their addresses
+/** The one rule of the module for Java I/O (org.qore.jni.QoreSandbox.checkNetworkAccess()) and for the destinations
+    of restricted jdbc connections (qore#5786): for each destination, a host name that a policy denies whatever it
+    resolves to is not looked up; it is resolved once with the %Qore resolver, and every address is checked, with the
+    host name so that allowed host patterns apply, against every policy.
+
+    @param managers the policies that every destination must pass; empty: no policy applies, and the destinations are
+    only resolved
+    @param targets the destinations
+    @param out receives the checked destinations, in the order of \a targets
+    @param xsink raises \c NETWORK-ACCESS-DENIED for a denied destination, \c JNI-SANDBOX-ERROR for an invalid one,
+    and the resolver's error
+
+    @return 0 if every destination passed, -1 if an exception was raised
+*/
+DLLLOCAL int jni_check_network_targets(const std::vector<QoreSandboxManager*>& managers,
+    const std::vector<JniNetTarget>& targets, std::vector<JniCheckedTarget>& out, ExceptionSink* xsink);
 
 //! Registers the native methods of org.qore.jni.QoreSandbox
 /** @throw JavaException the methods cannot be registered
