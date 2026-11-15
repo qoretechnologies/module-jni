@@ -372,12 +372,12 @@ int jdbc_connect_decision(Datasource* ds, JdbcStickyRestriction& sticky, JdbcCon
             if (!ds->getOptionRestrictions(hi.getKey(), setter) || !setter.isSandboxed()) {
                 continue;
             }
+            // the network policy that a check made by the setter would have used: none under a trusted policy barrier
+            // or in a system-policy capability, which the thread's rule below honours too (Policy purpose), so such
+            // a setter does not restrict the connection
             QoreSandboxManager* sm = ds->getOptionPolicyManagerRef(hi.getKey());
             if (!sm) {
-                // a missing policy is not a permission
-                xsink->raiseException("NETWORK-ACCESS-DENIED", "the sandbox policy of the code that set the URL of "
-                    "the JDBC connection cannot be determined");
-                return -1;
+                continue;
             }
             d.setter_policies.add(sm);
             d.restricted = true;
