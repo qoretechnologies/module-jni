@@ -7,6 +7,7 @@
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.SandboxIo
+%module-cmd(jni) import org.qore.jni.test.CrossProgramCalls
 %module-cmd(jni) import java.lang.reflect.Method
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.function.Consumer
@@ -74,6 +75,12 @@ object sub make_nested_consumer(object l2, object c2) {
             l2.forEach(c2);
             read_tl();
         }), load_class(\"java/util/function/Consumer\")));
+}
+
+# a Consumer whose callback only sets the given marker, which belongs to the test, not to this Program
+object sub make_marked_consumer(Queue ran) {
+    return cast<Consumer>(implement_interface(new QoreInvocationHandler(
+        sub (object method, *list<auto> args) { ran.push(True); }), load_class(\"java/util/function/Consumer\")));
 }
 
 # a call of the Java method made by the owner itself
@@ -153,6 +160,14 @@ sub call_via_java(object l, object c) {
 auto sub call_code(code c) {
     return c();
 }
+
+*string sub accept_catching(object c) {
+    return CrossProgramCalls::acceptCatching(c);
+}
+
+*string sub accept_catching_on_java_thread(object c) {
+    return CrossProgramCalls::acceptCatchingOnJavaThread(c);
+}
 ";
 
 #! the source of a sandboxed Program that calls the Java methods of trusted objects
@@ -212,6 +227,7 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         addTestCase("a Java closure uses the thread-local data of its Program", \testJavaClosureThreadLocal());
         addTestCase("a Java closure is governed by the sandbox of its caller", \testJavaClosureSandbox());
         addTestCase("a Java closure whose Program was deleted stays callable", \testJavaClosureDeletedProgram());
+        addTestCase("a callback whose Program was deleted is refused", \testDeletedProgramCallback());
         set_return_value(main());
     }
 
@@ -748,5 +764,23 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         # the Program that created the Java closure is gone: the closure is called in the context of this Program
         assertFalse(query(), "the Java closure runs for this Program");
         assertFalse(query(), "a second call");
+    }
+
+    testDeletedProgramCallback() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        # the marker that the callback's body would set: it belongs to the test, so it outlives the owner
+        Queue ran();
+        object c = owner.callFunction("make_marked_consumer", ran);
+        # the Java proxy outlives the Program whose code it calls back
+        delete owner;
+
+        # Java calls the proxy for another Program, and on a Java thread that Qore did not start: the callback's
+        # Program has been deleted, so Java sees the PROGRAM-ERROR of the call of its code, which does not run
+        *string from_caller = caller.callFunction("accept_catching", c);
+        assertRegex("PROGRAM-ERROR", from_caller ?? "<no exception>", "Java's exception for the calling Program");
+        *string from_java_thread = caller.callFunction("accept_catching_on_java_thread", c);
+        assertRegex("PROGRAM-ERROR", from_java_thread ?? "<no exception>", "Java's exception on a Java thread");
+        assertTrue(ran.empty(), "the callback's body did not run");
     }
 }

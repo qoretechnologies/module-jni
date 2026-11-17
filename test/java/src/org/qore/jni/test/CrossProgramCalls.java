@@ -22,6 +22,8 @@
 
 package org.qore.jni.test;
 
+import java.util.function.Consumer;
+
 import org.qore.jni.QoreClosure;
 import org.qore.jni.QoreClosureMarker;
 import org.qore.jni.QoreSandbox;
@@ -56,5 +58,38 @@ public class CrossProgramCalls {
     //! Returns a Java closure that queries the sandbox of the code that calls it
     public static QoreClosureMarker makeSandboxQuery() {
         return new SandboxQuery();
+    }
+
+    //! Calls the Consumer on this thread; returns the description of the exception that Java sees, or null
+    @SuppressWarnings("unchecked")
+    public static String acceptCatching(Object c) {
+        try {
+            ((Consumer<Object>) c).accept("x");
+            return null;
+        } catch (Throwable t) {
+            return describe(t);
+        }
+    }
+
+    //! Calls the Consumer on a new Java thread and waits for it; returns the description of the exception that Java
+    //! sees on that thread, or null
+    public static String acceptCatchingOnJavaThread(Object c) throws InterruptedException {
+        String[] rv = new String[1];
+        Thread t = new Thread(() -> rv[0] = acceptCatching(c));
+        t.start();
+        t.join();
+        return rv[0];
+    }
+
+    // the exception and its causes
+    private static String describe(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        for (Throwable e = t; e != null; e = e.getCause()) {
+            if (sb.length() > 0) {
+                sb.append("; caused by: ");
+            }
+            sb.append(e.getClass().getName()).append(": ").append(e.getMessage());
+        }
+        return sb.toString();
     }
 }

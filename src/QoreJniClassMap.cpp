@@ -4598,26 +4598,40 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
 // destroyed, which the Program's teardown does without the Program's lock once no other thread is in the Program;
 // hasProgramData() tells a thread that is not in a Program whether its data still exists without reading the
 // Program's external data, which the teardown can be destroying at the same time
-// a plain mutex: the lock is held only for a hash lookup, and an uncontended mutex costs less than a shared one
-static std::mutex jni_pgm_data_lock;
-static std::unordered_multiset<const QoreProgram*> jni_pgm_data;
+// a plain mutex: the lock is held only for a hash lookup, and an uncontended mutex costs less than a shared one;
+// the registry is created on first use and never destroyed, so that a Program's data destroyed during the process's
+// static destruction (after this file's statics) can still unregister
+namespace {
+struct JniProgramDataRegistry {
+    std::mutex lock;
+    std::unordered_multiset<const QoreProgram*> pgms;
+};
+
+JniProgramDataRegistry& jni_pgm_data() {
+    static JniProgramDataRegistry& reg = *new JniProgramDataRegistry;
+    return reg;
+}
+}
 
 static void jni_pgm_data_register(const QoreProgram* pgm) {
-    std::lock_guard<std::mutex> guard(jni_pgm_data_lock);
-    jni_pgm_data.insert(pgm);
+    JniProgramDataRegistry& reg = jni_pgm_data();
+    std::lock_guard<std::mutex> guard(reg.lock);
+    reg.pgms.insert(pgm);
 }
 
 static void jni_pgm_data_unregister(const QoreProgram* pgm) {
-    std::lock_guard<std::mutex> guard(jni_pgm_data_lock);
-    auto i = jni_pgm_data.find(pgm);
-    if (i != jni_pgm_data.end()) {
-        jni_pgm_data.erase(i);
+    JniProgramDataRegistry& reg = jni_pgm_data();
+    std::lock_guard<std::mutex> guard(reg.lock);
+    auto i = reg.pgms.find(pgm);
+    if (i != reg.pgms.end()) {
+        reg.pgms.erase(i);
     }
 }
 
 bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
-    std::lock_guard<std::mutex> guard(jni_pgm_data_lock);
-    return jni_pgm_data.find(pgm) != jni_pgm_data.end();
+    JniProgramDataRegistry& reg = jni_pgm_data();
+    std::lock_guard<std::mutex> guard(reg.lock);
+    return reg.pgms.find(pgm) != reg.pgms.end();
 }
 
 int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
