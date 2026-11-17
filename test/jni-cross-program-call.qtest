@@ -772,15 +772,24 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         # the marker that the callback's body would set: it belongs to the test, so it outlives the owner
         Queue ran();
         object c = owner.callFunction("make_marked_consumer", ran);
+
+        # control: while the owner exists, the same calls reach the callback, whose body runs once for each
+        assertEq(NOTHING, caller.callFunction("accept_catching", c), "no exception in Java for the calling Program");
+        assertEq(NOTHING, caller.callFunction("accept_catching_on_java_thread", c),
+            "no exception in Java on a Java thread");
+        assertEq(2, ran.size(), "the callback's body ran once for each call");
+        ran.clear();
+
         # the Java proxy outlives the Program whose code it calls back
         delete owner;
 
         # Java calls the proxy for another Program, and on a Java thread that Qore did not start: the callback's
         # Program has been deleted, so Java sees the PROGRAM-ERROR of the call of its code, which does not run
+        string expected = "^org\\.qore\\.jni\\.QoreExceptionWrapper: PROGRAM-ERROR: .*has already been deleted";
         *string from_caller = caller.callFunction("accept_catching", c);
-        assertRegex("PROGRAM-ERROR", from_caller ?? "<no exception>", "Java's exception for the calling Program");
+        assertRegex(expected, from_caller ?? "<no exception>", "Java's exception for the calling Program");
         *string from_java_thread = caller.callFunction("accept_catching_on_java_thread", c);
-        assertRegex("PROGRAM-ERROR", from_java_thread ?? "<no exception>", "Java's exception on a Java thread");
+        assertRegex(expected, from_java_thread ?? "<no exception>", "Java's exception on a Java thread");
         assertTrue(ran.empty(), "the callback's body did not run");
     }
 }

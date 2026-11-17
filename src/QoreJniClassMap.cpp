@@ -4611,7 +4611,7 @@ JniProgramDataRegistry& jni_pgm_data() {
     static JniProgramDataRegistry& reg = *new JniProgramDataRegistry;
     return reg;
 }
-}
+}  // namespace
 
 static void jni_pgm_data_register(const QoreProgram* pgm) {
     JniProgramDataRegistry& reg = jni_pgm_data();
