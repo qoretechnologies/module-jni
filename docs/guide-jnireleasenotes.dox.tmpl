@@ -16,7 +16,6 @@
       as a %Qore closure enters the Program that it was returned to in the same way when another Program calls it,
       which runs that Program's entry handler and raises \c PROGRAM-ERROR if the Program is being torn down or is
       being parsed by another thread (see @ref jni_callback_sandbox)
-
     - <b>Security</b>: the functions that load, define or run Java code or return the class loader
       (\c Jni::org::qore::jni::kotlin_eval(), \c get_byte_code(), \c load_class(), \c define_class(),
       \c implement_interface(), \c invoke(), \c invoke_nonvirtual() and \c get_class_loader()), and

@@ -147,7 +147,6 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
             // (an entry made after the check above, once the teardown had started, has failed) and no thread is in the
             // Program
             jpc = jni_get_context_unconditional(pgm);
-            assert(pgm == this->pgm);
         } else {
             pgm = nullptr;
         }

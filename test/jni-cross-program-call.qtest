@@ -522,6 +522,9 @@ class JniCrossProgramCallTest inherits QUnit::Test {
             call_function("Jni::org::qore::jni::dbg_jni_set_context_gate");
             return True;
         } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "NO-FUNCTION") {
+                rethrow;
+            }
             return False;
         }
     }
