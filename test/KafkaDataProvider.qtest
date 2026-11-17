@@ -45,6 +45,9 @@ public class KafkaDataProviderTest inherits QUnit::Test {
         addTestCase("event data types", \eventDataTypeTest());
         addTestCase("Kafka integration test", \kafkaIntegrationTest());
         addTestCase("Kafka record headers", \kafkaHeadersTest());
+        addTestCase("Kafka refused record redelivery", \kafkaRefusalTest());
+        addTestCase("Kafka restart after a refusal", \kafkaRefusalRestartTest());
+        addTestCase("Kafka consumer options", \kafkaConsumerOptionsTest());
 
         # the integration test runs only when a broker is configured; a configured broker that cannot be used
         # fails the test instead of skipping it
@@ -321,6 +324,138 @@ public class KafkaDataProviderTest inherits QUnit::Test {
         assertEq(0, msg_queue.size(), "no other messages arrive");
     }
 
+    #! Returns the integration connection, or skips the test if none is configured
+    private KafkaConnection getIntegrationConnection() {
+        if (setup_error) {
+            throw setup_error.err, sprintf("the configured Kafka connection could not be set up: %s",
+                setup_error.desc), setup_error.arg;
+        }
+        if (!kafka_conn) {
+            testSkip("no Kafka connection configured (set KAFKA_CONNECTION or use -c)");
+        }
+        return kafka_conn;
+    }
+
+    #! Produces the given values to a new topic and returns the topic
+    private string produceValues(KafkaConnection conn, list<string> values) {
+        string topic = "qore-test-" + get_random_string(12);
+        KafkaProducerDataProvider producer(conn);
+        foreach string value in (values) {
+            producer.doRequest({"topic": topic, "partition": 0, "value": value});
+        }
+        return topic;
+    }
+
+    #! Returns a consumer of the topic in the given group that reads a new group from the earliest offset
+    private KafkaConsumerDataProvider getConsumer(KafkaConnection conn, string topic, string group) {
+        return new KafkaConsumerDataProvider(conn, {
+            "topics": (topic,),
+            "group.id": group,
+            "auto.offset.reset": "earliest",
+            "refusal_delay_ms": 10,
+            "max_refusal_delay_ms": 100,
+        });
+    }
+
+    #! Returns the next delivery from the queue, failing the test if none arrives in time
+    private hash<auto> getDelivery(Queue queue, string what) {
+        auto rv = queue.get(ConsumeTimeout);
+        if (!exists rv) {
+            throw "KAFKA-TEST-ERROR", sprintf("%s: no delivery within %y", what, ConsumeTimeout);
+        }
+        return rv;
+    }
+
+    #! A refused record is delivered again and committed only after it is accepted (qore#6395)
+    /** An observer refuses a record once: the consumer keeps running, the record is delivered again, and the records
+        after it follow in order.  A new consumer of the same group then starts after the last record: every record
+        was committed once it was accepted, and none is delivered again.
+    */
+    kafkaRefusalTest() {
+        KafkaConnection conn = getIntegrationConnection();
+        string topic = produceValues(conn, ("v0", "v1", "v2"));
+        string group = "qore-test-" + get_random_string(12);
+
+        {
+            KafkaConsumerDataProvider consumer = getConsumer(conn, topic, group);
+            on_exit consumer.stopEvents();
+            Queue deliveries();
+            KafkaRefusingObserver obs(deliveries, "v1", 1);
+            consumer.registerObserver(obs);
+            consumer.observersReady();
+
+            list<hash<auto>> seen = map getDelivery(deliveries, "delivery " + $1), xrange(4);
+            assertEq(("v0", "v1", "v1", "v2"), (map $1.value, seen), "the refused record is delivered again, in "
+                "order");
+            assertEq((False, True, False, False), (map $1.refused, seen), "only the first delivery of v1 is "
+                "refused");
+            assertEq((0, 1, 1, 2), (map $1.offset, seen), "the record is delivered again with its offset");
+            consumer.stopEvents();
+            assertEq(0, deliveries.size(), "no other record is delivered");
+            # each accepted record was committed once, before the stop
+            assertEq({"refusals": 1, "committed": 3, "commit_errors": 0}, consumer.getDeliveryStats());
+        }
+
+        # every record was committed after it was accepted: a new consumer of the group delivers only new records
+        KafkaProducerDataProvider producer(conn);
+        producer.doRequest({"topic": topic, "partition": 0, "value": "v3"});
+        KafkaConsumerDataProvider consumer = getConsumer(conn, topic, group);
+        on_exit consumer.stopEvents();
+        Queue deliveries();
+        KafkaRefusingObserver obs(deliveries);
+        consumer.registerObserver(obs);
+        consumer.observersReady();
+        hash<auto> next = getDelivery(deliveries, "the record produced after the restart");
+        assertEq("v3", next.value, "the restarted consumer starts after the last accepted record");
+        assertEq(3, next.offset);
+    }
+
+    #! A consumer started after a refusal starts at the refused record (qore#6395)
+    /** An observer refuses a record every time; the consumer is stopped while the record is refused, and a new
+        consumer of the same group starts at the refused record: the records before it were committed, the refused
+        one was not.
+    */
+    kafkaRefusalRestartTest() {
+        KafkaConnection conn = getIntegrationConnection();
+        string topic = produceValues(conn, ("v0", "v1", "v2"));
+        string group = "qore-test-" + get_random_string(12);
+
+        {
+            KafkaConsumerDataProvider consumer = getConsumer(conn, topic, group);
+            on_exit consumer.stopEvents();
+            Queue deliveries();
+            KafkaRefusingObserver obs(deliveries, "v1", -1);
+            consumer.registerObserver(obs);
+            consumer.observersReady();
+            assertEq("v0", getDelivery(deliveries, "v0").value);
+            # v1 is refused twice: the consumer keeps delivering it again after a refusal
+            for (int i = 0; i < 2; ++i) {
+                hash<auto> d = getDelivery(deliveries, "refused v1");
+                assertEq("v1", d.value, "the refused record is delivered again");
+                assertTrue(d.refused);
+            }
+            consumer.stopEvents();
+        }
+
+        KafkaConsumerDataProvider consumer = getConsumer(conn, topic, group);
+        on_exit consumer.stopEvents();
+        Queue deliveries();
+        KafkaRefusingObserver obs(deliveries);
+        consumer.registerObserver(obs);
+        consumer.observersReady();
+        list<hash<auto>> seen = map getDelivery(deliveries, "delivery " + $1), xrange(2);
+        assertEq(("v1", "v2"), (map $1.value, seen), "the new consumer starts at the refused record");
+        assertEq((1, 2), (map $1.offset, seen));
+    }
+
+    #! The provider's own options are not Kafka client properties, and auto-commit is always off (qore#6395)
+    kafkaConsumerOptionsTest() {
+        hash<auto> opts = KafkaConsumerDataProvider::ConstructorOptions;
+        assertFalse(opts."enable.auto.commit".default_value, "auto-commit is off by default");
+        assertEq(KafkaConsumerDataProvider::DefaultRefusalDelayMs, opts.refusal_delay_ms.default_value);
+        assertEq(KafkaConsumerDataProvider::DefaultMaxRefusalDelayMs, opts.max_refusal_delay_ms.default_value);
+    }
+
     eventDataTypeTest() {
         # a message to send may carry headers, and needs no key
         hash<auto> send_fields = KafkaEventDataType.getFields();
@@ -527,6 +662,36 @@ components:
         message:
           type: string
 ", AsyncApiChannel, AsyncApiChannel, AsyncApiChannel, AsyncApiChannel, AsyncApiChannel);
+    }
+}
+
+#! Records every delivery and refuses the deliveries of one value a number of times
+class KafkaRefusingObserver inherits Observer {
+    private {
+        Queue queue;
+        *string refuse_value;
+        #! the number of deliveries of the value to refuse; -1 refuses every one
+        int refusals;
+    }
+
+    constructor(Queue queue, *string refuse_value, int refusals = 0) {
+        self.queue = queue;
+        self.refuse_value = refuse_value;
+        self.refusals = refusals;
+    }
+
+    update(string event_id, hash<auto> data) {
+        if (event_id != KafkaConsumerDataProvider::EVENT_KAFKA_MESSAGE) {
+            return;
+        }
+        bool refuse = exists refuse_value && data.value == refuse_value && refusals != 0;
+        queue.push({"value": data.value, "offset": data.offset, "refused": refuse});
+        if (refuse) {
+            if (refusals > 0) {
+                --refusals;
+            }
+            throw "KAFKA-TEST-REFUSAL", sprintf("refusing %y", data.value);
+        }
     }
 }
 

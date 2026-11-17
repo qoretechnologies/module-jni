@@ -96,16 +96,40 @@
           "message": "Identyfikator grupy konsumentów, do której należy ten konsument"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.desc": {
-          "source": "If `True` the consumer's offset will be periodically committed in the background",
-          "message": "Jeśli `True`, przesunięcie konsumenta będzie okresowo zatwierdzane w tle"
+          "source": "Ignored: the offsets are never committed in the background; the provider commits the offset of a record only after every observer has accepted it (at-least-once delivery), so that a record that an observer refuses is delivered again instead of being lost",
+          "message": "Ignorowane: przesunięcia nigdy nie są zatwierdzane w tle; dostawca zatwierdza przesunięcie rekordu dopiero wtedy, gdy wszyscy obserwatorzy go zaakceptują (dostarczanie co najmniej raz), dzięki czemu rekord odrzucony przez obserwatora jest dostarczany ponownie zamiast zostać utracony"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.display_name": {
           "source": "Enable Auto Commit",
           "message": "Włącz automatyczne zatwierdzanie"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.short_desc": {
-          "source": "If True the consumer's offset will be periodically committed in the background",
-          "message": "Jeśli True, przesunięcie konsumenta będzie okresowo zatwierdzane w tle"
+          "source": "Ignored: the provider commits the offset of each record after its delivery",
+          "message": "Ignorowane: dostawca zatwierdza przesunięcie każdego rekordu po jego dostarczeniu"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before a record that an observer refused is delivered again; it doubles with each consecutive refusal up to `max_refusal_delay_ms`, and the first successful delivery resets it",
+          "message": "Opóźnienie w milisekundach, po którym rekord odrzucony przez obserwatora jest dostarczany ponownie; podwaja się z każdym kolejnym odrzuceniem aż do `max_refusal_delay_ms`, a pierwsze udane dostarczenie je resetuje"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay",
+          "message": "Opóźnienie po odrzuceniu"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused record is delivered again",
+          "message": "Początkowe opóźnienie w milisekundach przed ponownym dostarczeniem odrzuconego rekordu"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before a record that an observer refused is delivered again",
+          "message": "Maksymalne opóźnienie w milisekundach, po którym rekord odrzucony przez obserwatora jest dostarczany ponownie"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay",
+          "message": "Maksymalne opóźnienie po odrzuceniu"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused record is delivered again",
+          "message": "Maksymalne opóźnienie w milisekundach przed ponownym dostarczeniem odrzuconego rekordu"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.desc": {
           "source": "The minimum amount of data the server should return for a fetch request.\n\nIf insufficient data is available, the request will wait for that much data to accumulate before answering the request.\n\nThe default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive.\n\nSetting this to something greater than `1` will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency",

@@ -4,6 +4,11 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.Header;
@@ -173,6 +178,72 @@ class QoreKafkaConsumer {
             }
         }
         return events;
+    }
+
+    /** The description of the last commit that failed without stopping the consumer (a reassignment of the
+        partition, or a retriable error)
+     */
+    private String lastCommitError;
+
+    /** Commits the position after a delivered record of a partition (qore#6395)
+
+        The provider commits offsets itself, after its observers have accepted the records, so that a record is never
+        committed before it has been delivered (\c enable.auto.commit is always off).
+
+        A commit that a stop request interrupts (stop() wakes the consumer up) is made again, as the wakeup is
+        one-shot, so that the records delivered before the stop stay committed.
+
+        @param topic the topic of the partition
+        @param partition the partition
+        @param nextOffset the offset of the next record to deliver: the offset of the last delivered record plus one
+
+        @return true if the position was committed, false if the commit failed because the partition was reassigned
+        or with a retriable error (a later commit of the partition covers its records, unless the partition is
+        reassigned or the consumer restarts first); getLastCommitError() describes it; any other error is thrown
+     */
+    public boolean commit(String topic, int partition, long nextOffset) throws Throwable {
+        Map<TopicPartition, OffsetAndMetadata> pos = Collections.singletonMap(new TopicPartition(topic, partition),
+            new OffsetAndMetadata(nextOffset));
+        try {
+            try {
+                cons.commitSync(pos);
+            } catch (WakeupException e) {
+                if (!quit.get()) {
+                    throw e;
+                }
+                cons.commitSync(pos);
+            }
+            return true;
+        } catch (CommitFailedException | RebalanceInProgressException | RetriableException e) {
+            lastCommitError = e.toString();
+            return false;
+        }
+    }
+
+    /** Returns the description of the last commit that failed without stopping the consumer
+     */
+    public String getLastCommitError() {
+        return lastCommitError;
+    }
+
+    /** Sets the position of a partition, so that the next poll() returns the record at the given offset again
+        (qore#6395)
+     */
+    public void seek(String topic, int partition, long offset) throws Throwable {
+        cons.seek(new TopicPartition(topic, partition), offset);
+    }
+
+    /** Pauses fetching from every assigned partition; poll() then returns no records from them, but keeps the
+        consumer in its group (qore#6395)
+     */
+    public void pauseAll() throws Throwable {
+        cons.pause(cons.assignment());
+    }
+
+    /** Resumes fetching from every paused partition (qore#6395)
+     */
+    public void resumeAll() throws Throwable {
+        cons.resume(cons.paused());
     }
 
     /** Marks polling done and closes this consumer

@@ -149,6 +149,10 @@ module KafkaDataProvider {
     @section kafkadataprovider_relnotes Release Notes
 
     @subsection kafkadataprovider_v2_1 KafkaDataProvider v2.1
+    - the consumer delivers records at least once: it commits a record only after every observer has accepted it,
+      and a refused record is delivered again after a back-off instead of stopping the consumer and being lost, so
+      an observer can see a record twice (see @ref kafkaconsumerdataprovider_delivery;
+      <a href="https://github.com/qoretechnologies/qore/issues/6395">issue 6395</a>)
     - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
       callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later

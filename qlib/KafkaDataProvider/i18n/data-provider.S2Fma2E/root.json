@@ -104,12 +104,36 @@
           "message": "Enable Auto Commit"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.short_desc": {
-          "source": "If True the consumer's offset will be periodically committed in the background",
-          "message": "If True the consumer's offset will be periodically committed in the background"
+          "source": "Ignored: the provider commits the offset of each record after its delivery",
+          "message": "Ignored: the provider commits the offset of each record after its delivery"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.desc": {
-          "source": "If `True` the consumer's offset will be periodically committed in the background",
-          "message": "If `True` the consumer's offset will be periodically committed in the background"
+          "source": "Ignored: the offsets are never committed in the background; the provider commits the offset of a record only after every observer has accepted it (at-least-once delivery), so that a record that an observer refuses is delivered again instead of being lost",
+          "message": "Ignored: the offsets are never committed in the background; the provider commits the offset of a record only after every observer has accepted it (at-least-once delivery), so that a record that an observer refuses is delivered again instead of being lost"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay",
+          "message": "Refusal Delay"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused record is delivered again",
+          "message": "The initial delay in milliseconds before a refused record is delivered again"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before a record that an observer refused is delivered again; it doubles with each consecutive refusal up to `max_refusal_delay_ms`, and the first successful delivery resets it",
+          "message": "The delay in milliseconds before a record that an observer refused is delivered again; it doubles with each consecutive refusal up to `max_refusal_delay_ms`, and the first successful delivery resets it"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay",
+          "message": "Max Refusal Delay"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused record is delivered again",
+          "message": "The maximum delay in milliseconds before a refused record is delivered again"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before a record that an observer refused is delivered again",
+          "message": "The maximum delay in milliseconds before a record that an observer refused is delivered again"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.YXV0by5vZmZzZXQucmVzZXQ.display_name": {
           "source": "Auto Offset Reset",
