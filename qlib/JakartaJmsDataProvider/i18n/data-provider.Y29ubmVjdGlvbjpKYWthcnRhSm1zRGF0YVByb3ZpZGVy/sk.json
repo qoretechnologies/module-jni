@@ -108,8 +108,8 @@
           "message": "Transakčná sesia"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.desc": {
-          "source": "The JMS session acknowledgment mode",
-          "message": "Režim potvrdenia relácie JMS"
+          "source": "The JMS session acknowledgment mode of the pooled sessions; the polling provider always uses a transacted session of its own, so that a message is acknowledged only after its observers have accepted it",
+          "message": "Režim potvrdzovania relácií JMS pre relácie v zásobníku; polling poskytovateľ vždy používa vlastnú transakčnú reláciu, takže správa sa potvrdí až potom, čo ju prijmú jej pozorovatelia"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.display_name": {
           "source": "Session Mode",

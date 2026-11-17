@@ -108,8 +108,8 @@
           "message": "交易式會話"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.desc": {
-          "source": "The JMS session acknowledgment mode",
-          "message": "JMS 會話確認模式"
+          "source": "The JMS session acknowledgment mode of the pooled sessions; the polling provider always uses a transacted session of its own, so that a message is acknowledged only after its observers have accepted it",
+          "message": "集區工作階段的 JMS 工作階段確認模式；輪詢提供者一律使用自己的交易工作階段，因此訊息只會在觀察者接受後才確認"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.display_name": {
           "source": "Session Mode",

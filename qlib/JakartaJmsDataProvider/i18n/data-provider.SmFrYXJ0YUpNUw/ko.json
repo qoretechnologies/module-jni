@@ -83,6 +83,42 @@
           "source": "JMS message selector for filtering messages",
           "message": "메시지 필터링을 위한 JMS 메시지 셀렉터"
         },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay (ms)",
+          "message": "거부 후 지연(밀리초)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused message is delivered again",
+          "message": "거부된 메시지를 다시 전달하기 전의 초기 지연 시간(밀리초)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused, so that the broker delivers it again; it doubles with each delivery of the message up to `max_refusal_delay_ms`",
+          "message": "옵저버가 거부한 메시지의 트랜잭션을 폴링 프로바이더가 롤백하여 브로커가 다시 전달하도록 하기 전의 지연 시간(밀리초)입니다. 메시지가 전달될 때마다 `max_refusal_delay_ms`까지 두 배로 늘어납니다"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay (ms)",
+          "message": "거부 후 최대 지연(밀리초)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused message is delivered again",
+          "message": "거부된 메시지를 다시 전달하기 전의 최대 지연 시간(밀리초)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused",
+          "message": "옵저버가 거부한 메시지의 트랜잭션을 폴링 프로바이더가 롤백하기 전의 최대 지연 시간(밀리초)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.display_name": {
+          "source": "Dead-Letter Destination",
+          "message": "데드 레터 대상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination of the messages that an observer refuses permanently",
+          "message": "옵저버가 영구적으로 거부한 메시지의 대상"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.desc": {
+          "source": "The destination, in format `queue://name` or `topic://name`, to which the polling provider moves a message that an observer refuses permanently (by throwing `JMS-MESSAGE-REJECTED`) or that cannot be converted to an event; without it, such a message is acknowledged and logged as an error",
+          "message": "옵저버가 영구적으로 거부한(`JMS-MESSAGE-REJECTED`를 발생시킨) 메시지나 이벤트로 변환할 수 없는 메시지를 폴링 프로바이더가 옮기는 대상(`queue://name` 또는 `topic://name` 형식)입니다. 지정하지 않으면 그러한 메시지는 확인 처리되고 오류로 기록됩니다"
+        },
         "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
           "source": "A JMS message is received from a queue or topic",
           "message": "큐 또는 토픽에서 JMS 메시지가 수신됨"

@@ -92,7 +92,8 @@ module JakartaJmsDataProvider {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                JmsDataProvider::ConstructorOptions{"client_id",}
+                JmsDataProvider::ConstructorOptions{"client_id", "refusal_delay_ms", "max_refusal_delay_ms",
+                    "dead_letter_destination",}
             ),
         });
 
@@ -212,7 +213,8 @@ module JakartaJmsDataProvider {
     - <b>Request-reply</b>: synchronous request-reply using temporary queues
     - <b>Queue browsing</b>: non-destructive inspection of queue contents
     - <b>Durable subscriptions</b>: persistent topic subscriptions across reconnects
-    - <b>Event-driven consumption</b>: asynchronous message reception via \c MessageListener
+    - <b>Event-driven consumption</b>: messages received in a transacted session and acknowledged only after
+      the observers have accepted them (see @ref jmspollingdataprovider_delivery)
     - <b>Session pooling</b>: thread-safe pool of JMS sessions for concurrent access
     - <b>Provider-agnostic</b>: works with any Jakarta Messaging 3.x compliant provider
 
@@ -321,8 +323,13 @@ module JakartaJmsDataProvider {
     AbstractDataProvider polling = provider.getChildProviderEx("polling");
     polling.registerObserver(new OrderHandler());
     polling.observersReady();
-    # messages matching the selector are delivered to OrderHandler::update()
+    # messages matching the selector are delivered to OrderHandler::update(); a message is acknowledged only after
+    # every observer has accepted it, and one that an observer refuses by throwing is delivered again
     @endcode
+
+    The polling provider commits each message in a transacted session only after its observers have accepted it;
+    see @ref jmspollingdataprovider_delivery for the redelivery of refused messages and the handling of messages
+    that an observer refuses permanently.
 
     @par Request-reply (synchronous)
     @code{.py}

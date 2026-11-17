@@ -83,6 +83,42 @@
           "source": "JMS message selector for filtering messages",
           "message": "Селектор повідомлень JMS для фільтрації повідомлень"
         },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay (ms)",
+          "message": "Затримка після відхилення (мс)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused message is delivered again",
+          "message": "Початкова затримка в мілісекундах перед повторною доставкою відхиленого повідомлення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused, so that the broker delivers it again; it doubles with each delivery of the message up to `max_refusal_delay_ms`",
+          "message": "Затримка в мілісекундах, після якої постачальник опитування відкочує транзакцію повідомлення, відхиленого спостерігачем, щоб брокер доставив його повторно; вона подвоюється з кожною доставкою повідомлення до `max_refusal_delay_ms`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay (ms)",
+          "message": "Максимальна затримка після відхилення (мс)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused message is delivered again",
+          "message": "Максимальна затримка в мілісекундах перед повторною доставкою відхиленого повідомлення"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused",
+          "message": "Максимальна затримка в мілісекундах, після якої постачальник опитування відкочує транзакцію повідомлення, відхиленого спостерігачем"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.display_name": {
+          "source": "Dead-Letter Destination",
+          "message": "Призначення недоставлених повідомлень"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination of the messages that an observer refuses permanently",
+          "message": "Призначення повідомлень, які спостерігач остаточно відхиляє"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.desc": {
+          "source": "The destination, in format `queue://name` or `topic://name`, to which the polling provider moves a message that an observer refuses permanently (by throwing `JMS-MESSAGE-REJECTED`) or that cannot be converted to an event; without it, such a message is acknowledged and logged as an error",
+          "message": "Призначення у форматі `queue://name` або `topic://name`, до якого постачальник опитування переміщує повідомлення, яке спостерігач остаточно відхилив (викинувши `JMS-MESSAGE-REJECTED`) або яке неможливо перетворити на подію; без нього таке повідомлення підтверджується і записується в журнал як помилка"
+        },
         "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
           "source": "A JMS message is received from a queue or topic",
           "message": "Повідомлення JMS отримано з черги або теми"

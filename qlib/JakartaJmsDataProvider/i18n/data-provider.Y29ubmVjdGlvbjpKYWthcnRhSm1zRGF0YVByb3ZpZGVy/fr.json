@@ -108,8 +108,8 @@
           "message": "Session transactionnelle"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.desc": {
-          "source": "The JMS session acknowledgment mode",
-          "message": "Mode de reconnaissance des sessions JMS"
+          "source": "The JMS session acknowledgment mode of the pooled sessions; the polling provider always uses a transacted session of its own, so that a message is acknowledged only after its observers have accepted it",
+          "message": "Le mode d'acquittement des sessions JMS du pool ; le fournisseur d'interrogation utilise toujours sa propre session transactionnelle, de sorte qu'un message n'est acquitté qu'après que ses observateurs l'ont accepté"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.display_name": {
           "source": "Session Mode",

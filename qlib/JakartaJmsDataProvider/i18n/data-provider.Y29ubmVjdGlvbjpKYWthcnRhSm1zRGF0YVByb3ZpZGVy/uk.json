@@ -108,8 +108,8 @@
           "message": "Транзакційна сесія"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.desc": {
-          "source": "The JMS session acknowledgment mode",
-          "message": "Режим підтвердження сесії JMS"
+          "source": "The JMS session acknowledgment mode of the pooled sessions; the polling provider always uses a transacted session of its own, so that a message is acknowledged only after its observers have accepted it",
+          "message": "Режим підтвердження сеансів JMS із пулу; постачальник опитування завжди використовує власний транзакційний сеанс, тож повідомлення підтверджується лише після того, як його приймуть спостерігачі"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.display_name": {
           "source": "Session Mode",

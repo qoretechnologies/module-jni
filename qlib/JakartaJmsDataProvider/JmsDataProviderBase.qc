@@ -35,7 +35,6 @@
 %module-cmd(jni) import jakarta.jms.BytesMessage
 %module-cmd(jni) import jakarta.jms.MessageProducer
 %module-cmd(jni) import jakarta.jms.MessageConsumer
-%module-cmd(jni) import jakarta.jms.MessageListener
 %module-cmd(jni) import jakarta.jms.QueueBrowser
 %module-cmd(jni) import jakarta.jms.TemporaryQueue
 %module-cmd(jni) import jakarta.jms.DeliveryMode
