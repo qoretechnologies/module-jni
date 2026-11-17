@@ -4856,7 +4856,9 @@ JniExternalProgramData* JniExternalProgramData::setContext(Env& env, QoreProgram
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
 #ifdef DEBUG
     // a test gate that runs code between the lookup of the context and its use
-    dbg_jni_run_context_gate();
+    if (dbg_jni_context_gate_set.load(std::memory_order_acquire)) {
+        dbg_jni_run_context_gate();
+    }
 #endif
     // set classloader context in new thread
     env.callVoidMethod(jpc->classLoader, Globals::methodQoreURLClassLoaderSetContext, nullptr);

@@ -75,7 +75,7 @@ static std::mutex context_gate_lock;
 static ResolvedCallReferenceNode* context_gate = nullptr;
 static int context_gate_tid = 0;
 // set while a gate is set, so that a lookup made with no gate set costs only this load
-static std::atomic<bool> context_gate_set{false};
+std::atomic<bool> dbg_jni_context_gate_set{false};
 
 //! Sets or clears a one-shot gate that runs the given code on this thread in the window between the lookup of a
 //! Program's jni context and its use
@@ -95,7 +95,7 @@ static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeCon
         old = context_gate;
         context_gate = code ? code->refRefSelf() : nullptr;
         context_gate_tid = code ? q_gettid() : 0;
-        context_gate_set.store(code != nullptr, std::memory_order_release);
+        dbg_jni_context_gate_set.store(code != nullptr, std::memory_order_release);
     }
     if (old) {
         old->deref(xsink);
@@ -104,9 +104,6 @@ static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeCon
 }
 
 void dbg_jni_run_context_gate() {
-    if (!context_gate_set.load(std::memory_order_acquire)) {
-        return;
-    }
     ResolvedCallReferenceNode* code;
     {
         std::lock_guard<std::mutex> guard(context_gate_lock);
@@ -116,7 +113,7 @@ void dbg_jni_run_context_gate() {
         code = context_gate;
         context_gate = nullptr;
         context_gate_tid = 0;
-        context_gate_set.store(false, std::memory_order_release);
+        dbg_jni_context_gate_set.store(false, std::memory_order_release);
     }
     ExceptionSink xsink;
     {
