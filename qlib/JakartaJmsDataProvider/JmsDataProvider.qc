@@ -87,7 +87,9 @@ public class JmsDataProvider inherits JmsDataProviderBase {
                 "display_name": "Session Mode",
                 "short_desc": "The JMS session acknowledgment mode",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The JMS session acknowledgment mode",
+                "desc": "The JMS session acknowledgment mode of the pooled sessions; the polling provider "
+                    "always uses a transacted session of its own, so that a message is acknowledged only after "
+                    "its observers have accepted it",
                 "default_value": "AUTO_ACKNOWLEDGE",
                 "allowed_values": (
                     <AllowedValueInfo>{
@@ -130,6 +132,32 @@ public class JmsDataProvider inherits JmsDataProviderBase {
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "A JMS SQL-92 message selector expression for filtering incoming messages "
                     "(e.g. `priority > 5 AND color = 'red'`)",
+            },
+            "refusal_delay_ms": <DataProviderOptionInfo>{
+                "display_name": "Refusal Delay (ms)",
+                "short_desc": "The initial delay in milliseconds before a refused message is delivered again",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "The delay in milliseconds before the polling provider rolls back the transaction of a "
+                    "message that an observer refused, so that the broker delivers it again; it doubles with "
+                    "each delivery of the message up to `max_refusal_delay_ms`",
+                "default_value": 1000,
+            },
+            "max_refusal_delay_ms": <DataProviderOptionInfo>{
+                "display_name": "Max Refusal Delay (ms)",
+                "short_desc": "The maximum delay in milliseconds before a refused message is delivered again",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "The maximum delay in milliseconds before the polling provider rolls back the "
+                    "transaction of a message that an observer refused",
+                "default_value": 60000,
+            },
+            "dead_letter_destination": <DataProviderOptionInfo>{
+                "display_name": "Dead-Letter Destination",
+                "short_desc": "The destination of the messages that an observer refuses permanently",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The destination, in format `queue://name` or `topic://name`, to which the polling "
+                    "provider moves a message that an observer refuses permanently (by throwing "
+                    "`JMS-MESSAGE-REJECTED`) or that cannot be converted to an event; without it, such a "
+                    "message is acknowledged and logged as an error",
             },
             "max_sessions": <DataProviderOptionInfo>{
                 "display_name": "Max Sessions",

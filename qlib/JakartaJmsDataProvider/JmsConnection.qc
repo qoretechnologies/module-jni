@@ -76,7 +76,9 @@ public class JmsConnection inherits ConnectionProvider::AbstractConnectionWithIn
                     "display_name": "Session Mode",
                     "short_desc": "The JMS session acknowledgment mode",
                     "type": "string",
-                    "desc": "The JMS session acknowledgment mode",
+                    "desc": "The JMS session acknowledgment mode of the pooled sessions; the polling provider "
+                        "always uses a transacted session of its own, so that a message is acknowledged only "
+                        "after its observers have accepted it",
                     "default_value": "AUTO_ACKNOWLEDGE",
                     "allowed_values": (
                         <AllowedValueInfo>{

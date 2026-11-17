@@ -35,7 +35,25 @@
 #! Contains all public definitions in the KafkaDataProvider module
 public namespace KafkaDataProvider {
 #! Event-based data provider for Kafka events
-/**
+/** @anchor kafkaconsumerdataprovider_delivery
+    @par Delivery and commits
+    Records are delivered to the observers in the order of each partition, and a record's offset is committed only after
+    every observer has accepted it (at-least-once delivery): \c enable.auto.commit is always off, and the provider
+    commits the offsets of the delivered records of each poll with \c commitSync().  An observer refuses a record by
+    throwing from its \c update() method (it reaches the provider as an \c OBSERVER-NOTIFICATION-ERROR); a record whose
+    value fails AsyncAPI validation is refused as well.  A refused record is not lost and does not stop the consumer:
+    each partition with records that were not delivered is set back to its first undelivered record, and they are
+    delivered again, in order, after a back-off that starts at \c refusal_delay_ms and doubles with each consecutive
+    refusal up to \c max_refusal_delay_ms; the first successful delivery resets the back-off. A record that can never be
+    accepted (for example, one that fails validation) is therefore delivered again at the longest back-off until it is
+    accepted: as every assigned partition is paused during a back-off, the whole consumer then delivers at most one poll
+    per \c max_refusal_delay_ms.  The consumer keeps polling during a back-off, so that it stays in its group.  A
+    redelivered record goes to every observer again, so an observer that accepted it before another one refused it sees
+    it again.  If the partitions are reassigned before a refused record is delivered, the consumer that gets them starts
+    at the last committed offset, which also delivers the record again.  A commit that fails because the partitions were
+    reassigned, or with a retriable error, is logged: a later commit of the partition covers its records, and they are
+    delivered again only if the partition is reassigned or the consumer restarts first; any other error of the Kafka
+    client is logged and stops the consumer (qore#6395).
 */
 public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDataProviderBase,
         DataProvider::DelayedObservable {
@@ -102,10 +120,29 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
             },
             "enable.auto.commit": <DataProviderOptionInfo>{
                 "display_name": "Enable Auto Commit",
-                "short_desc": "If True the consumer's offset will be periodically committed in the background",
+                "short_desc": "Ignored: the provider commits the offset of each record after its delivery",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If `True` the consumer's offset will be periodically committed in the background",
-                "default_value": True,
+                "desc": "Ignored: the offsets are never committed in the background; the provider commits the "
+                    "offset of a record only after every observer has accepted it (at-least-once delivery), so that "
+                    "a record that an observer refuses is delivered again instead of being lost",
+                "default_value": False,
+            },
+            "refusal_delay_ms": <DataProviderOptionInfo>{
+                "display_name": "Refusal Delay",
+                "short_desc": "The initial delay in milliseconds before a refused record is delivered again",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "The delay in milliseconds before a record that an observer refused is delivered again; it "
+                    "doubles with each consecutive refusal up to `max_refusal_delay_ms`, and the first successful "
+                    "delivery resets it",
+                "default_value": DefaultRefusalDelayMs,
+            },
+            "max_refusal_delay_ms": <DataProviderOptionInfo>{
+                "display_name": "Max Refusal Delay",
+                "short_desc": "The maximum delay in milliseconds before a refused record is delivered again",
+                "type": AbstractDataProviderTypeMap."int",
+                "desc": "The maximum delay in milliseconds before a record that an observer refused is delivered "
+                    "again",
+                "default_value": DefaultMaxRefusalDelayMs,
             },
             "auto.offset.reset": <DataProviderOptionInfo>{
                 "display_name": "Auto Offset Reset",
@@ -212,6 +249,18 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
 
         #! Kafka message event constant
         const EVENT_KAFKA_MESSAGE = "kafka-message";
+
+        #! The default initial delay in milliseconds before a refused record is delivered again
+        const DefaultRefusalDelayMs = 1000;
+
+        #! The default maximum delay in milliseconds before a refused record is delivered again
+        const DefaultMaxRefusalDelayMs = 60000;
+
+        #! The options of the provider that are not Kafka client properties
+        const ProviderOptions = ("refusal_delay_ms", "max_refusal_delay_ms");
+
+        #! The longest time in milliseconds that a poll waits during a back-off
+        const BackOffPollMs = 250;
     }
 
     private {
@@ -220,6 +269,21 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
         WaitGroup event_wg();
         bool events_started = False;
         bool events_closed = False;
+
+        #! The initial delay in milliseconds before a refused record is delivered again
+        int refusal_delay_ms = DefaultRefusalDelayMs;
+
+        #! The maximum delay in milliseconds before a refused record is delivered again
+        int max_refusal_delay_ms = DefaultMaxRefusalDelayMs;
+
+        #! The number of refused deliveries
+        int refusal_count = 0;
+
+        #! The number of commits that failed without stopping the consumer
+        int commit_error_count = 0;
+
+        #! The number of delivered records whose offsets were committed
+        int committed_count = 0;
     }
 
     #! Creates the object from a connection object
@@ -239,6 +303,15 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
         # add default values automatically
         map copts{$1.key} = $1.value.default_value, ConstructorOptions.pairIterator(),
             exists $1.value.default_value && !copts.hasKey($1.key);
+        refusal_delay_ms = max(1, copts.refusal_delay_ms ?? DefaultRefusalDelayMs);
+        max_refusal_delay_ms = max(refusal_delay_ms, copts.max_refusal_delay_ms ?? DefaultMaxRefusalDelayMs);
+        copts -= ProviderOptions;
+        # the provider commits each record after its delivery (qore#6395)
+        if (copts."enable.auto.commit") {
+            Logger::LoggerWrapper::warn("KafkaConsumerDataProvider: the \"enable.auto.commit\" option is "
+                "ignored: the provider commits the offset of each record after its delivery");
+        }
+        copts."enable.auto.commit" = False;
         cons = new QoreKafkaConsumer(copts ?? {}, EVENT_KAFKA_MESSAGE);
     }
 
@@ -278,13 +351,148 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
                 }
                 event_wg.done();
             }
-            cons.start();
-            while (cons.isRunning()) {
-                foreach hash<auto> data in ((cons.poll(1000))) {
-                    update(EVENT_KAFKA_MESSAGE, data);
+            try {
+                cons.start();
+                # consecutive refusals; gives the back-off before the next delivery
+                int refusals = 0;
+                while (cons.isRunning()) {
+                    int rc = deliverRecords(cons.poll(1000));
+                    if (rc > 0) {
+                        refusals = 0;
+                    } else if (rc < 0) {
+                        backOff(++refusals);
+                    }
                 }
+            } catch (hash<ExceptionInfo> ex) {
+                Logger::LoggerWrapper::error("KafkaConsumerDataProvider: the consumer stops after an error of the "
+                    "Kafka client: %s: %s", ex.err, ex.desc);
+                rethrow;
             }
         }();
+    }
+
+    #! Returns delivery statistics
+    /** @return a hash with the following keys:
+        - \c refusals: the number of deliveries that an observer refused
+        - \c committed: the number of delivered records whose offsets were committed
+        - \c commit_errors: the number of commits that failed without stopping the consumer (a later commit of the
+          partition covers their records)
+    */
+    hash<auto> getDeliveryStats() {
+        AutoLock al(event_m);
+        return {
+            "refusals": refusal_count,
+            "committed": committed_count,
+            "commit_errors": commit_error_count,
+        };
+    }
+
+    #! Delivers the records of a poll to the observers and commits the delivered ones
+    /** see @ref kafkaconsumerdataprovider_delivery
+
+        @return 1 if records were delivered, 0 if there were none, -1 if an observer refused one; then each partition
+        with records that were not delivered is set back to its first undelivered record
+    */
+    private int deliverRecords(list<auto> recs) {
+        # the next offset to commit of each partition with delivered records
+        hash<string, hash<auto>> delivered = {};
+        int rv = recs ? 1 : 0;
+        foreach hash<auto> rec in (recs) {
+            # after a stop request, the records that were not delivered are not committed and are delivered again
+            # when the group consumes again
+            if (!cons.isRunning()) {
+                break;
+            }
+            try {
+                update(EVENT_KAFKA_MESSAGE, rec);
+            } catch (hash<ExceptionInfo> ex) {
+                {
+                    AutoLock al(event_m);
+                    ++refusal_count;
+                }
+                Logger::LoggerWrapper::error("KafkaConsumerDataProvider: record at offset %d of partition %d of "
+                    "topic %y refused; it will be delivered again: %s: %s", rec.offset, rec.partition, rec.topic,
+                    ex.err, ex.desc);
+                # the refused record and every record after it are delivered again, in the order of their
+                # partitions
+                hash<string, bool> seen = {};
+                foreach hash<auto> r in (recs[$#..]) {
+                    string key = sprintf("%s:%d", r.topic, r.partition);
+                    if (!seen{key}) {
+                        seen{key} = True;
+                        cons.seek(r.topic, r.partition, r.offset);
+                    }
+                }
+                rv = -1;
+                break;
+            }
+            string key = sprintf("%s:%d", rec.topic, rec.partition);
+            delivered{key} = {
+                "topic": rec.topic,
+                "partition": rec.partition,
+                "offset": rec.offset + 1,
+                "count": (delivered{key}.count ?? 0) + 1,
+            };
+        }
+        commitDelivered(delivered);
+        return rv;
+    }
+
+    #! Commits the positions after the delivered records
+    private commitDelivered(hash<string, hash<auto>> delivered) {
+        foreach hash<auto> pos in (delivered.iterator()) {
+            # any error other than a reassignment of the partition or a retriable one is thrown and stops the
+            # consumer
+            if (cons.commit(pos.topic, pos.partition, pos.offset)) {
+                AutoLock al(event_m);
+                committed_count += pos.count;
+                continue;
+            }
+            # the partition was reassigned, or a retriable error: a later commit of the partition covers the records,
+            # unless the partition is reassigned or the consumer restarts first (at-least-once delivery)
+            {
+                AutoLock al(event_m);
+                ++commit_error_count;
+            }
+            Logger::LoggerWrapper::error("KafkaConsumerDataProvider: cannot commit offset %d of partition %d of "
+                "topic %y: %s", pos.offset, pos.partition, pos.topic, cons.getLastCommitError());
+        }
+    }
+
+    #! Waits before a refused record is delivered again
+    /** The partitions are paused and the consumer keeps polling, so that it stays in its group; records of
+        partitions that are assigned meanwhile are set back to be delivered after the back-off.
+
+        @param attempt the number of consecutive refusals
+    */
+    private backOff(int attempt) {
+        int delay_ms = refusal_delay_ms;
+        while (--attempt > 0 && delay_ms < max_refusal_delay_ms) {
+            delay_ms *= 2;
+        }
+        delay_ms = min(delay_ms, max_refusal_delay_ms);
+        date end = now_us() + milliseconds(delay_ms);
+        cons.pauseAll();
+        on_exit cons.resumeAll();
+        while (cons.isRunning()) {
+            int remaining_ms = ((end - now_us()).durationMilliseconds());
+            if (remaining_ms <= 0) {
+                break;
+            }
+            list<auto> recs = cons.poll(min(remaining_ms, BackOffPollMs));
+            if (recs) {
+                # records of partitions assigned during the back-off: they are delivered after it
+                hash<string, bool> seen = {};
+                foreach hash<auto> r in (recs) {
+                    string key = sprintf("%s:%d", r.topic, r.partition);
+                    if (!seen{key}) {
+                        seen{key} = True;
+                        cons.seek(r.topic, r.partition, r.offset);
+                    }
+                }
+                cons.pauseAll();
+            }
+        }
     }
 
     #! Called to stop generating events

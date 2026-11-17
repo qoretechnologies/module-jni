@@ -96,16 +96,40 @@
           "message": "此消費者所屬的消費者群組 ID"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.desc": {
-          "source": "If `True` the consumer's offset will be periodically committed in the background",
-          "message": "若為 `True`，消費者的位移將會在背景定期提交"
+          "source": "Ignored: the offsets are never committed in the background; the provider commits the offset of a record only after every observer has accepted it (at-least-once delivery), so that a record that an observer refuses is delivered again instead of being lost",
+          "message": "已忽略：位移絕不會在背景中提交；提供者只在所有觀察者都接受記錄後才提交其位移（至少一次傳遞），因此觀察者拒絕的記錄會重新傳遞，而不會遺失"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.display_name": {
           "source": "Enable Auto Commit",
           "message": "啟用自動提交"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.short_desc": {
-          "source": "If True the consumer's offset will be periodically committed in the background",
-          "message": "若為 True，消費者的位移將會在背景定期提交"
+          "source": "Ignored: the provider commits the offset of each record after its delivery",
+          "message": "已忽略：提供者會在每筆記錄傳遞後提交其位移"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before a record that an observer refused is delivered again; it doubles with each consecutive refusal up to `max_refusal_delay_ms`, and the first successful delivery resets it",
+          "message": "觀察者拒絕的記錄重新傳遞前的延遲（毫秒）；每次連續拒絕都會加倍，最多到 `max_refusal_delay_ms`，第一次成功傳遞會將其重設"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay",
+          "message": "拒絕後延遲"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused record is delivered again",
+          "message": "被拒絕的記錄重新傳遞前的初始延遲（毫秒）"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before a record that an observer refused is delivered again",
+          "message": "觀察者拒絕的記錄重新傳遞前的最大延遲（毫秒）"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay",
+          "message": "拒絕後最大延遲"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused record is delivered again",
+          "message": "被拒絕的記錄重新傳遞前的最大延遲（毫秒）"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.desc": {
           "source": "The minimum amount of data the server should return for a fetch request.\n\nIf insufficient data is available, the request will wait for that much data to accumulate before answering the request.\n\nThe default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive.\n\nSetting this to something greater than `1` will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency",

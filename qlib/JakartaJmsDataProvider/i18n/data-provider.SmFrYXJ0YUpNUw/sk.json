@@ -83,6 +83,42 @@
           "source": "JMS message selector for filtering messages",
           "message": "Selektor správ JMS na filtrovanie správ"
         },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay (ms)",
+          "message": "Oneskorenie po odmietnutí (ms)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused message is delivered again",
+          "message": "Počiatočné oneskorenie v milisekundách, kým sa odmietnutá správa doručí znova"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused, so that the broker delivers it again; it doubles with each delivery of the message up to `max_refusal_delay_ms`",
+          "message": "Oneskorenie v milisekundách, po ktorom polling poskytovateľ vráti transakciu správy, ktorú pozorovateľ odmietol, aby ju broker doručil znova; zdvojnásobuje sa s každým doručením správy až do `max_refusal_delay_ms`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay (ms)",
+          "message": "Maximálne oneskorenie po odmietnutí (ms)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused message is delivered again",
+          "message": "Maximálne oneskorenie v milisekundách, kým sa odmietnutá správa doručí znova"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused",
+          "message": "Maximálne oneskorenie v milisekundách, po ktorom polling poskytovateľ vráti transakciu správy, ktorú pozorovateľ odmietol"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.display_name": {
+          "source": "Dead-Letter Destination",
+          "message": "Cieľ nedoručiteľných správ"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination of the messages that an observer refuses permanently",
+          "message": "Cieľ správ, ktoré pozorovateľ natrvalo odmietne"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.desc": {
+          "source": "The destination, in format `queue://name` or `topic://name`, to which the polling provider moves a message that an observer refuses permanently (by throwing `JMS-MESSAGE-REJECTED`) or that cannot be converted to an event; without it, such a message is acknowledged and logged as an error",
+          "message": "Cieľ vo formáte `queue://name` alebo `topic://name`, do ktorého polling poskytovateľ presunie správu, ktorú pozorovateľ natrvalo odmietne (vyhodením `JMS-MESSAGE-REJECTED`) alebo ktorú nemožno previesť na udalosť; bez neho sa taká správa potvrdí a zaznamená ako chyba"
+        },
         "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
           "source": "A JMS message is received from a queue or topic",
           "message": "Správa JMS je prijatá z fronty alebo témy"

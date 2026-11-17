@@ -83,6 +83,42 @@
           "source": "JMS message selector for filtering messages",
           "message": "Selektor wiadomości JMS do filtrowania wiadomości"
         },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay (ms)",
+          "message": "Opóźnienie po odrzuceniu (ms)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused message is delivered again",
+          "message": "Początkowe opóźnienie w milisekundach przed ponownym dostarczeniem odrzuconej wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused, so that the broker delivers it again; it doubles with each delivery of the message up to `max_refusal_delay_ms`",
+          "message": "Opóźnienie w milisekundach, po którym dostawca odpytujący wycofuje transakcję wiadomości odrzuconej przez obserwatora, aby broker dostarczył ją ponownie; podwaja się z każdym dostarczeniem wiadomości aż do `max_refusal_delay_ms`"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay (ms)",
+          "message": "Maksymalne opóźnienie po odrzuceniu (ms)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused message is delivered again",
+          "message": "Maksymalne opóźnienie w milisekundach przed ponownym dostarczeniem odrzuconej wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused",
+          "message": "Maksymalne opóźnienie w milisekundach, po którym dostawca odpytujący wycofuje transakcję wiadomości odrzuconej przez obserwatora"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.display_name": {
+          "source": "Dead-Letter Destination",
+          "message": "Miejsce docelowe martwych wiadomości"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination of the messages that an observer refuses permanently",
+          "message": "Miejsce docelowe wiadomości, które obserwator trwale odrzuca"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.desc": {
+          "source": "The destination, in format `queue://name` or `topic://name`, to which the polling provider moves a message that an observer refuses permanently (by throwing `JMS-MESSAGE-REJECTED`) or that cannot be converted to an event; without it, such a message is acknowledged and logged as an error",
+          "message": "Miejsce docelowe w formacie `queue://name` lub `topic://name`, do którego dostawca odpytujący przenosi wiadomość trwale odrzuconą przez obserwatora (przez zgłoszenie `JMS-MESSAGE-REJECTED`) lub taką, której nie można przekształcić w zdarzenie; bez niego taka wiadomość jest potwierdzana i rejestrowana jako błąd"
+        },
         "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
           "source": "A JMS message is received from a queue or topic",
           "message": "Wiadomość JMS została odebrana z kolejki lub tematu"

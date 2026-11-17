@@ -83,6 +83,42 @@
           "source": "JMS message selector for filtering messages",
           "message": "メッセージフィルタリング用 JMS メッセージセレクター"
         },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay (ms)",
+          "message": "拒否後の遅延 (ミリ秒)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused message is delivered again",
+          "message": "拒否されたメッセージを再配信するまでの初期遅延 (ミリ秒)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused, so that the broker delivers it again; it doubles with each delivery of the message up to `max_refusal_delay_ms`",
+          "message": "オブザーバーが拒否したメッセージのトランザクションをポーリングプロバイダーがロールバックし、ブローカーが再配信するまでの遅延 (ミリ秒) です。メッセージが配信されるたびに `max_refusal_delay_ms` まで倍増します"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay (ms)",
+          "message": "拒否後の最大遅延 (ミリ秒)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused message is delivered again",
+          "message": "拒否されたメッセージを再配信するまでの最大遅延 (ミリ秒)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before the polling provider rolls back the transaction of a message that an observer refused",
+          "message": "オブザーバーが拒否したメッセージのトランザクションをポーリングプロバイダーがロールバックするまでの最大遅延 (ミリ秒)"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.display_name": {
+          "source": "Dead-Letter Destination",
+          "message": "デッドレター宛先"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.short_desc": {
+          "source": "The destination of the messages that an observer refuses permanently",
+          "message": "オブザーバーが永続的に拒否したメッセージの宛先"
+        },
+        "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.option.ZGVhZF9sZXR0ZXJfZGVzdGluYXRpb24.desc": {
+          "source": "The destination, in format `queue://name` or `topic://name`, to which the polling provider moves a message that an observer refuses permanently (by throwing `JMS-MESSAGE-REJECTED`) or that cannot be converted to an event; without it, such a message is acknowledged and logged as an error",
+          "message": "オブザーバーが永続的に拒否した (`JMS-MESSAGE-REJECTED` をスローした) メッセージ、またはイベントに変換できないメッセージをポーリングプロバイダーが移動する宛先 (`queue://name` または `topic://name` 形式) です。指定しない場合、そのようなメッセージは確認応答され、エラーとしてログに記録されます"
+        },
         "app.SmFrYXJ0YUpNUw.action.am1zLW1lc3NhZ2UtcmVjZWl2ZWQ.short_desc": {
           "source": "A JMS message is received from a queue or topic",
           "message": "キューまたはトピックから JMS メッセージを受信したとき"

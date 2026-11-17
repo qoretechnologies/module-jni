@@ -1,0 +1,374 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/* PollingDeliveryTest.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../build"
+%requires QUnit
+%requires DataProvider
+%requires ../../../qlib/JakartaJmsDataProvider
+
+%module-cmd(jni) import jakarta.jms.*
+
+%exec-class PollingDeliveryTest
+
+#! Records every delivery in a queue and refuses the deliveries that its refusal code chooses
+/** The refusal code returns NOTHING to accept a delivery, or the error code to throw
+*/
+class DeliveryObserver inherits DataProvider::Observer {
+    private {
+        Queue queue;
+        *code refuse;
+    }
+
+    constructor(Queue queue, *code refuse) {
+        self.queue = queue;
+        self.refuse = refuse;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id != JmsPollingDataProvider::EVENT_JMS_MESSAGE) {
+            return;
+        }
+        *string err = refuse ? refuse(data_) : NOTHING;
+        queue.push({"body": data_.body, "redelivered": data_.redelivered, "refused": exists err});
+        if (err) {
+            throw err, sprintf("refusing %y", data_.body);
+        }
+    }
+}
+
+#! Stops its provider from its update() method, and accepts the delivery
+class StoppingObserver inherits DataProvider::Observer {
+    private {
+        Queue queue;
+        JmsPollingDataProvider provider;
+    }
+
+    constructor(Queue queue, JmsPollingDataProvider provider) {
+        self.queue = queue;
+        self.provider = provider;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        provider.stopEvents();
+        queue.push(data_.body);
+    }
+}
+
+public class PollingDeliveryTest inherits QUnit::Test {
+    public {
+        const FactoryClass = "org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory";
+
+        #! The default maximum number of delivery attempts of ActiveMQ Artemis (max-delivery-attempts), after
+        #! which the broker moves a message to its DLQ address; the CI broker uses the default configuration
+        const ArtemisMaxDeliveryAttempts = 10;
+    }
+
+    private {
+        *string jms_url;
+        *string artemis_cp;
+        # the providers that the test cases create, kept until the end of the test
+        list<JmsDataProvider> providers;
+        int case_id = 0;
+    }
+
+    constructor() : Test("PollingDeliveryTest", "1.0", \ARGV) {
+        jms_url = ENV.JMS_CONNECTION;
+        artemis_cp = ENV.ARTEMIS_CLASSPATH;
+        if (!jms_url || !artemis_cp) {
+            addTestCase("skip", sub () { testSkip("set JMS_CONNECTION and ARTEMIS_CLASSPATH to run"); });
+            set_return_value(main());
+            return;
+        }
+
+        addTestCase("an accepted message is acknowledged once", \acceptTest());
+        addTestCase("a refused message is delivered again before the next one", \refusalTest());
+        addTestCase("the broker's redelivery limit moves a refused message to its DLQ", \brokerDlqTest());
+        addTestCase("a permanently refused message goes to the dead-letter destination", \rejectDlqTest());
+        addTestCase("a permanently refused message without a dead-letter destination is acknowledged",
+            \rejectAckTest());
+        addTestCase("a stop during a back-off returns promptly and the message is not lost", \stopDuringBackOffTest());
+        addTestCase("an observer can stop the provider, which can be started again", \stopFromObserverTest());
+        addTestCase("a refusal mixed with a permanent refusal is a refusal", \mixedRefusalTest());
+        set_return_value(main());
+    }
+
+    #! Returns a destination name of the test case's own
+    private string getQueueName(string what) {
+        return sprintf("queue://polling-delivery-%d-%d-%s", getpid(), ++case_id, what);
+    }
+
+    #! Creates a provider for the given destination
+    private JmsDataProvider getProvider(string dest, *hash<auto> opts) {
+        JmsDataProvider provider({
+            "url": jms_url,
+            "connection_factory_class": FactoryClass,
+            "provider_classpath": artemis_cp,
+            "destination": dest,
+        } + opts);
+        push providers, provider;
+        return provider;
+    }
+
+    #! Sends text messages to a destination with a test property
+    private send(JmsDataProvider provider, string dest, softlist<string> bodies, *hash<auto> headers) {
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+        MessageProducer prod = session.createProducer(JmsDataProviderBase::parseDestination(session, dest));
+        on_exit prod.close();
+        foreach string body in (bodies) {
+            Message msg = JmsTypeMapper::toJmsMessage(session, body, headers);
+            prod.send(msg);
+        }
+    }
+
+    #! Returns the bodies of the messages left in a destination (consuming them)
+    private list<string> drain(JmsDataProvider provider, string dest, *string selector, int wait_ms = 500) {
+        JmsSessionPool pool = provider.getSessionPool();
+        Session session = pool.acquire();
+        on_exit pool.release(session);
+        Destination d = JmsDataProviderBase::parseDestination(session, dest);
+        MessageConsumer cons = selector ? session.createConsumer(d, selector) : session.createConsumer(d);
+        on_exit cons.close();
+        list<string> rv = ();
+        while (True) {
+            *Message msg = cons.receive(wait_ms);
+            if (!msg) {
+                break;
+            }
+            push rv, JmsTypeMapper::fromJmsMessage(msg).body;
+        }
+        return rv;
+    }
+
+    #! Starts the polling provider of a provider with an observer
+    private JmsPollingDataProvider startPolling(JmsDataProvider provider, Observer obs) {
+        JmsPollingDataProvider polling = cast<JmsPollingDataProvider>(provider.getChildProviderEx("polling"));
+        polling.registerObserver(obs);
+        polling.observersReady();
+        return polling;
+    }
+
+    #! Waits until the delivery stats of a provider match
+    private waitForStats(JmsPollingDataProvider polling, hash<auto> stats) {
+        date end = now_us() + 20s;
+        while (polling.getDeliveryStats() != stats && now_us() < end) {
+            usleep(10ms);
+        }
+        assertEq(stats, polling.getDeliveryStats());
+    }
+
+    acceptTest() {
+        string dest = getQueueName("accept");
+        JmsDataProvider provider = getProvider(dest);
+        Queue deliveries();
+        JmsPollingDataProvider polling = startPolling(provider, new DeliveryObserver(deliveries));
+        on_exit polling.stopEvents();
+
+        send(provider, dest, ("a1", "a2"));
+        assertEq(("a1", "a2"), map deliveries.get(10s).body, xrange(2));
+        waitForStats(polling, {"accepted": 2, "refused": 0, "rejected": 0, "settle_errors": 0});
+        polling.stopEvents();
+        # the messages were acknowledged: nothing is left, and nothing is delivered again
+        assertEq((), drain(provider, dest));
+        assertEq(0, deliveries.size());
+    }
+
+    refusalTest() {
+        string dest = getQueueName("refusal");
+        JmsDataProvider provider = getProvider(dest, {"refusal_delay_ms": 10, "max_refusal_delay_ms": 50});
+        Queue deliveries();
+        int refusals = 1;
+        code refuse = *string sub (hash<auto> msg) {
+            if (msg.body == "r1" && refusals > 0) {
+                --refusals;
+                return "TEST-REFUSAL";
+            }
+        };
+        JmsPollingDataProvider polling = startPolling(provider, new DeliveryObserver(deliveries, refuse));
+        on_exit polling.stopEvents();
+
+        send(provider, dest, ("r1", "r2"));
+        list<hash<auto>> seen = map deliveries.get(10s), xrange(3);
+        # the refused message is delivered again, before the message that follows it
+        assertEq(("r1", "r1", "r2"), (map $1.body, seen));
+        assertEq((True, False, False), (map $1.refused, seen));
+        assertTrue(seen[1].redelivered, "the second delivery of r1 is a redelivery");
+        waitForStats(polling, {"accepted": 2, "refused": 1, "rejected": 0, "settle_errors": 0});
+        polling.stopEvents();
+        assertEq((), drain(provider, dest));
+    }
+
+    brokerDlqTest() {
+        string dest = getQueueName("broker-dlq");
+        string test_id = sprintf("broker-dlq-%d-%d", getpid(), case_id);
+        JmsDataProvider provider = getProvider(dest, {"refusal_delay_ms": 1, "max_refusal_delay_ms": 2});
+        Queue deliveries();
+        code refuse = *string sub (hash<auto> msg) {
+            if (msg.body == "poison") {
+                return "TEST-REFUSAL";
+            }
+        };
+        JmsPollingDataProvider polling = startPolling(provider, new DeliveryObserver(deliveries, refuse));
+        on_exit polling.stopEvents();
+
+        send(provider, dest, "poison", {"test_id": test_id});
+        send(provider, dest, "after");
+        list<string> seen = ();
+        while (True) {
+            string body = deliveries.get(20s).body;
+            push seen, body;
+            if (body == "after") {
+                break;
+            }
+        }
+        # the broker delivers the refused message up to its limit, then moves it to its DLQ
+        assertEq(ArtemisMaxDeliveryAttempts, (select seen, $1 == "poison").size(), "delivery attempts");
+        waitForStats(polling, {"accepted": 1, "refused": ArtemisMaxDeliveryAttempts, "rejected": 0,
+            "settle_errors": 0});
+        assertEq(("poison",), drain(provider, "queue://DLQ", sprintf("test_id = '%s'", test_id), 5000));
+    }
+
+    rejectDlqTest() {
+        string dest = getQueueName("reject-dlq");
+        string dlq = getQueueName("reject-dlq-dead");
+        JmsDataProvider provider = getProvider(dest, {"dead_letter_destination": dlq});
+        Queue deliveries();
+        code refuse = *string sub (hash<auto> msg) {
+            if (msg.body == "bad") {
+                return JMS_MESSAGE_REJECTED_ERR;
+            }
+        };
+        JmsPollingDataProvider polling = startPolling(provider, new DeliveryObserver(deliveries, refuse));
+        on_exit polling.stopEvents();
+
+        send(provider, dest, ("bad", "good"));
+        assertEq(("bad", "good"), map deliveries.get(10s).body, xrange(2));
+        waitForStats(polling, {"accepted": 1, "refused": 0, "rejected": 1, "settle_errors": 0});
+        polling.stopEvents();
+        assertEq(("bad",), drain(provider, dlq, NOTHING, 5000), "the rejected message is in the dead-letter queue");
+        assertEq((), drain(provider, dest), "the rejected message is not delivered again");
+    }
+
+    rejectAckTest() {
+        string dest = getQueueName("reject-ack");
+        JmsDataProvider provider = getProvider(dest);
+        Queue deliveries();
+        code refuse = *string sub (hash<auto> msg) {
+            if (msg.body == "bad") {
+                return JMS_MESSAGE_REJECTED_ERR;
+            }
+        };
+        JmsPollingDataProvider polling = startPolling(provider, new DeliveryObserver(deliveries, refuse));
+        on_exit polling.stopEvents();
+
+        send(provider, dest, ("bad", "good"));
+        assertEq(("bad", "good"), map deliveries.get(10s).body, xrange(2));
+        waitForStats(polling, {"accepted": 1, "refused": 0, "rejected": 1, "settle_errors": 0});
+        polling.stopEvents();
+        assertEq((), drain(provider, dest), "the rejected message is acknowledged");
+    }
+
+    stopDuringBackOffTest() {
+        string dest = getQueueName("stop-backoff");
+        JmsDataProvider provider = getProvider(dest, {"refusal_delay_ms": 60000});
+        Queue deliveries();
+        bool refusing = True;
+        code refuse = *string sub (hash<auto> msg) {
+            return refusing ? "TEST-REFUSAL" : NOTHING;
+        };
+        JmsPollingDataProvider polling = startPolling(provider, new DeliveryObserver(deliveries, refuse));
+        on_exit polling.stopEvents();
+
+        send(provider, dest, "s1");
+        assertEq("s1", deliveries.get(10s).body);
+        date start = now_us();
+        polling.stopEvents();
+        assertLt(10s, now_us() - start, "the stop does not wait for the back-off");
+
+        # the refused message was rolled back: a restarted provider receives it again
+        refusing = False;
+        assertFalse(polling.isActive());
+        polling.observersReady();
+        assertTrue(polling.isActive());
+        hash<auto> again = deliveries.get(10s);
+        assertEq("s1", again.body);
+        assertTrue(again.redelivered);
+        waitForStats(polling, {"accepted": 1, "refused": 1, "rejected": 0, "settle_errors": 0});
+    }
+
+    stopFromObserverTest() {
+        string dest = getQueueName("stop-observer");
+        JmsDataProvider provider = getProvider(dest);
+        Queue deliveries();
+        JmsPollingDataProvider polling = cast<JmsPollingDataProvider>(provider.getChildProviderEx("polling"));
+        polling.registerObserver(new StoppingObserver(deliveries, polling));
+        polling.observersReady();
+        on_exit polling.stopEvents();
+
+        send(provider, dest, ("o1", "o2", "o3"));
+        assertEq("o1", deliveries.get(10s));
+        waitForStats(polling, {"accepted": 1, "refused": 0, "rejected": 0, "settle_errors": 0});
+        # a start waits for the stop to complete, and the provider receives the next message
+        polling.observersReady();
+        assertEq("o2", deliveries.get(10s));
+        waitForStats(polling, {"accepted": 2, "refused": 0, "rejected": 0, "settle_errors": 0});
+        polling.stopEvents();
+        assertFalse(polling.isActive());
+        # the message after the stop is not consumed
+        assertEq(("o3",), drain(provider, dest));
+    }
+
+    mixedRefusalTest() {
+        string dest = getQueueName("mixed");
+        JmsDataProvider provider = getProvider(dest, {"refusal_delay_ms": 10, "max_refusal_delay_ms": 50});
+        Queue deliveries();
+        Queue other();
+        int refusals = 1;
+        # one observer rejects the message permanently, the other refuses it once
+        code reject = *string sub (hash<auto> msg) {
+            if (msg.body == "x1" && refusals > 0) {
+                return JMS_MESSAGE_REJECTED_ERR;
+            }
+        };
+        code refuse = *string sub (hash<auto> msg) {
+            if (msg.body == "x1" && refusals > 0) {
+                --refusals;
+                return "TEST-REFUSAL";
+            }
+        };
+        JmsPollingDataProvider polling = cast<JmsPollingDataProvider>(provider.getChildProviderEx("polling"));
+        polling.registerObserver(new DeliveryObserver(deliveries, reject));
+        polling.registerObserver(new DeliveryObserver(other, refuse));
+        polling.observersReady();
+        on_exit polling.stopEvents();
+
+        send(provider, dest, ("x1", "x2"));
+        # the message is delivered again, as not every failing observer rejected it
+        assertEq(("x1", "x1", "x2"), map deliveries.get(10s).body, xrange(3));
+        waitForStats(polling, {"accepted": 2, "refused": 1, "rejected": 0, "settle_errors": 0});
+    }
+}
