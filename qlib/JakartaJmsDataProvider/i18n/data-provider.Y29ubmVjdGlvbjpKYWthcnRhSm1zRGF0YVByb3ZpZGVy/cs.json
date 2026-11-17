@@ -108,8 +108,8 @@
           "message": "Transakční sesí"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.desc": {
-          "source": "The JMS session acknowledgment mode",
-          "message": "Režim potvrzování zpráv JMS sesí"
+          "source": "The JMS session acknowledgment mode of the pooled sessions; the polling provider always uses a transacted session of its own, so that a message is acknowledged only after its observers have accepted it",
+          "message": "Režim potvrzování relací JMS pro relace ve fondu; polling poskytovatel vždy používá vlastní transakční relaci, takže zpráva je potvrzena teprve poté, co ji přijmou její pozorovatelé"
         },
         "connection.SmFrYXJ0YUptc0RhdGFQcm92aWRlcg.scheme.Sm1zQ29ubmVjdGlvbg.option.c2Vzc2lvbl9tb2Rl.display_name": {
           "source": "Session Mode",
