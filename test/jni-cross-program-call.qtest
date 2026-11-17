@@ -7,6 +7,7 @@
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.SandboxIo
+%module-cmd(jni) import org.qore.jni.test.CrossProgramCalls
 %module-cmd(jni) import java.lang.reflect.Method
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.function.Consumer
@@ -20,6 +21,7 @@ const OwnerSource = "
 %requires jni
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.function.Consumer
+%module-cmd(jni) import org.qore.jni.test.CrossProgramCalls
 
 # a top-level variable: thread-local, and closure-bound in the functions that use it
 string tl = \"owner\";
@@ -54,6 +56,33 @@ object sub make_consumer(string what) {
         sub (object method, *list<auto> args) { c(); }), load_class(\"java/util/function/Consumer\")));
 }
 
+# a Java closure (a QoreClosureMarker object) created in this Program, which calls back the given code of this Program
+code sub make_java_closure(string what) {
+    code c = what == \"tl\" ? sub () { read_tl(); } : \\probe();
+    return CrossProgramCalls::makeForwarder(c);
+}
+
+# a Java closure created in this Program that returns QoreSandbox.isSandboxed() for the code that calls it
+code sub make_sandbox_query() {
+    return CrossProgramCalls::makeSandboxQuery();
+}
+
+# a Consumer whose callback makes a cross-Program Java call of its own (l2.forEach(c2) on objects of another
+# Program), and then reads and writes this Program's top-level variable
+object sub make_nested_consumer(object l2, object c2) {
+    return cast<Consumer>(implement_interface(new QoreInvocationHandler(
+        sub (object method, *list<auto> args) {
+            l2.forEach(c2);
+            read_tl();
+        }), load_class(\"java/util/function/Consumer\")));
+}
+
+# a Consumer whose callback only sets the given marker, which belongs to the test, not to this Program
+object sub make_marked_consumer(Queue ran) {
+    return cast<Consumer>(implement_interface(new QoreInvocationHandler(
+        sub (object method, *list<auto> args) { ran.push(True); }), load_class(\"java/util/function/Consumer\")));
+}
+
 # a call of the Java method made by the owner itself
 sub own_call(object l, object c) {
     l.forEach(c);
@@ -67,8 +96,16 @@ int sub own_size_loop(object l, int n) {
     return s;
 }
 
+auto sub call_code(code c) {
+    return c();
+}
+
 list<auto> sub get_seen() {
     return seen;
+}
+
+code sub get_tl_ref() {
+    return \\get_tl();
 }
 
 *string sub get_tl() {
@@ -119,6 +156,18 @@ sub call_via_java(object l, object c) {
 *string sub get_tl() {
     return tl;
 }
+
+auto sub call_code(code c) {
+    return c();
+}
+
+*string sub accept_catching(object c) {
+    return CrossProgramCalls::acceptCatching(c);
+}
+
+*string sub accept_catching_on_java_thread(object c) {
+    return CrossProgramCalls::acceptCatchingOnJavaThread(c);
+}
 ";
 
 #! the source of a sandboxed Program that calls the Java methods of trusted objects
@@ -144,6 +193,9 @@ sub check_file_static(string path) {
 sub check_file_via_method(object m, string path) {
     m.invoke(NOTHING, path, False);
 }
+auto sub call_code(code c) {
+    return c();
+}
 ";
 
 #! Java instance methods of an object of another Program run in that Program (qore#6183, qore#6185)
@@ -165,12 +217,23 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         addTestCase("an exception from the exit handler reaches the caller", \testExitHandlerException());
         addTestCase("an object whose Program was deleted stays callable", \testDeletedProgram());
         addTestCase("an object whose Program is being torn down cannot be called", \testTornDownProgram());
+        addTestCase("the owner deleted in the jni context lookup of a call", \testDeleteInContextLookup());
+        addTestCase("deleting the owner waits for a Java call in progress", \testDeleteWaitsForCall());
+        addTestCase("an owner being parsed by another thread cannot be called", \testParsingProgram());
+        addTestCase("the owner's thread initialization code runs on a thread's first call", \testThreadInit());
+        addTestCase("a call from a Java thread uses the owner's thread-local data", \testJavaThread());
+        addTestCase("an owner with a sandbox of its own", \testSandboxedOwner());
+        addTestCase("a nested cross-Program call from a callback", \testNestedCall());
+        addTestCase("a Java closure uses the thread-local data of its Program", \testJavaClosureThreadLocal());
+        addTestCase("a Java closure is governed by the sandbox of its caller", \testJavaClosureSandbox());
+        addTestCase("a Java closure whose Program was deleted stays callable", \testJavaClosureDeletedProgram());
+        addTestCase("a callback whose Program was deleted is refused", \testDeletedProgramCallback());
         set_return_value(main());
     }
 
     #! returns a new owner Program
-    private Program getOwner() {
-        Program owner(PO_NEW_STYLE);
+    private Program getOwner(int opts = PO_NEW_STYLE) {
+        Program owner(opts);
         owner.parse(OwnerSource, "owner");
         owner.run();
         return owner;
@@ -467,5 +530,266 @@ class JniCrossProgramCallTest inherits QUnit::Test {
             release.push(True);
             assertEq(True, done.get());
         }
+    }
+
+    #! returns True if the jni module is a debug build with the context gate
+    private bool hasContextGate() {
+        try {
+            call_function("Jni::org::qore::jni::dbg_jni_set_context_gate");
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "NO-FUNCTION") {
+                rethrow;
+            }
+            return False;
+        }
+    }
+
+    #! sets or clears the one-shot gate run between the lookup of a jni context and its use
+    private setContextGate(*code c) {
+        call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", c);
+    }
+
+    testDeleteInContextLookup() {
+        if (!hasContextGate()) {
+            testSkip("the jni module's context gate requires a debug build");
+        }
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        bool deleted;
+        # the owner is deleted on this thread exactly after the jni context of the call has been looked up: the
+        # call holds the owner then, so its data is destroyed only when the call has left it
+        setContextGate(sub () {
+            delete owner;
+            deleted = True;
+        });
+        on_exit setContextGate();
+        assertEq(1, l.size(), "the call completes");
+        assertTrue(deleted, "the gate ran in the call");
+        # the owner is deleted: the object is called in the context of this Program
+        assertEq(1, l.size(), "a call after the deletion");
+    }
+
+    testDeleteWaitsForCall() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        object l = owner.callFunction("make_list", 2);
+        Queue events();
+        # the first callback of the Java call starts the deletion of the owner on another thread, and waits until
+        # that thread has started it; the second callback then still uses the owner's code and data, and the
+        # deletion cannot have finished, as this thread is still in the owner
+        # a call reference to the owner's function, which the deletion does not clear
+        code get_tl = owner.callFunction("get_tl_ref");
+        bool started;
+        *string tl_in_call;
+        bool finished_in_call;
+        object each = cast<Consumer>(implement_interface(new QoreInvocationHandler(
+            sub (object method, *list<auto> args) {
+                if (!started) {
+                    started = True;
+                    background sub () {
+                        events.push("deleting");
+                        delete owner;
+                        events.push("deleted");
+                    }();
+                    assertEq("deleting", events.get(), "the deletion has started");
+                } else {
+                    tl_in_call = get_tl();
+                    finished_in_call = !events.empty();
+                }
+            }), load_class("java/util/function/Consumer")));
+        caller.callFunction("call_via_java", l, each);
+        assertEq("owner", tl_in_call, "the owner's data is intact during the call");
+        assertFalse(finished_in_call, "the deletion had not finished during the Java call");
+        assertEq("deleted", events.get(), "the deletion finishes after the call");
+    }
+
+    testParsingProgram() {
+        Program owner = getOwner(PO_NEW_STYLE | PO_ALLOW_REPARSE);
+        object l = owner.callFunction("make_list");
+        Queue parsing();
+        Queue release();
+        Queue done();
+        background sub () {
+            try {
+                # the parsed code is pending until it is committed: the Program is being parsed meanwhile
+                owner.parsePending("sub added() {}", "pending");
+                parsing.push(True);
+                release.get();
+                owner.parseCommit();
+                done.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                parsing.push(ex);
+                done.push(ex);
+            }
+        }();
+        on_exit release.push(True);
+        auto p = parsing.get();
+        assertEq(True, p, "the parse is pending");
+        if (p === True) {
+            assertThrows("PROGRAM-ERROR", "parsing", sub () { l.size(); });
+            release.push(True);
+            assertEq(True, done.get(), "the parse is committed");
+            assertEq(1, l.size(), "the call after the parse");
+        }
+    }
+
+    testThreadInit() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        object l = owner.callFunction("make_list");
+        Counter inits();
+        owner.setThreadInit(sub () { inits.inc(); });
+        Queue q();
+        background sub () {
+            try {
+                l.size();
+                int first = inits.getCount();
+                l.size();
+                caller.callFunction("call_code", int sub () { return l.size(); });
+                q.push((first, inits.getCount()));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        assertEq((1, 1), q.get(), "the thread initialization code runs once, on the thread's first call");
+    }
+
+    testJavaThread() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        object l = owner.callFunction("make_list");
+        object c = owner.callFunction("make_consumer", "tl");
+        # a Java thread that Qore did not start makes the calls: the owner's data on that thread is its own
+        hash<auto> h = SandboxIo::callOnJavaThread(hash<auto> sub () {
+            caller.callFunction("call_via_java", l, c);
+            caller.callFunction("call_via_java", l, c);
+            return {
+                "seen": owner.callFunction("get_seen"),
+                "owner_tl": owner.callFunction("get_tl"),
+                "caller_tl": caller.callFunction("get_tl"),
+            };
+        });
+        assertEq((NOTHING, "written by the callback"), h.seen, "the second callback reads the first one's write");
+        assertEq("written by the callback", h.owner_tl, "the write reaches the owner's data of the Java thread");
+        assertEq(NOTHING, h.caller_tl, "the caller's data of the Java thread is not changed");
+        assertEq("owner", owner.callFunction("get_tl"), "the owner's data of this thread is not changed");
+    }
+
+    testSandboxedOwner() {
+        if (!hasUncontrolledApiPolicy()) {
+            testSkip("the core has no uncontrolled API policy for sandboxes (qore#5741)");
+        }
+        SandboxManager sm();
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        Program owner(PO_NEW_STYLE);
+        owner.setSandboxManager(sm);
+        owner.parse(OwnerSource, "sandboxed-owner");
+        owner.run();
+        object l = owner.callFunction("make_list");
+        object c = owner.callFunction("make_consumer", "probe");
+        Program caller = getCaller();
+
+        # trusted code calls the Java method of an object of the sandboxed owner: the owner's code that Java calls
+        # back is governed by the owner's sandbox
+        caller.callFunction("call_via_java", l, c);
+        hash<auto> h = owner.callFunction("get_probe");
+        assertTrue(h.isSandboxed, "isSandboxed() in the owner's callback");
+        assertTrue(h.isGoverned, "isGoverned() in the owner's callback");
+        assertTrue(h.later(), "a closure created in the owner's callback");
+
+        # the owner's thread-local data is used as for a trusted owner
+        object t = owner.callFunction("make_consumer", "tl");
+        caller.callFunction("call_via_java", l, t);
+        assertEq(("owner",), owner.callFunction("get_seen"));
+        assertEq("caller", caller.callFunction("get_tl"));
+    }
+
+    testNestedCall() {
+        Program a = getOwner();
+        Program b = getOwner();
+        Program caller = getCaller();
+        # b's list and callback, called from a callback of a's Java call
+        object lb = b.callFunction("make_list");
+        object cb = b.callFunction("make_consumer", "tl");
+        object la = a.callFunction("make_list");
+        object ca = a.callFunction("make_nested_consumer", lb, cb);
+
+        caller.callFunction("call_via_java", la, ca);
+        assertEq(("owner",), b.callFunction("get_seen"), "the nested callback reads its own Program's data");
+        assertEq("written by the callback", b.callFunction("get_tl"));
+        assertEq(("owner",), a.callFunction("get_seen"), "after the nested call, the outer callback reads its data");
+        assertEq("written by the callback", a.callFunction("get_tl"));
+        assertEq("caller", caller.callFunction("get_tl"), "the caller's data is not changed");
+    }
+
+    testJavaClosureThreadLocal() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        code jc = owner.callFunction("make_java_closure", "tl");
+
+        # control: the owner calls the Java closure
+        owner.callFunction("call_code", jc);
+        assertEq(("owner",), owner.callFunction("get_seen"));
+        owner.callFunction("reset");
+
+        # another Program calls the Java closure, twice
+        caller.callFunction("call_code", jc);
+        caller.callFunction("call_code", jc);
+        assertEq(("owner", "written by the callback"), owner.callFunction("get_seen"),
+            "the callback reads the owner's variable");
+        assertEq("written by the callback", owner.callFunction("get_tl"), "the write reaches the owner");
+        assertEq("caller", caller.callFunction("get_tl"), "the caller's variable is not changed");
+    }
+
+    testJavaClosureSandbox() {
+        Program sandboxed = getSandboxed();
+        Program owner = getOwner();
+        code query = owner.callFunction("make_sandbox_query");
+        code jc = owner.callFunction("make_java_closure", "probe");
+
+        assertFalse(owner.callFunction("call_code", query), "Java's query for the owner's own call");
+        assertTrue(sandboxed.callFunction("call_code", query), "Java's query for a sandboxed caller");
+
+        sandboxed.callFunction("call_code", jc);
+        hash<auto> h = owner.callFunction("get_probe");
+        assertTrue(h.isSandboxed, "isSandboxed() in the owner's code called back by the Java closure");
+        assertTrue(h.later(), "a closure created there keeps the sandbox");
+    }
+
+    testJavaClosureDeletedProgram() {
+        Program owner = getOwner();
+        code query = owner.callFunction("make_sandbox_query");
+        delete owner;
+        # the Program that created the Java closure is gone: the closure is called in the context of this Program
+        assertFalse(query(), "the Java closure runs for this Program");
+        assertFalse(query(), "a second call");
+    }
+
+    testDeletedProgramCallback() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        # the marker that the callback's body would set: it belongs to the test, so it outlives the owner
+        Queue ran();
+        object c = owner.callFunction("make_marked_consumer", ran);
+
+        # control: while the owner exists, the same calls reach the callback, whose body runs once for each
+        assertEq(NOTHING, caller.callFunction("accept_catching", c), "no exception in Java for the calling Program");
+        assertEq(NOTHING, caller.callFunction("accept_catching_on_java_thread", c),
+            "no exception in Java on a Java thread");
+        assertEq(2, ran.size(), "the callback's body ran once for each call");
+        ran.clear();
+
+        # the Java proxy outlives the Program whose code it calls back
+        delete owner;
+
+        # Java calls the proxy for another Program, and on a Java thread that Qore did not start: the callback's
+        # Program has been deleted, so Java sees the PROGRAM-ERROR of the call of its code, which does not run
+        string expected = "^org\\.qore\\.jni\\.QoreExceptionWrapper: PROGRAM-ERROR: .*has already been deleted";
+        *string from_caller = caller.callFunction("accept_catching", c);
+        assertRegex(expected, from_caller ?? "<no exception>", "Java's exception for the calling Program");
+        *string from_java_thread = caller.callFunction("accept_catching_on_java_thread", c);
+        assertRegex(expected, from_java_thread ?? "<no exception>", "Java's exception on a Java thread");
+        assertTrue(ran.empty(), "the callback's body did not run");
     }
 }

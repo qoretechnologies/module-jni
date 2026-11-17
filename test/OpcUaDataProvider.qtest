@@ -1804,8 +1804,61 @@ sub sandboxProbe() {
                 "the runtime serves on the assigned port");
         }
 
+        # the release is checked on this process's own sockets: once released, the port is a free ephemeral port
+        # that any other socket on the host can take at once, so a bind to it cannot tell whether the runtime
+        # released it (a bind made here failed with SOCKET-BIND-ERROR now and then while other tests ran)
+        *bool holds = processHoldsPort(port);
+        if (!exists holds) {
+            # no /proc: the release cannot be checked without binding the port
+            runtime.stop();
+            return;
+        }
+        assertTrue(holds, "this process holds the port while the runtime runs");
         runtime.stop();
-        assertEq(NOTHING, bindLoopbackError(port), "the port is released when the runtime is stopped");
+        assertFalse(processHoldsPort(port), "the port is released when the runtime is stopped");
+    }
+
+    #! Returns True if a socket of this process has the given local TCP port, or NOTHING if it cannot be checked
+    /** Checks the process's own sockets (Linux /proc): the TCP sockets with the local port, of any process, whose
+        inodes are those of this process's file descriptors, in any state: a listening socket, one that is bound and
+        not listening, and an accepted connection (a socket closed by the process, in TIME_WAIT for example, has no
+        descriptor and does not count)
+    */
+    private *bool processHoldsPort(int port) {
+        if (!is_dir("/proc/self/fd") || !is_file("/proc/net/tcp")) {
+            return;
+        }
+        # the inodes of this process's sockets
+        hash<string, bool> mine;
+        Dir fds();
+        fds.chdir("/proc/self/fd");
+        foreach string fd in (fds.list() ?? ()) {
+            *string target;
+            try {
+                target = readlink("/proc/self/fd/" + fd);
+            } catch (hash<ExceptionInfo> ex) {
+                # the descriptor was closed meanwhile (ex: the one used to list the directory)
+                continue;
+            }
+            *string inode = (target =~ x/^socket:\[([0-9]+)\]$/)[0];
+            if (inode) {
+                mine{inode} = True;
+            }
+        }
+        foreach string file in ("/proc/net/tcp", "/proc/net/tcp6") {
+            if (!is_file(file)) {
+                continue;
+            }
+            foreach string line in (ReadOnlyFile::readTextFile(file).split("\n")) {
+                # local address:port, remote address:port, state, ..., inode
+                *list<*string> f = regex_extract(line, "^\\s*[0-9]+:\\s+[0-9A-F]+:([0-9A-F]+)\\s+[0-9A-F]+:[0-9A-F]+"
+                    + "\\s+[0-9A-F]+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+([0-9]+)");
+                if (f && ("0x" + f[0]).toInt(16) == port && mine{f[1]}) {
+                    return True;
+                }
+            }
+        }
+        return False;
     }
 
     #! Returns the error of a bind to the given loopback port, if any; the socket is closed at once

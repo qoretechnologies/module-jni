@@ -27,6 +27,9 @@
 #include <qore/QoreSandboxManager.h>
 #include "QoreJniFunctionalInterface.h"
 #include "QoreToJava.h"
+#include "QoreJniClassMap.h"
+
+#include <optional>
 
 namespace jni {
 QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj) : obj(GlobalReference<jobject>::fromLocal(obj)),
@@ -58,6 +61,17 @@ QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj) : obj(Global
             "be used as a Qore closure", cName.c_str());
         throw BasicException(str.c_str());
     }
+    // the closure can be called after its Program has been deleted (it is handed to other Programs), so the Program
+    // is kept allocated while the closure exists; taken last, as the constructor does not release it if it throws
+    if (src_pgm) {
+        src_pgm->depRef();
+    }
+}
+
+QoreJniFunctionalInterface::~QoreJniFunctionalInterface() {
+    if (src_pgm) {
+        src_pgm->depDeref();
+    }
 }
 
 QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
@@ -70,16 +84,34 @@ QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, Except
         //printd(5, "QoreJniFunctionalInterface::execValue() args: %p (%lld) evaluated_args: %p (%lld)\n", args,
         //    args ? args->size() : 0l, *evaluated_args, evaluated_args ? evaluated_args->size() : 0l);
 
-        // set call context
-        QoreExternalProgramCallContextHelper call_ctx(src_pgm);
+        // the closure runs in the Program that created it, which is entered first when it is not the current one,
+        // as for a Java method of an object of another Program (see jni_enter_call_program()); its jni data is looked
+        // up only then
+        // the thread is attached to the JVM before the Program is entered: a thread's first attach sets its Java
+        // context (the Program that Java's calls into Qore use, see QoreURLClassLoader.getProgramPtr()) to the
+        // current Program, which must be the caller's, as the context stays after the call
+        Env env;
+        QoreProgram* pgm = src_pgm;
+        std::optional<QoreExternalProgramContextHelper> epch;
+        if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, xsink)) {
+            return QoreValue();
+        }
+        std::optional<QoreExternalProgramCallContextHelper> call_ctx;
+        if (pgm) {
+            // set call context
+            call_ctx.emplace(pgm);
+        } else {
+            // the Program has been deleted or has no jni data: the call is made in the context of the calling code
+            jni_get_context_unconditional(pgm);
+        }
 
         // make sure that the Qore exception stack is populated correctly in case a Qore exception is thrown
         // from the Java code about to be called below
         QoreJniStackLocationHelper slh;
         // make the call
         return method->isStatic()
-            ? method->invokeStatic(*evaluated_args, src_pgm)
-            : method->invoke(obj, *evaluated_args, src_pgm);
+            ? method->invokeStatic(*evaluated_args, pgm)
+            : method->invoke(obj, *evaluated_args, pgm);
     } catch (jni::Exception& e) {
         e.convert(xsink);
         return QoreValue();
