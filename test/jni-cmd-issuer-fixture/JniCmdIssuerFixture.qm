@@ -1,0 +1,27 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# JniCmdIssuerFixture.qm: a library module that issues jni module commands from its own code, for
+# jni-module-cmd-issuer.qtest
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires jni
+
+module JniCmdIssuerFixture {
+    version = "1.0";
+    desc = "issues jni module commands from library module code";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+public namespace JniCmdIssuerFixture {
+#! Issues the jni module command from this module's code; returns the error code, or "ok"
+public string sub issue(string cmd) {
+    try {
+        Program::issueModuleCmd("jni", cmd);
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+}

@@ -114,6 +114,7 @@ int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {
     return connect(env, xsink);
 }
 
+#ifndef _QORE_HAS_SANDBOX_RESTRICTS_API
 //! Returns true if the network policy of the manager restricts network access in any way
 /** A manager that is attached to a Program does not restrict it by itself: an allow-all manager (the default network
     policy allows, and no host, range or port rule is set) restricts nothing, and Qorus attaches one to every trusted
@@ -124,7 +125,7 @@ int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {
     The policy is read from the configuration of the manager.  If the configuration cannot be read, the policy is
     assumed to restrict (fail closed).
 */
-static bool network_policy_restricts(QoreSandboxManager& manager) {
+static bool network_policy_restricts(const QoreSandboxManager& manager) {
     ExceptionSink xsink;
     ReferenceHolder<QoreHashNode> config(manager.network().getConfiguration(&xsink), &xsink);
     if (xsink || !config) {
@@ -147,12 +148,28 @@ static bool network_policy_restricts(QoreSandboxManager& manager) {
     }
     return false;
 }
+#endif
 
 int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
-    // the JDBC driver resolves and connects to its destinations in Java and discovers some of them itself (failover
-    // hosts, redirects), so the sandbox network policy cannot be applied to them (qore#5747); the connection is
-    // refused for code that a network policy restricts.  A manager that restricts nothing (an allow-all manager) is
-    // no restriction: the code is not governed by a policy, and the driver connects for it
+    // the JDBC driver is uncontrolled Java code: it resolves and connects to its destinations in Java and discovers
+    // some of them itself (failover hosts, redirects), so the sandbox network policy cannot be applied to them
+    // (qore#5747), and it can do file I/O, start threads and allocate memory that no sandbox policy or limit applies
+    // to
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+    // the connection is refused unless the governing sandbox (resolved for a policy check, so a system-policy
+    // capability of trusted code connects) trusts the code with uncontrolled APIs, whatever it restricts
+    // (jni_sandbox_refuses_uncontrolled_code()); for a composition of sandboxes, every member must trust the code
+    if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
+        xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
+            "does not trust with uncontrolled APIs, because the JDBC driver is uncontrolled Java code: it resolves "
+            "and connects to its destinations, and does its other I/O, in Java, where the sandbox policy and limits "
+            "cannot be applied to it");
+        return -1;
+    }
+#else
+    // without the restriction API of sandboxes, which aggregates over the members of a composition of sandboxes, the
+    // connection is refused for code that a network policy restricts.  A manager that restricts nothing (an allow-all
+    // manager) is no restriction: the code is not governed by a policy, and the driver connects for it
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
     if (governing && network_policy_restricts(*governing.get())) {
         xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
@@ -160,13 +177,93 @@ int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
             "where the sandbox network policy cannot be applied to them");
         return -1;
     }
+#endif
+    return 0;
+}
+
+//! Returns true if code that chose a value of a connection may not choose the destination of the jdbc driver
+/** The code that chose the value is judged by the rule that checkSandbox() applies to the code that opens a connection:
+    - code that its sandbox trusts with uncontrolled APIs (or that no sandbox governs) is not refused;
+    - otherwise, with the sandbox API that has QoreSandboxManager::trustsUncontrolledApis(), it is refused whatever its
+      sandbox restricts; without it, its policy manager decides: it is refused if the manager's network policy
+      restricts;
+    - without the sandbox trust API, code that is not trusted but has no policy manager is refused (fail closed)
+
+    @param trusted true if the sandbox of the code trusts it with uncontrolled APIs, or no sandbox governs it
+    @param mgr the policy manager of the code when it chose the value, or nullptr
+*/
+static bool jdbc_chooser_refused(bool trusted, const QoreSandboxManager* mgr) {
+    if (trusted) {
+        return false;
+    }
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+    return true;
+#else
+    return !mgr || network_policy_restricts(*mgr);
+#endif
+}
+
+int QoreJdbcConnection::checkChoosers(ExceptionSink* xsink) {
+    // the url option and the database name choose the destination of the connection and carry the driver properties
+    // that make a JDBC driver instantiate classes, so they are judged by the code that set them, as the classpath
+    // option is: trusted code that opens a datasource that sandboxed code configured is otherwise refused nothing
+#ifdef _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS
+    // the code that chose the connection (qore#6142): the creators of the datasource, the setters of the connection
+    // values in use (also the database name), and the setter of the url option
+    QoreDatasourceConnectChoosers choosers;
+    if (ds->getConnectChoosers(choosers, xsink)) {
+        return -1;
+    }
+    if (!db.empty() && ds->addOptionChooser(JDBC_OPT_URL, choosers, xsink) < 0) {
+        return -1;
+    }
+    for (size_t i = 0, e = choosers.size(); i < e; ++i) {
+        ReferenceHolder<QoreSandboxManager> mgr(choosers.getPolicyManagerRef(i), xsink);
+        if (jdbc_chooser_refused(choosers.allowsUncontrolledApis(i), *mgr)) {
+            xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc driver cannot connect to a destination that code "
+                "chose that a sandbox does not trust with uncontrolled APIs (the code that created the datasource, or "
+                "set its database name, connection values or '%s' option)", JDBC_OPT_URL);
+            return -1;
+        }
+    }
+#elif defined(_QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
+    // the setter of the url option (qore#5741); the database name has no recorded setter with this Qore library, so
+    // it is judged only by the code that opens the connection (checkSandbox())
+    if (!db.empty()) {
+        QoreModuleCommandRestrictions setter;
+        if (ds->getOptionRestrictions(JDBC_OPT_URL, setter)) {
+            ReferenceHolder<QoreSandboxManager> mgr(ds->getOptionPolicyManagerRef(JDBC_OPT_URL), xsink);
+            // the setter is judged as the code that opens a connection is, for a policy check: a sandboxed setter
+            // without a policy manager is trusted code that set the value under a system-policy barrier or
+            // capability on behalf of a sandboxed caller, which is not refused, as the record of the code that chose a
+            // connection does not refuse it either (QoreDatasourceConnectChoosers::allowsUncontrolledApis()); unlike
+            // the classpath option, which is judged as a module command is, through a barrier; the setter's sandbox
+            // was resolved for every purpose when it set the value, which sees a caller beyond a barrier, while its
+            // policy manager stops at the barrier: trusted code of a Program whose sandbox trusts it, which set the
+            // value inside a barrier for a caller that its sandbox does not trust, is trusted by its policy manager
+            // and is not refused, as it would not be if it opened the connection itself
+            bool trusted = !setter.isSandboxed() || !mgr;
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+            if (!trusted) {
+                trusted = mgr->trustsUncontrolledApis();
+            }
+#endif
+            if (jdbc_chooser_refused(trusted, *mgr)) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option chooses the destination of the "
+                    "connection, which code that a sandbox does not trust with uncontrolled APIs cannot choose",
+                    JDBC_OPT_URL);
+                return -1;
+            }
+        }
+    }
+#endif
     return 0;
 }
 
 int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
     assert(!connection);
     // also for a reconnect, which can be made for other code than the code that opened the connection
-    if (checkSandbox(xsink)) {
+    if (checkSandbox(xsink) || checkChoosers(xsink)) {
         return -1;
     }
 
@@ -273,15 +370,93 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
         }
         QoreStringValueHelper cp_str(val);
         const char* cp = cp_str->c_str();
-        if (!strcmp(classpath.c_str(), cp)) {
-            return 0;
-        }
 
+        // the value is judged by the code that sets it before it is compared with the current classpath: the same
+        // value set again by other code is recorded with that code as its setter, so restricted code that sets it is
+        // refused now, not only when the next connection is opened (qore#5741)
         QoreString arg(cp);
         q_env_subst(arg);
         //printd(5, "QoreJdbcConnection::setOption() %p '%s' jpc: %p arg: '%s'\n", this, opt, jpc, arg.c_str());
 
+        // the rule of the "add-classpath" module command, for the code that set the option (qore#5699): it loads jars
+        // into the Program's class loader and reads the filesystem.
+        //
+        // The option is applied when a connection is opened, which can happen on another thread and for other code
+        // than the code that set it: a DatasourcePool opens a connection on the thread that first needs one, and
+        // trusted code can open a datasource that sandboxed code configured.  So whoever configured the datasource
+        // decides (qore#5741): the Qore library records the restrictions and the filesystem policy of the code that
+        // set each option (Datasource::getOptionRestrictions()), and the option is judged by them, not by the code
+        // that opens the connection.  An option with no recorded setter, and every option with a Qore library that
+        // does not record setters, is judged by the code that is running, as the option was before.
+#ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+        // true if the code that set the option is known
+        bool setter_known = false;
+#endif
+#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
+        {
+            // the restrictions that a module command from the same code would have: library module code is judged by
+            // the sandbox only, not by the parse options that its Program inherited from the code that loaded it
+            QoreModuleCommandRestrictions setter;
+#ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+            setter_known = ds->getOptionRestrictions(opt, setter);
+            if (!setter_known) {
+                setter = QoreModuleCommandRestrictions::getCallerRestrictions();
+            }
+#else
+            setter = QoreModuleCommandRestrictions::getCallerRestrictions();
+#endif
+            if (setter.isSandboxed()) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which sandboxed code cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+            if (setter.hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which code that does not allow uncontrolled APIs or the filesystem cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+        }
+#else
+        // before module API 2.3: the parse options of the calling code and the sandbox that governs it
+        {
+            QoreReflectionCaller caller;
+            if (caller.getParseOptions().hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which code that does not allow uncontrolled APIs or the filesystem cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+            // trust only, as for the jdbc driver and check_class_option(): adding to the classpath is a direct use of
+            // an uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that restricts
+            // nothing but does not trust the code still refuses it
+            if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which sandboxed code cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+        }
+#endif
+
         try {
+            // the entries are read by this Program's class loader, as with the "add-classpath" module command, so they
+            // are checked against the filesystem policy of the code that set the option (qore#5741): the code that
+            // configured the datasource can read only what its own policy allows, also when other code opens the
+            // connection, and the policy of the code that opens it does not refuse a configuration that is not its own.
+            // A setter that a refusing sandbox governs was refused above, so this is the policy of trusted code that a
+            // sandbox governs only for its limits and interrupts (it allows uncontrolled APIs)
+#ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+            if (setter_known) {
+                ReferenceHolder<QoreSandboxManager> setter_policy(ds->getOptionPolicyManagerRef(opt), xsink);
+                ::jni_check_classpath_policy(*setter_policy, arg.c_str());
+            } else {
+                ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
+            }
+#else
+            ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
+#endif
+            // the classpath of the connection is already this value: nothing to add
+            if (classpath == arg.c_str()) {
+                return 0;
+            }
             jpc->addClasspath(arg.c_str());
             classpath = arg.c_str();
 

@@ -3,13 +3,23 @@
 
 /* jms.qtest
 
-    Run with QORE_JNI_CLASSPATH set to a a JMS provider JAR
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Run with PAYARA_JAR set to a JMS provider JAR (ex: glassfish/lib/gf-client.jar of a Payara or GlassFish
+    installation) and a Payara or GlassFish domain running on localhost (JNDI on port 3700)
 
     NOTE: requires the JMS queue "abc" to be created in advance - ex with Glassfish:
     ---
     prompt% ./bin/asadmin
     asadmin> create-jms-resource --restype javax.jms.Queue --property Name=PhysicalQueue abc
     ---
+
+    The test is skipped if PAYARA_JAR is not set or does not exist, or if the JMS server, its JNDI provider or the
+    JMS resources are not available.
+
+    The JMS client code is in jms-client.q; it is parsed at run time into a Program of its own, after the JAR has been
+    added to the classpath of that Program and the JMS classes imported, because the JMS types it uses do not exist
+    without the JAR.
 */
 
 %modern
@@ -19,21 +29,21 @@
 %requires QUnit
 %requires Util
 
-# import Java classes to our script
-%module-cmd(jni) import javax.naming.InitialContext
-%module-cmd(jni) import javax.jms.*
-
-# add environment variable $PAYARA_JAR to the dynamic classpath (if set)
-%module-cmd(jni) add-classpath $PAYARA_JAR
-
 %exec-class Main
 
 public class Main inherits QUnit::Test {
     private {
-        Counter c(1);
-        auto data;
-
         const TextMsg = "Hello, world!";
+
+        #! the host of the JNDI server
+        const JndiHost = "localhost";
+        #! the port of the JNDI server
+        const JndiPort = 3700;
+        #! the name of the JMS queue
+        const QueueName = "abc";
+
+        #! the file with the JMS client code
+        const ClientFile = "jms-client.q";
     }
 
     constructor() : Test("JMS test", "1.0", \ARGV) {
@@ -44,52 +54,52 @@ public class Main inherits QUnit::Test {
     }
 
     testJms() {
-        # these properties are the default; included here to provide an example for connecting to a remote server
-        # NOTE: the InitialContext constructor takes a Hashtable object, which can also be passed as a hash
-        Properties props();
-        props.setProperty("java.naming.factory.initial", "com.sun.enterprise.naming.SerialInitContextFactory");
-        props.setProperty("org.omg.CORBA.ORBInitialHost", "localhost");
-        props.setProperty("org.omg.CORBA.ORBInitialPort", "3700");
+        *string jar = ENV.PAYARA_JAR;
+        if (!jar) {
+            testSkip("PAYARA_JAR is not set; set it to a JMS provider JAR (ex: Payara's glassfish/lib/gf-client.jar) "
+                "to run the JMS test");
+        }
+        if (!is_file(jar)) {
+            testSkip(sprintf("PAYARA_JAR %y does not exist or is not a file", jar));
+        }
 
-        InitialContext ctx(props);
+        Program p = getClientProgram(jar);
 
-        Connection connection = cast<ConnectionFactory>(ctx.lookup("jms/__defaultConnectionFactory")).createConnection();
-        Session session = connection.createSession(Session::CLIENT_ACKNOWLEDGE);
+        object client;
+        try {
+            client = p.callFunction("jms_connect", JndiHost, JndiPort, QueueName, m_options.verbose.toBool());
+        } catch (hash<ExceptionInfo> ex) {
+            # only an unavailable server or JMS resource skips the test; any other error is a failure, also one in the
+            # classification itself, which must not replace the original error
+            *string reason;
+            try {
+                reason = p.callFunction("jms_unavailable_reason", ex);
+            } catch (hash<ExceptionInfo> cex) {
+                printf("error classifying the JMS exception: %s: %s\n", cex.err, cex.desc);
+            }
+            if (reason) {
+                testSkip(sprintf("the JMS server or queue %y at %s:%d is not available: %s", QueueName, JndiHost,
+                    JndiPort, reason));
+            }
+            rethrow;
+        }
 
-        Destination queue = cast<Destination>(ctx.lookup("abc"));
-
-        MessageProducer producer = session.createProducer(queue);
-        MessageConsumer consumer = session.createConsumer(queue);
-
-        # in order to implement the MessageListener interface for the callback, we have to use implement_interface() as follows:
-        ClassLoader loader = connection.getClass().getClassLoader();
-        consumer.setMessageListener(cast<MessageListener>(implement_interface(loader, new QoreInvocationHandler(\messageCallback()), Class::forName("javax.jms.MessageListener", True, loader))));
-
-        connection.start();
-
-        TextMessage message = session.createTextMessage();
-        message.setText(TextMsg);
-
-        producer.send(message);
-        # wait for message to be received
-        c.waitForZero();
-
+        *string data = p.callFunction("jms_send_receive", client, TextMsg);
         assertEq(TextMsg, data);
-
-        # unset the listener and exit
-        consumer.setMessageListener(NOTHING);
     }
 
-    # JMS message callback for the MessageListener interface
-    messageCallback(Method method, *list args) {
-        TextMessage msg = args[0];
-        # ignore redeliveries
-        if (msg.getJMSRedelivered())
-            return;
-        data = msg.getText();
-        msg.acknowledge();
-        if (m_options.verbose)
-            printf("*** JMS message received: %y (id: %y)\n", msg.getText(), msg.getJMSMessageID());
-        c.dec();
+    #! returns a new Program with the JAR in its classpath, the JMS classes imported, and the JMS client code parsed
+    private Program getClientProgram(string jar) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        # add the JAR to the dynamic classpath of the Program
+        p.issueModuleCmd("jni", "add-classpath " + jar);
+        # import Java classes to the Program
+        p.issueModuleCmd("jni", "import javax.naming.InitialContext");
+        p.issueModuleCmd("jni", "import javax.jms.*");
+
+        string path = normalize_dir(get_script_dir() + DirSep + ClientFile);
+        p.parse(ReadOnlyFile::readTextFile(path), path);
+        return p;
     }
 }

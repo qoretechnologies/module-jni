@@ -141,6 +141,8 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
         is @ref True "True" and \c "headers" is also present
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(WordDataProvider::AppName);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
         self.opts = checkOptions("WORD-READ-OPTION-ERROR", ConstructorOptions, opts);
@@ -157,6 +159,8 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
         is @ref True "True" and \c "headers" is also present
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(WordDataProvider::AppName);
         i = stream;
         self.opts = checkOptions("WORD-READ-OPTION-ERROR", ConstructorOptions, opts);
         name = sprintf("stream=%s", stream.uniqueHash());
@@ -171,6 +175,8 @@ public class WordReadDataProvider inherits DataProvider::AbstractDataProvider {
         is @ref True "True" and \c "headers" is also present
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(WordDataProvider::AppName);
         *hash<auto> copts = checkOptions("WORD-READ-OPTION-ERROR", ConstructorOptions, options);
         # Validate mutual exclusion of headers and header_row
         if (copts.headers && copts.header_row) {

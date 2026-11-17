@@ -125,6 +125,8 @@ public class JasperReportsDataProvider inherits DataProvider::AbstractDataProvid
         @throw JASPERREPORTS-OPTION-ERROR invalid or unknown option; conflicting options
     */
     constructor(string templatePath, string outputFormat, *hash<auto> opts) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JasperReportsDataProvider::AppName);
         JasperReportsDataProvider::checkTemplate();
         *hash<auto> copts = checkOptions("JASPERREPORTS-OPTION-ERROR", ConstructorOptions, opts);
         if (copts.template) {
@@ -153,6 +155,8 @@ public class JasperReportsDataProvider inherits DataProvider::AbstractDataProvid
         @note If \c output_path is not provided, use getData() to retrieve the report data as binary
     */
     constructor(*hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JasperReportsDataProvider::AppName);
         JasperReportsDataProvider::checkTemplate();
         *hash<auto> copts = checkOptions("JASPERREPORTS-OPTION-ERROR", ConstructorOptions, options);
         if (!copts.output_format) {

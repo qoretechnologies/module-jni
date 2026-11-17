@@ -44,6 +44,8 @@ public class MqttDevicesDataProvider inherits AbstractMqttDataProvider {
 
     #! Creates the object from another object of the same class
     constructor(AbstractMqttDataProvider prev) : AbstractMqttDataProvider(prev) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
     }
 
     #! Returns the name of the data provider

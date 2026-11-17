@@ -41,10 +41,14 @@ public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvid
 
     #! Creates the object without any arguments for child classes
     private constructor() {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(OpcUaDataProvider::AppName);
     }
 
     #! Creates the object from another object of the same class for child classes
     private constructor(AbstractOpcUaDataProvider prev) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(OpcUaDataProvider::AppName);
         client = prev.client;
         url = prev.url;
         copts = prev.copts;

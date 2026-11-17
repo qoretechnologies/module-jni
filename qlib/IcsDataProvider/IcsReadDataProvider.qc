@@ -106,6 +106,8 @@ public class IcsReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the IcsReadDataProvider with the input data path and optionally an option hash
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(IcsDataProvider::AppName);
         *hash<auto> copts = checkOptions("ICS-READ-OPTION-ERROR", ConstructorOptions, opts);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
@@ -114,6 +116,8 @@ public class IcsReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the IcsReadDataProvider with the input data stream
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(IcsDataProvider::AppName);
         *hash<auto> copts = checkOptions("ICS-READ-OPTION-ERROR", ConstructorOptions, opts);
         i = stream;
         name = sprintf("ics-stream=%s", stream.uniqueHash());
@@ -122,6 +126,8 @@ public class IcsReadDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(IcsDataProvider::AppName);
         *hash<auto> copts = checkOptions("ICS-READ-OPTION-ERROR", ConstructorOptions, options);
         content_type = copts.content_type ?? "events";
         if (copts.path) {

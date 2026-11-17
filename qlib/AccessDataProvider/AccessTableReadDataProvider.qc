@@ -57,6 +57,8 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
         @param table_name the name of the table to iterate
     */
     constructor(string db_path, string name, string table_name) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
         self.i = new AccessIterator(db_path, table_name);
         self.name = name;
         self.table_name = table_name;
@@ -69,6 +71,8 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
         *hash<auto> copts = checkOptions("ACCESS-READ-OPTION-ERROR", AccessReadDataProvider::ConstructorOptions,
             options);
         table_name = copts.table_name;

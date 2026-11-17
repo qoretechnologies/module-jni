@@ -96,6 +96,8 @@ public class MboxReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw MBOX-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(string path, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         *hash<auto> copts = checkOptions("MBOX-READ-OPTION-ERROR", ConstructorOptions, opts);
         i = FileLocationHandler::getBinaryStreamFromLocation(path);
         name = path;
@@ -109,6 +111,8 @@ public class MboxReadDataProvider inherits DataProvider::AbstractDataProvider {
         @throw MBOX-READ-OPTION-ERROR invalid or unknown option; invalid data type for option
     */
     constructor(InputStream stream, *hash<auto> opts) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         *hash<auto> copts = checkOptions("MBOX-READ-OPTION-ERROR", ConstructorOptions, opts);
         i = stream;
         name = sprintf("mbox-stream=%s", stream.uniqueHash());
@@ -121,6 +125,8 @@ public class MboxReadDataProvider inherits DataProvider::AbstractDataProvider {
         option conflict
     */
     constructor(*hash<auto> options) {
+        # uncontrolled Java calls (QDOM_UNCONTROLLED_API): sandboxed code is refused up front (qore#5741)
+        DataProviderActionCatalog::checkSandboxAccess(EmailDataProvider::AppName);
         *hash<auto> copts = checkOptions("MBOX-READ-OPTION-ERROR", ConstructorOptions, options);
         max_messages = copts.max_messages ?? 0;
         if (copts.path) {

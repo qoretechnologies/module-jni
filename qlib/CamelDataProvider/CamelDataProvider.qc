@@ -52,12 +52,16 @@ public class CamelDataProvider inherits DataProvider::AbstractDataProvider {
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(CamelDataProvider::AppName);
         ctx = new QoreCamelContext();
         ctx.start();
     }
 
     #! Creates the object from a connection object
     constructor(CamelConnection conn, *hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(CamelDataProvider::AppName);
         ctx = new QoreCamelContext();
         ctx.start();
     }

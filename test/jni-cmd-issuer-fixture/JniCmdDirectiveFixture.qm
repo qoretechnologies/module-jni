@@ -1,0 +1,20 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# JniCmdDirectiveFixture.qm: a library module with its own jni module command directive, for
+# jni-module-cmd-issuer.qtest
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires jni
+%module-cmd(jni) global-add-relative-classpath nonexistent-qore-test-dir
+
+module JniCmdDirectiveFixture {
+    version = "1.0";
+    desc = "a library module with a jni module command directive";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+public namespace JniCmdDirectiveFixture {
+public const Loaded = True;
+}

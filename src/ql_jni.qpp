@@ -185,7 +185,12 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
 /** Data provider and connection modules call this before they act on an option that names a Java class to load or
     instantiate (a JDBC driver class, a JMS connection factory class, a Kafka handler class, ...), or a classpath to
     add.  Such an option lets whoever sets it run Java code that the sandbox does not control, so it is refused to
-    code that a sandbox governs, also through a policy barrier or a system-policy capability.
+    code that a sandbox governs.  With the sandbox API that has \c QoreSandboxManager::trustsUncontrolledApis() (module
+    info key \c sandbox_restricts_api), it is refused unless the governing sandbox (resolved for a policy check, so a
+    system-policy capability of trusted code is not refused) trusts the code with uncontrolled APIs
+    (\c SandboxManager::setUncontrolledApiPolicy()), whatever the sandbox restricts; for a composition of sandboxes,
+    every member must trust it.  Without it, it is refused to code that any sandbox governs, also through a policy
+    barrier or a system-policy capability.
 
     The sandbox is the run-time boundary for module code: module code runs with its own Program's parse options, and
     with its caller's only when the caller is sandboxed, so a Program that is restricted only with parse options is
@@ -211,11 +216,24 @@ if (copts.driver_class) {
  */
 nothing check_class_option(string provider, string option, *string what) [flags=NAMED_ARGS] {
     const char* desc = what ? what->c_str() : "names a Java class or classpath to load";
+#ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
+    // refused unless the governing sandbox trusts the code with uncontrolled APIs, whatever it restricts, as for the
+    // jdbc driver: the Java code that the option loads is not subject to the sandbox's policy or limits
+    // (jni_sandbox_refuses_uncontrolled_code())
+    if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
+        xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which code that a sandbox does not trust "
+            "with uncontrolled APIs cannot use", provider->c_str(), option->c_str(), desc);
+    }
+#else
+    // without the restriction API, module code cannot judge a composition of sandboxes, so the check keeps its
+    // behaviour: any governing sandbox refuses it, seen through a policy barrier and a system-policy capability, so
+    // that the check fails closed
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
     if (governing) {
         xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which sandboxed code cannot use",
             provider->c_str(), option->c_str(), desc);
     }
+#endif
     return QoreValue();
 }
 
@@ -232,7 +250,7 @@ nothing check_class_option(string provider, string option, *string what) [flags=
     Class c = Jni::load_class(class_name: "java/lang/String");
     @endcode
  */
-Jni::java::lang::Class load_class(string class_name) [flags=NAMED_ARGS] {
+Jni::java::lang::Class load_class(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         QoreProgram* pgm = jni::jni_get_program_context();
         //printd(5, "load_class() pgm: %p\n", pgm);
@@ -250,7 +268,7 @@ Jni::java::lang::Class load_class(string class_name) [flags=NAMED_ARGS] {
     - reflection is not used, so exceptions are thrown directly (i.e. not wrapped as \c java.lang.reflect.InvocationTargetException objects)
     - for static method invocations, this function is identical to @ref invoke_nonvirtual()
  */
-Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) {
+Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
         Env env;
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
@@ -275,14 +293,14 @@ Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateDa
     - reflection is not used, so exceptions are thrown directly (i.e. not wrapped as \c java.lang.reflect.InvocationTargetException objects)
     - for static method invocations, this function is identical to @ref invoke()
  */
-Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) {
+Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
         Env env;
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(), Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
         BaseMethod m(method->getObject(), *cls);
 
-         QoreProgram* pgm = jni_get_program_context();
-       return object
+        QoreProgram* pgm = jni_get_program_context();
+        return object
             ? m.invokeNonvirtual(object->getObject(), args, pgm, 2)
             : m.invokeStatic(args, pgm, 2);
     } catch (jni::Exception& e) {
@@ -305,7 +323,7 @@ Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJ
     # runnableInstance now has a Java method void run() that calls Qore function doRun()
     @endcode
  */
-Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [flags=NAMED_ARGS] {
+Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     // get Qore class for Class object
     jni::Env env;
     jni::LocalReference<jstring> clsName = env.callObjectMethod(interface_class->getObject(),
@@ -343,7 +361,7 @@ Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationH
     # runnableInstance now has a Java method void run() that calls Qore function doRun()
     @endcode
  */
-Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] class_loader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [flags=NAMED_ARGS] {
+Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] class_loader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     // get Qore class for Class object
     jni::Env env;
     jni::LocalReference<jstring> clsName = env.callObjectMethod(interface_class->getObject(),
@@ -370,7 +388,7 @@ Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJni
 
     @return the allocated array
  */
-Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateData] component_class, int size) [flags=NAMED_ARGS] {
+Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateData] component_class, int size) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         // attaches the thread to the JVM before the class reference is used: the Class object can come from another
         // thread, and this can be this thread's first call into Java
@@ -396,7 +414,7 @@ java::lang::Class cls = define_class(class_name: class_name, bytecode: bytecode)
 
     @since %jni 1.1
 */
-Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [flags=NAMED_ARGS] {
+Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         ModifiedUtf8String utf8_name(class_name);
         jni::Env env;
@@ -460,7 +478,7 @@ ClassLoader loader = get_class_loader();
 
     @since jni 2.0
 */
-Jni::java::lang::Object get_class_loader() {
+Jni::java::lang::Object get_class_loader() [dom=UNCONTROLLED_API] {
     try {
         jni::Env env;
 
@@ -494,7 +512,7 @@ binary byte_code = get_byte_code(class_name: "::Qore::Thread::Condition");
 
     @since jni 2.0
 */
-binary get_byte_code(string class_name) [flags=NAMED_ARGS] {
+binary get_byte_code(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     TempEncodingHelper cn(class_name, QCS_UTF8, xsink);
     if (*xsink) {
         return QoreValue();
@@ -601,7 +619,7 @@ auto result = kotlin_eval(script: "1 + 2");  // returns 3
 
     @since jni 3.0
 */
-auto kotlin_eval(string script) [flags=NAMED_ARGS] {
+auto kotlin_eval(string script) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         jni::Env env;
 
@@ -673,7 +691,7 @@ if (kotlin_scripting_available()) {
 
     @since jni 3.0
 */
-bool kotlin_scripting_available() {
+bool kotlin_scripting_available() [dom=UNCONTROLLED_API] {
     try {
         jni::Env env;
 
@@ -712,7 +730,7 @@ if (kotlin_scripting_retry()) {
 
     @since jni 3.0
 */
-bool kotlin_scripting_retry() {
+bool kotlin_scripting_retry() [dom=UNCONTROLLED_API] {
     try {
         jni::Env env;
 

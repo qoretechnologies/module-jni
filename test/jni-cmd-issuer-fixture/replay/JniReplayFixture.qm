@@ -1,0 +1,20 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# JniReplayFixture.qm: a module with a jni module command directive, compiled with qcc by jni-module-cmd-issuer.qtest
+# so that its recorded command is replayed when it is loaded
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires jni
+%module-cmd(jni) add-classpath /nonexistent-qore-test-dir
+
+module JniReplayFixture {
+    version = "1.0";
+    desc = "a module with a jni module command, compiled to replay it";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+public namespace JniReplayFixture {
+public const Loaded = True;
+}

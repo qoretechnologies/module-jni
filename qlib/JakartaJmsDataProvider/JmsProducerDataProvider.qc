@@ -53,6 +53,8 @@ public class JmsProducerDataProvider inherits JmsDataProviderBase {
 
     #! Creates the object from a parent JmsDataProvider
     constructor(JmsDataProvider parent) : JmsDataProviderBase(parent.getConnectionOptions()) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JakartaJmsDataProvider::AppName);
         parent_provider = parent;
     }
 
