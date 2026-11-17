@@ -96,16 +96,40 @@
           "message": "このコンシューマーが所属するコンシューマーグループの ID"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.desc": {
-          "source": "If `True` the consumer's offset will be periodically committed in the background",
-          "message": "`True` の場合、コンシューマーのオフセットはバックグラウンドで定期的にコミットされます"
+          "source": "Ignored: the offsets are never committed in the background; the provider commits the offset of a record only after every observer has accepted it (at-least-once delivery), so that a record that an observer refuses is delivered again instead of being lost",
+          "message": "無視されます: オフセットがバックグラウンドでコミットされることはありません。プロバイダーは、すべてのオブザーバーがレコードを受け入れた後にのみそのオフセットをコミットします (少なくとも 1 回の配信)。そのため、オブザーバーが拒否したレコードは失われずに再配信されます"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.display_name": {
           "source": "Enable Auto Commit",
           "message": "自動コミットを有効化"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZW5hYmxlLmF1dG8uY29tbWl0.short_desc": {
-          "source": "If True the consumer's offset will be periodically committed in the background",
-          "message": "True の場合、コンシューマーのオフセットはバックグラウンドで定期的にコミットされます"
+          "source": "Ignored: the provider commits the offset of each record after its delivery",
+          "message": "無視されます: プロバイダーは各レコードの配信後にそのオフセットをコミットします"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.desc": {
+          "source": "The delay in milliseconds before a record that an observer refused is delivered again; it doubles with each consecutive refusal up to `max_refusal_delay_ms`, and the first successful delivery resets it",
+          "message": "オブザーバーが拒否したレコードを再配信するまでの遅延 (ミリ秒) です。連続して拒否されるたびに `max_refusal_delay_ms` まで倍増し、最初の配信成功でリセットされます"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.display_name": {
+          "source": "Refusal Delay",
+          "message": "拒否後の遅延"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.cmVmdXNhbF9kZWxheV9tcw.short_desc": {
+          "source": "The initial delay in milliseconds before a refused record is delivered again",
+          "message": "拒否されたレコードを再配信するまでの初期遅延 (ミリ秒)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.desc": {
+          "source": "The maximum delay in milliseconds before a record that an observer refused is delivered again",
+          "message": "オブザーバーが拒否したレコードを再配信するまでの最大遅延 (ミリ秒)"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.display_name": {
+          "source": "Max Refusal Delay",
+          "message": "拒否後の最大遅延"
+        },
+        "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZnVzYWxfZGVsYXlfbXM.short_desc": {
+          "source": "The maximum delay in milliseconds before a refused record is delivered again",
+          "message": "拒否されたレコードを再配信するまでの最大遅延 (ミリ秒)"
         },
         "app.S2Fma2E.action.bXNnLXJlY2VpdmVk.option.ZmV0Y2gubWluLmJ5dGVz.desc": {
           "source": "The minimum amount of data the server should return for a fetch request.\n\nIf insufficient data is available, the request will wait for that much data to accumulate before answering the request.\n\nThe default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive.\n\nSetting this to something greater than `1` will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency",
