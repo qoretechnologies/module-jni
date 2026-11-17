@@ -110,6 +110,11 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
         } else if (hdr.method == "DELETE") {
             return makeResponse(404, m_data ?? binary(body), {"Content-Type": m_mime});
         }
+        # any other method is not supported by this handler
+        return makeResponse(405, "method not allowed", {
+            "Content-Type": MimeTypeText,
+            "Allow": "GET, PUT, PATCH, POST, DELETE",
+        });
     }
 }
 
