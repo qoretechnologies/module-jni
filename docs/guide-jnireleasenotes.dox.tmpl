@@ -6,6 +6,20 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed Java code using the thread's Java context (the Program that Java's calls into %Qore on the thread, such
+      as \c org.qore.jni.QoreClosure.call(), resolve) that a Java call made for another Program had left: Java code
+      that called into %Qore, and Java code run by a Java object used as a %Qore closure, then called into %Qore
+      through that other Program (running its entry handler, and its sandbox applying to the code called); a call from
+      Java into %Qore through \c QoreClosure, \c QoreObject, \c QoreJavaApi or a proxy's \c QoreInvocationHandler now
+      saves the context and the thread's context class loader and restores them when it returns to Java, also when an
+      exception is raised, and a Java object used as a %Qore closure sets the context (and the thread's context class
+      loader) for the Java code it runs, as Java method calls do, which costs one more JNI call per closure call; a
+      static method uses the jni context of the Program that %Qore runs it in (the class's source Program, or the
+      caller's Program once the source Program has released the class), instead of reading the data of the class's
+      namespace Program, which the thread is not necessarily in; and a Java call whose Program is deleted by another thread just before the call enters it is now made in the
+      context of the calling code, as for a Program deleted before the call, instead of raising \c PROGRAM-ERROR (a
+      Java callback of such a Program is still refused with \c PROGRAM-ERROR, as its %Qore code belongs to the
+      deleted Program) (qore#6485, see @ref jni_callback_sandbox)
     - fixed a crash calling a Java object used as a %Qore closure (an object implementing
       \c org.qore.jni.QoreClosureMarker) after the Program that it was returned to had been deleted: the closure kept
       an unreferenced pointer to the Program; it now keeps the Program allocated, and is called in the context of the

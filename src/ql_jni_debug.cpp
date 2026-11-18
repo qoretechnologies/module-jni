@@ -34,6 +34,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <cstring>
 
 //! Returns the number of Programs holding entries in the module root namespace cache
 /** The cache is keyed by the raw QoreProgram pointer, so an entry that outlives its Program is a
@@ -69,19 +70,20 @@ static QoreValue f_dbg_jni_module_root_ns_locked_search_count(const QoreListNode
     return (int64)jni::get_module_root_ns_search_count(true);
 }
 
-// the one-shot gate run in the window between the lookup of a Program's jni context and its use; set, run and
-// cleared under the lock, and run only on the thread that set it
+// the one-shot gate run at one point of a call made in another Program (see DbgJniGatePoint); set, run and
+// cleared under the lock, and run only on the thread that set it, at the point it was set for
 static std::mutex context_gate_lock;
 static ResolvedCallReferenceNode* context_gate = nullptr;
 static int context_gate_tid = 0;
+static DbgJniGatePoint context_gate_point = DbgJniGatePoint::Lookup;
 // set while a gate is set, so that a lookup made with no gate set costs only this load
 std::atomic<bool> dbg_jni_context_gate_set{false};
 
-//! Sets or clears a one-shot gate that runs the given code on this thread in the window between the lookup of a
-//! Program's jni context and its use
-/** The next lookup of a jni context made by this thread runs the code there (see
-    JniExternalProgramData::setContext()), so that a test can delete the Program exactly in that window - see
-    test/jni-cross-program-call.qtest; with no argument, a gate that has not run is cleared
+//! Sets or clears a one-shot gate that runs the given code on this thread at one point of a call
+/** \a point \c "lookup" (the default): between the lookup of a Program's jni context and its use (see
+    JniExternalProgramData::setContext()); \c "entry": between the check that a Program has jni data and the entry
+    into it for a call made in another Program (see jni_enter_call_program()); so that a test can delete the Program
+    exactly in that window - see test/jni-cross-program-call.qtest; with no code, a gate that has not run is cleared
 */
 static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
@@ -89,12 +91,25 @@ static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeCon
     const ResolvedCallReferenceNode* code = arg.getType() == NT_NOTHING
         ? nullptr
         : arg.get<const ResolvedCallReferenceNode>();
+    QoreValue point_arg = get_param_value(args, 1);
+    DbgJniGatePoint point = DbgJniGatePoint::Lookup;
+    if (point_arg.getType() == NT_STRING) {
+        const char* p = point_arg.get<const QoreStringNode>()->c_str();
+        if (!strcmp(p, "entry")) {
+            point = DbgJniGatePoint::Entry;
+        } else if (strcmp(p, "lookup")) {
+            xsink->raiseException("DBG-JNI-GATE-ERROR", "unknown gate point '%s'; expecting \"lookup\" or "
+                "\"entry\"", p);
+            return QoreValue();
+        }
+    }
     ResolvedCallReferenceNode* old;
     {
         std::lock_guard<std::mutex> guard(context_gate_lock);
         old = context_gate;
         context_gate = code ? code->refRefSelf() : nullptr;
         context_gate_tid = code ? q_gettid() : 0;
+        context_gate_point = point;
         dbg_jni_context_gate_set.store(code != nullptr, std::memory_order_release);
     }
     if (old) {
@@ -103,11 +118,11 @@ static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeCon
     return QoreValue();
 }
 
-void dbg_jni_run_context_gate() {
+void dbg_jni_run_context_gate(DbgJniGatePoint point) {
     ResolvedCallReferenceNode* code;
     {
         std::lock_guard<std::mutex> guard(context_gate_lock);
-        if (!context_gate || context_gate_tid != q_gettid()) {
+        if (!context_gate || context_gate_tid != q_gettid() || context_gate_point != point) {
             return;
         }
         code = context_gate;
@@ -127,7 +142,8 @@ void dbg_jni_run_context_gate() {
 
 void init_jni_debug_functions(QoreNamespace& ns) {
     ns.addBuiltinVariant("dbg_jni_set_context_gate", f_dbg_jni_set_context_gate, QCF_NO_FLAGS, QDOM_DEFAULT,
-        nothingTypeInfo, 1, codeOrNothingTypeInfo, QoreValue(), "code");
+        nothingTypeInfo, 2, codeOrNothingTypeInfo, QoreValue(), "code", stringOrNothingTypeInfo, QoreValue(),
+        "point");
     ns.addBuiltinVariant("dbg_jni_module_root_ns_search_count", f_dbg_jni_module_root_ns_search_count,
         QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     ns.addBuiltinVariant("dbg_jni_module_root_ns_locked_search_count",

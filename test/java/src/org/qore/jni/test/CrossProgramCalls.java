@@ -55,9 +55,35 @@ public class CrossProgramCalls {
         return new Forwarder(cb);
     }
 
+    //! An instance method: returns a fixed value
+    public int value() {
+        return 7;
+    }
+
     //! Returns a Java closure that queries the sandbox of the code that calls it
     public static QoreClosureMarker makeSandboxQuery() {
         return new SandboxQuery();
+    }
+
+    //! Calls the first Qore closure and then the second one, on a new Java thread, and waits for the thread
+    /** Java's calls into Qore resolve their Program from the thread's Java context, so the second call shows the
+        context that the first one left on the thread
+    */
+    public static void callBothOnJavaThread(QoreClosure first, QoreClosure second) throws Throwable {
+        Throwable[] error = new Throwable[1];
+        Thread t = new Thread(() -> {
+            try {
+                first.call();
+                second.call();
+            } catch (Throwable e) {
+                error[0] = e;
+            }
+        });
+        t.start();
+        t.join();
+        if (error[0] != null) {
+            throw error[0];
+        }
     }
 
     //! Calls the Consumer on this thread; returns the description of the exception that Java sees, or null

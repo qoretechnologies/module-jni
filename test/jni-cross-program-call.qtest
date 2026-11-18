@@ -22,6 +22,7 @@ const OwnerSource = "
 %module-cmd(jni) import java.util.ArrayList
 %module-cmd(jni) import java.util.function.Consumer
 %module-cmd(jni) import org.qore.jni.test.CrossProgramCalls
+%module-cmd(jni) import org.qore.jni.test.CrossProgramStatic
 
 # a top-level variable: thread-local, and closure-bound in the functions that use it
 string tl = \"owner\";
@@ -81,6 +82,19 @@ object sub make_nested_consumer(object l2, object c2) {
 object sub make_marked_consumer(Queue ran) {
     return cast<Consumer>(implement_interface(new QoreInvocationHandler(
         sub (object method, *list<auto> args) { ran.push(True); }), load_class(\"java/util/function/Consumer\")));
+}
+
+# an object of a Java class that this Program loaded
+object sub make_calls_object() {
+    return new CrossProgramCalls();
+}
+
+# a child Program, which inherits the Java class that only this Program imports: its static method, called by the
+# child's code, belongs to this Program
+Program sub make_static_caller() {
+    Program child(PO_NEW_STYLE);
+    child.parse(\"int sub call_answer() { return CrossProgramStatic::answer(); }\", \"static-caller\");
+    return child;
 }
 
 # a call of the Java method made by the owner itself
@@ -228,6 +242,17 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         addTestCase("a Java closure is governed by the sandbox of its caller", \testJavaClosureSandbox());
         addTestCase("a Java closure whose Program was deleted stays callable", \testJavaClosureDeletedProgram());
         addTestCase("a callback whose Program was deleted is refused", \testDeletedProgramCallback());
+        addTestCase("a static method of an inherited class enters only the class's Program",
+            \testStaticMethodEntersProgram());
+        addTestCase("a static method of a deleted Program's class", \testStaticMethodDeletedProgram());
+        addTestCase("a Java closure sets the thread's Java context after a cross-Program call",
+            \testJavaContextRestored());
+        addTestCase("a Java closure sets the thread's Java context after a Program-loaded class's method",
+            \testJavaContextRestoredLoadedClass());
+        addTestCase("a callback's Program deleted before its entry", \testCallbackDeleteBeforeEntry());
+        addTestCase("a Java thread's context is restored after a cross-Program call",
+            \testJavaThreadContextRestored());
+        addTestCase("the owner deleted before the entry of a call", \testDeleteBeforeEntry());
         set_return_value(main());
     }
 
@@ -545,9 +570,10 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         }
     }
 
-    #! sets or clears the one-shot gate run between the lookup of a jni context and its use
-    private setContextGate(*code c) {
-        call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", c);
+    #! sets or clears the one-shot gate run at the given point of a call ("lookup": between the lookup of a jni
+    #! context and its use; "entry": between the check that a Program has jni data and the entry into it)
+    private setContextGate(*code c, string point = "lookup") {
+        call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", c, point);
     }
 
     testDeleteInContextLookup() {
@@ -791,5 +817,161 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         *string from_java_thread = caller.callFunction("accept_catching_on_java_thread", c);
         assertRegex(expected, from_java_thread ?? "<no exception>", "Java's exception on a Java thread");
         assertTrue(ran.empty(), "the callback's body did not run");
+    }
+
+    testStaticMethodEntersProgram() {
+        Program owner = getOwner();
+        # the child's own code calls a static method of a Java class that the owner's code defined, which the child
+        # inherited
+        Program child = owner.callFunction("make_static_caller");
+        Counter owner_entries();
+        owner.setThreadEntryHandler(sub () { owner_entries.inc(); });
+        on_exit owner.setThreadEntryHandler();
+        Counter child_entries();
+        child.setThreadEntryHandler(sub () { child_entries.inc(); });
+        on_exit child.setThreadEntryHandler();
+        assertEq(42, child.callFunction("call_answer"));
+        # Qore enters the class's source Program for the static method; the child, which the thread is already in for
+        # the call of its function, is not entered again
+        assertEq(1, owner_entries.getCount(), "the static method call entered the class's Program once");
+        assertEq(1, child_entries.getCount(), "the child was entered once, for the call of its function");
+
+        # the thread's Java context is restored after the call: a Java-to-Qore call on this thread does not go
+        # through the owner
+        code forward = CrossProgramCalls::makeForwarder(string sub () { return "called back"; });
+        assertEq("called back", forward());
+        assertEq(1, owner_entries.getCount(), "a Java-to-Qore call after the static method call");
+    }
+
+    testStaticMethodDeletedProgram() {
+        Program owner = getOwner();
+        Program child = owner.callFunction("make_static_caller");
+        assertEq(42, child.callFunction("call_answer"), "before the deletion");
+        delete owner;
+        # the class's Program has been deleted and its jni data destroyed: the static method is called in the context
+        # of the calling code
+        assertEq(42, child.callFunction("call_answer"), "after the deletion");
+    }
+
+    testJavaContextRestored() {
+        Program owner = getOwner();
+        Program caller = getCaller();
+        object l = owner.callFunction("make_list");
+        Counter entries();
+        owner.setThreadEntryHandler(sub () { entries.inc(); });
+        on_exit owner.setThreadEntryHandler();
+
+        # a Java closure of this Program that Java runs by calling a Qore closure of this Program back
+        # (QoreClosure.call(), which resolves the Program from the thread's Java context)
+        code forward = CrossProgramCalls::makeForwarder(string sub () { return "called back"; });
+        assertEq("called back", forward(), "control: before any cross-Program call");
+        assertEq(0, entries.getCount(), "control: the owner was not entered");
+
+        # a cross-Program call of the owner's Java object, made by this thread
+        assertEq(1, l.size());
+        assertEq(1, entries.getCount(), "the cross-Program call entered the owner");
+
+        # the same Java-to-Qore call on this thread after the cross-Program call returned: the thread's Java context
+        # is this Program's again, so the call does not go through the owner
+        assertEq("called back", forward());
+        assertEq(1, entries.getCount(), "the Java-to-Qore call after the cross-Program call did not enter the owner");
+
+        # also after a cross-Program call made by another Program on this thread
+        caller.callFunction("call_code", int sub () { return l.size(); });
+        int n = entries.getCount();
+        assertEq("called back", forward());
+        assertEq(n, entries.getCount(), "after a call made by another Program");
+    }
+
+    testDeleteBeforeEntry() {
+        if (!hasContextGate()) {
+            testSkip("the jni module's context gate requires a debug build");
+        }
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        bool deleted;
+        # the owner is deleted on this thread after the call has found that the owner has jni data, and before it
+        # enters the owner: the call then finds the owner deleted, and is made in the context of this Program, as for
+        # an owner that had been deleted before the call
+        setContextGate(sub () {
+            delete owner;
+            deleted = True;
+        }, "entry");
+        on_exit setContextGate();
+        assertEq(1, l.size(), "the call completes");
+        assertTrue(deleted, "the gate ran in the call");
+        assertEq(1, l.size(), "a call after the deletion");
+    }
+
+    testJavaContextRestoredLoadedClass() {
+        Program owner = getOwner();
+        # an object of a Java class that the owner loaded: Qore makes the owner, the class's source Program, current
+        # for calls of its methods, so the call sets the thread's Java context to the owner's
+        object o = owner.callFunction("make_calls_object");
+        Counter entries();
+        owner.setThreadEntryHandler(sub () { entries.inc(); });
+        on_exit owner.setThreadEntryHandler();
+        code forward = CrossProgramCalls::makeForwarder(string sub () { return "called back"; });
+
+        assertEq(7, o.value());
+        int n = entries.getCount();
+        # the thread's Java context is restored after the call: a Java-to-Qore call on this thread does not go
+        # through the owner
+        assertEq("called back", forward());
+        assertEq(n, entries.getCount(), "a Java-to-Qore call after the call did not enter the owner");
+    }
+
+    testCallbackDeleteBeforeEntry() {
+        if (!hasContextGate()) {
+            testSkip("the jni module's context gate requires a debug build");
+        }
+        Program owner = getOwner();
+        Program caller = getCaller();
+        Queue ran();
+        object c = owner.callFunction("make_marked_consumer", ran);
+        bool deleted;
+        # the owner is deleted on this thread after the callback's dispatcher has found that the owner has jni data,
+        # and before it enters the owner: the dispatcher falls back as for an owner deleted before the call, and the
+        # callback, code of the deleted owner, is refused with PROGRAM-ERROR, which Java sees
+        setContextGate(sub () {
+            delete owner;
+            deleted = True;
+        }, "entry");
+        on_exit setContextGate();
+        *string from_caller = caller.callFunction("accept_catching", c);
+        assertTrue(deleted, "the gate ran in the callback");
+        assertRegex("^org\\.qore\\.jni\\.QoreExceptionWrapper: PROGRAM-ERROR: .*has already been deleted",
+            from_caller ?? "<no exception>", "Java's exception");
+        assertTrue(ran.empty(), "the callback's body did not run");
+    }
+
+    testJavaThreadContextRestored() {
+        Program owner = getOwner();
+        object l = owner.callFunction("make_list");
+        Program child = owner.callFunction("make_static_caller");
+        code jc = owner.callFunction("make_java_closure", "tl");
+        Counter entries();
+        owner.setThreadEntryHandler(sub () { entries.inc(); });
+        on_exit owner.setThreadEntryHandler();
+        # on a Java thread, Java calls the first closure, which makes a call for the owner, and then the second one:
+        # the thread's Java context, from which Java's call of the second closure takes its Program, is the one it had
+        # before the call for the owner; the second closure's body records the entries made before it ran
+        hash<string, code> calls = {
+            "an instance method": sub () { l.size(); },
+            "a static method": sub () { child.callFunction("call_answer"); },
+            "a Java closure": sub () { jc(); },
+        };
+        foreach hash<auto> i in (calls.pairIterator()) {
+            int after_first;
+            int before_second;
+            CrossProgramCalls::callBothOnJavaThread(sub () {
+                i.value();
+                after_first = entries.getCount();
+            }, sub () {
+                before_second = entries.getCount();
+            });
+            assertGt(0, after_first, i.key + ": the call for the owner entered it");
+            assertEq(after_first, before_second, i.key + ": Java's next call into Qore did not enter the owner");
+        }
     }
 }

@@ -1173,6 +1173,36 @@ public class QoreURLClassLoader extends URLClassLoader {
         current.set(this);
     }
 
+    //! Returns the current thread's classloader context, for restoreContext()
+    /** Java's calls into Qore save the context and restore it when they return to Java (qore#6485): the Qore code
+        that runs can make Java calls for other Programs, each of which sets the context to its Program's
+        classloader, and the Java code that called into Qore continues with its own context; an array, not an object
+        of a class of its own, as this class is defined from its bytes alone, without nested classes
+
+        @return the thread-local reference (null if not set) and the thread's context classloader
+    */
+    public static Object[] saveContext() {
+        return new Object[] {current.get(), Thread.currentThread().getContextClassLoader()};
+    }
+
+    //! Restores a context returned by saveContext() on the current thread
+    /** The thread-local reference is restored if one was saved and its Program still exists, and is otherwise left as
+        it is, as calls from Java into Qore on the thread need one; the thread's context classloader is restored as
+        saved, unless it is the classloader of a Program that has been deleted: a deleted Program's classloader is not
+        restored, so that a long-lived thread does not keep it, and its classes, reachable
+    */
+    public static void restoreContext(Object[] saved) {
+        QoreURLClassLoader prev = (QoreURLClassLoader) saved[0];
+        if (prev != null && prev.pgm_ptr.get() != 0) {
+            current.set(prev);
+        }
+        ClassLoader prev_tccl = (ClassLoader) saved[1];
+        if (prev_tccl instanceof QoreURLClassLoader && ((QoreURLClassLoader) prev_tccl).pgm_ptr.get() == 0) {
+            return;
+        }
+        Thread.currentThread().setContextClassLoader(prev_tccl);
+    }
+
     //! Clears the current thread's classloader context
     /** This method should be called when a thread is done using this classloader
         to allow garbage collection. This clears both the thread's context classloader

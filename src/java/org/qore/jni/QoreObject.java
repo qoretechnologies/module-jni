@@ -42,7 +42,12 @@ public class QoreObject extends QoreObjectBase {
      * @see callMethodSave()
     */
     public Object callMethod(String name, Object... args) throws Throwable {
-        return callMethod0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callMethod0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! calls the given method with the given arguments and returns the result
@@ -55,7 +60,12 @@ public class QoreObject extends QoreObjectBase {
      * @see callMethodArgsSave()
     */
     public Object callMethodArgs(String name, Object[] args) throws Throwable {
-        return callMethod0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callMethod0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the given method with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
@@ -71,7 +81,12 @@ public class QoreObject extends QoreObjectBase {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callMethodSave(String name, Object... args) throws Throwable {
-        return callMethodSave0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callMethodSave0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the given method with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
@@ -87,12 +102,22 @@ public class QoreObject extends QoreObjectBase {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callMethodArgsSave(String name, Object[] args) throws Throwable {
-        return callMethodSave0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callMethodSave0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! returns the value of the given member
     public Object getMemberValue(String name) throws Throwable {
-        return getMemberValue0(obj, name);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return getMemberValue0(obj, name);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     private native String className0(long obj_ptr);

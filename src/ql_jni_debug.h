@@ -40,12 +40,20 @@
 */
 DLLLOCAL void init_jni_debug_functions(QoreNamespace& ns);
 
-//! Runs the one-shot gate set with Jni::dbg_jni_set_context_gate() if it was set by the current thread
-/** Called after the jni context of a Program has been looked up and before it is used (see
-    JniExternalProgramData::setContext()), so that a test can run code exactly in that window; throws
-    jni::XsinkException if the gate's code raises an exception
+//! The points of a call at which a gate set with Jni::dbg_jni_set_context_gate() can run
+enum class DbgJniGatePoint {
+    //! between the lookup of a Program's jni context and its use
+    Lookup,
+    //! between the check that a Program has jni data and the entry into it
+    Entry,
+};
+
+//! Runs the one-shot gate set with Jni::dbg_jni_set_context_gate() if it was set by the current thread for the point
+/** Called at the given point of a call (see DbgJniGatePoint, JniExternalProgramData::setContext() and
+    jni_enter_call_program()), so that a test can run code exactly in that window; throws jni::XsinkException if the
+    gate's code raises an exception
 */
-DLLLOCAL void dbg_jni_run_context_gate();
+DLLLOCAL void dbg_jni_run_context_gate(DbgJniGatePoint point);
 
 //! True while a gate is set; checked inline before dbg_jni_run_context_gate(), so that a lookup made with no gate
 //! set costs only this load

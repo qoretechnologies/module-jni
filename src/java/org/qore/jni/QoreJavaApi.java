@@ -99,7 +99,12 @@ public class QoreJavaApi {
         QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
         //System.out.format("cl: %s func: '%s' pgm: %x\n", (cl != null ? cl.toString() : "null"), name,
         //    cl.getProgramPtr());
-        return callFunction0(QoreURLClassLoader.getProgramPtr(), name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callFunction0(QoreURLClassLoader.getProgramPtr(), name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls a Qore function and returns the result as a Java Object, takes a variable number of arguments
@@ -107,7 +112,12 @@ public class QoreJavaApi {
         QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
         //System.out.format("cl: %s func: '%s' pgm: %x\n", (cl != null ? cl.toString() : "null"), name,
         //    cl.getProgramPtr());
-        return callFunction0(QoreURLClassLoader.getProgramPtr(), name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callFunction0(QoreURLClassLoader.getProgramPtr(), name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the given Qore function with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
@@ -125,7 +135,12 @@ public class QoreJavaApi {
     public static Object callFunctionSave(String name, Object... args) throws Throwable {
         //QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
         //System.out.println("cl: " + (cl != null ? cl.toString() : "null"));
-        return callFunctionSave0(QoreURLClassLoader.getProgramPtr(), name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callFunctionSave0(QoreURLClassLoader.getProgramPtr(), name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the given Qore function with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data, takes a variable number of arguments
@@ -143,21 +158,36 @@ public class QoreJavaApi {
     public static Object callFunctionSaveArgs(String name, Object[] args) throws Throwable {
         //QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
         //System.out.println("cl: " + (cl != null ? cl.toString() : "null"));
-        return callFunctionSave0(QoreURLClassLoader.getProgramPtr(), name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callFunctionSave0(QoreURLClassLoader.getProgramPtr(), name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the given Qore static method with the given arguments and returns the result
     public static Object callStaticMethod(String class_name, String method_name, Object... args) throws Throwable {
         //QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
         //System.out.println("cl: " + (cl != null ? cl.toString() : "null"));
-        return callStaticMethod0(QoreURLClassLoader.getProgramPtr(), class_name, method_name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callStaticMethod0(QoreURLClassLoader.getProgramPtr(), class_name, method_name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls a Qore static method and returns the result as a Java Object, takes a variable number of arguments
     public static Object callStaticMethodArgs(String class_name, String method_name, Object[] args) throws Throwable {
         //QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
         //System.out.println("cl: " + (cl != null ? cl.toString() : "null"));
-        return callStaticMethod0(QoreURLClassLoader.getProgramPtr(), class_name, method_name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callStaticMethod0(QoreURLClassLoader.getProgramPtr(), class_name, method_name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the given Qore static method with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
@@ -177,7 +207,12 @@ public class QoreJavaApi {
     public static Object callStaticMethodSave(String class_name, String method_name, Object... args) throws Throwable {
         //QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
         //System.out.println("cl: " + (cl != null ? cl.toString() : "null"));
-        return callStaticMethodSave0(QoreURLClassLoader.getProgramPtr(), class_name, method_name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callStaticMethodSave0(QoreURLClassLoader.getProgramPtr(), class_name, method_name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the given Qore static method with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data, takes a variable number of arguments
@@ -197,7 +232,12 @@ public class QoreJavaApi {
     public static Object callStaticMethodSaveArgs(String class_name, String method_name, Object[] args) throws Throwable {
         //QoreURLClassLoader cl = QoreURLClassLoader.getCurrent();
         //System.out.println("cl: " + (cl != null ? cl.toString() : "null"));
-        return callStaticMethodSave0(QoreURLClassLoader.getProgramPtr(), class_name, method_name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callStaticMethodSave0(QoreURLClassLoader.getProgramPtr(), class_name, method_name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Creates a new QoreObject from the class name and constructor arguments; a strong reference to the object is stored in thread-local data
@@ -213,7 +253,12 @@ public class QoreJavaApi {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public static QoreObject newObjectSave(String class_name, Object... args) throws Throwable {
-        return newObjectSave0(QoreURLClassLoader.getProgramPtr(), class_name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return newObjectSave0(QoreURLClassLoader.getProgramPtr(), class_name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Creates a new QoreObject from the class name and constructor arguments; a strong reference to the object is stored in thread-local data under the given key
@@ -229,7 +274,12 @@ public class QoreJavaApi {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public static QoreObject newObjectSaveArgs(String class_name, Object[] args) throws Throwable {
-        return newObjectSave0(QoreURLClassLoader.getProgramPtr(), class_name, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return newObjectSave0(QoreURLClassLoader.getProgramPtr(), class_name, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Registers the current Java thread as a Qore thread
