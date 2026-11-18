@@ -94,6 +94,11 @@ string sub test_func() {
     return "test_func_result";
 }
 
+# the answer of this Program to Kotlin's call of QoreJavaApi.callFunction("which") (qore#6551)
+string sub which() {
+    return "main";
+}
+
 # Base class for dynamic import testing
 public class DynamicTestBase {
     public {
@@ -404,6 +409,7 @@ public class KotlinTest inherits QUnit::Test {
         # Kotlin scripting tests (requires kotlin-scripting JARs)
         addTestCase("Kotlin scripting availability test", \kotlinScriptingAvailabilityTest());
         addTestCase("Kotlin eval test", \kotlinEvalTest());
+        addTestCase("Kotlin eval sets the thread's Java context", \kotlinEvalContextTest());
 
         # QoreKotlinCompiler tests (dynamic compilation with Qore imports)
         addTestCase("QoreKotlinCompiler basic test", \kotlinCompilerBasicTest());
@@ -1051,6 +1057,25 @@ public class KotlinTest inherits QUnit::Test {
         compilerClass = classloader.loadClass("org.qore.jni.compiler.QoreKotlinCompiler");
         compilerAvailable = True;
         return True;
+    }
+
+    # qore#6551: kotlin_eval() runs the script in the thread's Java context of the calling code, also after a Java
+    # call for another Program, which leaves the context set to that Program
+    kotlinEvalContextTest() {
+        tryLoadScriptingJars();
+        if (!kotlin_scripting_available()) {
+            testSkip("Kotlin scripting JARs not available");
+        }
+        string script = "org.qore.jni.QoreJavaApi.callFunction(\"which\")";
+        assertEq("main", kotlin_eval(script), "control");
+        Program owner(PO_NEW_STYLE);
+        owner.parse("%requires jni\n%module-cmd(jni) import java.util.ArrayList\n"
+            "string sub which() { return \"owner\"; }\n"
+            "object sub make_list() { ArrayList l(); l.add(\"x\"); return l; }\n", "owner");
+        object l = owner.callFunction("make_list");
+        # a call of a Java method of the owner's object leaves the thread's Java context set to the owner
+        assertEq(1, l.size());
+        assertEq("main", kotlin_eval(script), "after a Java call for another Program");
     }
 
     kotlinCompilerBasicTest() {

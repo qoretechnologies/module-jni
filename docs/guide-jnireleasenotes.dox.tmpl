@@ -6,6 +6,16 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed Java code that \c Jni::org::qore::jni::invoke(), \c invoke_nonvirtual(), \c kotlin_eval(),
+      \c JavaArray::toString() and \c JavaArray::deepToString() run, the static initializers that the creation of
+      the %Qore class for a Java class runs, and Java code that converting the value of a Java field or of a
+      \c JavaArray element runs (ex: the methods of a \c Map or a \c List), calling into %Qore through the Program of
+      an earlier Java call made for another Program instead of the calling code's Program (the Program that the class
+      is created in, for a static initializer): these now set the thread's Java context to that Program's context (a
+      read of a value only when converting it runs Java code that the value's class can override, so that other reads
+      cost no further call into Java); and a
+      call into %Qore from a Java class generated from a %Qore class now saves the thread's Java context and restores
+      it when it returns to Java, as the other calls from Java into %Qore do (qore#6551, see @ref jni_callback_sandbox)
     - fixed Java code using the thread's Java context (the Program that Java's calls into %Qore on the thread, such
       as \c org.qore.jni.QoreClosure.call(), resolve) that a Java call made for another Program had left: Java code
       that called into %Qore, and Java code run by a Java object used as a %Qore closure, then called into %Qore

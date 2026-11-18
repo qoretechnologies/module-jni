@@ -1250,6 +1250,10 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/SandboxIo.java
     test/java/src/org/qore/jni/test/CrossProgramCalls.java
     test/java/src/org/qore/jni/test/CrossProgramStatic.java
+    test/java/src/org/qore/jni/test/ContextProbe.java
+    test/java/src/org/qore/jni/test/ContextProbeInit.java
+    test/java/src/org/qore/jni/test/ContextProbeList.java
+    test/java/src/org/qore/jni/test/ContextProbeMap.java
     test/java/src/org/qore/jni/test/ExceptionLocations.java
     test/java/src/org/qore/jni/test/Fields.java
     test/java/src/org/qore/jni/test/FinalFields.java

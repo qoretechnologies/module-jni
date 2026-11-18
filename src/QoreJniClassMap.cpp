@@ -586,6 +586,7 @@ QoreValue QoreJniClassMap::getValue(LocalReference<jobject>& obj, QoreProgram* p
             nullptr).as<jstring>();
         Env::GetStringUtfChars tname(env, clsName);
         if (!strcmp(tname.c_str(), "microsoft.sql.DateTimeOffset")) {
+            JniPendingContextHelper::set(env);
             LocalReference<jstring> date_str = env.callObjectMethod(obj,
                 Globals::methodObjectToString, nullptr).as<jstring>();
             Env::GetStringUtfChars chars(env, date_str);
@@ -1264,6 +1265,14 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
 
     // add methods after parents
     if (init_done) {
+        // qore#6551: adding the class's members initializes the Java class (the IDs of its static members), which
+        // runs its static initializers: Java code that runs in the context of the Program that the class is created
+        // in, which the thread has entered; this path runs only when a class is created
+        {
+            Env env;
+            QoreProgram* ctx_pgm = pgm;
+            JniExternalProgramData::setContext(env, ctx_pgm);
+        }
         populateQoreClass(*qc, jc, pgm);
     }
 
@@ -4883,6 +4892,8 @@ void JniExternalProgramData::addParentClasspath(const char* path) {
         }
     }
 }
+
+thread_local bool JniPendingContextHelper::pending = false;
 
 JniExternalProgramData* JniExternalProgramData::setContext(Env& env) {
     QoreProgram* pgm = nullptr;

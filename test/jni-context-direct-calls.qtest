@@ -1,0 +1,318 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.ContextProbe
+%module-cmd(jni) import org.qore.jni.test.ContextProbeMap
+%module-cmd(jni) import java.lang.reflect.Method
+%requires QUnit
+
+%exec-class JniContextDirectCallsTest
+
+#! the answer of this Program to the context probe (org.qore.jni.test.ContextProbe.which())
+string sub which() {
+    return "main";
+}
+
+#! the source of a Program that owns a Java object: a call of its methods sets the thread's Java context to it
+const OwnerSource = "
+%requires jni
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import org.qore.jni.test.ContextProbe
+
+string sub which() {
+    return \"owner\";
+}
+
+object sub make_probe() {
+    return new ContextProbe();
+}
+
+object sub make_list() {
+    ArrayList l();
+    l.add(\"x\");
+    return l;
+}
+";
+
+#! the source of a Program with Qore classes and functions for which Java classes are generated; each call makes a
+#! Java call in this Program, which sets the thread's Java context to it
+const GeneratorSource = "
+%requires jni
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import java.lang.Runnable
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+
+string sub which() {
+    return \"generator\";
+}
+
+# a Java call made in this Program
+sub touch() {
+    ArrayList l();
+    l.size();
+}
+
+public namespace ContextGen {
+    public class Calls {
+        constructor() {
+            touch();
+        }
+
+        destructor() {
+            touch();
+        }
+
+        int value() {
+            touch();
+            return 1;
+        }
+
+        int fail() {
+            touch();
+            throw \"CONTEXT-GEN-ERROR\", \"the method raised an exception\";
+        }
+
+        static int twice() {
+            touch();
+            return 2;
+        }
+    }
+
+    int sub plus() {
+        touch();
+        return 3;
+    }
+
+    # a Qore class implementing a Java interface: Java calls its method through the generated class's overriding
+    # method
+    public class Task inherits Runnable {
+        run() {
+            touch();
+        }
+    }
+}
+
+object sub make_task() {
+    return new ContextGen::Task();
+}
+
+binary sub bytes(string name) {
+    return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.ContextGen.\" + name);
+}
+";
+
+#! Java code run by direct Java calls, and Java code that called into Qore through a Java class generated from a Qore
+#! class, calls into Qore in the right Program (qore#6551)
+/** The thread's Java context is the Program that Java's calls into Qore resolve against; a call of a Java method of
+    another Program's object leaves it set to that Program; each test makes such a call first, and then checks the
+    Program that a call into Qore made by the Java code of the operation tested resolves against
+*/
+class JniContextDirectCallsTest inherits QUnit::Test {
+    private {
+        Program owner;
+        object l;
+    }
+
+    constructor() : QUnit::Test("JNI context of direct Java calls", "1.0", \ARGV) {
+        owner = new Program(PO_NEW_STYLE);
+        owner.parse(OwnerSource, "owner");
+        l = owner.callFunction("make_list");
+
+        addTestCase("a Java method call sets the context (control)", \testMethodCall());
+        addTestCase("invoke() sets the context", \testInvoke());
+        addTestCase("invoke_nonvirtual() sets the context", \testInvokeNonvirtual());
+        addTestCase("reading a field sets the context", \testField());
+        addTestCase("reading a field holding a List sets the context", \testListField());
+        addTestCase("an exception from the Java code of a field's value", \testFieldException());
+        addTestCase("a read whose value runs no Java code does not set the context", \testNoJavaCodeRead());
+        addTestCase("reading a field of another Program's object", \testOtherProgramObject());
+        addTestCase("reading a static field sets the context", \testStaticField());
+        addTestCase("JavaArray::get() sets the context", \testArrayGet());
+        addTestCase("JavaArray::toString() and deepToString() set the context", \testArrayToString());
+        addTestCase("load_class() sets the context for a static initializer", \testLoadClass());
+        addTestCase("calls from generated Java classes restore the context", \testGeneratedClasses());
+        addTestCase("a generated method overriding a Java method restores the context", \testGeneratedOverride());
+        set_return_value(main());
+    }
+
+    #! makes a call of a Java method of the owner's object, which leaves the thread's Java context set to the owner
+    private leaveOwnerContext() {
+        assertEq(1, l.size());
+    }
+
+    testMethodCall() {
+        leaveOwnerContext();
+        assertEq("main", ContextProbe::which(), "a static method call");
+        ContextProbe p();
+        leaveOwnerContext();
+        assertEq("main", p.which(), "an instance method call");
+    }
+
+    testInvoke() {
+        Class cls = load_class("org/qore/jni/test/ContextProbe");
+        Method m = cls.getDeclaredMethod("which");
+        leaveOwnerContext();
+        assertEq("main", invoke(m, NOTHING), "a static method");
+        Method mi = cls.getDeclaredMethod("whichSelf");
+        ContextProbe p();
+        leaveOwnerContext();
+        assertEq("main", invoke(mi, p), "an instance method");
+    }
+
+    testInvokeNonvirtual() {
+        Class cls = load_class("org/qore/jni/test/ContextProbe");
+        Method m = cls.getDeclaredMethod("which");
+        leaveOwnerContext();
+        assertEq("main", invoke_nonvirtual(m, NOTHING), "a static method");
+        Method mi = cls.getDeclaredMethod("whichSelf");
+        ContextProbe p();
+        leaveOwnerContext();
+        assertEq("main", invoke_nonvirtual(mi, p), "an instance method");
+    }
+
+    testField() {
+        ContextProbe p();
+        leaveOwnerContext();
+        # Qore converts the Map in the field to a hash by calling its entrySet(), whose Java code calls into Qore
+        assertEq({"which": "main"}, p.probe);
+    }
+
+    testListField() {
+        ContextProbe p();
+        leaveOwnerContext();
+        # Qore converts the List in the field to a list by calling its size() and get(), whose Java code calls into
+        # Qore
+        assertEq(("main",), p.probeList);
+    }
+
+    testFieldException() {
+        ContextProbe p();
+        leaveOwnerContext();
+        # the exception raised by the List's Java code while Qore converts the field's value reaches the caller
+        assertThrows("JNI-ERROR", "the List raised an exception", sub () { auto v = p.failingList; });
+        # the next read sets the context again
+        leaveOwnerContext();
+        assertEq(("main",), p.probeList);
+        # a read whose value runs no Java code leaves the context as it was: a Map read after it still sets it
+        leaveOwnerContext();
+        assertEq("probe", p.name, "a String field");
+        assertEq({"which": "main"}, p.probe);
+    }
+
+    #! returns True if the module has the debug gate on the setting of the context
+    private bool hasContextGate() {
+        try {
+            call_function("Jni::org::qore::jni::dbg_jni_set_context_gate");
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "NO-FUNCTION") {
+                rethrow;
+            }
+            return False;
+        }
+    }
+
+    #! sets or clears the one-shot debug gate that runs when the thread's Java context is set
+    private setContextGate(*code c) {
+        call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", c);
+    }
+
+    testNoJavaCodeRead() {
+        if (!hasContextGate()) {
+            testSkip("the jni module's context gate requires a debug build");
+        }
+        ContextProbe p();
+        on_exit setContextGate();
+        bool set = False;
+        setContextGate(sub () { set = True; });
+        # reads whose values run no Java code make no call into Java for the context
+        assertEq("probe", p.name, "a String field");
+        assertEq(7, p.number, "a primitive field");
+        assertFalse(set, "the reads did not set the context");
+        # a read whose value runs Java code sets it
+        assertEq({"which": "main"}, p.probe, "a Map field");
+        assertTrue(set, "the Map read set the context");
+
+        # after a read whose value's Java code raised an exception, the next read of a String does not set it
+        set = False;
+        setContextGate(sub () { set = True; });
+        assertThrows("JNI-ERROR", "the List raised an exception", sub () { auto v = p.failingList; });
+        assertTrue(set, "the List read set the context");
+        set = False;
+        setContextGate(sub () { set = True; });
+        assertEq("probe", p.name, "a String field after the exception");
+        assertFalse(set, "the read after the exception did not set the context");
+    }
+
+    testOtherProgramObject() {
+        # an object of the owner, read by this Program: the read does not enter the owner, and the value is converted,
+        # and its Java code run, in the context of this Program, the calling code
+        object op = owner.callFunction("make_probe");
+        leaveOwnerContext();
+        assertEq({"which": "main"}, op.probe, "a field");
+        Method mi = load_class("org/qore/jni/test/ContextProbe").getDeclaredMethod("whichSelf");
+        leaveOwnerContext();
+        assertEq("main", invoke(mi, op), "invoke()");
+    }
+
+    testStaticField() {
+        leaveOwnerContext();
+        assertEq({"which": "main"}, ContextProbe::staticProbe);
+    }
+
+    testArrayGet() {
+        JavaArray a = new_array(load_class("java/lang/Object"), 1);
+        a.set(0, new ContextProbeMap());
+        leaveOwnerContext();
+        assertEq({"which": "main"}, a.get(0));
+    }
+
+    testArrayToString() {
+        JavaArray a = new_array(load_class("java/lang/Object"), 1);
+        a.set(0, new ContextProbeMap());
+        leaveOwnerContext();
+        assertEq("[which:main]", a.toString(), "toString()");
+        leaveOwnerContext();
+        assertEq("[which:main]", a.deepToString(), "deepToString()");
+    }
+
+    testLoadClass() {
+        leaveOwnerContext();
+        # creating the Qore class for the Java class initializes it, which runs its static initializer, whose Java
+        # code calls into Qore
+        load_class("org/qore/jni/test/ContextProbeInit");
+        assertEq("main", ContextProbe::initWhich);
+    }
+
+    testGeneratedOverride() {
+        Program gen(PO_NEW_STYLE);
+        gen.parse(GeneratorSource, "generator");
+        object task = gen.callFunction("make_task");
+        # Java runs the Qore method run() through the generated class's method overriding Runnable.run(); the method
+        # makes a Java call in the generator, and the Java code that called it continues with its own context
+        assertEq("main", ContextProbe::runThenWhich(task));
+    }
+
+    testGeneratedClasses() {
+        Program gen(PO_NEW_STYLE);
+        gen.parse(GeneratorSource, "generator");
+        # each call into Qore through the generated classes makes a Java call in the generator, which sets the thread's
+        # Java context to it; the Java code that made the call continues with its own context
+        hash<auto> h = ContextProbe::callGenerated(gen.callFunction("bytes", "Calls"),
+            gen.callFunction("bytes", "$Functions"));
+        assertEq({
+            "control": "main",
+            "constructor": "main",
+            "method": "main",
+            "exception": "main",
+            "static method": "main",
+            "function": "main",
+            "destructor": "main",
+        }, h);
+    }
+}
