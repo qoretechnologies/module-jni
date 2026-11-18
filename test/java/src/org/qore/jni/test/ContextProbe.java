@@ -61,6 +61,20 @@ public class ContextProbe {
         return QoreJavaApi.callFunction("which");
     }
 
+    //! Returns the answer of the Qore function \c get_script_path() in the Program of the thread's Java context
+    /** Every Program has the function, so the answer identifies the Program (QoreJavaApi.callFunction() falls back
+        to the calling code's Program for a function that the context's Program does not have)
+    */
+    public static Object scriptPath() throws Throwable {
+        return QoreJavaApi.callFunction("get_script_path");
+    }
+
+    //! Loads the given class with the thread's context class loader, and returns scriptPath() after it
+    public static Object loadThenScriptPath(String name) throws Throwable {
+        Class.forName(name, true, Thread.currentThread().getContextClassLoader());
+        return scriptPath();
+    }
+
     //! Runs the given Runnable, and returns which() after it
     public static Object runThenWhich(Runnable r) throws Throwable {
         r.run();

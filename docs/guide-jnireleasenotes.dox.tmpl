@@ -14,8 +14,10 @@
       is created in, for a static initializer): these now set the thread's Java context to that Program's context (a
       read of a value only when converting it runs Java code that the value's class can override, so that other reads
       cost no further call into Java); and a
-      call into %Qore from a Java class generated from a %Qore class now saves the thread's Java context and restores
-      it when it returns to Java, as the other calls from Java into %Qore do (qore#6551, see @ref jni_callback_sandbox)
+      call into %Qore from a Java class generated from a %Qore class, and the loading of a \c qore.* or
+      \c qoremod.* class, which can load a %Qore module whose initialization code makes Java calls for other
+      Programs, now save the thread's Java context and restore it when they return to Java, as the other calls from
+      Java into %Qore do (qore#6551, see @ref jni_callback_sandbox)
     - fixed Java code using the thread's Java context (the Program that Java's calls into %Qore on the thread, such
       as \c org.qore.jni.QoreClosure.call(), resolve) that a Java call made for another Program had left: Java code
       that called into %Qore, and Java code run by a Java object used as a %Qore closure, then called into %Qore

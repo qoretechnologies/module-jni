@@ -4,12 +4,14 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %prepend-module-path "${SCRIPT_DIR}/../qlib"
+%prepend-module-path "${SCRIPT_DIR}/qore-modules"
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.ContextProbe
 %module-cmd(jni) import org.qore.jni.test.ContextProbeMap
 %module-cmd(jni) import java.lang.reflect.Method
 %requires QUnit
+%requires JniCtxHelper
 
 %exec-class JniContextDirectCallsTest
 
@@ -137,6 +139,7 @@ class JniContextDirectCallsTest inherits QUnit::Test {
         addTestCase("load_class() sets the context for a static initializer", \testLoadClass());
         addTestCase("calls from generated Java classes restore the context", \testGeneratedClasses());
         addTestCase("a generated method overriding a Java method restores the context", \testGeneratedOverride());
+        addTestCase("loading a qoremod class whose module's initialization makes Java calls", \testModuleClassLoad());
         set_return_value(main());
     }
 
@@ -296,6 +299,18 @@ class JniContextDirectCallsTest inherits QUnit::Test {
         # Java runs the Qore method run() through the generated class's method overriding Runnable.run(); the method
         # makes a Java call in the generator, and the Java code that called it continues with its own context
         assertEq("main", ContextProbe::runThenWhich(task));
+    }
+
+    testModuleClassLoad() {
+        # control: a Java call in the helper module's Program, made by this Program, and then a Java-to-Qore call made
+        # by a Java method of this Program
+        JniCtxHelper::touch();
+        assertEq(get_script_path(), ContextProbe::scriptPath(), "control");
+        # Java loads qoremod.JniCtxLoad.Probe, whose bytecode generation loads the module, whose initialization code
+        # makes a Java call in the helper module's Program; the Java code that loaded the class continues with its
+        # own context
+        assertEq(get_script_path(), ContextProbe::loadThenScriptPath("qoremod.JniCtxLoad.Probe"));
+        assertTrue(exists get_module_hash().JniCtxLoad, "the module was loaded by the class's loading");
     }
 
     testGeneratedClasses() {

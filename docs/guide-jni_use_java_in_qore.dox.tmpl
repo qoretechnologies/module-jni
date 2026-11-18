@@ -166,7 +166,8 @@ class Outer {
     from Java into %Qore through \c QoreClosure, \c QoreObject (\c callMethod(), \c getMemberValue()),
     \c QoreJavaApi (\c callFunction(), \c callStaticMethod(), \c newObjectSave()), the \c QoreInvocationHandler of
     a proxy or a Java class generated from a %Qore class (its constructors, destructor, methods, static methods,
-    functions and constants) saves the thread's Java context and restores it when it returns to Java, also when an
+    functions and constants), and the loading of a \c qore.* or \c qoremod.* class, which can load a %Qore module
+    whose initialization code runs, saves the thread's Java context and restores it when it returns to Java, also when an
     exception is raised, so that the Java code that called into %Qore continues with its own context, whatever
     Programs the %Qore code made Java calls for; a thread that had no %Qore Java context keeps the one that the %Qore
     code set, as Java's calls into %Qore need one, and the class loader of a Program that has been deleted meanwhile
