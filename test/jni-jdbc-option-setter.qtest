@@ -33,6 +33,9 @@
 */
 class JniJdbcOptionSetterTest inherits QUnit::Test {
     private:internal {
+        #! the cached result of coreChecksTargets()
+        static *bool core_checks_targets;
+
         #! the restricting parse options of the kinds of code: name -> parse options, or -1 for a sandbox
         const Kinds = {
             "trusted": 0,
@@ -288,9 +291,12 @@ list<string> sub loader_urls() {
         connection chosen by code whose sandbox restricts network or filesystem access, whatever the sandbox trusts
     */
     private static bool coreChecksTargets() {
+        if (exists core_checks_targets) {
+            return core_checks_targets;
+        }
         SandboxManager sm();
         if (!sm.hasCallableMethod("setUncontrolledApiPolicy")) {
-            return False;
+            return core_checks_targets = False;
         }
         sm.setNetworkDefaultPolicy(False);
         sm.setFilesystemDefaultPolicy(True);
@@ -309,7 +315,7 @@ string sub open_desc() {
 }
 ", "jni-jdbc-option-setter-core-check");
         string rv = p.callFunction("open_desc");
-        return rv =~ /^NETWORK-ACCESS-DENIED:.*cannot report the destinations/;
+        return core_checks_targets = (rv =~ /^NETWORK-ACCESS-DENIED:.*cannot report the destinations/);
     }
 
     #! Returns the result of a connection that the code of the kind \a connecting chose and opens, with the option

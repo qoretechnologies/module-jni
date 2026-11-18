@@ -8,8 +8,9 @@
 
     - <b>Security</b>: with a %Qore library that checks the destinations of connections against the sandbox of the
       code that chose them (qore#5747), the \c jdbc driver, which cannot report its destinations, is refused for a
-      connection chosen by code whose governing sandbox restricts network or filesystem access, whatever the sandbox
-      trusts; the driver is used only if the sandbox trusts the code and restricts neither (see @ref jni_sandbox)
+      connection chosen by code (the code that created the datasource or set its database name or connection
+      values) whose governing sandbox restricts network or filesystem access, whatever the sandbox trusts
+      (see @ref jni_sandbox)
     - fixed Java code using the thread's Java context (the Program that Java's calls into %Qore on the thread, such
       as \c org.qore.jni.QoreClosure.call(), resolve) that a Java call made for another Program had left: Java code
       that called into %Qore, and Java code run by a Java object used as a %Qore closure, then called into %Qore

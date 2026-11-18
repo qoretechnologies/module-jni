@@ -19,6 +19,9 @@
 
 class JniJdbcNetworkSandboxTest inherits QUnit::Test {
     private:internal {
+        #! the cached result of coreChecksTargets()
+        static *bool core_checks_targets;
+
         #! no driver accepts this URL, so a connection that is not refused fails with the driver's error
         const Url = "jdbc:u/p@ignored{url=qore-none://127.0.0.1:1/x}";
 
@@ -201,7 +204,8 @@ string sub socket_barrier() {
         tsm.blockPrivateNetworks();
         call_object_method(tsm, "setUncontrolledApiPolicy", True);
         assertEq(coreChecksTargets() || !restrictsApi() ? Denied : NoDriver,
-            getSandboxed(OpenSource, tsm).callFunction("open_url", Url), "a trusting sandbox that restricts the network");
+            getSandboxed(OpenSource, tsm).callFunction("open_url", Url),
+            "a trusting sandbox that restricts the network");
     }
 
     allowedPolicyTest() {
@@ -331,10 +335,8 @@ sub probe() {
 ";
         # a sandbox that allows uncontrolled APIs (qore#5741; the call is dynamic because the Qore library may lack
         # the policy) lets the code establish the barrier: the barrier stops at the Program of the call, whose own
-        # sandbox still applies
-        # the sandbox restricts no network or filesystem access: the Program's own sandbox governs the code in its
-        # barrier, and a sandbox that restricts the network would still refuse the driver, whose destinations cannot
-        # be checked, whatever the trust
+        # sandbox still applies; it restricts no network or filesystem access, as such a policy would refuse the
+        # driver, whose destinations cannot be checked, whatever the trust
         SandboxManager sm = allowAll();
         if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
             call_object_method(sm, "setUncontrolledApiPolicy", True);
@@ -488,8 +490,11 @@ string sub open_options() {
         code with the restriction API, and refuses it with its own message without it
     */
     private static bool coreChecksTargets() {
+        if (exists core_checks_targets) {
+            return core_checks_targets;
+        }
         if (!(new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
-            return False;
+            return core_checks_targets = False;
         }
         SandboxManager sm = allowAll();
         sm.setNetworkDefaultPolicy(False);
@@ -507,7 +512,7 @@ string sub open_desc(string url) {
 }
 ";
         string rv = getSandboxed(src, sm).callFunction("open_desc", Url);
-        return rv.equalPartial(Denied + ":") && rv =~ /cannot report the destinations/;
+        return core_checks_targets = (rv.equalPartial(Denied + ":") && rv =~ /cannot report the destinations/);
     }
 
     restrictsApiTest() {
@@ -560,6 +565,13 @@ string sub open_ds(Datasource ds) {
         map $1.set(sm), restrictions(), !targetRestriction($1);
         trusting(sm);
         assertEq(NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "all resource limits, trusted");
+        # every restriction at once: refused by a Qore library that checks the destinations of connections, not by
+        # the jni module, as the sandbox trusts the code
+        SandboxManager every = allowAll();
+        map $1.set(every), restrictions();
+        trusting(every);
+        assertEq(coreChecksTargets() ? Denied : NoDriver, getSandboxed(OpenSource, every).callFunction("open_url", Url),
+            "all restrictions, trusted");
         # each restriction: trust exempts the code from the jni module's check; a network or filesystem policy still
         # applies, so a Qore library that checks the destinations of connections refuses the jdbc driver, which
         # cannot report them

@@ -19,6 +19,9 @@
 
 class JniJdbcUrlSetterTest inherits QUnit::Test {
     private:internal {
+        #! the cached result of coreChecksTargets()
+        static *bool core_checks_targets;
+
         #! the url of the datasources of the test, which no driver accepts
         const Url = "jdbc:u/p@ignored";
 
@@ -224,8 +227,11 @@ DatasourcePool sub new_pool(string url) {
         connection chosen by code whose sandbox restricts network or filesystem access, whatever the sandbox trusts
     */
     private static bool coreChecksTargets() {
+        if (exists core_checks_targets) {
+            return core_checks_targets;
+        }
         if (!hasPolicy()) {
-            return False;
+            return core_checks_targets = False;
         }
         SandboxManager sm = allowAll(True);
         sm.setNetworkDefaultPolicy(False);
@@ -243,7 +249,7 @@ string sub open_desc(string url) {
 }
 ", "jni-jdbc-url-setter-core-check");
         string rv = p.callFunction("open_desc", Url);
-        return rv =~ /^NETWORK-ACCESS-DENIED:.*cannot report the destinations/;
+        return core_checks_targets = (rv =~ /^NETWORK-ACCESS-DENIED:.*cannot report the destinations/);
     }
 
     urlTest() {
@@ -410,7 +416,7 @@ string sub open_desc(string url) {
             assertRefused(ds, "a sandboxed closure called inside a barrier");
             Datasource dds(Url);
             trusted.callFunction("call_barrier", caller.callFunction("get_db_setter"), dds, DbName);
-            if (choosersAware()) {
+            if (choosersAware() || coreChecksTargets()) {
                 assertRefused(dds, "a sandboxed closure called inside a barrier: the database name", True);
             } else {
                 assertEq("NO-DRIVER", open(dds), "a sandboxed closure called inside a barrier: the database name, "

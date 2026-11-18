@@ -423,8 +423,10 @@ public class Fetcher {
     connection against the sandbox of the code that chose it refuses the \c jdbc driver, which cannot report its
     destinations, for a connection chosen by code whose governing sandbox restricts network or filesystem access,
     whatever the sandbox trusts (\c NETWORK-ACCESS-DENIED; the library checks this before the driver is asked to
-    connect).  So the \c jdbc driver is refused unless the governing sandbox trusts the code and no network or
-    filesystem policy of a governing sandbox restricts it.  A host that governs trusted code with a sandbox only for
+    connect, and whatever the jni module is built with).  The code that chose a connection is the code that created
+    the datasource and that set its database name or connection values, not the code that opens it.  So the
+    \c jdbc driver is refused unless the governing sandbox of the code that opens the connection trusts it, and,
+    for the code that chose the connection, no network or filesystem policy of a governing sandbox restricts it.  A host that governs trusted code with a sandbox only for
     its interrupts or limits sets \c SandboxManager::setUncontrolledApiPolicy() on it.  For code that more
     than one sandbox governs (a composition of sandboxes, for example when a callback or closure of one sandboxed
     %Program runs code of another), the sandbox trusts the code only if every member does.  The governing sandbox is
