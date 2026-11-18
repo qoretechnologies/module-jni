@@ -418,8 +418,14 @@ public class Fetcher {
     (\c SandboxManager::setUncontrolledApiPolicy()), whatever the sandbox restricts: a sandbox that restricts nothing
     (an allow-all manager) but does not trust the code refuses them as well, because the Java code that they let run
     does I/O, uses threads and memory, and changes the state of the whole JVM, none of which the sandbox controls, as
-    the %Qore library refuses such code every other uncontrolled API.  A host that governs trusted code with a sandbox
-    only for its interrupts or limits sets \c SandboxManager::setUncontrolledApiPolicy() on it.  For code that more
+    the %Qore library refuses such code every other uncontrolled API.  Trust only enables uncontrolled APIs: the
+    network and filesystem policies of the sandbox still apply, and a %Qore library that checks the destinations of a
+    connection against the sandbox of the code that chose it refuses the \c jdbc driver, which cannot report its
+    destinations, for a connection chosen by code whose governing sandbox restricts network or filesystem access,
+    whatever the sandbox trusts (\c NETWORK-ACCESS-DENIED; the library checks this before the driver is asked to
+    connect).  So the \c jdbc driver is refused unless the governing sandbox trusts the code and no network or
+    filesystem policy of a governing sandbox restricts it.  A host that governs trusted code with a sandbox only for
+    its interrupts or limits sets \c SandboxManager::setUncontrolledApiPolicy() on it.  For code that more
     than one sandbox governs (a composition of sandboxes, for example when a callback or closure of one sandboxed
     %Program runs code of another), the sandbox trusts the code only if every member does.  The governing sandbox is
     resolved as for a policy check (\c QoreSandboxManagerHelper::Policy), so neither check applies inside

@@ -158,7 +158,10 @@ int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
 #ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
     // the connection is refused unless the governing sandbox (resolved for a policy check, so a system-policy
     // capability of trusted code connects) trusts the code with uncontrolled APIs, whatever it restricts
-    // (jni_sandbox_refuses_uncontrolled_code()); for a composition of sandboxes, every member must trust the code
+    // (jni_sandbox_refuses_uncontrolled_code()); for a composition of sandboxes, every member must trust the code.
+    // A Qore library that checks the destinations of connections refuses the driver first, whatever the trust, for a
+    // connection chosen by code whose governing sandbox restricts network or filesystem access, as the driver cannot
+    // report its destinations
     if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
             "does not trust with uncontrolled APIs, because the JDBC driver is uncontrolled Java code: it resolves "

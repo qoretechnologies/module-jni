@@ -197,14 +197,53 @@ DatasourcePool sub new_pool(string url) {
     }
 
     #! asserts that trusted code that opens the datasource is refused for the code that set the value
-    private assertRefused(Datasource ds, string label) {
+    /** @param restricting True if the value is one that the Qore library records the setter of as a chooser of the
+        connection (the database name, connection values, the creator of the datasource; not the jdbc \c url option)
+        and the setter's sandbox restricts network or filesystem access: a Qore library that checks the destinations
+        of connections against the sandbox of the code that chose them refuses the jdbc driver, which cannot report
+        its destinations, before the jni module judges the setter
+    */
+    private assertRefused(Datasource ds, string label, bool restricting = False) {
         try {
             ds.open();
             fail(label + ": not refused");
         } catch (hash<ExceptionInfo> ex) {
-            assertEq(Refused, ex.err, label + ": " + ex.desc);
-            assertRegex("does not trust with uncontrolled APIs", ex.desc, label + ": the rule");
+            if (restricting && coreChecksTargets()) {
+                assertEq("NETWORK-ACCESS-DENIED", ex.err, label + ": " + ex.desc);
+                assertRegex("cannot report the destinations", ex.desc, label + ": the rule");
+            } else {
+                assertEq(Refused, ex.err, label + ": " + ex.desc);
+                assertRegex("does not trust with uncontrolled APIs", ex.desc, label + ": the rule");
+            }
         }
+    }
+
+    #! Returns True if the Qore library checks the destinations of connections against the sandbox of the code that
+    #! chose them
+    /** Such a library refuses a driver that cannot report its destinations, such as the jdbc driver, for a
+        connection chosen by code whose sandbox restricts network or filesystem access, whatever the sandbox trusts
+    */
+    private static bool coreChecksTargets() {
+        if (!hasPolicy()) {
+            return False;
+        }
+        SandboxManager sm = allowAll(True);
+        sm.setNetworkDefaultPolicy(False);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("
+string sub open_desc(string url) {
+    try {
+        Datasource ds(url);
+        ds.open();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+", "jni-jdbc-url-setter-core-check");
+        string rv = p.callFunction("open_desc", Url);
+        return rv =~ /^NETWORK-ACCESS-DENIED:.*cannot report the destinations/;
     }
 
     urlTest() {
@@ -243,8 +282,9 @@ DatasourcePool sub new_pool(string url) {
             Datasource ds(Url);
             SandboxManager sm = allowAll(True);
             if (trustOnly()) {
-                # whatever the sandbox restricts
-                sm.setNetworkDefaultPolicy(False);
+                # whatever the sandbox restricts of its resources: a network or filesystem policy that restricts
+                # would still refuse the driver, whose destinations cannot be checked, whatever the trust
+                sm.setMaxThreads(64);
             }
             getSetter(sm).callFunction("set_url", ds, UrlOption);
             assertEq("NO-DRIVER", open(ds), "a trusting sandbox");
@@ -263,8 +303,8 @@ DatasourcePool sub new_pool(string url) {
         # the connection (a gap that is documented)
         Datasource ds(Url);
         getSetter(new SandboxManager()).callFunction("set_db", ds, DbName);
-        if (choosersAware()) {
-            assertRefused(ds, "a default sandbox");
+        if (choosersAware() || coreChecksTargets()) {
+            assertRefused(ds, "a default sandbox", True);
         } else {
             assertEq("NO-DRIVER", open(ds), "a default sandbox, without a record of the setter");
         }
@@ -293,8 +333,9 @@ DatasourcePool sub new_pool(string url) {
         if (hasPolicy()) {
             SandboxManager sm = allowAll(True);
             if (trustOnly()) {
-                # whatever the sandbox restricts
-                sm.setNetworkDefaultPolicy(False);
+                # whatever the sandbox restricts of its resources: a network or filesystem policy that restricts
+                # would still refuse the driver, whose destinations cannot be checked, whatever the trust
+                sm.setMaxThreads(64);
             }
             Program trusting = getSetter(sm);
             # with references that the Program's initialization created, so that only the rule for the setter's
@@ -319,8 +360,9 @@ DatasourcePool sub new_pool(string url) {
         if (hasPolicy()) {
             SandboxManager sm = allowAll(True);
             if (trustOnly()) {
-                # whatever the sandbox restricts
-                sm.setNetworkDefaultPolicy(False);
+                # whatever the sandbox restricts of its resources: a network or filesystem policy that restricts
+                # would still refuse the driver, whose destinations cannot be checked, whatever the trust
+                sm.setMaxThreads(64);
             }
             Program trusting = getSetter(sm);
             code tref = trusting.getCallReference("set_url");
@@ -369,7 +411,7 @@ DatasourcePool sub new_pool(string url) {
             Datasource dds(Url);
             trusted.callFunction("call_barrier", caller.callFunction("get_db_setter"), dds, DbName);
             if (choosersAware()) {
-                assertRefused(dds, "a sandboxed closure called inside a barrier: the database name");
+                assertRefused(dds, "a sandboxed closure called inside a barrier: the database name", True);
             } else {
                 assertEq("NO-DRIVER", open(dds), "a sandboxed closure called inside a barrier: the database name, "
                     "without a record of the setter");
