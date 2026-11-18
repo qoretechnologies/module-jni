@@ -19,6 +19,9 @@
 
 class JniJdbcNetworkSandboxTest inherits QUnit::Test {
     private:internal {
+        #! the cached result of coreChecksTargets()
+        static *bool core_checks_targets;
+
         #! no driver accepts this URL, so a connection that is not refused fails with the driver's error
         const Url = "jdbc:u/p@ignored{url=qore-none://127.0.0.1:1/x}";
 
@@ -186,12 +189,22 @@ string sub socket_barrier() {
         deny.blockPrivateNetworks();
         assertEq(Denied, getSandboxed(OpenSource, deny).callFunction("open_url", Url),
             "a restricting sandbox that does not trust the code");
-        # a trusting sandbox that restricts the network: the trust of the sandbox exempts the code only with the API;
-        # without it, the network policy decides, as for any sandbox
+        # a trusting sandbox that restricts only resource limits: the trust exempts the code from the jni module's
+        # check, and no network or filesystem policy restricts it
+        SandboxManager lsm = allowAll();
+        lsm.setMaxThreads(64);
+        call_object_method(lsm, "setUncontrolledApiPolicy", True);
+        assertEq(NoDriver, getSandboxed(OpenSource, lsm).callFunction("open_url", Url),
+            "a trusting sandbox that restricts only resource limits");
+        # a trusting sandbox that restricts the network: trust only enables uncontrolled APIs, and the network policy
+        # still applies: a Qore library that checks the destinations of connections against the sandbox of the code
+        # that chose them refuses the jdbc driver, which cannot report its destinations; with an older library, the
+        # jni module's check decides (the trust exempts the code with the API, the network policy without it)
         SandboxManager tsm = allowAll();
         tsm.blockPrivateNetworks();
         call_object_method(tsm, "setUncontrolledApiPolicy", True);
-        assertEq(restrictsApi() ? NoDriver : Denied, getSandboxed(OpenSource, tsm).callFunction("open_url", Url),
+        assertEq(coreChecksTargets() || !restrictsApi() ? Denied : NoDriver,
+            getSandboxed(OpenSource, tsm).callFunction("open_url", Url),
             "a trusting sandbox that restricts the network");
     }
 
@@ -322,16 +335,15 @@ sub probe() {
 ";
         # a sandbox that allows uncontrolled APIs (qore#5741; the call is dynamic because the Qore library may lack
         # the policy) lets the code establish the barrier: the barrier stops at the Program of the call, whose own
-        # sandbox still applies
-        SandboxManager sm();
+        # sandbox still applies; it restricts no network or filesystem access, as such a policy would refuse the
+        # driver, whose destinations cannot be checked, whatever the trust
+        SandboxManager sm = allowAll();
         if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
             call_object_method(sm, "setUncontrolledApiPolicy", True);
         }
-        # with the restriction API of sandboxes, the trusting sandbox does not refuse the driver (the Program's own
-        # sandbox governs the code in its barrier), which then fails for the missing driver; without it, the network
-        # policy of the sandbox refuses it
-        assertEq(restrictsApi() ? NoDriver : Denied, getSandboxed(src, sm).callFunction("run", Url),
-            "barrier established");
+        # the trusting sandbox does not refuse the driver, which then fails for the missing driver; without the
+        # restriction API, the network policy of the sandbox decides, and it allows the connection
+        assertEq(NoDriver, getSandboxed(src, sm).callFunction("run", Url), "barrier established");
 
         # a default sandbox: a Qore library that refuses uncontrolled APIs at run time (qore#5741) refuses the barrier
         # itself to the sandboxed code; without the refusal, the barrier stops at the Program of the call as above
@@ -464,6 +476,45 @@ string sub open_options() {
         return sm;
     }
 
+    #! Returns True if the restriction is a network or filesystem policy, which the destinations of a connection are
+    #! checked against, and False for a resource limit
+    private static bool targetRestriction(hash<auto> r) {
+        return r.name !~ /^limits:/;
+    }
+
+    #! Returns True if the Qore library checks the destinations of connections against the sandbox of the code that
+    #! chose them
+    /** Such a library refuses a driver that cannot report its destinations, such as the jdbc driver, for a
+        connection chosen by code whose sandbox restricts network or filesystem access, also when the sandbox trusts
+        the code: a trusting sandbox that denies the network distinguishes it, as the jni module does not refuse that
+        code with the restriction API, and refuses it with its own message without it
+    */
+    private static bool coreChecksTargets() {
+        if (exists core_checks_targets) {
+            return core_checks_targets;
+        }
+        if (!(new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
+            return core_checks_targets = False;
+        }
+        SandboxManager sm = allowAll();
+        sm.setNetworkDefaultPolicy(False);
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        # the description tells the core's refusal from the jni module's
+        string src = "
+string sub open_desc(string url) {
+    try {
+        Datasource ds(url);
+        ds.open();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+";
+        string rv = getSandboxed(src, sm).callFunction("open_desc", Url);
+        return core_checks_targets = (rv.equalPartial(Denied + ":") && rv =~ /cannot report the destinations/);
+    }
+
     restrictsApiTest() {
         skipIfNoRestrictsApi();
         # a sandbox that restricts nothing but does not trust the code refuses it: an allow-all manager, also with an
@@ -509,14 +560,24 @@ string sub open_ds(Datasource ds) {
 
     restrictsApiTrustTest() {
         skipIfNoRestrictsApi();
-        # every restriction at once: a sandbox that trusts the code does not refuse it
+        # every resource limit at once: a sandbox that trusts the code does not refuse it
         SandboxManager sm = allowAll();
-        map $1.set(sm), restrictions();
+        map $1.set(sm), restrictions(), !targetRestriction($1);
         trusting(sm);
-        assertEq(NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "all restrictions, trusted");
+        assertEq(NoDriver, getSandboxed(OpenSource, sm).callFunction("open_url", Url), "all resource limits, trusted");
+        # every restriction at once: refused by a Qore library that checks the destinations of connections, not by
+        # the jni module, as the sandbox trusts the code
+        SandboxManager every = allowAll();
+        map $1.set(every), restrictions();
+        trusting(every);
+        assertEq(coreChecksTargets() ? Denied : NoDriver, getSandboxed(OpenSource, every).callFunction("open_url", Url),
+            "all restrictions, trusted");
+        # each restriction: trust exempts the code from the jni module's check; a network or filesystem policy still
+        # applies, so a Qore library that checks the destinations of connections refuses the jdbc driver, which
+        # cannot report them
         foreach hash<auto> r in (restrictions()) {
-            assertEq(NoDriver, getSandboxed(OpenSource, trusting(restricted(r))).callFunction("open_url", Url),
-                r.name + ": trusted");
+            assertEq(targetRestriction(r) && coreChecksTargets() ? Denied : NoDriver,
+                getSandboxed(OpenSource, trusting(restricted(r))).callFunction("open_url", Url), r.name + ": trusted");
         }
     }
 
@@ -556,7 +617,8 @@ string sub open_ds(Datasource ds) {
         foreach hash<auto> r in (restrictions()) {
             assertEq(Denied, composed(allowAll(), restricted(r)), r.name + ": restricting inner member");
             assertEq(Denied, composed(restricted(r), allowAll()), r.name + ": restricting outer member");
-            assertEq(NoDriver, composed(trusting(restricted(r)), trusting()), r.name + ": trusting members");
+            assertEq(targetRestriction(r) && coreChecksTargets() ? Denied : NoDriver,
+                composed(trusting(restricted(r)), trusting()), r.name + ": trusting members");
             assertEq(Denied, composed(trusting(restricted(r)), allowAll()), r.name
                 + ": a member that does not trust the code");
             assertEq(Denied, composed(allowAll(), trusting(restricted(r))), r.name

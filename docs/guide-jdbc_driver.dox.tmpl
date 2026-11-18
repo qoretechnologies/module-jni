@@ -394,14 +394,13 @@ foreach hash<auto> column in (result.schemaV2()) {
     - a datasource whose \c classpath option restricted code set is refused also when trusted code opens it
     - the option of a trusted datasource or pool is not refused when a connection is opened on the thread of
       restricted code; the driver does not connect at all for code that a sandbox restricts (with the restriction
-      API of sandboxes: code that a governing sandbox restricts in any way, including with a sandbox root or a
-      resource limit, and does not trust with uncontrolled APIs; without it: code that a sandbox network policy
-      restricts) (\c NETWORK-ACCESS-DENIED, see @ref jni_sandbox), so a trusted pool that is shared with such
-      sandboxed code cannot open a new connection for it, and a datasource object that such code created or copied
-      cannot connect, whoever opens it; trusted code that opens the connection inside
-      \c SandboxManager::callWithSystemPolicy() or a \c SandboxManager::createSystemPolicyCall() capability on behalf
-      of a sandboxed caller is not refused, as for every policy check: a system-policy call is an explicit, trusted
-      capability
+      API of sandboxes: code that a governing sandbox does not trust with uncontrolled APIs, whatever it restricts;
+      without it: code that a sandbox network policy restricts) (\c NETWORK-ACCESS-DENIED, see @ref jni_sandbox),
+      so a trusted pool that is shared with such sandboxed code cannot open a new connection for it, and a
+      datasource object that such code created or copied cannot connect, whoever opens it; trusted code that opens
+      the connection inside \c SandboxManager::callWithSystemPolicy() or a
+      \c SandboxManager::createSystemPolicyCall() capability on behalf of a sandboxed caller is not refused, as for
+      every policy check: a system-policy call is an explicit, trusted capability
     - the entries are checked against the filesystem policy of the code that set the option, not of the code that
       opens the connection
 
