@@ -89,7 +89,7 @@ QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, Except
         // up only then
         // the thread is attached to the JVM before the Program is entered: a thread's first attach sets its Java
         // context (the Program that Java's calls into Qore use, see QoreURLClassLoader.getProgramPtr()) to the
-        // current Program, which must be the caller's, as the context stays after the call
+        // current Program, which must be the caller's
         Env env;
         QoreProgram* pgm = src_pgm;
         std::optional<QoreExternalProgramContextHelper> epch;
@@ -100,10 +100,10 @@ QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, Except
         if (pgm) {
             // set call context
             call_ctx.emplace(pgm);
-        } else {
-            // the Program has been deleted or has no jni data: the call is made in the context of the calling code
-            jni_get_context_unconditional(pgm);
         }
+        // sets the thread's Java context for the call, as Java methods do (qore#6485); a Program that has been deleted
+        // or has no jni data: the call is made in the context of the calling code (jni_get_context_unconditional())
+        JniExternalProgramData::setContext(env, pgm);
 
         // make sure that the Qore exception stack is populated correctly in case a Qore exception is thrown
         // from the Java code about to be called below

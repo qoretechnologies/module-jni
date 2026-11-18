@@ -65,10 +65,14 @@ public class QoreInvocationHandler implements InvocationHandler {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        // the thread's classloader context is restored when the callback returns to Java (qore#6485); saved before
+        // the reference is taken, which the finally block below releases
+        Object[] ctx = QoreURLClassLoader.saveContext();
         long p = state.ref();
         try {
             return invoke0(p, proxy, method, args);
         } finally {
+            QoreURLClassLoader.restoreContext(ctx);
             state.deref();
         }
     }

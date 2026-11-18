@@ -33,7 +33,12 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see callSave()
     */
     public Object call(Object... args) throws Throwable {
-        return call0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return call0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! calls the closure / call reference with the given arguments and returns the result
@@ -45,7 +50,12 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see callMethodArgsSave()
     */
     public Object callArgs(Object[] args) throws Throwable {
-        return call0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return call0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the closure / call reference with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
@@ -60,7 +70,12 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callSave(Object... args) throws Throwable {
-        return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     //! Calls the closure / call reference with the given arguments and returns the result; if an object is returned, then a strong reference to the object is stored in thread-local data
@@ -76,7 +91,12 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callArgsSave(String name, Object[] args) throws Throwable {
-        return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     private native Object call0(long pgm_ptr, long obj_ptr, Object... args);

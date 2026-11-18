@@ -4434,9 +4434,14 @@ static void exec_java_constructor(const QoreMethod& qmeth, BaseMethod* m, QoreOb
 
 static QoreValue exec_java_static_method(const QoreMethod& meth, BaseMethod* m, const QoreListNode* args,
         q_rt_flags_t rtflags, ExceptionSink* xsink) {
+    // the jni context of the current Program: Qore has entered the class's source Program for the call of a static
+    // method of a class that another Program loaded, and the thread is in the current Program, so its jni data cannot
+    // be destroyed during the call; the Program of the class's namespace is not necessarily one that the thread is in
+    // (ex: a call reference to a static method of a class imported into another Program) (qore#6485)
+    QoreProgram* pgm = nullptr;
     try {
-        // issue #3585: set context for external java threads
-        QoreProgram* pgm = meth.getClass()->getProgram();
+        // issue #3585: set context for external java threads; this attaches the thread to the JVM, which raises an
+        // exception when the thread is cancelled or cannot be attached
         JniExternalProgramData::setContext(pgm);
         return m->invokeStatic(args, pgm);
     } catch (jni::Exception& e) {
@@ -4451,18 +4456,19 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     // always use the current object's Program, otherwise the wrong ClassLoader will be used
     QoreProgram* pgm = self->getProgram();
     try {
+        // issue #3585: set context for external java threads; this attaches the thread to the JVM, which raises an
+        // exception when the thread is cancelled or cannot be attached; attached before the entry below, so that a
+        // thread's first attach sets its Java context to the caller's Program
+        Env env;
         // issues qore#6183 and qore#6185: the call runs in the object's Program, which is entered first when it is not
         // the current one (see jni_enter_call_program()); its jni data is looked up only then, as the Program's
         // teardown can destroy the data of a Program that the thread is not in; the entry is left when epch is
-        // destroyed, also when an exception propagates
-        // a call within the object's Program costs only the comparison
+        // destroyed, also when an exception propagates; a call within the object's Program costs only the comparison
         std::optional<QoreExternalProgramContextHelper> epch;
         if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, xsink)) {
             return QoreValue();
         }
-        // issue #3585: set context for external java threads; this attaches the thread to the JVM, which raises an
-        // exception when the thread is cancelled or cannot be attached
-        JniExternalProgramData::setContext(pgm);
+        JniExternalProgramData::setContext(env, pgm);
         return m->invoke(jd->getObject(), args, pgm);
     } catch (jni::Exception& e) {
         e.convert(xsink);
@@ -4647,11 +4653,30 @@ int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch
         pgm = nullptr;
         return 0;
     }
+#ifdef DEBUG
+    // a test gate that runs code between the check above and the entry
+    if (dbg_jni_context_gate_set.load(std::memory_order_acquire)) {
+        dbg_jni_run_context_gate(DbgJniGatePoint::Entry);
+    }
+#endif
     // the Program is entered before its jni data is looked up: the entry holds the Program, whose teardown destroys
     // the data only once no thread is in it; an exception means that the Program cannot be entered (it is being torn
     // down, or another thread is parsing it), or one raised by its entry handler or thread initialization code
     epch.emplace(xsink, pgm);
     if (*xsink) {
+        // qore#6485: the Program was deleted after the check above, and its teardown destroyed its jni data: the
+        // entry was refused for that reason, so the call is made in the context of the calling code, as for a Program
+        // deleted before the call; the data is checked before the entry is released, as a Program that this thread
+        // has entered, even in part (a parse by another thread, an exception from its entry handler or thread
+        // initialization code), keeps its data until then, so another reason, also a teardown still in progress,
+        // keeps the exception
+        bool deleted = !JniExternalProgramData::hasProgramData(pgm);
+        epch.reset();
+        if (deleted) {
+            xsink->clear();
+            pgm = nullptr;
+            return 0;
+        }
         return -1;
     }
     // the data exists for the whole call: the teardown destroys it only after it has refused new entries (an entry
@@ -4871,7 +4896,7 @@ JniExternalProgramData* JniExternalProgramData::setContext(Env& env, QoreProgram
 #ifdef DEBUG
     // a test gate that runs code between the lookup of the context and its use
     if (dbg_jni_context_gate_set.load(std::memory_order_acquire)) {
-        dbg_jni_run_context_gate();
+        dbg_jni_run_context_gate(DbgJniGatePoint::Lookup);
     }
 #endif
     // set classloader context in new thread

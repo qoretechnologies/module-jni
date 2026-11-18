@@ -142,7 +142,22 @@ class Outer {
     Program's own sandbox, if it has one, governs its own code that Java calls back.  The call raises
     \c PROGRAM-ERROR, before the Java method is called, if the object's Program is being torn down or is being parsed
     by another thread, and raises any exception of the Program's entry handler.  A call within the object's own
-    Program does not enter it again.
+    Program does not enter it again.  A method of a Java class that another Program loaded (ex: a class that a child
+    Program inherited) is run by %Qore in that Program, the class's source Program, which %Qore enters for the call;
+    a static method then uses the jni context of that Program, and the module does not enter another Program.
+
+    A call of a Java method or constructor, or of a Java object used as a %Qore closure, sets the thread's Java
+    context - the %Qore Program that Java's calls into %Qore on the thread, such as
+    \c org.qore.jni.QoreClosure.call(), resolve, together with the thread's context class loader - to the class
+    loader of the Program whose jni context it uses, for the Java code that the call runs; the context stays set after
+    the call until the next call sets it (\c Jni::org::qore::jni::invoke(), field access and the other functions that
+    call Java do not set it).  A call from Java into %Qore through \c QoreClosure, \c QoreObject (\c callMethod(),
+    \c getMemberValue()), \c QoreJavaApi (\c callFunction(), \c callStaticMethod(), \c newObjectSave()) or the
+    \c QoreInvocationHandler of a proxy saves the thread's Java context and restores it when it returns to Java, also
+    when an exception is raised, so that the Java code that called into %Qore continues with its own context, whatever
+    Programs the %Qore code made Java calls for (the calls that Java classes generated from %Qore classes make into
+    %Qore do not restore it); a thread that had no %Qore Java context keeps the one that the %Qore code set, as Java's
+    calls into %Qore need one, and the class loader of a Program that has been deleted meanwhile is not restored.
 
     A Java object used as a %Qore closure (an object of a class implementing \c org.qore.jni.QoreClosureMarker that
     Java returns to %Qore) is called in the same way in the Program whose code it was returned to, also when
@@ -153,7 +168,9 @@ class Outer {
     An object whose Program has no jni context (ex: a Java object of a Java base class), or whose Program has already
     been deleted, so that its jni context has been destroyed, is called in the context of the calling code: the
     jni context of the current Program, or else of the Program of the calling code, or else of the module's global
-    Java context Program, is used, and no Program is entered for the call.
+    Java context Program, is used, and no Program is entered for the call.  This also applies when another thread
+    finishes deleting the Program while the call is about to enter it; while the deletion is still in progress, the
+    call raises \c PROGRAM-ERROR.
 
     @subsection jni_sandbox Sandboxing Java I/O
 

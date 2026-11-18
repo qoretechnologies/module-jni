@@ -29,6 +29,7 @@
 #include "Method.h"
 #include "QoreToJava.h"
 #include "QoreJniClassMap.h"
+#include "ql_jni_debug.h"
 
 #include <optional>
 
@@ -135,20 +136,37 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
         // a Program with no jni data, also one that has been deleted, whose jni data has been destroyed: the callback
         // is made in the Program that the context falls back to, and the Program is not entered; the registry is
         // read, not the Program's own data, which its teardown can be destroying
-        if (JniExternalProgramData::hasProgramData(pgm)) {
+        if (!JniExternalProgramData::hasProgramData(pgm)) {
+            pgm = nullptr;
+        } else {
+#ifdef DEBUG
+            // a test gate that runs code between the check above and the entry
+            if (dbg_jni_context_gate_set.load(std::memory_order_acquire)) {
+                dbg_jni_run_context_gate(DbgJniGatePoint::Entry);
+            }
+#endif
             pctx.emplace(&xsink, pgm);
             if (xsink) {
-                // the Program cannot be entered (it is being torn down, or another thread is parsing it), or its
-                // entry handler or thread initialization code raised an exception
-                QoreToJava::wrapException(xsink);
-                return nullptr;
+                // qore#6485: the Program was deleted after the check above, and its teardown destroyed its jni data:
+                // the entry was refused for that reason, so the callback is made in the Program that the context
+                // falls back to, as for a Program deleted before the call; the data is checked before the entry is
+                // released, as a Program that this thread has entered, even in part, keeps its data until then, so
+                // another reason (a teardown still in progress, another thread parsing the Program, its entry
+                // handler) keeps the exception
+                bool deleted = !JniExternalProgramData::hasProgramData(pgm);
+                pctx.reset();
+                if (!deleted) {
+                    QoreToJava::wrapException(xsink);
+                    return nullptr;
+                }
+                xsink.clear();
+                pgm = nullptr;
+            } else {
+                // the data exists for the whole callback: the teardown destroys it only after it has refused new
+                // entries (an entry made after the check above, once the teardown had started, has failed) and no
+                // thread is in the Program
+                jpc = jni_get_context_unconditional(pgm);
             }
-            // the data exists for the whole callback: the teardown destroys it only after it has refused new entries
-            // (an entry made after the check above, once the teardown had started, has failed) and no thread is in the
-            // Program
-            jpc = jni_get_context_unconditional(pgm);
-        } else {
-            pgm = nullptr;
         }
         if (!pgm) {
             // the current Program, the Program of the calling code, or the global Java context Program, which do not
