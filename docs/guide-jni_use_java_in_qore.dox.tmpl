@@ -425,11 +425,12 @@ public class Fetcher {
     whatever the sandbox trusts (\c NETWORK-ACCESS-DENIED; the library checks this before the driver is asked to
     connect, and whatever the jni module is built with).  The code that chose a connection is the code that created
     the datasource and that set its database name or connection values, not the code that opens it.  So the
-    \c jdbc driver is refused unless the governing sandbox of the code that opens the connection trusts it, and,
-    for the code that chose the connection, no network or filesystem policy of a governing sandbox restricts it.  A host that governs trusted code with a sandbox only for
-    its interrupts or limits sets \c SandboxManager::setUncontrolledApiPolicy() on it.  For code that more
-    than one sandbox governs (a composition of sandboxes, for example when a callback or closure of one sandboxed
-    %Program runs code of another), the sandbox trusts the code only if every member does.  The governing sandbox is
+    \c jdbc driver is refused unless the governing sandboxes of the code that opens the connection and of the code
+    that chose it trust that code, and no network or filesystem policy of the governing sandbox of the code that
+    chose it restricts it.  A host that governs trusted code with a sandbox only for its interrupts or limits sets
+    \c SandboxManager::setUncontrolledApiPolicy() on it.  For code that more than one sandbox governs (a composition
+    of sandboxes, for example when a callback or closure of one sandboxed %Program runs code of another), the
+    sandbox trusts the code only if every member does.  The governing sandbox is
     resolved as for a policy check (\c QoreSandboxManagerHelper::Policy), so neither check applies inside
     \c SandboxManager::callWithSystemPolicy() or a \c SandboxManager::createSystemPolicyCall() capability (see
     above): this is intended, as a system-policy call is an explicit, trusted capability in which trusted code acts
