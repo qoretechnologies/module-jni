@@ -410,6 +410,8 @@ public class KotlinTest inherits QUnit::Test {
         addTestCase("Kotlin scripting availability test", \kotlinScriptingAvailabilityTest());
         addTestCase("Kotlin eval test", \kotlinEvalTest());
         addTestCase("Kotlin eval sets the thread's Java context", \kotlinEvalContextTest());
+        addTestCase("Kotlin scripting is discovered in the caller's context on first use",
+            \kotlinFirstUseContextTest());
 
         # QoreKotlinCompiler tests (dynamic compilation with Qore imports)
         addTestCase("QoreKotlinCompiler basic test", \kotlinCompilerBasicTest());
@@ -1076,6 +1078,60 @@ public class KotlinTest inherits QUnit::Test {
         # a call of a Java method of the owner's object leaves the thread's Java context set to the owner
         assertEq(1, l.size());
         assertEq("main", kotlin_eval(script), "after a Java call for another Program");
+    }
+
+    # qore#6551: the first use of Kotlin scripting discovers the script engine through the thread's context class
+    # loader and keeps a failure; a child process, whose Program alone has the scripting jars, uses it first after a
+    # Java call for another Program, which leaves the thread's Java context set to that Program
+    kotlinFirstUseContextTest() {
+        *string dir;
+        foreach string d in ((ENV.KOTLIN_SCRIPTING_JARS ?? ""), (ENV.HOME ?? "") + "/.kotlin-scripting",
+            "/tmp/kotlin-scripting") {
+            if (d && is_dir(d) && glob(d + "/*.jar")) {
+                dir = d;
+                break;
+            }
+        }
+        *string kotlin_home = find_kotlin_home();
+        if (!dir && kotlin_home && glob(kotlin_home + "/lib/scripting/*.jar")) {
+            dir = kotlin_home + "/lib/scripting";
+        }
+        if (!dir) {
+            testSkip("Kotlin scripting JARs not available");
+        }
+        *string stdlib = find_kotlin_stdlib();
+        if (!stdlib) {
+            testSkip("Kotlin stdlib not found");
+        }
+        string reflect = kotlin_home ? kotlin_home + "/lib/kotlin-reflect.jar" : "";
+        if (!is_file(reflect)) {
+            reflect = "";
+        }
+        hash<string, string> expected = {
+            "control": "result: 3",
+            "eval": "result: 3",
+            "available": "result: True",
+            "retry": "result: True",
+            "modcmd": "result: parsed",
+        };
+        foreach hash<auto> i in (expected.pairIterator()) {
+            string cmd = sprintf("%s -b --enable-debug %s %s %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
+                shellQuote(get_script_dir() + "/kotlin-context-child.q"), shellQuote(dir), shellQuote(stdlib),
+                shellQuote(reflect), i.key);
+            int rc;
+            string out = backquote(cmd, \rc);
+            list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+            if (i.key == "control" && lines != (i.value,)) {
+                # the scripting jars do not work with this setup at all
+                testSkip("Kotlin scripting does not work with the jars found: " + out);
+            }
+            assertEq((i.value,), lines, i.key + ": " + out);
+            assertEq(0, rc, i.key + ": exit code");
+        }
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
     }
 
     kotlinCompilerBasicTest() {

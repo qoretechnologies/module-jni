@@ -54,6 +54,15 @@ public class ContextProbe {
     //! the answer of which() in the static initializer of ContextProbeInit
     public static Object initWhich;
 
+    //! the answer of which() in the static initializer of ContextProbeSysInit
+    public static Object sysInitWhich;
+
+    //! the answer of which() in the static initializer of ContextProbeInvokeInit
+    public static Object invokeInitWhich;
+
+    //! the answer of which() in the static initializer of ContextProbeInvokeNvInit
+    public static Object invokeNvInitWhich;
+
     //! a static field holding a Map whose Java code calls into Qore when Qore reads the field
     public static Object staticProbe = new ContextProbeMap();
 

@@ -1122,6 +1122,11 @@ static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, Jni
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);
 
+    jni::Env env;
+    // qore#6551: the script engine's discovery, which the first use makes through the thread's context class loader
+    // and whose failure is kept, and the evaluation run in the context of the Program being parsed
+    env.callVoidMethod(jpc->getClassLoader(), Globals::methodQoreURLClassLoaderSetContext, nullptr);
+
     // Initialize the Kotlin script engine if not already done
     Globals::initKotlinScriptEngine();
 
@@ -1129,8 +1134,6 @@ static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, Jni
         throw QoreJniException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
             "Kotlin scripting is not available - KotlinScriptEngine class not found");
     }
-
-    jni::Env env;
 
     // Check if scripting is available
     jboolean available = env.callStaticBooleanMethod(Globals::classKotlinScriptEngine,

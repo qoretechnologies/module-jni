@@ -152,11 +152,14 @@ class Outer {
     loader of the Program whose jni context it uses, for the Java code that the call runs; the context stays set after
     the call until the next call sets it.  The other functions that run Java code do not enter the Program of the Java
     object they are given, and set the context to the context of the calling code, in which they also convert their
-    arguments and results: \c Jni::org::qore::jni::invoke(), \c invoke_nonvirtual(), \c kotlin_eval(),
-    \c JavaArray::toString() and \c JavaArray::deepToString() (of an array of a reference type).  The creation of
-    the %Qore class for a Java class, which initializes the Java class and so runs its static initializers (ex: in
-    \c load_class(), \c implement_interface() or an import), sets it to the context of the Program that the class is
-    created in.  A
+    arguments and results, before any Java code runs (ex: the static initializers that looking up the method of
+    \c invoke() can run): \c Jni::org::qore::jni::invoke(), \c invoke_nonvirtual(), \c kotlin_eval(),
+    \c kotlin_scripting_available() and \c kotlin_scripting_retry() (whose discovery of the Kotlin script engine uses
+    the thread's context class loader), \c JavaArray::toString() and \c JavaArray::deepToString() (of an array of a
+    reference type); the \c kotlin-eval module command sets it to the context of the Program being parsed.  The lookup of a Java class that is not yet known and the creation of its %Qore class, which
+    initialize the Java class and so run its static initializers (ex: in \c load_class(), \c implement_interface() or
+    an import, for a class of the JVM's system class path as well as of a Program's class loader), set it to the
+    context of the Program that the class is loaded for.  A
     read of a Java field, also of a static field, or of a \c JavaArray element, made by another Program's code too,
     sets it to the context of the calling code only if converting the value to %Qore runs Java code that the value's
     class can override: the methods of a \c java.util.Map or \c java.util.List, \c toString() of a

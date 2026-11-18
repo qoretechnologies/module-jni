@@ -7,8 +7,12 @@
     @section jni_3_0_0 jni Module Version 3.0.0
 
     - fixed Java code that \c Jni::org::qore::jni::invoke(), \c invoke_nonvirtual(), \c kotlin_eval(),
-      \c JavaArray::toString() and \c JavaArray::deepToString() run, the static initializers that the creation of
-      the %Qore class for a Java class runs, and Java code that converting the value of a Java field or of a
+      \c JavaArray::toString() and \c JavaArray::deepToString() run (also the static initializers that the lookup of
+      the method of \c invoke() runs, and the discovery of the Kotlin script engine by these functions,
+      \c kotlin_scripting_available(), \c kotlin_scripting_retry() and the \c kotlin-eval module command, which
+      failed for the caller when only its class loader had the scripting jars), the static initializers that the
+      lookup of a Java class and the creation of its %Qore class run (also for a class of the JVM's system class
+      path), and Java code that converting the value of a Java field or of a
       \c JavaArray element runs (ex: the methods of a \c Map or a \c List), calling into %Qore through the Program of
       an earlier Java call made for another Program instead of the calling code's Program (the Program that the class
       is created in, for a static initializer): these now set the thread's Java context to that Program's context (a
