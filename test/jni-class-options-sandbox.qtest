@@ -424,7 +424,12 @@ string sub get_context(object c) {
         map tp.loadModule($1), Modules;
         tp.parse(TrustedCamelCode, "jni-class-options-trusted-objects");
         list<object> producer = tp.callFunction("make_producer");
-        on_exit delete producer[0];
+        # the producer is destroyed through a variable that may hold no value: an element of a list<object> cannot
+        # be deleted, as the element would then have no value
+        on_exit {
+            *object p = producer[0];
+            delete p;
+        }
         object conn = tp.callFunction("make_connection");
 
         Program sp(PO_NEW_STYLE);
@@ -773,7 +778,11 @@ code sub make_capability() {
         map tp.loadModule($1), Modules;
         tp.parse(TrustedCamelCode, "jni-class-options-allow-all-camel-trusted");
         list<object> producer = tp.callFunction("make_producer");
-        on_exit delete producer[0];
+        # destroyed through a variable that may hold no value (an element of a list<object> cannot be deleted)
+        on_exit {
+            *object p = producer[0];
+            delete p;
+        }
 
         Program sp(PO_NEW_STYLE);
         sp.setSandboxManager(allowAll());

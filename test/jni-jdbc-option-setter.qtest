@@ -33,6 +33,9 @@
 */
 class JniJdbcOptionSetterTest inherits QUnit::Test {
     private:internal {
+        #! the cached result of coreChecksTargets()
+        static *bool core_checks_targets;
+
         #! the restricting parse options of the kinds of code: name -> parse options, or -1 for a sandbox
         const Kinds = {
             "trusted": 0,
@@ -260,18 +263,66 @@ list<string> sub loader_urls() {
     /** the driver refuses to connect, before it processes any option, for code of the sandboxed Program (whose
         default sandbox restricts everything and does not trust it with uncontrolled APIs), also when it opens a
         datasource that trusted code configured, a pool that grows on its thread, and a datasource object that its
-        Program created or copied, whoever opens it.  It does not refuse the code of the trusted-sandbox Program:
-        with the restriction API of sandboxes, its sandbox trusts it; without it, the driver is refused only for code
-        that a sandbox network policy restricts, and that sandbox allows the network (its classpath option is then
-        refused by the option check where the sandbox cannot trust it; see expectedFor())
+        Program created or copied, whoever opens it.  The jni module does not refuse the code of the trusted-sandbox
+        Program: with the restriction API of sandboxes, its sandbox trusts it; without it, the driver is refused only
+        for code that a sandbox network policy restricts, and that sandbox allows the network (its classpath option is
+        then refused by the option check where the sandbox cannot trust it; see expectedFor()).  But its sandbox
+        restricts filesystem access, so a Qore library that checks the destinations of connections against the
+        sandbox of the code that chose them refuses the jdbc driver, which cannot report its destinations, for a
+        connection that this code chose (created the datasource of, or set its connection values), whatever its
+        sandbox trusts (see chooserRefused()); opening a datasource that trusted code created is not refused for it
     */
     private static bool connectRefused(string kind) {
         return kind == "sandboxed";
     }
 
-    #! Returns the result of a connection for the code of the kind \a connecting with the option set by \a setter
+    #! Returns True if the Qore library refuses a connection that the code of the kind given chose
+    /** a Qore library that checks the destinations of connections refuses the jdbc driver, which cannot report its
+        destinations, for a connection chosen by code whose sandbox restricts network or filesystem access, as the
+        sandbox of the trusted-sandbox code does, whatever the sandbox trusts
+    */
+    private static bool chooserRefused(string kind) {
+        return kind == "trusted-sandbox" && coreChecksTargets();
+    }
+
+    #! Returns True if the Qore library checks the destinations of connections against the sandbox of the code that
+    #! chose them
+    /** Such a library refuses a driver that cannot report its destinations, such as the jdbc driver, for a
+        connection chosen by code whose sandbox restricts network or filesystem access, whatever the sandbox trusts
+    */
+    private static bool coreChecksTargets() {
+        if (exists core_checks_targets) {
+            return core_checks_targets;
+        }
+        SandboxManager sm();
+        if (!sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            return core_checks_targets = False;
+        }
+        sm.setNetworkDefaultPolicy(False);
+        sm.setFilesystemDefaultPolicy(True);
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("
+string sub open_desc() {
+    try {
+        Datasource ds(\"jdbc:u/p@jdbc:qore-none://x\");
+        ds.open();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+}
+", "jni-jdbc-option-setter-core-check");
+        string rv = p.callFunction("open_desc");
+        return core_checks_targets = (rv =~ /^NETWORK-ACCESS-DENIED:.*cannot report the destinations/);
+    }
+
+    #! Returns the result of a connection that the code of the kind \a connecting chose and opens, with the option
+    #! set by \a setter
     private string expectedConnect(string connecting, string setter, string entry) {
-        return connectRefused(connecting) ? "NETWORK-ACCESS-DENIED" : expectedFor(setter, entry);
+        return connectRefused(connecting) || chooserRefused(connecting) ? "NETWORK-ACCESS-DENIED"
+            : expectedFor(setter, entry);
     }
 
     #! the classpath entries of the test: one in the allowed directory, one in the denied directory
@@ -347,7 +398,8 @@ list<string> sub loader_urls() {
             }
             # the code of the kind copies a datasource that trusted code configured
             Datasource trusted("jdbc:u/p@jdbc:qore-none://x{classpath=" + NoSuchEntry + "}");
-            assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : "JNI-ERROR",
+            # the copy is the code's own datasource object: the code of the kind chose its connection
+            assertEq(connectRefused(kind) || chooserRefused(kind) ? "NETWORK-ACCESS-DENIED" : "JNI-ERROR",
                 open(pgms{kind}.callFunction("copy_ds", trusted)), kind + ": its copy of a trusted datasource");
         }
     }
@@ -518,7 +570,9 @@ list<string> sub loader_urls() {
         # the trusted sandbox sets the option: its policy applies when trusted or sandboxed code opens the datasource
         foreach string entry in (entries()) {
             Datasource ds = pgms."trusted-sandbox".callFunction("make", entry);
-            string exp = expectedFor("trusted-sandbox", entry);
+            # the trusted-sandbox code created the datasource: a Qore library that checks the destinations of
+            # connections refuses it, as that code's sandbox restricts filesystem access
+            string exp = expectedConnect("trusted-sandbox", "trusted-sandbox", entry);
             assertEq(exp, open(ds.copy()), "opened by trusted code: " + entry);
             foreach string kind in (keys Kinds) {
                 assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : exp,
@@ -531,6 +585,20 @@ list<string> sub loader_urls() {
         # shows which class loader it was added to
         string dir = allowed + DirSep + "policy-classes";
         mkdir(dir);
+        if (chooserRefused("trusted-sandbox")) {
+            # a Qore library that checks the destinations of connections refuses a connection that the
+            # trusted-sandbox code chose, as its sandbox restricts filesystem access; the class loader is then shown
+            # with a creator that it does not refuse: the trusted Program
+            assertEq("NETWORK-ACCESS-DENIED", open(pgms."trusted-sandbox".callFunction("make", dir)),
+                "created by the trusted-sandbox code, opened by trusted code: " + dir);
+            Datasource tds = pgms.trusted.callFunction("make", dir);
+            assertEq("JNI-ERROR", open(tds), "created by the trusted Program, opened by trusted code: " + dir);
+            assertTrue(loaderHas("trusted", dir), "the class loader of the Program that created the datasource");
+            assertFalse(loaderHas(NOTHING, dir), "the class loader of the trusted code that opened it");
+            assertEq("JNI-ERROR", open(tds.copy()), "a copy opened by trusted code: " + dir);
+            assertFalse(loaderHas(NOTHING, dir), "the class loader of the trusted code that copied and opened it");
+            return;
+        }
         Datasource ds = pgms."trusted-sandbox".callFunction("make", dir);
         # the driver is not found in the directory
         assertEq("JNI-ERROR", open(ds), "opened by trusted code: " + dir);
