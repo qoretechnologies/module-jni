@@ -140,6 +140,8 @@ class JniContextDirectCallsTest inherits QUnit::Test {
         addTestCase("calls from generated Java classes restore the context", \testGeneratedClasses());
         addTestCase("a generated method overriding a Java method restores the context", \testGeneratedOverride());
         addTestCase("loading a qoremod class whose module's initialization makes Java calls", \testModuleClassLoad());
+        addTestCase("listing a qoremod package whose module's initialization makes Java calls",
+            \testModulePackageList());
         set_return_value(main());
     }
 
@@ -302,6 +304,11 @@ class JniContextDirectCallsTest inherits QUnit::Test {
     }
 
     testModuleClassLoad() {
+        # positive control: a Java call made by the helper module's code sets the thread's Java context to the
+        # helper's Program, which a call from Java into Qore then resolves against
+        auto helper_path = JniCtxHelper::scriptPathFromJava();
+        assertNeq(get_script_path(), helper_path, "the helper's Java call moves the context to its Program");
+        assertRegex("JniCtxHelper\\.qm$", helper_path, "the helper's Program");
         # control: a Java call in the helper module's Program, made by this Program, and then a Java-to-Qore call made
         # by a Java method of this Program
         JniCtxHelper::touch();
@@ -311,6 +318,14 @@ class JniContextDirectCallsTest inherits QUnit::Test {
         # own context
         assertEq(get_script_path(), ContextProbe::loadThenScriptPath("qoremod.JniCtxLoad.Probe"));
         assertTrue(exists get_module_hash().JniCtxLoad, "the module was loaded by the class's loading");
+    }
+
+    testModulePackageList() {
+        # Java lists the classes of the qoremod.JniCtxList package, which loads the module, whose initialization code
+        # makes a Java call in the helper module's Program; the Java code that listed the package continues with its
+        # own context
+        assertEq(get_script_path(), ContextProbe::listThenScriptPath("qoremod.JniCtxList"));
+        assertTrue(exists get_module_hash().JniCtxList, "the module was loaded by the listing");
     }
 
     testGeneratedClasses() {

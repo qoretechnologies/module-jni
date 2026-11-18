@@ -153,25 +153,26 @@ class Outer {
     the call until the next call sets it.  The other functions that run Java code do not enter the Program of the Java
     object they are given, and set the context to the context of the calling code, in which they also convert their
     arguments and results: \c Jni::org::qore::jni::invoke(), \c invoke_nonvirtual(), \c kotlin_eval(),
-    \c JavaArray::toString() and \c JavaArray::deepToString() (of an array of a reference type).  The creation of the %Qore class for a Java class,
-    which initializes the Java class and so runs its static initializers (ex: in \c load_class(),
-    \c implement_interface() or an import), sets it to the context of the Program that the class is created in.  A
+    \c JavaArray::toString() and \c JavaArray::deepToString() (of an array of a reference type).  The creation of
+    the %Qore class for a Java class, which initializes the Java class and so runs its static initializers (ex: in
+    \c load_class(), \c implement_interface() or an import), sets it to the context of the Program that the class is
+    created in.  A
     read of a Java field, also of a static field, or of a \c JavaArray element, made by another Program's code too,
     sets it to the context of the calling code only if converting the value to %Qore runs Java code that the value's
     class can override: the methods of a \c java.util.Map or \c java.util.List, \c toString() of a
     \c java.sql.Timestamp, \c java.sql.Date, \c java.sql.Time, \c java.math.BigDecimal or
     \c microsoft.sql.DateTimeOffset, and \c get() of an \c org.qore.jni.QoreObjectBase or
     \c org.qore.jni.QoreClosure; a read whose value runs no such code (ex: a primitive value or a string) makes no
-    further call into Java; writing a field or an array element does not set it.  A call
-    from Java into %Qore through \c QoreClosure, \c QoreObject (\c callMethod(), \c getMemberValue()),
-    \c QoreJavaApi (\c callFunction(), \c callStaticMethod(), \c newObjectSave()), the \c QoreInvocationHandler of
-    a proxy or a Java class generated from a %Qore class (its constructors, destructor, methods, static methods,
-    functions and constants), and the loading of a \c qore.* or \c qoremod.* class, which can load a %Qore module
-    whose initialization code runs, saves the thread's Java context and restores it when it returns to Java, also when an
-    exception is raised, so that the Java code that called into %Qore continues with its own context, whatever
-    Programs the %Qore code made Java calls for; a thread that had no %Qore Java context keeps the one that the %Qore
-    code set, as Java's calls into %Qore need one, and the class loader of a Program that has been deleted meanwhile
-    is not restored.
+    further call into Java; writing a field or an array element does not set it.  A call from Java into %Qore through
+    \c QoreClosure, \c QoreObject (\c callMethod(), \c getMemberValue()), \c QoreJavaApi (\c callFunction(),
+    \c callStaticMethod(), \c newObjectSave()), the \c QoreInvocationHandler of a proxy or a Java class generated
+    from a %Qore class (its constructors, destructor, methods, static methods, functions and constants) saves the
+    thread's Java context and restores it when it returns to Java, also when an exception is raised, so that the Java
+    code that called into %Qore continues with its own context, whatever Programs the %Qore code made Java calls for;
+    so does the loading of a \c qore.* or \c qoremod.* class, and the listing of the classes of such a package, as
+    either can load a %Qore module and run its initialization code.  A thread that had no %Qore Java context keeps the
+    one that the %Qore code set, as Java's calls into %Qore need one, and the class loader of a Program that has been
+    deleted meanwhile is not restored.
 
     A Java object used as a %Qore closure (an object of a class implementing \c org.qore.jni.QoreClosureMarker that
     Java returns to %Qore) is called in the same way in the Program whose code it was returned to, also when

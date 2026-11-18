@@ -6,6 +6,7 @@
 %modern
 %requires jni
 %module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import org.qore.jni.QoreJavaApi
 
 module JniCtxHelper {
     version = "1.0";
@@ -19,5 +20,11 @@ public namespace JniCtxHelper {
     public sub touch() {
         ArrayList l();
         l.size();
+    }
+
+    #! returns the answer of get_script_path() to a call from Java into Qore made by a Java call of this module's
+    #! Program: the Program that the thread's Java context is set to by this module's Java calls
+    public auto sub scriptPathFromJava() {
+        return QoreJavaApi::callFunction("get_script_path");
     }
 }

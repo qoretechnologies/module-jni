@@ -28,6 +28,7 @@ import java.util.Map;
 
 import org.qore.jni.QoreJavaApi;
 import org.qore.jni.QoreObjectBase;
+import org.qore.jni.QoreURLClassLoader;
 
 //! Java code that reports the Program that Java's calls into Qore resolve against (test/jni-context-direct-calls.qtest,
 //! qore#6551)
@@ -72,6 +73,13 @@ public class ContextProbe {
     //! Loads the given class with the thread's context class loader, and returns scriptPath() after it
     public static Object loadThenScriptPath(String name) throws Throwable {
         Class.forName(name, true, Thread.currentThread().getContextClassLoader());
+        return scriptPath();
+    }
+
+    //! Lists the classes of the given package with the thread's context class loader (a QoreURLClassLoader), and
+    //! returns scriptPath() after it
+    public static Object listThenScriptPath(String packageName) throws Throwable {
+        ((QoreURLClassLoader) Thread.currentThread().getContextClassLoader()).getClassesInNamespace(packageName);
         return scriptPath();
     }
 
