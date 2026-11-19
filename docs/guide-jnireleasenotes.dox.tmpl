@@ -12,6 +12,13 @@
       raise \c JNI-ERROR, and the \c classpath option of the \c jdbc driver raises \c JDBC-OPTION-ERROR (a %Qore
       library that refuses a NUL character in every DBI option value raises \c DBI-OPTION-ERROR first);
       \c QORE_JNI_CLASSPATH, an environment variable, cannot have a NUL character (qore#6771)
+    - fixed a classpath entry that is only a wildcard with no directory part, such as \c *.jar: the class loader
+      raised a \c NullPointerException for it, which was printed as an unhandled exception, and the entry was not
+      added (with \c QORE_JNI_CLASSPATH, a debug build of the module aborted); it is now the matching files in the
+      JVM's \c user.dir, as for any other relative entry, for the \c add-classpath and \c global-add-classpath module
+      commands, the \c classpath option of the \c jdbc driver and \c QORE_JNI_CLASSPATH, and the sandbox's filesystem
+      policy checks it there; with \c add-relative-classpath and \c global-add-relative-classpath, it is the matching
+      files in the Program's script directory, as it was before (qore#6740, see @ref jniimport)
     - fixed a C++ exception in a JNI native method of the module, which ended the process in \c std::terminate()
       (exit code 134) instead of being raised in Java: the native methods raised the Java exception of an error with a
       class that they looked up in their catch handlers, and the lookup throws a C++ exception if it fails, and some
