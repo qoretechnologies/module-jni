@@ -962,7 +962,14 @@ static bool jni_check_target_options() {
 }
 #endif
 
-static void jni_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+static void jni_module_parse_cmd(const QoreString& cmd_arg, ExceptionSink* xsink) {
+    // the command can be in any encoding: it is processed in UTF-8, in which its arguments are passed to Java (ex:
+    // a class name, a system property, Kotlin code)
+    TempEncodingHelper cmd_utf8(cmd_arg, QCS_UTF8, xsink);
+    if (*xsink) {
+        return;
+    }
+    const QoreString& cmd = **cmd_utf8;
     printd(LogLevel, "jni_module_parse_cmd() cmd: '%s'\n", cmd.c_str());
 
     const char* p = strchr(cmd.c_str(), ' ');
@@ -1235,7 +1242,7 @@ static void qore_jni_mc_define_pending_class(const QoreString& arg, QoreProgram*
     java_name.replaceAll("/", ".");
 
     // add the byte code as a pending class
-    LocalReference<jstring> jname = env.newString(java_name.c_str());
+    LocalReference<jstring> jname = env.newString(java_name.c_str(), java_name.size());
     LocalReference<jbyteArray> jbyte_code = QoreToJava::makeByteArray(env, **byte_code);
 
     std::vector<jvalue> jargs(2);
@@ -1340,14 +1347,14 @@ static void qore_jni_mc_set_property(const QoreString& arg, QoreProgram* pgm, Jn
     }
 
     QoreString property(&arg, end);
-    QoreString value(arg.c_str() + end + 1);
+    QoreString value(arg.c_str() + end + 1, arg.size() - end - 1, QCS_UTF8);
 
     //printd(5, "qore_jni_mc_set_property() '%s' = '%s'\n", property.c_str(), value.c_str());
 
     jni::Env env;
 
-    LocalReference<jstring> jprop = env.newString(property.c_str());
-    LocalReference<jstring> jval = env.newString(value.c_str());
+    LocalReference<jstring> jprop = env.newString(property.c_str(), property.size());
+    LocalReference<jstring> jval = env.newString(value.c_str(), value.size());
 
     std::vector<jvalue> jargs(2);
     jargs[0].l = jprop;
@@ -1375,7 +1382,7 @@ static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram
     assert(jpc);
 
     Env env;
-    LocalReference<jstring> jname = env.newString(arg.c_str());
+    LocalReference<jstring> jname = env.newString(arg.c_str(), arg.size());
     jvalue jarg;
     jarg.l = jname;
     env.callVoidMethod(jpc->getClassLoader(), Globals::methodQoreURLClassLoaderRegisterSharedDynamicClass, &jarg);
@@ -1419,7 +1426,7 @@ static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, Jni
     }
 
     // Evaluate the Kotlin code
-    LocalReference<jstring> jscript = env.newString(arg.c_str());
+    LocalReference<jstring> jscript = env.newString(arg.c_str(), arg.size());
     std::vector<jvalue> jargs(1);
     jargs[0].l = jscript;
 

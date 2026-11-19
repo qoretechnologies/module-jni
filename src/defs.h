@@ -458,6 +458,16 @@ private:
     bool attached = false;
 };
 
+//! Appends a value of a %Qore exception (ex: its code or description) to a string in UTF-8
+/** The value is converted to a string, and the string to UTF-8; a string that cannot be converted to UTF-8 is
+    appended as it is (Env::newString() decodes it strictly, so that each invalid sequence becomes U+FFFD).  No C++
+    exception is raised other than \c std::bad_alloc.
+
+    @param utf8 the string to append to, in UTF-8
+    @param v the value to append
+*/
+DLLLOCAL void jni_append_utf8(QoreString& utf8, QoreValue v);
+
 } // namespace jni
 
 //! Refuses a classpath to sandboxed code where its policy does not allow it (see jni-module.cpp)

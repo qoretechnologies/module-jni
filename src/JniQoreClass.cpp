@@ -4,7 +4,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2023 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,7 @@
 #include "QoreJniPrivateData.h"
 #include "JavaToQore.h"
 #include "JniQoreClass.h"
-#include "ModifiedUtf8String.h"
+#include "Utf8String.h"
 #include "QoreJniClassMap.h"
 
 #include <classfile_constants.h>
@@ -63,7 +63,7 @@ QoreValue JniQoreClass::memberGate(const QoreMethod& meth, void* m, QoreObject* 
         Env env;
         LocalReference<jobject> cls = env.callObjectMethod(jobj, Globals::methodObjectGetClass, nullptr);
 
-        ModifiedUtf8String str(*mname);
+        Utf8String str(*mname);
         LocalReference<jstring> fname = env.newString(str.c_str());
 
         std::vector<jvalue> jargs(2);

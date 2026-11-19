@@ -247,9 +247,22 @@ void JavaException::convert(ExceptionSink* xsink) {
 
                 QoreExternalProgramLocationWrapper loc;
                 JniCallStack callstack(throwable, loc);
-                SimpleRefHolder<QoreStringNode> description(new QoreStringNode(desc_str.c_str(), QCS_UTF8));
+                // the description keeps its NUL characters
+                SimpleRefHolder<QoreStringNode> description(new QoreStringNode(desc_str.c_str(), desc_str.size(),
+                    QCS_UTF8));
+                // the code is passed in the default encoding, which the API assumes for it
+                // (a code that cannot be converted is passed as it is)
+                QoreString err_utf8(err_str.c_str(), err_str.size(), QCS_UTF8);
+                ExceptionSink conv_xsink;
+                TempEncodingHelper err_code(err_utf8, QCS_DEFAULT, &conv_xsink);
+                const char* code = err_str.c_str();
+                if (conv_xsink) {
+                    conv_xsink.clear();
+                } else {
+                    code = err_code->c_str();
+                }
 
-                xsink->raiseExceptionArg(loc.get(), err_str.c_str(), qore_arg.release(),
+                xsink->raiseExceptionArg(loc.get(), code, qore_arg.release(),
                     description.release(), callstack);
                 return;
             }
@@ -478,5 +491,19 @@ bool JavaException::checkBug_8221530() {
     }
 
     return false;
+}
+
+void jni_append_utf8(QoreString& utf8, QoreValue v) {
+    assert(utf8.getEncoding() == QCS_UTF8);
+    ExceptionSink xsink;
+    QoreStringValueHelper str(v, QCS_UTF8, &xsink);
+    if (xsink) {
+        // the string cannot be converted to UTF-8: its bytes are appended as they are
+        xsink.clear();
+        QoreStringValueHelper raw(v);
+        utf8.concat(raw->c_str(), raw->size());
+        return;
+    }
+    utf8.concat(str->c_str(), str->size());
 }
 } // namespace jni

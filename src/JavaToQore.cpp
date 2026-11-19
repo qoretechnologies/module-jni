@@ -255,6 +255,7 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
                     mixed_types = true;
                 }
 
+                // the key in UTF-8; a hash key cannot have a NUL character, so a key is cut at its first one
                 Env::GetStringUtfChars key_str(env, key.as<jstring>());
                 entries.emplace_back(key_str.c_str(), val.release());
             }
@@ -295,11 +296,11 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
         // Create typed hash and add entries
         ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hash_value_type_info), &xsink);
         for (size_t idx = 0; idx < entries.size(); ++idx) {
-            rv->setKeyValue(entries[idx].first.c_str(), entries[idx].second, &xsink);
+            // the key is converted from UTF-8 to the default encoding, which hash keys are in
+            rv->setKeyValue(QoreString(entries[idx].first, QCS_UTF8), entries[idx].second, &xsink);
             if (xsink) {
-                // setKeyValue takes ownership on success, but on failure we must discard
-                // the current value and all remaining values
-                entries[idx].second.discard(&xsink);
+                // setKeyValue() takes ownership of the value also when it fails (it discards it then), so only the
+                // remaining values are discarded here
                 for (size_t j = idx + 1; j < entries.size(); ++j) {
                     entries[j].second.discard(&xsink);
                 }
