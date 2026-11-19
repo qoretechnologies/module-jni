@@ -2,22 +2,23 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # SPDX-License-Identifier: MIT
 
-# run by test/jni-invoke-return-type.qtest (qore#6808): calls jni::invoke() or jni::invoke_nonvirtual() with a Java
-# method that returns a primitive value or nothing, and uses the result in three ways, each in its own Program, so
-# that a parse error in one use does not prevent the others:
+# run by test/jni-invoke-return-type.qtest (qore#6808): calls jni::invoke() or jni::invoke_nonvirtual() with Java
+# methods that return a primitive value, a value converted from a Java object, an object or nothing, and uses each
+# result in three ways, each in its own Program, so that a parse error in one use does not prevent the others:
 # - "method": a method is called on the result directly (jni::invoke(...).toString()), which crashed the process
-#   when the function was declared to return Jni::java::lang::Object: the call was resolved at parse time as a call
-#   of a method of that class, which IR and JIT code then made with the value
+#   when the function was declared to return Jni::java::lang::Object: the call was resolved at parse time from that
+#   class, and IR and JIT code made it with the plain value as the object (as did the AST interpreter for a
+#   pseudo-method of objects, such as size())
 # - "plain": the result is used as the plain Qore value that it is (arithmetic, logic)
 # - "typed": the result is assigned to a variable of its Qore type, which was a parse-time type error
 #
-# usage: jni-invoke-return-type-child.q <function>:<kind>
+# usage: jni-invoke-return-type-child.q <function> [<kind>...]
 #   function: "invoke" or "invoke_nonvirtual"
-#   kind: the return type of the method of org.qore.jni.test.InvokeReturnTypes: "int", "boolean", "double",
-#     "char", "void", "static_double", "static_void" (static methods), "string" or "object"
+#   kind: the return type of the method of org.qore.jni.test.InvokeReturnTypes (see Kinds below); all kinds by
+#     default
 #
-# for each use, "result <use>: <value>" or "caught <use>: <err>: <desc>" is printed; then "after: <case>" is printed,
-# and the process exits with status 0
+# for each kind and use, "result <kind> <use>: <value>" or "caught <kind> <use>: <err>: <desc>" is printed; then
+# "after: <function>" is printed, and the process exits with status 0
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../build"
@@ -70,6 +71,8 @@ const Kinds = {
         "method": "toString()",
         "plain": "exists %s",
         "typed": "*int",
+        # the method ran: the receiver is new for each use
+        "typed_ret": "(v, cast<Jni::org::qore::jni::test::InvokeReturnTypes>(o).getTouched())",
     },
     # static double staticHalf(double)
     "static_double": {
@@ -86,6 +89,24 @@ const Kinds = {
         "method": "toString()",
         "plain": "exists %s",
         "typed": "*int",
+        # the method ran: once for each use of the process, so three times with this, the last one
+        "typed_ret": "(v, Jni::org::qore::jni::test::InvokeReturnTypes::getStaticTouched())",
+    },
+    # Integer boxed(): a boxed value is converted to a Qore int
+    "boxed_int": {
+        "setup": "Jni::java::lang::reflect::Method m = findMethod(\"boxed\"); *Jni::java::lang::Object o = obj();",
+        "args": "",
+        "method": "toString()",
+        "plain": "%s + 1",
+        "typed": "int",
+    },
+    # String nullString(): null is NOTHING
+    "null_string": {
+        "setup": "Jni::java::lang::reflect::Method m = findMethod(\"nullString\"); *Jni::java::lang::Object o = obj();",
+        "args": "",
+        "method": "toString()",
+        "plain": "exists %s",
+        "typed": "*string",
     },
     # String upper(): a String is converted to a Qore string
     "string": {
@@ -128,36 +149,41 @@ Jni::java::lang::Object sub obj() {
 #! the uses of the result
 const Uses = ("method", "plain", "typed");
 
-string case_name = ARGV[0] ?? "";
-(*string func, *string kind) = (case_name =~ x/^([a-z_]+):([a-z_]+)$/);
-if (!inlist(func, ("invoke", "invoke_nonvirtual")) || !Kinds{kind}) {
-    stderr.printf("unknown case %y; expecting <invoke|invoke_nonvirtual>:<%s>\n", case_name,
-        foldl $1 + "|" + $2, keys Kinds);
+string func = ARGV[0] ?? "";
+softlist<string> kinds = ARGV.size() > 1 ? ARGV[1..] : keys Kinds;
+if (!inlist(func, ("invoke", "invoke_nonvirtual")) || (foldl $1 + $2, map (Kinds{$1} ? 0 : 1), kinds)) {
+    stderr.printf("unknown case %y; expecting <invoke|invoke_nonvirtual> [<kind>...] (kinds: %y)\n", ARGV,
+        keys Kinds);
     exit(2);
 }
 
-hash<auto> k = Kinds{kind};
-foreach string use in (Uses) {
-    string call = sprintf("jni::%s(m, o%s)", func, k.args);
-    string body;
-    switch (use) {
-        case "method":
-            body = sprintf("return %s.%s;", call, k.method);
-            break;
-        case "plain":
-            body = sprintf("return " + k.plain + ";", call);
-            break;
-        case "typed":
-            body = sprintf("%s v = %s; return %s;", k.typed, call, k.typed_ret ?? "v");
-            break;
-    }
-    try {
-        Program p(PO_NEW_STYLE);
-        p.loadModule("jni");
-        p.parse(Common + "auto sub t() { " + k.setup + " " + body + " }", sprintf("%s-%s", case_name, use));
-        printf("result %s: %y\n", use, p.callFunction("t"));
-    } catch (hash<ExceptionInfo> ex) {
-        printf("caught %s: %s: %s\n", use, ex.err, ex.desc);
+foreach string kind in (kinds) {
+    hash<auto> k = Kinds{kind};
+    foreach string use in (Uses) {
+        string call = sprintf("jni::%s(m, o%s)", func, k.args);
+        string body;
+        switch (use) {
+            case "method":
+                body = sprintf("return %s.%s;", call, k.method);
+                break;
+            case "plain":
+                body = sprintf("return " + k.plain + ";", call);
+                break;
+            case "typed":
+                body = sprintf("%s v = %s; return %s;", k.typed, call, k.typed_ret ?? "v");
+                break;
+        }
+        try {
+            Program p(PO_NEW_STYLE);
+            p.loadModule("jni");
+            # %modern: the code runs in the exec mode of the process (IR and JIT code require the parse options of
+            # %modern)
+            p.parse("%modern\n" + Common + "auto sub t() { " + k.setup + " " + body + " }",
+                sprintf("%s-%s-%s", func, kind, use));
+            printf("result %s %s: %y\n", kind, use, p.callFunction("t"));
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s %s: %s: %s\n", kind, use, ex.err, ex.desc);
+        }
     }
 }
-printf("after: %s\n", case_name);
+printf("after: %s\n", func);

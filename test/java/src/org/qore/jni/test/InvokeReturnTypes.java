@@ -61,6 +61,14 @@ public class InvokeReturnTypes {
         return value.toUpperCase();
     }
 
+    public Integer boxed() {
+        return Integer.valueOf(7);
+    }
+
+    public String nullString() {
+        return null;
+    }
+
     public InvokeReturnTypes self() {
         return this;
     }

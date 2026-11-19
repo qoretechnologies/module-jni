@@ -4,15 +4,16 @@
 # SPDX-License-Identifier: MIT
 
 # jni::invoke() and jni::invoke_nonvirtual() return the value of the Java method converted to Qore, which is a plain
-# Qore value for a method that returns a primitive type (an int, a float or a bool) and NOTHING for a void method, but
-# they were declared to return Jni::java::lang::Object (qore#6808): a method call made directly on the result
-# (jni::invoke(m, o).toString()) was resolved at parse time as a call of a method of that class, and IR and JIT code
-# (the "ir", "jit" and "tiered" execution modes; "tiered" is the default for %modern code) made the call with the
-# plain value as the object, which crashed the process (SIGSEGV in QoreObject::getProgram()); assigning the result to
+# Qore value for a method that returns a primitive type (an int, a float or a bool), a String, a boxed value or null,
+# and NOTHING for a void method, but they were declared to return Jni::java::lang::Object (qore#6808): a method call
+# made directly on the result (jni::invoke(m, o).toString()) was resolved at parse time from that class, and IR and
+# JIT code (the "ir", "jit" and "tiered" execution modes; "tiered" is the default for %modern code) made the call with
+# the plain value as the object, which crashed the process (SIGSEGV in QoreObject::getProgram()), as did the AST
+# interpreter for a pseudo-method of objects such as size() (SIGSEGV in QoreObject::size()); assigning the result to
 # a variable of its Qore type was a parse-time type error.  The functions are now declared to return "auto".
 #
-# Each case runs test/jni-invoke-return-type-child.q in a new process, as the failure terminated the process, in each
-# execution mode.
+# test/jni-invoke-return-type-child.q runs the cases of a function in a new process, as the failure terminated the
+# process, once for each execution mode.
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../build"
@@ -33,24 +34,39 @@ class JniInvokeReturnTypeTest inherits QUnit::Test {
         #! the expected result lines of each kind of Java return type, for the "method", "plain" and "typed" uses
         const Expected = {
             # length() of "abcd"
-            "int": ("result method: \"4\"", "result plain: 5", "result typed: 4"),
+            "int": ("result int method: \"4\"", "result int plain: 5", "result int typed: 4"),
             # isEmpty() of "abcd"
-            "boolean": ("result method: \"0\"", "result plain: True", "result typed: False"),
+            "boolean": ("result boolean method: \"0\"", "result boolean plain: True",
+                "result boolean typed: False"),
             # half(3.0)
-            "double": ("result method: \"1.5\"", "result plain: 3.0", "result typed: 1.5"),
+            "double": ("result double method: \"1.5\"", "result double plain: 3.0", "result double typed: 1.5"),
             # charAt(1) of "abcd": a char is an int
-            "char": ("result method: \"98\"", "result plain: 99", "result typed: 98"),
-            # touch()
-            "void": ("result method: \"\"", "result plain: False", "result typed: null"),
+            "char": ("result char method: \"98\"", "result char plain: 99", "result char typed: 98"),
+            # touch() of a new object for each use: the result is NOTHING, and the method ran once
+            "void": ("result void method: \"\"", "result void plain: False", "result void typed: [null, 1]"),
             # staticHalf(3.0)
-            "static_double": ("result method: \"1.5\"", "result plain: 3.0", "result typed: 1.5"),
-            # staticTouch()
-            "static_void": ("result method: \"\"", "result plain: False", "result typed: null"),
+            "static_double": ("result static_double method: \"1.5\"", "result static_double plain: 3.0",
+                "result static_double typed: 1.5"),
+            # staticTouch(): the result is NOTHING, and the method ran once for each use
+            "static_void": ("result static_void method: \"\"", "result static_void plain: False",
+                "result static_void typed: [null, 3]"),
+            # boxed(): an Integer is an int
+            "boxed_int": ("result boxed_int method: \"7\"", "result boxed_int plain: 8",
+                "result boxed_int typed: 7"),
+            # nullString(): null is NOTHING
+            "null_string": ("result null_string method: \"\"", "result null_string plain: False",
+                "result null_string typed: null"),
             # upper() of "abcd": a String is a Qore string
-            "string": ("result method: 4", "result plain: \"ABCDx\"", "result typed: \"ABCD\""),
+            "string": ("result string method: 4", "result string plain: \"ABCDx\"",
+                "result string typed: \"ABCD\""),
             # self(): an object
-            "object": ("result method: 4", "result plain: True", "result typed: \"ABCD\""),
+            "object": ("result object method: 4", "result object plain: True", "result object typed: \"ABCD\""),
         };
+    }
+
+    private {
+        #! the output and the exit code of the child for each function and exec mode ("<function>:<mode>")
+        hash<string, hash<auto>> outputs;
     }
 
     constructor() : QUnit::Test("jni::invoke() return type", "1.0") {
@@ -68,18 +84,29 @@ class JniInvokeReturnTypeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    #! runs the case in each execution mode and checks the result of each use
+    #! checks the results of the kind in each execution mode
     checkCase(string func, string kind) {
-        string case_name = sprintf("%s:%s", func, kind);
         foreach string mode in (ExecModes) {
-            string out = runChild(mode, case_name);
-            string label = sprintf("%s (exec mode %s): %s", case_name, mode, out);
-            list<string> lines = getLines(out, "result ");
-            assertEq(Expected{kind}, lines, label);
-            assertEq((), getLines(out, "caught "), label);
+            string out = getOutput(func, mode);
+            string label = sprintf("%s:%s (exec mode %s): %s", func, kind, mode, out);
+            assertEq(Expected{kind}, getLines(out, "result " + kind + " "), label);
+            assertEq((), getLines(out, "caught " + kind + " "), label);
             assertFalse(out =~ /unhandled QORE/, label);
-            assertEq(("after: " + case_name,), getLines(out, "after: "), label);
+            assertEq(("after: " + func,), getLines(out, "after: "), label);
         }
+    }
+
+    #! returns the output of the child that runs all kinds of the function in the exec mode, which is run once, and
+    #! checks that it exited with status 0
+    private string getOutput(string func, string mode) {
+        string key = func + ":" + mode;
+        if (!outputs{key}) {
+            int rc;
+            string out = runChildRc(mode, func, (), \rc);
+            outputs{key} = {"out": out, "rc": rc};
+        }
+        assertEq(0, outputs{key}.rc, sprintf("exit code (%s, exec mode %s): %s", func, mode, outputs{key}.out));
+        return outputs{key}.out;
     }
 
     #! a value that is not an object is refused at run time by a variable of an object type
@@ -111,10 +138,13 @@ class JniInvokeReturnTypeTest inherits QUnit::Test {
 
     unknownCase() {
         int rc;
-        string out = runChildRc("tiered", "invoke:no-such-kind", \rc);
+        string out = runChildRc("tiered", "invoke", "no-such-kind", \rc);
         assertEq(2, rc, out);
         assertRegex("unknown case", out);
         assertEq((), getLines(out, "after: "), out);
+        out = runChildRc("tiered", "no-such-function", (), \rc);
+        assertEq(2, rc, out);
+        assertRegex("unknown case", out);
     }
 
     #! returns the lines of the output that start with the prefix
@@ -128,23 +158,19 @@ class JniInvokeReturnTypeTest inherits QUnit::Test {
         return rv;
     }
 
-    #! runs the child with the case and returns its output, checking that it exited with status 0
-    private string runChild(string mode, string case_name) {
-        int rc;
-        string out = runChildRc(mode, case_name, \rc);
-        assertEq(0, rc, sprintf("exit code (exec mode %s): %s", mode, out));
-        return out;
-    }
-
-    #! runs the child with the case and returns its output (stdout and stderr) and its exit code
-    private string runChildRc(string mode, string case_name, reference<int> rc) {
+    #! runs the child with the function and kinds (all by default) and returns its output (stdout and stderr) and
+    #! its exit code
+    private string runChildRc(string mode, string func, softlist<string> kinds, reference<int> rc) {
         string child = normalize_dir(get_script_dir() + "/jni-invoke-return-type-child.q");
         # the variables that make the JVM print a notice on startup are removed, as the output of the child is
         # checked; no core file is written for a crash
         string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b "
-            "--enable-debug --exec-mode=%s %s %s 2>&1", shellQuote(QORE_ARGV[0]), mode, shellQuote(child),
-            shellQuote(case_name));
-        return backquote(cmd, \rc);
+            "--enable-debug --exec-mode=%s %s %s", shellQuote(QORE_ARGV[0]), mode, shellQuote(child),
+            shellQuote(func));
+        foreach string kind in (kinds) {
+            cmd += " " + shellQuote(kind);
+        }
+        return backquote(cmd + " 2>&1", \rc);
     }
 
     private static string shellQuote(string arg) {

@@ -274,11 +274,11 @@ Jni::java::lang::Class load_class(string class_name) [dom=UNCONTROLLED_API;flags
     - reflection is not used, so exceptions are thrown directly (i.e. not wrapped as \c java.lang.reflect.InvocationTargetException objects)
     - for static method invocations, this function is identical to @ref invoke_nonvirtual()
     - the return type is @ref auto_type "auto": the value is converted to %Qore as for a direct call of the method
-      (see @ref jni_java_to_qore), so a primitive value is an @ref int_type "int" (also for a \c char), a
-      @ref float_type "float" or a @ref bool_type "bool", a \c java.lang.String is a @ref string_type "string",
-      and a \c void method returns @ref nothing; before jni 3.0, the function was declared to return
-      \c Jni::java::lang::Object, and a method call made directly on a returned value that was not an object
-      crashed the process (qore#6808)
+      (see @ref jni_java_to_qore and @ref jni_declared_value_types), so it can be any %Qore value: for example, a
+      primitive value is an @ref int_type "int" (also for a \c char), a @ref float_type "float" or a
+      @ref bool_type "bool", a \c java.lang.String is a @ref string_type "string", a boxed value is converted as
+      the primitive value, a \c null reference and the result of a \c void method are @ref nothing, and an object
+      of a class that is not converted is a Java object
  */
 auto invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
@@ -314,11 +314,11 @@ auto invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::j
     - reflection is not used, so exceptions are thrown directly (i.e. not wrapped as \c java.lang.reflect.InvocationTargetException objects)
     - for static method invocations, this function is identical to @ref invoke()
     - the return type is @ref auto_type "auto": the value is converted to %Qore as for a direct call of the method
-      (see @ref jni_java_to_qore), so a primitive value is an @ref int_type "int" (also for a \c char), a
-      @ref float_type "float" or a @ref bool_type "bool", a \c java.lang.String is a @ref string_type "string",
-      and a \c void method returns @ref nothing; before jni 3.0, the function was declared to return
-      \c Jni::java::lang::Object, and a method call made directly on a returned value that was not an object
-      crashed the process (qore#6808)
+      (see @ref jni_java_to_qore and @ref jni_declared_value_types), so it can be any %Qore value: for example, a
+      primitive value is an @ref int_type "int" (also for a \c char), a @ref float_type "float" or a
+      @ref bool_type "bool", a \c java.lang.String is a @ref string_type "string", a boxed value is converted as
+      the primitive value, a \c null reference and the result of a \c void method are @ref nothing, and an object
+      of a class that is not converted is a Java object
  */
 auto invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
