@@ -5088,6 +5088,12 @@ bool JniExternalProgramData::compatTypes() {
 }
 
 JniExternalProgramData* JniExternalProgramData::getCreateJniProgramData(QoreProgram* pgm) {
+#ifdef DEBUG
+    // a test fail point: the jni data cannot be created, as for a Program that is being deleted (below)
+    if (dbg_jni_fail_at(DbgJniFailPoint::ProgramData)) {
+        throw BasicException("dbg_jni_fail_point(): the jni context of the Program cannot be created");
+    }
+#endif
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     //printd(5, "parse-cmd '%s' jpc: %p jnins: %p\n", arg.c_str(), jpc, jpc ? jpc->getJniNamespace() : nullptr);
     if (!jpc) {

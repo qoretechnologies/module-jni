@@ -264,6 +264,13 @@ Env::Env(bool set_context) {
       }
    }
 
+#ifdef DEBUG
+   // a test fail point: the thread cannot be attached to the JVM
+   if (dbg_jni_fail_at(DbgJniFailPoint::Attach)) {
+      throw UnableToAttachException(JNI_ERR);
+   }
+#endif
+
    bool new_attach;
    env = Jvm::attachAndGetEnv(new_attach);
    if (set_context && new_attach)

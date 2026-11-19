@@ -75,6 +75,33 @@ DLLLOCAL bool dbg_jni_find_class_fails(JNIEnv* jenv, const char* name);
     test can prove that no C++ exception leaves a JNI native method (qore#6739)
 */
 DLLLOCAL void dbg_jni_native_throw_point();
+
+//! The points at which Jni::dbg_jni_fail_point() can make the module fail with a C++ exception
+enum class DbgJniFailPoint {
+    //! jni::Env's constructor fails to attach the thread to the JVM (jni::UnableToAttachException)
+    Attach,
+    //! JniExternalProgramData::getCreateJniProgramData() fails (jni::BasicException)
+    ProgramData,
+    //! JniExternalProgramData::copy() fails to attach the thread to the JVM (jni::UnableToAttachException)
+    ProgramCopy,
+    //! Globals::stopNativeCleanupThread() fails to attach the thread to the JVM (jni::UnableToAttachException)
+    NativeCleanupStop,
+};
+
+//! True while a fail point is set with Jni::dbg_jni_fail_point(); checked inline in dbg_jni_fail_at()
+DLLLOCAL extern std::atomic<bool> dbg_jni_fail_point_set;
+
+//! Returns true once, and clears the fail point, if the fail point set with Jni::dbg_jni_fail_point() is \a point
+//! and was set by the calling thread
+DLLLOCAL bool dbg_jni_fail_point_hit(DbgJniFailPoint point);
+
+//! Returns true if the code at \a point must fail with a C++ exception, as set with Jni::dbg_jni_fail_point()
+/** The caller throws the C++ exception that the code at the point throws when it fails; a check made with no fail
+    point set costs only an atomic load
+*/
+DLLLOCAL inline bool dbg_jni_fail_at(DbgJniFailPoint point) {
+    return dbg_jni_fail_point_set.load(std::memory_order_acquire) && dbg_jni_fail_point_hit(point);
+}
 #endif
 
 #endif // QORE_JNI_QL_JNI_DEBUG_H

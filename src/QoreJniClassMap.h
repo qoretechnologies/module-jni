@@ -611,6 +611,12 @@ public:
     }
 
     DLLLOCAL virtual AbstractQoreProgramExternalData* copy(QoreProgram* pgm) const {
+#ifdef DEBUG
+        // a test fail point: the thread cannot be attached to the JVM
+        if (dbg_jni_fail_at(DbgJniFailPoint::ProgramCopy)) {
+            throw UnableToAttachException(JNI_ERR);
+        }
+#endif
         // issue #3862: ensure that the thread is registered for this call
         Env env;
         return new JniExternalProgramData(*this, env, pgm);

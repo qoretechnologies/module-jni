@@ -4912,6 +4912,12 @@ void Globals::stopNativeCleanupThread() {
     if (!native_cleanup_thread_started.load()) {
         return;
     }
+#ifdef DEBUG
+    // a test fail point: the thread cannot be attached to the JVM to stop the worker
+    if (dbg_jni_fail_at(DbgJniFailPoint::NativeCleanupStop)) {
+        throw UnableToAttachException(JNI_ERR);
+    }
+#endif
     // Capture all registered handles before waking the worker. The sentinel may
     // overtake queued references, and live wrappers may never have been enqueued.
     Env env;
