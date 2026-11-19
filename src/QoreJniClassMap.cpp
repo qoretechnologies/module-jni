@@ -3531,11 +3531,11 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
     ExceptionSink xsink;
     if (!qcls) {
         assert(!qpath.empty());
-        // set program context (and read lock) before calling QoreProgram::findClass()
-        QoreExternalProgramContextHelper pch(&xsink, pgm);
-        if (xsink) {
-            throw XsinkException(xsink);
-        }
+        // the Program is current: the class loader callback entered it, or found it current already and did not
+        // enter it, as for a module command on a Program with code pending, which no runtime entry is allowed into
+        // (qore#6785); finding the class reads its definitions under the parse lock taken above and runs none of its
+        // code
+        assert(pgm == ::getProgram());
 
         qcls = pgm->findClass(qpath.c_str(), &xsink);
         if (xsink) {
