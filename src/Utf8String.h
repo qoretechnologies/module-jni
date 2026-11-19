@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -25,23 +25,24 @@
 //------------------------------------------------------------------------------
 ///
 /// \file
-/// \brief Defines the ModifiedUtf8String class.
+/// \brief Defines the Utf8String class.
 ///
 //------------------------------------------------------------------------------
-#ifndef QORE_JNI_MODIFIEDUTF8STRING_H_
-#define QORE_JNI_MODIFIEDUTF8STRING_H_
+#ifndef QORE_JNI_UTF8STRING_H_
+#define QORE_JNI_UTF8STRING_H_
 
 #include <qore/Qore.h>
 
 namespace jni {
 
 /**
- * \brief A helper class for converting a string to UTF-8 for Java.
+ * \brief Converts a %Qore string in any encoding to standard UTF-8 for Java.
  *
  * The string is converted to UTF-8 only: Env::newString() makes a Java string of it (strictly, from UTF-16, for any
- * string that is not ASCII), and a class name for JNI's FindClass() is ASCII in practice.
+ * string that is not ASCII); a class name for JNI's FindClass() or DefineClass() is converted to modified UTF-8 by
+ * Env::ClassName.
  */
-class ModifiedUtf8String {
+class Utf8String {
 
 public:
    /**
@@ -51,7 +52,7 @@ public:
     * \param src the source string to convert, must not be null
     * \throws StringException if the string cannot be converted
     */
-   explicit ModifiedUtf8String(const QoreString& src) {
+   explicit Utf8String(const QoreString& src) {
       ExceptionSink xsink;
       helper.set(&src, QCS_UTF8, &xsink);
       if (xsink) {
@@ -59,7 +60,7 @@ public:
       }
    }
 
-   explicit ModifiedUtf8String(const QoreString* src) {
+   explicit Utf8String(const QoreString* src) {
       ExceptionSink xsink;
       helper.set(src, QCS_UTF8, &xsink);
       if (xsink) {
@@ -88,4 +89,4 @@ private:
 
 } // namespace jni
 
-#endif // QORE_JNI_MODIFIEDUTF8STRING_H_
+#endif // QORE_JNI_UTF8STRING_H_

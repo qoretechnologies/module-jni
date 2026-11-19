@@ -427,7 +427,7 @@ java::lang::Class cls = define_class(class_name: class_name, bytecode: bytecode)
 */
 Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
-        ModifiedUtf8String utf8_name(class_name);
+        Utf8String utf8_name(class_name);
         jni::Env env;
         // NOTE: this must be qore_get_call_program_context() and not jni::jni_get_program_context()
         // as the caller's program context must be used in all cases
@@ -656,8 +656,10 @@ auto kotlin_eval(string script) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
                 Globals::methodKotlinScriptEngineGetInitError, nullptr).as<jstring>();
             if (errMsg) {
                 Env::GetStringUtfChars err(env, errMsg);
-                xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
-                    "Kotlin scripting is not available: %s", err.c_str());
+                // the message from Java is UTF-8
+                SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
+                desc->sprintf("Kotlin scripting is not available: %s", err.c_str());
+                xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE", desc.release());
             } else {
                 xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
                     "Kotlin scripting is not available - ensure kotlin-scripting-jsr223 JARs are in the classpath");
@@ -665,8 +667,8 @@ auto kotlin_eval(string script) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
             return QoreValue();
         }
 
-        // Evaluate the Kotlin code
-        LocalReference<jstring> jscript = env.newString(script->c_str());
+        // Evaluate the Kotlin code; the script can be in any encoding
+        LocalReference<jstring> jscript = env.newString(*script);
         std::vector<jvalue> jargs(1);
         jargs[0].l = jscript;
 

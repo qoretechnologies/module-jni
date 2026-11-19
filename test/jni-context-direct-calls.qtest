@@ -359,6 +359,8 @@ class JniContextDirectCallsTest inherits QUnit::Test {
         # by a Java method of this Program
         JniCtxHelper::touch();
         assertEq(get_script_path(), ContextProbe::scriptPath(), "control");
+        # the module is loaded by the class's loading below, not before
+        assertFalse(exists get_module_hash().JniCtxLoad, "the module is not loaded before the class's loading");
         # Java loads qoremod.JniCtxLoad.Probe, whose bytecode generation loads the module, whose initialization code
         # makes a Java call in the helper module's Program; the Java code that loaded the class continues with its
         # own context
@@ -367,6 +369,8 @@ class JniContextDirectCallsTest inherits QUnit::Test {
     }
 
     testModulePackageList() {
+        # the module is loaded by the listing below, not before
+        assertFalse(exists get_module_hash().JniCtxList, "the module is not loaded before the listing");
         # Java lists the classes of the qoremod.JniCtxList package, which loads the module, whose initialization code
         # makes a Java call in the helper module's Program; the Java code that listed the package continues with its
         # own context

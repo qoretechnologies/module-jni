@@ -147,7 +147,7 @@ static void throw_java(JNIEnv* jenv, const char* cls_name, const char* msg) {
     }
     jclass cls = jenv->FindClass(cls_name);
     if (cls) {
-        jenv->ThrowNew(cls, msg);
+        Env::throwNew(jenv, cls, msg);
         jenv->DeleteLocalRef(cls);
     }
 }
@@ -383,10 +383,12 @@ static void JNICALL qore_sandbox_check_file_access(JNIEnv* jenv, jclass, jlong p
 }
 
 //! Returns a new JNI-SANDBOX-ERROR exception as a QoreExceptionWrapper, without throwing it
-static jobject new_error(JNIEnv* jenv, const char* msg) {
-    return sandbox_native<jobject>(jenv, nullptr, [msg](Env& env, SandboxCallScope&, ExceptionSink*) -> jobject {
+/** @param msg the message in UTF-8; it may have NUL characters
+*/
+static jobject new_error(JNIEnv* jenv, const std::string& msg) {
+    return sandbox_native<jobject>(jenv, nullptr, [&msg](Env& env, SandboxCallScope&, ExceptionSink*) -> jobject {
         ExceptionSink err;
-        err.raiseException(JNI_SANDBOX_ERROR, "%s", msg);
+        err.raiseException(JNI_SANDBOX_ERROR, new QoreStringNode(msg.data(), msg.size(), QCS_UTF8));
         try {
             return QoreToJava::newExceptionWrapper(env, err).release();
         } catch (...) {
@@ -398,22 +400,31 @@ static jobject new_error(JNIEnv* jenv, const char* msg) {
 
 //! QoreSandbox.argumentError0(): returns the JNI-SANDBOX-ERROR exception for invalid arguments
 static jobject JNICALL qore_sandbox_argument_error(JNIEnv* jenv, jclass, jstring jmsg) {
+    // the message in UTF-8, with its NUL characters
     std::string msg;
     if (jmsg) {
         Env env(jenv);
         try {
             Env::GetStringUtfChars chars(env, jmsg);
-            msg = chars.c_str();
+            msg.assign(chars.c_str(), chars.size());
         } catch (JavaException&) {
+            return nullptr;
+        } catch (const std::bad_alloc&) {
+            throw_java(jenv, "java/lang/OutOfMemoryError", "cannot allocate memory for a sandbox error");
             return nullptr;
         }
     }
-    return new_error(jenv, msg.c_str());
+    return new_error(jenv, msg);
 }
 
 //! QoreSandbox.closedError0(): returns the JNI-SANDBOX-ERROR exception for a closed policy
 static jobject JNICALL qore_sandbox_closed_error(JNIEnv* jenv, jclass) {
-    return new_error(jenv, "the sandbox policy has been closed");
+    try {
+        return new_error(jenv, "the sandbox policy has been closed");
+    } catch (const std::bad_alloc&) {
+        throw_java(jenv, "java/lang/OutOfMemoryError", "cannot allocate memory for a sandbox error");
+        return nullptr;
+    }
 }
 
 JNINativeMethod qoreSandboxNativeMethods[] = {

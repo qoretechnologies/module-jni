@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@
 #include "Env.h"
 #include "Field.h"
 #include "Globals.h"
-#include "ModifiedUtf8String.h"
+#include "Utf8String.h"
 #include "Method.h"
 
 namespace jni {

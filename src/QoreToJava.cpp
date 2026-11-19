@@ -29,7 +29,7 @@
 namespace jni {
 
 static jstring jni_string_to_jstring(const QoreString& qstr) {
-    ModifiedUtf8String str(qstr);
+    Utf8String str(qstr);
     Env env;
     // the length is given: the string may have NUL characters
     return env.newString(str.c_str(), str.size()).release();
@@ -433,9 +433,13 @@ jobject QoreToJava::makeMap(const QoreHashNode& h, jclass cls, JniExternalProgra
     LocalReference<jobject> hm = env.newObject(cls, ctor, nullptr);
     jni_check_collection_class(env, hm, target_cls, "hash");
 
+    // hash keys are in the default encoding
+    bool utf8_keys = QCS_DEFAULT == QCS_UTF8;
     ConstHashIterator i(h);
     while (i.next()) {
-        LocalReference<jstring> key = env.newString(i.getKey());
+        LocalReference<jstring> key = utf8_keys
+            ? env.newString(i.getKey())
+            : env.newString(QoreString(i.getKey(), QCS_DEFAULT));
         QoreValue v(i.get());
         LocalReference<jobject> value = toAnyObject(env, v, jpc);
 

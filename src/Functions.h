@@ -34,7 +34,7 @@
 #include "Env.h"
 #include "Array.h"
 #include "Class.h"
-#include "ModifiedUtf8String.h"
+#include "Utf8String.h"
 #include "InvocationHandler.h"
 #include "Globals.h"
 #include "Jvm.h"
@@ -69,7 +69,7 @@ public:
     }
 
     static Class* loadClass(const QoreString& name) {
-        ModifiedUtf8String nameUtf8(name);
+        Utf8String nameUtf8(name);
         return loadClass(nameUtf8.c_str());
     }
 

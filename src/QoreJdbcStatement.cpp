@@ -454,7 +454,7 @@ bool QoreJdbcStatement::execRaw(Env& env, ExceptionSink* xsink, const QoreString
     params = nullptr;
     bind_size = 0;
     raw = true;
-    raw_sql = str->c_str();
+    raw_sql.assign(str->c_str(), str->size());
 
     createStatement(env);
     return execIntern(env, **str, xsink);
@@ -476,7 +476,7 @@ void QoreJdbcStatement::prepareStatement(Env& env, const QoreString& str) {
     assert(!stmt);
     // no exception handling needed; calls must be wrapped in a try/catch block
     std::vector<jvalue> jargs(1);
-    LocalReference<jstring> jstr = env.newString(str.c_str());
+    LocalReference<jstring> jstr = env.newString(str.c_str(), str.size());
     jargs[0].l = jstr;
 
     stmt = env.callObjectMethod(conn->getConnectionObject(), Globals::methodConnectionPrepareStatement, &jargs[0])
@@ -544,7 +544,7 @@ bool QoreJdbcStatement::executeOnce(Env& env, ExceptionSink* xsink) {
     }
     if (raw) {
         std::vector<jvalue> jargs(1);
-        LocalReference<jstring> jstr = env.newString(raw_sql.c_str());
+        LocalReference<jstring> jstr = env.newString(raw_sql.c_str(), raw_sql.size());
         jargs[0].l = jstr;
         return env.callBooleanMethod(stmt, Globals::methodStatementExecute, &jargs[0]);
     }
@@ -713,8 +713,16 @@ int QoreJdbcStatement::describeResultSet(Env& env, ExceptionSink* xsink) {
             &jarg).as<jstring>();
         Env::GetStringUtfChars name(env, cname);
 
+        // the label is a hash key of the results: it is converted from UTF-8 to the default encoding, which hash keys
+        // are in (a hash key cannot have a NUL character, so a label is cut at its first one)
+        QoreString label(name.c_str(), QCS_UTF8);
+        ExceptionSink conv_xsink;
+        TempEncodingHelper key(label, QCS_DEFAULT, &conv_xsink);
+        if (conv_xsink) {
+            throw XsinkException(conv_xsink);
+        }
         // convert to lower case
-        QoreString qname(name.c_str());
+        QoreString qname(key->c_str(), key->size(), QCS_DEFAULT);
         qname.tolwr();
 
         std::string unique_qname;
@@ -939,7 +947,8 @@ QoreHashNode* QoreJdbcStatement::describe(Env& env, ExceptionSink* xsink) {
         // the column size: the length in characters for character data, in bytes for binary data, the maximum
         // precision for numeric data
         desc->setKeyValue("maxsize", static_cast<int64>(col.precision), xsink);
-        desc->setKeyValue("native_type", new QoreStringNode(col.native_type), xsink);
+        // the type name from the driver is UTF-8
+        desc->setKeyValue("native_type", new QoreStringNode(col.native_type, QCS_UTF8), xsink);
         desc->setKeyValue("internal_id", static_cast<int64>(col.ctype), xsink);
         desc->setKeyValue("nullable", col.nullable, xsink);
         if (jdbc_is_decimal_type(col.ctype)) {
@@ -2862,8 +2871,8 @@ int QoreJdbcStatement::bindParamSingleValue(Env& env, int column, QoreValue arg,
         }
 
         case NT_STRING: {
-            QoreStringValueHelper str(arg);
-            LocalReference<jstring> jstr = env.newString(str->c_str());
+            // the string can be in any encoding, and have NUL characters
+            LocalReference<jstring> jstr = env.newString(*arg.get<const QoreStringNode>());
             jargs[1].l = jstr;
             env.callVoidMethod(stmt, Globals::methodPreparedStatementSetString, &jargs[0]);
             break;

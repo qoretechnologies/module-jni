@@ -160,6 +160,7 @@ public:
 
     DLLLOCAL static GlobalReference<jclass> classQoreJavaApi;                     // org.qore.jni.QoreJavaApi
     DLLLOCAL static GlobalReference<jclass> classQoreSandbox;                     // org.qore.jni.QoreSandbox
+    DLLLOCAL static jmethodID methodQoreSandboxEncodeClasspath;                   // static byte[][] encodeClasspath(String)
     DLLLOCAL static jmethodID methodQoreJavaApiGetStackTrace;                     // StackTraceElement[] getStackTrace()
     DLLLOCAL static GlobalReference<jclass> classJavaCollectionTypes;             // org.qore.jni.JavaCollectionTypes
     DLLLOCAL static jmethodID methodJavaCollectionTypesIsStringKeyMap;            // boolean isStringKeyMap(Object)

@@ -1,0 +1,493 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%requires Util
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.Utf8Boundary
+%module-cmd(jni) import org.qore.jni.test.Utf8Driver
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.QoreSandbox
+%exec-class JniStrictUtf8Test
+
+#! Strings that cross the JNI boundary in places other than the main string conversion are exact in both directions
+#! (qore#6604): non-ASCII characters of the Basic Multilingual Plane, characters outside it (a UTF-16 surrogate pair
+#! in Java, which JNI's modified UTF-8 has as two 3-byte sequences), NUL characters (which modified UTF-8 has as
+#! C0 80, and which a NUL-terminated C string loses), and strings in another encoding than UTF-8
+/** Each test case is marked:
+    - regression: it fails without the fix (a string is cut at a NUL character, garbled, or not converted from its
+      encoding)
+    - coverage: it passes with and without the fix (ex: the text is UTF-8 and the default encoding is UTF-8), and
+      checks a path that the fix changed
+*/
+class JniStrictUtf8Test inherits QUnit::Test {
+    private {
+        #! non-ASCII characters of the Basic Multilingual Plane, and U+1F600
+        string text = "ř€😀";
+        #! a string with a NUL character: "a<NUL>b😀"
+        string with_nul;
+        #! "fäß" in ISO-8859-1
+        string latin1;
+    }
+
+    constructor() : QUnit::Test("JNI strict UTF-8", "1.0") {
+        # this file is UTF-8, and the cases expect UTF-8 as the default encoding (see nonUtf8DefaultEncoding() and
+        # test/jni-strict-utf8-child.q for another default encoding)
+        if (get_default_encoding() != "UTF-8") {
+            addTestCase("the default encoding is not UTF-8", sub () {
+                testSkip(sprintf("the default encoding is %y; this test needs UTF-8", get_default_encoding()));
+            });
+            set_return_value(main());
+            return;
+        }
+        with_nul = binary_to_string(<610062>, "UTF-8") + "😀";
+        latin1 = convert_encoding("fäß", "ISO-8859-1");
+
+        addTestCase("regression: a Qore exception message with NUL to Java", \qoreToJavaMessageNul());
+        addTestCase("regression: a Qore exception message in ISO-8859-1 to Java", \qoreToJavaMessageLatin1());
+        addTestCase("regression: a QoreException description with NUL to Qore", \javaToQoreDescNul());
+        addTestCase("regression: the message of a Java exception that the module raises (ThrowNew())",
+            \classLoadErrors());
+        addTestCase("regression: a module load error raised in Java is not also reported as unhandled",
+            \moduleLoadErrorNotUnhandled());
+        addTestCase("coverage: define_class() and load_class() with a BMP class name", \bmpClassName());
+        addTestCase("regression: define_class() and load_class() with a class name outside the BMP",
+            \supplementaryClassName());
+        addTestCase("coverage: define_class() with an ISO-8859-1 class name", \latin1ClassName());
+        addTestCase("regression: a JDBC bind value with NUL", \jdbcBindNul());
+        addTestCase("regression: a JDBC bind value in ISO-8859-1", \jdbcBindLatin1());
+        addTestCase("coverage: a UTF-8 JDBC bind value", \jdbcBindUtf8());
+        addTestCase("regression: prepared JDBC SQL with NUL", \jdbcSqlNul());
+        addTestCase("regression: raw JDBC SQL with NUL", \jdbcRawSqlNul());
+        addTestCase("coverage: raw JDBC SQL in ISO-8859-1", \jdbcRawSqlLatin1());
+        addTestCase("coverage: JDBC column labels and metadata names", \jdbcLabels());
+        addTestCase("coverage: UTF-8 JDBC connection values", \jdbcConnectionValues());
+        addTestCase("regression: the JDBC url option in ISO-8859-1", \jdbcUrlOptionLatin1());
+        addTestCase("coverage: a UTF-8 Kotlin script", \kotlinUtf8());
+        addTestCase("regression: a Kotlin script with NUL", \kotlinNul());
+        addTestCase("regression: a Kotlin script in ISO-8859-1", \kotlinLatin1());
+        addTestCase("regression: a set-property value with NUL", \setPropertyNul());
+        addTestCase("coverage: a set-property command in ISO-8859-1", \setPropertyLatin1());
+        addTestCase("coverage: a UTF-8 set-property command", \setPropertyUtf8());
+        addTestCase("coverage: a kotlin-eval command in ISO-8859-1", \kotlinEvalCmdLatin1());
+        addTestCase("regression: a kotlin-eval command with NUL", \kotlinEvalCmdNul());
+        addTestCase("coverage: a define-pending-class command with a class name outside the BMP",
+            \definePendingClass());
+        addTestCase("regression: JavaArray::deepToString() with NUL", \deepToStringNul());
+        addTestCase("coverage: a sandbox argument error", \sandboxArgumentError());
+        addTestCase("coverage: hash keys and Map keys", \hashKeys());
+        addTestCase("regression: a default encoding other than UTF-8", \nonUtf8DefaultEncoding());
+        addTestCase("regression: a classpath entry is checked against the sandbox as the JVM uses it",
+            \classpathSandboxCheck());
+        set_return_value(main());
+    }
+
+    #! returns the UTF-16 units of a string, as Java has them (the main string conversion)
+    private static list<int> units(string str) {
+        return Utf8Boundary::units(str);
+    }
+
+    #! the message of a Qore exception, which Java reads with QoreExceptionWrapper.getMessage(), was cut at a NUL
+    #! character
+    qoreToJavaMessageNul() {
+        string desc = "dé" + with_nul;
+        assertEq("ERR-" + text + ": " + desc, Utf8Boundary::messageOf(sub () { throw "ERR-" + text, desc; }));
+    }
+
+    #! a code or description in another encoding than UTF-8 was not converted
+    qoreToJavaMessageLatin1() {
+        assertEq("ERR: fäß", Utf8Boundary::messageOf(sub () { throw "ERR", latin1; }), "description");
+        assertEq("fäß: fäß", Utf8Boundary::messageOf(sub () { throw latin1, "fäß"; }), "code");
+    }
+
+    #! the description of an org.qore.jni.QoreException thrown in Java was cut at a NUL character
+    javaToQoreDescNul() {
+        try {
+            Utf8Boundary::throwQore("ERR-" + text, "dé" + with_nul);
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            # the code (the default encoding is UTF-8 here; see nonUtf8DefaultEncoding())
+            assertEq("ERR-" + text, ex.err);
+            assertEq("dé" + with_nul, ex.desc);
+        }
+    }
+
+    #! the error message of a Java class that cannot be generated, which the module raises in Java with a dynamic text,
+    #! was passed to JNI's ThrowNew() in standard UTF-8, which garbled a character outside the BMP (U+1F600 became
+    #! "ð"), and the list of the loaded modules had no opening parenthesis
+    classLoadErrors() {
+        # the byte code of a Java class for a Qore class that does not exist: the class loader's own lookup, which a
+        # class load falls back to, would replace the module's error with its own
+        *hash<ExceptionInfo> err;
+        try {
+            QoreURLClassLoader loader = QoreURLClassLoader::getCurrent();
+            loader.generateByteCode("qore.NoSuch" + text + "Class");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex;
+        }
+        assertEq("JNI-ERROR", err.err, "an exception is raised");
+        string msg = err.desc;
+        assertRegex("^java.lang.ClassNotFoundException: ", msg);
+        assertEq(True, msg.find("Java class 'qore.NoSuch" + text + "Class' cannot be generated") >= 0, msg);
+        # the list of the loaded modules is in parentheses
+        assertRegex("cannot be found \\(loaded modules: [^()]*\\)", msg);
+    }
+
+    #! the error of a module that Java's loading of a qoremod.* class could not load was raised in Java as a
+    #! ClassNotFoundException, and also printed as an unhandled Qore exception, as its exception sink was not cleared
+    moduleLoadErrorNotUnhandled() {
+        int rc;
+        string out = backquote(childCmd("", "load-error"), \rc);
+        assertEq("result: load error: OK\n", out);
+        assertEq(0, rc, "exit code");
+    }
+
+    #! returns the shell command that runs test/jni-strict-utf8-child.q with its output and errors
+    /** The variables that make the JVM print a notice on startup ("Picked up JAVA_TOOL_OPTIONS: ...") are removed
+        from the child's environment, as the whole output of the child is checked
+
+        @param env variable assignments for the child (ex: \c "QORE_CHARSET=ISO-8859-1")
+        @param args the child's arguments
+    */
+    private static string childCmd(string env, string args = "") {
+        # an absolute path, as the child can run in another directory
+        string child = normalize_dir(get_script_dir() + "/jni-strict-utf8-child.q");
+        return sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s %s -b --enable-debug %s %s "
+            "2>&1", env, shellQuote(QORE_ARGV[0]), shellQuote(child), args);
+    }
+
+    #! returns the byte code of a class with the given binary name (ex: "org.qore.test.Name"), whose method name()
+    #! returns its simple name
+    private static binary compileClass(string bin_name) {
+        list<string> parts = bin_name.split(".");
+        string simple = pop parts;
+        QoreJavaCompiler compiler();
+        compiler::CompilerOutput out = compiler.compile(bin_name, sprintf("package %s;
+
+public class %s {
+    public String name() {
+        return getClass().getSimpleName();
+    }
+}
+", parts.join("."), simple));
+        return out.file.openInputStream().readAllBytes();
+    }
+
+    #! BMP characters are the same in standard and modified UTF-8, which DefineClass() and FindClass() take
+    bmpClassName() {
+        string name = "org/qore/test/Třída";
+        object cls = define_class(name, compileClass(replace(name, "/", ".")));
+        assertEq("Třída", cls.newInstance().name());
+        assertEq("org.qore.test.Třída", load_class(name).getName());
+    }
+
+    #! U+10400 (a letter outside the BMP, which Java allows in a name) was passed to DefineClass() as a 4-byte
+    #! sequence, which is not modified UTF-8
+    supplementaryClassName() {
+        string name = "org/qore/test/Třída𐐀";
+        object cls = define_class(name, compileClass(replace(name, "/", ".")));
+        assertEq("Třída𐐀", cls.newInstance().name());
+        assertEq("org.qore.test.Třída𐐀", load_class(name).getName());
+        assertEq("org.qore.test.Třída𐐀", load_class(name).getName(), "cached");
+    }
+
+    #! a class name in another encoding than UTF-8 (it was already converted to UTF-8)
+    latin1ClassName() {
+        object cls = define_class(convert_encoding("org/qore/test/Fäß", "ISO-8859-1"),
+            compileClass("org.qore.test.Fäß"));
+        assertEq("Fäß", cls.newInstance().name());
+    }
+
+    #! returns a Datasource for the fixture driver (org.qore.jni.test.Utf8Driver)
+    private static Datasource getDatasource(string user = "user", string pass = "pass", string db = "qore-utf8:db") {
+        Utf8Driver::install();
+        Utf8Driver::labels = ("value",);
+        return new Datasource("jdbc", user, pass, db);
+    }
+
+    #! a bind value was cut at a NUL character
+    jdbcBindNul() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        string val = text + with_nul;
+        hash<auto> row = ds.selectRow("select %v", val);
+        assertEq(units(val), Utf8Driver::recorded("bound0"));
+        assertEq({"value": val}, row, "the value is returned");
+    }
+
+    #! a bind value in another encoding than UTF-8 was not converted
+    jdbcBindLatin1() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        hash<auto> row = ds.selectRow("select %v", latin1);
+        assertEq(units("fäß"), Utf8Driver::recorded("bound0"));
+        assertEq({"value": "fäß"}, row);
+    }
+
+    jdbcBindUtf8() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        hash<auto> row = ds.selectRow("select %v", text);
+        assertEq(units(text), Utf8Driver::recorded("bound0"));
+        assertEq({"value": text}, row);
+    }
+
+    #! SQL with a NUL character was cut at it
+    jdbcSqlNul() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        string sql = "select '" + with_nul + "'";
+        ds.selectRow(sql);
+        assertEq(units(sql), Utf8Driver::recorded("sql"));
+    }
+
+    jdbcRawSqlNul() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        string sql = "select '" + with_nul + "'";
+        ds.execRaw(sql);
+        assertEq(units(sql), Utf8Driver::recorded("sql"));
+    }
+
+    #! SQL in another encoding was already converted
+    jdbcRawSqlLatin1() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        ds.execRaw(convert_encoding("select 'fäß'", "ISO-8859-1"));
+        assertEq(units("select 'fäß'"), Utf8Driver::recorded("sql"));
+    }
+
+    #! with UTF-8 as the default encoding, the labels and metadata names were already right; see
+    #! nonUtf8DefaultEncoding() for the regression
+    jdbcLabels() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        Utf8Driver::labels = ("číslo_" + text,);
+        hash<auto> row = ds.selectRow("select %v", "x");
+        assertEq(("číslo_" + text,), keys row);
+        Utf8Driver::productName = "Prodüct " + text;
+        Utf8Driver::productVersion = "1.0 " + text;
+        Utf8Driver::driverName = "Dřiver " + text;
+        Utf8Driver::driverVersion = "2.0 " + text;
+        hash<auto> v = ds.getServerVersion();
+        assertEq("Prodüct " + text, v.name);
+        assertEq("1.0 " + text, v.version);
+        assertEq("UTF-8", v.name.encoding());
+        v = ds.getClientVersion();
+        assertEq("Dřiver " + text, v.name);
+        assertEq("2.0 " + text, v.version);
+        assertEq("Prodüct " + text, ds.getDriverRealName());
+    }
+
+    #! UTF-8 connection values with UTF-8 as the default encoding; see nonUtf8DefaultEncoding() for another
+    #! default encoding
+    jdbcConnectionValues() {
+        Datasource ds = getDatasource("usér" + text, "pässwörd" + text, "qore-utf8:dbř" + text);
+        ds.open();
+        assertEq(units("usér" + text), Utf8Driver::recorded("user"));
+        assertEq(units("pässwörd" + text), Utf8Driver::recorded("password"));
+        assertEq(units("jdbc:qore-utf8:dbř" + text), Utf8Driver::recorded("url"));
+    }
+
+    #! the url option in another encoding than UTF-8 was not converted
+    jdbcUrlOptionLatin1() {
+        Datasource ds = getDatasource();
+        ds.setOption("url", convert_encoding("qore-utf8:ürl", "ISO-8859-1"));
+        ds.open();
+        assertEq(units("jdbc:qore-utf8:ürl"), Utf8Driver::recorded("url"));
+        assertEq("qore-utf8:ürl", ds.getOption("url"));
+    }
+
+    #! returns True if Kotlin scripting is available
+    /** If it is not, the jars in the directory given by the KOTLIN_SCRIPTING_JARS environment variable (ex: made by
+        bin/download-kotlin-scripting-jars, with the Kotlin standard library), if any, are added to this Program's
+        class loader first, with the jar of QORE_CLASSPATH (qore-jni.jar, which has the Kotlin script engine class)
+    */
+    private static bool kotlinAvailable() {
+        if (kotlin_scripting_available()) {
+            return True;
+        }
+        *string dir = ENV.KOTLIN_SCRIPTING_JARS;
+        if (!dir || !is_dir(dir)) {
+            return False;
+        }
+        QoreURLClassLoader loader = QoreURLClassLoader::getCurrent();
+        if (ENV.QORE_CLASSPATH) {
+            loader.addPath(ENV.QORE_CLASSPATH);
+        }
+        map loader.addPath($1), glob(dir + "/*.jar");
+        return kotlin_scripting_retry();
+    }
+
+    private checkKotlin() {
+        if (!kotlinAvailable()) {
+            testSkip("Kotlin scripting is not available");
+        }
+    }
+
+    kotlinUtf8() {
+        checkKotlin();
+        assertEq(text, kotlin_eval("\"" + text + "\""));
+    }
+
+    #! a Kotlin script was cut at a NUL character (here, one in a string literal of the script)
+    kotlinNul() {
+        checkKotlin();
+        assertEq(with_nul, kotlin_eval("\"" + with_nul + "\""));
+    }
+
+    #! a Kotlin script in another encoding than UTF-8 was not converted
+    kotlinLatin1() {
+        checkKotlin();
+        assertEq("fäß", kotlin_eval(convert_encoding("\"fäß\"", "ISO-8859-1")));
+    }
+
+    #! issues a module command in a new Program with the jni module
+    private static issue(string cmd) {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", cmd);
+    }
+
+    #! the value of set-property was cut at a NUL character
+    setPropertyNul() {
+        issue("set-property qore.test.utf8.p1 " + text + with_nul);
+        assertEq(units(text + with_nul), Utf8Boundary::propertyUnits("qore.test.utf8.p1"));
+    }
+
+    #! a module command in another encoding than UTF-8 (Program::issueModuleCmd() converts it to the default
+    #! encoding; see nonUtf8DefaultEncoding() for a default encoding other than UTF-8)
+    setPropertyLatin1() {
+        issue(convert_encoding("set-property qore.test.utf8.p2 fäß", "ISO-8859-1"));
+        assertEq(units("fäß"), Utf8Boundary::propertyUnits("qore.test.utf8.p2"));
+    }
+
+    #! a UTF-8 property name and value
+    setPropertyUtf8() {
+        issue("set-property qore.test.utf8." + text + " " + text);
+        assertEq(units(text), Utf8Boundary::propertyUnits("qore.test.utf8." + text));
+    }
+
+    kotlinEvalCmdLatin1() {
+        checkKotlin();
+        issue(convert_encoding("kotlin-eval System.setProperty(\"qore.test.utf8.k1\", \"fäß\")", "ISO-8859-1"));
+        assertEq(units("fäß"), Utf8Boundary::propertyUnits("qore.test.utf8.k1"));
+    }
+
+    kotlinEvalCmdNul() {
+        checkKotlin();
+        issue("kotlin-eval System.setProperty(\"qore.test.utf8.k2\", \"" + with_nul + "\")");
+        assertEq(units(with_nul), Utf8Boundary::propertyUnits("qore.test.utf8.k2"));
+    }
+
+    #! the name of a pending class is passed to Java with its length (it was right before for a valid name)
+    definePendingClass() {
+        string name = "org.qore.test.Pendíng𐐀";
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires jni\nstring sub class_name(string name) { return load_class(name).getName(); }",
+            "pending");
+        p.issueModuleCmd("jni", "define-pending-class " + name + " " + compileClass(name).toBase64());
+        assertEq(name, p.callFunction("class_name", replace(name, ".", "/")));
+    }
+
+    #! the output of Arrays.deepToString() was cut at a NUL character
+    deepToStringNul() {
+        JavaArray a = new_array(load_class("java/lang/String"), 1);
+        a.set(0, with_nul);
+        assertEq("[" + with_nul + "]", a.deepToString());
+    }
+
+    #! the path of the JNI-SANDBOX-ERROR that org.qore.jni.QoreSandbox raises for an invalid argument, whose message
+    #! is now passed to Qore with its length and as UTF-8 (the messages are ASCII texts, so this passed before)
+    sandboxArgumentError() {
+        assertThrows("JNI-SANDBOX-ERROR", "must not contain a NUL character", \QoreSandbox::checkFileAccess(),
+            (with_nul, False));
+    }
+
+    #! with UTF-8 as the default encoding, hash keys were already right; see nonUtf8DefaultEncoding() for the
+    #! regression
+    hashKeys() {
+        string key = "ключ_" + text;
+        hash<auto> h = Utf8Boundary::mapOf(key, 1);
+        assertEq((key,), keys h);
+        assertEq(units(key), Utf8Boundary::firstKeyUnits({key: 1}));
+    }
+
+    #! with a default encoding other than UTF-8 (the encoding of hash keys, exception codes and the connection values
+    #! of a jdbc datasource), hash keys, JDBC column labels, the code of a QoreException, module commands, the JDBC
+    #! connection values and the JDBC metadata names were not converted between it and UTF-8; see
+    #! test/jni-strict-utf8-child.q
+    nonUtf8DefaultEncoding() {
+        int rc;
+        string out = backquote(childCmd("QORE_CHARSET=ISO-8859-1"), \rc);
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq((
+            "result: Qore hash key to Java: OK",
+            "result: Java Map key to Qore: OK",
+            "result: Java Map key that the default encoding cannot represent: OK",
+            "result: QoreException code: OK",
+            "result: QoreException code that the default encoding cannot represent: OK",
+            "result: module command: OK",
+            "result: module command error text: OK",
+            "result: JDBC user: OK",
+            "result: JDBC password: OK",
+            "result: JDBC URL: OK",
+            "result: JDBC column label: OK",
+            "result: JDBC column label that the default encoding cannot represent: OK",
+            "result: JDBC metadata name: OK",
+        ), lines, out);
+        assertEq(0, rc, "exit code: " + out);
+    }
+
+    #! with ISO-8859-1 as the default encoding and as the JVM's file name encoding, a classpath entry with a
+    #! non-ASCII character in a directory that the sandbox allows was refused or not usable, and a relative entry was
+    #! checked against another directory than the JVM resolves it against: the sandbox did not check the
+    #! representation of the entry that the JVM uses; see classpath_case() in test/jni-strict-utf8-child.q
+    classpathSandboxCheck() {
+        string out = runInTempDir("QORE_CHARSET=ISO-8859-1 LC_ALL=en_US.iso88591", "classpath");
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq((
+            "result: classpath entry in an allowed directory: OK",
+            "result: classpath entry outside the allowed directory: OK",
+            "result: classpath with an allowed and a refused entry: OK",
+            "result: wildcard classpath entry in an allowed directory: OK",
+            "result: wildcard classpath entry outside the allowed directory: OK",
+            "result: relative classpath entry after a change of the current directory: OK",
+            "result: relative classpath entry in the allowed directory after a change of the current directory: OK",
+        ), lines, out);
+        # a classpath entry that the JVM's file name encoding cannot represent exactly is refused
+        out = runInTempDir("QORE_CHARSET=UTF-8 LC_ALL=en_US.iso88591", "classpath-unmappable");
+        lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq(("result: classpath entry that the JVM cannot represent: OK",), lines, out);
+    }
+
+    #! runs test/jni-strict-utf8-child.q in a new empty directory, which the JVM's user.dir is, and returns its output
+    /** The test is skipped if the child reports that it cannot run its case (ex: the locale is missing)
+    */
+    private string runInTempDir(string env, string args) {
+        string dir = tmp_location() + DirSep + sprintf("jni-strict-utf8-%d-%d", getpid(),
+            now_us().durationMicroseconds());
+        if (mkdir(dir, 0700)) {
+            throw "TEST-ERROR", sprintf("cannot create directory %y: %s", dir, strerror());
+        }
+        on_exit rmdir(dir);
+        int rc;
+        string out = backquote("cd " + shellQuote(dir) + " && " + childCmd(env, args), \rc);
+        if (out =~ /^result: classpath: skipped/m) {
+            testSkip(trim(out));
+        }
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

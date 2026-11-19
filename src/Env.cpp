@@ -175,6 +175,86 @@ bool Env::convertModifiedUtf8(const char* mutf8, std::string& out) {
     return true;
 }
 
+void Env::toModifiedUtf8(const char* utf8, size_t len, std::string& out) {
+    std::vector<jchar> utf16;
+    decodeUtf8(utf8, len, utf16);
+    out.clear();
+    out.reserve(len + 8);
+    // each UTF-16 unit is encoded on its own: a surrogate is a 3-byte sequence, and NUL the two bytes C0 80
+    for (jchar u : utf16) {
+        if (u && u < 0x80) {
+            out += static_cast<char>(u);
+        } else if (u < 0x800) {
+            out += static_cast<char>(0xc0 | (u >> 6));
+            out += static_cast<char>(0x80 | (u & 0x3f));
+        } else {
+            out += static_cast<char>(0xe0 | (u >> 12));
+            out += static_cast<char>(0x80 | ((u >> 6) & 0x3f));
+            out += static_cast<char>(0x80 | (u & 0x3f));
+        }
+    }
+}
+
+LocalReference<jstring> Env::newString(const QoreString& str) {
+    ExceptionSink xsink;
+    TempEncodingHelper utf8(str, QCS_UTF8, &xsink);
+    if (xsink) {
+        throw XsinkException(xsink);
+    }
+    return newString(utf8->c_str(), utf8->size());
+}
+
+jint Env::throwNew(JNIEnv* env, jclass cls, const char* utf8, size_t len) noexcept {
+    assert(!utf8[len]);
+    // the exception replaces a pending one; JNI's functions, ThrowNew() included, cannot be called while one is
+    // pending
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    if (isAscii(utf8, len)) {
+        return env->ThrowNew(cls, utf8);
+    }
+    jstring msg;
+    try {
+        std::vector<jchar> utf16;
+        decodeUtf8(utf8, len, utf16);
+        msg = env->NewString(utf16.data(), static_cast<jsize>(utf16.size()));
+    } catch (...) {
+        // the UTF-16 string cannot be allocated (std::bad_alloc)
+        return env->ThrowNew(cls, "the message of the exception cannot be allocated");
+    }
+    if (!msg) {
+        // an OutOfMemoryError is pending
+        return JNI_ERR;
+    }
+    jint rc = JNI_ERR;
+    jmethodID ctor = env->GetMethodID(cls, "<init>", "(Ljava/lang/String;)V");
+    if (ctor) {
+        jobject ex = env->NewObject(cls, ctor, msg);
+        if (ex) {
+            rc = env->Throw(static_cast<jthrowable>(ex));
+            env->DeleteLocalRef(ex);
+        }
+    }
+    env->DeleteLocalRef(msg);
+    return rc;
+}
+
+jint Env::throwNew(JNIEnv* env, jclass cls, const QoreString& msg) noexcept {
+    try {
+        ExceptionSink xsink;
+        TempEncodingHelper utf8(msg, QCS_UTF8, &xsink);
+        if (!xsink) {
+            return throwNew(env, cls, utf8->c_str(), utf8->size());
+        }
+        xsink.clear();
+    } catch (...) {
+        // the conversion failed (std::bad_alloc); the message is used as it is below
+    }
+    // the message cannot be converted: its bytes are decoded as UTF-8, each invalid sequence becoming U+FFFD
+    return throwNew(env, cls, msg.c_str(), msg.size());
+}
+
 Env::Env(bool set_context) {
    // Check for interrupt before attaching to JVM
    {

@@ -33,12 +33,24 @@
 
 namespace jni {
 
-static void set_prop(Env& env, LocalReference<jobject>& props, const char* prop, const char* val) {
+//! Returns a Java string of a connection value of the datasource (ex: the user name)
+/** The datasource keeps its connection values as the bytes that it was given, which are converted from the
+    datasource's encoding (the default encoding unless one was set for it) to UTF-8
+
+    @throw XsinkException the value cannot be converted
+*/
+static LocalReference<jstring> ds_string(Env& env, const Datasource* ds, const std::string& val) {
+    const QoreEncoding* enc = ds->getQoreEncoding();
+    return env.newString(QoreString(val.data(), val.size(), enc ? enc : QCS_DEFAULT));
+}
+
+static void set_prop(Env& env, LocalReference<jobject>& props, const char* prop, const Datasource* ds,
+        const std::string& val) {
     std::vector<jvalue> jargs(2);
 
     LocalReference<jstring> jprop = env.newString(prop);
     jargs[0].l = jprop;
-    LocalReference<jstring> jval = env.newString(val);
+    LocalReference<jstring> jval = ds_string(env, ds, val);
     jargs[1].l = jval;
     LocalReference<jobject> ignore = env.callObjectMethod(props, Globals::methodPropertiesSetProperty, &jargs[0]);
 }
@@ -277,7 +289,8 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
             "option");
         return -1;
     }
-    QoreStringMaker url("%s%s", !str.rfind("jdbc:", 0) ? "" : "jdbc:", str.c_str());
+    // the url option is in UTF-8, and the database name in the datasource's encoding (see ds_string())
+    std::string url = !str.rfind("jdbc:", 0) ? str : "jdbc:" + str;
 
     printd(5, "QoreJdbcConnection::connect() using URL '%s' (jpc: %p: %x)\n", url.c_str(), jpc,
         env.callIntMethod(jpc->getClassLoader(), jni::Globals::methodObjectHashCode, nullptr));
@@ -287,18 +300,20 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
         {
             const std::string& str = ds->getUsernameStr();
             if (!str.empty()) {
-                set_prop(env, props, "user", str.c_str());
+                set_prop(env, props, "user", ds, str);
             }
         }
         {
             const std::string& str = ds->getPasswordStr();
             if (!str.empty()) {
-                set_prop(env, props, "password", str.c_str());
+                set_prop(env, props, "password", ds, str);
             }
         }
 
         // use the dynamic API to ensure that the DriverManager.getConnection() call is made in the right context
-        LocalReference<jstring> jurl = env.newString(url.c_str());
+        LocalReference<jstring> jurl = db.empty()
+            ? ds_string(env, ds, url)
+            : env.newString(url.c_str(), url.size());
         std::vector<jvalue> jargs(2);
         jargs[0].l = jurl;
         jargs[1].l = props;
@@ -371,7 +386,12 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                 JDBC_OPT_CLASSPATH, val.getFullTypeName());
             return -1;
         }
-        QoreStringValueHelper cp_str(val);
+        // the classpath in the default encoding, the encoding of Qore's file names and of the environment variables
+        // that q_env_subst() substitutes
+        QoreStringValueHelper cp_str(val, QCS_DEFAULT, xsink);
+        if (*xsink) {
+            return -1;
+        }
         const char* cp = cp_str->c_str();
 
         // the value is judged by the code that sets it before it is compared with the current classpath: the same
@@ -446,25 +466,27 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
             // connection, and the policy of the code that opens it does not refuse a configuration that is not its own.
             // A setter that a refusing sandbox governs was refused above, so this is the policy of trusted code that a
             // sandbox governs only for its limits and interrupts (it allows uncontrolled APIs)
+            // one Java string is both checked and added
+            Env env;
+            LocalReference<jstring> jcp = env.newPathString(arg);
 #ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
             if (setter_known) {
                 ReferenceHolder<QoreSandboxManager> setter_policy(ds->getOptionPolicyManagerRef(opt), xsink);
-                ::jni_check_classpath_policy(*setter_policy, arg.c_str());
+                ::jni_check_classpath_policy(*setter_policy, env, jcp);
             } else {
-                ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
+                ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
             }
 #else
-            ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
+            ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
 #endif
             // the classpath of the connection is already this value: nothing to add
             if (classpath == arg.c_str()) {
                 return 0;
             }
-            jpc->addClasspath(arg.c_str());
+            jpc->addClasspath(env, jcp);
             classpath = arg.c_str();
 
             // try to load new drivers
-            Env env;
 
             printd(5, "QoreJdbcConnection::setOption() %p '%s' jpc: %p (%x) add classpath: '%s' (driver: %p)\n", this,
                 opt, jpc, env.callIntMethod(jpc->getClassLoader(), jni::Globals::methodObjectHashCode, nullptr),
@@ -500,7 +522,11 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                 JDBC_OPT_URL, val.getFullTypeName());
             return -1;
         }
-        QoreStringValueHelper db_str(val);
+        // kept in UTF-8
+        QoreStringValueHelper db_str(val, QCS_UTF8, xsink);
+        if (*xsink) {
+            return -1;
+        }
         db.assign(db_str->c_str(), db_str->size());
     } else if (!strcasecmp(opt, JDBC_OPT_LOB_MAX_SIZE)) {
         // an integer, or a string of digits only (ex: from a datasource string); "2G" or "1e9x" is refused
@@ -539,7 +565,7 @@ QoreValue QoreJdbcConnection::getOption(const char* opt) {
     if (!strcasecmp(opt, JDBC_OPT_CLASSPATH)) {
         return classpath.empty() ? QoreValue() : new QoreStringNode(classpath);
     } else if (!strcasecmp(opt, JDBC_OPT_URL)) {
-        return db.empty() ? QoreValue() : new QoreStringNode(db);
+        return db.empty() ? QoreValue() : new QoreStringNode(db, QCS_UTF8);
     } else if (!strcasecmp(opt, JDBC_OPT_LOB_MAX_SIZE)) {
         return lob_max_size;
     } else if (!strcasecmp(opt, DBI_OPT_NUMBER_OPT)) {
@@ -742,13 +768,13 @@ QoreValue QoreJdbcConnection::getServerVersion(ExceptionSink* xsink) {
             Globals::methodDatabaseMetaDataGetDatabaseProductName, nullptr).as<jstring>();
         if (str) {
             Env::GetStringUtfChars desc(env, str);
-            rv->setKeyValue("name", new QoreStringNode(desc.c_str()), xsink);
+            rv->setKeyValue("name", new QoreStringNode(desc.c_str(), desc.size(), QCS_UTF8), xsink);
         }
         str = env.callObjectMethod(md,
             Globals::methodDatabaseMetaDataGetDatabaseProductVersion, nullptr).as<jstring>();
         if (str) {
             Env::GetStringUtfChars desc(env, str);
-            rv->setKeyValue("version", new QoreStringNode(desc.c_str()), xsink);
+            rv->setKeyValue("version", new QoreStringNode(desc.c_str(), desc.size(), QCS_UTF8), xsink);
         }
         jint i = env.callIntMethod(md,
             Globals::methodDatabaseMetaDataGetDatabaseMajorVersion, nullptr);
@@ -780,13 +806,13 @@ QoreValue QoreJdbcConnection::getClientVersion(ExceptionSink* xsink) {
             Globals::methodDatabaseMetaDataGetDriverName, nullptr).as<jstring>();
         if (str) {
             Env::GetStringUtfChars desc(env, str);
-            rv->setKeyValue("name", new QoreStringNode(desc.c_str()), xsink);
+            rv->setKeyValue("name", new QoreStringNode(desc.c_str(), desc.size(), QCS_UTF8), xsink);
         }
         str = env.callObjectMethod(md,
             Globals::methodDatabaseMetaDataGetDriverVersion, nullptr).as<jstring>();
         if (str) {
             Env::GetStringUtfChars desc(env, str);
-            rv->setKeyValue("version", new QoreStringNode(desc.c_str()), xsink);
+            rv->setKeyValue("version", new QoreStringNode(desc.c_str(), desc.size(), QCS_UTF8), xsink);
         }
         jint i = env.callIntMethod(md,
             Globals::methodDatabaseMetaDataGetDriverMajorVersion, nullptr);
@@ -818,7 +844,7 @@ QoreStringNode* QoreJdbcConnection::getDriverRealName(ExceptionSink* xsink) {
             return nullptr;
         }
         Env::GetStringUtfChars desc(env, str);
-        SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(desc.c_str()));
+        SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(desc.c_str(), desc.size(), QCS_UTF8));
         return rv.release();
     } catch (jni::Exception& e) {
         e.convert(xsink);

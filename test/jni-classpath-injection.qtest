@@ -11,6 +11,7 @@
 %requires jni
 %requires QUnit
 %requires FsUtil
+%requires Util
 
 %exec-class JniClasspathInjectionTest
 
@@ -144,8 +145,12 @@ try {
     #! Asserts that the module's path check refused the command for the jar: \a rv is the result of issue()
     private assertFilesystemDenied(string rv, string cmd, string label) {
         assertRegex("^FILESYSTEM-ACCESS-DENIED: ", rv, label);
-        assertRegex("'" + getJar() + "'.*module command error from command '" + cmd.split(" ")[0], rv,
-            label + " (reason)");
+        # the jar is named by the absolute path that it is checked as, as the JVM makes it absolute (against its
+        # user.dir, the current directory, which this test does not change, without resolving symbolic links or "..")
+        string jar = getJar();
+        string expected = absolute_path(jar) ? jar : getcwd() + DirSep + jar;
+        assertEq(True, rv.find("'" + expected + "'") >= 0, label + " (path): " + rv);
+        assertRegex("module command error from command '" + cmd.split(" ")[0], rv, label + " (reason)");
     }
 
     #! Returns True if the jni module judges module commands by their issuer (module API 2.3, qore#5699)

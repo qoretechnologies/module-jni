@@ -77,12 +77,13 @@ public:
 
    /**
     * \brief Finds a class with given name.
-    * \param name fully-qualified class name or an array type signature
+    * \param name fully-qualified class name or an array type signature in standard UTF-8; a name that is not
+    * ASCII is converted to the modified UTF-8 of JNI (see ClassName)
     * \return a local reference to the class object
     * \throws JavaException if the class cannot be found
     */
    DLLLOCAL LocalReference<jclass> findClass(const char* name) {
-      jclass c = env->FindClass(name);
+      jclass c = env->FindClass(ClassName(name).c_str());
       if (c == nullptr) {
          throw JavaException();
       }
@@ -1061,6 +1062,24 @@ public:
         return newString(utf8, strlen(utf8));
     }
 
+    //! Creates a Java string from a %Qore string in any encoding; see newString(const char*, size_t)
+    /** The string is converted to UTF-8 first; it may have NUL characters
+
+        @throw XsinkException the string cannot be converted to UTF-8
+    */
+    DLLLOCAL LocalReference<jstring> newString(const QoreString& str);
+
+    //! Creates a Java string from a %Qore string with a file path or a classpath, in any encoding
+    /** The string is cut at its first NUL character, as the C string APIs that %Qore passes paths to cut it, and
+        converted to UTF-8; the Java string is the one value that a path is both checked as and used as (see
+        jni_check_classpath_policy())
+
+        @throw XsinkException the string cannot be converted to UTF-8
+    */
+    DLLLOCAL LocalReference<jstring> newPathString(const QoreString& path) {
+        return newString(QoreString(path.c_str(), path.getEncoding()));
+    }
+
     //! Returns true if a string has only ASCII characters other than NUL
     DLLLOCAL static bool isAscii(const char* str, size_t len) {
         for (size_t i = 0; i < len; ++i) {
@@ -1088,6 +1107,51 @@ public:
         @return true if the string was converted to \a out, false if it is standard UTF-8 as it is
     */
     DLLLOCAL static bool convertModifiedUtf8(const char* mutf8, std::string& out);
+
+    //! Converts standard UTF-8 to the modified UTF-8 of JNI, for the names that JNI takes in it
+    /** JNI's FindClass() and DefineClass() take a class name in modified UTF-8, in which a character outside the
+        Basic Multilingual Plane is a UTF-16 surrogate pair of two 3-byte sequences and NUL is the two bytes C0 80.
+        The string is decoded strictly, as by decodeUtf8(): each invalid sequence becomes U+FFFD.
+
+        @param utf8 the string in standard UTF-8
+        @param len the length of the string in bytes; it may have NUL characters
+        @param out the string in modified UTF-8, which has no NUL byte
+    */
+    DLLLOCAL static void toModifiedUtf8(const char* utf8, size_t len, std::string& out);
+
+    //! A class name for JNI's FindClass() or DefineClass() in modified UTF-8, for as long as the object lives
+    /** An ASCII name, as almost every class name is, is used as it is; any other name is converted with
+        toModifiedUtf8()
+    */
+    class ClassName {
+    public:
+        //! Takes a NUL-terminated class name in standard UTF-8
+        DLLLOCAL explicit ClassName(const char* utf8) : ClassName(utf8, strlen(utf8)) {
+        }
+
+        //! Takes a class name in standard UTF-8, which must have a NUL at \a len and may have NUL characters
+        DLLLOCAL ClassName(const char* utf8, size_t len) {
+            assert(!utf8[len]);
+            if (isAscii(utf8, len)) {
+                str = utf8;
+            } else {
+                toModifiedUtf8(utf8, len, converted);
+                str = converted.c_str();
+            }
+        }
+
+        ClassName(const ClassName&) = delete;
+        ClassName& operator=(const ClassName&) = delete;
+
+        DLLLOCAL const char* c_str() const {
+            return str;
+        }
+
+    private:
+        //! the converted name, which str may point to
+        std::string converted;
+        const char* str;
+    };
 
     DLLLOCAL void registerNatives(jclass cls, const JNINativeMethod *methods, jint count) {
         if (env->RegisterNatives(cls, methods, count) != 0) {
@@ -1393,12 +1457,50 @@ public:
         env->Throw(throwable);
     }
 
-    DLLLOCAL void throwNew(jclass cls, const char* msg) {
-        env->ThrowNew(cls, msg);
+    //! Throws a new Java exception of the given class with a NUL-terminated message in UTF-8
+    /** see throwNew(JNIEnv*, jclass, const char*, size_t)
+    */
+    DLLLOCAL void throwNew(jclass cls, const char* utf8) noexcept {
+        throwNew(env, cls, utf8, strlen(utf8));
     }
 
+    //! Throws a new Java exception of the given class with a message in any encoding
+    /** see throwNew(JNIEnv*, jclass, const QoreString&)
+    */
+    DLLLOCAL void throwNew(jclass cls, const QoreString& msg) noexcept {
+        throwNew(env, cls, msg);
+    }
+
+    //! Throws a new Java exception of the given class with a message in UTF-8, without C++ exceptions
+    /** JNI's ThrowNew() takes the message in modified UTF-8, so only an ASCII message is passed to it; any other
+        message is made a Java string as by newString() (strictly, from UTF-16), and the exception is made with the
+        class's constructor that takes a \c String, and thrown.  The exception replaces a pending one, which is
+        cleared first.
+
+        @param env the JNI environment of the thread
+        @param cls the class of the exception, which must have a constructor taking a \c String
+        @param utf8 the message in UTF-8; it must have a NUL at \a len (a %Qore string's buffer has one)
+        @param len the length of the message in bytes; it may have NUL characters
+
+        @return 0 if the exception was thrown; a negative value if it could not be made, in which case the Java
+        exception of the failure (ex: an \c OutOfMemoryError) is pending
+    */
+    DLLLOCAL static jint throwNew(JNIEnv* env, jclass cls, const char* utf8, size_t len) noexcept;
+
+    //! Throws a new Java exception of the given class with a NUL-terminated message in UTF-8, without C++ exceptions
+    DLLLOCAL static jint throwNew(JNIEnv* env, jclass cls, const char* utf8) noexcept {
+        return throwNew(env, cls, utf8, strlen(utf8));
+    }
+
+    //! Throws a new Java exception of the given class with a message in any encoding, without C++ exceptions
+    /** The message is converted to UTF-8; if it cannot be converted, its bytes are decoded as UTF-8, in which each
+        invalid sequence becomes U+FFFD; see throwNew(JNIEnv*, jclass, const char*, size_t)
+    */
+    DLLLOCAL static jint throwNew(JNIEnv* env, jclass cls, const QoreString& msg) noexcept;
+
+    //! Defines a class; \a name is in standard UTF-8 (see ClassName)
     DLLLOCAL LocalReference<jclass> defineClass(const char* name, jobject loader, const unsigned char* buf, jsize bufLen) {
-        jclass c = env->DefineClass(name, loader, reinterpret_cast<const jbyte*>(buf), bufLen);
+        jclass c = env->DefineClass(ClassName(name).c_str(), loader, reinterpret_cast<const jbyte*>(buf), bufLen);
         if (c == nullptr) {
             throw JavaException();
         }
@@ -1411,7 +1513,9 @@ public:
         the class already exists, so we look for it first
     */
     DLLLOCAL LocalReference<jclass> findDefineClass(const char* name, jobject loader, const unsigned char* buf, jsize bufLen) {
-        jclass c = env->FindClass(name);
+        // the name in modified UTF-8 (see ClassName)
+        ClassName mname(name);
+        jclass c = env->FindClass(mname.c_str());
         //if (c) { printd(5, "FOUND '%s': %p\n", name, c); }
         if (!c) {
             // Clear any pending exception from FindClass before trying DefineClass
@@ -1420,7 +1524,7 @@ public:
             if (env->ExceptionCheck()) {
                 env->ExceptionClear();
             }
-            c = env->DefineClass(name, loader, reinterpret_cast<const jbyte*>(buf), bufLen);
+            c = env->DefineClass(mname.c_str(), loader, reinterpret_cast<const jbyte*>(buf), bufLen);
             if (!c) {
                 throw JavaException();
             }

@@ -38,7 +38,7 @@
 #include "LocalReference.h"
 #include "Object.h"
 #include "defs.h"
-#include "ModifiedUtf8String.h"
+#include "Utf8String.h"
 #include "QoreJniClassMap.h"
 #include "Env.h"
 

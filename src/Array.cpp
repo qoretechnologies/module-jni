@@ -186,7 +186,7 @@ QoreStringNodeHolder Array::deepToString(Env& env, jarray array) {
     LocalReference<jstring> str = env.callStaticObjectMethod(Globals::classArrays, Globals::methodArraysDeepToString, &jarg).as<jstring>();
 
     Env::GetStringUtfChars chars(env, str);
-    return QoreStringNodeHolder(new QoreStringNode(chars.c_str(), QCS_UTF8));
+    return QoreStringNodeHolder(new QoreStringNode(chars.c_str(), chars.size(), QCS_UTF8));
 }
 
 void Array::set(jarray array, Type elementType, jclass elementClass, int64 index, const QoreValue &value,

@@ -200,12 +200,14 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
     } catch (QoreStandardException& e) {
         ExceptionSink xsink;
         e.convert(&xsink);
-        QoreString errstr;
-        QoreStringValueHelper err(xsink.getExceptionErr());
-        QoreStringValueHelper desc(xsink.getExceptionDesc());
-        errstr.sprintf("failed to execute Qore callback: %s: %s", err->c_str(), desc->c_str());
+        // the code and the description can be in any encoding
+        QoreString errstr(QCS_UTF8);
+        errstr.concat("failed to execute Qore callback: ");
+        jni_append_utf8(errstr, xsink.getExceptionErr());
+        errstr.concat(": ");
+        jni_append_utf8(errstr, xsink.getExceptionDesc());
         xsink.clear();
-        env.throwNew(env.findClass("java/lang/RuntimeException"), errstr.c_str());
+        env.throwNew(env.findClass("java/lang/RuntimeException"), errstr);
         return nullptr;
     }
 }

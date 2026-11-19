@@ -33,7 +33,7 @@
 #include "Env.h"
 #include "Dispatcher.h"
 #include "InvocationHandler.h"
-#include "ModifiedUtf8String.h"
+#include "Utf8String.h"
 #include "Array.h"
 #include "QoreToJava.h"
 #include "QoreJniClassMap.h"
@@ -161,6 +161,7 @@ jmethodID Globals::methodQoreInvocationHandlerDestroy;
 
 GlobalReference<jclass> Globals::classQoreJavaApi;
 GlobalReference<jclass> Globals::classQoreSandbox;
+jmethodID Globals::methodQoreSandboxEncodeClasspath;
 jmethodID Globals::methodQoreJavaApiGetStackTrace;
 GlobalReference<jclass> Globals::classJavaCollectionTypes;
 jmethodID Globals::methodJavaCollectionTypesIsStringKeyMap;
@@ -606,7 +607,7 @@ static void JNICALL invocation_handler_finalize(JNIEnv* jenv, jclass, jlong ptr)
     auto raise = [jenv](const char* name, const char* message) {
         jclass cls = jenv->FindClass(name);
         if (cls) {
-            jenv->ThrowNew(cls, message);
+            Env::throwNew(jenv, cls, message);
             jenv->DeleteLocalRef(cls);
         }
     };
@@ -874,7 +875,10 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
             }
             if (!cls) {
                 if (!xsink) {
-                    xsink.raiseException("UNKNOWN-CLASS", "cannot resolve class '%s'", cname.c_str());
+                    // the class name from Java is UTF-8
+                    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
+                    desc->sprintf("cannot resolve class '%s'", cname.c_str());
+                    xsink.raiseException("UNKNOWN-CLASS", desc.release());
                 }
                 QoreToJava::wrapException(env, xsink);
                 return nullptr;
@@ -978,7 +982,10 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
     }
 
     if (!cls && !xsink) {
-        xsink.raiseException("CREATE-OBJECT-ERROR", "class '%s' cannot be found", clsname.c_str());
+        // the class name from Java is UTF-8
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
+        desc->sprintf("class '%s' cannot be found", clsname.c_str());
+        xsink.raiseException("CREATE-OBJECT-ERROR", desc.release());
     }
 
     if (xsink) {
@@ -1040,7 +1047,7 @@ static jlong JNICALL java_api_new_connection_waiter(JNIEnv* env, jclass) {
     } catch (const std::bad_alloc&) {
         jclass cls = env->FindClass("java/lang/OutOfMemoryError");
         if (cls) {
-            env->ThrowNew(cls, "cannot allocate JDBC connection waiter");
+            Env::throwNew(env, cls, "cannot allocate JDBC connection waiter");
             env->DeleteLocalRef(cls);
         }
         return 0;
@@ -1078,7 +1085,7 @@ static void JNICALL java_api_await_connection_waiter(JNIEnv* jenv, jclass, jlong
         } catch (const std::bad_alloc&) {
             jclass cls = jenv->FindClass("java/lang/OutOfMemoryError");
             if (cls) {
-                jenv->ThrowNew(cls, "cannot wrap JDBC connection cancellation");
+                Env::throwNew(jenv, cls, "cannot wrap JDBC connection cancellation");
                 jenv->DeleteLocalRef(cls);
             }
         }
@@ -1092,32 +1099,41 @@ static void JNICALL java_api_delete_connection_waiter(JNIEnv*, jclass, jlong ptr
 static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, jlong ptr) {
     ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
 
-    QoreString jstr;
-    QoreValue err = xsink->getExceptionErr();
-    QoreStringValueHelper err_str(err);
-    QoreValue desc = xsink->getExceptionDesc();
-    QoreStringValueHelper desc_str(desc);
+    // no C++ exception may leave a JNI native method
+    try {
+        // the message in UTF-8: the code and the description can be in any encoding, and have NUL characters
+        QoreString err_str(QCS_UTF8);
+        jni_append_utf8(err_str, xsink->getExceptionErr());
+        QoreString desc_str(QCS_UTF8);
+        jni_append_utf8(desc_str, xsink->getExceptionDesc());
 
-    if (!err_str->empty()) {
-        if (!desc_str->empty()) {
-            jstr.concat(err_str->c_str());
-            jstr.concat(": ");
-            jstr.concat(desc_str->c_str());
+        QoreString jstr(QCS_UTF8);
+        if (!err_str.empty()) {
+            jstr.concat(err_str.c_str(), err_str.size());
+            if (!desc_str.empty()) {
+                jstr.concat(": ");
+                jstr.concat(desc_str.c_str(), desc_str.size());
+            }
+        } else if (!desc_str.empty()) {
+            jstr.concat(desc_str.c_str(), desc_str.size());
         } else {
-            jstr.concat(err_str->c_str());
-        }
-    } else {
-        if (!desc_str->empty())
-            jstr.concat(desc_str->c_str());
-        else
             jstr.concat("No message");
+        }
+
+        //printd(LogLevel, "qore_exception_wrapper_get_message() xsink: %p %s\n", xsink, jstr.c_str());
+
+        Env env(jenv);
+        return env.newString(jstr.c_str(), jstr.size()).release();
+    } catch (JavaException&) {
+        // the Java exception (ex: an OutOfMemoryError) is pending
+    } catch (const std::bad_alloc&) {
+        jclass cls = jenv->FindClass("java/lang/OutOfMemoryError");
+        if (cls) {
+            Env::throwNew(jenv, cls, "cannot allocate the message of a Qore exception");
+            jenv->DeleteLocalRef(cls);
+        }
     }
-
-    //printd(LogLevel, "qore_exception_wrapper_get_message() xsink: %p %s\n", xsink, jstr.c_str());
-
-    Env env(jenv);
-    ModifiedUtf8String str(jstr);
-    return env.newString(str.c_str()).release();
+    return nullptr;
 }
 
 static jstring JNICALL qore_object_class_name(JNIEnv* jenv, jclass, jlong ptr) {
@@ -1377,19 +1393,19 @@ static Result generated_native_call(JNIEnv* jenv, Callback&& callback) {
     } catch (const std::bad_alloc& e) {
         jclass cls = jenv->FindClass("java/lang/OutOfMemoryError");
         if (cls) {
-            jenv->ThrowNew(cls, e.what());
+            Env::throwNew(jenv, cls, e.what());
             jenv->DeleteLocalRef(cls);
         }
     } catch (const std::exception& e) {
         jclass cls = jenv->FindClass("java/lang/RuntimeException");
         if (cls) {
-            jenv->ThrowNew(cls, e.what());
+            Env::throwNew(jenv, cls, e.what());
             jenv->DeleteLocalRef(cls);
         }
     } catch (...) {
         jclass cls = jenv->FindClass("java/lang/RuntimeException");
         if (cls) {
-            jenv->ThrowNew(cls, "Unknown exception in generated Qore binding");
+            Env::throwNew(jenv, cls, "Unknown exception in generated Qore binding");
             jenv->DeleteLocalRef(cls);
         }
     }
@@ -1487,10 +1503,14 @@ static jobject JNICALL java_class_builder_get_constant_value(JNIEnv* jenv, jclas
 static int load_module(Env& env, Env::GetStringUtfChars& mod_str, QoreProgram* pgm) {
     ExceptionSink xsink;
     if (ModuleManager::runTimeLoadModule(mod_str.c_str(), pgm, &xsink)) {
-        QoreStringValueHelper err(xsink.getExceptionErr());
-        QoreStringValueHelper desc(xsink.getExceptionDesc());
-        QoreStringMaker errdesc("%s: %s", err->c_str(), desc->c_str());
-        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), errdesc.c_str());
+        // the code and the description can be in any encoding
+        QoreString errdesc(QCS_UTF8);
+        jni_append_utf8(errdesc, xsink.getExceptionErr());
+        errdesc.concat(": ");
+        jni_append_utf8(errdesc, xsink.getExceptionDesc());
+        // the error is raised in Java only: the exception sink would report it as an unhandled exception
+        xsink.clear();
+        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), errdesc);
         //printd(5, "load_module() '%s': %s\n", mod_str.c_str(), errdesc.c_str());
         return -1;
     }
@@ -2429,7 +2449,8 @@ static void jni_throw_module_loader_error(JNIEnv* jenv, jni::Exception* e) {
         return;
     }
     try {
-        std::string msg = fixed;
+        // the message in UTF-8: the code and the description can be in any encoding
+        QoreString msg(fixed, QCS_UTF8);
         if (e) {
             ExceptionSink xsink;
             e->convert(&xsink);
@@ -2437,19 +2458,19 @@ static void jni_throw_module_loader_error(JNIEnv* jenv, jni::Exception* e) {
                 QoreValue err = xsink.getExceptionErr();
                 QoreValue desc = xsink.getExceptionDesc();
                 if (err.getType() == NT_STRING) {
-                    msg += ": ";
-                    msg += err.get<const QoreStringNode>()->c_str();
+                    msg.concat(": ");
+                    jni_append_utf8(msg, err);
                 }
                 if (desc.getType() == NT_STRING) {
-                    msg += ": ";
-                    msg += desc.get<const QoreStringNode>()->c_str();
+                    msg.concat(": ");
+                    jni_append_utf8(msg, desc);
                 }
                 xsink.clear();
             }
         }
-        jenv->ThrowNew(cls, msg.c_str());
+        Env::throwNew(jenv, cls, msg.c_str(), msg.size());
     } catch (...) {
-        jenv->ThrowNew(cls, fixed);
+        Env::throwNew(jenv, cls, fixed);
     }
 }
 
@@ -3783,6 +3804,8 @@ bool Globals::init() {
     findDefineClass(env, "org.qore.jni.QoreSandbox$Policy", nullptr, java_org_qore_jni_QoreSandbox_Policy_class,
         java_org_qore_jni_QoreSandbox_Policy_class_len);
     jni_register_qore_sandbox_natives(env, classQoreSandbox);
+    methodQoreSandboxEncodeClasspath = env.getStaticMethod(classQoreSandbox, "encodeClasspath",
+        "(Ljava/lang/String;)[[B");
 
     classJavaCollectionTypes = findDefineClass(env, "org.qore.jni.JavaCollectionTypes", nullptr,
         java_org_qore_jni_JavaCollectionTypes_class, java_org_qore_jni_JavaCollectionTypes_class_len).makeGlobal();

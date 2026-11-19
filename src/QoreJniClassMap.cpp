@@ -45,7 +45,7 @@
 #include "Method.h"
 #include "Functions.h"
 #include "JavaToQore.h"
-#include "ModifiedUtf8String.h"
+#include "Utf8String.h"
 #include "Array.h"
 
 #include "JavaClassQoreJavaDynamicApi.inc"
@@ -465,7 +465,7 @@ void QoreJniClassMap::destroy(ExceptionSink& xsink) {
 
 // takes an internal name (ex: java/lang/Class)
 jclass QoreJniClassMap::findLoadClass(const QoreString& name, QoreProgram* pgm) {
-   ModifiedUtf8String nameUtf8(name);
+   Utf8String nameUtf8(name);
    return findLoadClass(nameUtf8.c_str(), pgm);
 }
 
@@ -680,8 +680,9 @@ Class* QoreJniClassMap::loadClass(Env& env, const char* name, bool& base, JniExt
         if (!jpc) {
             printd(5, "failed to load class '%s' with default classloader; no program-specific classloader present",
                 name);
-            throw QoreJniException("JNI-IMPORT-ERROR", "failed to load class '%s' with default classloader; no " \
-                "program-specific classloader present", name);
+            // the Java class name is UTF-8; the text of the error is in the default encoding
+            throw QoreJniException("JNI-IMPORT-ERROR", "failed to load class '%s' with default classloader; no "
+                "program-specific classloader present", jni_utf8_to_default(name).c_str());
         }
     }
     return loadProgramClass(env, name, jpc);
@@ -792,8 +793,9 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
             // are QoreBuiltinClass, not JniQoreClass, and are already usable directly, so importing
             // the underlying Java class is both impossible and unnecessary
             if (strcmp(ec->getLanguage(), "Java")) {
-                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in "
-                    "Qore class with that name already exists in the Jni namespace", name.c_str());
+                // the Java class name is UTF-8; the text of the error is in the default encoding
+                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in Qore class "
+                    "with that name already exists in the Jni namespace", jni_utf8_to_default(name.c_str()).c_str());
             }
             qc = static_cast<JniQoreClass*>(ec);
             // make sure the class is not already a representation of the new class
@@ -961,8 +963,9 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
             // (that reads JniQoreClass-only members and crashes); they are already usable directly, so
             // importing the underlying Java class is both impossible and unnecessary
             if (strcmp(existing->getLanguage(), "Java")) {
-                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in "
-                    "Qore class with that name already exists in the Jni namespace", name.c_str());
+                // the Java class name is UTF-8; the text of the error is in the default encoding
+                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in Qore class "
+                    "with that name already exists in the Jni namespace", jni_utf8_to_default(name.c_str()).c_str());
             }
             JniQoreClass* je = static_cast<JniQoreClass*>(existing);
             if (je->getJavaName() == name.c_str()) {
@@ -3503,19 +3506,24 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
             // get java name for error message
             Env::GetStringUtfChars java_name(env, jname);
             ReferenceHolder<QoreListNode> feature_list(pgm->getFeatureList(), &xsink);
-            QoreStringMaker desc("Java class '%s' cannot be generated, because Qore class '%s' cannot be found; loaded " \
+            // the message in UTF-8: the Java name, and the Qore path made from it, are UTF-8
+            QoreString desc(QCS_UTF8);
+            desc.sprintf("Java class '%s' cannot be generated, because Qore class '%s' cannot be found (loaded " \
                 "modules: ", java_name.c_str(), qpath.c_str());
+            bool first = true;
             ConstListIterator fi(*feature_list);
             while (fi.next()) {
                 QoreValue feature = fi.getValue();
                 if (feature.getType() == NT_STRING) {
-                    QoreStringValueHelper str(feature);
-                    desc.sprintf("%s, ", str->c_str());
+                    if (!first) {
+                        desc.concat(", ");
+                    }
+                    first = false;
+                    jni_append_utf8(desc, feature);
                 }
             }
-            desc.terminate(desc.size() - 2);
             desc.concat(')');
-            env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc.c_str());
+            env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
             return nullptr;
         }
     }
@@ -3581,12 +3589,14 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
             }
             if (class_under_module_ns) {
                 const char* rest = strchr(jn.c_str() + 5, '.') + 1;
-                QoreStringMaker desc("Java class '%s' refers to module-owned class '%s' (module '%s') " \
+                // the message in UTF-8: the Java name, and the Qore path made from it, are UTF-8
+                QoreString desc(QCS_UTF8);
+                desc.sprintf("Java class '%s' refers to module-owned class '%s' (module '%s') " \
                     "via the legacy qore.<X>.<Y> binary name; module classes are exposed only under " \
                     "the canonical qoremod.<mod>.<rest> form.  Re-emit / re-import as " \
                     "'qoremod.%s.%s'.",
                     jn.c_str(), qpath.c_str(), qcls->getModuleName(), qcls->getModuleName(), rest);
-                env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc.c_str());
+                env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
                 return nullptr;
             }
         }
@@ -3836,9 +3846,11 @@ LocalReference<jbyteArray> JniExternalProgramData::generateFunctionClassIntern(E
 
     if (!ns) {
         assert(ns_path);
-        QoreStringMaker desc("cannot find Qore namespace '%s' to generate '%s' class for importing functions to Java",
+        // the message in UTF-8: the namespace path comes from the Java name
+        QoreString desc(QCS_UTF8);
+        desc.sprintf("cannot find Qore namespace '%s' to generate '%s' class for importing functions to Java",
             ns_path, JniImportedFunctionClassName.c_str());
-        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc.c_str());
+        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
         return nullptr;
     }
 
@@ -3945,9 +3957,11 @@ LocalReference<jbyteArray> JniExternalProgramData::generateConstantClassIntern(E
 
     if (!ns) {
         assert(ns_path);
-        QoreStringMaker desc("cannot find Qore namespace '%s' to generate '%s' class for importing constants to Java",
+        // the message in UTF-8: the namespace path comes from the Java name
+        QoreString desc(QCS_UTF8);
+        desc.sprintf("cannot find Qore namespace '%s' to generate '%s' class for importing constants to Java",
             ns_path, JniImportedConstantClassName.c_str());
-        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc.c_str());
+        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
         return nullptr;
     }
     assert(jname);
@@ -4778,7 +4792,8 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
     // setup classpath
     TempString classpath(SystemEnvironment::get("QORE_JNI_CLASSPATH"));
     if (classpath) {
-        addClasspath(classpath->c_str());
+        // the variable is in the default encoding
+        addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)));
     }
     jni_pgm_data_register(pgm);
 }
@@ -4912,11 +4927,9 @@ void JniExternalProgramData::initDynamicApi(Env& env) {
         (jclass)Globals::classQoreJavaClassBase);
 }
 
-void JniExternalProgramData::addClasspath(const char* path) {
-    Env env;
-    LocalReference<jstring> jname = env.newString(path);
+void JniExternalProgramData::addClasspath(Env& env, jstring path) {
     jvalue jarg;
-    jarg.l = jname;
+    jarg.l = path;
     try {
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddPath, &jarg);
     } catch (jni::Exception& e) {
@@ -4926,11 +4939,9 @@ void JniExternalProgramData::addClasspath(const char* path) {
     }
 }
 
-void JniExternalProgramData::addParentClasspath(const char* path) {
-    Env env;
-    LocalReference<jstring> jname = env.newString(path);
+void JniExternalProgramData::addParentClasspath(Env& env, jstring path) {
     jvalue jarg;
-    jarg.l = jname;
+    jarg.l = path;
     try {
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddParentPath, &jarg);
     } catch (jni::Exception& e) {
