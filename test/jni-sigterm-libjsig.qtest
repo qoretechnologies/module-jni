@@ -216,7 +216,7 @@ stdout.sync();
         checkProc();
         # -Xbatch makes compilation synchronous, so JvmSignals::read() is compiled before it is called with null;
         # compilations are logged to a file, as JVM threads writing to the child's output could split its lines
-        string jit_log = tmp.path + DirSep + "jit.log";
+        string jit_log = tmp.path + DirSep + (with_libjsig ? "jit-libjsig.log" : "jit.log");
         hash<auto> res = run(preload, "npe", 0, "-Xbatch -Xlog:jit+compilation=debug:file=" + jit_log);
         checkLibjsig(res, with_libjsig);
         assertEq(0, res.rc, "exit status: " + res.out);
@@ -264,7 +264,8 @@ stdout.sync();
         int rc;
         string out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
             "-u QORE_JNI_DISABLE_JIT -u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG -u QORE_JNI_MIN_HEAP_SIZE "
-            "-u QORE_JNI_MAX_HEAP_SIZE %sLD_PRELOAD=%s %s --enable-debug %s %s %d 2>&1",
+            "-u QORE_JNI_MAX_HEAP_SIZE -u QORE_JNI_DISABLE_NATIVE_ACCESS "
+            "-u QORE_JNI_DISABLE_UNSAFE_WARNING_SUPPRESSION -u QORE_JNI_CLASSPATH -u QORE_CLASSPATH %sLD_PRELOAD=%s %s --enable-debug %s %s %d 2>&1",
             jvm_args ? "QORE_JNI_JVM_ARGS=" + shellQuote(jvm_args) + " " : "", shellQuote(preload),
             shellQuote(QORE_ARGV[0]), shellQuote(script), mode, sig), \rc);
         if (m_options.verbose > 2) {

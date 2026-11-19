@@ -58,12 +58,13 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
       (the JVM starts its attach listener at startup when it runs with reduced signals, so these tools do not need a
       signal); the listener's socket (<tt>/tmp/.java_pid<i>pid</i></tt>) is removed when the process ends with
       \c exit(), and remains when %Qore ends the process immediately
-    - refuses Java handlers for \c SIGTERM, \c SIGINT, \c SIGHUP and \c SIGQUIT registered with the internal Java
-      signal API (\c jdk.internal.misc.Signal or \c sun.misc.Signal)
+    - refuses Java handlers for \c SIGTERM, \c SIGINT and \c SIGHUP (as it always does for \c SIGQUIT) registered
+      with the internal Java signal API (\c jdk.internal.misc.Signal or \c sun.misc.Signal); Java code can still
+      replace the JVM's handlers for other signals, such as \c SIGUSR2, with this API
 
     The JVM reads \c JAVA_TOOL_OPTIONS first and the module adds <tt>-Xrs</tt> after the options in
-    \c QORE_JNI_JVM_ARGS, so
-    <tt>-XX:-ReduceSignalUsage</tt> there has no effect; it must not be set in \c _JAVA_OPTIONS either, which the JVM
-    applies last: a shutdown signal would then end the process with \c System.exit() on a thread of the JVM while
-    %Qore threads still run, %Qore signal handlers would not be called, and the process could abort.
+    \c QORE_JNI_JVM_ARGS, so <tt>-XX:-ReduceSignalUsage</tt> there has no effect; it must not be set in
+    \c _JAVA_OPTIONS either, which the JVM applies last: a shutdown signal would then end the process with
+    \c System.exit() on a thread of the JVM while %Qore threads still run, %Qore signal handlers would not be called,
+    and the process could abort.
 */
