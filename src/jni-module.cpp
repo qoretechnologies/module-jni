@@ -36,8 +36,11 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -63,11 +66,196 @@ using namespace jni;
 #include <pthread.h>
 #endif
 
-sig_vec_t sig_vec = {
+//! the signals that the module reserves for the JVM, which can also be reserved by the library itself
+static const sig_vec_t jvm_sys_signals = {
 #ifndef Q_WINDOWS
     SIGTRAP, SIGSEGV, SIGBUS, SIGCHLD, SIGILL, SIGFPE
 #endif
 };
+
+//! the signals that the module has reserved for the JVM
+/** jvm_sys_signals and the JVM's suspend/resume signal (see jvm_sr_signal()); set when the module is initialized
+*/
+sig_vec_t sig_vec;
+
+#ifndef Q_WINDOWS
+//! Returns the signal that HotSpot uses to suspend and resume threads (qore#6707)
+/** HotSpot uses \c SIGUSR2, or the signal in the \c _JAVA_SR_SIGNUM environment variable if it is a decimal number
+    greater than \c SIGSEGV and \c SIGBUS and less than \c NSIG (otherwise it warns and uses \c SIGUSR2).  It handles
+    the signal in its own threads, where it unblocks it, so the signal is delivered to them and a %Qore handler for it
+    never runs; the signal is therefore reserved for the JVM.
+*/
+static int jvm_sr_signal() {
+    QoreString val;
+    if (SystemEnvironment::get("_JAVA_SR_SIGNUM", val) || val.empty()) {
+        return SIGUSR2;
+    }
+    errno = 0;
+    char* end = nullptr;
+    long sig = strtol(val.c_str(), &end, 10);
+    if (errno || *end || sig <= std::max(SIGSEGV, SIGBUS) || sig >= NSIG) {
+        return SIGUSR2;
+    }
+    return static_cast<int>(sig);
+}
+
+//! the JVM's suspend/resume signal if the module reserved it alone (see jni_module_init()), otherwise 0
+static int jvm_sr_reserved = 0;
+//! true if the suspend/resume signal was blocked in the thread that reserved it
+/** libqore unblocks a signal that it reserves for a module in the reserving thread and does not block it again when
+    the module releases it; unlike the other signals that the module reserves, which no %Qore thread blocks, the
+    suspend/resume signal (ex: \c SIGUSR2) is blocked in %Qore threads, and with its default action it would end the
+    process if it were delivered to that thread after a failed initialization released it
+*/
+static bool jvm_sr_was_blocked = false;
+//! the thread that reserved the suspend/resume signal alone
+static pthread_t jvm_sr_thread;
+
+//! after the suspend/resume signal has been released: blocks it again in the calling thread if it is the thread that
+//! reserved it alone and it was blocked there before
+/** jni_module_init_finalize() can also fail in a Java thread in bootstrap mode (when a Java process loads %Qore),
+    after the module's initialization has succeeded; the mask of the reserving thread cannot be restored there
+*/
+static void jni_reblock_sr_signal() {
+    if (!jvm_sr_reserved) {
+        return;
+    }
+    if (jvm_sr_was_blocked && pthread_equal(jvm_sr_thread, pthread_self())) {
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, jvm_sr_reserved);
+        pthread_sigmask(SIG_BLOCK, &set, nullptr);
+    }
+    jvm_sr_reserved = 0;
+}
+#endif
+
+#ifndef Q_WINDOWS
+//! reserves the suspend/resume signal alone for the module, without taking it over from the library or another module
+/** Records whether the signal was blocked in the calling thread, as libqore unblocks it there (see
+    jvm_sr_was_blocked).
+
+    @return nullptr if reserved, or the error, which the caller owns
+*/
+static QoreStringNode* jni_reserve_sr_signal(int sig) {
+    sigset_t cur;
+    bool was_blocked = !pthread_sigmask(SIG_BLOCK, nullptr, &cur) && sigismember(&cur, sig) == 1;
+    QoreStringNode* err = qore_reassign_signal(sig, QORE_JNI_MODULE_NAME, false);
+    if (err) {
+        return err;
+    }
+    jvm_sr_reserved = sig;
+    jvm_sr_was_blocked = was_blocked;
+    jvm_sr_thread = pthread_self();
+    return nullptr;
+}
+#endif
+
+#if !defined(Q_WINDOWS) && defined(SIGRTMIN) && defined(SIGRTMAX)
+//! true if the module can choose a real-time signal for the JVM's suspend/resume signal on this platform
+#define QORE_JNI_CHOOSE_SR_SIGNAL 1
+
+//! Chooses and reserves the real-time signal that the JVM is told to use to suspend and resume its threads
+/** Without \c _JAVA_SR_SIGNUM, HotSpot uses \c SIGUSR2, which %Qore programs use (ex: Qorus for its shutdown); the
+    module therefore gives the JVM a free real-time signal in \c _JAVA_SR_SIGNUM (qore#6707).
+
+    The candidates are the real-time signals from \c SIGRTMAX() down to \c SIGRTMIN() + 2, determined at run time
+    (the C library reserves real-time signals below \c SIGRTMIN() for itself), except:
+    - \c SIGRTMIN() and \c SIGRTMIN() + 1: libqore's internal signal is \c SIGRTMIN() + 1 on Linux, and the lowest
+      real-time signals are the ones that other libraries take first
+    - \c SIGRTMAX() - 2: the JDK's NIO library interrupts threads blocked in I/O with it on Linux
+    - a signal that HotSpot does not accept in \c _JAVA_SR_SIGNUM (a number greater than \c SIGSEGV and \c SIGBUS and
+      less than \c NSIG)
+
+    The first candidate whose disposition is \c SIG_DFL (no handler installed in the process and not ignored) and that
+    the library can reserve for the module (no %Qore handler is set for it, and neither the library nor another module
+    manages it) is reserved and returned.  This is normally \c SIGRTMAX(); under valgrind, which reserves
+    \c SIGRTMAX() for itself and reports it as ignored, it is \c SIGRTMAX() - 1.
+
+    @return the signal reserved, 0 if no candidate is free, or -1 if the platform has no candidate that HotSpot would
+    accept (ex: FreeBSD, where \c NSIG is 32 and the real-time signals start above it)
+*/
+static int jni_choose_sr_signal() {
+    int rtmin = SIGRTMIN;
+    int rtmax = SIGRTMAX;
+    if (rtmin + 2 >= NSIG) {
+        return -1;
+    }
+    for (int sig = rtmax; sig >= rtmin + 2; --sig) {
+        if (sig == rtmax - 2 || sig <= std::max(SIGSEGV, SIGBUS) || sig >= NSIG) {
+            continue;
+        }
+        struct sigaction sa;
+        if (sigaction(sig, nullptr, &sa) || (sa.sa_flags & SA_SIGINFO) || sa.sa_handler != SIG_DFL) {
+            continue;
+        }
+        QoreStringNode* err = jni_reserve_sr_signal(sig);
+        if (err) {
+            err->deref();
+            continue;
+        }
+        return sig;
+    }
+    return 0;
+}
+
+//! Sets \c _JAVA_SR_SIGNUM for the JVM that the module creates, and unsets it when destroyed
+/** The variable is set through libqore's environment API, under its environment lock, and the JVM is created while
+    the lock is held shared, so that no %Qore code changes the environment meanwhile; it is unset after the JVM is
+    created, so that it is not inherited by the child processes that the process starts afterwards.  A child process
+    started by another thread between the setting and the unsetting can inherit it.
+*/
+class JniSrSignalEnv {
+public:
+    //! sets the variable if \a sig is not 0
+    /** @return 0 if OK or nothing to set, -1 for error (with \c errno set)
+    */
+    int set(int sig) {
+        if (!sig) {
+            return 0;
+        }
+        char val[16];
+        snprintf(val, sizeof val, "%d", sig);
+        // not overwritten: another thread can have set the variable since the module checked that it is not set
+        if (SystemEnvironment::set("_JAVA_SR_SIGNUM", val, false)) {
+            return -1;
+        }
+        lock.emplace();
+        // the value must be the module's: another thread can have set the variable before, or changed it after
+        QoreString cur;
+        if (SystemEnvironment::get("_JAVA_SR_SIGNUM", cur) || cur != val) {
+            // not the module's value, which is left as it is
+            errno = EAGAIN;
+            return -1;
+        }
+        is_set = true;
+        return 0;
+    }
+
+    ~JniSrSignalEnv() {
+        // the shared lock must be released before the variable can be unset
+        lock.reset();
+        if (is_set && SystemEnvironment::unset("_JAVA_SR_SIGNUM")) {
+            printd(0, "jni module: cannot unset _JAVA_SR_SIGNUM: %s\n", strerror(errno));
+        }
+    }
+
+private:
+    //! true if the variable was set
+    bool is_set = false;
+    //! held shared while the JVM is created
+    std::optional<QoreEnvironmentReadLock> lock;
+};
+#endif
+
+//! releases the signals that the module reserved for the JVM when its initialization fails
+static void jni_release_signals() {
+    // all of them or none: the suspend/resume signal is in sig_vec if the module reserved it
+    qore_release_signals(sig_vec, QORE_JNI_MODULE_NAME);
+#ifndef Q_WINDOWS
+    jni_reblock_sr_signal();
+#endif
+}
 
 static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 #if defined(QORE_JNI_HAS_COMMAND_CONTEXT) && !defined(NDEBUG)
@@ -228,7 +416,7 @@ QoreStringNode* jni_module_init_finalize(bool system) {
         qjcm.init(pgm, already_initialized);
     } catch (jni::Exception& e) {
         tclist.pop(false);
-        qore_release_signals(sig_vec, QORE_JNI_MODULE_NAME);
+        jni_release_signals();
         jni::Jvm::destroyVM();
         // display exception info on the console as an unhandled exception
         if (system) {
@@ -329,15 +517,75 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         }
         if (signals_assigned) {
             // jni_module_init_finalize() releases them itself when it fails, in which case this has no effect
-            qore_release_signals(sig_vec, QORE_JNI_MODULE_NAME);
+            jni_release_signals();
         }
+#ifndef Q_WINDOWS
+        else if (jvm_sr_reserved) {
+            // the suspend/resume signal was reserved alone, but the reservation of the others did not complete
+            qore_release_signal(jvm_sr_reserved, QORE_JNI_MODULE_NAME);
+            jni_reblock_sr_signal();
+        }
+#endif
         qore_deregister_program_cleanup_callback(jni_program_cleanup);
     });
 
     qore_set_module_option("jni", "jni-version", JNI_VERSION_21);
 
+    sig_vec = jvm_sys_signals;
+#ifndef Q_WINDOWS
+    // the JVM's suspend/resume signal if the module chose it and tells the JVM with _JAVA_SR_SIGNUM, otherwise 0
+    int sr_chosen = 0;
+    // the JVM's suspend/resume signal is reserved too (qore#6707); unlike the signals above, it cannot be taken over
+    // from the library (ex: if _JAVA_SR_SIGNUM names the library's internal signal), so it is reserved alone first,
+    // which fails if the library or another module manages it
+    int sr_sig = 0;
+    // allocated first, so that nothing can fail once the signal is reserved
+    sig_vec.reserve(sig_vec.size() + 1);
+    {
+        ValueHolder host_jvm(qore_get_module_option("jni", "jvm-ptr"), nullptr);
+#ifdef QORE_JNI_CHOOSE_SR_SIGNAL
+        // the module chooses the signal for a JVM that it creates, unless the user has set _JAVA_SR_SIGNUM
+        if (host_jvm->getType() != NT_INT && !SystemEnvironment::isSet("_JAVA_SR_SIGNUM")) {
+            sr_sig = jni_choose_sr_signal();
+            if (sr_sig > 0) {
+                sr_chosen = sr_sig;
+            } else if (!sr_sig) {
+                xsink.raiseException("MODULE-INIT-ERROR", "the jni module cannot start the JVM: no real-time "
+                    "signal from SIGRTMAX down to SIGRTMIN+2 (%d - %d) is free for the JVM to suspend and resume its "
+                    "threads with (each has a handler installed in the process or a Qore handler, or is managed "
+                    "by the Qore library or another module); set _JAVA_SR_SIGNUM to choose the signal", SIGRTMAX,
+                    SIGRTMIN + 2);
+                return;
+            }
+        }
+#endif
+        if (!sr_chosen) {
+            // the signal that the user set in _JAVA_SR_SIGNUM, or that the host process's JVM uses, or SIGUSR2 (also
+            // where the platform has no real-time signal that HotSpot accepts)
+            sr_sig = jvm_sr_signal();
+        }
+    }
+    bool sr_alone = std::find(sig_vec.begin(), sig_vec.end(), sr_sig) == sig_vec.end();
+    if (sr_alone) {
+        if (!sr_chosen) {
+            QoreStringNode* err = jni_reserve_sr_signal(sr_sig);
+            if (err) {
+                xsink.raiseException("MODULE-INIT-ERROR", err);
+                return;
+            }
+        }
+        sig_vec.push_back(sr_sig);
+    }
+#endif
     QoreStringNode* err = qore_reassign_signals(sig_vec, QORE_JNI_MODULE_NAME, true);
     if (err) {
+#ifndef Q_WINDOWS
+        if (sr_alone) {
+            qore_release_signal(sr_sig, QORE_JNI_MODULE_NAME);
+            jni_reblock_sr_signal();
+            sig_vec.pop_back();
+        }
+#endif
         xsink.raiseException("MODULE-INIT-ERROR", err);
         return;
     }
@@ -360,7 +608,20 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     } else {
         already_initialized = false;
         try {
+#ifdef QORE_JNI_CHOOSE_SR_SIGNAL
+            // _JAVA_SR_SIGNUM is set only while the JVM is created
+            JniSrSignalEnv sr_env;
+            if (sr_env.set(sr_chosen)) {
+                err = errno == EAGAIN
+                    ? new QoreStringNodeMaker("cannot set _JAVA_SR_SIGNUM to %d: another thread set or changed the "
+                        "variable meanwhile", sr_chosen)
+                    : new QoreStringNodeMaker("cannot set _JAVA_SR_SIGNUM to %d: %s", sr_chosen, strerror(errno));
+            } else {
+                err = jni::Jvm::createVM();
+            }
+#else
             err = jni::Jvm::createVM();
+#endif
         } catch (jni::Exception& e) {
             ExceptionSink xsink;
             e.convert(&xsink);
@@ -470,6 +731,8 @@ static void jni_module_delete() {
     tclist.pop(false);
     jni::Jvm::destroyVM();
     jni::Jvm::unregisterForkHandler();
+    // the signals reserved for the JVM stay reserved: the module is deleted as the library is torn down, or the JVM
+    // belongs to the Java host (the jvm-ptr option) and keeps running, and its handlers stay installed in either case
 }
 
 static QoreNamespace* qore_jni_wildcard_import(QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {

@@ -6,6 +6,14 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed %Qore handlers for \c SIGUSR2 never running while the JVM was loaded: HotSpot suspends and resumes its
+      threads with \c SIGUSR2 by default and handles it in its own threads; the module now gives the JVM that it
+      creates a free real-time signal in \c _JAVA_SR_SIGNUM (only while the JVM is created, and only if the variable
+      is not set), so \c SIGUSR2 handlers run, and reserves the signal that the JVM uses as it does the other signals
+      that the JVM needs; this changes which signals %Qore code can handle while the module is loaded: the chosen
+      real-time signal (normally \c SIGRTMAX) cannot be handled, the module cannot be loaded if no real-time signal is
+      free, and \c SIGUSR2, whose handlers never ran, cannot be handled on platforms without real-time signals that the
+      JVM accepts (such as macOS) and when a Java process has created the JVM (qore#6707, see @ref jni_sr_signal)
     - fixed Java's \c System.exit() and \c Runtime.halt() aborting the process
       (<tt>external native threads still active while stopping the cleanup worker</tt>) when a \c ThreadPool worker
       was active: the JVM called C \c exit() on its VM Thread, which ran libqore's static destructors while %Qore
