@@ -142,7 +142,8 @@ stdout.print(\"after\\n\");
             hash<auto> ref = run(preload, "qore", worker);
             checkLibjsig(ref, with_libjsig);
             assertEq(Status.qore, ref.rc, "Qore exit() " + wlabel + ": exit status: " + ref.out);
-            bool qore_hook = ref.out.find("qore-exit-hook") >= 0;
+            # the Qore exit hooks run only when a program ends normally, not with Qore's exit()
+            assertEq(-1, ref.out.find("qore-exit-hook"), "Qore exit() " + wlabel + ": no Qore exit hook: " + ref.out);
 
             foreach string mode in (("exit", "halt", "thread", "thread-halt")) {
                 hash<auto> res = run(preload, mode, worker);
@@ -155,14 +156,14 @@ stdout.print(\"after\\n\");
                 # Java runs its shutdown hooks for System.exit() before the JVM ends the process, not for halt()
                 assertEq(!HaltModes{mode}, res.out.find("java-shutdown-hook") >= 0,
                     label + ": Java shutdown hooks: " + res.out);
-                # no Qore code runs after Java's shutdown hooks: the Qore exit hooks run only when a program ends
-                # normally, and not with Qore's exit() either
-                assertEq(False, qore_hook, "Qore exit() " + wlabel + ": no Qore exit hook: " + ref.out);
+                # no Qore code runs after Java's shutdown hooks, as with Qore's exit()
                 assertEq(-1, res.out.find("qore-exit-hook"), label + ": no Qore exit hook: " + res.out);
                 # the module's exit hook removes the JVM's attach socket, which _Exit() leaves otherwise; the attach
                 # listener creates it in its own thread at startup, so it is checked only if the child saw it
                 if (res.out =~ /(^|\n)socket: True\n/) {
                     assertFalse(res.socket_left, label + ": the attach socket was removed");
+                } else if (m_options.verbose) {
+                    printf("%s: the child did not see the attach socket; its removal is not checked\n", label);
                 }
             }
         }

@@ -60,8 +60,7 @@
     first: the module's \c atexit() handler then still abandons the global Program, but Jvm::destroyVM() skips the
     JVM's teardown, which would wait for ever for Java threads stopped at the final safepoint; the static global
     references of the module fail to attach the VM Thread to the JVM in their destructors and are left.  libqore's own
-    static destructors then run on this thread, which is not a %Qore thread, as with any C \c exit() that
-    qore_exit_process() calls.
+    static destructors then run on this thread, which is not a %Qore thread, as C \c exit() always runs them.
 
     With signal handling (the default), this cannot deadlock: it runs no %Qore or Java code and makes no JNI call
     (each would block for ever, as Java threads stay stopped at the final safepoint and the JVM blocks every thread
