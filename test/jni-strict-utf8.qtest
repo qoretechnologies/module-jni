@@ -122,14 +122,16 @@ class JniStrictUtf8Test inherits QUnit::Test {
     classLoadErrors() {
         # the byte code of a Java class for a Qore class that does not exist: the class loader's own lookup, which a
         # class load falls back to, would replace the module's error with its own
-        string msg;
+        *hash<ExceptionInfo> err;
         try {
             QoreURLClassLoader loader = QoreURLClassLoader::getCurrent();
             loader.generateByteCode("qore.NoSuch" + text + "Class");
-            fail("no exception");
         } catch (hash<ExceptionInfo> ex) {
-            msg = ex.desc;
+            err = ex;
         }
+        assertEq("JNI-ERROR", err.err, "an exception is raised");
+        string msg = err.desc;
+        assertRegex("^java.lang.ClassNotFoundException: ", msg);
         assertEq(True, msg.find("Java class 'qore.NoSuch" + text + "Class' cannot be generated") >= 0, msg);
         # the list of the loaded modules is in parentheses
         assertRegex("cannot be found \\(loaded modules: [^()]*\\)", msg);
