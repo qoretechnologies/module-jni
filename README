@@ -75,3 +75,11 @@ jni.qtest suite returns normally so native teardown is included in memory checks
 its abrupt-exit behavior is tested in a separate subprocess. When running Valgrind
 with the optional Python module, use PYTHONMALLOC=malloc to expose individual Python
 allocations instead of its pooled allocator.
+
+Develop CI
+----------
+
+After a squash merge into develop, CI checks the merged pull request head
+as well as the merge commit and its parents. It reuses an earlier result
+only when the Git trees match and the existing pipeline checks pass.
+A missing PR, changed tree, or unavailable evidence runs the full suite.
