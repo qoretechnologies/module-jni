@@ -888,9 +888,9 @@ DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelp
     is the current one already, it is not entered.  The same holds for generating the byte code of a Java class for a
     Qore class (the superclass of a Java class that extends a Qore class, ex: one defined with \c define-class) and for
     listing the classes of a namespace, which read its definitions and run none of its code (qore#6785).  The
-    Program is current for a module command (an \c import, \c define-class or \c define-pending-class, also one issued with
-    Program::issueModuleCmd() while the Program has code pending, which no runtime entry is allowed into) and for a
-    parse in the Program.  The code that made it current then holds only a reference to it, not its thread count,
+    Program is current for a module command (an \c import, \c define-class or \c define-pending-class, also one
+    issued with Program::issueModuleCmd() while the Program has code pending, which no runtime entry is allowed into)
+    and for a parse in the Program.  The code that made it current then holds only a reference to it, not its thread count,
     which keeps its memory but not its data: the caller must take the Program's parse lock immediately after this
     call (CurrentProgramRuntimeExternalParseContextHelper), as that is what keeps the Program from being torn down
     while it is changed (the parse lock is refused once the Program's teardown has begun, and the teardown waits for
