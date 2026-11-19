@@ -4,11 +4,11 @@
 # SPDX-License-Identifier: MIT
 
 # jni::invoke() and jni::invoke_nonvirtual() return the value of the Java method converted to Qore, which is a plain
-# Qore value for a method that returns a primitive type (an int, a float or a bool), a String, a boxed value or null,
-# and NOTHING for a void method, but they were declared to return Jni::java::lang::Object (qore#6808): a method call
-# made directly on the result (jni::invoke(m, o).toString()) was resolved at parse time from that class, and IR and
-# JIT code (the "ir", "jit" and "tiered" execution modes; "tiered" is the default for %modern code) made the call with
-# the plain value as the object, which crashed the process (SIGSEGV in QoreObject::getProgram()), as did the AST
+# Qore value for a method that returns a primitive type (an int, a float or a bool), a String or a boxed value, and
+# NOTHING for null or a void method, but they were declared to return Jni::java::lang::Object (qore#6808): a method
+# call made directly on the result (jni::invoke(m, o).toString()) was resolved at parse time from that class, and IR
+# and JIT code (the "ir", "jit" and "tiered" execution modes; "tiered" is the default for %modern code) made the call
+# with the plain value as the object, which crashed the process (SIGSEGV in QoreObject::getProgram()), as did the AST
 # interpreter for a pseudo-method of objects such as size() (SIGSEGV in QoreObject::size()); assigning the result to
 # a variable of its Qore type was a parse-time type error.  The functions are now declared to return "auto".
 #
@@ -118,7 +118,7 @@ class JniInvokeReturnTypeTest inherits QUnit::Test {
             # an object is accepted
             Jni::java::lang::Object o = call(cls.getMethod("self"), obj);
             assertTrue(o instanceof InvokeReturnTypes, func);
-            assertEq(4, o.length(), func);
+            assertEq(4, cast<InvokeReturnTypes>(o).length(), func);
             # an int is refused
             assertThrows("RUNTIME-TYPE-ERROR", sub () {
                 Jni::java::lang::Object o1 = call(cls.getMethod("length"), obj);
@@ -142,9 +142,16 @@ class JniInvokeReturnTypeTest inherits QUnit::Test {
         assertEq(2, rc, out);
         assertRegex("unknown case", out);
         assertEq((), getLines(out, "after: "), out);
+        assertEq((), getLines(out, "result "), out);
+        # a known kind with an unknown one
+        out = runChildRc("tiered", "invoke", ("int", "no-such-kind"), \rc);
+        assertEq(2, rc, out);
+        assertRegex("unknown kinds: \\[\"no-such-kind\"\\]", out);
+        assertEq((), getLines(out, "result "), out);
         out = runChildRc("tiered", "no-such-function", (), \rc);
         assertEq(2, rc, out);
         assertRegex("unknown case", out);
+        assertEq((), getLines(out, "after: "), out);
     }
 
     #! returns the lines of the output that start with the prefix

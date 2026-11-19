@@ -102,7 +102,8 @@ const Kinds = {
     },
     # String nullString(): null is NOTHING
     "null_string": {
-        "setup": "Jni::java::lang::reflect::Method m = findMethod(\"nullString\"); *Jni::java::lang::Object o = obj();",
+        "setup": "Jni::java::lang::reflect::Method m = findMethod(\"nullString\"); "
+            "*Jni::java::lang::Object o = obj();",
         "args": "",
         "method": "toString()",
         "plain": "exists %s",
@@ -151,9 +152,10 @@ const Uses = ("method", "plain", "typed");
 
 string func = ARGV[0] ?? "";
 softlist<string> kinds = ARGV.size() > 1 ? ARGV[1..] : keys Kinds;
-if (!inlist(func, ("invoke", "invoke_nonvirtual")) || (foldl $1 + $2, map (Kinds{$1} ? 0 : 1), kinds)) {
-    stderr.printf("unknown case %y; expecting <invoke|invoke_nonvirtual> [<kind>...] (kinds: %y)\n", ARGV,
-        keys Kinds);
+list<string> unknown = select kinds, !Kinds{$1};
+if (!inlist(func, ("invoke", "invoke_nonvirtual")) || unknown) {
+    stderr.printf("unknown case %y (unknown kinds: %y); expecting <invoke|invoke_nonvirtual> [<kind>...] (kinds: "
+        "%y)\n", ARGV, unknown, keys Kinds);
     exit(2);
 }
 
@@ -184,6 +186,8 @@ foreach string kind in (kinds) {
         } catch (hash<ExceptionInfo> ex) {
             printf("caught %s %s: %s: %s\n", kind, use, ex.err, ex.desc);
         }
+        # the lines printed so far are kept if the next use crashes the process
+        flush();
     }
 }
 printf("after: %s\n", func);
