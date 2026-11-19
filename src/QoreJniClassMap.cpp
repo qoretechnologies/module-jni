@@ -4932,6 +4932,26 @@ JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& par
     jni_pgm_data_register(pgm);
 }
 
+AbstractQoreProgramExternalData* JniExternalProgramData::copy(QoreProgram* pgm) const noexcept {
+    // qore#6787: libqore offers no way to report an error here, and the constructor of the child Program, from which
+    // this is called, does not catch C++ exceptions; until it does (qoretechnologies/qore#6786), a failure is
+    // reported, and the child Program gets no jni data
+    try {
+#ifdef DEBUG
+        // a test fail point: the thread cannot be attached to the JVM
+        if (dbg_jni_fail_at(DbgJniFailPoint::ProgramCopy)) {
+            throw UnableToAttachException(JNI_ERR);
+        }
+#endif
+        // issue #3862: ensure that the thread is registered for this call
+        Env env;
+        return new JniExternalProgramData(*this, env, pgm);
+    } catch (...) {
+        jni_report_current_exception("copying the jni data of a Program for a child Program");
+    }
+    return nullptr;
+}
+
 JniExternalProgramData::~JniExternalProgramData() {
     jni_pgm_data_unregister(pgm);
     // NOTE: the module root namespace cache is NOT purged here.  It is keyed by the Program that
@@ -5093,6 +5113,12 @@ bool JniExternalProgramData::compatTypes() {
 }
 
 JniExternalProgramData* JniExternalProgramData::getCreateJniProgramData(QoreProgram* pgm) {
+#ifdef DEBUG
+    // a test fail point: the jni data cannot be created, as for a Program that is being deleted (below)
+    if (dbg_jni_fail_at(DbgJniFailPoint::ProgramData)) {
+        throw BasicException("dbg_jni_fail_point(): the jni context of the Program cannot be created");
+    }
+#endif
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     //printd(5, "parse-cmd '%s' jpc: %p jnins: %p\n", arg.c_str(), jpc, jpc ? jpc->getJniNamespace() : nullptr);
     if (!jpc) {

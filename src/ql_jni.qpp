@@ -472,13 +472,20 @@ set_save_object_callback(*code save_object_callback) [dom=PROCESS;flags=NAMED_AR
     // NOTE: this must be qore_get_call_program_context() and not jni::jni_get_program_context() or jni_get_context()
     // as the caller's program context must be used in all cases
     QoreProgram* pgm = qore_get_call_program_context();
-    JniExternalProgramData* jpc = pgm ? JniExternalProgramData::getCreateJniProgramData(pgm)
-        : jni_get_context_unconditional(pgm);
-    if (!jpc) {
-        xsink->raiseException("JNI-ERROR", "cannot set the save object callback without a valid Program context");
-        return QoreValue();
+    // qore#6789: creating the Program's jni context can fail with a C++ exception, which must not leave the builtin
+    try {
+        JniExternalProgramData* jpc = pgm ? JniExternalProgramData::getCreateJniProgramData(pgm)
+            : jni_get_context_unconditional(pgm);
+        if (!jpc) {
+            xsink->raiseException("JNI-ERROR", "cannot set the save object callback without a valid Program "
+                "context");
+            return QoreValue();
+        }
+        jpc->setSaveObjectCallback(save_object_callback, xsink);
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
     }
-    jpc->setSaveObjectCallback(save_object_callback, xsink);
+    return QoreValue();
 }
 
 //! Returns the class loader associated with the current program
