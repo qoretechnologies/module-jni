@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# The save-object callback of a Program must stay valid while it runs (qore#6790): save_object() ran the callback
+# through a raw pointer, with no reference held and no lock, so when the callback was replaced or removed while it ran,
+# by the callback itself or by another thread, set_save_object_callback() released the last reference to it and freed
+# it during the call, a use-after-free.  The callback now runs through a reference that save_object() takes under the
+# lock that protects the callback, and releases after the callback returns.
+#
+# Each case runs test/jni-save-object-race-child.q in a new process, as the use-after-free can crash the process.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniSaveObjectRaceTest
+
+class JniSaveObjectRaceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI save-object callback replaced while it runs", "1.0") {
+        addTestCase("regression: the callback replaces itself", \reentrantReplaceCase());
+        addTestCase("regression: the callback removes itself", \reentrantClearCase());
+        addTestCase("regression: another thread replaces the callback", \concurrentReplaceCase());
+        addTestCase("negative: the release of the callback raises an exception", \releaseThrowsCase());
+        addTestCase("coverage: the callback is replaced between calls", \normalCase());
+        set_return_value(main());
+    }
+
+    reentrantReplaceCase() {
+        string out = runChild("reentrant-replace");
+        # the running callback is released after it returns, not while it runs
+        checkOrder(out, ("first start", "first end", "first destroyed", "saved: 1", "second called", "saved: 2",
+            "second destroyed", "after: reentrant-replace"));
+        assertEq(1, countOf(out, "first destroyed"), out);
+        assertEq(1, countOf(out, "second called"), out);
+    }
+
+    reentrantClearCase() {
+        string out = runChild("reentrant-clear");
+        # with no callback, the second object is saved in thread-local data
+        checkOrder(out, ("first start", "first end", "first destroyed", "saved: 1", "saved: 1 thread-local: 1",
+            "after: reentrant-clear"));
+        assertEq(1, countOf(out, "first destroyed"), out);
+    }
+
+    concurrentReplaceCase() {
+        string out = runChild("concurrent-replace");
+        # the main thread replaces the callback while it is blocked in the background thread; it is released when it
+        # returns there
+        checkOrder(out, ("first start", "replaced", "first end", "first destroyed", "saved: 1", "second called",
+            "saved: 2", "second destroyed", "after: concurrent-replace"));
+        assertFalse(out =~ /background caught/, out);
+        assertEq(1, countOf(out, "first destroyed"), out);
+    }
+
+    releaseThrowsCase() {
+        string out = runChild("release-throws");
+        # the exception raised when the callback is released is raised to the Java code, and from there to the caller
+        checkOrder(out, ("first start", "first end", "first destroyed",
+            "caught: SAVE-OBJECT-RACE-TEST-ERROR: destructor of first", "saved: 1", "after: release-throws"));
+        assertFalse(out =~ /no exception/, out);
+        assertFalse(out =~ /unhandled QORE/, out);
+    }
+
+    normalCase() {
+        string out = runChild("normal");
+        checkOrder(out, ("first called", "first called", "saved: 2", "first destroyed", "second called", "saved: 3",
+            "second destroyed", "after: normal"));
+        assertEq(2, countOf(out, "first called"), out);
+        assertEq(1, countOf(out, "second called"), out);
+    }
+
+    #! checks that the output consists of the given lines in this order, and nothing else is reported
+    private checkOrder(string out, list<string> expected) {
+        list<string> lines = ();
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial("first ") || line.equalPartial("second ") || line.equalPartial("saved: ")
+                    || line.equalPartial("caught: ") || line.equalPartial("after: ") || line == "replaced") {
+                lines += line;
+            }
+        }
+        assertEq(expected, lines, out);
+        assertFalse(out =~ /unhandled QORE/, out);
+    }
+
+    #! returns the number of times that the string appears in the output
+    private static int countOf(string out, string str) {
+        int count = 0;
+        int pos = 0;
+        while ((pos = out.find(str, pos)) >= 0) {
+            ++count;
+            pos += str.size();
+        }
+        return count;
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr), checking that it exited with status 0
+    private string runChild(string case_name) {
+        string child = normalize_dir(get_script_dir() + "/jni-save-object-race-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is checked;
+        # glibc overwrites freed memory (MALLOC_PERTURB_; with no thread cache, which frees memory without
+        # overwriting it), so that a use of a freed callback crashes the child instead of reading stale data; if the
+        # child crashes, neither a core file nor the JVM's crash report (-XX:ErrorFile, written in the current
+        # directory by default) is written
+        string jvm_args = "-XX:ErrorFile=/dev/null";
+        if (*string env_args = ENV.QORE_JNI_JVM_ARGS) {
+            jvm_args = env_args + " " + jvm_args;
+        }
+        string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "QORE_JNI_JVM_ARGS=%s GLIBC_TUNABLES=${GLIBC_TUNABLES:+$GLIBC_TUNABLES:}glibc.malloc.tcache_count=0 "
+            "MALLOC_PERTURB_=165 %s -b "
+            "--enable-debug %s %s 2>&1", shellQuote(jvm_args), shellQuote(QORE_ARGV[0]), shellQuote(child),
+            case_name);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

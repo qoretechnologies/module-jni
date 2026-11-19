@@ -23,6 +23,11 @@
       \c std::terminate() (exit code 134) when a JNI error occurred in them (ex: the thread could not be attached to
       the JVM): they now raise it as a %Qore exception, as all other functions and methods of the module do
       (qore#6789)
+    - fixed a use-after-free when the save object callback of a Program (see \c set_save_object_callback()) was
+      replaced or removed while it ran, by the callback itself or by another thread: the callback ran without a
+      reference to it, so replacing it could free it during the call; it now runs through a reference that is
+      released when it returns, and an exception raised by that release (ex: in the destructor of an object that only
+      the replaced callback held) is raised to the Java code that created the object (qore#6790)
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a
