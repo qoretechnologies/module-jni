@@ -121,11 +121,16 @@ public:
     DLLLOCAL static jmethodID methodThrowableGetCause;                            // String Throwable.getCause()
 
     // the classes of the Java exceptions that native methods raise for errors; looked up when the module is
-    // initialized, so that raising one never needs a class lookup, which can fail (qore#6739; see jni_throw_new())
-    DLLLOCAL static GlobalReference<jclass> classError;                           // java.lang.Error
-    DLLLOCAL static GlobalReference<jclass> classRuntimeException;                // java.lang.RuntimeException
-    DLLLOCAL static GlobalReference<jclass> classOutOfMemoryError;                // java.lang.OutOfMemoryError
-    DLLLOCAL static GlobalReference<jclass> classClassNotFoundException;          // java.lang.ClassNotFoundException
+    // initialized, so that raising one never needs a class lookup, which can fail (qore#6739; see jni_throw_new());
+    // global references that are never deleted (these bootstrap classes are never unloaded), so that a native method
+    // that runs while the module is cleaned up on another thread never uses a deleted reference
+    DLLLOCAL static std::atomic<jclass> classError;                               // java.lang.Error
+    DLLLOCAL static std::atomic<jclass> classRuntimeException;                    // java.lang.RuntimeException
+    DLLLOCAL static std::atomic<jclass> classOutOfMemoryError;                    // java.lang.OutOfMemoryError
+    DLLLOCAL static std::atomic<jclass> classClassNotFoundException;              // java.lang.ClassNotFoundException
+
+    //! Looks up and keeps a class of the Java exceptions that native methods raise, once (see classError)
+    DLLLOCAL static void cacheErrorClass(Env& env, std::atomic<jclass>& cls, const char* name);
 
     DLLLOCAL static GlobalReference<jclass> classStackTraceElement;               // java.lang.StackTraceElement
     DLLLOCAL static jmethodID methodStackTraceElementGetClassName;                // String StackTraceElement.getClassName()
@@ -814,7 +819,7 @@ DLLLOCAL const QoreNamespace* find_ns_path(const QoreNamespace* ns, const char* 
     up when it was initialized (ex: Globals::classError); jni::Env::findClass(), which throws a C++ exception if the
     lookup fails, is not used.  A pending Java exception is replaced.
 
-    If the cached class is not available (before the module is initialized or after it is cleaned up), the class is
+    If the cached class is not available (before the module is initialized), the class is
     looked up with JNI's \c FindClass(); if that fails, the Java exception of the failure (ex: a
     \c NoClassDefFoundError or an \c OutOfMemoryError) is pending instead, which reports the error to the caller as
     well.  Only if no Java exception at all can be made pending, which JNI does not allow (a failed \c FindClass() or
@@ -842,33 +847,34 @@ DLLLOCAL void jni_throw_new(JNIEnv* jenv, jclass cls, const char* cls_name, cons
 //! Throws a new \c java.lang.Error, without C++ exceptions; see jni_throw_new()
 template <typename T>
 static inline void jni_throw_error(JNIEnv* jenv, const T& msg) noexcept {
-    jni_throw_new(jenv, Globals::classError, "java/lang/Error", msg);
+    jni_throw_new(jenv, Globals::classError.load(std::memory_order_acquire), "java/lang/Error", msg);
 }
 
 //! Throws a new \c java.lang.RuntimeException, without C++ exceptions; see jni_throw_new()
 template <typename T>
 static inline void jni_throw_runtime_exception(JNIEnv* jenv, const T& msg) noexcept {
-    jni_throw_new(jenv, Globals::classRuntimeException, "java/lang/RuntimeException", msg);
+    jni_throw_new(jenv, Globals::classRuntimeException.load(std::memory_order_acquire), "java/lang/RuntimeException", msg);
 }
 
 //! Throws a new \c java.lang.OutOfMemoryError, without C++ exceptions; see jni_throw_new()
 template <typename T>
 static inline void jni_throw_out_of_memory(JNIEnv* jenv, const T& msg) noexcept {
-    jni_throw_new(jenv, Globals::classOutOfMemoryError, "java/lang/OutOfMemoryError", msg);
+    jni_throw_new(jenv, Globals::classOutOfMemoryError.load(std::memory_order_acquire), "java/lang/OutOfMemoryError", msg);
 }
 
 //! Throws a new \c java.lang.ClassNotFoundException, without C++ exceptions; see jni_throw_new()
 template <typename T>
 static inline void jni_throw_class_not_found(JNIEnv* jenv, const T& msg) noexcept {
-    jni_throw_new(jenv, Globals::classClassNotFoundException, "java/lang/ClassNotFoundException", msg);
+    jni_throw_new(jenv, Globals::classClassNotFoundException.load(std::memory_order_acquire), "java/lang/ClassNotFoundException", msg);
 }
 
 //! Raises the C++ exception being handled as a pending Java exception, without C++ exceptions (qore#6739)
 /** Called only in a catch handler, by JNI_NATIVE_CATCH(); the exception is rethrown and raised in Java:
     - jni::JavaException: the Java exception is already pending, and is kept (\c java.lang.Error if none is pending)
-    - any other jni::Exception (ex: jni::XsinkException, jni::QoreJniException): the %Qore exception, as an
-      \c org.qore.jni.QoreExceptionWrapper; the thread is attached to %Qore for the conversion if it is not
-      attached, and if it cannot be attached, or %Qore or the module is shut down, a \c java.lang.Error is raised
+    - any other jni::Exception (ex: jni::XsinkException, jni::QoreJniException) or other %Qore exception
+      (\c AbstractException): the %Qore exception, as an \c org.qore.jni.QoreExceptionWrapper; the thread is
+      attached to %Qore for the conversion if it is not attached, and if it cannot be attached, or %Qore or the
+      module is shut down, a \c java.lang.Error is raised (and the %Qore exception is not freed)
     - \c std::bad_alloc: \c java.lang.OutOfMemoryError
     - any other \c std::exception: \c java.lang.Error with its message
     - any other C++ exception: \c java.lang.Error

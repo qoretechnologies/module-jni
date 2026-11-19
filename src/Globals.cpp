@@ -118,10 +118,10 @@ jmethodID Globals::methodClassIsAssignableFrom;
 jmethodID Globals::methodClassGetMethod;
 
 GlobalReference<jclass> Globals::classThrowable;
-GlobalReference<jclass> Globals::classError;
-GlobalReference<jclass> Globals::classRuntimeException;
-GlobalReference<jclass> Globals::classOutOfMemoryError;
-GlobalReference<jclass> Globals::classClassNotFoundException;
+std::atomic<jclass> Globals::classError{nullptr};
+std::atomic<jclass> Globals::classRuntimeException{nullptr};
+std::atomic<jclass> Globals::classOutOfMemoryError{nullptr};
+std::atomic<jclass> Globals::classClassNotFoundException{nullptr};
 jmethodID Globals::methodThrowableGetMessage;
 jmethodID Globals::methodThrowableGetStackTrace;
 jmethodID Globals::methodThrowableGetCause;
@@ -647,23 +647,54 @@ void jni_throw_new(JNIEnv* jenv, jclass cls, const char* cls_name, const QoreStr
         [&](jclass c) -> jint { return Env::throwNew(jenv, c, msg); });
 }
 
-//! Raises a jni::Exception other than jni::JavaException as a pending Java exception, without C++ exceptions
+void Globals::cacheErrorClass(Env& env, std::atomic<jclass>& cls, const char* name) {
+    if (cls.load(std::memory_order_acquire)) {
+        return;
+    }
+    LocalReference<jclass> local = env.findClass(name);
+    jclass global = static_cast<jclass>((*env)->NewGlobalRef(local));
+    if (!global) {
+        throw JavaException();
+    }
+    cls.store(global, std::memory_order_release);
+}
+
+//! Leaves the %Qore exception of a jni::XsinkException unfreed, where it cannot be freed safely
+/** The %Qore exception of a jni::XsinkException is freed with the C++ exception; where the thread cannot be attached
+    to %Qore, or %Qore is shut down, it would be reported as an unhandled exception and freed in that state
+*/
+static void jni_native_leak_qore_exception(AbstractException& e) noexcept {
+    XsinkException* xe = dynamic_cast<XsinkException*>(&e);
+    if (xe) {
+        xe->leak();
+    }
+}
+
+//! Raises a %Qore exception (a jni::Exception other than jni::JavaException) in Java, without C++ exceptions
 /** The %Qore exception is raised as an \c org.qore.jni.QoreExceptionWrapper.  The locals of the native method,
     including the helper that attached the thread to %Qore, have been destroyed, so the thread is attached here for the
     conversion if it is not attached.
 */
-static void jni_native_raise_qore_exception(JNIEnv* jenv, jni::Exception& e) noexcept {
+static void jni_native_raise_qore_exception(JNIEnv* jenv, AbstractException& e) noexcept {
     // the C++ exception replaces a pending Java exception
     jenv->ExceptionClear();
     // no Qore API may be used once the library or the module is shut down
     if (q_libqore_shutdown() || Globals::isShuttingDown()) {
+        jni_native_leak_qore_exception(e);
         jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java; the Qore library or "
             "the jni module has been shut down");
         return;
     }
+    QoreThreadAttacher attacher;
     try {
-        QoreThreadAttacher attacher;
         attacher.attach();
+    } catch (...) {
+        jni_native_leak_qore_exception(e);
+        jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java; the thread cannot be "
+            "attached to Qore");
+        return;
+    }
+    try {
         // destroyed before the thread is detached
         ExceptionSink xsink;
         try {
@@ -683,11 +714,8 @@ static void jni_native_raise_qore_exception(JNIEnv* jenv, jni::Exception& e) noe
         jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java");
     } catch (const std::bad_alloc& oom) {
         jni_throw_out_of_memory(jenv, oom.what());
-    } catch (jni::Exception&) {
-        // the thread cannot be attached to Qore
-        jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java; the thread cannot be "
-            "attached to Qore");
     } catch (...) {
+        // any other error converting the exception (ex: a jni::Exception from the wrapper)
         jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java");
     }
 }
@@ -700,7 +728,8 @@ void jni_native_exception(JNIEnv* jenv) noexcept {
         if (!jenv->ExceptionCheck()) {
             jni_throw_error(jenv, "internal error: a JNI call failed with no Java exception pending");
         }
-    } catch (jni::Exception& e) {
+    } catch (AbstractException& e) {
+        // a jni::Exception other than jni::JavaException, or another Qore exception (ex: QoreStandardException)
         jni_native_raise_qore_exception(jenv, e);
     } catch (const std::bad_alloc& e) {
         jni_throw_out_of_memory(jenv, e.what());
@@ -2599,10 +2628,7 @@ static jobject JNICALL qore_url_classloader_shutdown_context(JNIEnv* jenv, jclas
         // half-destroyed at this point, so neither jni::Exception::convert() nor
         // QoreToJava::wrapException() can be relied on to run.  Nothing may propagate out of a
         // JNI native method.
-        try {
-            jni_throw_error(*env, "Qore library cleanup failed");
-        } catch (...) {
-        }
+        jni_throw_error(*env, "Qore library cleanup failed");
     }
     return nullptr;
 } JNI_NATIVE_CATCH(jenv, nullptr)
@@ -3842,10 +3868,10 @@ bool Globals::init() {
     // get exception info second
     classThrowable = env.findClass("java/lang/Throwable").makeGlobal();
     // the classes of the Java exceptions that native methods raise, before any native method is registered
-    classError = env.findClass("java/lang/Error").makeGlobal();
-    classRuntimeException = env.findClass("java/lang/RuntimeException").makeGlobal();
-    classOutOfMemoryError = env.findClass("java/lang/OutOfMemoryError").makeGlobal();
-    classClassNotFoundException = env.findClass("java/lang/ClassNotFoundException").makeGlobal();
+    cacheErrorClass(env, classError, "java/lang/Error");
+    cacheErrorClass(env, classRuntimeException, "java/lang/RuntimeException");
+    cacheErrorClass(env, classOutOfMemoryError, "java/lang/OutOfMemoryError");
+    cacheErrorClass(env, classClassNotFoundException, "java/lang/ClassNotFoundException");
     methodThrowableGetMessage = env.getMethod(classThrowable, "getMessage", "()Ljava/lang/String;");
     methodThrowableGetStackTrace = env.getMethod(classThrowable, "getStackTrace", "()[Ljava/lang/StackTraceElement;");
     methodThrowableGetCause = env.getMethod(classThrowable, "getCause", "()Ljava/lang/Throwable;");
@@ -4899,10 +4925,7 @@ void Globals::stopNativeCleanupThread() {
 void Globals::cleanup() {
     // delete classes
     classThrowable = nullptr;
-    classError = nullptr;
-    classRuntimeException = nullptr;
-    classOutOfMemoryError = nullptr;
-    classClassNotFoundException = nullptr;
+    // the classes of the Java exceptions that native methods raise are not deleted (see Globals::classError)
     classStackTraceElement = nullptr;
     classPrimitiveVoid = nullptr;
     classPrimitiveBoolean = nullptr;

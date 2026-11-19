@@ -25,6 +25,25 @@ public final class NativeExceptionProbe {
         }
     }
 
+    //! calls Qore functions with QoreJavaApi.callFunction() in a new Java thread, which is not attached to Qore
+    /** \a setup is called with \a arg first, then \a function, whose result or error is returned
+    */
+    public static String callFunctionInThread(String setup, String arg, String function) throws InterruptedException {
+        final String[] rv = new String[1];
+        Thread t = new Thread(() -> {
+            try {
+                QoreJavaApi.callFunction(setup, arg);
+            } catch (Throwable e) {
+                rv[0] = "setup: " + describe(e);
+                return;
+            }
+            rv[0] = callFunction(function);
+        });
+        t.start();
+        t.join();
+        return rv[0];
+    }
+
     //! calls a Qore closure
     public static String callClosure(QoreClosure closure) {
         try {

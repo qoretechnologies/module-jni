@@ -222,7 +222,8 @@ static thread_local DbgJniNativeThrow native_throw = DbgJniNativeThrow::None;
 //! Makes the next native method that calls %Qore code from Java on this thread throw a C++ exception, once
 /** \a kind: \c "bad_alloc" (\c std::bad_alloc), \c "std" (a \c std::runtime_error), \c "unknown" (an \c int),
     \c "qore" (a jni::QoreJniException with \c DBG-JNI-NATIVE-ERROR), \c "xsink" (a jni::XsinkException with
-    \c DBG-JNI-NATIVE-ERROR), \c "java" (a jni::JavaException with no Java exception pending); with no kind, a
+    \c DBG-JNI-NATIVE-ERROR; only on a thread attached to %Qore, as QoreJavaApi.callFunction() throws it before it
+    attaches the thread), \c "java" (a jni::JavaException with no Java exception pending); with no kind, a
     C++ exception that has not been thrown is cleared.  The natives are QoreJavaApi.callFunction() and the calls of
     QoreObject methods and QoreClosure objects (see dbg_jni_native_throw_point()), so that a test can prove that the
     C++ exception does not leave the native method (qore#6739) - see test/jni-native-exception.qtest.  DEBUG builds

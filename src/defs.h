@@ -298,6 +298,12 @@ public:
       sink->clear();
    }
 
+   //! Leaves the %Qore exception unfreed, for where it cannot be freed safely (no %Qore thread, or %Qore shut down)
+   DLLLOCAL void leak() {
+      // deliberately leaked: freeing it there would report it as unhandled and free Qore values in an invalid state
+      static_cast<void>(sink.release());
+   }
+
 private:
    std::unique_ptr<ExceptionSink> sink;
 };
@@ -360,6 +366,7 @@ static inline void jni_check_classpath(const QoreString& cp, const char* err) {
     if (jni_has_nul(cp.c_str(), cp.size())) {
         ExceptionSink xsink;
         jni_check_classpath(cp.c_str(), cp.size(), err, &xsink);
+        assert(xsink);
         throw XsinkException(xsink);
     }
 }

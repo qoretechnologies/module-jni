@@ -147,10 +147,14 @@ list<string> sub loader_urls() {
         return select p.callFunction("loader_urls"), $1 =~ /qore-jni-test\.jar/;
     }
 
-    #! returns the description of the error for a classpath with a NUL character at the given byte offset
-    private string classpathDesc(string cp, int offset) {
-        return sprintf("classpath \"%s\" contains a NUL character at byte offset %d; classpaths cannot contain NUL "
-            "characters", replace(cp, nul, "\\x00"), offset);
+    #! checks the description of the error for a classpath with a NUL character
+    /** the classpath is shown escaped and possibly shortened, so only the text around it and the byte offset of the
+        NUL character are checked
+    */
+    private checkDesc(string cp, string desc, string label) {
+        int offset = cp.substr(0, cp.find(nul)).size();
+        assertRegex(sprintf("^classpath \".*\" contains a NUL character at byte offset %d; classpaths cannot contain "
+            "NUL characters", offset), desc, label);
     }
 
     #! checks that the module command is refused for the classpath, with the error for its NUL character
@@ -163,9 +167,12 @@ list<string> sub loader_urls() {
         } catch (hash<ExceptionInfo> e) {
             ex = e;
         }
+        if (!ex) {
+            fail(cmd + " was not refused");
+            return;
+        }
         assertEq("JNI-ERROR", ex.err, cmd);
-        string desc = classpathDesc(cp, cp.find(nul));
-        assertEq(desc, ex.desc.substr(0, desc.size()), cmd);
+        checkDesc(cp, ex.desc, cmd);
     }
 
     #! checks that the code refuses the classpath option for its NUL character
@@ -176,12 +183,16 @@ list<string> sub loader_urls() {
         } catch (hash<ExceptionInfo> e) {
             ex = e;
         }
+        if (!ex) {
+            fail("the classpath option was not refused");
+            return;
+        }
         if (ex.err == "DBI-OPTION-ERROR") {
             assertEq("driver 'jdbc' option 'classpath' value contains a NUL character; DBI option values cannot "
                 "contain NUL characters", ex.desc);
         } else {
             assertEq("JDBC-OPTION-ERROR", ex.err);
-            assertEq(classpathDesc(cp, cp.find(nul)), ex.desc);
+            checkDesc(cp, ex.desc, "jdbc classpath option");
         }
     }
 
@@ -193,7 +204,11 @@ list<string> sub loader_urls() {
         } catch (hash<ExceptionInfo> e) {
             ex = e;
         }
-        assertEq("JNI-ERROR", ex.err, "the class of the test jar was loaded");
+        if (!ex) {
+            fail("the class of the test jar was loaded");
+            return;
+        }
+        assertEq("JNI-ERROR", ex.err);
         assertRegex("ClassNotFoundException", ex.desc);
     }
 }

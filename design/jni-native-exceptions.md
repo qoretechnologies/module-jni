@@ -21,7 +21,7 @@ without throwing:
 | C++ exception | Java exception |
 |---|---|
 | `jni::JavaException` | the pending Java exception (`java.lang.Error` if none is pending) |
-| any other `jni::Exception` | the Qore exception as `org.qore.jni.QoreExceptionWrapper` |
+| any other `jni::Exception`, or other Qore exception (`AbstractException`) | the Qore exception as `org.qore.jni.QoreExceptionWrapper` |
 | `std::bad_alloc` | `java.lang.OutOfMemoryError` |
 | any other `std::exception` | `java.lang.Error` with `what()` |
 | anything else | `java.lang.Error` |
@@ -29,7 +29,9 @@ without throwing:
 The locals of the native method, including the `QoreThreadAttachHelper` that attached the thread to Qore, are
 destroyed before the handler runs, so the conversion of a Qore exception attaches the thread itself if it is not
 attached.  It is not attempted once libqore or the module is shut down, or if the thread cannot be attached; a
-`java.lang.Error` is raised instead.  A C++ exception other than `jni::JavaException` replaces a pending Java
+`java.lang.Error` is raised instead, and the Qore exception of a `jni::XsinkException` is deliberately leaked
+(`XsinkException::leak()`), as freeing it there would report it as unhandled and free Qore values in an invalid
+state.  A C++ exception other than `jni::JavaException` replaces a pending Java
 exception.
 
 The handler is the last resort: native methods still handle the errors that they expect themselves (ex: a Qore
@@ -43,7 +45,9 @@ The error paths of native methods raise Java exceptions with `jni_throw_new()` a
 `jni_throw_class_not_found()`), which are `noexcept`.  They use the classes that `Globals::init()` looks up before
 any native method is registered (`Globals::classError`, `classRuntimeException`, `classOutOfMemoryError`,
 `classClassNotFoundException`), never `jni::Env::findClass()`, which throws `jni::JavaException` if the lookup
-fails.  Before initialization or after cleanup, the class is looked up with JNI's `FindClass()`; if that fails, its
+fails.  These are `std::atomic<jclass>` global references that are never deleted (the bootstrap classes are never
+unloaded), so that a native method that runs while the module is cleaned up on another thread never uses a deleted
+reference.  Before initialization, the class is looked up with JNI's `FindClass()`; if that fails, its
 Java exception is pending instead.  Only if no Java exception at all can be made pending, which JNI does not allow,
 is the process ended with `FatalError()`, as returning with no exception pending would report a failed call as a
 call that succeeded.

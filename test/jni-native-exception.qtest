@@ -19,7 +19,8 @@
 #
 # Each test case is marked:
 # - regression: it aborts the process without the fix
-# - coverage: it passes with and without the fix
+# - coverage: it passes with and without the fix (the catch handlers of the calls of closures and methods converted
+#   C++ exceptions before the fix, as long as the lookup of the class of the Java exception worked)
 
 %modern
 
@@ -30,9 +31,21 @@
 %module-cmd(jni) import org.qore.jni.test.NativeExceptionProbe
 %exec-class JniNativeExceptionTest
 
+#! the Program that calls the debug functions, if the module is a debug build
+our *Program jni_native_exception_dbg;
+
 #! a function that Java code calls with QoreJavaApi.callFunction()
 string sub jni_native_exception_echo() {
     return "function";
+}
+
+#! does nothing; the setup of a call from a Java thread with no C++ exception
+nothing sub jni_native_exception_noop(string arg) {
+}
+
+#! sets the C++ exception that the next call from Java on the calling thread throws (see dbg_jni_native_throw())
+nothing sub jni_native_exception_arm(string kind) {
+    jni_native_exception_dbg.callFunction("native_throw", kind);
 }
 
 #! a class whose method Java code calls
@@ -93,6 +106,7 @@ nothing sub fail_find_class(*string name) {
             Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
             p.parse(DbgSource, "dbg");
             dbg = p;
+            jni_native_exception_dbg = p;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
                 rethrow;
@@ -101,11 +115,28 @@ nothing sub fail_find_class(*string name) {
         }
 
         addTestCase("regression: a C++ exception in QoreJavaApi.callFunction()", \functionTest());
-        addTestCase("regression: a C++ exception in a call of a QoreClosure", \closureTest());
-        addTestCase("regression: a C++ exception in a call of a QoreObject method", \methodTest());
+        addTestCase("regression: a C++ exception in QoreJavaApi.callFunction() in a Java thread", \javaThreadTest());
+        addTestCase("coverage: a C++ exception in a call of a QoreClosure", \closureTest());
+        addTestCase("coverage: a C++ exception in a call of a QoreObject method", \methodTest());
         addTestCase("regression: the lookup of the class of the Java exception fails", \classLookupTest());
         addTestCase("coverage: the calls without a C++ exception", \callsOkTest());
         set_return_value(main());
+    }
+
+    #! in a thread that Java started, which is not attached to Qore, the handler attaches the thread to convert a Qore
+    #! exception
+    /** the C++ exception is thrown before the thread is attached to Qore, where no Qore exception can be raised, so
+        the "xsink" kind (a jni::XsinkException, which holds a raised Qore exception) is not used here
+    */
+    javaThreadTest() {
+        checkDebug();
+        foreach hash<auto> i in ((Kinds - "xsink").pairIterator()) {
+            assertRegex(i.value, NativeExceptionProbe::callFunctionInThread("jni_native_exception_arm", i.key,
+                "jni_native_exception_echo"), i.key);
+        }
+        # the call works in a Java thread
+        assertEq("ok: function", NativeExceptionProbe::callFunctionInThread("jni_native_exception_noop", "",
+            "jni_native_exception_echo"));
     }
 
     #! QoreJavaApi.callFunction() had no handler before the thread was attached to Qore
