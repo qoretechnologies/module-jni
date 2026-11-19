@@ -1285,6 +1285,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/CollectionTypes.java
     test/java/src/org/qore/jni/test/ConvertedValueFields.java
     test/java/src/org/qore/jni/test/ConvertedValueReturns.java
+    test/java/src/org/qore/jni/test/InvokeReturnTypes.java
     test/java/src/org/qore/jni/test/Methods.java
     test/java/src/org/qore/jni/test/NullableFields.java
     test/java/src/org/qore/jni/test/OverloadChoices.java
