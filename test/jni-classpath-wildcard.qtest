@@ -54,24 +54,31 @@ class JniClasspathWildcardTest inherits QUnit::Test {
 
     globalAddClasspath() {
         checkCase("global-add-classpath", (
+            "result: global-add-classpath: no test jar before: OK",
+            "result: global-add-classpath: the jar in user.dir is added for a new Program: OK",
             "result: global-add-classpath: the class is loaded in a new Program: OK",
         ));
     }
 
     globalAddRelativeClasspath() {
         checkCase("global-add-relative-classpath", (
+            "result: global-add-relative-classpath: no test jar before: OK",
+            "result: global-add-relative-classpath: the jar in the script directory is added for a new Program: OK",
             "result: global-add-relative-classpath: the class is loaded in a new Program: OK",
         ));
     }
 
     jdbcClasspathOption() {
         checkCase("jdbc", (
+            "result: jdbc classpath option: no test jar before: OK",
+            "result: jdbc classpath option: the jar in user.dir is added: OK",
             "result: jdbc classpath option: the class is loaded: OK",
         ));
     }
 
     envClasspath() {
         checkCase("env", (
+            "result: QORE_JNI_CLASSPATH: the jar in user.dir is added: OK",
             "result: QORE_JNI_CLASSPATH: the class is loaded: OK",
         ), "QORE_JNI_CLASSPATH='*.jar'");
     }
@@ -125,10 +132,13 @@ class JniClasspathWildcardTest inherits QUnit::Test {
         }
 
         # an absolute path, as the child runs in another directory; the variables that make the JVM print a notice
-        # on startup are removed, as the whole output of the child is checked
+        # on startup are removed, as the whole output of the child is checked, and so are the variables that could
+        # add the test jar to the classpath or set the JVM's user.dir, so that the child's classpath and user.dir are
+        # only those of the case
         string child = normalize_dir(get_script_dir() + "/jni-classpath-wildcard-child.q");
-        string cmd = sprintf("cd %s && env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s %s -b "
-            "--enable-debug %s %s 2>&1", shellQuote(dir), env, shellQuote(QORE_ARGV[0]), shellQuote(child), name);
+        string cmd = sprintf("cd %s && env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "-u QORE_JNI_CLASSPATH -u QORE_JNI_JVM_ARGS %s %s -b --enable-debug %s %s 2>&1", shellQuote(dir), env,
+            shellQuote(QORE_ARGV[0]), shellQuote(child), name);
         int rc;
         string out = backquote(cmd, \rc);
         assertEq(0, rc, "exit code: " + out);

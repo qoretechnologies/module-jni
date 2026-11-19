@@ -12,6 +12,8 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %requires jni
+%module-cmd(jni) import java.net.URLClassLoader
+%module-cmd(jni) import java.net.URL
 
 #! a class that is only in the test jar
 const TestClass = "org.qore.jni.test.Utf8Boundary";
@@ -28,6 +30,17 @@ list<string> sub loader_urls() {
     foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(
             Jni::org::qore::jni::get_class_loader()).getURLs()) {
         rv += url.toString();
+    }
+    return rv;
+}
+list<string> sub chain_urls() {
+    list<string> rv = ();
+    for (*Jni::java::lang::ClassLoader cl = Jni::org::qore::jni::get_class_loader(); cl; cl = cl.getParent()) {
+        if (cl instanceof Jni::java::net::URLClassLoader) {
+            foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(cl).getURLs()) {
+                rv += url.toString();
+            }
+        }
     }
     return rv;
 }
@@ -63,6 +76,26 @@ Program sub get_program(*string script_path) {
 #! returns the URLs of the test jar in the classpath of the Program's own class loader
 list<string> sub jar_urls(Program p) {
     return select p.callFunction("loader_urls"), $1 =~ /qore-jni-test\.jar/;
+}
+
+#! returns the URLs of the test jar in the classpath of the Program's class loader and of its parent class loaders
+list<string> sub chain_jar_urls(Program p) {
+    return select p.callFunction("chain_urls"), $1 =~ /qore-jni-test\.jar/;
+}
+
+#! returns the URLs of the test jar in the classpath of this Program's class loader and of its parent class loaders
+list<string> sub chain_jar_urls_here() {
+    list<string> rv = ();
+    for (*Jni::java::lang::ClassLoader cl = Jni::org::qore::jni::get_class_loader(); cl; cl = cl.getParent()) {
+        if (cl instanceof Jni::java::net::URLClassLoader) {
+            foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(cl).getURLs()) {
+                if (url.toString() =~ /qore-jni-test\.jar/) {
+                    rv += url.toString();
+                }
+            }
+        }
+    }
+    return rv;
 }
 
 #! returns the URL that the class loader uses for the test jar in the given directory of the JVM's user.dir
@@ -142,29 +175,41 @@ sub add_relative_classpath_case() {
 
 #! the global classpath is the classpath of every Program
 sub global_add_classpath_case() {
+    # no class loader of a Program has the test jar before
+    result("global-add-classpath: no test jar before", (), chain_jar_urls(get_program()));
     get_program().issueModuleCmd("jni", "global-add-classpath *.jar");
-    result("global-add-classpath: the class is loaded in a new Program", TestClass, load_result(get_program()));
+    Program p = get_program();
+    result("global-add-classpath: the jar in user.dir is added for a new Program", (jar_url(""),),
+        chain_jar_urls(p));
+    result("global-add-classpath: the class is loaded in a new Program", TestClass, load_result(p));
 }
 
 sub global_add_relative_classpath_case() {
+    result("global-add-relative-classpath: no test jar before", (), chain_jar_urls(get_program()));
     get_program(get_user_dir() + "/rel/script.q").issueModuleCmd("jni", "global-add-relative-classpath *.jar");
-    result("global-add-relative-classpath: the class is loaded in a new Program", TestClass,
-        load_result(get_program()));
+    Program p = get_program();
+    result("global-add-relative-classpath: the jar in the script directory is added for a new Program",
+        (jar_url("rel/"),), chain_jar_urls(p));
+    result("global-add-relative-classpath: the class is loaded in a new Program", TestClass, load_result(p));
 }
 
 #! the classpath option of the jdbc driver is added to this Program's class loader when a connection is opened
 sub jdbc_case() {
+    result("jdbc classpath option: no test jar before", (), chain_jar_urls_here());
     Datasource ds({"type": "jdbc", "user": "u", "pass": "p", "db": "qore-none:x", "options": {"classpath": "*.jar"}});
     # no driver accepts the URL: the classpath is added before the driver is looked up
     try {
         ds.open();
     } catch (hash<ExceptionInfo> ex) {
     }
+    result("jdbc classpath option: the jar in user.dir is added", (jar_url(""),), chain_jar_urls_here());
     result("jdbc classpath option: the class is loaded", TestClass, load_result_here());
 }
 
-#! QORE_JNI_CLASSPATH is added to this Program's class loader when the module is loaded
+#! QORE_JNI_CLASSPATH is added to this Program's class loader when the module is loaded; the parent test removes any
+#! inherited value, so the variable is only the bare wildcard
 sub env_case() {
+    result("QORE_JNI_CLASSPATH: the jar in user.dir is added", (jar_url(""),), chain_jar_urls_here());
     result("QORE_JNI_CLASSPATH: the class is loaded", TestClass, load_result_here());
 }
 
