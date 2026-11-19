@@ -19,15 +19,8 @@
       teardown of the Program; it now never throws, and the exception is reported as an unhandled exception on
       \c stderr; an exception raised when the callback is replaced with \c set_save_object_callback() is now raised
       to its caller instead of being reported as an unhandled exception (qore#6773)
-    - fixed a classpath entry that is only a wildcard with no directory part, such as \c *.jar: the class loader
-      raised a \c NullPointerException for it, which was printed as an unhandled exception, and the entry was not
-      added (with \c QORE_JNI_CLASSPATH, a debug build of the module aborted on an assertion); it is now the matching
-      files in the JVM's \c user.dir, as for any other relative entry, for the \c add-classpath and
-      \c global-add-classpath module commands, the \c classpath option of the \c jdbc driver and
-      \c QORE_JNI_CLASSPATH, and the sandbox's filesystem policy checks it there for \c add-classpath and the
-      \c classpath option of the \c jdbc driver; with \c add-relative-classpath and
-      \c global-add-relative-classpath, it is the matching files in the Program's script directory, as it was before
-      (qore#6740, see @ref jniimport)
+    - fixed bare wildcard classpath entries such as \c *.jar being dropped by the class loader. They now load matching
+      archives from the JVM's working directory (qore#6740, see @ref jniimport).
     - fixed a C++ exception in a JNI native method of the module, which ended the process in \c std::terminate()
       (exit code 134) instead of being raised in Java: the native methods raised the Java exception of an error with a
       class that they looked up in their catch handlers, and the lookup throws a C++ exception if it fails, and some
@@ -65,6 +58,16 @@
       as the module entered the Program at runtime to add the class to it; adding a class changes the Program's
       definitions under its parse lock and runs none of its code, so the Program is no longer entered when it is the
       current Program (qore#6758)
+    - fixed the \c define-class, \c define-pending-class and \c import module commands for a Java class that extends
+      a %Qore class (ex: the Java classes of Qorus's new API, which extend \c qore.OMQ.UserApi.* classes), as issued
+      with \c Program::issueModuleCmd() for a Program that has code pending: with %Qore's consistent thread-local
+      Program data (qore#6185), the command failed with <tt>PROGRAM-ERROR: the Program accessed is currently
+      undergoing parsing and cannot be accessed at runtime</tt> when the byte code of the Java class of the %Qore
+      superclass was generated for the Program (the first time it was needed in the process), as the module entered
+      the Program at runtime for it; generating byte code reads the Program's definitions under its parse lock and
+      runs none of its code, so the Program is no longer entered for it when it is the current Program, and the same
+      applies to listing the classes of a namespace for the Java compiler, which now reads the namespace under the
+      Program's parse lock (qore#6785)
     - fixed strings that cross between %Qore and Java outside the conversion of values: they are now converted
       strictly to and from UTF-8 with their lengths, as values are (qore#6604, see @ref jni_strings):
       - the messages of Java exceptions that the module raises with the text of a %Qore exception, and the message of
@@ -726,52 +729,52 @@
       Kafka messaging
     - @ref mqttdataproviderintro "MqttDataProvider" module
       - added support for the data provider action catalog API
-        (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+        (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
     - fixed handling conversions from %Qore and %Python to Java for \c Float values
-      (<a href="https://github.com/qorelanguage/qore/issues/4890">issue 4890</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4890">issue 4890</a>)
     - fix for importing Qore methods with varargs into Java
-      (<a href="https://github.com/qorelanguage/qore/issues/4833">issue 4833</a>)
+      (<a href="https://github.com/qoretechnologies/qore/pull/4833">issue 4833</a>)
 
     @section jni_2_3_1 jni Module Version 2.3.1
     - fixed a bugs handling the signal mask that could cause hard-to-debug problems such as deadlocks in JIT in the
       JVM on macOS aarch64
-      (<a href="https://github.com/qorelanguage/qore/issues/4793">issue 4793</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4793">issue 4793</a>)
     - fixed signatures for Java methods with varargs params
-      (<a href="https://github.com/qorelanguage/qore/issues/4787">issue 4787</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4787">issue 4787</a>)
     - fixed a bug where %Qore's thread stack size settings were not applied to Java threads
-      (<a href="https://github.com/qorelanguage/qore/issues/4769">issue 4769</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4769">issue 4769</a>)
 
     @section jni_2_3_0 jni Module Version 2.3.0
     - added the @ref mqttdataproviderintro "MqttDataProvider" module to allow for publishing
       and subscribing to MQTT messages
-      (<a href="https://github.com/qorelanguage/qore/issues/4756">issue 4756</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4756">issue 4756</a>)
 
     @section jni_2_2_1 jni Module Version 2.2.1
     - fixed a bug handling class loaders in JDBC connection acquisition when called from %Qore code imported in native
       Java code; in this case dynamic dispatch is used in the internal call to \c DriverManager.getConnection() to
       ensure that the call succeeds
-      (<a href="https://github.com/qorelanguage/qore/issues/4740">issue 4740</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4740">issue 4740</a>)
 
     @section jni_2_2_0 jni Module Version 2.2.0
     - implemented support for specifying the minimum an maximum heap sizes for the JVM on initialization from
       environment variables
-      (<a href="https://github.com/qorelanguage/qore/issues/4734">issue 4734</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4734">issue 4734</a>)
     - fixed bugs handling dynamic Java class generation from %Qore classes with abstract methods
-      (<a href="https://github.com/qorelanguage/qore/issues/4737">issue 4737</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4737">issue 4737</a>)
 
     @section jni_2_1_1 jni Module Version 2.1.1
     - fixed reading date/time values from MS SQL Server databases
-      (<a href="https://github.com/qorelanguage/qore/issues/4705">issue 4705</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4705">issue 4705</a>)
     - fixed exception handling in destroying JNI program data
-      (<a href="https://github.com/qorelanguage/qore/issues/4704">issue 4704</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4704">issue 4704</a>)
 
     @section jni_2_1_0 jni Module Version 2.1.0
     - added support for the @ref jnijdbc_driverguide "jdbc DBI driver"
-      (<a href="https://github.com/qorelanguage/qore/issues/4684">issue 4684</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4684">issue 4684</a>)
     - fixed a bug where \c qjavac did not detect the binary path of compiled objects correctly in all cases
-      (<a href="https://github.com/qorelanguage/qore/issues/4683">issue 4683</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4683">issue 4683</a>)
     - fixed a bug in \c qjavac where error information was not output when compiler diagnostic information was missing
-      (<a href="https://github.com/qorelanguage/qore/issues/4682">issue 4682</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4682">issue 4682</a>)
 
     @section jni_2_0_11 jni Module Version 2.0.11
     - updated to work with the latest \c qpp from %Qore 1.12.4+
@@ -779,127 +782,127 @@
     @section jni_2_0_10 jni Module Version 2.0.10
     - fixed a bug where the dynamic compiler (@ref org.qore.jni.compiler.QoreJavaCompiler "QoreJavaCompiler") could
       not load classes in internal Java modules
-      (<a href="https://github.com/qorelanguage/qore/issues/4619">issue 4619</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4619">issue 4619</a>)
 
     @section jni_2_0_9 jni Module Version 2.0.9
     - added the following new class to the Java API:
       - @ref org.qore.jni.QoreClosureMarkerImpl
     - fixed a bug where a crash could result when calling a Java varargs method from another language with no
       arguments passed
-      (<a href="https://github.com/qorelanguage/qore/issues/4594">issue 4594</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4594">issue 4594</a>)
     - fixed a bug importing %Qore APIs using the \c code type into Java as @ref org.qore.jni.QoreClosureMarkerImpl types
-      (<a href="https://github.com/qorelanguage/qore/issues/4593">issue 4593</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4593">issue 4593</a>)
     - fixed a bug handling %Qore constructor calls from dynamically generated Java classes
-      (<a href="https://github.com/qorelanguage/qore/issues/4581">issue 4581</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4581">issue 4581</a>)
 
     @section jni_2_0_8 jni Module Version 2.0.8
     - fixed a bug importing %Qore abstract methods with default or optional arguments
-      (<a href="https://github.com/qorelanguage/qore/issues/4570">issue 4570</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4570">issue 4570</a>)
 
     @section jni_2_0_7 jni Module Version 2.0.7
     - fixed a bug where missing c++ exception handling could cause a crash
-      (<a href="https://github.com/qorelanguage/qore/issues/4500">issue 4500</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4500">issue 4500</a>)
 
     @section jni_2_0_6 jni Module Version 2.0.6
     - fixed a bug where \c qjavac wrote output files in the current working directory instead of in the directory of
       the input file
-      (<a href="https://github.com/qorelanguage/qore/issues/4376">issue 4376</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4376">issue 4376</a>)
     - fixed a bug where %Qore and %Python functions could not be imported into the special \c $Functions Java class if
       the enclosing namespace had less than two classes in it
-      (<a href="https://github.com/qorelanguage/qore/issues/4375">issue 4375</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4375">issue 4375</a>)
     - fixed a bug where @ref org.qore.jni.QoreURLClassLoader could not be used as the system class loader
-      (<a href="https://github.com/qorelanguage/qore/issues/4374">issue 4374</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4374">issue 4374</a>)
     - fixed a bug where %Qore and %Python dynamic module imports were not created with consistent Java binary names;
       also to facilitate handling injected symbols, the \c mark-module-injected module command was implemented
-      (<a href="https://github.com/qorelanguage/qore/issues/4373">issue 4373</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4373">issue 4373</a>)
     - fixed a bug where Java method args in array format were not always converted from %Qore values correctly
-      (<a href="https://github.com/qorelanguage/qore/issues/4372">issue 4372</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4372">issue 4372</a>)
     - fixed a bug where the %Qore \c Program and Java \c ClassLoader context was not always set correctly when
       instantiating %Qore classes from Java when there were dependencies on dynamic classes, leading to class
       resolution errors
-      (<a href="https://github.com/qorelanguage/qore/issues/4371">issue 4371</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4371">issue 4371</a>)
 
     @section jni_2_0_5 jni Module Version 2.0.5
     - fixed a memory error in exception handling in %Qore to Java tyype conversions that could cause a core dump
-      (<a href="https://github.com/qorelanguage/qore/issues/4349">issue 4349</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4349">issue 4349</a>)
 
     @section jni_2_0_4 jni Module Version 2.0.4
     - fixed a bug handling %Qore callbacks in native Java threads
-      (<a href="https://github.com/qorelanguage/qore/issues/4340">issue 4340</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4340">issue 4340</a>)
     - fixed a bug handling Java interfaces as parents of a Java class
-      (<a href="https://github.com/qorelanguage/qore/issues/4337">issue 4337</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4337">issue 4337</a>)
 
     @section jni_2_0_3 jni Module Version 2.0.3
     - implemented the magic \c '$' target when importing %Qore or %Python modules with import statements with the
       \c qoremod or \c pythonmod special packages
-      (<a href="https://github.com/qorelanguage/qore/issues/4304">issue 4304</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4304">issue 4304</a>)
 
     @section jni_2_0_2 jni Module Version 2.0.2
     - fixed a bug where vararg arguments were not handled correctly when dynamically-generated Java called a %Qore or
       %Python static method
-      (<a href="https://github.com/qorelanguage/qore/issues/4302">issue 4302</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4302">issue 4302</a>)
     - fixed a bug where a runtime error was generated when used with Java 17 or above
-      (<a href="https://github.com/qorelanguage/qore/issues/4300">issue 4300</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4300">issue 4300</a>)
 
     @section jni_2_0_1 jni Module Version 2.0.1
     - fixed a bug where parameters of %Qore type \c null or \c nothing would cause runtime errors when importing
       the method into Java
-      (<a href="https://github.com/qorelanguage/qore/issues/4287">issue 4287</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4287">issue 4287</a>)
     - fixed static method calls of imported %Qore methods in Java; the calling context is now set correctly
-      (<a href="https://github.com/qorelanguage/qore/issues/4286">issue 4286</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4286">issue 4286</a>)
     - fixed importing abstract %Qore methods into Java; Java methods are no longer marked as taking trailing vararg
       arguments
-      (<a href="https://github.com/qorelanguage/qore/issues/4282">issue 4282</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4282">issue 4282</a>)
     - fixed importing %Qore classes with multiple inheritance into Java; methods from other non-primary base classes
       are now also imported into the dynamic Java class
-      (<a href="https://github.com/qorelanguage/qore/issues/4091">issue 4091</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4091">issue 4091</a>)
 
     @section jni_2_0 jni Module Version 2.0
     - %Qore @ref int_type "int" values are now converted to Java \c long in order to maintain precision
     - the old hand-developed Java wrapper classes are deprecated as of this release in favor of
       @ref jni_dynamic_import_in_java "dynamic imports"
     - implemented support for dynamically importing %Qore code into Java
-      (<a href="https://github.com/qorelanguage/qore/issues/4091">issue 4091</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4091">issue 4091</a>)
 
     @section jni_1_2 jni Module Version 1.2
     - fixed crashes handling deleted Qore program contexts
-      (<a href="https://github.com/qorelanguage/qore/issues/4263">issue 4262</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4263">issue 4262</a>)
     - fixed crashes handling Java lambdas wrapping Qore closures and call references
-      (<a href="https://github.com/qorelanguage/qore/issues/4261">issue 4261</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4261">issue 4261</a>)
     - fixed importing AWT classes in headless mode
-      (<a href="https://github.com/qorelanguage/qore/issues/4231">issue 4231</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4231">issue 4231</a>)
     - fixed method calls for methods that return base types where a caller context is required (for Reflection access
       control, for example)
-      (<a href="https://github.com/qorelanguage/qore/issues/4093">issue 4093</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4093">issue 4093</a>)
     - fixed a memory leak (or an assertion crash in debug mode) for a duplicate member error when importing Java
       classes in %Qore
-      (<a href="https://github.com/qorelanguage/qore/issues/4029">issue 4029</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4029">issue 4029</a>)
     - added support for converting %Qore closures / call references to a Java object
-      (<a href="https://github.com/qorelanguage/qore/issues/3995">issue 3995</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3995">issue 3995</a>)
 
     @section jni_1_1_3 jni Module Version 1.1.3
     - fixed a bug create %Qore classes wrapping Java classes that can cause a crash with debug builds of %Qore
-      (<a href="https://github.com/qorelanguage/qore/issues/3976">issue 3976</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3976">issue 3976</a>)
     - added a runtime check to verify that the Java version is the expected version, otherwise a crash or other
       errors could result
-      (<a href="https://github.com/qorelanguage/qore/issues/3969">issue 3969</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3969">issue 3969</a>)
     - added \c getAs*() methods to the @ref org.qore.jni.Hash class to help in retrieving key values with specific
       base types
-      (<a href="https://github.com/qorelanguage/qore/issues/3957">issue 3957</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3957">issue 3957</a>)
     - added the @ref org.qore.lang.dataprovider.AbstractDataProcessor class
-      (<a href="https://github.com/qorelanguage/qore/issues/3876">issue 3876</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3876">issue 3876</a>)
 
     @section jni_1_1_2 jni Module Version 1.1.2
     - use <tt>java.util.List&lt;?&gt;</tt> instead of <tt>java.util.ArrayList&lt;?&gt;</tt> as the base class for list
       conversions
-      (<a href="https://github.com/qorelanguage/qore/issues/3873">issue 3873</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3873">issue 3873</a>)
     - added the @ref org.qore.jni.Hash class to use when passing %Qore hashes to Java to make it easier to work with
       %Qore hash data
-      (<a href="https://github.com/qorelanguage/qore/issues/3868">issue 3868</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3868">issue 3868</a>)
     - fixed a crash in %Qore Program setup when initiated from a Qore thread with no Java context thread
-      (<a href="https://github.com/qorelanguage/qore/issues/3862">issue 3862</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3862">issue 3862</a>)
     - fixed a crash in method invocation due to incorrect detection of the Java thread context
-      (<a href="https://github.com/qorelanguage/qore/issues/3794">issue 3794</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3794">issue 3794</a>)
     - fixed a bug in @ref org.qore.lang.smtpclient.SmtpClient.sendMessage() "SmtpClient.sendMessage()"
 
     @section jni_1_1_1 jni Module Version 1.1.1
@@ -910,15 +913,15 @@
       - @ref org.qore.lang.restclient.RestClient "RestClient"
       - @ref org.qore.lang.smtpclient.SmtpClient "SmtpClient"
       .
-      (<a href="https://github.com/qorelanguage/qore/issues/3794">issue 3794</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3794">issue 3794</a>)
 
     @section jni_1_1 jni Module Version 1.1
     - added support for disabling JIT with the <tt>QORE_JNI_DISABLE_JIT=1</tt> environment variable
-      (<a href="https://github.com/qorelanguage/qore/issues/3199">issue 3199</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3199">issue 3199</a>)
     - updated to require Java/JDK 11+
-      (<a href="https://github.com/qorelanguage/qore/issues/3188">issue 3188</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3188">issue 3188</a>)
     - added @ref Jni::org::qore::jni::define_class() "define_class()"
-      (<a href="https://github.com/qorelanguage/qore/issues/3023">issue 3023</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3023">issue 3023</a>)
     - added the following new class methods to the Qore API:
       - @ref Jni::org::qore::jni::JavaArray::toString() "JavaArray::toString()"
       - @ref Jni::org::qore::jni::JavaArray::deepToString() "JavaArray::deepToString()"
@@ -965,18 +968,18 @@
       - @ref org.qore.lang.tablemapper.InboundTableMapper
       - @ref org.qore.lang.tablemapper.SqlStatementOutboundMapper
     - added support for date <-> java.time.ZonedDateTime conversions
-      (<a href="https://github.com/qorelanguage/qore/issues/3026">issue 3026</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3026">issue 3026</a>)
     - fixed the %Qore exception location when a Java exception is propagated to %Qore
-      (<a href="https://github.com/qorelanguage/qore/issues/3077">issue 3077</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3077">issue 3077</a>)
     - fixed call stacks for exceptions to include Java call stack information in all cases
-      (<a href="https://github.com/qorelanguage/qore/issues/3169">issue 3169</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3169">issue 3169</a>)
     - implemented the \c set-property module command to allow for Java system properties to be set while initializing
       the module
-      (<a href="https://github.com/qorelanguage/qore/issues/3495">issue 3495</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3495">issue 3495</a>)
 
     @section jni_1_0_1 jni Module Version 1.0.1
     - fixed setting the class loader context when calling %Qore code from Java threads
-      (<a href="https://github.com/qorelanguage/qore/issues/3585">issue 3585</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/3585">issue 3585</a>)
 
     @section jni_1_0 jni Module Version 1.0
     - initial release

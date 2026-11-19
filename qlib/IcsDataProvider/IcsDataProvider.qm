@@ -235,14 +235,20 @@ module IcsDataProvider {
     - @ref IcsDataProvider::IcsWriteDataProvider "IcsWriteDataProvider" - for writing ICS files
     - @ref IcsDataProvider::IcsWriteDataProviderFactory "IcsWriteDataProviderFactory" - factory for write providers
 
-    @section IcsDataProvider_relnotes Release Notes
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
 
-    @subsection IcsDataProvider_v1_0 IcsDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
-      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
-      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
-      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
-      middle of a call; the module requires \c DataProvider 3.12 or later
+
+
+    @anchor IcsDataProvider_relnotes
+
+    @subpage icsdataproviderreleasenotes
+*/
+
+/** @page icsdataproviderreleasenotes IcsDataProvider Release Notes
+
+    @section IcsDataProvider_v1_0 IcsDataProvider Module Version 1.0
     - initial release
 */
 

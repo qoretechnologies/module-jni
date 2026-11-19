@@ -181,7 +181,7 @@ module CamelDataProvider {
 
     @tableofcontents
 
-    @section cameldataproviderintro Introduction to the CamelDataProvider Module
+    @section cameldataproviderintro CamelDataProvider Module Introduction
 
     <img src="camel-logo.svg" width="96" alt="CamelDataProvider module logo"/>
 
@@ -191,6 +191,14 @@ module CamelDataProvider {
     This data provider provides Apache Camel functionality with the \c camel factory and data
     provider with the same name, supporting message routing and endpoint integration
     (class @ref CamelDataProvider::CamelDataProvider "CamelDataProvider").
+
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
+    Sandboxed code may only send to a plain endpoint name, with no options or placeholders, of the in-memory
+      components \c direct, \c seda, \c log and \c mock, and cannot get the Camel context from a \c CamelConnection
+      (\c JNI-SANDBOX-ERROR).
 
     @section cameldataprovider_examples Camel Data Provider Examples
 
@@ -204,16 +212,15 @@ module CamelDataProvider {
     @verbatim qdp 'camel/routes' search
     @endverbatim
 
-    @section cameldataprovider_relnotes Release Notes
+    @anchor cameldataprovider_relnotes
 
-    @subsection cameldataprovider_v1_0 CamelDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
-      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
-      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
+    @subpage cameldataproviderreleasenotes
+*/
+
+/** @page cameldataproviderreleasenotes CamelDataProvider Release Notes
+
+    @section cameldataprovider_v1_0 CamelDataProvider Module Version 1.0
     - initial release
-    - sandboxed code may only send to a plain endpoint name, with no options or placeholders, of the in-memory
-      components \c direct, \c seda, \c log and \c mock, and cannot get the Camel context from a \c CamelConnection
-      (\c JNI-SANDBOX-ERROR)
 */
 
 #! Contains all public definitions in the CamelDataProvider module

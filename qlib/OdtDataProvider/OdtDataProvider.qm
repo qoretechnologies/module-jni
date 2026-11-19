@@ -254,6 +254,10 @@ module OdtDataProvider {
     - @ref OdtDataProvider::OdtWriteDataProvider "OdtWriteDataProvider" - for writing ODT documents
     - @ref OdtDataProvider::OdtWriteDataProviderFactory "OdtWriteDataProviderFactory" - factory for write providers
 
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
     @section OdtDataProvider_reading Reading ODT Documents
 
     @subsection OdtDataProvider_reading_paragraphs Reading Paragraphs
@@ -377,14 +381,14 @@ module OdtDataProvider {
     - \c ODT-READ-OPTION-ERROR: Invalid read options or option conflicts
     - \c ODT-WRITE-OPTION-ERROR: Invalid write options or option conflicts
 
-    @section OdtDataProvider_relnotes Release Notes
+    @anchor OdtDataProvider_relnotes
 
-    @subsection OdtDataProvider_v1_0 OdtDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
-      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
-      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
-      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
-      middle of a call; the module requires \c DataProvider 3.12 or later
+    @subpage odtdataproviderreleasenotes
+*/
+
+/** @page odtdataproviderreleasenotes OdtDataProvider Release Notes
+
+    @section OdtDataProvider_v1_0 OdtDataProvider Module Version 1.0
     - initial release
 */
 

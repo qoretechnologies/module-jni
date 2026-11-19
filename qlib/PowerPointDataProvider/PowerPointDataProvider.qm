@@ -204,6 +204,10 @@ module PowerPointDataProvider {
     - @ref PowerPointDataProvider::PowerPointWriteDataProvider "PowerPointWriteDataProvider" - for writing presentations
     - @ref PowerPointDataProvider::PowerPointWriteDataProviderFactory "PowerPointWriteDataProviderFactory" - factory for write providers
 
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
     @section PowerPointDataProvider_reading Reading PowerPoint Presentations
 
     @subsection PowerPointDataProvider_reading_slides Reading Slides
@@ -331,14 +335,14 @@ module PowerPointDataProvider {
     - \c POWERPOINT-READ-OPTION-ERROR: Invalid read options or option conflicts
     - \c POWERPOINT-WRITE-OPTION-ERROR: Invalid write options or option conflicts
 
-    @section PowerPointDataProvider_relnotes Release Notes
+    @anchor PowerPointDataProvider_relnotes
 
-    @subsection PowerPointDataProvider_v1_0 PowerPointDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
-      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
-      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
-      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
-      middle of a call; the module requires \c DataProvider 3.12 or later
+    @subpage powerpointdataproviderreleasenotes
+*/
+
+/** @page powerpointdataproviderreleasenotes PowerPointDataProvider Release Notes
+
+    @section PowerPointDataProvider_v1_0 PowerPointDataProvider Module Version 1.0
     - initial release
 */
 

@@ -1,0 +1,211 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# A Java class that extends a Qore class (here qore.Qore.AbstractIterator) is defined with define-class or
+# define-pending-class, or imported, in a Program that has code pending (parsed with Program::parsePending() and not
+# yet committed), as Qorus does for the Java classes of its new API, which extend qore.OMQ.UserApi.* classes
+# (QorusProgram::cacheJavaClass() before commitPending()).
+#
+# Loading the Java class makes the JVM load its superclass, the Java class of the Qore class, whose byte code the jni
+# module generates for the Program the first time it is needed in the process.  A module command runs with the
+# target Program current but not entered (qore#6185), and no runtime entry is allowed into a Program while it has code
+# pending; generating the byte code reads the Program's definitions under its parse lock and runs none of its code,
+# but the module entered the Program for it, and the command failed with "PROGRAM-ERROR: the Program accessed is
+# currently undergoing parsing and cannot be accessed at runtime" (qore#6785).
+#
+# The byte code is generated only once per process for a class: each case runs test/jni-qore-subclass-pending-child.q
+# in a new process, so that its JVM has not generated it yet, as in a new Qorus container process.  The classes are
+# compiled here, in this process.
+#
+# The regression cases need a Qore library with qore#6185: with an older library, the thread kept the calling
+# Program's thread-local data, the entry was skipped, and they pass with or without the fix.
+#
+# A class added to a Program that is not current enters the Program, also to generate the byte code: those cases use
+# Jni::org::qore::jni::dbg_jni_import_into_program(), which a debug build of the module has, and are skipped
+# otherwise.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires QUnit
+%requires Util
+%requires jni
+
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+
+%exec-class JniQoreSubclassPendingProgramTest
+
+class JniQoreSubclassPendingProgramTest inherits QUnit::Test {
+    public {
+        #! the package of the test classes
+        const Package = "org.qore.jni.test.pending";
+
+        #! the classes that extend the Qore class directly, one for each case
+        const SubClasses = ("SubDefineClass", "SubDefinePendingClass", "SubImport", "SubLaterCode", "SubNotCurrent",
+            "SubNotCurrentPending");
+    }
+
+    private {
+        #! the directory with the compiled classes
+        string dir;
+
+        #! the files in dir
+        list<string> files = ();
+
+        #! the directories created under dir, innermost first
+        list<string> dirs = ();
+    }
+
+    constructor() : QUnit::Test("jni Java subclass of a Qore class in a Program with code pending", "1.0", \ARGV) {
+        addTestCase("regression: define-class", \defineClassTest());
+        addTestCase("regression: define-pending-class and define-class", \definePendingClassTest());
+        addTestCase("regression: import", \importTest());
+        addTestCase("regression: code parsed after the import uses the class", \laterCodeTest());
+        addTestCase("a class added to a Program that is not current enters it", \notCurrentTest());
+        addTestCase("a class added to a Program that is not current and has code pending", \notCurrentPendingTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        dir = tmp_location() + DirSep + sprintf("jni-qore-subclass-pending-%d-%d", getpid(),
+            now_us().durationMicroseconds());
+        string pkg_dir = dir;
+        dirs = (dir,);
+        foreach string elem in (Package.split(".")) {
+            pkg_dir += DirSep + elem;
+            unshift dirs, pkg_dir;
+        }
+        foreach string d in (reverse(dirs)) {
+            if (mkdir(d, 0700)) {
+                throw "TEST-ERROR", sprintf("cannot create directory %y: %s", d, strerror());
+            }
+        }
+
+        hash<string, string> sources = map {Package + "." + $1: getSubClassSource($1)}, SubClasses;
+        # the main class of the define-pending-class case extends one of the pending classes
+        sources{Package + ".MainDefinePendingClass"} = sprintf("package %s;\n"
+            "public class MainDefinePendingClass extends SubDefinePendingClass {\n"
+            "    public MainDefinePendingClass() throws Throwable {}\n"
+            "}\n", Package);
+        QoreJavaCompiler compiler();
+        hash<auto> out = compiler.compile(sources);
+        foreach string cls in (keys sources) {
+            binary byte_code = out{cls}.file.openInputStream().readAllBytes();
+            string file = pkg_dir + DirSep + (cls.split(".").last()) + ".class";
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            push files, file;
+            f.write(byte_code);
+        }
+    }
+
+    globalTearDown() {
+        foreach string file in (files) {
+            unlink(file);
+        }
+        foreach string d in (dirs) {
+            rmdir(d);
+        }
+    }
+
+    defineClassTest() {
+        checkCase("define-class", (
+            "result: define-class: define-class: OK",
+            "result: define-class: the pending code is committed: OK",
+            "result: define-class: the class is in the Program: OK",
+            "result: define-class: the class is a subclass of the Qore class: OK",
+            "result: define-class: the Java method is called: OK",
+        ));
+    }
+
+    definePendingClassTest() {
+        checkCase("define-pending-class", (
+            "result: define-pending-class: define-pending-class: OK",
+            "result: define-pending-class: define-class: OK",
+            "result: define-pending-class: the pending code is committed: OK",
+            "result: define-pending-class: the class is in the Program: OK",
+            "result: define-pending-class: the class is a subclass of the Qore class: OK",
+            "result: define-pending-class: the Java method is called: OK",
+        ));
+    }
+
+    importTest() {
+        checkCase("import", (
+            "result: import: add-classpath: OK",
+            "result: import: import: OK",
+            "result: import: the pending code is committed: OK",
+            "result: import: the class is in the Program: OK",
+            "result: import: the class is a subclass of the Qore class: OK",
+            "result: import: the Java method is called: OK",
+        ));
+    }
+
+    laterCodeTest() {
+        checkCase("later-code", (
+            "result: later-code: add-classpath: OK",
+            "result: later-code: import: OK",
+            "result: later-code: the pending code is committed: OK",
+            "result: later-code: the class is in the Program: OK",
+            "result: later-code: the class is a subclass of the Qore class: OK",
+            "result: later-code: the Java method is called: OK",
+            "result: later-code: the later code uses the class: OK",
+        ));
+    }
+
+    notCurrentTest() {
+        checkCase("not-current", (
+            "result: not-current: add-classpath: OK",
+            "result: not-current: the entry handler runs: OK",
+            "result: not-current: the exit handler runs when each entry is left: OK",
+            "result: not-current: the class is a subclass of the Qore class: OK",
+        ));
+    }
+
+    notCurrentPendingTest() {
+        checkCase("not-current-pending", (
+            "result: not-current-pending: add-classpath: OK",
+            "result: not-current-pending: the entry is refused: OK",
+            "result: not-current-pending: the pending code is committed: OK",
+            "result: not-current-pending: import after the commit: OK",
+            "result: not-current-pending: the class is a subclass of the Qore class: OK",
+        ));
+    }
+
+    #! returns the source of a class that extends the Qore class
+    private static string getSubClassSource(string cls) {
+        return sprintf("package %s;\n"
+            "import qore.Qore.AbstractIterator;\n"
+            "public class %s extends AbstractIterator {\n"
+            "    public %s() throws Throwable {}\n"
+            "    public boolean next() { return false; }\n"
+            "    public Object getValue() { return null; }\n"
+            "    public boolean valid() { return false; }\n"
+            "}\n", Package, cls, cls);
+    }
+
+    #! runs a case in a new process and checks its results
+    private checkCase(string name, list<string> expected) {
+        string child = normalize_dir(get_script_dir() + "/jni-qore-subclass-pending-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the whole output of the child is
+        # checked
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b --enable-debug %s "
+            "%s %s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child), name, shellQuote(dir));
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        if (*string skip = (out =~ x/^skip: (.*)$/m)[0]) {
+            testSkip("%s", skip);
+        }
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq(expected, lines, out);
+        assertFalse(out =~ /unhandled QORE System exception/, "an unhandled exception was printed: " + out);
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

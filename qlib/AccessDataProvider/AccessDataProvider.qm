@@ -137,6 +137,10 @@ module AccessDataProvider {
       providers
     - @ref AccessDataProvider::AccessTableReadDataProvider "AccessTableReadDataProvider" - for reading specific tables
 
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
     @section AccessDataProvider_reading Reading Access Databases
 
     @subsection AccessDataProvider_reading_basic Basic Reading
@@ -185,12 +189,14 @@ module AccessDataProvider {
     Common exceptions:
     - \c ACCESS-READ-OPTION-ERROR: Invalid read options or option conflicts
 
-    @section AccessDataProvider_relnotes Release Notes
+    @anchor AccessDataProvider_relnotes
 
-    @subsection AccessDataProvider_v1_0 AccessDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
-      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
-      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
+    @subpage accessdataproviderreleasenotes
+*/
+
+/** @page accessdataproviderreleasenotes AccessDataProvider Release Notes
+
+    @section AccessDataProvider_v1_0 AccessDataProvider Module Version 1.0
     - initial release
 */
 

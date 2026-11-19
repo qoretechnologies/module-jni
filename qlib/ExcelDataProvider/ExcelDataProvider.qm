@@ -275,6 +275,17 @@ module ExcelDataProvider {
     - @ref ExcelDataProvider::ExcelListWorksheetsDataProvider "ExcelListWorksheetsDataProvider" - for listing the
       worksheets of a workbook (the \c list-worksheets action)
 
+    @section exceldataproviderdocumentation Documentation
+
+    - @subpage exceldataprovidercookbook
+    - @subpage exceldataproviderreference
+    - @anchor ExcelDataProvider_relnotes @subpage exceldataproviderreleasenotes
+*/
+
+/** @page exceldataprovidercookbook Reading and Writing Workbooks
+
+    @tableofcontents
+
     @section ExcelDataProvider_reading Reading Excel Files
 
     @subsection ExcelDataProvider_reading_basic Basic Reading
@@ -585,6 +596,11 @@ module ExcelDataProvider {
     # Write legacy .xls format
     ExcelWriteDataProvider dp("legacy.xls", {"format": "xls"});
     @endcode
+*/
+
+/** @page exceldataproviderreference Cell Types and Error Handling
+
+    @tableofcontents
 
     @section ExcelDataProvider_datatypes Supported Data Types
 
@@ -609,16 +625,17 @@ module ExcelDataProvider {
       (see @ref ExcelDataProvider_reading_types)
     - \c EXCEL-CELL-ERROR: A cell is an error, such as \c \#DIV/0!, and error cells are not accepted
       (see @ref ExcelDataProvider_reading_errors)
+*/
 
-    @section ExcelDataProvider_relnotes Release Notes
+/** @page exceldataproviderreleasenotes ExcelDataProvider Release Notes
 
-    @subsection ExcelDataProvider_v1_1 ExcelDataProvider v1.1
+    @section ExcelDataProvider_v1_1 ExcelDataProvider v1.1
     - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
       calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
       code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
       provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
       middle of a call; the module requires \c DataProvider 3.12 or later
-    - `preserve_empty_rows` lets the reader keep empty records, including trailing empty rows, when checking exports
+    - <tt>preserve_empty_rows</tt> lets the reader keep empty records, including trailing empty rows, when checking exports
     - added the \c header_row write option to place column headers after blank leading rows, including in
       individual worksheets of a multi-sheet workbook
     - added the \c list-worksheets action and
@@ -710,7 +727,7 @@ module ExcelDataProvider {
       characters was cut short to its first 31, and a name with a character that worksheet names cannot have raised
       a Java exception
 
-    @subsection ExcelDataProvider_v1_0 ExcelDataProvider v1.0
+    @section ExcelDataProvider_v1_0 ExcelDataProvider v1.0
     - initial release
 */
 

@@ -113,16 +113,21 @@ module BusyLightDataProvider {
     @verbatim qdp 'busylight{url=ssl://eu1.cloud.thethings.network:8883,username=my-username,password=my-password}' send update 'topic=v3/username@ttn/devices/bl-001/down/push,red=128,on=50,off=150'
     @endverbatim
 
-    @section BusyLightDataProvider_relnotes Release Notes
+    @anchor BusyLightDataProvider_relnotes
 
-    @subsection BusyLightDataProvider_v1_1 BusyLightDataProvider v1.1
+    @subpage busylightdataproviderreleasenotes
+*/
+
+/** @page busylightdataproviderreleasenotes BusyLightDataProvider Release Notes
+
+    @section BusyLightDataProvider_v1_1 BusyLightDataProvider v1.1
     - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
       callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
     - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
       presentation keeps its original producer identity, including HTTP/REST options and allowed values
 
-    @subsection BusyLightDataProvider_v1_0 BusyLightDataProvider v1.0
+    @section BusyLightDataProvider_v1_0 BusyLightDataProvider v1.0
     - initial release
 */
 
