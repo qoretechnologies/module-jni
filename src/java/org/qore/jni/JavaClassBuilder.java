@@ -530,7 +530,16 @@ public class JavaClassBuilder {
     @RuntimeType
     public static Object doNormalCallTyped(String methodName, long qobjptr, long mptr, long vptr, Class<?> rtype,
             @Argument(0) Object... args) throws Throwable {
-        return convertReturnValue(doNormalCall0(methodName, qobjptr, mptr, vptr, args), rtype);
+        // the Qore code can make Java calls for other Programs: the thread's classloader context is restored when
+        // the call returns to Java (qore#6551)
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        Object rv;
+        try {
+            rv = doNormalCall0(methodName, qobjptr, mptr, vptr, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
+        return convertReturnValue(rv, rtype);
     }
 
     //! add static method
@@ -583,7 +592,14 @@ public class JavaClassBuilder {
             @Argument(0) Object... args) throws Throwable {
         //System.out.println(String.format("JavaClassBuilder::doStaticCall() %s() cptr: %d args: %s", methodName,
         //  qclsptr, Arrays.toString(args)));
-        return doStaticCall0(methodName, qclsptr, pgm, mptr, vptr, args);
+        // the Qore code can make Java calls for other Programs: the thread's classloader context is restored when
+        // the call returns to Java (qore#6551)
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return doStaticCall0(methodName, qclsptr, pgm, mptr, vptr, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     /** makes a normal method call
@@ -603,7 +619,14 @@ public class JavaClassBuilder {
             @Argument(0) Object... args) throws Throwable {
         //System.out.println(String.format("JavaClassBuilder::doNormalCall() %s() ptr: %d args: %s", methodName,
         //  qobjptr, Arrays.toString(args)));
-        return doNormalCall0(methodName, qobjptr, mptr, vptr, args);
+        // the Qore code can make Java calls for other Programs: the thread's classloader context is restored when
+        // the call returns to Java (qore#6551)
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return doNormalCall0(methodName, qobjptr, mptr, vptr, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     /** makes a function call
@@ -622,7 +645,14 @@ public class JavaClassBuilder {
             throws Throwable {
         //System.out.println(String.format("JavaClassBuilder::doFunctionCall() %s() args: %s", methodName,
         //  Arrays.toString(args)));
-        return doFunctionCall0(pgm, fptr, vptr, args);
+        // the Qore code can make Java calls for other Programs: the thread's classloader context is restored when
+        // the call returns to Java (qore#6551)
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return doFunctionCall0(pgm, fptr, vptr, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     /** retrieves the value of a constant from the given Qore program
@@ -634,7 +664,14 @@ public class JavaClassBuilder {
      */
     @RuntimeType
     public static Object getConstantValue(long pgm, long cPtr) throws Throwable {
-        return getConstantValue0(pgm, cPtr);
+        // the Qore code can make Java calls for other Programs: the thread's classloader context is restored when
+        // the call returns to Java (qore#6551)
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        try {
+            return getConstantValue0(pgm, cPtr);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
     }
 
     /** Returns a TypeDescription object for the given class

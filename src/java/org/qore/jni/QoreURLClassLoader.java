@@ -1319,7 +1319,14 @@ public class QoreURLClassLoader extends URLClassLoader {
         ClassModInfo info = new ClassModInfo(packageName, true);
         long ptr = pgm_ptr.get();
         if (ptr != 0) {
-            getClassesInNamespace0(ptr, info.cls, info.mod, info.python, info.kotlin, rv);
+            // listing the classes can load a module, whose initialization code can make Java calls for other
+            // Programs: the thread's classloader context is restored when the call returns to Java (qore#6551)
+            Object[] ctx = saveContext();
+            try {
+                getClassesInNamespace0(ptr, info.cls, info.mod, info.python, info.kotlin, rv);
+            } finally {
+                restoreContext(ctx);
+            }
         }
         //System.out.printf("getClassesInNamespace(%s) pgm: %x cls: '%s' mod: '%s' rv: %s\n", packageName, ptr,
         //    info.cls, info.mod, rv);
@@ -1495,7 +1502,15 @@ public class QoreURLClassLoader extends URLClassLoader {
             try {
                 //System.out.printf("QoreURLClassLoader.generateByteCodeIntern() this: %x pgm: %x '%s' cptr: %x\n",
                 //    hashCode(), ptr, bin_name, class_ptr);
-                rv = generateByteCode0(ptr, info.cls, bin_name, info.mod, info.python, info.kotlin, class_ptr);
+                // generating the bytecode can load a Qore module, whose initialization code can make Java calls
+                // for other Programs: the thread's classloader context is restored when the call returns to Java
+                // (qore#6551)
+                Object[] ctx = saveContext();
+                try {
+                    rv = generateByteCode0(ptr, info.cls, bin_name, info.mod, info.python, info.kotlin, class_ptr);
+                } finally {
+                    restoreContext(ctx);
+                }
                 //System.out.printf("QoreURLClassLoader.generateByteCodeIntern() this: %x pgm: %x '%s' cptr: %x " +
                 //    "rv: %s\n", hashCode(), ptr, bin_name, class_ptr, rv);
             } catch (ClassNotFoundException e) {

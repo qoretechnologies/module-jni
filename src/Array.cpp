@@ -26,6 +26,7 @@
 #include "Array.h"
 #include "JavaToQore.h"
 #include "QoreToJava.h"
+#include "QoreJniClassMap.h"
 
 namespace jni {
 
@@ -154,6 +155,14 @@ QoreValue Array::get(Env& env, jarray array, Type elementType, jclass elementCla
 
 QoreValue Array::get(int64 index, QoreProgram* pgm, bool compat_types) const {
     Env env;
+    if (elementType == Type::Reference) {
+        LocalReference<jobject> v = env.getObjectArrayElement(jobj.cast<jobjectArray>(), index);
+        // qore#6551: converting the element can run its Java code (ex: entrySet() of a Map), which runs in the
+        // context of the calling code, as the read does not enter the array's Program; a primitive element runs no
+        // Java code
+        JniPendingContextHelper pending_ctx;
+        return JavaToQore::convertToQore(std::move(v), pgm, compat_types);
+    }
     return get(env, jobj.cast<jarray>(), elementType, elementClass, index, pgm, compat_types);
 }
 
@@ -163,6 +172,11 @@ void Array::set(int64 index, const QoreValue &value, JniExternalProgramData* jpc
 
 QoreStringNodeHolder Array::deepToString() const {
     Env env;
+    if (elementType == Type::Reference) {
+        // qore#6551: the toString() methods of the elements run in the context of the calling code; the elements of
+        // an array of a primitive type run no Java code
+        JniExternalProgramData::setContext(env);
+    }
     return deepToString(env, jobj.cast<jarray>());
 }
 

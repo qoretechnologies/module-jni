@@ -30,6 +30,7 @@
 #include "Env.h"
 #include "JavaToQore.h"
 #include "QoreToJava.h"
+#include "QoreJniClassMap.h"
 
 namespace jni {
 
@@ -65,7 +66,13 @@ QoreValue BaseField::get(jobject object, QoreProgram* pgm, bool compat_types) {
         case Type::Reference:
         default:
             assert(type == Type::Reference);
-            return JavaToQore::convertToQore(env.getObjectField(object, id), pgm, compat_types);
+            {
+                LocalReference<jobject> v = env.getObjectField(object, id);
+                // qore#6551: converting the value can run its Java code (ex: entrySet() of a Map), which runs in
+                // the context of the calling code; a primitive value runs no Java code
+                JniPendingContextHelper pending_ctx;
+                return JavaToQore::convertToQore(std::move(v), pgm, compat_types);
+            }
     }
 }
 
@@ -129,7 +136,13 @@ QoreValue BaseField::getStatic(QoreProgram* pgm, bool compat_types) {
         case Type::Reference:
         default:
             assert(type == Type::Reference);
-            return JavaToQore::convertToQore(env.getStaticObjectField(cls->getJavaObject(), id), pgm, compat_types);
+            {
+                LocalReference<jobject> v = env.getStaticObjectField(cls->getJavaObject(), id);
+                // qore#6551: converting the value can run its Java code, which runs in the context of the calling
+                // code
+                JniPendingContextHelper pending_ctx;
+                return JavaToQore::convertToQore(std::move(v), pgm, compat_types);
+            }
     }
 }
 

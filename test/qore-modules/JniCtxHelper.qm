@@ -1,0 +1,30 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# JniCtxHelper.qm - test module that makes a Java call in its own Program (test/jni-context-direct-calls.qtest)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires jni
+%module-cmd(jni) import java.util.ArrayList
+%module-cmd(jni) import org.qore.jni.QoreJavaApi
+
+module JniCtxHelper {
+    version = "1.0";
+    desc = "test module for the thread's Java context during class loading (qore#6551)";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace JniCtxHelper {
+    #! makes a Java call in this module's Program, which sets the thread's Java context to it
+    public sub touch() {
+        ArrayList l();
+        l.size();
+    }
+
+    #! returns the answer of get_script_path() to a call from Java into Qore made by a Java call of this module's
+    #! Program: the Program that the thread's Java context is set to by this module's Java calls
+    public auto sub scriptPathFromJava() {
+        return QoreJavaApi::callFunction("get_script_path");
+    }
+}

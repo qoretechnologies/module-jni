@@ -586,6 +586,7 @@ QoreValue QoreJniClassMap::getValue(LocalReference<jobject>& obj, QoreProgram* p
             nullptr).as<jstring>();
         Env::GetStringUtfChars tname(env, clsName);
         if (!strcmp(tname.c_str(), "microsoft.sql.DateTimeOffset")) {
+            JniPendingContextHelper::set(env);
             LocalReference<jstring> date_str = env.callObjectMethod(obj,
                 Globals::methodObjectToString, nullptr).as<jstring>();
             Env::GetStringUtfChars chars(env, date_str);
@@ -606,7 +607,62 @@ static LocalReference<jstring> get_dot_name(Env& env, const char* name) {
     return env.newString(nname.c_str());
 }
 
+namespace {
+//! Sets the thread's Java context for the lookup of a class that is not in a cache, and restores the previous one
+/** JNI FindClass initializes a class that it loads, which runs its static initializers: Java code that runs in the
+    context of the Program that the class is loaded for (qore#6551); the lookup can be made in the middle of another
+    operation (ex: a conversion), whose context is restored after it; no context is set while the module bootstraps,
+    before a Program has a jni context
+*/
+class JniClassLookupContextHelper {
+public:
+    DLLLOCAL JniClassLookupContextHelper(Env& env, JniExternalProgramData* jpc) : env(env) {
+        if (!Globals::methodQoreURLClassLoaderSetContext || !Globals::methodQoreURLClassLoaderGetCurrent) {
+            return;
+        }
+        JniExternalProgramData* ctx = jpc ? jpc : jni_get_context_unconditional();
+        if (!ctx || !ctx->getClassLoader()) {
+            return;
+        }
+        LocalReference<jobject> current = env.callStaticObjectMethod(Globals::classQoreURLClassLoader,
+            Globals::methodQoreURLClassLoaderGetCurrent, nullptr);
+        if (current) {
+            saved = current.makeGlobal();
+        }
+        env.callVoidMethod(ctx->getClassLoader(), Globals::methodQoreURLClassLoaderSetContext, nullptr);
+    }
+
+    DLLLOCAL ~JniClassLookupContextHelper() {
+        if (!saved) {
+            return;
+        }
+        // the destructor can run while an exception propagates: a pending Java exception is set aside for the call
+        // and thrown again afterwards
+        JNIEnv* jenv = Jvm::getEnv();
+        jthrowable pending = jenv->ExceptionOccurred();
+        if (pending) {
+            jenv->ExceptionClear();
+        }
+        jenv->CallVoidMethod(saved, Globals::methodQoreURLClassLoaderSetContext);
+        if (jenv->ExceptionCheck()) {
+            // a failure to restore the context is not reported in place of the operation's own result
+            jenv->ExceptionClear();
+        }
+        if (pending) {
+            jenv->Throw(pending);
+            jenv->DeleteLocalRef(pending);
+        }
+    }
+
+private:
+    Env& env;
+    GlobalReference<jobject> saved;
+};
+}  // namespace
+
 Class* QoreJniClassMap::loadClass(Env& env, const char* name, bool& base, JniExternalProgramData* jpc) {
+    // this path runs only for a class that is not in a cache
+    JniClassLookupContextHelper ctx_helper(env, jpc);
     try {
         base = true;
 
@@ -1264,6 +1320,14 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
 
     // add methods after parents
     if (init_done) {
+        // qore#6551: adding the class's members initializes the Java class (the IDs of its static members), which
+        // runs its static initializers: Java code that runs in the context of the Program that the class is created
+        // in, which the thread has entered; this path runs only when a class is created
+        {
+            Env env;
+            QoreProgram* ctx_pgm = pgm;
+            JniExternalProgramData::setContext(env, ctx_pgm);
+        }
         populateQoreClass(*qc, jc, pgm);
     }
 
@@ -4883,6 +4947,8 @@ void JniExternalProgramData::addParentClasspath(const char* path) {
         }
     }
 }
+
+thread_local bool JniPendingContextHelper::pending = false;
 
 JniExternalProgramData* JniExternalProgramData::setContext(Env& env) {
     QoreProgram* pgm = nullptr;

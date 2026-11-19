@@ -271,6 +271,11 @@ Jni::java::lang::Class load_class(string class_name) [dom=UNCONTROLLED_API;flags
 Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
         Env env;
+        // qore#6551: the Java method runs in the context of the calling code, which is also the context that the
+        // arguments and the return value are converted in (unlike a call of a Java method of an object, this function
+        // does not enter the object's Program); set first, as the method ID lookup below can initialize the
+        // method's class, which runs its static initializers
+        JniExternalProgramData::setContext(env);
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
             Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
         BaseMethod m(method->getObject(), *cls);
@@ -296,7 +301,13 @@ Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateDa
 Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
         Env env;
-        SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(), Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
+        // qore#6551: the Java method runs in the context of the calling code, which is also the context that the
+        // arguments and the return value are converted in (unlike a call of a Java method of an object, this function
+        // does not enter the object's Program); set first, as the method ID lookup below can initialize the
+        // method's class, which runs its static initializers
+        JniExternalProgramData::setContext(env);
+        SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
+            Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
         BaseMethod m(method->getObject(), *cls);
 
         QoreProgram* pgm = jni_get_program_context();
@@ -622,6 +633,9 @@ auto result = kotlin_eval(script: "1 + 2");  // returns 3
 auto kotlin_eval(string script) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
     try {
         jni::Env env;
+        // qore#6551: the script engine's discovery, which the first use makes through the thread's context class
+        // loader and whose failure is kept, and the evaluation run in the context of the calling code
+        JniExternalProgramData::setContext(env);
 
         // Initialize the Kotlin script engine if not already done
         Globals::initKotlinScriptEngine();
@@ -694,6 +708,8 @@ if (kotlin_scripting_available()) {
 bool kotlin_scripting_available() [dom=UNCONTROLLED_API] {
     try {
         jni::Env env;
+        // qore#6551: the script engine's discovery runs in the context of the calling code
+        JniExternalProgramData::setContext(env);
 
         // Initialize the Kotlin script engine if not already done
         Globals::initKotlinScriptEngine();
@@ -733,6 +749,8 @@ if (kotlin_scripting_retry()) {
 bool kotlin_scripting_retry() [dom=UNCONTROLLED_API] {
     try {
         jni::Env env;
+        // qore#6551: the script engine's discovery runs in the context of the calling code
+        JniExternalProgramData::setContext(env);
 
         // Initialize the Kotlin script engine if not already done
         Globals::initKotlinScriptEngine();

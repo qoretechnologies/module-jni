@@ -25,7 +25,15 @@ public class QoreObjectBase {
     public QoreObjectBase(long qcptr, long mptr, long vptr, Object... args) throws Throwable {
         // Register first with ptr=0 so phantom dispatch is safe even if create0 throws.
         this.ref = NativeCleanup.register(this, 0, NativeCleanup.KIND_OBJECT_BASE_WEAK);
-        long ptr = create0(qcptr, mptr, vptr, this, args);
+        // the Qore constructor can make Java calls for other Programs: the thread's classloader context is restored
+        // when it returns to Java (qore#6551)
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        long ptr;
+        try {
+            ptr = create0(qcptr, mptr, vptr, this, args);
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
         if (!this.ref.publish(ptr)) {
             if (ptr != 0) {
                 release0(ptr);
@@ -65,7 +73,14 @@ public class QoreObjectBase {
         obj = 0;
         NativeCleanup.unregister(ref);
         if (x != 0) {
-            destroy0(x);
+            // the Qore destructor can make Java calls for other Programs: the thread's classloader context is
+            // restored when it returns to Java (qore#6551)
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                destroy0(x);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         }
     }
 
