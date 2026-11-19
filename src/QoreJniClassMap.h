@@ -882,6 +882,21 @@ DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm
 */
 DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
         ExceptionSink* xsink);
+
+//! Makes the Program that a Java class is added to current, for its namespaces to be changed under its parse lock
+/** Adding a class to a Program changes its definitions, as parsing does, and runs none of its code: when the Program
+    is the current one already, it is not entered.  It is current for a module command (an \c import, also one issued
+    with Program::issueModuleCmd() while the Program has code pending, which no runtime entry is allowed into) and for
+    a parse in the Program; the caller holds it then.  Otherwise (ex: a class loaded in a thread that Java started),
+    it is entered, which also holds it while it is changed.
+
+    @param epch holds the entry; it is left empty when the Program is current
+
+    @throw XsinkException the Program cannot be entered (PROGRAM-ERROR if it is being torn down or parsed), or its
+    entry handler or thread initialization code raised an exception
+*/
+DLLLOCAL void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch,
+        QoreProgram* pgm);
 }
 
 #endif

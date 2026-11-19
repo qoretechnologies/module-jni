@@ -758,10 +758,10 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
     }
 
     assert(pgm);
-    QoreExternalProgramContextHelper epch(&xsink, pgm);
-    if (xsink) {
-        throw XsinkException(xsink);
-    }
+    // no runtime entry when the Program is current: a module command can add the class to a Program that has code
+    // pending (see jni_enter_program_for_class_add())
+    std::optional<QoreExternalProgramContextHelper> epch;
+    jni_enter_program_for_class_add(epch, pgm);
 
     // grab current Program's parse lock before manipulating namespaces
     CurrentProgramRuntimeExternalParseContextHelper pch;
@@ -1055,11 +1055,10 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
     }
 
     assert(pgm);
-    ExceptionSink xsink;
-    QoreExternalProgramContextHelper epch(&xsink, pgm);
-    if (xsink) {
-        throw XsinkException(xsink);
-    }
+    // no runtime entry when the Program is current: a module command can add the class to a Program that has code
+    // pending (see jni_enter_program_for_class_add())
+    std::optional<QoreExternalProgramContextHelper> epch;
+    jni_enter_program_for_class_add(epch, pgm);
 
     // grab current Program's parse lock before manipulating namespaces
     CurrentProgramRuntimeExternalParseContextHelper pch;
@@ -4716,6 +4715,19 @@ bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);
     return reg.pgms.find(pgm) != reg.pgms.end();
+}
+
+void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram* pgm) {
+    assert(pgm);
+    if (pgm == ::getProgram()) {
+        return;
+    }
+    ExceptionSink xsink;
+    epch.emplace(&xsink, pgm);
+    if (xsink) {
+        epch.reset();
+        throw XsinkException(xsink);
+    }
 }
 
 int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,

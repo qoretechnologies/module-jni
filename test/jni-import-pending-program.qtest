@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The "import" module command adds a Java class to a Program that has code pending (parsed with
+# Program::parsePending() and not yet committed), as Qorus does when it initializes Java in a container
+# (QorusProgram::initJava() before commitPending()).
+#
+# A module command runs with the target Program current but not entered (qore#6185): no runtime entry is allowed into
+# a Program while it has code pending.  Adding the class to the Program changes its definitions under its parse lock
+# and runs none of its code, so the jni module must not enter the Program for it; it did, and the import failed with
+# "PROGRAM-ERROR: the Program accessed is currently undergoing parsing and cannot be accessed at runtime" for a class
+# that the base class loader loads, both when the class was new and when another Program had imported it first.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires QUnit
+
+%exec-class JniImportPendingProgramTest
+
+class JniImportPendingProgramTest inherits QUnit::Test {
+    public {
+        #! the code that each Program has pending when the classes are imported
+        const PendingCode = "string sub pending() { return 'pending'; }";
+    }
+
+    constructor() : Test("jni import into a Program with code pending", "1.0", \ARGV) {
+        addTestCase("a class that no Program has imported", \newClassTest());
+        addTestCase("a class that another Program has imported", \cachedClassTest());
+        addTestCase("several classes, as Qorus imports them", \severalClassesTest());
+        addTestCase("a wildcard import used by code parsed later", \wildcardTest());
+        addTestCase("code parsed after the import uses the class", \laterCodeTest());
+        addTestCase("an import of a class that does not exist", \missingClassTest());
+        addTestCase("the Program's code still cannot run before the commit", \noRuntimeEntryTest());
+        addTestCase("an import from a thread other than the one that parsed the code", \otherThreadTest());
+        set_return_value(main());
+    }
+
+    newClassTest() {
+        # a class that no other test or Program imports
+        Program p = getPendingProgram();
+        p.issueModuleCmd("jni", "import java.util.concurrent.ConcurrentSkipListSet");
+        p.parseCommit();
+        assertEq("ConcurrentSkipListSet", newObjectClassName(p, "ConcurrentSkipListSet"));
+        assertEq("pending", p.callFunction("pending"), "the pending code is committed with the import");
+    }
+
+    cachedClassTest() {
+        # another Program imports the class first, so that the module has it in its global class cache: the class is
+        # then only added to the pending Program
+        {
+            Program other(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            other.loadModule("jni");
+            other.issueModuleCmd("jni", "import java.util.ArrayDeque");
+            other.parse("", "other");
+            assertEq("ArrayDeque", newObjectClassName(other, "ArrayDeque"));
+        }
+
+        Program p = getPendingProgram();
+        p.issueModuleCmd("jni", "import java.util.ArrayDeque");
+        p.parseCommit();
+        assertEq("ArrayDeque", newObjectClassName(p, "ArrayDeque"));
+    }
+
+    severalClassesTest() {
+        # the imports of QorusProgram::initJava() that the base class loader and the jni module's own jar serve
+        Program p = getPendingProgram();
+        p.issueModuleCmd("jni", "import org.qore.jni.*");
+        p.issueModuleCmd("jni", "import java.util.ArrayList");
+        p.issueModuleCmd("jni", "import javax.tools.DiagnosticCollector");
+        p.parseCommit();
+        assertEq("ArrayList", newObjectClassName(p, "ArrayList"));
+        assertEq("DiagnosticCollector", newObjectClassName(p, "DiagnosticCollector"));
+    }
+
+    wildcardTest() {
+        Program p = getPendingProgram();
+        p.issueModuleCmd("jni", "import java.util.concurrent.atomic.*");
+        # the class is resolved when the code that uses it is parsed, still before the commit
+        p.parsePending("string sub get_atomic() { AtomicLong a(); return a.className(); }", "wildcard");
+        p.parseCommit();
+        assertEq("AtomicLong", p.callFunction("get_atomic"));
+    }
+
+    laterCodeTest() {
+        Program p = getPendingProgram();
+        p.issueModuleCmd("jni", "import java.util.TreeMap");
+        p.parsePending("string sub get_map() { TreeMap m(); return m.className(); }", "later");
+        p.parseCommit();
+        assertEq("TreeMap", p.callFunction("get_map"));
+    }
+
+    missingClassTest() {
+        Program p = getPendingProgram();
+        # the import's own error, not the refusal of an entry into the Program
+        assertThrows("JNI-ERROR", "NoClassDefFoundError|ClassNotFoundException",
+            \p.issueModuleCmd(), ("jni", "import org.qore.jni.test.NoSuchClassForPendingImport"));
+        # the failed import leaves the Program usable: its pending code is committed
+        p.issueModuleCmd("jni", "import java.util.LinkedHashSet");
+        p.parseCommit();
+        assertEq("LinkedHashSet", newObjectClassName(p, "LinkedHashSet"));
+        assertEq("pending", p.callFunction("pending"));
+    }
+
+    noRuntimeEntryTest() {
+        # the import does not open the Program to runtime entries while it has code pending
+        Program p = getPendingProgram();
+        p.issueModuleCmd("jni", "import java.util.HashSet");
+        assertThrows("PROGRAM-ERROR", "currently undergoing parsing", \p.callFunction(), "pending");
+        p.parseCommit();
+        assertEq("pending", p.callFunction("pending"));
+        assertEq("HashSet", newObjectClassName(p, "HashSet"));
+    }
+
+    otherThreadTest() {
+        # a Program shared by threads (as a Qorus container): the code is parsed in one thread and the class is
+        # imported in another one, still before the commit
+        Program p = getPendingProgram();
+        Queue result();
+        background sub () {
+            try {
+                p.issueModuleCmd("jni", "import java.util.concurrent.ConcurrentLinkedQueue");
+                result.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(sprintf("%s: %s", ex.err, ex.desc));
+            }
+        }();
+        assertEq(True, result.get());
+        p.parseCommit();
+        assertEq("ConcurrentLinkedQueue", newObjectClassName(p, "ConcurrentLinkedQueue"));
+    }
+
+    #! returns a new Program with the jni module loaded and code pending
+    private Program getPendingProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # code pending from the start, as a Qorus container has from its construction until its first commit
+        p.parsePending(PendingCode, "pending");
+        p.loadModule("jni");
+        return p;
+    }
+
+    #! returns the class name of a new object of the class with the given short name in the given Program
+    private string newObjectClassName(Program p, string short_name) {
+        Expression e(p, sprintf("new %s().className()", short_name), "new-object");
+        return e.eval();
+    }
+}
