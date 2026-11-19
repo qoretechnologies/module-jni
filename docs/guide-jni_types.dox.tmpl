@@ -191,7 +191,12 @@
     - an \c org.qore.jni.QoreException whose argument cannot be converted (ex: a \c Map with a key that has a NUL
       character) is reported as the Java exception that it is, as for any other error converting its argument
 
-    A classpath given to a module command is still cut at its first NUL character.
+    A classpath is a file path, so a classpath with a NUL character is refused too (qore#6771): the
+    \c add-classpath and \c add-relative-classpath module commands and their \c global-* forms raise
+    \c JNI-ERROR, ex: <tt>classpath "/dir\x00junk" contains a NUL character at byte offset 4; classpaths cannot
+    contain NUL characters</tt>, and the \c classpath option of the \c jdbc driver raises \c JDBC-OPTION-ERROR (or
+    \c DBI-OPTION-ERROR from a %Qore library that refuses a NUL character in every DBI option value); nothing is
+    added to the classpath.
 
     A classpath is in the default encoding, as %Qore's file names are; it is converted once to the Java string that
     the class loader uses, and the sandbox's filesystem policy checks each of its entries as the JVM uses it: as an

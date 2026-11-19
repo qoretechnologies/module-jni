@@ -39,6 +39,7 @@
 #include "QoreJniClassMap.h"
 #include "GeneratedBinding.h"
 #include "JavaSandbox.h"
+#include "ql_jni_debug.h"
 
 #include <thread>
 #include <unordered_map>
@@ -117,6 +118,10 @@ jmethodID Globals::methodClassIsAssignableFrom;
 jmethodID Globals::methodClassGetMethod;
 
 GlobalReference<jclass> Globals::classThrowable;
+std::atomic<jclass> Globals::classError{nullptr};
+std::atomic<jclass> Globals::classRuntimeException{nullptr};
+std::atomic<jclass> Globals::classOutOfMemoryError{nullptr};
+std::atomic<jclass> Globals::classClassNotFoundException{nullptr};
 jmethodID Globals::methodThrowableGetMessage;
 jmethodID Globals::methodThrowableGetStackTrace;
 jmethodID Globals::methodThrowableGetCause;
@@ -601,16 +606,148 @@ static std::atomic<size_t> qmnc_searches(0);
 static std::atomic<size_t> qmnc_locked_searches(0);
 #endif
 
-static void JNICALL invocation_handler_finalize(JNIEnv* jenv, jclass, jlong ptr) {
+//! Throws a new Java exception with \a throw_new, which takes the class; see jni_throw_new()
+/** @param fatal_msg the message for JNI's FatalError(), if no Java exception can be made pending
+*/
+template <typename F>
+static void jni_throw_new_intern(JNIEnv* jenv, jclass cls, const char* cls_name, const char* fatal_msg,
+        F throw_new) noexcept {
+    jclass local = nullptr;
+    if (!cls) {
+        // the module is not initialized, or has been cleaned up: the class is looked up
+        jenv->ExceptionClear();
+        local = jenv->FindClass(cls_name);
+        if (!local) {
+            // the Java exception of the failed lookup is pending, and reports the error
+            if (!jenv->ExceptionCheck()) {
+                jenv->FatalError(fatal_msg);
+            }
+            return;
+        }
+        cls = local;
+    }
+    jint rc = throw_new(cls);
+    if (local) {
+        // allowed with an exception pending
+        jenv->DeleteLocalRef(local);
+    }
+    // on failure, the Java exception of the failure (ex: an OutOfMemoryError) is pending
+    if (rc && !jenv->ExceptionCheck()) {
+        jenv->FatalError(fatal_msg);
+    }
+}
+
+void jni_throw_new(JNIEnv* jenv, jclass cls, const char* cls_name, const char* msg, size_t len) noexcept {
+    jni_throw_new_intern(jenv, cls, cls_name, "cannot raise a Java exception in a JNI native method",
+        [&](jclass c) -> jint { return Env::throwNew(jenv, c, msg, len); });
+}
+
+void jni_throw_new(JNIEnv* jenv, jclass cls, const char* cls_name, const QoreString& msg) noexcept {
+    jni_throw_new_intern(jenv, cls, cls_name, "cannot raise a Java exception in a JNI native method",
+        [&](jclass c) -> jint { return Env::throwNew(jenv, c, msg); });
+}
+
+void Globals::cacheErrorClass(Env& env, std::atomic<jclass>& cls, const char* name) {
+    if (cls.load(std::memory_order_acquire)) {
+        return;
+    }
+    LocalReference<jclass> local = env.findClass(name);
+    jclass global = static_cast<jclass>((*env)->NewGlobalRef(local));
+    if (!global) {
+        throw JavaException();
+    }
+    cls.store(global, std::memory_order_release);
+}
+
+//! Leaves the %Qore exception of a jni::XsinkException unfreed, where it cannot be freed safely
+/** The %Qore exception of a jni::XsinkException is freed with the C++ exception; where the thread cannot be attached
+    to %Qore, or %Qore is shut down, it would be reported as an unhandled exception and freed in that state
+*/
+static void jni_native_leak_qore_exception(AbstractException& e) noexcept {
+    XsinkException* xe = dynamic_cast<XsinkException*>(&e);
+    if (xe) {
+        xe->leak();
+    }
+}
+
+//! Raises a %Qore exception (a jni::Exception other than jni::JavaException) in Java, without C++ exceptions
+/** The %Qore exception is raised as an \c org.qore.jni.QoreExceptionWrapper.  The locals of the native method,
+    including the helper that attached the thread to %Qore, have been destroyed, so the thread is attached here for the
+    conversion if it is not attached.
+*/
+static void jni_native_raise_qore_exception(JNIEnv* jenv, AbstractException& e) noexcept {
+    // the C++ exception replaces a pending Java exception
+    jenv->ExceptionClear();
+    // no Qore API may be used once the library or the module is shut down
+    if (q_libqore_shutdown() || Globals::isShuttingDown()) {
+        jni_native_leak_qore_exception(e);
+        jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java; the Qore library or "
+            "the jni module has been shut down");
+        return;
+    }
+    QoreThreadAttacher attacher;
+    try {
+        attacher.attach();
+    } catch (...) {
+        jni_native_leak_qore_exception(e);
+        jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java; the thread cannot be "
+            "attached to Qore");
+        return;
+    }
+    try {
+        // destroyed before the thread is detached
+        ExceptionSink xsink;
+        try {
+            e.convert(&xsink);
+            Env env(jenv);
+            QoreToJava::wrapException(env, xsink);
+            return;
+        } catch (...) {
+            // the exceptions are freed while the thread is attached
+            xsink.clear();
+            jni::Exception* je = dynamic_cast<jni::Exception*>(&e);
+            if (je) {
+                je->ignore();
+            }
+            throw;
+        }
+    } catch (JavaException&) {
+        // the wrapper could not be made: the Java exception of the failure is pending, and is raised instead
+        if (jenv->ExceptionCheck()) {
+            return;
+        }
+        jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java");
+    } catch (const std::bad_alloc& oom) {
+        jni_throw_out_of_memory(jenv, oom.what());
+    } catch (...) {
+        // any other error converting the exception (ex: a jni::Exception from the wrapper)
+        jni_throw_error(jenv, "cannot raise the Qore exception of a JNI native method in Java");
+    }
+}
+
+void jni_native_exception(JNIEnv* jenv) noexcept {
+    try {
+        throw;
+    } catch (JavaException&) {
+        // the Java exception is pending
+        if (!jenv->ExceptionCheck()) {
+            jni_throw_error(jenv, "internal error: a JNI call failed with no Java exception pending");
+        }
+    } catch (AbstractException& e) {
+        // a jni::Exception other than jni::JavaException, or another Qore exception (ex: QoreStandardException)
+        jni_native_raise_qore_exception(jenv, e);
+    } catch (const std::bad_alloc& e) {
+        jni_throw_out_of_memory(jenv, e.what());
+    } catch (const std::exception& e) {
+        jni_throw_error(jenv, e.what());
+    } catch (...) {
+        jni_throw_error(jenv, "Unknown exception type");
+    }
+}
+
+static void JNICALL invocation_handler_finalize(JNIEnv* jenv, jclass, jlong ptr) try {
     std::unique_ptr<Dispatcher> dispatcher(reinterpret_cast<Dispatcher*>(ptr));
     ExceptionSink xsink;
-    auto raise = [jenv](const char* name, const char* message) {
-        jclass cls = jenv->FindClass(name);
-        if (cls) {
-            Env::throwNew(jenv, cls, message);
-            jenv->DeleteLocalRef(cls);
-        }
-    };
     try {
         dispatcher->destroy(xsink);
         dispatcher.reset();
@@ -623,21 +760,22 @@ static void JNICALL invocation_handler_finalize(JNIEnv* jenv, jclass, jlong ptr)
         xsink.clear();
     } catch (const std::bad_alloc& e) {
         xsink.clear();
-        raise("java/lang/OutOfMemoryError", e.what());
+        jni_throw_out_of_memory(jenv, e.what());
     } catch (const std::exception& e) {
         xsink.clear();
-        raise("java/lang/RuntimeException", e.what());
+        jni_throw_runtime_exception(jenv, e.what());
     } catch (...) {
         xsink.clear();
-        raise("java/lang/RuntimeException", "Native invocation handler cleanup failed");
+        jni_throw_runtime_exception(jenv, "Native invocation handler cleanup failed");
     }
-}
+} JNI_NATIVE_CATCH(jenv)
 
-static jobject JNICALL invocation_handler_invoke(JNIEnv* jenv, jobject, jlong ptr, jobject proxy, jobject method, jobjectArray args) {
+static jobject JNICALL invocation_handler_invoke(JNIEnv* jenv, jobject, jlong ptr, jobject proxy, jobject method,
+        jobjectArray args) try {
     Env env(jenv);
     Dispatcher* dispatcher = reinterpret_cast<Dispatcher*>(ptr);
     return dispatcher->dispatch(env, proxy, method, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static int save_object_thread(Env& env, const QoreValue& rv, QoreProgram* pgm, ExceptionSink& xsink) {
     QoreHashNode* data = pgm->getThreadData();
@@ -712,7 +850,7 @@ static int save_object(Env& env, const QoreValue& rv, QoreProgram* pgm, Exceptio
     return save_object_thread(env, rv, pgm, xsink);
 }
 
-static jlong JNICALL java_api_init_qore(JNIEnv* jenv, jobject obj) {
+static jlong JNICALL java_api_init_qore(JNIEnv* jenv, jobject obj) try {
     QoreThreadAttachHelper attach_helper;
     Env env(jenv);
     try {
@@ -723,10 +861,10 @@ static jlong JNICALL java_api_init_qore(JNIEnv* jenv, jobject obj) {
         env.callVoidMethod(Globals::syscl, Globals::methodQoreURLClassLoaderSetContext, nullptr);
         return reinterpret_cast<jlong>(Globals::getJavaContextProgram());
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return 0;
     }
-}
+} JNI_NATIVE_CATCH(jenv, 0)
 
 //! Raises a Qore exception in Java for a native method; no C++ exception is raised other than std::bad_alloc
 static void jni_raise_in_java(Env& env, ExceptionSink& xsink) {
@@ -786,12 +924,16 @@ static int jni_get_java_args(Env& env, ReferenceHolder<QoreListNode>& qore_args,
 
 static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong ptr, jboolean save, jstring name,
         jobjectArray args) {
+#ifdef DEBUG
+    // a test can throw a C++ exception here, before the thread is attached to Qore (see Jni::dbg_jni_native_throw())
+    dbg_jni_native_throw_point();
+#endif
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
@@ -861,14 +1003,14 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
 }
 
 static jobject JNICALL java_api_call_function(JNIEnv* jenv, jobject obj, jlong ptr, jstring name,
-    jobjectArray args) {
+    jobjectArray args) try {
     return java_api_call_function_internal(jenv, obj, ptr, false, name, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL java_api_call_function_save(JNIEnv* jenv, jobject obj, jlong ptr, jstring name,
-    jobjectArray args) {
+    jobjectArray args) try {
     return java_api_call_function_internal(jenv, obj, ptr, true, name, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, jlong ptr, jboolean save,
         jstring class_name, jstring method_name, jobjectArray args, const QoreClass* cls = nullptr,
@@ -878,7 +1020,7 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -979,18 +1121,18 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
 }
 
 static jobject JNICALL java_api_call_static_method(JNIEnv* jenv, jobject obj, jlong ptr, jstring class_name,
-    jstring method_name, jobjectArray args) {
+    jstring method_name, jobjectArray args) try {
     return java_api_call_static_method_internal(jenv, obj, ptr, false, class_name, method_name, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL java_api_call_static_method_save(JNIEnv* jenv, jobject obj, jlong ptr, jstring class_name,
-    jstring method_name, jobjectArray args) {
+    jstring method_name, jobjectArray args) try {
     return java_api_call_static_method_internal(jenv, obj, ptr, true, class_name, method_name, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 // private native static QoreObject newObjectSave0(long pgm_ptr, String class_name, Object...args);
 static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong ptr, jstring cname,
-        jobjectArray args) {
+        jobjectArray args) try {
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
 
     Env env(jenv);
@@ -998,7 +1140,7 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -1080,9 +1222,9 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
         QoreToJava::wrapException(env, xsink);
         return nullptr;
     }
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jboolean JNICALL java_api_register_java_thread(JNIEnv* jenv, jobject obj) {
+static jboolean JNICALL java_api_register_java_thread(JNIEnv* jenv, jobject obj) try {
     int rc = q_register_foreign_thread();
     jboolean rv;
     if (rc == QFT_OK) {
@@ -1093,11 +1235,11 @@ static jboolean JNICALL java_api_register_java_thread(JNIEnv* jenv, jobject obj)
         rv = false;
     }
     return rv;
-}
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
-static void JNICALL java_api_deregister_java_thread(JNIEnv* jenv, jobject obj) {
+static void JNICALL java_api_deregister_java_thread(JNIEnv* jenv, jobject obj) try {
     q_deregister_foreign_thread();
-}
+} JNI_NATIVE_CATCH(jenv)
 
 namespace {
 // The Java caller owns this state until its connection worker has been joined. The worker only
@@ -1109,27 +1251,23 @@ struct JdbcConnectionWaiter {
 };
 }
 
-static jlong JNICALL java_api_new_connection_waiter(JNIEnv* env, jclass) {
+static jlong JNICALL java_api_new_connection_waiter(JNIEnv* jenv, jclass) try {
     try {
         return reinterpret_cast<jlong>(new JdbcConnectionWaiter);
     } catch (const std::bad_alloc&) {
-        jclass cls = env->FindClass("java/lang/OutOfMemoryError");
-        if (cls) {
-            Env::throwNew(env, cls, "cannot allocate JDBC connection waiter");
-            env->DeleteLocalRef(cls);
-        }
+        jni_throw_out_of_memory(jenv, "cannot allocate JDBC connection waiter");
         return 0;
     }
-}
+} JNI_NATIVE_CATCH(jenv, 0)
 
-static void JNICALL java_api_complete_connection_waiter(JNIEnv*, jclass, jlong ptr) {
+static void JNICALL java_api_complete_connection_waiter(JNIEnv* jenv, jclass, jlong ptr) try {
     auto* waiter = reinterpret_cast<JdbcConnectionWaiter*>(ptr);
     AutoLocker lock(waiter->lock);
     waiter->complete = true;
     waiter->condition.signal();
-}
+} JNI_NATIVE_CATCH(jenv)
 
-static void JNICALL java_api_await_connection_waiter(JNIEnv* jenv, jclass, jlong ptr) {
+static void JNICALL java_api_await_connection_waiter(JNIEnv* jenv, jclass, jlong ptr) try {
     auto* waiter = reinterpret_cast<JdbcConnectionWaiter*>(ptr);
     ExceptionSink xsink;
     {
@@ -1151,20 +1289,16 @@ static void JNICALL java_api_await_connection_waiter(JNIEnv* jenv, jclass, jlong
         } catch (JavaException&) {
             // A failure allocating the wrapper has already raised a Java exception.
         } catch (const std::bad_alloc&) {
-            jclass cls = jenv->FindClass("java/lang/OutOfMemoryError");
-            if (cls) {
-                Env::throwNew(jenv, cls, "cannot wrap JDBC connection cancellation");
-                jenv->DeleteLocalRef(cls);
-            }
+            jni_throw_out_of_memory(jenv, "cannot wrap JDBC connection cancellation");
         }
     }
-}
+} JNI_NATIVE_CATCH(jenv)
 
-static void JNICALL java_api_delete_connection_waiter(JNIEnv*, jclass, jlong ptr) {
+static void JNICALL java_api_delete_connection_waiter(JNIEnv* jenv, jclass, jlong ptr) try {
     delete reinterpret_cast<JdbcConnectionWaiter*>(ptr);
-}
+} JNI_NATIVE_CATCH(jenv)
 
-static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, jlong ptr) {
+static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, jlong ptr) try {
     ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
 
     // no C++ exception may leave a JNI native method
@@ -1195,23 +1329,19 @@ static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, 
     } catch (JavaException&) {
         // the Java exception (ex: an OutOfMemoryError) is pending
     } catch (const std::bad_alloc&) {
-        jclass cls = jenv->FindClass("java/lang/OutOfMemoryError");
-        if (cls) {
-            Env::throwNew(jenv, cls, "cannot allocate the message of a Qore exception");
-            jenv->DeleteLocalRef(cls);
-        }
+        jni_throw_out_of_memory(jenv, "cannot allocate the message of a Qore exception");
     }
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jstring JNICALL qore_object_class_name(JNIEnv* jenv, jclass, jlong ptr) {
+static jstring JNICALL qore_object_class_name(JNIEnv* jenv, jclass, jlong ptr) try {
     QoreObject* obj = JniObjectHandle::fromJava(ptr)->getObject();
 
     Env env(jenv);
     return env.newString(obj->getClassName()).release();
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr, jstring cname) {
+static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr, jstring cname) try {
     QoreObject* obj = JniObjectHandle::fromJava(ptr)->getObject();
 
     Env env(jenv);
@@ -1234,7 +1364,7 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     }
     assert(!xsink);
     return obj->validInstanceOf(*cls);
-}
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
 static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgram* pgm, jlong obj_ptr, jboolean save,
         jstring mname, jobjectArray args, const QoreMethod* m = nullptr,
@@ -1247,7 +1377,7 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -1269,6 +1399,11 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         if (xsink) {
             throw XsinkException(xsink);
         }
+
+#ifdef DEBUG
+        // a test can throw a C++ exception here, in the Program's context (see Jni::dbg_jni_native_throw())
+        dbg_jni_native_throw_point();
+#endif
 
         jsize len = args ? env.getArrayLength(args) : 0;
         ReferenceHolder<QoreListNode> qore_args(&xsink);
@@ -1332,46 +1467,46 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         QoreToJava::wrapException(env, xsink);
     } catch (const std::bad_alloc& e) {
         // translate OOM C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/OutOfMemoryError"), e.what());
+        jni_throw_out_of_memory(*env, e.what());
     } catch (const std::exception& e) {
         // translate unknown C++ exceptions to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), e.what());
+        jni_throw_error(*env, e.what());
     } catch (...) {
         // translate unknown C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), "Unknown exception type");
+        jni_throw_error(*env, "Unknown exception type");
     }
     return nullptr;
 }
 
 static jobject JNICALL qore_object_call_method(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
-        jstring mname, jobjectArray args) {
+        jstring mname, jobjectArray args) try {
     return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, false, mname, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL qore_object_call_method_save(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
-        jstring mname, jobjectArray args) {
+        jstring mname, jobjectArray args) try {
     return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, true, mname, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL qore_closure_call(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
-        jobjectArray args) {
+        jobjectArray args) try {
     return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, false, nullptr, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL qore_closure_call_save(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
-        jobjectArray args) {
+        jobjectArray args) try {
     return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, true, nullptr, args);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL qore_object_get_member_value(JNIEnv* jenv, jobject jobj, jlong obj_ptr,
-        jstring member) {
+        jstring member) try {
     Env env(jenv);
 
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -1417,7 +1552,7 @@ static jobject JNICALL qore_object_get_member_value(JNIEnv* jenv, jobject jobj, 
         QoreToJava::wrapException(env, xsink);
         return nullptr;
     }
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 struct class_info_t {
     unsigned compressed_len;
@@ -1429,7 +1564,7 @@ typedef std::map<const char*, class_info_t, ltstr> cmap_t;
 
 DLLLOCAL extern cmap_t jar_cmap;
 
-static jbyteArray JNICALL qore_url_classloader_get_cached_class(JNIEnv* jenv, jclass jcls, jstring bin_name) {
+static jbyteArray JNICALL qore_url_classloader_get_cached_class(JNIEnv* jenv, jclass jcls, jstring bin_name) try {
     Env env(jenv);
     Env::GetStringUtfChars bname(env, bin_name);
     // a name with a NUL character, which a class name in the cache cannot have, is not found; it would be cut at the
@@ -1460,7 +1595,7 @@ static jbyteArray JNICALL qore_url_classloader_get_cached_class(JNIEnv* jenv, jc
 
     //printd(LogLevel, "qore_url_classloader_get_cached_class() FOUND '%s'\n", bname.c_str());
     return array.release();
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 // No C++ exception may cross a JNI boundary, including failures while resolving
 // a generated handle, attaching a foreign thread, or converting arguments.
@@ -1476,23 +1611,11 @@ static Result generated_native_call(JNIEnv* jenv, Callback&& callback) {
         e.convert(&xsink);
         QoreToJava::wrapException(env, xsink);
     } catch (const std::bad_alloc& e) {
-        jclass cls = jenv->FindClass("java/lang/OutOfMemoryError");
-        if (cls) {
-            Env::throwNew(jenv, cls, e.what());
-            jenv->DeleteLocalRef(cls);
-        }
+        jni_throw_out_of_memory(jenv, e.what());
     } catch (const std::exception& e) {
-        jclass cls = jenv->FindClass("java/lang/RuntimeException");
-        if (cls) {
-            Env::throwNew(jenv, cls, e.what());
-            jenv->DeleteLocalRef(cls);
-        }
+        jni_throw_runtime_exception(jenv, e.what());
     } catch (...) {
-        jclass cls = jenv->FindClass("java/lang/RuntimeException");
-        if (cls) {
-            Env::throwNew(jenv, cls, "Unknown exception in generated Qore binding");
-            jenv->DeleteLocalRef(cls);
-        }
+        jni_throw_runtime_exception(jenv, "Unknown exception in generated Qore binding");
     }
     return Result{};
 }
@@ -1516,7 +1639,7 @@ static JniExternalProgramData* generated_program_context(QoreProgram* pgm, jlong
 }
 
 static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jcls, jstring mname, jlong qobj,
-        jlong method_handle, jlong reserved, jobjectArray args) {
+        jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         GeneratedBindingContext binding(method_handle, GeneratedBindingKind::Method, &xsink);
         if (!qobj || reserved) {
@@ -1532,10 +1655,10 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
         return qore_object_closure_call_internal(jenv, jcls, pgm, qobj, true, mname, args,
             binding->method, static_cast<const QoreExternalMethodVariant*>(binding->variant));
     });
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL java_class_builder_do_static_call(JNIEnv* jenv, jclass jcls, jstring mname, jlong class_handle,
-        jlong program_id, jlong method_handle, jlong reserved, jobjectArray args) {
+        jlong program_id, jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         GeneratedBindingContext binding(method_handle, GeneratedBindingKind::StaticMethod, &xsink);
         GeneratedBindingContext cls(class_handle, GeneratedBindingKind::Class, &xsink);
@@ -1547,10 +1670,10 @@ static jobject JNICALL java_class_builder_do_static_call(JNIEnv* jenv, jclass jc
             nullptr, mname, args, binding->cls, binding->method,
             static_cast<const QoreExternalMethodVariant*>(binding->variant));
     });
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL java_class_builder_do_function_call(JNIEnv* jenv, jclass jcls, jlong program_id,
-        jlong function_handle, jlong reserved, jobjectArray args) {
+        jlong function_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         GeneratedBindingContext binding(function_handle, GeneratedBindingKind::Function, &xsink);
         QoreProgram* pgm = binding->pgm;
@@ -1572,10 +1695,10 @@ static jobject JNICALL java_class_builder_do_function_call(JNIEnv* jenv, jclass 
         }
         return QoreToJava::toAnyObject(env, *rv, jpc);
     });
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL java_class_builder_get_constant_value(JNIEnv* jenv, jclass jcls, jlong program_id,
-        jlong constant_handle) {
+        jlong constant_handle) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         JniExternalProgramData* caller_context = jni_get_context();
         GeneratedBindingContext binding(constant_handle, GeneratedBindingKind::Constant, &xsink);
@@ -1583,7 +1706,7 @@ static jobject JNICALL java_class_builder_get_constant_value(JNIEnv* jenv, jclas
         ValueHolder val(binding->constant->getReferencedValue(), &xsink);
         return QoreToJava::toAnyObject(env, *val, jpc);
     });
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static int load_module(Env& env, Env::GetStringUtfChars& mod_str, QoreProgram* pgm) {
     ExceptionSink xsink;
@@ -1595,7 +1718,7 @@ static int load_module(Env& env, Env::GetStringUtfChars& mod_str, QoreProgram* p
         jni_append_utf8(errdesc, xsink.getExceptionDesc());
         // the error is raised in Java only: the exception sink would report it as an unhandled exception
         xsink.clear();
-        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), errdesc);
+        jni_throw_class_not_found(*env, errdesc);
         //printd(5, "load_module() '%s': %s\n", mod_str.c_str(), errdesc.c_str());
         return -1;
     }
@@ -1622,7 +1745,7 @@ int load_python_module(Env& env, QoreProgram* pgm) {
 
         python_module_import = (python_module_import_t)dlsym(RTLD_DEFAULT, "python_module_import");
         if (!python_module_import) {
-            env.throwNew(env.findClass("java/lang/RuntimeException"), "python_module_import() symbol not found");
+            jni_throw_runtime_exception(*env, "python_module_import() symbol not found");
             return -1;
         }
         printd(5, "load_python_module() python_module_import symbol resolved\n");
@@ -1633,7 +1756,7 @@ int load_python_module(Env& env, QoreProgram* pgm) {
 }
 
 static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, jobject class_loader, jlong ptr,
-        jstring nspath, jstring jname, jstring module, jboolean python, jboolean kotlin, jlong class_ptr) {
+        jstring nspath, jstring jname, jstring module, jboolean python, jboolean kotlin, jlong class_ptr) try {
     assert(ptr);
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
     Env env(jenv);
@@ -1649,7 +1772,7 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -1672,12 +1795,12 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
         JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
         if (!jpc) {
             //printd(5, "pgm: %p\n", pgm);
-            env.throwNew(env.findClass("java/lang/RuntimeException"), "No JNI context for Qore Program");
+            jni_throw_runtime_exception(*env, "No JNI context for Qore Program");
             return nullptr;
         }
 
         if (!Globals::classJavaClassBuilder) {
-            env.throwNew(env.findClass("java/lang/RuntimeException"), "bytecode generation unavailable; cannot " \
+            jni_throw_runtime_exception(*env, "bytecode generation unavailable; cannot " \
                 "perform dynamic imports in Java");
             return nullptr;
         }
@@ -1718,16 +1841,16 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
         QoreToJava::wrapException(env, xsink);
     } catch (const std::bad_alloc& e) {
         // translate OOM C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/OutOfMemoryError"), e.what());
+        jni_throw_out_of_memory(*env, e.what());
     } catch (const std::exception& e) {
         // translate unknown C++ exceptions to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), e.what());
+        jni_throw_error(*env, e.what());
     } catch (...) {
         // translate unknown C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), "Unknown exception type");
+        jni_throw_error(*env, "Unknown exception type");
     }
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 typedef std::map<const char*, const QoreListNode*, ltstr> mod_dep_map_t;
 static bool is_module(const QoreNamespace* parent, const char* name, const QoreHashNode* all_mod_info,
@@ -2085,13 +2208,13 @@ static bool ns_has_foreign_members(const QoreNamespace& ns, const char* mod) {
 }
 
 static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jenv, jclass jcls, jlong ptr,
-        jstring qname, jstring module, jboolean python, jboolean kotlin, jobject arraylist) {
+        jstring qname, jstring module, jboolean python, jboolean kotlin, jobject arraylist) try {
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -2100,7 +2223,7 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
 
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     if (!jpc) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "No JNI context for Qore Program");
+        jni_throw_runtime_exception(*env, "No JNI context for Qore Program");
         return nullptr;
     }
 
@@ -2372,16 +2495,16 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
         QoreToJava::wrapException(env, xsink);
     } catch (const std::bad_alloc& e) {
         // translate OOM C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/OutOfMemoryError"), e.what());
+        jni_throw_out_of_memory(*env, e.what());
     } catch (const std::exception& e) {
         // translate unknown C++ exceptions to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), e.what());
+        jni_throw_error(*env, e.what());
     } catch (...) {
         // translate unknown C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), "Unknown exception type");
+        jni_throw_error(*env, "Unknown exception type");
     }
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 //! True once the JVM shutdown hook running the %Qore cleanup sequence has been requested
 /** See qore_url_classloader_get_context_program() and qore_url_classloader_shutdown_context().
@@ -2401,13 +2524,13 @@ static bool qore_cleanup_needs_jvm_shutdown_hook() {
 }
 
 static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jclass jcls, jobject new_syscl,
-        jobject created, jboolean finalize_init) {
+        jobject created, jboolean finalize_init) try {
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return 0;
     }
 
@@ -2437,20 +2560,20 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     }
     printd(5, "qore_url_classloader_get_context_program() rv: %p created: %d\n", rv, pcreated);
     return rv;
-}
+} JNI_NATIVE_CATCH(jenv, 0)
 
-static jobject JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv, jclass jcls, jlong ptr) {
+static jobject JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv, jclass jcls, jlong ptr) try {
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     if (!jpc) {
         Env env(jenv);
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "No JNI context for Qore Program");
+        jni_throw_runtime_exception(*env, "No JNI context for Qore Program");
         return nullptr;
     }
 
     jpc->clearCompilationCache();
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 //! Runs the %Qore library cleanup sequence from a JVM shutdown hook
 /** Registered by QoreURLClassLoader.setContextProgram() on the loader that established the
@@ -2471,7 +2594,7 @@ static jobject JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv
     triggers (jni_module_delete()) releases global JNI references and so needs a live JVM, while
     by the time atexit() handlers run the host's DestroyJavaVM() has already completed.
 */
-static jobject JNICALL qore_url_classloader_shutdown_context(JNIEnv* jenv, jclass jcls) {
+static jobject JNICALL qore_url_classloader_shutdown_context(JNIEnv* jenv, jclass jcls) try {
     Env env(jenv);
 
     // Defensive: the hook is only registered in JVM-primary mode, and running it when %Qore owns
@@ -2494,7 +2617,7 @@ static jobject JNICALL qore_url_classloader_shutdown_context(JNIEnv* jenv, jclas
     int rc = q_register_foreign_thread();
     if (rc != QFT_OK && rc != QFT_REGISTERED) {
         shutdown_done.store(false, std::memory_order_release);
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -2510,17 +2633,14 @@ static jobject JNICALL qore_url_classloader_shutdown_context(JNIEnv* jenv, jclas
         // half-destroyed at this point, so neither jni::Exception::convert() nor
         // QoreToJava::wrapException() can be relied on to run.  Nothing may propagate out of a
         // JNI native method.
-        try {
-            env.throwNew(env.findClass("java/lang/Error"), "Qore library cleanup failed");
-        } catch (...) {
-        }
+        jni_throw_error(*env, "Qore library cleanup failed");
     }
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jobject JNICALL qore_url_classloader_dummy(JNIEnv* jenv, jclass jcls) {
+static jobject JNICALL qore_url_classloader_dummy(JNIEnv* jenv, jclass jcls) try {
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 // Returns the canonical "system" QoreURLClassLoader.
 //
@@ -2528,9 +2648,9 @@ static jobject JNICALL qore_url_classloader_dummy(JNIEnv* jenv, jclass jcls) {
 // module classes whose owning Program cannot be resolved (binary modules, modules not yet
 // loaded under their canonical name).  `qoremod.<mod>.*` classes route to the owning user
 // module's Program loader instead — see qore_url_classloader_get_module_loader().
-static jobject JNICALL qore_url_classloader_get_syscl(JNIEnv* jenv, jclass jcls) {
+static jobject JNICALL qore_url_classloader_get_syscl(JNIEnv* jenv, jclass jcls) try {
     return Globals::syscl ? (jobject)Globals::syscl : nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 // Returns the QoreURLClassLoader of the named user module's owning Program, or null.
 //
@@ -2545,11 +2665,6 @@ static void jni_throw_module_loader_error(JNIEnv* jenv, jni::Exception* e) {
         return;
     }
     static const char* fixed = "getModuleLoader() failed";
-    jclass cls = jenv->FindClass("java/lang/RuntimeException");
-    if (!cls) {
-        // FindClass() raised the error
-        return;
-    }
     try {
         // the message in UTF-8: the code and the description can be in any encoding
         QoreString msg(fixed, QCS_UTF8);
@@ -2570,13 +2685,13 @@ static void jni_throw_module_loader_error(JNIEnv* jenv, jni::Exception* e) {
                 xsink.clear();
             }
         }
-        Env::throwNew(jenv, cls, msg.c_str(), msg.size());
+        jni_throw_runtime_exception(jenv, msg);
     } catch (...) {
-        Env::throwNew(jenv, cls, fixed);
+        jni_throw_runtime_exception(jenv, fixed);
     }
 }
 
-static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jclass jcls, jstring jname) {
+static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jclass jcls, jstring jname) try {
     if (!jname) {
         return nullptr;
     }
@@ -2602,12 +2717,12 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
         jni_throw_module_loader_error(jenv, nullptr);
     }
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 // Instance native: returns the canonical owning loader for `bin_name` from the
 // perspective of `jthis` (the calling QoreURLClassLoader).  See
 // Globals::getCanonicalLoader() for the dispatch rules.
-static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, jobject jthis, jstring jname) {
+static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, jobject jthis, jstring jname) try {
     if (!jname) {
         return nullptr;
     }
@@ -2628,14 +2743,14 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
         // swallow; null tells the Java caller to fall back to local generation
     }
     return loader;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jobject JNICALL qore_url_classloader_debug(JNIEnv* jenv, jclass jcls, jlong ptr) {
+static jobject JNICALL qore_url_classloader_debug(JNIEnv* jenv, jclass jcls, jlong ptr) try {
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class_handle, jlong reserved_method,
-        jlong reserved_variant, jobject java_this, jobjectArray args) {
+        jlong reserved_variant, jobject java_this, jobjectArray args) try {
     return generated_native_call<jlong>(jenv, [&](Env& env, ExceptionSink& xsink) -> jlong {
         // Capture the caller before entering the generating Program's context: the
         // caller's loader is needed when constructing Java subclasses of Qore classes.
@@ -2701,14 +2816,14 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
         // the code that runs the Java constructor, which governs the calls that Java makes on the object.
         return reinterpret_cast<jlong>(new JniObjectHandle(qobj));
     });
-}
+} JNI_NATIVE_CATCH(jenv, 0)
 
-static void JNICALL qore_object_release(JNIEnv*, jclass, jlong ptr) {
+static void JNICALL qore_object_release(JNIEnv* jenv, jclass, jlong ptr) try {
     // releases the weak reference
     delete JniObjectHandle::fromJava(ptr);
-}
+} JNI_NATIVE_CATCH(jenv)
 
-static void JNICALL qore_object_destroy(JNIEnv* jenv, jclass, jlong ptr) {
+static void JNICALL qore_object_destroy(JNIEnv* jenv, jclass, jlong ptr) try {
     assert(ptr);
     // must ensure that the thread is attached before executing Qore code
     Env env(jenv);
@@ -2717,7 +2832,7 @@ static void JNICALL qore_object_destroy(JNIEnv* jenv, jclass, jlong ptr) {
         attach_helper.attach();
     } catch (Exception& e) {
         // NOTE: this results in a memory leak
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return;
     }
 
@@ -2738,15 +2853,15 @@ static void JNICALL qore_object_destroy(JNIEnv* jenv, jclass, jlong ptr) {
         QoreToJava::wrapException(env, xsink);
     } catch (const std::bad_alloc& e) {
         // translate OOM C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/OutOfMemoryError"), e.what());
+        jni_throw_out_of_memory(*env, e.what());
     } catch (const std::exception& e) {
         // translate unknown C++ exceptions to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), e.what());
+        jni_throw_error(*env, e.what());
     } catch (...) {
         // translate unknown C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), "Unknown exception type");
+        jni_throw_error(*env, "Unknown exception type");
     }
-}
+} JNI_NATIVE_CATCH(jenv)
 
 static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperName) {
     LocalReference<jclass> wrapperClass = env.findClass(wrapperName);
@@ -2883,7 +2998,7 @@ static ucmap_t ucmap = {
 };
 
 // returns byte[] of class data if found
-static jbyteArray qore_url_classloader_get_internal_class(JNIEnv* jenv, jclass jcls, jstring bin_name) {
+static jbyteArray qore_url_classloader_get_internal_class(JNIEnv* jenv, jclass jcls, jstring bin_name) try {
     Env env(jenv);
     Env::GetStringUtfChars bname(env, bin_name);
     // a name with a NUL character, which the name of an internal class cannot have, is not found; it would be cut at
@@ -2905,16 +3020,16 @@ static jbyteArray qore_url_classloader_get_internal_class(JNIEnv* jenv, jclass j
 
     //printd(LogLevel, "qore_url_classloader_get_internal_class() FOUND '%s'\n", bname.c_str());
     return array.release();
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNIEnv* jenv, jclass jcls, jlong ptr,
-        jstring pkg, jobject arraylist) {
+        jstring pkg, jobject arraylist) try {
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -2923,7 +3038,7 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
 
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     if (!jpc) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "No JNI context for Qore Program");
+        jni_throw_runtime_exception(*env, "No JNI context for Qore Program");
         return nullptr;
     }
 
@@ -2956,17 +3071,17 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
         QoreToJava::wrapException(env, xsink);
     } catch (const std::bad_alloc& e) {
         // translate OOM C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/OutOfMemoryError"), e.what());
+        jni_throw_out_of_memory(*env, e.what());
     } catch (const std::exception& e) {
         // translate unknown C++ exceptions to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), e.what());
+        jni_throw_error(*env, e.what());
     } catch (...) {
         // translate unknown C++ exception to a Java exception
-        env.throwNew(env.findClass("java/lang/Error"), "Unknown exception type");
+        jni_throw_error(*env, "Unknown exception type");
     }
 
     return nullptr;
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 static JNINativeMethod invocationHandlerNativeMethods[2] = {
     {
@@ -3757,6 +3872,11 @@ bool Globals::init() {
 
     // get exception info second
     classThrowable = env.findClass("java/lang/Throwable").makeGlobal();
+    // the classes of the Java exceptions that native methods raise, before any native method is registered
+    cacheErrorClass(env, classError, "java/lang/Error");
+    cacheErrorClass(env, classRuntimeException, "java/lang/RuntimeException");
+    cacheErrorClass(env, classOutOfMemoryError, "java/lang/OutOfMemoryError");
+    cacheErrorClass(env, classClassNotFoundException, "java/lang/ClassNotFoundException");
     methodThrowableGetMessage = env.getMethod(classThrowable, "getMessage", "()Ljava/lang/String;");
     methodThrowableGetStackTrace = env.getMethod(classThrowable, "getStackTrace", "()[Ljava/lang/StackTraceElement;");
     methodThrowableGetCause = env.getMethod(classThrowable, "getCause", "()Ljava/lang/Throwable;");
@@ -4810,6 +4930,7 @@ void Globals::stopNativeCleanupThread() {
 void Globals::cleanup() {
     // delete classes
     classThrowable = nullptr;
+    // the classes of the Java exceptions that native methods raise are not deleted (see Globals::classError)
     classStackTraceElement = nullptr;
     classPrimitiveVoid = nullptr;
     classPrimitiveBoolean = nullptr;

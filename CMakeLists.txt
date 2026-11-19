@@ -1305,6 +1305,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/GeneratedBindings.java
     test/java/src/org/qore/jni/test/GlobalContextTeardownFixture.java
     test/java/src/org/qore/jni/test/JvmSignals.java
+    test/java/src/org/qore/jni/test/NativeExceptionProbe.java
     test/java/src/org/qore/jni/test/Utf8Boundary.java
     test/java/src/org/qore/jni/test/Utf8Driver.java
     test/java/src/org/qore/lang/test/QoreJavaLangApiTest.java
@@ -1626,6 +1627,9 @@ add_test(NAME make_inc_reproducibility COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
     ${CMAKE_SOURCE_DIR}/test/test-make-inc.py
     --qore ${QORE_EXECUTABLE} --make-inc ${CMAKE_SOURCE_DIR}/make-inc)
 set_tests_properties(make_inc_reproducibility PROPERTIES TIMEOUT 120)
+add_test(NAME jni_native_catch COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
+    ${CMAKE_SOURCE_DIR}/test/test-jni-native-catch.py ${CMAKE_SOURCE_DIR})
+set_tests_properties(jni_native_catch PROPERTIES TIMEOUT 30)
 add_test(NAME headless_class_import COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
     ${CMAKE_SOURCE_DIR}/test/test-headless-class-import.py
     --qore ${QORE_EXECUTABLE} --module $<TARGET_FILE:jni>)

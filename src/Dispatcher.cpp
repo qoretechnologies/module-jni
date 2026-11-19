@@ -99,7 +99,7 @@ void QoreCodeDispatcher::destroy(ExceptionSink& xsink) {
 
 jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jobjectArray jargs) {
     if (q_libqore_shutdown() || Globals::isShuttingDown()) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "could not execute Qore callback; the "
+        jni_throw_runtime_exception(*env, "could not execute Qore callback; the "
             "Qore library or JNI module has been shut down");
         return nullptr;
     }
@@ -111,7 +111,7 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        env.throwNew(env.findClass("java/lang/RuntimeException"), "Unable to attach thread to Qore");
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
 
@@ -207,7 +207,7 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
         errstr.concat(": ");
         jni_append_utf8(errstr, xsink.getExceptionDesc());
         xsink.clear();
-        env.throwNew(env.findClass("java/lang/RuntimeException"), errstr);
+        jni_throw_runtime_exception(*env, errstr);
         return nullptr;
     }
 }

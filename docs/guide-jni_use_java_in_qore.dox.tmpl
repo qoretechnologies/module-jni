@@ -22,6 +22,9 @@
       projected %Qore class one Java identity across sibling %Program classloaders; the first registering %Program
       owns the Java class and every later registrant delegates to it
 
+    A classpath with a NUL character is refused with \c JNI-ERROR by the classpath commands above (and with
+    \c JDBC-OPTION-ERROR as the \c classpath option of the \c jdbc driver), as a file path cannot have one.
+
     All classes in \c java.lang.* are imported implicitly.  Referencing an imported class in %Qore code
     causes a %Qore class to be generated dynamically that presents the Java class.   Instantiating a %Qore class
     based on a Java class also instantiates an internal Java object that is attached to the %Qore object.  Calling

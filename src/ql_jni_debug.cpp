@@ -33,7 +33,11 @@
 #include "defs.h"
 
 #include <atomic>
+#include <map>
 #include <mutex>
+#include <new>
+#include <stdexcept>
+#include <string>
 #include <cstring>
 
 //! Returns the number of Programs holding entries in the module root namespace cache
@@ -164,6 +168,115 @@ static QoreValue f_dbg_jni_import_into_program(const QoreListNode* args, Runtime
     return QoreValue();
 }
 
+// the class name for which jni::Env::findClass() fails (see f_dbg_jni_fail_find_class()); set and read under the lock
+static std::mutex find_class_fail_lock;
+static std::string find_class_fail_name;
+std::atomic<bool> dbg_jni_find_class_fail_set{false};
+
+//! Makes jni::Env::findClass() of the given class fail on every thread, or with no name, no longer fail
+/** A lookup of the class then fails as JNI's \c FindClass() fails, with a \c NoClassDefFoundError pending, so that a
+    test can make the lookup of the class of an error that a native method raises fail (qore#6739) - see
+    test/jni-native-exception.qtest.  DEBUG builds only.
+*/
+static QoreValue f_dbg_jni_fail_find_class(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(args, 0).get<const QoreStringNode>();
+    std::lock_guard<std::mutex> guard(find_class_fail_lock);
+    if (name) {
+        find_class_fail_name.assign(name->c_str(), name->size());
+    } else {
+        find_class_fail_name.clear();
+    }
+    dbg_jni_find_class_fail_set.store(name != nullptr, std::memory_order_release);
+    return QoreValue();
+}
+
+bool dbg_jni_find_class_fails(JNIEnv* jenv, const char* name) {
+    {
+        std::lock_guard<std::mutex> guard(find_class_fail_lock);
+        if (find_class_fail_name != name) {
+            return false;
+        }
+    }
+    // the lookup of a class that does not exist leaves the Java exception of a failed lookup pending
+    jclass cls = jenv->FindClass("org/qore/jni/dbg/NoSuchClassForFailedLookup");
+    if (cls) {
+        jenv->DeleteLocalRef(cls);
+    }
+    return jenv->ExceptionCheck() == JNI_TRUE;
+}
+
+//! the kinds of C++ exceptions that Jni::dbg_jni_native_throw() can set
+enum class DbgJniNativeThrow {
+    None,
+    BadAlloc,
+    StdException,
+    Unknown,
+    QoreJni,
+    Xsink,
+    JavaNotPending,
+};
+
+// the C++ exception that the next native method that calls Qore code on this thread throws
+static thread_local DbgJniNativeThrow native_throw = DbgJniNativeThrow::None;
+
+//! Makes the next native method that calls %Qore code from Java on this thread throw a C++ exception, once
+/** \a kind: \c "bad_alloc" (\c std::bad_alloc), \c "std" (a \c std::runtime_error), \c "unknown" (an \c int),
+    \c "qore" (a jni::QoreJniException with \c DBG-JNI-NATIVE-ERROR), \c "xsink" (a jni::XsinkException with
+    \c DBG-JNI-NATIVE-ERROR; only on a thread attached to %Qore, as QoreJavaApi.callFunction() throws it before it
+    attaches the thread), \c "java" (a jni::JavaException with no Java exception pending); with no kind, a
+    C++ exception that has not been thrown is cleared.  The natives are QoreJavaApi.callFunction() and the calls of
+    QoreObject methods and QoreClosure objects (see dbg_jni_native_throw_point()), so that a test can prove that the
+    C++ exception does not leave the native method (qore#6739) - see test/jni-native-exception.qtest.  DEBUG builds
+    only.
+*/
+static QoreValue f_dbg_jni_native_throw(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    const QoreStringNode* kind = get_param_value(args, 0).get<const QoreStringNode>();
+    if (!kind) {
+        native_throw = DbgJniNativeThrow::None;
+        return QoreValue();
+    }
+    static const std::map<std::string, DbgJniNativeThrow> kinds = {
+        {"bad_alloc", DbgJniNativeThrow::BadAlloc},
+        {"std", DbgJniNativeThrow::StdException},
+        {"unknown", DbgJniNativeThrow::Unknown},
+        {"qore", DbgJniNativeThrow::QoreJni},
+        {"xsink", DbgJniNativeThrow::Xsink},
+        {"java", DbgJniNativeThrow::JavaNotPending},
+    };
+    auto i = kinds.find(kind->c_str());
+    if (i == kinds.end()) {
+        xsink->raiseException("DBG-JNI-NATIVE-THROW-ERROR", "unknown kind '%s'; expecting \"bad_alloc\", \"std\", "
+            "\"unknown\", \"qore\", \"xsink\" or \"java\"", kind->c_str());
+        return QoreValue();
+    }
+    native_throw = i->second;
+    return QoreValue();
+}
+
+void dbg_jni_native_throw_point() {
+    DbgJniNativeThrow kind = native_throw;
+    native_throw = DbgJniNativeThrow::None;
+    switch (kind) {
+        case DbgJniNativeThrow::None:
+            return;
+        case DbgJniNativeThrow::BadAlloc:
+            throw std::bad_alloc();
+        case DbgJniNativeThrow::StdException:
+            throw std::runtime_error("dbg_jni_native_throw() std::runtime_error");
+        case DbgJniNativeThrow::Unknown:
+            throw 1;
+        case DbgJniNativeThrow::QoreJni:
+            throw jni::QoreJniException("DBG-JNI-NATIVE-ERROR", "dbg_jni_native_throw() QoreJniException");
+        case DbgJniNativeThrow::Xsink: {
+            ExceptionSink xsink;
+            xsink.raiseException("DBG-JNI-NATIVE-ERROR", "dbg_jni_native_throw() XsinkException");
+            throw jni::XsinkException(xsink);
+        }
+        case DbgJniNativeThrow::JavaNotPending:
+            throw jni::JavaException();
+    }
+}
+
 void init_jni_debug_functions(QoreNamespace& ns) {
     ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
@@ -178,6 +291,10 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     ns.addBuiltinVariant("dbg_jni_module_root_ns_cache_purge_count",
         f_dbg_jni_module_root_ns_cache_purge_count, QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_fail_find_class", f_dbg_jni_fail_find_class, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo, 1, stringOrNothingTypeInfo, QoreValue(), "name");
+    ns.addBuiltinVariant("dbg_jni_native_throw", f_dbg_jni_native_throw, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo, 1, stringOrNothingTypeInfo, QoreValue(), "kind");
 }
 
 #endif // DEBUG

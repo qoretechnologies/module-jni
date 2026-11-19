@@ -120,6 +120,18 @@ public:
     DLLLOCAL static jmethodID methodThrowableGetStackTrace;                       // String Throwable.getStackTrace()
     DLLLOCAL static jmethodID methodThrowableGetCause;                            // String Throwable.getCause()
 
+    // the classes of the Java exceptions that native methods raise for errors; looked up when the module is
+    // initialized, so that raising one never needs a class lookup, which can fail (qore#6739; see jni_throw_new());
+    // global references that are never deleted (these bootstrap classes are never unloaded), so that a native method
+    // that runs while the module is cleaned up on another thread never uses a deleted reference
+    DLLLOCAL static std::atomic<jclass> classError;                               // java.lang.Error
+    DLLLOCAL static std::atomic<jclass> classRuntimeException;                    // java.lang.RuntimeException
+    DLLLOCAL static std::atomic<jclass> classOutOfMemoryError;                    // java.lang.OutOfMemoryError
+    DLLLOCAL static std::atomic<jclass> classClassNotFoundException;              // java.lang.ClassNotFoundException
+
+    //! Looks up and keeps a class of the Java exceptions that native methods raise, once (see classError)
+    DLLLOCAL static void cacheErrorClass(Env& env, std::atomic<jclass>& cls, const char* name);
+
     DLLLOCAL static GlobalReference<jclass> classStackTraceElement;               // java.lang.StackTraceElement
     DLLLOCAL static jmethodID methodStackTraceElementGetClassName;                // String StackTraceElement.getClassName()
     DLLLOCAL static jmethodID methodStackTraceElementGetFileName;                 // String StackTraceElement.getFileName()
@@ -802,7 +814,101 @@ DLLLOCAL size_t get_module_root_ns_search_count(bool locked);
 // find a subnamespace with "::" delimited paths; returns nullptr if not found
 DLLLOCAL const QoreNamespace* find_ns_path(const QoreNamespace* ns, const char* ns_path);
 
+//! Throws a new Java exception with a message in UTF-8, without C++ exceptions (qore#6739)
+/** For the error paths of JNI native methods, which no C++ exception may leave: the class is one that the module looked
+    up when it was initialized (ex: Globals::classError); jni::Env::findClass(), which throws a C++ exception if the
+    lookup fails, is not used.  A pending Java exception is replaced.
+
+    If the cached class is not available (before the module is initialized), the class is
+    looked up with JNI's \c FindClass(); if that fails, the Java exception of the failure (ex: a
+    \c NoClassDefFoundError or an \c OutOfMemoryError) is pending instead, which reports the error to the caller as
+    well.  Only if no Java exception at all can be made pending, which JNI does not allow (a failed \c FindClass() or
+    \c Throw() leaves an exception pending), is the process ended with JNI's \c FatalError(): returning from the
+    native method with no exception pending would report a failed call to Java as a call that succeeded.
+
+    @param jenv the JNI environment of the thread
+    @param cls the class of the exception, from Globals, or nullptr
+    @param cls_name the name of the class, for the lookup if \a cls is nullptr (ex: \c "java/lang/Error")
+    @param msg the message in UTF-8; it may have NUL characters
+    @param len the length of the message in bytes
+*/
+DLLLOCAL void jni_throw_new(JNIEnv* jenv, jclass cls, const char* cls_name, const char* msg, size_t len) noexcept;
+
+//! Throws a new Java exception with a NUL-terminated message in UTF-8, without C++ exceptions; see jni_throw_new()
+static inline void jni_throw_new(JNIEnv* jenv, jclass cls, const char* cls_name, const char* msg) noexcept {
+    jni_throw_new(jenv, cls, cls_name, msg, strlen(msg));
+}
+
+//! Throws a new Java exception with a message in any encoding, without C++ exceptions; see jni_throw_new()
+/** The message is converted to UTF-8 as by Env::throwNew(JNIEnv*, jclass, const QoreString&)
+*/
+DLLLOCAL void jni_throw_new(JNIEnv* jenv, jclass cls, const char* cls_name, const QoreString& msg) noexcept;
+
+//! Throws a new \c java.lang.Error, without C++ exceptions; see jni_throw_new()
+template <typename T>
+static inline void jni_throw_error(JNIEnv* jenv, const T& msg) noexcept {
+    jni_throw_new(jenv, Globals::classError.load(std::memory_order_acquire),
+        "java/lang/Error", msg);
+}
+
+//! Throws a new \c java.lang.RuntimeException, without C++ exceptions; see jni_throw_new()
+template <typename T>
+static inline void jni_throw_runtime_exception(JNIEnv* jenv, const T& msg) noexcept {
+    jni_throw_new(jenv, Globals::classRuntimeException.load(std::memory_order_acquire),
+        "java/lang/RuntimeException", msg);
+}
+
+//! Throws a new \c java.lang.OutOfMemoryError, without C++ exceptions; see jni_throw_new()
+template <typename T>
+static inline void jni_throw_out_of_memory(JNIEnv* jenv, const T& msg) noexcept {
+    jni_throw_new(jenv, Globals::classOutOfMemoryError.load(std::memory_order_acquire),
+        "java/lang/OutOfMemoryError", msg);
+}
+
+//! Throws a new \c java.lang.ClassNotFoundException, without C++ exceptions; see jni_throw_new()
+template <typename T>
+static inline void jni_throw_class_not_found(JNIEnv* jenv, const T& msg) noexcept {
+    jni_throw_new(jenv, Globals::classClassNotFoundException.load(std::memory_order_acquire),
+        "java/lang/ClassNotFoundException", msg);
+}
+
+//! Raises the C++ exception being handled as a pending Java exception, without C++ exceptions (qore#6739)
+/** Called only in a catch handler, by JNI_NATIVE_CATCH(); the exception is rethrown and raised in Java:
+    - jni::JavaException: the Java exception is already pending, and is kept (\c java.lang.Error if none is pending)
+    - any other jni::Exception (ex: jni::XsinkException, jni::QoreJniException) or other %Qore exception
+      (\c AbstractException): the %Qore exception, as an \c org.qore.jni.QoreExceptionWrapper; the thread is
+      attached to %Qore for the conversion if it is not attached, and if it cannot be attached, or %Qore or the
+      module is shut down, a \c java.lang.Error is raised (and the %Qore exception is not freed)
+    - \c std::bad_alloc: \c java.lang.OutOfMemoryError
+    - any other \c std::exception: \c java.lang.Error with its message
+    - any other C++ exception: \c java.lang.Error
+
+    The C++ exception replaces a Java exception that is pending, other than for jni::JavaException.
+
+    @param jenv the JNI environment of the thread
+*/
+DLLLOCAL void jni_native_exception(JNIEnv* jenv) noexcept;
+
 } // namespace jni
+
+//! The top-level catch handler of a JNI native method: no C++ exception may leave a native method (qore#6739)
+/** A C++ exception that leaves a JNI native method unwinds through JVM frames, which ends the process in
+    \c std::terminate().  Every JNI native method of the module is a function-try-block that ends with this handler,
+    which raises any C++ exception as a pending Java exception with jni::jni_native_exception() and returns the given
+    value (none for a \c void method):
+    @code{.cpp}
+static jobject JNICALL my_native(JNIEnv* jenv, jclass cls) try {
+    // ...
+} JNI_NATIVE_CATCH(jenv, nullptr)
+    @endcode
+
+    The locals of the native method are destroyed before the handler runs.
+*/
+#define JNI_NATIVE_CATCH(jenv, ...) \
+    catch (...) { \
+        ::jni::jni_native_exception(jenv); \
+        return __VA_ARGS__; \
+    }
 
 // callled from the QoireURLClassLoader's constructor when used as the system classloader
 DLLLOCAL QoreStringNode* jni_module_init_finalize(bool system = false);

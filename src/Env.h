@@ -33,6 +33,7 @@
 
 #include "Jvm.h"
 #include "LocalReference.h"
+#include "ql_jni_debug.h"
 
 #include <cstdint>
 #include <cstring>
@@ -83,6 +84,12 @@ public:
     * \throws JavaException if the class cannot be found
     */
    DLLLOCAL LocalReference<jclass> findClass(const char* name) {
+#ifdef DEBUG
+      // a test can make the lookup of a class fail (see Jni::dbg_jni_fail_find_class())
+      if (dbg_jni_find_class_fail_set.load(std::memory_order_acquire) && dbg_jni_find_class_fails(env, name)) {
+         throw JavaException();
+      }
+#endif
       jclass c = env->FindClass(ClassName(name).c_str());
       if (c == nullptr) {
          throw JavaException();
@@ -1070,14 +1077,16 @@ public:
     DLLLOCAL LocalReference<jstring> newString(const QoreString& str);
 
     //! Creates a Java string from a %Qore string with a file path or a classpath, in any encoding
-    /** The string is cut at its first NUL character, as the C string APIs that %Qore passes paths to cut it, and
-        converted to UTF-8; the Java string is the one value that a path is both checked as and used as (see
-        jni_check_classpath_policy())
+    /** The string is converted to UTF-8; the Java string is the one value that a path is both checked as and used as
+        (see jni_check_classpath_policy()).  A path with a NUL character is refused (qore#6771): it would name another
+        path than the one that is checked; callers check the classpath that they are given with
+        jni_check_classpath() before they make a path of it, so that the error names the classpath as given
 
-        @throw XsinkException the string cannot be converted to UTF-8
+        @throw XsinkException the string has a NUL character (\c JNI-ERROR), or cannot be converted to UTF-8
     */
     DLLLOCAL LocalReference<jstring> newPathString(const QoreString& path) {
-        return newString(QoreString(path.c_str(), path.getEncoding()));
+        jni_check_classpath(path, "JNI-ERROR");
+        return newString(path);
     }
 
     //! Returns true if a string has only ASCII characters other than NUL

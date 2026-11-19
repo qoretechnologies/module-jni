@@ -239,7 +239,7 @@ static bool encode_address(const struct addrinfo& ai, std::string& rv) {
 }
 
 //! QoreSandbox.capture0(): captures the policy of the current thread, or copies the policy \a ptr
-static jlong JNICALL qore_sandbox_capture(JNIEnv* jenv, jclass, jlong ptr) {
+static jlong JNICALL qore_sandbox_capture(JNIEnv* jenv, jclass, jlong ptr) try {
     return sandbox_native<jlong>(jenv, 0, [ptr](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jlong {
         // a capture made inside Policy.run() is the run's policy, whatever the thread runs (qore#5644)
         if (ptr) {
@@ -250,18 +250,18 @@ static jlong JNICALL qore_sandbox_capture(JNIEnv* jenv, jclass, jlong ptr) {
         }
         return reinterpret_cast<jlong>(new QoreSandboxCapture);
     });
-}
+} JNI_NATIVE_CATCH(jenv, 0)
 
 //! QoreSandbox.release0(): releases a captured policy
-static void JNICALL qore_sandbox_release(JNIEnv* jenv, jclass, jlong ptr) {
+static void JNICALL qore_sandbox_release(JNIEnv* jenv, jclass, jlong ptr) try {
     sandbox_native<jboolean>(jenv, JNI_FALSE, [ptr](Env&, SandboxCallScope&, ExceptionSink*) -> jboolean {
         delete reinterpret_cast<QoreSandboxCapture*>(ptr);
         return JNI_TRUE;
     });
-}
+} JNI_NATIVE_CATCH(jenv)
 
 //! QoreSandbox.isSandboxed0(): returns true if the policy \a ptr, or of the current thread, is sandboxed
-static jboolean JNICALL qore_sandbox_is_sandboxed(JNIEnv* jenv, jclass, jlong ptr) {
+static jboolean JNICALL qore_sandbox_is_sandboxed(JNIEnv* jenv, jclass, jlong ptr) try {
     return sandbox_native<jboolean>(jenv, JNI_FALSE,
             [ptr](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jboolean {
         if (scope.enter(ptr, xsink)) {
@@ -269,11 +269,11 @@ static jboolean JNICALL qore_sandbox_is_sandboxed(JNIEnv* jenv, jclass, jlong pt
         }
         return scope.managers().empty() ? JNI_FALSE : JNI_TRUE;
     });
-}
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
 //! QoreSandbox.checkNetworkAccess0(): checks a network destination and returns the checked addresses
 static jobjectArray JNICALL qore_sandbox_check_network_access(JNIEnv* jenv, jclass, jlong ptr, jbyteArray jhost,
-        jint port, jint proto) {
+        jint port, jint proto) try {
     return sandbox_native<jobjectArray>(jenv, nullptr,
             [=](Env& env, SandboxCallScope& scope, ExceptionSink* xsink) -> jobjectArray {
         if (scope.enter(ptr, xsink)) {
@@ -354,10 +354,10 @@ static jobjectArray JNICALL qore_sandbox_check_network_access(JNIEnv* jenv, jcla
         }
         return rv.release();
     });
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 //! QoreSandbox.checkFileAccess0(): checks a path with the filesystem policy
-static void JNICALL qore_sandbox_check_file_access(JNIEnv* jenv, jclass, jlong ptr, jbyteArray jpath, jint mode) {
+static void JNICALL qore_sandbox_check_file_access(JNIEnv* jenv, jclass, jlong ptr, jbyteArray jpath, jint mode) try {
     sandbox_native<jboolean>(jenv, JNI_FALSE,
             [=](Env& env, SandboxCallScope& scope, ExceptionSink* xsink) -> jboolean {
         if (scope.enter(ptr, xsink)) {
@@ -380,7 +380,7 @@ static void JNICALL qore_sandbox_check_file_access(JNIEnv* jenv, jclass, jlong p
         }
         return JNI_TRUE;
     });
-}
+} JNI_NATIVE_CATCH(jenv)
 
 //! Returns a new JNI-SANDBOX-ERROR exception as a QoreExceptionWrapper, without throwing it
 /** @param msg the message in UTF-8; it may have NUL characters
@@ -399,7 +399,7 @@ static jobject new_error(JNIEnv* jenv, const std::string& msg) {
 }
 
 //! QoreSandbox.argumentError0(): returns the JNI-SANDBOX-ERROR exception for invalid arguments
-static jobject JNICALL qore_sandbox_argument_error(JNIEnv* jenv, jclass, jstring jmsg) {
+static jobject JNICALL qore_sandbox_argument_error(JNIEnv* jenv, jclass, jstring jmsg) try {
     // the message in UTF-8, with its NUL characters
     std::string msg;
     if (jmsg) {
@@ -415,17 +415,17 @@ static jobject JNICALL qore_sandbox_argument_error(JNIEnv* jenv, jclass, jstring
         }
     }
     return new_error(jenv, msg);
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 //! QoreSandbox.closedError0(): returns the JNI-SANDBOX-ERROR exception for a closed policy
-static jobject JNICALL qore_sandbox_closed_error(JNIEnv* jenv, jclass) {
+static jobject JNICALL qore_sandbox_closed_error(JNIEnv* jenv, jclass) try {
     try {
         return new_error(jenv, "the sandbox policy has been closed");
     } catch (const std::bad_alloc&) {
         throw_java(jenv, "java/lang/OutOfMemoryError", "cannot allocate memory for a sandbox error");
         return nullptr;
     }
-}
+} JNI_NATIVE_CATCH(jenv, nullptr)
 
 JNINativeMethod qoreSandboxNativeMethods[] = {
     {const_cast<char*>("capture0"), const_cast<char*>("(J)J"), reinterpret_cast<void*>(qore_sandbox_capture)},

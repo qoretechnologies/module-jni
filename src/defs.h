@@ -298,6 +298,12 @@ public:
       sink->clear();
    }
 
+   //! Leaves the %Qore exception unfreed, for where it cannot be freed safely (no %Qore thread, or %Qore shut down)
+   DLLLOCAL void leak() noexcept {
+      // deliberately leaked: freeing it there would report it as unhandled and free Qore values in an invalid state
+      static_cast<void>(sink.release());
+   }
+
 private:
    std::unique_ptr<ExceptionSink> sink;
 };
@@ -331,6 +337,36 @@ static inline void jni_check_name(const char* name, size_t len, const char* what
     if (jni_has_nul(name, len)) {
         ExceptionSink xsink;
         jni_check_name(name, len, what, what_plural, &xsink);
+        throw XsinkException(xsink);
+    }
+}
+
+//! Raises an exception if a classpath has a NUL character (qore#6771)
+/** A classpath entry is a file path, a NUL-terminated string for the operating system, so a classpath with a NUL
+    character would be cut at it, and the cut classpath would be both checked against the sandbox and used: it is
+    refused instead, as libqore's q_check_path() refuses a path, with an error like <tt>classpath "/dir\x00junk"
+    contains a NUL character at byte offset 4; classpaths cannot contain NUL characters</tt>.  Every classpath that
+    the module adds is checked with this function before it is used in any way (the \c add-classpath and
+    \c add-relative-classpath module commands, their \c global-* forms and the \c classpath option of the \c jdbc
+    driver); \c QORE_JNI_CLASSPATH, an environment variable, is a C string and cannot have a NUL character.
+
+    @param cp the classpath, which need not be NUL-terminated
+    @param len the length of the classpath in bytes
+    @param err the error code of the exception
+    @param xsink the exception is raised here if the classpath has a NUL character
+
+    @return 0 if the classpath has no NUL character, -1 if it has one and the exception was raised
+*/
+static inline int jni_check_classpath(const char* cp, size_t len, const char* err, ExceptionSink* xsink) {
+    return q_check_no_nul(cp, len, "classpath", "classpaths", err, xsink);
+}
+
+//! Throws XsinkException if a classpath has a NUL character (qore#6771); see jni_check_classpath()
+static inline void jni_check_classpath(const QoreString& cp, const char* err) {
+    if (jni_has_nul(cp.c_str(), cp.size())) {
+        ExceptionSink xsink;
+        jni_check_classpath(cp.c_str(), cp.size(), err, &xsink);
+        assert(xsink);
         throw XsinkException(xsink);
     }
 }

@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# A classpath with a NUL character is refused (qore#6771): the add-classpath and add-relative-classpath module
+# commands, their global-* forms and the classpath option of the jdbc driver cut a classpath at its first NUL
+# character, and the cut classpath was both checked against the sandbox and added; they now raise an exception and add
+# nothing.
+#
+# Each refused classpath is the test jar followed by a NUL character and more text, so that the cut classpath is the
+# test jar: a class of the test jar can then be loaded only if the cut classpath was added.  The test does not add the
+# test jar to its own classpath.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%exec-class JniClasspathNulTest
+
+class JniClasspathNulTest inherits QUnit::Test {
+    public {
+        #! the name of the test jar, in the directory of this script
+        const TestJarName = "qore-jni-test.jar";
+
+        #! a class that is only in the test jar
+        const TestClass = "org.qore.jni.test.Utf8Boundary";
+
+        #! the code that lists the classpath of a Program's own class loader
+        const LoaderSource = "%requires jni
+%module-cmd(jni) import java.net.URLClassLoader
+%module-cmd(jni) import java.net.URL
+list<string> sub loader_urls() {
+    list<string> rv = ();
+    foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(
+            Jni::org::qore::jni::get_class_loader()).getURLs()) {
+        rv += url.toString();
+    }
+    return rv;
+}
+";
+    }
+
+    private {
+        #! a NUL character
+        string nul = binary_to_string(<00>, "UTF-8");
+
+        #! the absolute path of the test jar
+        string jar = get_script_dir() + TestJarName;
+    }
+
+    constructor() : QUnit::Test("JNI classpath with a NUL character", "1.0") {
+        addTestCase("regression: add-classpath", \addClasspath());
+        addTestCase("regression: add-relative-classpath", \addRelativeClasspath());
+        addTestCase("regression: global-add-classpath", \globalAddClasspath());
+        addTestCase("regression: global-add-relative-classpath", \globalAddRelativeClasspath());
+        addTestCase("regression: the jdbc classpath option", \jdbcClasspathOption());
+        addTestCase("coverage: a classpath without a NUL character is still added", \classpathOk());
+        set_return_value(main());
+    }
+
+    #! the class is not loaded: the cut classpath was added, so the class of the test jar was loaded from it
+    addClasspath() {
+        Program p = getProgram();
+        string cp = jar + nul + "junk";
+        checkRefused(p, "add-classpath", cp);
+        assertEq((), jarUrls(p), "the Program's classpath");
+        checkNotLoaded(p);
+    }
+
+    #! the relative classpath is resolved against the current directory: a new Program has no script directory
+    addRelativeClasspath() {
+        string cwd = getcwd();
+        on_exit chdir(cwd);
+        chdir(get_script_dir());
+
+        Program p = getProgram();
+        checkRefused(p, "add-relative-classpath", TestJarName + nul + "junk");
+        assertEq((), jarUrls(p), "the Program's classpath");
+        checkNotLoaded(p);
+    }
+
+    #! the global classpath is the classpath of every Program: a new Program then loads the class
+    globalAddClasspath() {
+        checkRefused(getProgram(), "global-add-classpath", jar + nul + "junk");
+        checkNotLoaded(getProgram());
+    }
+
+    globalAddRelativeClasspath() {
+        string cwd = getcwd();
+        on_exit chdir(cwd);
+        chdir(get_script_dir());
+
+        checkRefused(getProgram(), "global-add-relative-classpath", TestJarName + nul + "junk");
+        checkNotLoaded(getProgram());
+    }
+
+    #! the option is refused when it is set, before it is applied to a connection
+    /** a Qore library that refuses an option value with a NUL character for every DBI driver raises
+        \c DBI-OPTION-ERROR before the driver sees the value; with another one, the driver raises \c JDBC-OPTION-ERROR
+    */
+    jdbcClasspathOption() {
+        string cp = jar + nul + "junk";
+
+        # set with the datasource
+        checkJdbcRefused(cp, sub () {
+            Datasource ds({"type": "jdbc", "user": "u", "pass": "p", "db": "jdbc:qore-none://x",
+                "options": {"classpath": cp}});
+            ds.open();
+        });
+
+        # set on a datasource
+        checkJdbcRefused(cp, sub () {
+            Datasource ds("jdbc", "u", "p", "jdbc:qore-none://x");
+            ds.setOption("classpath", cp);
+            ds.open();
+        });
+    }
+
+    #! the commands still add a classpath without a NUL character (only the Program's own classpath, as a global
+    #! classpath would be the classpath of the other test cases' Programs)
+    classpathOk() {
+        Program p = getProgram();
+        p.issueModuleCmd("jni", "add-classpath " + jar);
+        assertEq(1, jarUrls(p).size(), "the Program's classpath");
+        p.issueModuleCmd("jni", "import " + TestClass);
+
+        string cwd = getcwd();
+        on_exit chdir(cwd);
+        chdir(get_script_dir());
+        p = getProgram();
+        p.issueModuleCmd("jni", "add-relative-classpath " + TestJarName);
+        assertEq(1, jarUrls(p).size(), "the Program's classpath");
+        p.issueModuleCmd("jni", "import " + TestClass);
+    }
+
+    #! returns a new Program with the jni module and the loader_urls() function
+    private Program getProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(LoaderSource, "loader");
+        return p;
+    }
+
+    #! returns the URLs of the test jar in the classpath of the Program's own class loader
+    private static list<string> jarUrls(Program p) {
+        return select p.callFunction("loader_urls"), $1 =~ /qore-jni-test\.jar/;
+    }
+
+    #! checks the description of the error for a classpath with a NUL character
+    /** the classpath is shown escaped and possibly shortened, so only the text around it and the byte offset of the
+        NUL character are checked
+    */
+    private checkDesc(string cp, string desc, string label, *bool exact) {
+        int offset = cp.substr(0, cp.find(nul)).size();
+        assertRegex(sprintf("^classpath \".*\" contains a NUL character at byte offset %d; classpaths cannot contain "
+            "NUL characters%s", offset, exact ? "$" : ""), desc, label);
+    }
+
+    #! checks that the module command is refused for the classpath, with the error for its NUL character
+    /** the module command is appended to the description of a module command error, cut at the NUL character
+    */
+    private checkRefused(Program p, string cmd, string cp) {
+        *hash<ExceptionInfo> ex;
+        try {
+            p.issueModuleCmd("jni", cmd + " " + cp);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        if (!ex) {
+            fail(cmd + " was not refused");
+            return;
+        }
+        assertEq("JNI-ERROR", ex.err, cmd);
+        checkDesc(cp, ex.desc, cmd);
+    }
+
+    #! checks that the code refuses the classpath option for its NUL character
+    private checkJdbcRefused(string cp, code c) {
+        *hash<ExceptionInfo> ex;
+        try {
+            c();
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        if (!ex) {
+            fail("the classpath option was not refused");
+            return;
+        }
+        if (ex.err == "DBI-OPTION-ERROR") {
+            assertEq("driver 'jdbc' option 'classpath' value contains a NUL character; DBI option values cannot "
+                "contain NUL characters", ex.desc);
+        } else {
+            assertEq("JDBC-OPTION-ERROR", ex.err);
+            checkDesc(cp, ex.desc, "jdbc classpath option", True);
+        }
+    }
+
+    #! checks that the class of the test jar cannot be loaded in the Program
+    private checkNotLoaded(Program p) {
+        *hash<ExceptionInfo> ex;
+        try {
+            p.issueModuleCmd("jni", "import " + TestClass);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        if (!ex) {
+            fail("the class of the test jar was loaded");
+            return;
+        }
+        assertEq("JNI-ERROR", ex.err);
+        assertRegex("ClassNotFoundException", ex.desc);
+    }
+}
