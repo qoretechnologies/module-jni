@@ -2,15 +2,17 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# The jni module reserves the signal that the JVM uses to suspend and resume its threads (SIGUSR2, or the signal in
-# _JAVA_SR_SIGNUM), as it does the other signals that the JVM needs, so that no Qore signal handler can be set for it
-# while the module is loaded (qore#6707).
+# The JVM's suspend/resume signal (qore#6707).
 #
-# The JVM handles that signal in its own threads, where it unblocks it, so a handler set for it with
-# set_signal_handler() never ran: the signal was delivered to a JVM thread instead of to the Qore signal thread.
+# HotSpot suspends and resumes its threads with SIGUSR2, or with the signal in _JAVA_SR_SIGNUM, and handles it in its
+# own threads, where it unblocks it, so a handler set for SIGUSR2 with set_signal_handler() never ran while the JVM
+# was loaded: the signal was delivered to a JVM thread instead of to the Qore signal thread.  The module now gives the
+# JVM that it creates a free real-time signal in _JAVA_SR_SIGNUM (only while the JVM is created) unless the user has
+# set _JAVA_SR_SIGNUM, and reserves the signal that the JVM uses, as it does the other signals that the JVM needs.
 #
 # Each case runs a child process; the parent reads the child's output until the child has exited, so no case waits
-# for a time.
+# for a time.  A signal whose handler is not called within 30 seconds is counted as not handled (a guard only: the
+# handler is called at once when the signal reaches it).
 
 %modern
 %no-child-restrictions
@@ -24,23 +26,39 @@
 
 class JniReservedSignalsTest inherits QUnit::Test {
     private:internal {
-        #! the code of the child process; run with: <mode> <signal> <other signal>
+        #! the code of the child process; run with: <mode> <signal>
         /** modes:
-            - \c loaded: jni is loaded first; a handler for the signal is refused, and one for the other signal, which
-              is not reserved, runs
-            - \c before: a handler for the signal is set first; then loading jni fails
-            - \c load: jni is loaded; the result is reported
-            - \c fail: loading jni fails after the signal is reserved; the signal is blocked again in the thread, and a
-              handler for it runs
+            - \c loaded: jni is loaded first; reports the signals reserved for jni, the signals that the process has
+              handlers for and whether the JVM's suspend/resume variable is visible, and that a handler for SIGUSR2
+              runs 5 times, and makes a thread dump of itself with jcmd
+            - \c before: a handler for SIGUSR2 is set first, then jni is loaded; reports the result, and that the
+              handler runs 5 times
+            - \c fail: loading jni fails (the parent passes an invalid JVM option) after the signal given was
+              reserved; reports whether it is blocked in the thread, and that a handler for it runs
+            - \c nofree: Qore handlers are set for all real-time signals, then jni is loaded; reports the result
+            - \c load: jni is loaded; reports the result
         */
         const ChildSource = "%modern
 string mode = ARGV[0];
 int sig = ARGV[1].toInt();
-int other = ARGV[2].toInt();
 
 #! returns True if libjsig is mapped in the process
 bool sub has_libjsig() {
     return (ReadOnlyFile::readTextFile(\"/proc/self/maps\") =~ /\\/libjsig\\./);
+}
+
+#! returns the bits of the standard and real-time signals in the given line of /proc/thread-self/status as a string
+string sub status_mask(string name) {
+    *list<string> m = regex_extract(ReadOnlyFile::readTextFile(\"/proc/thread-self/status\"),
+        \"^\" + name + \":\\\\s*([0-9a-f]+)$\", RE_MultiLine);
+    return m ? m[0] : \"\";
+}
+
+#! returns True if the bit of the signal is set in the hex mask
+bool sub has_sig(string mask, int s) {
+    # 4 signals per hex digit, from the right
+    int digit = (s - 1) / 4;
+    return (strtoint(mask.substr(-(digit + 1), 1), 16) & (1 << ((s - 1) % 4))) != 0;
 }
 
 #! loads jni and makes a Java call, which starts the JVM
@@ -52,69 +70,138 @@ sub load_jni() {
     stdout.printf(\"java: %s\\n\", p.callFunction(\"v\"));
 }
 
-#! sets a handler for the signal, then loads jni
-sub before(int sig) {
-    set_signal_handler(sig, sub (int s) {});
+#! loads jni and reports the result
+bool sub try_load() {
     try {
         load_jni();
         stdout.print(\"load: ok\\n\");
+        return True;
     } catch (hash<ExceptionInfo> ex) {
         stdout.printf(\"load: %s: %s\\n\", ex.err, ex.desc);
     }
-    remove_signal_handler(sig);
+    return False;
 }
 
-#! loads jni, then sets handlers for the signal and for the other signal
-sub loaded(int sig, int other) {
+#! returns True if the handler pushed to the queue within the guard time
+bool sub wait_for(Queue q) {
+    try {
+        q.get(30s);
+        return True;
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"QUEUE-TIMEOUT\") {
+            rethrow;
+        }
+    }
+    return False;
+}
+
+#! sends the signal to the process the given number of times and reports how often the handler ran
+sub run_handler(int s, int count) {
+    Queue q();
+    try {
+        set_signal_handler(s, sub (int x) { q.push(x); });
+    } catch (hash<ExceptionInfo> ex) {
+        stdout.printf(\"handled %d: %s\\n\", s, ex.err);
+        return;
+    }
+    int got = 0;
+    for (int i = 0; i < count; ++i) {
+        kill(getpid(), s);
+        if (wait_for(q)) {
+            ++got;
+        }
+    }
+    remove_signal_handler(s);
+    stdout.printf(\"handled %d: %d\\n\", s, got);
+}
+
+#! returns the jcmd tool of the JDK that the process has loaded
+*string sub find_jcmd() {
+    *string jvm = (ReadOnlyFile::readTextFile(\"/proc/self/maps\") =~ x/(\\/\\S*)\\/lib\\/server\\/libjvm\\.so$/m)[0];
+    if (jvm && is_executable(jvm + \"/bin/jcmd\")) {
+        return jvm + \"/bin/jcmd\";
+    }
+}
+
+sub loaded() {
     load_jni();
     stdout.printf(\"libjsig: %y\\n\", has_libjsig());
-    try {
-        set_signal_handler(sig, sub (int s) {});
-        stdout.print(\"set: ok\\n\");
-        remove_signal_handler(sig);
-    } catch (hash<ExceptionInfo> ex) {
-        stdout.printf(\"set: %s: %s\\n\", ex.err, ex.desc);
+    # the signals reserved for jni from SIGUSR2 up
+    list<int> reserved = ();
+    for (int s = SIGUSR2; s <= 64; ++s) {
+        # SIGCHLD is one of the signals that jni reserves in any case
+        if (s == SIGCHLD) {
+            continue;
+        }
+        try {
+            set_signal_handler(s, sub (int x) {});
+            remove_signal_handler(s);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc =~ /module 'jni'/) {
+                reserved += s;
+            }
+        }
     }
-
-    # a handler for a signal that is not reserved runs
-    Queue q();
-    set_signal_handler(other, sub (int s) { q.push(s); });
-    kill(getpid(), other);
-    stdout.printf(\"other handled: %d\\n\", q.get());
-    remove_signal_handler(other);
+    stdout.printf(\"reserved: %s\\n\", (foldl $1 + \",\" + $2, (map string($1), reserved)) ?? \"\");
+    stdout.printf(\"sigcgt: %s\\n\", status_mask(\"SigCgt\"));
+    # the variable is visible neither to the process nor to a child process started now
+    stdout.printf(\"env: %y\\n\", getenv(\"_JAVA_SR_SIGNUM\"));
+    stdout.printf(\"child env: %s\\n\", trim(backquote(\"printenv _JAVA_SR_SIGNUM || echo none\")));
+    run_handler(SIGUSR2, 5);
+    # a thread dump of the process, which brings the JVM to a safepoint
+    *string jcmd = find_jcmd();
+    if (jcmd) {
+        int rc;
+        string out = backquote(sprintf(\"'%s' %d Thread.print 2>&1\", jcmd, getpid()), \\rc);
+        stdout.printf(\"jcmd: %d %y\\n\", rc, out =~ /Full thread dump/);
+    } else {
+        stdout.print(\"jcmd: none\\n\");
+    }
 }
 
 stdout.printf(\"pid: %d\\n\", getpid());
-if (mode == \"before\") {
-    before(sig);
-} else if (mode == \"fail\") {
-    # the JVM does not start (the parent passes an invalid JVM option), so the module's initialization fails after
-    # it has reserved the signal
-    try {
-        load_jni();
-        stdout.print(\"load: ok\\n\");
-    } catch (hash<ExceptionInfo> ex) {
-        stdout.printf(\"load: %s\\n\", ex.err);
+switch (mode) {
+    case \"loaded\": loaded(); break;
+    case \"before\": {
+        Queue q();
+        set_signal_handler(SIGUSR2, sub (int x) { q.push(x); });
+        if (try_load()) {
+            int got = 0;
+            for (int i = 0; i < 5; ++i) {
+                kill(getpid(), SIGUSR2);
+                if (wait_for(q)) {
+                    ++got;
+                }
+            }
+            stdout.printf(\"handled %d: %d\\n\", SIGUSR2, got);
+        }
+        remove_signal_handler(SIGUSR2);
+        break;
     }
-    *string blk = (ReadOnlyFile::readTextFile(\"/proc/thread-self/status\") =~ x/^SigBlk:\\s*([0-9a-f]+)$/m)[0];
-    stdout.printf(\"blocked: %y\\n\", blk ? (strtoint(blk.substr(-8), 16) & (1 << (sig - 1))) != 0 : NOTHING);
-    # the signal is free again: a handler for it runs, and the signal does not end the process
-    Queue q();
-    set_signal_handler(sig, sub (int s) { q.push(s); });
-    kill(getpid(), sig);
-    stdout.printf(\"handled: %d\\n\", q.get());
-    remove_signal_handler(sig);
-} else if (mode == \"load\") {
-    try {
-        load_jni();
-        stdout.print(\"load: ok\\n\");
-    } catch (hash<ExceptionInfo> ex) {
-        stdout.printf(\"load: %s: %s\\n\", ex.err, ex.desc);
+    case \"fail\": {
+        try_load();
+        stdout.printf(\"blocked: %y\\n\", has_sig(status_mask(\"SigBlk\"), sig));
+        stdout.printf(\"env: %y\\n\", getenv(\"_JAVA_SR_SIGNUM\"));
+        # the signal is free again: a handler for it runs, and the signal does not end the process
+        run_handler(sig, 1);
+        break;
     }
-} else {
-    loaded(sig, other);
+    case \"nofree\": {
+        for (int s = 34; s <= 64; ++s) {
+            try {
+                set_signal_handler(s, sub (int x) {});
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+        try_load();
+        break;
+    }
+    case \"load\": try_load(); break;
 }
 ";
+
+        #! the error of a handler for a signal reserved for jni
+        const Refused = "SIGNAL-HANDLER-ERROR";
     }
 
     private {
@@ -129,10 +216,11 @@ if (mode == \"before\") {
     }
 
     constructor() : Test("JniReservedSignals", "1.0") {
-        addTestCase("SIGUSR2 reserved with libjsig", \libjsigTest());
-        addTestCase("SIGUSR2 reserved without libjsig", \noLibjsigTest());
-        addTestCase("handler set before jni is loaded", \beforeTest());
-        addTestCase("_JAVA_SR_SIGNUM", \srSignumTest());
+        addTestCase("JVM signal with libjsig", \libjsigTest());
+        addTestCase("JVM signal without libjsig", \noLibjsigTest());
+        addTestCase("SIGUSR2 handler set before jni is loaded", \beforeTest());
+        addTestCase("_JAVA_SR_SIGNUM set by the user", \srSignumTest());
+        addTestCase("no free real-time signal", \noFreeTest());
         addTestCase("failed initialization", \failedInitTest());
 
         set_return_value(main());
@@ -151,56 +239,105 @@ if (mode == \"before\") {
         if (!libjsig) {
             testSkip("libjsig.so of the JVM was not found");
         }
-        loadedCase(libjsig, True, SIGUSR2, SIGUSR1);
+        loadedCase(libjsig, True);
     }
 
     noLibjsigTest() {
-        loadedCase("", False, SIGUSR2, SIGUSR1);
+        loadedCase("", False);
     }
 
     beforeTest() {
-        hash<auto> res = run("", "before", SIGUSR2, SIGUSR1);
+        checkProc();
+        # the order of Qorus: its SIGUSR2 handler is set before jni is loaded
+        hash<auto> res = run("", "before", 0);
         assertEq(0, res.rc, "exit status: " + res.out);
-        assertRegex("(^|\n)load: MODULE-INIT-ERROR: .*signal " + SIGUSR2 + "\\b", res.out,
-            "jni cannot be loaded while a handler is set for SIGUSR2");
+        assertRegex("(^|\n)load: ok\n", res.out, "jni is loaded while a SIGUSR2 handler is set");
+        assertRegex("(^|\n)handled " + SIGUSR2 + ": 5\n", res.out, "the SIGUSR2 handler runs");
     }
 
     srSignumTest() {
-        # the JVM uses the signal in _JAVA_SR_SIGNUM instead of SIGUSR2 for its threads
-        loadedCase("", False, SIGVTALRM, SIGUSR2, {"_JAVA_SR_SIGNUM": SIGVTALRM});
-        # ... if it is greater than SIGSEGV and SIGBUS (the JVM warns and uses SIGUSR2 otherwise)
-        loadedCase("", False, SIGUSR2, SIGUSR1, {"_JAVA_SR_SIGNUM": SIGUSR1});
+        checkProc();
+        # a signal that the user sets in _JAVA_SR_SIGNUM is used by the JVM and reserved
+        hash<auto> res = run("", "loaded", 0, {"_JAVA_SR_SIGNUM": SIGVTALRM});
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)reserved: " + SIGVTALRM + "\n", res.out, "the signal set by the user is reserved");
+        assertTrue(hasSig(res, SIGVTALRM), "the JVM handles the signal set by the user");
+        assertRegex("(^|\n)handled " + SIGUSR2 + ": 5\n", res.out, "a SIGUSR2 handler runs");
+        # the user's variable stays set
+        assertRegex("(^|\n)env: \"" + SIGVTALRM + "\"\n", res.out, "the user's _JAVA_SR_SIGNUM stays set");
+
+        # a value that the JVM does not accept: it warns and uses SIGUSR2, which is reserved then
+        res = run("", "loaded", 0, {"_JAVA_SR_SIGNUM": SIGUSR1});
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)reserved: " + SIGUSR2 + "\n", res.out, "SIGUSR2 is reserved");
+        assertRegex("(^|\n)handled " + SIGUSR2 + ": SIGNAL-HANDLER-ERROR\n", res.out, "a SIGUSR2 handler is refused");
+
         # a signal that the library uses itself is not taken over: jni cannot be loaded
-        hash<auto> res = run("", "load", SIGALRM, SIGUSR1, {"_JAVA_SR_SIGNUM": SIGALRM});
+        res = run("", "load", 0, {"_JAVA_SR_SIGNUM": SIGALRM});
         assertEq(0, res.rc, "exit status: " + res.out);
         assertRegex("(^|\n)load: MODULE-INIT-ERROR: .*signal " + SIGALRM + " .*already managed", res.out,
             "jni cannot be loaded when _JAVA_SR_SIGNUM names SIGALRM");
     }
 
+    noFreeTest() {
+        checkProc();
+        hash<auto> res = run("", "nofree", 0);
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)load: MODULE-INIT-ERROR: .*no real-time signal", res.out,
+            "jni cannot be loaded when no real-time signal is free");
+    }
+
     failedInitTest() {
-        if (!is_file("/proc/thread-self/status")) {
-            testSkip("no /proc file system");
-        }
-        # an invalid JVM option makes JNI_CreateJavaVM() fail
-        hash<auto> res = run("", "fail", SIGUSR2, SIGUSR1, {"QORE_JNI_JVM_ARGS": "-XX:+QoreJniNoSuchOption"});
+        checkProc();
+        # an invalid JVM option makes JNI_CreateJavaVM() fail after the signal has been reserved
+        string bad = "-XX:+QoreJniNoSuchOption";
+        # with the signal set by the user: libqore unblocked it in the thread when the module reserved it
+        hash<auto> res = run("", "fail", SIGUSR2, {"QORE_JNI_JVM_ARGS": bad, "_JAVA_SR_SIGNUM": SIGUSR2});
         assertRegex("(^|\n)load: MODULE-INIT-ERROR", res.out, "the module's initialization failed");
-        # libqore unblocked the signal in the thread when the module reserved it
         assertRegex("(^|\n)blocked: True\n", res.out, "the signal is blocked again in the thread");
-        assertRegex("(^|\n)handled: " + SIGUSR2 + "\n", res.out, "a handler for the released signal runs");
+        assertRegex("(^|\n)handled " + SIGUSR2 + ": 1\n", res.out, "a handler for the released signal runs");
+        assertEq(0, res.rc, "exit status: " + res.out);
+
+        # with the signal chosen by the module: the variable is unset again
+        res = run("", "fail", SIGUSR2, {"QORE_JNI_JVM_ARGS": bad});
+        assertRegex("(^|\n)load: MODULE-INIT-ERROR", res.out, "the module's initialization failed");
+        assertRegex("(^|\n)env: null\n", res.out, "_JAVA_SR_SIGNUM is not left set");
         assertEq(0, res.rc, "exit status: " + res.out);
     }
 
-    private:internal loadedCase(string preload, bool with_libjsig, int sig, int other, *hash<auto> env) {
-        if (!is_file("/proc/self/maps")) {
-            testSkip("no /proc file system");
-        }
-        hash<auto> res = run(preload, "loaded", sig, other, env);
+    private:internal loadedCase(string preload, bool with_libjsig) {
+        checkProc();
+        hash<auto> res = run(preload, "loaded", 0);
         checkLibjsig(res, with_libjsig);
         assertEq(0, res.rc, "exit status: " + res.out);
-        assertRegex("(^|\n)set: SIGNAL-HANDLER-ERROR: .*signal " + sig + " .*'jni'", res.out,
-            sprintf("a handler for %s is refused", SignalToName{sig}));
-        assertRegex("(^|\n)other handled: " + other + "\n", res.out,
-            sprintf("a handler for %s runs", SignalToName{other}));
+        # SIGUSR2 is free: a handler for it runs every time
+        assertRegex("(^|\n)handled " + SIGUSR2 + ": 5\n", res.out, "a SIGUSR2 handler runs");
+        assertFalse(hasSig(res, SIGUSR2), "the JVM has no handler for SIGUSR2");
+        # the JVM uses a real-time signal, which is reserved for jni
+        *string reserved = (res.out =~ x/(?:^|\n)reserved: ([0-9,]*)\n/)[0];
+        list<string> sigs = reserved ? reserved.split(",") : ();
+        assertEq(1, sigs.size(), "one signal from SIGUSR2 up is reserved for jni: " + res.out);
+        int sr = sigs[0].toInt();
+        assertTrue(sr > 32, "the reserved signal is a real-time signal: " + sr);
+        assertTrue(hasSig(res, sr), "the JVM handles the reserved signal");
+        # the variable is unset after the JVM is created
+        assertRegex("(^|\n)env: null\n", res.out, "_JAVA_SR_SIGNUM is not visible to the process");
+        assertRegex("(^|\n)child env: none\n", res.out, "_JAVA_SR_SIGNUM is not visible to a child process");
+        # a thread dump, which brings the JVM to a safepoint
+        if (res.out =~ /(^|\n)jcmd: none\n/) {
+            testSkip("jcmd was not found");
+        }
+        assertRegex("(^|\n)jcmd: 0 True\n", res.out, "jcmd Thread.print works: " + res.out);
+    }
+
+    #! returns True if the child reported a handler in the process for the signal
+    private:internal bool hasSig(hash<auto> res, int sig) {
+        *string cgt = (res.out =~ x/(?:^|\n)sigcgt: ([0-9a-f]+)\n/)[0];
+        if (!cgt) {
+            fail("the child did not report its signal handlers: " + res.out);
+        }
+        int digit = (sig - 1) / 4;
+        return (strtoint(cgt.substr(-(digit + 1), 1), 16) & (1 << ((sig - 1) % 4))) != 0;
     }
 
     #! checks the child's report of libjsig; skips the test case if a process without libjsig cannot be tested
@@ -215,18 +352,24 @@ if (mode == \"before\") {
         assertEq(with_libjsig ? "True" : "False", jsig, "libjsig in the child");
     }
 
+    #! skips the test case if the process cannot be inspected through /proc
+    private:internal checkProc() {
+        if (!is_file("/proc/thread-self/status")) {
+            testSkip("no /proc file system");
+        }
+    }
+
     #! runs the child with the jni module of this process and returns its exit status and output
-    private:internal hash<auto> run(string preload, string mode, int sig, int other, *hash<auto> env) {
+    private:internal hash<auto> run(string preload, string mode, int sig, *hash<auto> env) {
         string vars;
         foreach hash<auto> i in (env.pairIterator()) {
             vars += sprintf("%s=%s ", i.key, shellQuote(string(i.value)));
         }
         int rc;
         string out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u _JAVA_SR_SIGNUM "
-            "-u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG %sQORE_MODULE_DIR=%s LD_PRELOAD=%s %s --enable-debug %s %s %d %d "
-            "2>&1",
-            vars, shellQuote(getModuleDir()), shellQuote(preload), shellQuote(QORE_ARGV[0]), shellQuote(script),
-            mode, sig, other), \rc);
+            "-u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG %sQORE_MODULE_DIR=%s LD_PRELOAD=%s %s --enable-debug %s %s %d "
+            "2>&1", vars, shellQuote(getModuleDir()), shellQuote(preload), shellQuote(QORE_ARGV[0]),
+            shellQuote(script), mode, sig), \rc);
         if (m_options.verbose > 2) {
             printf("mode %s sig %d preload %y env %y: rc %d\n%s\n", mode, sig, preload, env, rc, out);
         }
