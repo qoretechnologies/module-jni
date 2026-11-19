@@ -1,0 +1,372 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.Utf8Boundary
+%module-cmd(jni) import org.qore.jni.test.Utf8Driver
+%exec-class JniRefuseNulTest
+
+#! a function that Java code calls in the tests of the names and the arguments of calls from Java
+auto sub jni_refuse_nul_echo(auto v) {
+    return v;
+}
+
+#! a class that Java code uses in the tests of the names of calls from Java
+class JniRefuseNulTarget {
+    public {
+        int member = 1;
+    }
+
+    static int staticMethod() {
+        return 2;
+    }
+
+    int method() {
+        return 3;
+    }
+}
+
+#! A Java string with a NUL character that is used as a Qore hash key or as a name is refused (qore#6738)
+/** A hash key and a name (of a class, method, field, function, module or namespace) are NUL-terminated strings in
+    Qore and in JNI, so a Java string with a NUL character was cut at it, silently, and named another key or another
+    class: the string is refused instead, with \c HASH-KEY-ERROR for a hash key and \c JNI-ERROR for a name.  Values
+    keep their NUL characters (see test/jni-strict-utf8.qtest).
+
+    Each test case is marked:
+    - regression: it fails without the fix (the string is cut at the NUL character, or the process is aborted)
+    - coverage: it passes with and without the fix, and checks that a string without a NUL character still works
+*/
+class JniRefuseNulTest inherits QUnit::Test {
+    private {
+        #! a string with a NUL character
+        string nul = binary_to_string(<00>, "UTF-8");
+    }
+
+    constructor() : QUnit::Test("JNI refuse NUL", "1.0") {
+        addTestCase("regression: a Java Map key with a NUL character", \mapKey());
+        addTestCase("regression: two Java Map keys that differ after a NUL character", \mapKeysDifferAfterNul());
+        addTestCase("regression: a key with a NUL character in a nested Java Map", \nestedMapKey());
+        addTestCase("regression: a nested Java Map key with a NUL character after converted values",
+            \nestedMapKeyAfterValues());
+        addTestCase("regression: a QoreException whose argument has a Map key with a NUL character",
+            \qoreExceptionArg());
+        addTestCase("coverage: Java Map keys without a NUL character", \mapKeysOk());
+        addTestCase("regression: a Java Map key with a NUL character in an argument of a call from Java",
+            \callbackMapKey());
+        addTestCase("regression: an error converting an argument of a call from Java", \callbackArgError());
+        addTestCase("regression: a JDBC column label with a NUL character", \jdbcLabel());
+        addTestCase("coverage: JDBC column labels without a NUL character", \jdbcLabelsOk());
+        addTestCase("regression: load_class() and define_class() with a NUL character in the class name",
+            \loadDefineClass());
+        addTestCase("regression: get_byte_code() and get_java_name() with a NUL character in the class name",
+            \byteCodeClassName());
+        addTestCase("regression: module commands with a NUL character in a class, package or module name",
+            \moduleCommands());
+        addTestCase("coverage: the import module command without a NUL character", \moduleCommandsOk());
+        addTestCase("regression: a Java class, method or field name with a NUL character", \javaNames());
+        addTestCase("regression: the parent class and a method's type with a NUL character in the class name",
+            \javaTypeNames());
+        addTestCase("coverage: Java class, method and field names without a NUL character", \javaNamesOk());
+        addTestCase("regression: the names of calls from Java with a NUL character", \callNames());
+        addTestCase("coverage: the names of calls from Java without a NUL character", \callNamesOk());
+        addTestCase("regression: a class that Java loads by a name with a NUL character", \classLoaderNames());
+        set_return_value(main());
+    }
+
+    #! checks that the code raises the given exception
+    private checkError(string err, string desc, code c, *softlist<auto> args) {
+        *hash<ExceptionInfo> ex;
+        try {
+            call_function_args(c, args);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq(err, ex.err, "error code: " + desc);
+        assertEq(desc, ex.desc);
+    }
+
+    #! checks that the code raises the given exception with a description that starts with the given text
+    /** a module command error has the command appended to its description, which Qore cuts at the NUL character
+    */
+    private checkErrorPrefix(string err, string desc, code c, *softlist<auto> args) {
+        *hash<ExceptionInfo> ex;
+        try {
+            call_function_args(c, args);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq(err, ex.err, "error code: " + desc);
+        assertEq(desc, ex.desc.substr(0, desc.size()), ex.desc);
+    }
+
+    #! returns the error description of a Java Map key or JDBC column label with a NUL character
+    private static string keyDesc(string what, string key, int offset) {
+        return sprintf("%s \"%s\" contains a NUL character at byte offset %d, which a Qore hash key cannot hold",
+            what, replace(key, binary_to_string(<00>, "UTF-8"), "\\x00"), offset);
+    }
+
+    #! returns the error description of a name with a NUL character
+    private static string nameDesc(string what, string name, int offset) {
+        return sprintf("%s \"%s\" contains a NUL character at byte offset %d; %ss cannot contain NUL characters",
+            what, replace(name, binary_to_string(<00>, "UTF-8"), "\\x00"), offset, what);
+    }
+
+    #! the key was cut at the NUL character: "a<NUL>b" became "a"
+    mapKey() {
+        checkError("HASH-KEY-ERROR", keyDesc("Java Map key", "a" + nul + "b", 1), \Utf8Boundary::mapOf(),
+            ("a" + nul + "b", 1));
+        checkError("HASH-KEY-ERROR", keyDesc("Java Map key", nul, 0), \Utf8Boundary::mapOf(), (nul, 1));
+    }
+
+    #! the two keys were cut to the same key, so that one value replaced the other: {"x": 2}
+    mapKeysDifferAfterNul() {
+        checkError("HASH-KEY-ERROR", keyDesc("Java Map key", "x" + nul + "1", 1), \Utf8Boundary::mapOf2(),
+            ("x" + nul + "1", "x" + nul + "2"));
+    }
+
+    #! the key of the inner Map was cut at the NUL character
+    nestedMapKey() {
+        checkError("HASH-KEY-ERROR", keyDesc("Java Map key", "a" + nul + "b", 1), \Utf8Boundary::nestedMapOf(),
+            "a" + nul + "b");
+    }
+
+    #! the refusal of a key of a nested Map is checked under valgrind: the values converted before it are discarded
+    nestedMapKeyAfterValues() {
+        checkError("HASH-KEY-ERROR", keyDesc("Java Map key", "b" + nul + "c", 1),
+            \Utf8Boundary::valueThenNestedMapOf(), "b" + nul + "c");
+        checkError("HASH-KEY-ERROR", keyDesc("Java Map key", "b" + nul + "c", 1),
+            \Utf8Boundary::valueThenMapListOf(), "b" + nul + "c");
+        assertEq({"a": "value", "outer": {"b": 1}}, Utf8Boundary::valueThenNestedMapOf("b"));
+        assertEq(("value", {"b": 1}), Utf8Boundary::valueThenMapListOf("b"));
+    }
+
+    #! the argument of an org.qore.jni.QoreException, a Map with a key that has a NUL character, was cut at it: {"a": 1};
+    #! an argument that cannot be converted makes the exception be reported as the Java exception that it is, as for
+    #! any other error of the conversion (see test/jni-reference-safety.qtest)
+    qoreExceptionArg() {
+        *hash<ExceptionInfo> ex;
+        try {
+            Utf8Boundary::throwQoreWithArg("ERR", "the description", "a" + nul + "b");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("JNI-ERROR", ex.err);
+        assertEq("org.qore.jni.QoreException", ex.arg.getClass().getName());
+
+        try {
+            Utf8Boundary::throwQoreWithArg("ERR", "the description", "ab");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("ERR", ex.err);
+        assertEq({"ab": 1}, ex.arg);
+        assertEq(NOTHING, ex.next);
+    }
+
+    mapKeysOk() {
+        assertEq({"ключ_😀": 1}, Utf8Boundary::mapOf("ключ_😀", 1));
+        assertEq({"x1": 1, "x2": 2}, Utf8Boundary::mapOf2("x1", "x2"));
+        assertEq({"outer": {"a": 1}}, Utf8Boundary::nestedMapOf("a"));
+        assertEq({"a": 1}, Utf8Boundary::callWithMap("jni_refuse_nul_echo", "a"));
+        assertEq({"outer": {"a": 1}}, Utf8Boundary::callWithNestedMap("jni_refuse_nul_echo", "a"));
+    }
+
+    #! the key of a Map that Java passes to a Qore function was cut at the NUL character; the error is raised in Java,
+    #! and from there in Qore (see callbackArgError())
+    callbackMapKey() {
+        checkError("HASH-KEY-ERROR", keyDesc("Java Map key", "a" + nul + "b", 1), \Utf8Boundary::callWithMap(),
+            ("jni_refuse_nul_echo", "a" + nul + "b"));
+        checkError("HASH-KEY-ERROR", keyDesc("Java Map key", "a" + nul + "b", 1),
+            \Utf8Boundary::callWithNestedMap(), ("jni_refuse_nul_echo", "a" + nul + "b"));
+    }
+
+    #! an error converting an argument of a call from Java to Qore (here a Java exception, thrown by the entrySet() of
+    #! a Map) was a C++ exception that left the JNI native method, which aborted the process; it is raised in Java,
+    #! and from there in Qore
+    callbackArgError() {
+        *hash<ExceptionInfo> ex;
+        try {
+            Utf8Boundary::callWithThrowingMap("jni_refuse_nul_echo");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("JNI-ERROR", ex.err);
+        assertRegex("IllegalStateException: entrySet\\(\\) failed", ex.desc);
+    }
+
+    #! returns a Datasource for the fixture driver (org.qore.jni.test.Utf8Driver) with the given column labels
+    private static Datasource getDatasource(list<string> labels) {
+        Utf8Driver::install();
+        Utf8Driver::labels = labels;
+        return new Datasource("jdbc", "user", "pass", "qore-utf8:db");
+    }
+
+    #! the label was cut at the NUL character: "c<NUL>d" became the key "c"
+    jdbcLabel() {
+        Datasource ds = getDatasource(("c" + nul + "d",));
+        on_exit ds.rollback();
+        string desc = keyDesc("JDBC column label", "c" + nul + "d", 1);
+        checkError("HASH-KEY-ERROR", desc, \ds.selectRow(), ("select %v", "x"));
+        checkError("HASH-KEY-ERROR", desc, \ds.select(), ("select %v", "x"));
+        checkError("HASH-KEY-ERROR", desc, \ds.selectRows(), ("select %v", "x"));
+        SQLStatement stmt(ds);
+        stmt.prepare("select %v");
+        stmt.bind("x");
+        checkError("HASH-KEY-ERROR", desc, \stmt.describe());
+        stmt.close();
+
+        # two labels that differ after the NUL character were cut to the same key
+        Datasource ds2 = getDatasource(("c" + nul + "1", "c" + nul + "2"));
+        on_exit ds2.rollback();
+        checkError("HASH-KEY-ERROR", keyDesc("JDBC column label", "c" + nul + "1", 1), \ds2.selectRow(),
+            ("select %v, %v", "x", "y"));
+    }
+
+    jdbcLabelsOk() {
+        Datasource ds = getDatasource(("c1", "c2"));
+        on_exit ds.rollback();
+        assertEq({"c1": "x", "c2": "y"}, ds.selectRow("select %v, %v", "x", "y"));
+        assertEq({"c1": ("x",), "c2": ("y",)}, ds.select("select %v, %v", "x", "y"));
+        SQLStatement stmt(ds);
+        stmt.prepare("select %v, %v");
+        stmt.bind("x", "y");
+        assertEq(("c1", "c2"), keys stmt.describe());
+        stmt.close();
+    }
+
+    #! the name was cut at the NUL character: load_class() of "java/lang/String<NUL>junk" returned java.lang.String
+    loadDefineClass() {
+        string name = "java/lang/String" + nul + "junk";
+        checkError("JNI-ERROR", nameDesc("class name", name, 16), \load_class(), name);
+        assertEq("java.lang.String", load_class("java/lang/String").getName());
+        name = "org/qore/test/Nul" + nul + "Class";
+        checkError("JNI-ERROR", nameDesc("class name", name, 17), \define_class(), (name, <cafebabe>));
+    }
+
+    #! the name was cut at the NUL character, and named another Qore class
+    byteCodeClassName() {
+        string name = "JniRefuseNulTarget" + nul + "x";
+        checkError("JNI-ERROR", nameDesc("class name", name, 18), \get_byte_code(), name);
+        checkError("JNI-ERROR", nameDesc("class name", name, 18), \get_java_name(), name);
+        assertEq("qore.JniRefuseNulTarget", get_java_name("JniRefuseNulTarget"));
+    }
+
+    #! issues a module command in a new Program with the jni module
+    private static issue(string cmd) {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", cmd);
+    }
+
+    #! the names were cut at the NUL character: "import java.lang.String<NUL>junk" imported java.lang.String
+    moduleCommands() {
+        string name = "java.lang.String" + nul + "junk";
+        checkErrorPrefix("JNI-ERROR", nameDesc("class name", name, 16), \issue(), "import " + name);
+        name = "java.lang" + nul + "junk.*";
+        checkErrorPrefix("JNI-ERROR", nameDesc("package name", name, 9), \issue(), "import " + name);
+        name = "org.qore.test.Nul" + nul + "Class";
+        checkErrorPrefix("JNI-ERROR", nameDesc("class name", name, 17), \issue(), "define-class " + name
+            + " yv66vg==");
+        checkErrorPrefix("JNI-ERROR", nameDesc("class name", name, 17), \issue(), "define-pending-class " + name
+            + " yv66vg==");
+        checkErrorPrefix("JNI-ERROR", nameDesc("class name", name, 17), \issue(), "register-shared-class " + name);
+        name = "Util" + nul + "junk";
+        checkErrorPrefix("JNI-ERROR", nameDesc("module name", name, 4), \issue(), "mark-module-injected " + name);
+    }
+
+    moduleCommandsOk() {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", "import java.lang.StringBuilder");
+        p.parse("string sub get() { Jni::java::lang::StringBuilder sb(\"ok\"); return sb.toString(); }", "ok");
+        assertEq("ok", p.callFunction("get"));
+    }
+
+    #! returns a new object of a class made with the given names (see Utf8Boundary.classWithNames())
+    private static object newObject(string class_name, string field, string static_field, string method) {
+        return Utf8Boundary::classWithNames(class_name, field, static_field, method).newInstance();
+    }
+
+    #! the JVM allows a NUL character in a class, method or field name, which was cut at it in the name of the Qore
+    #! class, method, member or static variable: class "org.qore.test.Nul<NUL>Class" became Qore class "Nul", and
+    #! method "me<NUL>th" became method "me"
+    javaNames() {
+        string name = "org.qore.test.Nul" + nul + "Class";
+        checkError("JNI-ERROR", nameDesc("Java class name", name, 17), \newObject(), (name, "field", "staticField",
+            "method"));
+        checkError("JNI-ERROR", nameDesc("Java method name", "me" + nul + "th", 2), \newObject(),
+            ("org.qore.test.NulMethod", "field", "staticField", "me" + nul + "th"));
+        checkError("JNI-ERROR", nameDesc("Java field name", "fi" + nul + "eld", 2), \newObject(),
+            ("org.qore.test.NulField", "fi" + nul + "eld", "staticField", "method"));
+        checkError("JNI-ERROR", nameDesc("Java field name", "st" + nul + "atic", 2), \newObject(),
+            ("org.qore.test.NulStaticField", "field", "st" + nul + "atic", "method"));
+    }
+
+    #! a class whose parent class has a NUL character in its name, which is looked up by its name, is refused; a
+    #! method whose type is such a class is declared with any object as its type, and the object that it returns is
+    #! refused when it is converted
+    javaTypeNames() {
+        string name = "org.qore.test.Nul" + nul + "Parent";
+        Jni::java::lang::Class parent = Utf8Boundary::classWithNames(name, "field", "staticField", "method");
+        checkError("JNI-ERROR", nameDesc("Java class name", name, 17),
+            sub () {
+                Jni::java::lang::Class child = Utf8Boundary::subclassOf(parent, "org.qore.test.NulParentChild");
+                child.newInstance();
+            });
+        object returner = Utf8Boundary::classReturning(parent, "org.qore.test.NulTypeReturner").newInstance();
+        assertEq("NulTypeReturner", returner.className());
+        checkError("JNI-ERROR", nameDesc("Java class name", name, 17), sub () { call_object_method(returner, "get"); });
+    }
+
+    javaNamesOk() {
+        object obj = newObject("org.qore.test.NoNulNames", "field", "staticField", "method");
+        assertEq("NoNulNames", obj.className());
+        assertEq(1, obj.method());
+        assertEq(0, obj.field);
+    }
+
+    #! the names that Java passed to Qore were cut at the NUL character: a call of function "f<NUL>junk" called "f"
+    callNames() {
+        string name = "jni_refuse_nul_echo" + nul + "junk";
+        checkError("JNI-ERROR", nameDesc("function name", name, 19), \Utf8Boundary::callWithMap(), (name, "a"));
+        name = "JniRefuseNulTarget" + nul + "junk";
+        checkError("JNI-ERROR", nameDesc("class name", name, 18), \Utf8Boundary::callStaticMethod(),
+            (name, "staticMethod"));
+        checkError("JNI-ERROR", nameDesc("class name", name, 18), \Utf8Boundary::newObjectClassName(), name);
+        checkError("JNI-ERROR", nameDesc("method name", "staticMethod" + nul + "junk", 12),
+            \Utf8Boundary::callStaticMethod(), ("JniRefuseNulTarget", "staticMethod" + nul + "junk"));
+        JniRefuseNulTarget target();
+        checkError("JNI-ERROR", nameDesc("method name", "method" + nul + "junk", 6), \Utf8Boundary::callMethod(),
+            (target, "method" + nul + "junk"));
+        checkError("JNI-ERROR", nameDesc("member name", "member" + nul + "junk", 6), \Utf8Boundary::memberOf(),
+            (target, "member" + nul + "junk"));
+        # a class name with a NUL character is the name of no class
+        assertFalse(Utf8Boundary::instanceOf(target, name));
+    }
+
+    callNamesOk() {
+        assertEq({"a": 1}, Utf8Boundary::callWithMap("jni_refuse_nul_echo", "a"));
+        assertEq(2, Utf8Boundary::callStaticMethod("JniRefuseNulTarget", "staticMethod"));
+        assertEq("JniRefuseNulTarget", Utf8Boundary::newObjectClassName("JniRefuseNulTarget"));
+        JniRefuseNulTarget target();
+        assertEq(3, Utf8Boundary::callMethod(target, "method"));
+        assertEq(1, Utf8Boundary::memberOf(target, "member"));
+        assertTrue(Utf8Boundary::instanceOf(target, "JniRefuseNulTarget"));
+    }
+
+    #! the name of a class of a Qore namespace or module that Java loads was cut at the NUL character, and named
+    #! another class or module
+    classLoaderNames() {
+        checkError("JNI-ERROR", nameDesc("Qore namespace path", "::JniRefuseNulTarget" + nul + "junk", 20),
+            \Utf8Boundary::loadClassName(), "qore.JniRefuseNulTarget" + nul + "junk");
+        checkError("JNI-ERROR", nameDesc("Java class name", "qoremod.Util" + nul + "junk.Class", 12),
+            \Utf8Boundary::loadClassName(), "qoremod.Util" + nul + "junk.Class");
+        assertEq("qore.JniRefuseNulTarget", Utf8Boundary::loadClassName("qore.JniRefuseNulTarget"));
+    }
+}

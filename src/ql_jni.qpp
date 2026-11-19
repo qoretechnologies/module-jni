@@ -243,7 +243,8 @@ nothing check_class_option(string provider, string option, *string what) [flags=
 
     @return the loaded class
 
-    @throws JNI-ERROR if the class cannot be loaded
+    @throws JNI-ERROR if the class cannot be loaded, or the name has a NUL character, which a class name cannot have
+    (qore#6738)
 
     @par Example:
     @code{.py}
@@ -335,18 +336,13 @@ Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJ
     @endcode
  */
 Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
-    // get Qore class for Class object
-    jni::Env env;
-    jni::LocalReference<jstring> clsName = env.callObjectMethod(interface_class->getObject(),
-        jni::Globals::methodClassGetName, nullptr).as<jstring>();
-    jni::Env::GetStringUtfChars cname(env, clsName);
-    QoreString jcname(cname.c_str());
-    jcname.replaceAll(".", "/");
-    LocalReference<jclass> jc = interface_class->makeLocal().as<jclass>();
-    QoreProgram* pgm = jni_get_program_context();
-    QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
-
+    // the Qore class of the interface is found or created in the try block: it raises a C++ exception if it fails (ex:
+    // for a name with a NUL character, qore#6738), which must be converted
     try {
+        jni::Env env;
+        LocalReference<jclass> jc = interface_class->makeLocal().as<jclass>();
+        QoreProgram* pgm = jni_get_program_context();
+        QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
         return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(
             jni::Functions::implementInterface(nullptr, *invocation_handler, jc)));
     } catch (jni::Exception& e) {
@@ -373,18 +369,13 @@ Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationH
     @endcode
  */
 Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] class_loader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
-    // get Qore class for Class object
-    jni::Env env;
-    jni::LocalReference<jstring> clsName = env.callObjectMethod(interface_class->getObject(),
-        jni::Globals::methodClassGetName, nullptr).as<jstring>();
-    jni::Env::GetStringUtfChars cname(env, clsName);
-    QoreString jcname(cname.c_str());
-    jcname.replaceAll(".", "/");
-    LocalReference<jclass> jc = interface_class->makeLocal().as<jclass>();
-    QoreProgram* pgm = jni_get_program_context();
-    QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
-
+    // the Qore class of the interface is found or created in the try block: it raises a C++ exception if it fails (ex:
+    // for a name with a NUL character, qore#6738), which must be converted
     try {
+        jni::Env env;
+        LocalReference<jclass> jc = interface_class->makeLocal().as<jclass>();
+        QoreProgram* pgm = jni_get_program_context();
+        QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
         return new QoreObject(qc, jni::jni_get_program_context(), new QoreJniPrivateData(
             jni::Functions::implementInterface(class_loader->getObject(), *invocation_handler, jc)));
     } catch (jni::Exception& e) {
@@ -423,6 +414,8 @@ java::lang::Class cls = define_class(class_name: class_name, bytecode: bytecode)
 
     @note the class will be created using the classloader for the containing %Program object
 
+    @throws JNI-ERROR the name has a NUL character, which a class name cannot have (qore#6738)
+
     @since %jni 1.1
 */
 Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
@@ -434,7 +427,9 @@ Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [dom
         QoreProgram* pgm = qore_get_call_program_context();
         JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
         assert(jpc);
-        LocalReference<jclass> jcls = env.defineClass(utf8_name.c_str(), jpc->getClassLoader(),
+        // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
+        LocalReference<jclass> jcls = env.defineClass(utf8_name.name("class name", "class names"),
+            jpc->getClassLoader(),
             static_cast<const unsigned char*>(bytecode->getPtr()), bytecode->size());
         return new QoreObject(QC_CLASS, pgm, new QoreJniPrivateData(jcls));
     } catch (jni::Exception& e) {
@@ -518,6 +513,7 @@ binary byte_code = get_byte_code(class_name: "::Qore::Thread::Condition");
     @return the dynamically generated Java byte code for the class
 
     @throws CLASS-NOT-FOUND the %Qore class could not be found
+    @throws JNI-ERROR the name has a NUL character, which a class name cannot have (qore#6738)
 
     @note Other exceptions can also be thrown during bytecode generation
 
@@ -537,6 +533,8 @@ binary get_byte_code(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] 
         assert(jpc);
         assert(pgm);
 
+        // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
+        jni_check_name(cn->c_str(), cn->size(), "class name", "class names");
         const QoreClass* cls = pgm->findClass(cn->c_str(), xsink);
         if (*xsink) {
             return QoreValue();
@@ -572,6 +570,7 @@ string java_name = get_java_name(class_name: "::Qore::Ocr::TesseractEngine");  #
     @return the Java binary class name for the class
 
     @throws CLASS-NOT-FOUND the %Qore class could not be found
+    @throws JNI-ERROR the name has a NUL character, which a class name cannot have (qore#6738)
 
     @since jni 3.0
 */
@@ -589,6 +588,8 @@ string get_java_name(string class_name) [flags=NAMED_ARGS] {
         assert(jpc);
         assert(pgm);
 
+        // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
+        jni_check_name(cn->c_str(), cn->size(), "class name", "class names");
         const QoreClass* cls = pgm->findClass(cn->c_str(), xsink);
         if (*xsink) {
             return QoreValue();

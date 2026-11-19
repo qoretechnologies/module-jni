@@ -33,6 +33,46 @@
 
 namespace jni {
 
+//! Discards the values converted for a Java Map or List that the conversion still holds when it is left with an exception
+/** A QoreValue does not own its value, so the values converted so far would leak if the conversion of a nested value
+    (ex: a Map with a key that has a NUL character, qore#6738) or a Java call threw an exception.  The explicit error
+    paths of the conversion discard the values themselves and clear the vector.
+*/
+template <typename Vec, typename GetValue>
+class JniConvertedValuesGuard {
+public:
+    DLLLOCAL JniConvertedValuesGuard(Vec& values, GetValue get) : values(values), get(get) {
+    }
+
+    DLLLOCAL ~JniConvertedValuesGuard() {
+        if (values.empty()) {
+            return;
+        }
+        // a Java exception that is unwinding (JavaException) stays pending until it is converted: it is set aside
+        // while the values are discarded, which can run Java code (ex: the destructor of a Qore object)
+        JNIEnv* jenv = Jvm::getEnv();
+        jthrowable pending = jenv->ExceptionOccurred();
+        if (pending) {
+            jenv->ExceptionClear();
+        }
+        ExceptionSink xsink;
+        for (auto& i : values) {
+            get(i).discard(&xsink);
+        }
+        // an exception raised while discarding a value as another exception is unwinding is dropped
+        xsink.clear();
+        if (pending) {
+            jenv->ExceptionClear();
+            jenv->Throw(pending);
+            jenv->DeleteLocalRef(pending);
+        }
+    }
+
+private:
+    Vec& values;
+    GetValue get;
+};
+
 QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm, bool compat_types,
         NumericOption numeric) {
     if (!v) {
@@ -212,6 +252,8 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
 
         // issue #4892: First pass - convert all entries and determine common value type
         std::vector<std::pair<std::string, QoreValue>> entries;
+        auto entry_value = [](std::pair<std::string, QoreValue>& entry) -> QoreValue& { return entry.second; };
+        JniConvertedValuesGuard<decltype(entries), decltype(entry_value)> entries_guard(entries, entry_value);
         qore_type_t common_type = -1;  // -1 means not yet determined
         bool mixed_types = false;
 
@@ -232,7 +274,18 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
                     for (auto& entry : entries) {
                         entry.second.discard(&xsink);
                     }
+                    entries.clear();
                     return qjcm.getValue(v, pgm, compat_types);
+                }
+
+                // the key in UTF-8; a hash key cannot have a NUL character, at which it would be cut, so a key with
+                // one is refused (qore#6738); it is copied, so that the JNI buffer is released before the value is
+                // converted
+                std::string key_utf8;
+                {
+                    Env::GetStringUtfChars key_str(env, key.as<jstring>());
+                    jni_check_key(key_str.c_str(), key_str.size(), "Java Map key");
+                    key_utf8.assign(key_str.c_str(), key_str.size());
                 }
 
                 LocalReference<jobject> value = env.callObjectMethod(element,
@@ -244,6 +297,7 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
                     for (auto& entry : entries) {
                         entry.second.discard(&xsink);
                     }
+                    entries.clear();
                     throw XsinkException(xsink);
                 }
 
@@ -255,9 +309,7 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
                     mixed_types = true;
                 }
 
-                // the key in UTF-8; a hash key cannot have a NUL character, so a key is cut at its first one
-                Env::GetStringUtfChars key_str(env, key.as<jstring>());
-                entries.emplace_back(key_str.c_str(), val.release());
+                entries.emplace_back(std::move(key_utf8), val.release());
             }
         }
 
@@ -298,15 +350,18 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
         for (size_t idx = 0; idx < entries.size(); ++idx) {
             // the key is converted from UTF-8 to the default encoding, which hash keys are in
             rv->setKeyValue(QoreString(entries[idx].first, QCS_UTF8), entries[idx].second, &xsink);
+            // setKeyValue() takes ownership of the value also when it fails (it discards it then)
+            entries[idx].second = QoreValue();
             if (xsink) {
-                // setKeyValue() takes ownership of the value also when it fails (it discards it then), so only the
-                // remaining values are discarded here
+                // the remaining values are discarded here
                 for (size_t j = idx + 1; j < entries.size(); ++j) {
                     entries[j].second.discard(&xsink);
                 }
+                entries.clear();
                 throw XsinkException(xsink);
             }
         }
+        entries.clear();
 
         return rv.release();
     }
@@ -321,6 +376,8 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
 
         // issue #4892: First pass - convert all elements and determine common type
         std::vector<QoreValue> elements;
+        auto element_value = [](QoreValue& element) -> QoreValue& { return element; };
+        JniConvertedValuesGuard<decltype(elements), decltype(element_value)> elements_guard(elements, element_value);
         elements.reserve(size);
         qore_type_t common_type = -1;  // -1 means not yet determined
         bool mixed_types = false;
@@ -339,6 +396,7 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
                 for (auto& elem : elements) {
                     elem.discard(&xsink);
                 }
+                elements.clear();
                 throw XsinkException(xsink);
             }
 
@@ -389,16 +447,18 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
         ReferenceHolder<QoreListNode> rv(new QoreListNode(list_type_info), &xsink);
         for (size_t idx = 0; idx < elements.size(); ++idx) {
             rv->push(elements[idx], &xsink);
+            // push() takes ownership of the value also when it fails (it discards it then)
+            elements[idx] = QoreValue();
             if (xsink) {
-                // push takes ownership on success, but on failure we must discard
-                // the current value and all remaining values
-                elements[idx].discard(&xsink);
+                // the remaining values are discarded here
                 for (size_t j = idx + 1; j < elements.size(); ++j) {
                     elements[j].discard(&xsink);
                 }
+                elements.clear();
                 throw XsinkException(xsink);
             }
         }
+        elements.clear();
 
         return rv.release();
     }

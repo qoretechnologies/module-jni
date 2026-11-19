@@ -466,7 +466,8 @@ void QoreJniClassMap::destroy(ExceptionSink& xsink) {
 // takes an internal name (ex: java/lang/Class)
 jclass QoreJniClassMap::findLoadClass(const QoreString& name, QoreProgram* pgm) {
    Utf8String nameUtf8(name);
-   return findLoadClass(nameUtf8.c_str(), pgm);
+   // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
+   return findLoadClass(nameUtf8.name("class name", "class names"), pgm);
 }
 
 // takes an internal name (ex: java/lang/Class)
@@ -585,7 +586,8 @@ QoreValue QoreJniClassMap::getValue(LocalReference<jobject>& obj, QoreProgram* p
         LocalReference<jstring> clsName = env.callObjectMethod(jc, Globals::methodClassGetName,
             nullptr).as<jstring>();
         Env::GetStringUtfChars tname(env, clsName);
-        if (!strcmp(tname.c_str(), "microsoft.sql.DateTimeOffset")) {
+        // the whole name is compared, as it can have a NUL character (qore#6738)
+        if (tname == "microsoft.sql.DateTimeOffset") {
             JniPendingContextHelper::set(env);
             LocalReference<jstring> date_str = env.callObjectMethod(obj,
                 Globals::methodObjectToString, nullptr).as<jstring>();
@@ -699,13 +701,68 @@ Class* QoreJniClassMap::loadProgramClass(Env& env, const char* name, JniExternal
     return new Class(c.release());
 }
 
+//! Throws an exception if a name that the Qore class of a Java class is made with has a NUL character (qore#6738)
+/** The JVM allows a NUL character in the name of a class, method or field, and a Qore name would be cut at it: the
+    names of the parent class and the interfaces, which are looked up by name, and of the methods and fields that
+    become Qore methods, members, static variables and constants (not those of synthetic members, which are skipped,
+    apart from bridge methods, nor of Kotlin default parameter method variants) are checked, before the Qore class is built.  doMethodsIntern(), doFields() and
+    addSuperClass() check them again where they are used.
+
+    @throw XsinkException \c JNI-ERROR: a name has a NUL character
+*/
+static void jni_check_java_names(Class* jc) {
+    Env env;
+    auto check_class_name = [&env](jobject cls) {
+        LocalReference<jstring> name = env.callObjectMethod(cls, Globals::methodClassGetName, nullptr).as<jstring>();
+        Env::GetStringUtfChars str(env, name);
+        str.name("Java class name", "Java class names");
+    };
+    LocalReference<jclass> parent = env.callObjectMethod(jc->getJavaObject(), Globals::methodClassGetSuperClass,
+        nullptr).as<jclass>();
+    if (parent) {
+        check_class_name(parent);
+    }
+    LocalReference<jobjectArray> interfaces = jc->getInterfaces();
+    for (jsize i = 0, e = interfaces ? env.getArrayLength(interfaces) : 0; i < e; ++i) {
+        check_class_name(env.getObjectArrayElement(interfaces, i));
+    }
+    LocalReference<jobjectArray> methods = jc->getDeclaredMethods();
+    for (jsize i = 0, e = methods ? env.getArrayLength(methods) : 0; i < e; ++i) {
+        LocalReference<jobject> m = env.getObjectArrayElement(methods, i);
+        int mods = env.callIntMethod(m, Globals::methodMethodGetModifiers, nullptr);
+        if ((mods & ACC_SYNTHETIC) && !(mods & ACC_BRIDGE)) {
+            continue;
+        }
+        LocalReference<jstring> name = env.callObjectMethod(m, Globals::methodMethodGetName, nullptr).as<jstring>();
+        Env::GetStringUtfChars str(env, name);
+        // a Kotlin default parameter method variant is skipped, as in doMethodsIntern()
+        if (strstr(str.c_str(), "$default")) {
+            continue;
+        }
+        str.name("Java method name", "Java method names");
+    }
+    LocalReference<jobjectArray> fields = jc->getDeclaredFields();
+    for (jsize i = 0, e = fields ? env.getArrayLength(fields) : 0; i < e; ++i) {
+        LocalReference<jobject> f = env.getObjectArrayElement(fields, i);
+        int mods = env.callIntMethod(f, Globals::methodFieldGetModifiers, nullptr);
+        if (mods & ACC_SYNTHETIC) {
+            continue;
+        }
+        LocalReference<jstring> name = env.callObjectMethod(f, Globals::methodFieldGetName, nullptr).as<jstring>();
+        Env::GetStringUtfChars str(env, name);
+        str.name("Java field name", "Java field names");
+    }
+}
+
 JniQoreClass* QoreJniClassMap::findCreateQoreClass(Env& env, LocalReference<jclass>& jc, QoreProgram* pgm) {
     LocalReference<jstring> clsName = env.callObjectMethod(jc, Globals::methodClassGetName, nullptr).as<jstring>();
     Env::GetStringUtfChars tname(env, clsName);
 
     printd(5, "QoreJniClassMap::findCreateQoreClass() looking up: '%s' pgm: %p\n", tname.c_str(), pgm);
 
-    QoreString cname(tname.c_str());
+    // the Qore class and namespace names are made of the Java name, which the JVM allows to have a NUL character,
+    // at which they would be cut (qore#6738)
+    QoreString cname(tname.name("Java class name", "Java class names"));
     //cname.replaceAll("$", "__");
 
     QoreString jpath(tname.c_str());
@@ -1312,6 +1369,10 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
 
     assert(qc->getManagedUserData());
 
+    // a Java name with a NUL character is refused before the class is built: refused while it is built, a class built
+    // recursively in the meantime could keep the partial class, which is deleted when its creation fails (qore#6738)
+    jni_check_java_names(jc);
+
     // build the class WITHOUT m held (only the caller's per-Program parse lock, which is safe to
     // hold across a module load).  Same-thread recursion that reaches this jpath resolves to the
     // partial via the marker; cross-thread creators block on class_create_cond.
@@ -1454,7 +1515,8 @@ void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* pare
 
     printd(5, "QoreJniClassMap::addSuperClass() qc: '%s' parent: '%s'\n", qc.getName(), chars.c_str());
 
-    QoreString jpath(chars.c_str());
+    // the parent class is looked up by its name, which would be cut at a NUL character (qore#6738)
+    QoreString jpath(chars.name("Java class name", "Java class names"));
     jpath.replaceAll(".", "/");
     // use the coordinated lookup: if this parent class is currently being created by this thread
     // (a class referring back to itself through its inheritance/type graph), resolve it to the
@@ -2068,7 +2130,7 @@ const QoreTypeInfo* QoreJniClassMap::getQoreType(jclass cls, const QoreTypeInfo*
         LocalReference<jstring> clsName = env.callObjectMethod(cls, Globals::methodClassGetName,
             nullptr).as<jstring>();
         Env::GetStringUtfChars tname(env, clsName);
-        if (!strcmp(tname.c_str(), "[B")) {
+        if (tname == "[B") {
             return binaryOrNothingTypeInfo;
         }
         return qore_get_complex_list_or_nothing_type(getVarargsElementType(cls, pgm));
@@ -2175,7 +2237,7 @@ const QoreTypeInfo* QoreJniClassMap::getQoreTypeIntern(Env& env, jclass cls, con
     Env::GetStringUtfChars tname(env, clsName);
 
     // check for byte[]
-    if (!strcmp(tname.c_str(), "[B")) {
+    if (tname == "[B") {
         return binaryTypeInfo;
     }
 
@@ -2209,6 +2271,13 @@ const QoreTypeInfo* QoreJniClassMap::getQoreTypeIntern(Env& env, jclass cls, con
             printd(5, "QoreJniClassMap::getQoreType() array type: '%s'\n", qore_type_get_name(elem_type));
             return qore_get_complex_softlist_type(elem_type);
         }
+    }
+
+    // a class whose name has a NUL character, which the JVM allows, cannot have a Qore class: the class is looked up by
+    // its name, which would be cut at the NUL character and name another class (qore#6738); the type is any object,
+    // as for an internal class, and an object of the class is refused when it is converted to Qore
+    if (tname.hasNul()) {
+        return objectTypeInfo;
     }
 
     // check for class imported from Qore
@@ -2376,6 +2445,10 @@ void QoreJniClassMap::doMethodsIntern(JniQoreClass& qc, jni::Class* jc, QoreProg
             continue;
         }
 
+        // the name of the Qore method would be cut at a NUL character, which the JVM allows in a method name
+        // (qore#6738)
+        jni_check_name(mname.c_str(), mname.size(), "Java method name", "Java method names");
+
         printd(LogLevel, "+ adding %smethod %s.%s()\n", meth->isBridge() ? "bridge " : "", qc.getName(),
             mname.c_str());
 
@@ -2519,6 +2592,10 @@ bool QoreJniClassMap::addInheritedFixedArityVariant(JniQoreClass& qc, jni::Class
             LocalReference<jstring> jmname = env.callObjectMethod(m, Globals::methodMethodGetName,
                 nullptr).as<jstring>();
             Env::GetStringUtfChars mn(env, jmname);
+            // a name with a NUL character is not the name, which cannot have one (qore#6738)
+            if (mn.hasNul()) {
+                continue;
+            }
             QoreString mname(mn.c_str());
             // see doMethodsIntern()
             if (!is_static && (mname == "copy" || mname == "constructor" || mname == "destructor"
@@ -4642,6 +4719,10 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
             printd(LogLevel, "+ skipping synthetic field %s.%s\n", qc.getName(), fname.c_str());
             continue;
         }
+
+        // the name of the Qore member, static variable or constant would be cut at a NUL character, which the JVM
+        // allows in a field name (qore#6738)
+        jni_check_name(fname.c_str(), fname.size(), "Java field name", "Java field names");
 
         // the declared type accepts every value read from the field, including no value for a field of a reference
         // type (see getQoreType()), as Qore checks the value read from a field against its declared type

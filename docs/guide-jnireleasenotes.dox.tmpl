@@ -6,6 +6,28 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Incompatible change</b>: a Java string with a NUL character that is used as a %Qore hash key or as a name is
+      now refused with an exception instead of being cut at the NUL character, silently, which made it another key
+      or name (qore#6738, see @ref jni_strings):
+      - a Java \c Map key or JDBC column label with a NUL character raises \c HASH-KEY-ERROR; it was cut at the NUL
+        character, so that two keys that differ only after it became one key, and one value replaced the other
+      - a class, package, module, method, field, function, member or namespace name with a NUL character raises
+        \c JNI-ERROR: given to \c load_class(), \c define_class(), \c get_byte_code(), \c get_java_name() or a
+        module command (\c import, \c define-class, \c define-pending-class, \c register-shared-class,
+        \c mark-module-injected), as the name of a Java class, method or field that a %Qore class is made for, as a
+        name that Java code passes to %Qore (\c QoreJavaApi and \c QoreObject calls), or as the %Qore name of a
+        class that Java loads; for example, \c load_class() of <tt>"java/lang/String\x00junk"</tt> returned
+        \c java.lang.String, and Java method <tt>"me\x00th"</tt> became %Qore method \c me(); a parameter, return
+        value or field whose class has a NUL character in its name is declared as any object
+      - an \c org.qore.jni.QoreException whose argument is a \c Map with a key that has a NUL character is reported
+        as the Java exception that it is, as for any other argument that cannot be converted
+      - fixed the values already converted for a Java \c Map or \c List, which leaked when the conversion of a nested
+        value raised an error
+      - fixed an error raised while converting the arguments of a call from Java to a %Qore function, static method
+        or constructor (\c QoreJavaApi.callFunction(), \c QoreJavaApi.callStaticMethod(),
+        \c QoreJavaApi.newObjectSave(); ex: a Java exception thrown by a \c Map argument, or a \c Map key with a NUL
+        character), which aborted the process instead of being raised in Java, as no C++ exception may leave a JNI
+        native method
     - fixed the \c import module command, as issued with \c Program::issueModuleCmd(), for a Program that has code
       pending (parsed with \c Program::parsePending() and not yet committed), as when Qorus initializes Java in a
       container: with %Qore's consistent thread-local Program data (qore#6185), an import of a class failed with

@@ -38,7 +38,8 @@ void BaseField::getName(QoreString& str) {
     Env env;
     LocalReference<jstring> fieldName = env.callObjectMethod(field, Globals::methodFieldGetName, nullptr).as<jstring>();
     Env::GetStringUtfChars fname(env, fieldName);
-    str.concat(fname.c_str());
+    // with its length: the JVM allows a NUL character in a field name (qore#6738)
+    str.concat(fname.c_str(), fname.size());
 }
 
 QoreValue BaseField::get(jobject object, QoreProgram* pgm, bool compat_types) {

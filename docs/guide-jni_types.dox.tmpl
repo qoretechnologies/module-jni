@@ -163,8 +163,35 @@
     is converted to it, and a hash key is converted from it to UTF-16.  With a default encoding other than UTF-8, a
     \c Map key or column label that the default encoding cannot represent (ex: an emoji in ISO-8859-1) raises
     \c ENCODING-CONVERSION-ERROR, and the code of an \c org.qore.jni.QoreException that it cannot represent is kept
-    in UTF-8.  As a hash key cannot have a NUL character, a \c Map key or column label is cut at its first one, so
-    two Java keys that differ only after a NUL character name the same hash key.
+    in UTF-8.
+
+    A hash key and a name are NUL-terminated strings in %Qore and in JNI, so a string with a NUL character cannot be
+    one: it would be cut at its first NUL character and name another key or another class, method or module.  Such a
+    string is therefore refused with an exception, as a %Qore string with a NUL character is refused as a hash key
+    (the values themselves keep their NUL characters, as above):
+    - a Java \c Map key (also in a nested \c Map, and in an argument of a call from Java to %Qore) or a JDBC column
+      label (in the results of a query and in \c SQLStatement::describe()) with a NUL character raises
+      \c HASH-KEY-ERROR, ex: <tt>Java Map key "a\x00b" contains a NUL character at byte offset 1, which a Qore hash
+      key cannot hold</tt>
+    - a name with a NUL character raises \c JNI-ERROR, ex: <tt>class name "java/lang/String\x00junk" contains a NUL
+      character at byte offset 16; class names cannot contain NUL characters</tt>: a class name given to
+      \c load_class(), \c define_class(), \c get_byte_code() or \c get_java_name(), a class, package or module name
+      given to the \c import, \c define-class, \c define-pending-class, \c register-shared-class and
+      \c mark-module-injected module commands, the name of a Java class, method or field that a %Qore class is made
+      for (the JVM allows a NUL character in these names, although the Java compiler does not), the name of a
+      function, class, method or member that Java code passes to %Qore (\c QoreJavaApi.callFunction(),
+      \c QoreJavaApi.callStaticMethod(), \c QoreJavaApi.newObjectSave(), \c QoreObject.callMethod(),
+      \c QoreObject.getMemberValue()), and the %Qore namespace or module name of a \c qore.* or \c qoremod.* class
+      that Java loads; in a call from Java, the exception is raised in Java, and from there in %Qore.
+      \c QoreObject.instanceOf() returns \c false for a class name with a NUL character, which is the name of no
+      class
+    - a Java class whose name has a NUL character cannot have a %Qore class: a %Qore class is not made for it, nor for
+      a class that extends it, and a parameter, return value or field of the class is declared as any object, so
+      that an object of the class is refused when it is converted to %Qore
+    - an \c org.qore.jni.QoreException whose argument cannot be converted (ex: a \c Map with a key that has a NUL
+      character) is reported as the Java exception that it is, as for any other error converting its argument
+
+    A classpath given to a module command is still cut at its first NUL character.
 
     A classpath is in the default encoding, as %Qore's file names are; it is converted once to the Java string that
     the class loader uses, and the sandbox's filesystem policy checks each of its entries as the JVM uses it: as an
@@ -174,7 +201,7 @@
     not checked one by one.
 
     The names of Java and %Qore classes, methods, fields and functions are passed as they are (in UTF-8), apart from
-    the class names below.
+    the class names below, and a name with a NUL character is refused (see above).
 
     A class name given to \c load_class(), \c define_class(), an import or the \c define-class module command is
     converted to the modified UTF-8 that JNI's \c FindClass() and \c DefineClass() take, so a class name can have

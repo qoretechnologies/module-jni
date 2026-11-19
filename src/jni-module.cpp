@@ -1037,8 +1037,13 @@ static void qore_jni_mc_import(const QoreString& cmd_arg, QoreProgram* pgm, JniE
 
     // see if there is a wildcard at the end
     if (arg[-1] == '*') {
+        // the package is a NUL-terminated namespace path from here on, so a name with a NUL character is refused
+        // (qore#6738)
+        jni_check_name(arg.c_str(), arg.size(), "package name", "package names");
         qore_jni_wildcard_import(arg, pgm, jpc);
     } else {
+        // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
+        jni_check_name(arg.c_str(), arg.size(), "class name", "class names");
         printd(LogLevel, "jni_module_parse_cmd() non wc lcc arg: '%s' (pgm: %p)\n", arg.c_str(), pgm);
         Env env;
         env.callVoidMethod(jpc->getClassLoader(), Globals::methodQoreURLClassLoaderSetContext, nullptr);
@@ -1257,13 +1262,17 @@ static void qore_jni_mc_define_pending_class(const QoreString& arg, QoreProgram*
     assert(pgm);
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
 
-    // find end of name
-    qore_offset_t end = arg.find(' ');
-    if (end == -1) {
+    // find end of name; the whole argument is searched, as it can have a NUL character (qore#6738)
+    const char* name_end = static_cast<const char*>(memchr(arg.c_str(), ' ', arg.size()));
+    if (!name_end) {
         throw QoreJniException("JNI-DEFINE-CLASS-ERROR", "cannot find the end of the class name in the "
             "'define-pending-class' directive");
     }
+    qore_offset_t end = name_end - arg.c_str();
     QoreString java_name(&arg, end);
+    // a class name with a NUL character is refused, as it is for the other commands, which would cut it at the NUL
+    // character (qore#6738)
+    jni_check_name(java_name.c_str(), java_name.size(), "class name", "class names");
     QoreString base64(arg.c_str() + end + 1);
     ExceptionSink xsink;
     SimpleRefHolder<BinaryNode> byte_code(base64.parseBase64(&xsink));
@@ -1296,13 +1305,16 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);
 
-    // find end of name
-    qore_offset_t end = arg.find(' ');
-    if (end == -1) {
+    // find end of name; the whole argument is searched, as it can have a NUL character (qore#6738)
+    const char* name_end = static_cast<const char*>(memchr(arg.c_str(), ' ', arg.size()));
+    if (!name_end) {
         throw QoreJniException("JNI-DEFINE-CLASS-ERROR", "cannot find the end of the class name in the "
             "'define-class' directive");
     }
+    qore_offset_t end = name_end - arg.c_str();
     QoreString java_name(&arg, end);
+    // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
+    jni_check_name(java_name.c_str(), java_name.size(), "class name", "class names");
     QoreString base64(arg.c_str() + end + 1);
     ExceptionSink xsink;
     SimpleRefHolder<BinaryNode> byte_code(base64.parseBase64(&xsink));
@@ -1410,6 +1422,8 @@ static void qore_jni_mc_mark_module_injected(const QoreString& arg, QoreProgram*
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);
 
+    // a module name is a NUL-terminated string, so a name with a NUL character is refused (qore#6738)
+    jni_check_name(arg.c_str(), arg.size(), "module name", "module names");
     // module names are in the default encoding
     jpc->addInjectedModule(jni_cmd_default_arg(arg).c_str());
 }
@@ -1422,6 +1436,9 @@ static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);
 
+    // a class name with a NUL character is refused, as it is for the other commands, which would cut it at the NUL
+    // character (qore#6738)
+    jni_check_name(arg.c_str(), arg.size(), "class name", "class names");
     Env env;
     LocalReference<jstring> jname = env.newString(arg.c_str(), arg.size());
     jvalue jarg;
