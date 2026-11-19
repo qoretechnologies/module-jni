@@ -40,4 +40,27 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
 
     If any %Qore code has a signal handler assigned to any of the above signals (for the signals that can be
     assigned), the \c jni module cannot be initialized and will fail to load.
+
+    When the \c jni module creates the JVM, it always initializes it with reduced signals, also when \c libjsig (the
+    JVM's signal-chaining library) is preloaded or linked into the process: %Qore is the host process and owns the
+    asynchronous signals, such as \c SIGTERM, \c SIGINT, \c SIGHUP and \c SIGQUIT, which %Qore programs can handle
+    with @ref Qore::set_signal_handler() "set_signal_handler()"; without a handler, \c SIGTERM, \c SIGINT and
+    \c SIGHUP end the process through %Qore.  (When a Java process loads %Qore and so has created the JVM itself, the
+    Java host decides the JVM's options.)  With reduced signals, the JVM:
+    - still handles the synchronous signals that it needs to run (\c SIGSEGV, \c SIGBUS, \c SIGFPE and \c SIGILL),
+      which it uses for implicit null checks, stack overflow checks and safepoints; \c libjsig, if present, chains
+      them with the handlers of other runtimes in the process
+    - does not run Java shutdown hooks when the process gets a shutdown signal; they run when the JVM is destroyed as
+      the process ends normally, and do not run when %Qore ends the process immediately, as for a shutdown signal
+      without a handler
+    - does not print a thread dump for \c SIGQUIT; use <tt>jcmd <i>pid</i> Thread.print</tt> or \c jstack instead
+      (the JVM starts its attach listener at startup when it runs with reduced signals, so these tools do not need a
+      signal)
+    - does not support Java signal handlers registered with the internal Java signal API (\c jdk.internal.misc.Signal
+      or \c sun.misc.Signal)
+
+    The module adds <tt>-Xrs</tt> after the options in \c QORE_JNI_JVM_ARGS and \c JAVA_TOOL_OPTIONS, so
+    <tt>-XX:-ReduceSignalUsage</tt> there has no effect; it must not be set in \c _JAVA_OPTIONS either, which the JVM
+    applies last: a shutdown signal would then end the process with \c System.exit() on a thread of the JVM while
+    %Qore threads still run, %Qore signal handlers would not be called, and the process could abort.
 */
