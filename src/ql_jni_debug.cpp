@@ -166,7 +166,7 @@ static QoreValue f_dbg_jni_import_into_program(const QoreListNode* args, Runtime
 
 void init_jni_debug_functions(QoreNamespace& ns) {
     ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
-        nothingTypeInfo, 2, objectTypeInfo, QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
     ns.addBuiltinVariant("dbg_jni_set_context_gate", f_dbg_jni_set_context_gate, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, codeOrNothingTypeInfo, QoreValue(), "code", stringOrNothingTypeInfo, QoreValue(),
         "point");

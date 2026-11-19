@@ -10,7 +10,9 @@
 # a Program while it has code pending.  Adding the class to the Program changes its definitions under its parse lock
 # and runs none of its code, so the jni module must not enter the Program for it; it did, and the import failed with
 # "PROGRAM-ERROR: the Program accessed is currently undergoing parsing and cannot be accessed at runtime" for a class
-# that the base class loader loads, both when the class was new and when another Program had imported it first.
+# that the base class loader loads (both when the class was new and when another Program had imported it first), and
+# for a class created in the Program itself: one from a jar added to its classpath, or defined with define-class
+# (qore#6758).
 #
 # The regression cases need a Qore library with qore#6185: with an older library, the thread kept the calling
 # Program's thread-local data, the entry was skipped, and they pass with or without the fix.  The wildcard import
@@ -254,7 +256,11 @@ class JniImportPendingProgramTest inherits QUnit::Test {
                 "    Jni::org::qore::jni::dbg_jni_import_into_program(p, import);\n"
                 "}", "importer");
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("the jni module is not a debug build: " + ex.desc);
+            # only the function's absence (a release build of the module) skips the test
+            if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_import_into_program/) {
+                rethrow;
+            }
+            testSkip("the jni module is not a debug build: %s", ex.desc);
         }
         return importer;
     }
