@@ -8,6 +8,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %requires QUnit
 %requires jni
+%requires Util
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.Utf8Boundary
 %module-cmd(jni) import org.qore.jni.test.Utf8Driver
@@ -156,8 +157,10 @@ class JniStrictUtf8Test inherits QUnit::Test {
         @param args the child's arguments
     */
     private static string childCmd(string env, string args = "") {
+        # an absolute path, as the child can run in another directory
+        string child = normalize_dir(get_script_dir() + "/jni-strict-utf8-child.q");
         return sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s %s -b --enable-debug %s %s "
-            "2>&1", env, shellQuote(QORE_ARGV[0]), shellQuote(get_script_dir() + "/jni-strict-utf8-child.q"), args);
+            "2>&1", env, shellQuote(QORE_ARGV[0]), shellQuote(child), args);
     }
 
     #! returns the byte code of a class with the given binary name (ex: "org.qore.test.Name"), whose method name()
@@ -444,20 +447,41 @@ public class %s {
     }
 
     #! with ISO-8859-1 as the default encoding and as the JVM's file name encoding, a classpath entry with a
-    #! non-ASCII character in a directory that the sandbox allows was refused or not usable: the sandbox did not check
-    #! the representation of the entry that the JVM uses; see classpath_case() in test/jni-strict-utf8-child.q
+    #! non-ASCII character in a directory that the sandbox allows was refused or not usable, and a relative entry was
+    #! checked against another directory than the JVM resolves it against: the sandbox did not check the
+    #! representation of the entry that the JVM uses; see classpath_case() in test/jni-strict-utf8-child.q
     classpathSandboxCheck() {
-        int rc;
-        string out = backquote(childCmd("QORE_CHARSET=ISO-8859-1 LC_ALL=en_US.iso88591", "classpath"), \rc);
-        if (out =~ /^result: classpath: skipped/m) {
-            testSkip(trim(out));
-        }
+        string out = runInTempDir("QORE_CHARSET=ISO-8859-1 LC_ALL=en_US.iso88591", "classpath");
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
         assertEq((
             "result: classpath entry in an allowed directory: OK",
             "result: classpath entry outside the allowed directory: OK",
+            "result: classpath with an allowed and a refused entry: OK",
+            "result: wildcard classpath entry in an allowed directory: OK",
+            "result: wildcard classpath entry outside the allowed directory: OK",
+            "result: relative classpath entry after a change of the current directory: OK",
         ), lines, out);
+        # a classpath entry that the JVM's file name encoding cannot represent exactly is refused
+        out = runInTempDir("QORE_CHARSET=UTF-8 LC_ALL=en_US.iso88591", "classpath-unmappable");
+        lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq(("result: classpath entry that the JVM cannot represent: OK",), lines, out);
+    }
+
+    #! runs test/jni-strict-utf8-child.q in a new empty directory, which the JVM's user.dir is, and returns its output
+    /** The test is skipped if the child reports that it cannot run its case (ex: the locale is missing)
+    */
+    private string runInTempDir(string env, string args) {
+        string dir = tmp_location() + DirSep + sprintf("jni-strict-utf8-%d-%d", getpid(),
+            now_us().durationMicroseconds());
+        mkdir(dir);
+        on_exit rmdir(dir);
+        int rc;
+        string out = backquote("cd " + shellQuote(dir) + " && " + childCmd(env, args), \rc);
+        if (out =~ /^result: classpath: skipped/m) {
+            testSkip(trim(out));
+        }
         assertEq(0, rc, "exit code: " + out);
+        return out;
     }
 
     private static string shellQuote(string arg) {

@@ -8,12 +8,12 @@
 # string literals mean the same in any default encoding
 #
 # with the argument "load-error", it loads a Java class of a module that does not exist instead (in any default
-# encoding), so that the test can check its whole output
+# encoding), so that the test can check its whole output; with "classpath" or "classpath-unmappable", it checks
+# classpath entries against a sandbox, in the current directory, which must be empty (see classpath_case())
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %requires jni
-%requires Util
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.Utf8Boundary
 %module-cmd(jni) import org.qore.jni.test.Utf8Driver
@@ -57,9 +57,69 @@ string sub parse_sandboxed(SandboxManager sm, string src, *reference<Program> pg
     return "parsed";
 }
 
-#! a classpath entry in the default encoding, with a non-ASCII character, is checked against the sandbox policy as
-#! the JVM uses it: an entry in an allowed directory is accepted and usable, and one outside it is refused
-/** Run with ISO-8859-1 as the default encoding and as the JVM's file name encoding (LC_ALL=en_US.iso88591)
+#! the source of a sandboxed Program that adds a classpath and reads the resource "res.txt" through its class loader
+const ClasspathSource = "%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) add-classpath %PATH%
+string sub res() {
+    return QoreURLClassLoader::getCurrent().getResourceAsStream(\"res.txt\").readAllBytes().toString();
+}
+";
+
+#! returns the error of adding the classpath in a sandboxed Program, or "parsed: " and the resource it reads (or the
+#! error of reading it)
+string sub classpath_result(SandboxManager sm, string classpath) {
+    Program p;
+    string rc = parse_sandboxed(sm, replace(ClasspathSource, "%PATH%", classpath), \p);
+    if (rc != "parsed") {
+        return rc;
+    }
+    try {
+        return "parsed: " + p.callFunction("res");
+    } catch (hash<ExceptionInfo> ex) {
+        return "parsed: " + ex.err;
+    }
+}
+
+#! returns a sandbox that allows reading the given directory only, and the uncontrolled APIs that the Program's code
+#! needs to read the resource through Java; NOTHING if this Qore library cannot allow them
+*SandboxManager sub classpath_sandbox(string allowed) {
+    SandboxManager sm();
+    if (!sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+        return;
+    }
+    call_object_method(sm, "setUncontrolledApiPolicy", True);
+    sm.setFilesystemDefaultPolicy(False);
+    sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+    return sm;
+}
+
+#! makes a directory with the resource "res.txt" with the given content
+sub make_res_dir(string dir, string content) {
+    mkdir(dir);
+    File f();
+    f.open2(dir + DirSep + "res.txt", O_CREAT | O_WRONLY | O_TRUNC);
+    f.write(content);
+}
+
+#! removes the directories made by make_res_dir(), the innermost first, ignoring errors
+sub remove_res_dirs(list<string> dirs) {
+    foreach string dir in (dirs) {
+        try {
+            unlink(dir + DirSep + "res.txt");
+        } catch () {
+        }
+        try {
+            rmdir(dir);
+        } catch () {
+        }
+    }
+}
+
+#! classpath entries in the default encoding, with a non-ASCII character, are checked against the sandbox policy as
+#! the JVM uses them
+/** Run with ISO-8859-1 as the default encoding and as the JVM's file name encoding (LC_ALL=en_US.iso88591), in an
+    empty directory, which is the JVM's \c user.dir
 */
 sub classpath_case() {
     string jnu = System::getProperty("sun.jnu.encoding") ?? "<none>";
@@ -69,63 +129,70 @@ sub classpath_case() {
     }
     # "e" with an acute accent in ISO-8859-1
     string e = binary_to_string(<e9>, "ISO-8859-1");
-    string base = tmp_location() + DirSep + "jni-strict-utf8-cp-" + getpid();
+    string base = getcwd();
     string allowed = base + DirSep + "allowed" + e;
     string outside = base + DirSep + "outside" + e;
-    mkdir(base);
-    on_exit {
-        foreach string dir in ((allowed, outside)) {
-            try {
-                unlink(dir + DirSep + "res.txt");
-            } catch () {
-            }
-            try {
-                rmdir(dir);
-            } catch () {
-            }
-        }
-        rmdir(base);
-    }
-    foreach string dir in ((allowed, outside)) {
-        mkdir(dir);
-        File f();
-        f.open2(dir + DirSep + "res.txt", O_CREAT | O_WRONLY | O_TRUNC);
-        f.write(basename(dir) == basename(allowed) ? "allowed" : "outside");
-    }
+    string allowed_sub = allowed + DirSep + "sub";
+    string outside_sub = base + DirSep + "sub";
+    on_exit remove_res_dirs((allowed_sub, outside_sub, allowed, outside));
+    make_res_dir(allowed, "allowed");
+    make_res_dir(outside, "outside");
+    make_res_dir(allowed_sub, "allowed-sub");
+    make_res_dir(outside_sub, "outside-sub");
 
-    SandboxManager sm();
-    sm.setFilesystemDefaultPolicy(False);
-    sm.addFilesystemAllowedPath(allowed, QSEC_READ);
-    # the Program's code reads the resource through Java
-    if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
-        call_object_method(sm, "setUncontrolledApiPolicy", True);
+    *SandboxManager sm = classpath_sandbox(allowed);
+    if (!sm) {
+        printf("result: classpath: skipped (this Qore library cannot allow uncontrolled APIs in a sandbox)\n");
+        return;
     }
-
-    string src = "%requires jni
-%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
-%module-cmd(jni) add-classpath %PATH%
-string sub res() {
-    return QoreURLClassLoader::getCurrent().getResourceAsStream(\"res.txt\").readAllBytes().toString();
-}
-";
-    Program p;
-    string rc = parse_sandboxed(sm, replace(src, "%PATH%", allowed), \p);
-    *string content;
-    if (rc == "parsed") {
-        try {
-            content = p.callFunction("res");
-        } catch (hash<ExceptionInfo> ex) {
-            content = ex.err;
-        }
-    }
-    result("classpath entry in an allowed directory", ("parsed", "allowed"), (rc, content));
+    result("classpath entry in an allowed directory", "parsed: allowed", classpath_result(sm, allowed));
     result("classpath entry outside the allowed directory", "FILESYSTEM-ACCESS-DENIED",
-        parse_sandboxed(sm, replace(src, "%PATH%", outside)));
+        classpath_result(sm, outside));
+    # the entries of one classpath are checked each
+    result("classpath with an allowed and a refused entry", "FILESYSTEM-ACCESS-DENIED",
+        classpath_result(sm, allowed + ":" + outside));
+    # a wildcard entry is checked as its directory with the pattern
+    result("wildcard classpath entry in an allowed directory", "parsed: <no resource>",
+        replace(classpath_result(sm, allowed + DirSep + "*.jar"), "parsed: PSEUDO-METHOD-DOES-NOT-EXIST",
+            "parsed: <no resource>"));
+    result("wildcard classpath entry outside the allowed directory", "FILESYSTEM-ACCESS-DENIED",
+        classpath_result(sm, outside + DirSep + "*.jar"));
+    # a relative entry is resolved as the JVM resolves it (against its user.dir, this directory), not against the
+    # current directory of the process: in the allowed directory, "sub" is the JVM's ./sub, outside it
+    chdir(allowed);
+    on_exit chdir(base);
+    result("relative classpath entry after a change of the current directory", "FILESYSTEM-ACCESS-DENIED",
+        classpath_result(sm, "sub"));
+}
+
+#! a classpath entry that the JVM's file name encoding cannot represent exactly is refused under a sandbox
+/** Run with UTF-8 as the default encoding and ISO-8859-1 as the JVM's file name encoding, in an empty directory
+*/
+sub classpath_unmappable_case() {
+    string jnu = System::getProperty("sun.jnu.encoding") ?? "<none>";
+    if (jnu != "ISO-8859-1") {
+        printf("result: classpath: skipped (the JVM's file name encoding is %s)\n", jnu);
+        return;
+    }
+    string allowed = getcwd() + DirSep + "allowed";
+    on_exit remove_res_dirs((allowed,));
+    make_res_dir(allowed, "allowed");
+    *SandboxManager sm = classpath_sandbox(allowed);
+    if (!sm) {
+        printf("result: classpath: skipped (this Qore library cannot allow uncontrolled APIs in a sandbox)\n");
+        return;
+    }
+    result("classpath entry that the JVM cannot represent", "JNI-SANDBOX-ERROR",
+        classpath_result(sm, allowed + DirSep + binary_to_string(EmojiUtf8, "UTF-8")));
 }
 
 sub main() {
     if (ARGV[0] == "classpath") {
         classpath_case();
+        return;
+    }
+    if (ARGV[0] == "classpath-unmappable") {
+        classpath_unmappable_case();
         return;
     }
     if (ARGV[0] == "load-error") {

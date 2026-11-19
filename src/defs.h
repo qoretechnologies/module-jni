@@ -492,8 +492,8 @@ DLLLOCAL void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pg
 /** @param policy the policy to check the entries against; nullptr: no policy, every entry is allowed
     @param env the JNI environment
     @param classpath the classpath as the Java string that is then given to QoreURLClassLoader.addPath(), which
-    splits it into entries at the system path separator or \c ';'; each entry is checked as the bytes that the JVM
-    passes to the operating system for it
+    splits it into entries at the system path separator or \c ';'; each entry is checked as the absolute path that
+    the JVM resolves it to (against its \c user.dir), in the bytes that the JVM passes to the operating system for it
 
     @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a classpath entry
     @throw JNI-SANDBOX-ERROR an entry cannot be represented in the file name encoding of the JVM
