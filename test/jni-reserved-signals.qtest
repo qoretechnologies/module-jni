@@ -148,7 +148,8 @@ sub loaded() {
     stdout.printf(\"env: %y\\n\", getenv(\"_JAVA_SR_SIGNUM\"));
     stdout.printf(\"child env: %s\\n\", trim(backquote(\"printenv _JAVA_SR_SIGNUM || echo none\")));
     run_handler(SIGUSR2, 5);
-    # a thread dump of the process, which brings the JVM to a safepoint
+    # a thread dump of the process, which brings the JVM to a safepoint (a smoke test: HotSpot reaches safepoints by
+    # polling, not with the suspend/resume signal)
     *string jcmd = find_jcmd();
     if (jcmd) {
         int rc;
@@ -182,12 +183,32 @@ switch (mode) {
         try_load();
         stdout.printf(\"blocked: %y\\n\", has_sig(status_mask(\"SigBlk\"), sig));
         stdout.printf(\"env: %y\\n\", getenv(\"_JAVA_SR_SIGNUM\"));
+        # the real-time signals that the module could have chosen are all blocked in the thread and free again
+        string blk = status_mask(\"SigBlk\");
+        list<int> unblocked = ();
+        list<int> refused = ();
+        for (int s = 36; s <= 64; ++s) {
+            if (!has_sig(blk, s)) {
+                unblocked += s;
+            }
+            try {
+                set_signal_handler(s, sub (int x) {});
+                remove_signal_handler(s);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.desc =~ /module 'jni'/) {
+                    refused += s;
+                }
+            }
+        }
+        stdout.printf(\"rt unblocked: %y\\n\", unblocked);
+        stdout.printf(\"rt refused: %y\\n\", refused);
         # the signal is free again: a handler for it runs, and the signal does not end the process
         run_handler(sig, 1);
         break;
     }
     case \"nofree\": {
-        for (int s = 34; s <= 64; ++s) {
+        # the candidates start at SIGRTMIN + 2, which is at least 36
+        for (int s = 36; s <= 64; ++s) {
             try {
                 set_signal_handler(s, sub (int x) {});
             } catch (hash<ExceptionInfo> ex) {
@@ -302,6 +323,9 @@ switch (mode) {
         res = run("", "fail", SIGUSR2, {"QORE_JNI_JVM_ARGS": bad});
         assertRegex("(^|\n)load: MODULE-INIT-ERROR", res.out, "the module's initialization failed");
         assertRegex("(^|\n)env: null\n", res.out, "_JAVA_SR_SIGNUM is not left set");
+        # the chosen real-time signal is released and blocked again in the thread
+        assertRegex("(^|\n)rt unblocked: \\[\\]\n", res.out, "the real-time signals are blocked in the thread");
+        assertRegex("(^|\n)rt refused: \\[\\]\n", res.out, "no real-time signal is left reserved for jni");
         assertEq(0, res.rc, "exit status: " + res.out);
     }
 
@@ -323,7 +347,7 @@ switch (mode) {
         # the variable is unset after the JVM is created
         assertRegex("(^|\n)env: null\n", res.out, "_JAVA_SR_SIGNUM is not visible to the process");
         assertRegex("(^|\n)child env: none\n", res.out, "_JAVA_SR_SIGNUM is not visible to a child process");
-        # a thread dump, which brings the JVM to a safepoint
+        # a thread dump, which brings the JVM to a safepoint (a smoke test of the JVM with the chosen signal)
         if (res.out =~ /(^|\n)jcmd: none\n/) {
             testSkip("jcmd was not found");
         }

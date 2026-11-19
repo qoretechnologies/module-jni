@@ -169,13 +169,18 @@ static QoreStringNode* jni_reserve_sr_signal(int sig) {
 
     The first candidate whose disposition is \c SIG_DFL (no handler installed in the process and not ignored) and that
     the library can reserve for the module (no %Qore handler is set for it, and neither the library nor another module
-    manages it) is reserved and returned.
+    manages it) is reserved and returned.  This is normally \c SIGRTMAX(); under valgrind, which reserves
+    \c SIGRTMAX() for itself and reports it as ignored, it is \c SIGRTMAX() - 1.
 
-    @return the signal reserved, or 0 if no candidate is free
+    @return the signal reserved, 0 if no candidate is free, or -1 if the platform has no candidate that HotSpot would
+    accept (ex: FreeBSD, where \c NSIG is 32 and the real-time signals start above it)
 */
 static int jni_choose_sr_signal() {
     int rtmin = SIGRTMIN;
     int rtmax = SIGRTMAX;
+    if (rtmin + 2 >= NSIG) {
+        return -1;
+    }
     for (int sig = rtmax; sig >= rtmin + 2; --sig) {
         if (sig == rtmax - 2 || sig <= std::max(SIGSEGV, SIGBUS) || sig >= NSIG) {
             continue;
@@ -216,14 +221,20 @@ public:
         }
         is_set = true;
         lock.emplace();
+        // another thread could have changed the variable before the lock was taken
+        QoreString cur;
+        if (SystemEnvironment::get("_JAVA_SR_SIGNUM", cur) || cur != val) {
+            errno = EAGAIN;
+            return -1;
+        }
         return 0;
     }
 
     ~JniSrSignalEnv() {
         // the shared lock must be released before the variable can be unset
         lock.reset();
-        if (is_set) {
-            SystemEnvironment::unset("_JAVA_SR_SIGNUM");
+        if (is_set && SystemEnvironment::unset("_JAVA_SR_SIGNUM")) {
+            printd(0, "jni module: cannot unset _JAVA_SR_SIGNUM: %s\n", strerror(errno));
         }
     }
 
@@ -525,7 +536,7 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // the JVM's suspend/resume signal is reserved too (qore#6707); unlike the signals above, it cannot be taken over
     // from the library (ex: if _JAVA_SR_SIGNUM names the library's internal signal), so it is reserved alone first,
     // which fails if the library or another module manages it
-    int sr_sig;
+    int sr_sig = 0;
     // allocated first, so that nothing can fail once the signal is reserved
     sig_vec.reserve(sig_vec.size() + 1);
     {
@@ -534,7 +545,9 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         // the module chooses the signal for a JVM that it creates, unless the user has set _JAVA_SR_SIGNUM
         if (host_jvm->getType() != NT_INT && !SystemEnvironment::isSet("_JAVA_SR_SIGNUM")) {
             sr_sig = jni_choose_sr_signal();
-            if (!sr_sig) {
+            if (sr_sig > 0) {
+                sr_chosen = sr_sig;
+            } else if (!sr_sig) {
                 xsink.raiseException("MODULE-INIT-ERROR", "the jni module cannot start the JVM: no real-time "
                     "signal from SIGRTMAX down to SIGRTMIN+2 (%d - %d) is free for the JVM to suspend and resume its "
                     "threads with (each has a handler installed in the process or a Qore handler, or is managed "
@@ -542,11 +555,11 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
                     SIGRTMIN + 2);
                 return;
             }
-            sr_chosen = sr_sig;
-        } else
+        }
 #endif
-        {
-            // the signal that the user set in _JAVA_SR_SIGNUM, or that the host process's JVM uses, or SIGUSR2
+        if (!sr_chosen) {
+            // the signal that the user set in _JAVA_SR_SIGNUM, or that the host process's JVM uses, or SIGUSR2 (also
+            // where the platform has no real-time signal that HotSpot accepts)
             sr_sig = jvm_sr_signal();
         }
     }
