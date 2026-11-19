@@ -302,6 +302,57 @@ private:
    std::unique_ptr<ExceptionSink> sink;
 };
 
+//! Returns true if the string has a NUL character before \a len
+static inline bool jni_has_nul(const char* str, size_t len) {
+    return memchr(str, '\0', len) != nullptr;
+}
+
+//! Raises \c JNI-ERROR if a name has a NUL character (qore#6738)
+/** A name (ex: a class, method, field, function or module name) is a NUL-terminated string in %Qore and in JNI, so
+    a name with a NUL character would be cut at it, and name something else: it is refused instead, with the error
+    of q_check_no_nul() (ex: <tt>class name "java/lang/String\x00junk" contains a NUL character at byte offset 16;
+    class names cannot contain NUL characters</tt>).
+
+    @param name the name, which need not be NUL-terminated
+    @param len the length of the name in bytes
+    @param what what the name is, in the singular (ex: \c "class name")
+    @param what_plural what the name is, in the plural (ex: \c "class names")
+    @param xsink the exception is raised here if the name has a NUL character
+
+    @return 0 if the name has no NUL character, -1 if it has one and the exception was raised
+*/
+static inline int jni_check_name(const char* name, size_t len, const char* what, const char* what_plural,
+        ExceptionSink* xsink) {
+    return q_check_no_nul(name, len, what, what_plural, "JNI-ERROR", xsink);
+}
+
+//! Throws XsinkException with \c JNI-ERROR if a name has a NUL character; see jni_check_name()
+static inline void jni_check_name(const char* name, size_t len, const char* what, const char* what_plural) {
+    if (jni_has_nul(name, len)) {
+        ExceptionSink xsink;
+        jni_check_name(name, len, what, what_plural, &xsink);
+        throw XsinkException(xsink);
+    }
+}
+
+//! Throws XsinkException with \c HASH-KEY-ERROR if a string that becomes a hash key has a NUL character (qore#6738)
+/** A hash key is a NUL-terminated string, so a key with a NUL character would be cut at it, and name another key: it
+    is refused instead, with the error of QoreHashNode::checkKey() (ex: <tt>Java Map key "a\x00b" contains a NUL
+    character at byte offset 1, which a Qore hash key cannot hold</tt>), as a %Qore string with a NUL character is
+    refused as a hash key.
+
+    @param key the key, which need not be NUL-terminated
+    @param len the length of the key in bytes
+    @param what what the key is (ex: \c "Java Map key")
+*/
+static inline void jni_check_key(const char* key, size_t len, const char* what) {
+    if (jni_has_nul(key, len)) {
+        ExceptionSink xsink;
+        QoreHashNode::checkKey(key, len, "HASH-KEY-ERROR", what, &xsink);
+        throw XsinkException(xsink);
+    }
+}
+
 //! The native state of a Java \c org.qore.jni.QoreClosure object: a Qore closure or call reference handed to Java
 /** Java can call the closure on any thread, including a thread that Qore did not start and that has no Qore caller,
     so the closure is called and released under the sandbox of the code that handed it to Java, captured when the

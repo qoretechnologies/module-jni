@@ -728,6 +728,62 @@ static jlong JNICALL java_api_init_qore(JNIEnv* jenv, jobject obj) {
     }
 }
 
+//! Raises a Qore exception in Java for a native method; no C++ exception is raised other than std::bad_alloc
+static void jni_raise_in_java(Env& env, ExceptionSink& xsink) {
+    try {
+        QoreToJava::wrapException(env, xsink);
+    } catch (jni::Exception&) {
+        // the wrapper could not be made: the Java exception of the failure is pending, and is raised instead
+        xsink.clear();
+    }
+}
+
+//! Gets a name that Java passes to a native method (ex: the name of a Qore function to call), with no C++ exception
+/** A name is a NUL-terminated string in %Qore, at whose first NUL character it would be cut, so a name with a NUL
+    character is refused with \c JNI-ERROR (qore#6738; see jni_check_name())
+
+    @param env the JNI environment
+    @param str set to the name in UTF-8
+    @param name the name from Java
+    @param what what the name is, in the singular, for the error (ex: \c "function name")
+    @param what_plural what the name is, in the plural, for the error (ex: \c "function names")
+
+    @return 0 if the name was got, -1 if a Java exception was raised
+*/
+static int jni_get_java_name(Env& env, Env::GetStringUtfChars& str, jstring name, const char* what,
+        const char* what_plural) {
+    if (str.set(name)) {
+        // the Java exception of the failure is pending
+        return -1;
+    }
+    if (str.hasNul()) {
+        ExceptionSink xsink;
+        jni_check_name(str.c_str(), str.size(), what, what_plural, &xsink);
+        jni_raise_in_java(env, xsink);
+        return -1;
+    }
+    return 0;
+}
+
+//! Converts the arguments that Java passes to a native method that calls Qore code, with no C++ exception
+/** No C++ exception may leave a JNI native method: an error of the conversion (ex: a Java Map key with a NUL
+    character, which a Qore hash key cannot have) is raised in Java (qore#6738).
+
+    @return 0 if the arguments were converted, -1 if a Java exception was raised
+*/
+static int jni_get_java_args(Env& env, ReferenceHolder<QoreListNode>& qore_args, jobjectArray args, QoreProgram* pgm,
+        bool varargs = false) {
+    try {
+        Array::getArgList(qore_args, env, args, pgm, varargs);
+        return 0;
+    } catch (jni::Exception& e) {
+        ExceptionSink xsink;
+        e.convert(&xsink);
+        jni_raise_in_java(env, xsink);
+        return -1;
+    }
+}
+
 static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong ptr, jboolean save, jstring name,
         jobjectArray args) {
     Env env(jenv);
@@ -751,11 +807,14 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
     jsize len = args ? env.getArrayLength(args) : 0;
     ReferenceHolder<QoreListNode> qore_args(&xsink);
 
-    if (len) {
-        Array::getArgList(qore_args, env, args, pgm);
+    if (len && jni_get_java_args(env, qore_args, args, pgm)) {
+        return nullptr;
     }
 
-    Env::GetStringUtfChars fname(env, name);
+    Env::GetStringUtfChars fname(env);
+    if (jni_get_java_name(env, fname, name, "function name", "function names")) {
+        return nullptr;
+    }
     //printd(LogLevel, "java_api_call_function() '%s()' args: %p %d\n", fname.c_str(), *qore_args, len);
 
     QoreJniStackLocationHelper slh;
@@ -838,16 +897,22 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
     jsize len = args ? env.getArrayLength(args) : 0;
     ReferenceHolder<QoreListNode> qore_args(&xsink);
 
-    if (len) {
-        Array::getArgList(qore_args, env, args, pgm,
-            (v && v->getCodeFlags() & QCF_USES_EXTRA_ARGS) ? true : false);
+    if (len && jni_get_java_args(env, qore_args, args, pgm,
+            (v && v->getCodeFlags() & QCF_USES_EXTRA_ARGS) ? true : false)) {
+        return nullptr;
     }
 
     if (!m) {
         assert(method_name);
-        Env::GetStringUtfChars mname(env, method_name);
+        Env::GetStringUtfChars mname(env);
+        if (jni_get_java_name(env, mname, method_name, "method name", "method names")) {
+            return nullptr;
+        }
         if (!cls) {
-            Env::GetStringUtfChars cname(env, class_name);
+            Env::GetStringUtfChars cname(env);
+            if (jni_get_java_name(env, cname, class_name, "class name", "class names")) {
+                return nullptr;
+            }
             //printd(LogLevel, "java_api_call_function() '%s()' args: %p %d\n", fname.c_str(), *qore_args, len);
 
             // grab the current Program's parse lock before calling QoreProgram::findClass()
@@ -964,11 +1029,14 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
     jsize len = args ? env.getArrayLength(args) : 0;
     ReferenceHolder<QoreListNode> qore_args(&xsink);
 
-    if (len) {
-        Array::getArgList(qore_args, env, args, pgm);
+    if (len && jni_get_java_args(env, qore_args, args, pgm)) {
+        return nullptr;
     }
 
-    Env::GetStringUtfChars clsname(env, cname);
+    Env::GetStringUtfChars clsname(env);
+    if (jni_get_java_name(env, clsname, cname, "class name", "class names")) {
+        return nullptr;
+    }
     printd(5, "java_api_new_object() class '%s' args: %p %d\n", clsname.c_str(), *qore_args, len);
 
     const QoreClass* cls = pgm->findClass(clsname.c_str(), &xsink);
@@ -1147,7 +1215,15 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     QoreObject* obj = JniObjectHandle::fromJava(ptr)->getObject();
 
     Env env(jenv);
-    Env::GetStringUtfChars class_name(env, cname);
+    Env::GetStringUtfChars class_name(env);
+    if (class_name.set(cname)) {
+        // the Java exception of the failure is pending
+        return false;
+    }
+    // a name with a NUL character, which a class name cannot have, is the name of no class (qore#6738)
+    if (class_name.hasNul()) {
+        return false;
+    }
 
     ExceptionSink xsink;
     const QoreClass* cls = jni_get_program_context()->findClass(class_name.c_str(), &xsink);
@@ -1210,7 +1286,8 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
             obj = JniObjectHandle::fromJava(obj_ptr)->getObject();
             if (!m) {
                 Env::GetStringUtfChars method_name(env, mname);
-                val = obj->evalMethod(method_name.c_str(), *qore_args, &xsink);
+                // a method name is a NUL-terminated string, so a name with a NUL character is refused (qore#6738)
+                val = obj->evalMethod(method_name.name("method name", "method names"), *qore_args, &xsink);
                 printd(5, "qore_object_closure_call_internal() %s::%s() (v: %p) %d arg(s) obj: %p pgm: %p cpgm: %p " \
                     "opgm: %p\n", obj->getClassName(), method_name.c_str(), v, (int)len, obj, pgm,
                     obj->getClass()->getProgram(), obj->getProgram());
@@ -1316,7 +1393,10 @@ static jobject JNICALL qore_object_get_member_value(JNIEnv* jenv, jobject jobj, 
             return nullptr;
         }
 
-        Env::GetStringUtfChars mem(env, member);
+        Env::GetStringUtfChars mem(env);
+        if (jni_get_java_name(env, mem, member, "member name", "member names")) {
+            return nullptr;
+        }
         rv = obj->evalMember(mem.c_str(), &xsink);
     }
     if (xsink) {
@@ -1352,6 +1432,11 @@ DLLLOCAL extern cmap_t jar_cmap;
 static jbyteArray JNICALL qore_url_classloader_get_cached_class(JNIEnv* jenv, jclass jcls, jstring bin_name) {
     Env env(jenv);
     Env::GetStringUtfChars bname(env, bin_name);
+    // a name with a NUL character, which a class name in the cache cannot have, is not found; it would be cut at the
+    // NUL character (qore#6738)
+    if (bname.hasNul()) {
+        return nullptr;
+    }
 
     cmap_t::const_iterator i = jar_cmap.find(bname.c_str());
     if (i == jar_cmap.end()) {
@@ -1555,7 +1640,8 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
     QoreString qpath;
     if (nspath) {
         Env::GetStringUtfChars jqpath(env, nspath);
-        qpath = jqpath.c_str();
+        // with its length, so that a NUL character is refused below
+        qpath.concat(jqpath.c_str(), jqpath.size());
     }
 
     // must ensure that the thread is attached before calling Qore APIs
@@ -1569,6 +1655,14 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
 
     ExceptionSink xsink;
     try {
+        // the namespace path, the Java name and the module name are NUL-terminated strings in Qore, at whose first NUL
+        // character they would be cut: a name with one is refused (qore#6738)
+        jni_check_name(qpath.c_str(), qpath.size(), "Qore namespace path", "Qore namespace paths");
+        if (jname) {
+            Env::GetStringUtfChars jname_str(env, jname);
+            jname_str.name("Java class name", "Java class names");
+        }
+
         // verify that program is still valid
         QoreExternalProgramContextHelper pch(&xsink, pgm);
         if (xsink) {
@@ -1591,6 +1685,7 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
         QoreString modstr;
         if (module) {
             Env::GetStringUtfChars mod_str(env, module);
+            mod_str.name("module name", "module names");
             printd(5, "qore_url_classloader_generate_byte_code() mod: '%s' python: %d kotlin: %d\n", mod_str.c_str(),
                 python, kotlin);
             modstr = mod_str.c_str();
@@ -2023,6 +2118,13 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
         if (nsname.set(qname)) {
             return nullptr;
         }
+    }
+    // the module name and the namespace path are NUL-terminated strings in Qore, at whose first NUL character they
+    // would be cut: a name with one is refused (qore#6738)
+    if (jni_check_name(mod_str.c_str(), mod_str.size(), "module name", "module names", &xsink)
+        || jni_check_name(nsname.c_str(), nsname.size(), "Qore namespace path", "Qore namespace paths", &xsink)) {
+        jni_raise_in_java(env, xsink);
+        return nullptr;
     }
 
     QoreString lang_path;
@@ -2484,7 +2586,12 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
         if (!utf.get()) {
             return nullptr;
         }
-        return Globals::getModuleClassLoader(Env::ModifiedUtf8(utf.get()).c_str());
+        Env::ModifiedUtf8 name(utf.get());
+        // a module name with a NUL character, at which it would be cut, is the name of no module (qore#6738)
+        if (jni_has_nul(name.c_str(), name.size())) {
+            return nullptr;
+        }
+        return Globals::getModuleClassLoader(name.c_str());
     } catch (JavaException&) {
         // the Java exception of a JNI call is pending: it is raised to the caller
         assert(jenv->ExceptionCheck());
@@ -2511,7 +2618,12 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
     jobject loader = nullptr;
     try {
         Env env(jenv);
-        loader = Globals::getCanonicalLoader(env, jthis, Env::ModifiedUtf8(utf.get()).c_str());
+        Env::ModifiedUtf8 name(utf.get());
+        // a class name with a NUL character, at which it would be cut, has no canonical loader (qore#6738)
+        if (jni_has_nul(name.c_str(), name.size())) {
+            return nullptr;
+        }
+        loader = Globals::getCanonicalLoader(env, jthis, name.c_str());
     } catch (...) {
         // swallow; null tells the Java caller to fall back to local generation
     }
@@ -2774,6 +2886,11 @@ static ucmap_t ucmap = {
 static jbyteArray qore_url_classloader_get_internal_class(JNIEnv* jenv, jclass jcls, jstring bin_name) {
     Env env(jenv);
     Env::GetStringUtfChars bname(env, bin_name);
+    // a name with a NUL character, which the name of an internal class cannot have, is not found; it would be cut at
+    // the NUL character (qore#6738)
+    if (bname.hasNul()) {
+        return nullptr;
+    }
 
     ucmap_t::const_iterator i = ucmap.find(bname.c_str());
     if (i == ucmap.end()) {
@@ -2812,6 +2929,11 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
 
     try {
         Env::GetStringUtfChars pname(env, pkg);
+        // a package name with a NUL character has no internal classes; it would be cut at the NUL character
+        // (qore#6738)
+        if (pname.hasNul()) {
+            return nullptr;
+        }
         unsigned len = strlen(pname.c_str());
         for (auto& i : ucmap) {
             unsigned plen = strlen(i.first);

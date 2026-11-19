@@ -33,6 +33,8 @@
 
 #include <qore/Qore.h>
 
+#include "defs.h"
+
 namespace jni {
 
 /**
@@ -81,6 +83,18 @@ public:
    //! Returns the length of the string in bytes; it may have NUL characters
    size_t size() {
       return helper->size();
+   }
+
+   //! Returns the string for use as a name (ex: a class name), which is a NUL-terminated string (qore#6738)
+   /** @param what what the name is, in the singular, for the error (ex: \c "class name")
+       @param what_plural what the name is, in the plural, for the error (ex: \c "class names")
+
+       @throw XsinkException \c JNI-ERROR: the string has a NUL character, at which the name would be cut (see
+       jni_check_name())
+   */
+   const char* name(const char* what, const char* what_plural) {
+      jni_check_name(c_str(), size(), what, what_plural);
+      return c_str();
    }
 
 private:

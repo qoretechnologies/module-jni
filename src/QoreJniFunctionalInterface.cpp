@@ -46,7 +46,8 @@ QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj) : obj(Global
         LocalReference<jobject> m = env.getObjectArrayElement(methods, i);
         LocalReference<jstring> mName = env.callObjectMethod(m, Globals::methodMethodGetName, nullptr).as<jstring>();
         Env::GetStringUtfChars mcn(env, mName);
-        if (!strcmp(mcn.c_str(), "call")) {
+        // the whole name is compared, as the JVM allows a NUL character in a method name (qore#6738)
+        if (mcn == "call") {
             method = new BaseMethod(m, *cls);
             break;
         }

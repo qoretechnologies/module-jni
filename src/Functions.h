@@ -70,7 +70,8 @@ public:
 
     static Class* loadClass(const QoreString& name) {
         Utf8String nameUtf8(name);
-        return loadClass(nameUtf8.c_str());
+        // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
+        return loadClass(nameUtf8.name("class name", "class names"));
     }
 
     static LocalReference<jobject> implementInterface(jobject classLoader, const InvocationHandler *invocationHandler, jclass cls) {

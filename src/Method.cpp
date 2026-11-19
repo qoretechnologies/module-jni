@@ -472,7 +472,8 @@ void BaseMethod::getName(QoreString& str) const {
     // get Method name
     LocalReference<jstring> jmName = env.callObjectMethod(method, Globals::methodMethodGetName, nullptr).as<jstring>();
     Env::GetStringUtfChars mName(env, jmName);
-    str.concat(mName.c_str());
+    // with its length: the JVM allows a NUL character in a method name (qore#6738)
+    str.concat(mName.c_str(), mName.size());
 }
 
 int BaseMethod::getParamTypes(Env& env, type_vec_t& paramTypeInfo, type_vec_t& altParamTypeInfo,

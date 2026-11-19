@@ -714,8 +714,10 @@ int QoreJdbcStatement::describeResultSet(Env& env, ExceptionSink* xsink) {
         Env::GetStringUtfChars name(env, cname);
 
         // the label is a hash key of the results: it is converted from UTF-8 to the default encoding, which hash keys
-        // are in (a hash key cannot have a NUL character, so a label is cut at its first one)
-        QoreString label(name.c_str(), QCS_UTF8);
+        // are in; a hash key cannot have a NUL character, at which it would be cut, so a label with one is refused
+        // (qore#6738)
+        jni_check_key(name.c_str(), name.size(), "JDBC column label");
+        QoreString label(name.c_str(), name.size(), QCS_UTF8);
         ExceptionSink conv_xsink;
         TempEncodingHelper key(label, QCS_DEFAULT, &conv_xsink);
         if (conv_xsink) {

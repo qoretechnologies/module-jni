@@ -1672,6 +1672,25 @@ public:
             return chars ? len : 0;
         }
 
+        //! Returns true if the string has a NUL character, which a name or a hash key cannot have (qore#6738)
+        DLLLOCAL bool hasNul() const {
+            return chars && jni_has_nul(chars, len);
+        }
+
+        //! Returns the string for use as a name, which is a NUL-terminated string (qore#6738)
+        /** @param what what the name is, in the singular, for the error (ex: \c "class name")
+            @param what_plural what the name is, in the plural, for the error (ex: \c "class names")
+
+            @throw XsinkException \c JNI-ERROR: the string has a NUL character, at which the name would be cut (see
+            jni_check_name())
+        */
+        DLLLOCAL const char* name(const char* what, const char* what_plural) const {
+            if (chars) {
+                jni_check_name(chars, len, what, what_plural);
+            }
+            return c_str();
+        }
+
         DLLLOCAL char operator[](int i) const {
             if (i < 0) {
                 i = strlen(chars) + i;
@@ -1683,14 +1702,14 @@ public:
             return (bool)chars;
         }
 
+        //! Compares the whole string, which may have NUL characters, with a NUL-terminated string
         DLLLOCAL bool operator==(const char* str) const {
             assert(chars);
-            return !strcmp(str, chars);
+            return strlen(str) == len && !memcmp(str, chars, len);
         }
 
         DLLLOCAL bool operator!=(const char* str) const {
-            assert(chars);
-            return strcmp(str, chars);
+            return !(*this == str);
         }
 
         DLLLOCAL GetStringUtfChars& operator=(const char* new_chars) {
