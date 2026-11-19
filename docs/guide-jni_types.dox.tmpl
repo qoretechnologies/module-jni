@@ -200,10 +200,10 @@
 
     A classpath is in the default encoding, as %Qore's file names are; it is converted once to the Java string that
     the class loader uses, and the sandbox's filesystem policy checks each of its entries as the JVM uses it: as an
-    absolute path resolved against the JVM's \c user.dir (a relative entry is not resolved against the current
-    directory of the process), in the bytes of the JVM's file name encoding (\c sun.jnu.encoding).  The policy checks
-    the entries; the files that the class loader reads under a directory entry or that a wildcard entry matches are
-    not checked one by one.
+    absolute path resolved against the JVM's \c user.dir (a relative entry, including a wildcard with no directory
+    part such as \c *.jar, is not resolved against the current directory of the process), in the bytes of the JVM's
+    file name encoding (\c sun.jnu.encoding).  The policy checks the entries; the files that the class loader reads
+    under a directory entry or that a wildcard entry matches are not checked one by one.
 
     The names of Java and %Qore classes, methods, fields and functions are passed as they are (in UTF-8), apart from
     the class names below, and a name with a NUL character is refused (see above).

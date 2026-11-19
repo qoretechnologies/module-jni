@@ -388,15 +388,16 @@ public final class QoreSandbox {
     //! Returns the entries of a classpath as the bytes that the JVM passes to the operating system for them
     /** Called by the module before the same classpath string is given to QoreURLClassLoader.addPath(), so that
         each entry is checked against the sandbox policy as the JVM uses it: the entries are those that addPath()
-        uses (QoreURLClassLoader.classpathEntries()), each made absolute as the JVM resolves it (against the
-        \c user.dir of the JVM, not the current directory of the process), and encoded as encode() does, which
-        raises JNI-SANDBOX-ERROR for an entry that the file name encoding cannot represent exactly.
+        uses (QoreURLClassLoader.classpathEntries()), each made absolute as addPath() resolves it
+        (QoreURLClassLoader.resolveClasspathEntry(): against the \c user.dir of the JVM, not the current directory of
+        the process, also for a wildcard with no directory part, such as \c "*.jar"), and encoded as encode() does,
+        which raises JNI-SANDBOX-ERROR for an entry that the file name encoding cannot represent exactly.
     */
     static byte[][] encodeClasspath(String classpath) {
         java.util.ArrayList<String> entries = QoreURLClassLoader.classpathEntries(classpath);
         byte[][] rv = new byte[entries.size()][];
         for (int i = 0; i < rv.length; ++i) {
-            rv[i] = encode(new java.io.File(entries.get(i)).getAbsolutePath(), "classpath entry");
+            rv[i] = encode(QoreURLClassLoader.resolveClasspathEntry(entries.get(i)).getPath(), "classpath entry");
         }
         return rv;
     }

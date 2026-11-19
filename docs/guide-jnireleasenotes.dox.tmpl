@@ -12,6 +12,8 @@
       raise \c JNI-ERROR, and the \c classpath option of the \c jdbc driver raises \c JDBC-OPTION-ERROR (a %Qore
       library that refuses a NUL character in every DBI option value raises \c DBI-OPTION-ERROR first);
       \c QORE_JNI_CLASSPATH, an environment variable, cannot have a NUL character (qore#6771)
+    - fixed bare wildcard classpath entries such as \c *.jar being dropped by the class loader. They now load matching
+      archives from the JVM's working directory (qore#6740, see @ref jniimport).
     - fixed a C++ exception in a JNI native method of the module, which ended the process in \c std::terminate()
       (exit code 134) instead of being raised in Java: the native methods raised the Java exception of an error with a
       class that they looked up in their catch handlers, and the lookup throws a C++ exception if it fails, and some
