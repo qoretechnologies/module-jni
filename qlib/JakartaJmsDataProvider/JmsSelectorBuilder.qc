@@ -28,13 +28,13 @@ public namespace JakartaJmsDataProvider {
 /** Converts a Qore hash to a JMS message selector string.
 
     Simple equality example:
-    @code
+    @code{.py}
     hash where = {"color": "red", "size": 42};
     # produces: "color = 'red' AND size = 42"
     @endcode
 
     Operator example:
-    @code
+    @code{.py}
     hash where = {"price": {"op": ">", "value": 100}};
     # produces: "price > 100"
     @endcode

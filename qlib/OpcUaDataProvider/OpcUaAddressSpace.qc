@@ -37,7 +37,7 @@ public namespace OpcUaDataProvider {
 
     @par Example
     Validate an industrial machine address space while it is being authored, before the service binds a port:
-    @code
+    @code{.py}
     hash<auto> snapshot = OpcUaDataProvider::describeAddressSpace({
         "opcua": "1",
         "contract_version": 1,
@@ -56,7 +56,7 @@ public namespace OpcUaDataProvider {
     @endcode
 
     An address space without nodes can also be described and exported:
-    @code
+    @code{.py}
     hash<auto> empty_document = {
         "opcua": "1",
         "contract_version": 1,
@@ -104,7 +104,7 @@ public hash<auto> sub describeAddressSpace(hash<auto> document) {
 
     @par Example
     Convert a vendor NodeSet2 model before storing it as a Qorus API schema:
-    @code
+    @code{.py}
     hash<auto> document = OpcUaDataProvider::nodeSet2ToAddressSpace(nodeset2_xml);
     @endcode
 */
@@ -137,7 +137,7 @@ public hash<auto> sub nodeSet2ToAddressSpace(string xml) {
 
     @par Example
     Export an authored machine address space for an OPC UA engineering tool:
-    @code
+    @code{.py}
     string nodeset2 = OpcUaDataProvider::exportNodeSet2(document);
     @endcode
 */

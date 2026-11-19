@@ -199,7 +199,7 @@ module FlywayDataProvider {
 
     @tableofcontents
 
-    @section flywaydataproviderintro Introduction to the FlywayDataProvider Module
+    @section flywaydataproviderintro FlywayDataProvider Module Introduction
 
     <img src="flyway-logo.svg" width="96" alt="FlywayDataProvider module logo"/>
 
@@ -208,6 +208,13 @@ module FlywayDataProvider {
     This data provider provides Flyway functionality with the \c flyway factory and data provider with the
     same name, supporting database migration, validation, info, clean, and repair operations
     (class @ref FlywayDataProvider::FlywayDataProvider "FlywayDataProvider").
+
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
+    \c locations other than directories (ex: \c classpath:), and a \c url with driver properties, are refused to
+      sandboxed code (\c JNI-SANDBOX-ERROR).
 
     @section flywaydataprovider_examples Flyway Data Provider Examples
 
@@ -221,15 +228,15 @@ module FlywayDataProvider {
     @verbatim qdp 'flyway{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret,locations=filesystem:/path/to/sql}/info' search
     @endverbatim
 
-    @section flywaydataprovider_relnotes Release Notes
+    @anchor flywaydataprovider_relnotes
 
-    @subsection flywaydataprovider_v1_0 FlywayDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
-      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
-      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
+    @subpage flywaydataproviderreleasenotes
+*/
+
+/** @page flywaydataproviderreleasenotes FlywayDataProvider Release Notes
+
+    @section flywaydataprovider_v1_0 FlywayDataProvider Module Version 1.0
     - initial release
-    - \c locations other than directories (ex: \c classpath:), and a \c url with driver properties, are refused to
-      sandboxed code (\c JNI-SANDBOX-ERROR)
 */
 
 #! Contains all public definitions in the FlywayDataProvider module

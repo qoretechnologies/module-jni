@@ -181,7 +181,7 @@ module AvroDataProvider {
 
     @tableofcontents
 
-    @section avrodataproviderintro Introduction to the AvroDataProvider Module
+    @section avrodataproviderintro AvroDataProvider Module Introduction
 
     <img src="avro-logo.svg" width="96" alt="AvroDataProvider module logo"/>
 
@@ -194,6 +194,10 @@ module AvroDataProvider {
     - @ref AvroDataProvider::AvroReadDataProviderFactory "AvroReadDataProviderFactory" - factory for read providers
     - @ref AvroDataProvider::AvroWriteDataProvider "AvroWriteDataProvider" - for writing Avro files
     - @ref AvroDataProvider::AvroWriteDataProviderFactory "AvroWriteDataProviderFactory" - factory for write providers
+
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
 
     @section AvroDataProvider_reading Reading Avro Files
 
@@ -282,14 +286,14 @@ module AvroDataProvider {
     - \c AVRO-READ-OPTION-ERROR: Invalid read options or option conflicts
     - \c AVRO-WRITE-OPTION-ERROR: Invalid write options or option conflicts
 
-    @section AvroDataProvider_relnotes Release Notes
+    @anchor AvroDataProvider_relnotes
 
-    @subsection AvroDataProvider_v1_0 AvroDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
-      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
-      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
-      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
-      middle of a call; the module requires \c DataProvider 3.12 or later
+    @subpage avrodataproviderreleasenotes
+*/
+
+/** @page avrodataproviderreleasenotes AvroDataProvider Release Notes
+
+    @section AvroDataProvider_v1_0 AvroDataProvider Module Version 1.0
     - initial release
 */
 

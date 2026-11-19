@@ -142,7 +142,7 @@ module JdbcDataProvider {
 
     @tableofcontents
 
-    @section jdbcdataproviderintro Introduction to the JdbcDataProvider Module
+    @section jdbcdataproviderintro JdbcDataProvider Module Introduction
 
     <img src="jdbc-dp-logo.svg" width="96" alt="JdbcDataProvider module logo"/>
 
@@ -156,6 +156,13 @@ module JdbcDataProvider {
     Pass \c classpath and, when the driver is not auto-registered by the JVM, \c driver_class in the
     provider or connection options.  Drivers can also be made available with the \c QORE_JNI_CLASSPATH
     environment variable or JNI classpath configuration.
+
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
+    The \c classpath and \c driver_class options, and a \c url with driver properties, are refused to sandboxed
+      code (\c JNI-SANDBOX-ERROR).
 
     @section jdbcdataprovider_examples JDBC Data Provider Examples
 
@@ -173,15 +180,15 @@ module JdbcDataProvider {
     @verbatim qdp 'jdbc-dp{url=jdbc:postgresql://localhost/mydb,user=myuser,password=secret}/exec' request sql="INSERT INTO users (name) VALUES ('test')"
     @endverbatim
 
-    @section jdbcdataprovider_relnotes Release Notes
+    @anchor jdbcdataprovider_relnotes
 
-    @subsection jdbcdataprovider_v1_0 JdbcDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
-      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
-      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
+    @subpage jdbcdataproviderreleasenotes
+*/
+
+/** @page jdbcdataproviderreleasenotes JdbcDataProvider Release Notes
+
+    @section jdbcdataprovider_v1_0 JdbcDataProvider Module Version 1.0
     - initial release
-    - the \c classpath and \c driver_class options, and a \c url with driver properties, are refused to sandboxed
-      code (\c JNI-SANDBOX-ERROR)
 */
 
 #! Contains all public definitions in the JdbcDataProvider module
