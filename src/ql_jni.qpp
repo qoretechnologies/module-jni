@@ -472,12 +472,17 @@ set_save_object_callback(save_object_callback: callback);
     The callback set here will be called any time a %Qore object is created from Java code; if no callback is set,
     then the standard thread-local implementation is used where %Qore objects are saved in a thread-local hash.
 
-    The callback replaced by this call is released by it, and an exception raised then (ex: by the destructor of an
-    object that only the callback held) is raised by this call, and the new callback is set nevertheless; the
+    The callback replaced by this call is released by it, unless it is running (see below), and an exception raised
+    then (ex: by the destructor of an object that only the callback held) is raised by this call, and the new callback
+    is set nevertheless; the
     callback set last is released with the jni data of the Program, when the Program is deleted, and an exception
     raised then is reported as an unhandled exception on \c stderr, as there is no caller to raise it to; the code of
     the Program cannot run any more at that point, so the destructor of an object of a class of the Program that only
     the callback holds then raises a \c PROGRAM-ERROR exception
+
+    The callback can be replaced or removed while it runs, by the callback itself or by another thread; the running
+    callback stays valid until it returns, and is then released; an exception raised by that release is raised to the
+    Java code that created the object, even though the callback has already run for the object
 
     @see @ref jni_qore_object_lifecycle_managementguide for more information
 */

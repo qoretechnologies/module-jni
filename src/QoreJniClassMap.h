@@ -601,18 +601,35 @@ public:
 
     //! Sets the save object callback, releasing the old one
     /** The old callback is released after the new one is set, as releasing it can run Qore code, for example the
-        destructor of an object that only the callback holds; an exception raised by that code is raised in \a xsink
+        destructor of an object that only the callback holds; an exception raised by that code is raised in \a xsink;
+        if the old callback is running (see getSaveObjectCallbackRef()), its last reference is released, and such an
+        exception is raised, by save_object() when it returns
     */
     DLLLOCAL void setSaveObjectCallback(const ResolvedCallReferenceNode* save_object_callback, ExceptionSink* xsink) {
-        ResolvedCallReferenceNode* old = this->save_object_callback;
-        this->save_object_callback = save_object_callback ? save_object_callback->refRefSelf() : nullptr;
+        ResolvedCallReferenceNode* new_callback = save_object_callback ? save_object_callback->refRefSelf()
+            : nullptr;
+        ResolvedCallReferenceNode* old;
+        // the member is swapped under the lock (qore#6790); the old callback is released after the lock is released,
+        // as its release can run Qore code, which could set the callback again
+        {
+            AutoLocker al(save_object_callback_lock);
+            old = this->save_object_callback;
+            this->save_object_callback = new_callback;
+        }
         if (old) {
             old->deref(xsink);
         }
     }
 
-    DLLLOCAL ResolvedCallReferenceNode* getSaveObjectCallback() const {
-        return save_object_callback;
+    //! Returns a new reference to the save object callback, or nullptr if there is none
+    /** The caller owns the reference and must release it with deref(), with no lock held, as releasing the last
+        reference to the callback can run Qore code; the reference keeps the callback valid while it runs, also if the
+        callback is replaced or removed meanwhile by setSaveObjectCallback(), by another thread or by the callback
+        itself (qore#6790)
+    */
+    DLLLOCAL ResolvedCallReferenceNode* getSaveObjectCallbackRef() const {
+        AutoLocker al(save_object_callback_lock);
+        return save_object_callback ? save_object_callback->refRefSelf() : nullptr;
     }
 
     //! Returns the jni data of a child Program created from the Program of this object
@@ -684,8 +701,10 @@ protected:
     GlobalReference<jobject> classLoader;
     // dynamic API class
     GlobalReference<jclass> dynamicApi;
-    // call reference for saving object references
+    // call reference for saving object references; save_object_callback_lock must be held when accessing it
     ResolvedCallReferenceNode* save_object_callback = nullptr;
+    // protects save_object_callback; only held to read, reference, or swap the pointer, never while Qore code runs
+    mutable QoreThreadLock save_object_callback_lock;
 
     // QoreJavaDynamicApi.newInstance()
     jmethodID methodQoreJavaDynamicApiNewInstance = 0;

@@ -833,12 +833,19 @@ static int save_object(Env& env, const QoreValue& rv, QoreProgram* pgm, Exceptio
 
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     if (jpc) {
-        ResolvedCallReferenceNode* save_object_callback = jpc->getSaveObjectCallback();
+        // the callback runs through a reference, as it can be replaced or removed while it runs, by another thread or
+        // by the callback itself, which releases the Program's reference to it (qore#6790)
+        ReferenceHolder<ResolvedCallReferenceNode> save_object_callback(jpc->getSaveObjectCallbackRef(), &xsink);
         if (save_object_callback) {
-            printd(5, "save_object() running callback %p\n", save_object_callback);
-            ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
-            args->push(rv.refSelf(), &xsink);
-            save_object_callback->execValue(*args, &xsink);
+            printd(5, "save_object() running callback %p\n", *save_object_callback);
+            {
+                ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &xsink);
+                args->push(rv.refSelf(), &xsink);
+                save_object_callback->execValue(*args, &xsink);
+            }
+            // the reference is released before the exception check, as releasing the last reference to the callback
+            // can raise an exception, for example in the destructor of an object that only the callback holds
+            save_object_callback = nullptr;
             if (xsink) {
                 QoreToJava::wrapException(env, xsink);
                 return -1;
