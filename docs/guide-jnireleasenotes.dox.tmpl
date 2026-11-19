@@ -6,11 +6,12 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
-    - fixed %Qore handlers for \c SIGUSR2 never running while the JVM was loaded: the JVM suspends and resumes its
-      threads with \c SIGUSR2 (or the signal in \c _JAVA_SR_SIGNUM) and handles it in its own threads; the module
-      now reserves that signal as it does the other signals that the JVM needs, so
+    - <b>Incompatible change</b>: fixed %Qore handlers for \c SIGUSR2 never running while the JVM was loaded: the JVM
+      suspends and resumes its threads with \c SIGUSR2 (or the signal in \c _JAVA_SR_SIGNUM) and handles it in its own
+      threads; the module now reserves that signal as it does the other signals that the JVM needs, so
       @ref Qore::set_signal_handler() "set_signal_handler()" raises \c SIGNAL-HANDLER-ERROR for it while the module
-      is loaded, and the module cannot be loaded while a handler is set for it (qore#6707, see @ref jni_signals)
+      is loaded, and the module cannot be loaded (\c MODULE-INIT-ERROR) while a handler is set for it; code that sets
+      a handler for \c SIGUSR2 and uses the \c jni module must stop setting it (qore#6707, see @ref jni_signals)
     - fixed Java's \c System.exit() and \c Runtime.halt() aborting the process
       (<tt>external native threads still active while stopping the cleanup worker</tt>) when a \c ThreadPool worker
       was active: the JVM called C \c exit() on its VM Thread, which ran libqore's static destructors while %Qore

@@ -80,8 +80,8 @@ sig_vec_t sig_vec;
 //! Returns the signal that HotSpot uses to suspend and resume threads (qore#6707)
 /** HotSpot uses \c SIGUSR2, or the signal in the \c _JAVA_SR_SIGNUM environment variable if it is a decimal number
     greater than \c SIGSEGV and \c SIGBUS and less than \c NSIG (otherwise it warns and uses \c SIGUSR2).  It handles
-    the signal in its own threads, which it unblocks it in, so the signal is delivered to them and a %Qore handler for
-    it never runs; the signal is therefore reserved for the JVM.
+    the signal in its own threads, where it unblocks it, so the signal is delivered to them and a %Qore handler for it
+    never runs; the signal is therefore reserved for the JVM.
 */
 static int jvm_sr_signal() {
     QoreString val;
@@ -96,7 +96,41 @@ static int jvm_sr_signal() {
     }
     return static_cast<int>(sig);
 }
+
+//! the JVM's suspend/resume signal if the module reserved it alone (see jni_module_init()), otherwise 0
+static int jvm_sr_reserved = 0;
+//! true if the suspend/resume signal was blocked in the thread that reserved it
+/** libqore unblocks a signal that it reserves for a module in the reserving thread and does not block it again when
+    the module releases it; unlike the other signals that the module reserves, which no %Qore thread blocks, the
+    suspend/resume signal (ex: \c SIGUSR2) is blocked in %Qore threads, and with its default action it would end the
+    process if it were delivered to that thread after a failed initialization released it
+*/
+static bool jvm_sr_was_blocked = false;
+
+//! after the suspend/resume signal has been released: blocks it again in the calling thread if it was blocked there
+//! before the module reserved it alone
+static void jni_reblock_sr_signal() {
+    if (!jvm_sr_reserved) {
+        return;
+    }
+    if (jvm_sr_was_blocked) {
+        sigset_t set;
+        sigemptyset(&set);
+        sigaddset(&set, jvm_sr_reserved);
+        pthread_sigmask(SIG_BLOCK, &set, nullptr);
+    }
+    jvm_sr_reserved = 0;
+}
 #endif
+
+//! releases the signals that the module reserved for the JVM when its initialization fails
+static void jni_release_signals() {
+    // all of them or none: the suspend/resume signal is in sig_vec if the module reserved it
+    qore_release_signals(sig_vec, QORE_JNI_MODULE_NAME);
+#ifndef Q_WINDOWS
+    jni_reblock_sr_signal();
+#endif
+}
 
 static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 #if defined(QORE_JNI_HAS_COMMAND_CONTEXT) && !defined(NDEBUG)
@@ -257,7 +291,7 @@ QoreStringNode* jni_module_init_finalize(bool system) {
         qjcm.init(pgm, already_initialized);
     } catch (jni::Exception& e) {
         tclist.pop(false);
-        qore_release_signals(sig_vec, QORE_JNI_MODULE_NAME);
+        jni_release_signals();
         jni::Jvm::destroyVM();
         // display exception info on the console as an unhandled exception
         if (system) {
@@ -358,7 +392,7 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         }
         if (signals_assigned) {
             // jni_module_init_finalize() releases them itself when it fails, in which case this has no effect
-            qore_release_signals(sig_vec, QORE_JNI_MODULE_NAME);
+            jni_release_signals();
         }
         qore_deregister_program_cleanup_callback(jni_program_cleanup);
     });
@@ -373,11 +407,17 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     int sr_sig = jvm_sr_signal();
     bool sr_alone = std::find(sig_vec.begin(), sig_vec.end(), sr_sig) == sig_vec.end();
     if (sr_alone) {
+        sigset_t cur;
+        bool was_blocked = !pthread_sigmask(SIG_BLOCK, nullptr, &cur) && sigismember(&cur, sr_sig) == 1;
+        // allocated first, so that nothing can fail once the signal is reserved
+        sig_vec.reserve(sig_vec.size() + 1);
         QoreStringNode* err = qore_reassign_signal(sr_sig, QORE_JNI_MODULE_NAME, false);
         if (err) {
             xsink.raiseException("MODULE-INIT-ERROR", err);
             return;
         }
+        jvm_sr_reserved = sr_sig;
+        jvm_sr_was_blocked = was_blocked;
         sig_vec.push_back(sr_sig);
     }
 #endif
@@ -386,6 +426,7 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 #ifndef Q_WINDOWS
         if (sr_alone) {
             qore_release_signal(sr_sig, QORE_JNI_MODULE_NAME);
+            jni_reblock_sr_signal();
             sig_vec.pop_back();
         }
 #endif

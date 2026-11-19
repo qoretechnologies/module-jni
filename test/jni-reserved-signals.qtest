@@ -6,7 +6,7 @@
 # _JAVA_SR_SIGNUM), as it does the other signals that the JVM needs, so that no Qore signal handler can be set for it
 # while the module is loaded (qore#6707).
 #
-# The JVM handles that signal in its own threads, which it unblocks it in, so a handler set for it with
+# The JVM handles that signal in its own threads, where it unblocks it, so a handler set for it with
 # set_signal_handler() never ran: the signal was delivered to a JVM thread instead of to the Qore signal thread.
 #
 # Each case runs a child process; the parent reads the child's output until the child has exited, so no case waits
@@ -30,6 +30,8 @@ class JniReservedSignalsTest inherits QUnit::Test {
               is not reserved, runs
             - \c before: a handler for the signal is set first; then loading jni fails
             - \c load: jni is loaded; the result is reported
+            - \c fail: loading jni fails after the signal is reserved; the signal is blocked again in the thread, and a
+              handler for it runs
         */
         const ChildSource = "%modern
 string mode = ARGV[0];
@@ -85,6 +87,23 @@ sub loaded(int sig, int other) {
 stdout.printf(\"pid: %d\\n\", getpid());
 if (mode == \"before\") {
     before(sig);
+} else if (mode == \"fail\") {
+    # the JVM does not start (the parent passes an invalid JVM option), so the module's initialization fails after
+    # it has reserved the signal
+    try {
+        load_jni();
+        stdout.print(\"load: ok\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        stdout.printf(\"load: %s\\n\", ex.err);
+    }
+    *string blk = (ReadOnlyFile::readTextFile(\"/proc/thread-self/status\") =~ x/^SigBlk:\\s*([0-9a-f]+)$/m)[0];
+    stdout.printf(\"blocked: %y\\n\", blk ? (strtoint(blk.substr(-8), 16) & (1 << (sig - 1))) != 0 : NOTHING);
+    # the signal is free again: a handler for it runs, and the signal does not end the process
+    Queue q();
+    set_signal_handler(sig, sub (int s) { q.push(s); });
+    kill(getpid(), sig);
+    stdout.printf(\"handled: %d\\n\", q.get());
+    remove_signal_handler(sig);
 } else if (mode == \"load\") {
     try {
         load_jni();
@@ -114,6 +133,7 @@ if (mode == \"before\") {
         addTestCase("SIGUSR2 reserved without libjsig", \noLibjsigTest());
         addTestCase("handler set before jni is loaded", \beforeTest());
         addTestCase("_JAVA_SR_SIGNUM", \srSignumTest());
+        addTestCase("failed initialization", \failedInitTest());
 
         set_return_value(main());
     }
@@ -157,6 +177,19 @@ if (mode == \"before\") {
             "jni cannot be loaded when _JAVA_SR_SIGNUM names SIGALRM");
     }
 
+    failedInitTest() {
+        if (!is_file("/proc/thread-self/status")) {
+            testSkip("no /proc file system");
+        }
+        # an invalid JVM option makes JNI_CreateJavaVM() fail
+        hash<auto> res = run("", "fail", SIGUSR2, SIGUSR1, {"QORE_JNI_JVM_ARGS": "-XX:+QoreJniNoSuchOption"});
+        assertRegex("(^|\n)load: MODULE-INIT-ERROR", res.out, "the module's initialization failed");
+        # libqore unblocked the signal in the thread when the module reserved it
+        assertRegex("(^|\n)blocked: True\n", res.out, "the signal is blocked again in the thread");
+        assertRegex("(^|\n)handled: " + SIGUSR2 + "\n", res.out, "a handler for the released signal runs");
+        assertEq(0, res.rc, "exit status: " + res.out);
+    }
+
     private:internal loadedCase(string preload, bool with_libjsig, int sig, int other, *hash<auto> env) {
         if (!is_file("/proc/self/maps")) {
             testSkip("no /proc file system");
@@ -197,7 +230,7 @@ if (mode == \"before\") {
         if (m_options.verbose > 2) {
             printf("mode %s sig %d preload %y env %y: rc %d\n%s\n", mode, sig, preload, env, rc, out);
         }
-        # with reduced signals, the JVM creates its attach socket at startup and removes it at exit() only
+        # the JVM (with reduced signals) creates its attach socket at startup; it is removed if a child leaves it
         *string pid = (out =~ x/(?:^|\n)pid: ([0-9]+)\n/)[0];
         if (pid) {
             string sock = "/tmp/.java_pid" + pid;
