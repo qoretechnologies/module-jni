@@ -24,6 +24,19 @@ const Utf8 = <66c3a4c39f>;
 #! the same as UTF-16 units
 const Units = (0x66, 0xe4, 0xdf);
 
+#! U+1F600 in UTF-8, which ISO-8859-1 cannot represent
+const EmojiUtf8 = <f09f9880>;
+
+#! returns the code of the exception that the closure raises, or "no error"
+string sub error_of(code c) {
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return "no error";
+}
+
 #! prints the result of a case
 sub result(string name, auto expected, auto found) {
     printf("result: %s: %s\n", name, expected == found ? "OK" : sprintf("expected %y, found %y", expected, found));
@@ -43,6 +56,7 @@ sub main() {
     }
 
     string fass = binary_to_string(Latin1, "ISO-8859-1");
+    string emoji = binary_to_string(EmojiUtf8, "UTF-8");
 
     # a hash key, in the default encoding, as a Java Map key
     hash<auto> h = {fass: 1};
@@ -52,11 +66,22 @@ sub main() {
     h = Utf8Boundary::mapOf(fass, 1);
     result("Java Map key to Qore", Latin1, binary((keys h)[0]));
 
+    # a Java Map key that the default encoding cannot represent (U+1F600) cannot be a hash key
+    result("Java Map key that the default encoding cannot represent", "ENCODING-CONVERSION-ERROR",
+        error_of(sub () { Utf8Boundary::mapOf(emoji, 1); }));
+
     # the code of a QoreException thrown in Java, in the default encoding
     try {
         Utf8Boundary::throwQore(fass, "desc");
     } catch (hash<ExceptionInfo> ex) {
         result("QoreException code", Latin1, binary(ex.err));
+    }
+
+    # the code of a QoreException that the default encoding cannot represent is kept in UTF-8
+    try {
+        Utf8Boundary::throwQore(emoji, "desc");
+    } catch (hash<ExceptionInfo> ex) {
+        result("QoreException code that the default encoding cannot represent", EmojiUtf8, binary(ex.err));
     }
 
     # a module command, which Program::issueModuleCmd() passes in the default encoding
@@ -81,6 +106,11 @@ sub main() {
     Utf8Driver::labels = (fass,);
     hash<auto> row = ds.selectRow("select 1");
     result("JDBC column label", Latin1, binary((keys row)[0]));
+
+    # a JDBC column label that the default encoding cannot represent cannot be a hash key
+    Utf8Driver::labels = (emoji,);
+    result("JDBC column label that the default encoding cannot represent", "ENCODING-CONVERSION-ERROR",
+        error_of(sub () { ds.selectRow("select 1"); }));
 
     # a JDBC metadata name, a UTF-8 string
     Utf8Driver::productName = fass;

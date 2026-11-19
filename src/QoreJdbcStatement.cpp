@@ -947,7 +947,8 @@ QoreHashNode* QoreJdbcStatement::describe(Env& env, ExceptionSink* xsink) {
         // the column size: the length in characters for character data, in bytes for binary data, the maximum
         // precision for numeric data
         desc->setKeyValue("maxsize", static_cast<int64>(col.precision), xsink);
-        desc->setKeyValue("native_type", new QoreStringNode(col.native_type), xsink);
+        // the type name from the driver is UTF-8
+        desc->setKeyValue("native_type", new QoreStringNode(col.native_type, QCS_UTF8), xsink);
         desc->setKeyValue("internal_id", static_cast<int64>(col.ctype), xsink);
         desc->setKeyValue("nullable", col.nullable, xsink);
         if (jdbc_is_decimal_type(col.ctype)) {

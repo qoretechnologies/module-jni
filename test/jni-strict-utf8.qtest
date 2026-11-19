@@ -13,6 +13,7 @@
 %module-cmd(jni) import org.qore.jni.test.Utf8Driver
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
 %module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.QoreSandbox
 %exec-class JniStrictUtf8Test
 
 #! Strings that cross the JNI boundary in places other than the main string conversion are exact in both directions
@@ -36,6 +37,15 @@ class JniStrictUtf8Test inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JNI strict UTF-8", "1.0") {
+        # this file is UTF-8, and the cases expect UTF-8 as the default encoding (see nonUtf8DefaultEncoding() and
+        # test/jni-strict-utf8-child.q for another default encoding)
+        if (get_default_encoding() != "UTF-8") {
+            addTestCase("the default encoding is not UTF-8", sub () {
+                testSkip(sprintf("the default encoding is %y; this test needs UTF-8", get_default_encoding()));
+            });
+            set_return_value(main());
+            return;
+        }
         with_nul = binary_to_string(<610062>, "UTF-8") + "😀";
         latin1 = convert_encoding("fäß", "ISO-8859-1");
 
@@ -66,6 +76,10 @@ class JniStrictUtf8Test inherits QUnit::Test {
         addTestCase("coverage: a UTF-8 set-property command", \setPropertyUtf8());
         addTestCase("coverage: a kotlin-eval command in ISO-8859-1", \kotlinEvalCmdLatin1());
         addTestCase("regression: a kotlin-eval command with NUL", \kotlinEvalCmdNul());
+        addTestCase("coverage: a define-pending-class command with a class name outside the BMP",
+            \definePendingClass());
+        addTestCase("regression: JavaArray::deepToString() with NUL", \deepToStringNul());
+        addTestCase("coverage: a sandbox argument error", \sandboxArgumentError());
         addTestCase("coverage: hash keys and Map keys", \hashKeys());
         addTestCase("regression: a default encoding other than UTF-8", \nonUtf8DefaultEncoding());
         set_return_value(main());
@@ -112,12 +126,22 @@ class JniStrictUtf8Test inherits QUnit::Test {
     #! the error of a module that Java's loading of a qoremod.* class could not load was raised in Java as a
     #! ClassNotFoundException, and also printed as an unhandled Qore exception, as its exception sink was not cleared
     moduleLoadErrorNotUnhandled() {
-        string cmd = sprintf("%s -b --enable-debug %s load-error 2>&1", shellQuote(QORE_ARGV[0]),
-            shellQuote(get_script_dir() + "/jni-strict-utf8-child.q"));
         int rc;
-        string out = backquote(cmd, \rc);
+        string out = backquote(childCmd("", "load-error"), \rc);
         assertEq("result: load error: OK\n", out);
         assertEq(0, rc, "exit code");
+    }
+
+    #! returns the shell command that runs test/jni-strict-utf8-child.q with its output and errors
+    /** The variables that make the JVM print a notice on startup ("Picked up JAVA_TOOL_OPTIONS: ...") are removed
+        from the child's environment, as the whole output of the child is checked
+
+        @param env variable assignments for the child (ex: \c "QORE_CHARSET=ISO-8859-1")
+        @param args the child's arguments
+    */
+    private static string childCmd(string env, string args = "") {
+        return sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s %s -b --enable-debug %s %s "
+            "2>&1", env, shellQuote(QORE_ARGV[0]), shellQuote(get_script_dir() + "/jni-strict-utf8-child.q"), args);
     }
 
     #! returns the byte code of a class with the given binary name (ex: "org.qore.test.Name"), whose method name()
@@ -344,6 +368,30 @@ public class %s {
         assertEq(units(with_nul), Utf8Boundary::propertyUnits("qore.test.utf8.k2"));
     }
 
+    #! the name of a pending class is passed to Java with its length (it was right before for a valid name)
+    definePendingClass() {
+        string name = "org.qore.test.Pendíng𐐀";
+        Program p(PO_NEW_STYLE);
+        p.parse("%requires jni\nstring sub class_name(string name) { return load_class(name).getName(); }",
+            "pending");
+        p.issueModuleCmd("jni", "define-pending-class " + name + " " + compileClass(name).toBase64());
+        assertEq(name, p.callFunction("class_name", replace(name, ".", "/")));
+    }
+
+    #! the output of Arrays.deepToString() was cut at a NUL character
+    deepToStringNul() {
+        JavaArray a = new_array(load_class("java/lang/String"), 1);
+        a.set(0, with_nul);
+        assertEq("[" + with_nul + "]", a.deepToString());
+    }
+
+    #! the message of a JNI-SANDBOX-ERROR that org.qore.jni.QoreSandbox raises for an invalid argument (an ASCII
+    #! text) is passed to Qore with its length
+    sandboxArgumentError() {
+        assertThrows("JNI-SANDBOX-ERROR", "must not contain a NUL character", \QoreSandbox::checkFileAccess(),
+            (with_nul, False));
+    }
+
     #! with UTF-8 as the default encoding, hash keys were already right; see nonUtf8DefaultEncoding() for the
     #! regression
     hashKeys() {
@@ -358,20 +406,21 @@ public class %s {
     #! connection values and the JDBC metadata names were not converted between it and UTF-8; see
     #! test/jni-strict-utf8-child.q
     nonUtf8DefaultEncoding() {
-        string cmd = sprintf("QORE_CHARSET=ISO-8859-1 %s -b --enable-debug %s 2>&1", shellQuote(QORE_ARGV[0]),
-            shellQuote(get_script_dir() + "/jni-strict-utf8-child.q"));
         int rc;
-        string out = backquote(cmd, \rc);
+        string out = backquote(childCmd("QORE_CHARSET=ISO-8859-1"), \rc);
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
         assertEq((
             "result: Qore hash key to Java: OK",
             "result: Java Map key to Qore: OK",
+            "result: Java Map key that the default encoding cannot represent: OK",
             "result: QoreException code: OK",
+            "result: QoreException code that the default encoding cannot represent: OK",
             "result: module command: OK",
             "result: JDBC user: OK",
             "result: JDBC password: OK",
             "result: JDBC URL: OK",
             "result: JDBC column label: OK",
+            "result: JDBC column label that the default encoding cannot represent: OK",
             "result: JDBC metadata name: OK",
         ), lines, out);
         assertEq(0, rc, "exit code: " + out);

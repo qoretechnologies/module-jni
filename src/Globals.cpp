@@ -1092,34 +1092,41 @@ static void JNICALL java_api_delete_connection_waiter(JNIEnv*, jclass, jlong ptr
 static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, jlong ptr) {
     ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
 
-    // the message in UTF-8: the code and the description can be in any encoding, and have NUL characters
-    QoreString err_str(QCS_UTF8);
-    jni_append_utf8(err_str, xsink->getExceptionErr());
-    QoreString desc_str(QCS_UTF8);
-    jni_append_utf8(desc_str, xsink->getExceptionDesc());
-
-    QoreString jstr(QCS_UTF8);
-    if (!err_str.empty()) {
-        jstr.concat(err_str.c_str(), err_str.size());
-        if (!desc_str.empty()) {
-            jstr.concat(": ");
-            jstr.concat(desc_str.c_str(), desc_str.size());
-        }
-    } else if (!desc_str.empty()) {
-        jstr.concat(desc_str.c_str(), desc_str.size());
-    } else {
-        jstr.concat("No message");
-    }
-
-    //printd(LogLevel, "qore_exception_wrapper_get_message() xsink: %p %s\n", xsink, jstr.c_str());
-
-    Env env(jenv);
+    // no C++ exception may leave a JNI native method
     try {
+        // the message in UTF-8: the code and the description can be in any encoding, and have NUL characters
+        QoreString err_str(QCS_UTF8);
+        jni_append_utf8(err_str, xsink->getExceptionErr());
+        QoreString desc_str(QCS_UTF8);
+        jni_append_utf8(desc_str, xsink->getExceptionDesc());
+
+        QoreString jstr(QCS_UTF8);
+        if (!err_str.empty()) {
+            jstr.concat(err_str.c_str(), err_str.size());
+            if (!desc_str.empty()) {
+                jstr.concat(": ");
+                jstr.concat(desc_str.c_str(), desc_str.size());
+            }
+        } else if (!desc_str.empty()) {
+            jstr.concat(desc_str.c_str(), desc_str.size());
+        } else {
+            jstr.concat("No message");
+        }
+
+        //printd(LogLevel, "qore_exception_wrapper_get_message() xsink: %p %s\n", xsink, jstr.c_str());
+
+        Env env(jenv);
         return env.newString(jstr.c_str(), jstr.size()).release();
     } catch (JavaException&) {
         // the Java exception (ex: an OutOfMemoryError) is pending
-        return nullptr;
+    } catch (const std::bad_alloc&) {
+        jclass cls = jenv->FindClass("java/lang/OutOfMemoryError");
+        if (cls) {
+            Env::throwNew(jenv, cls, "cannot allocate the message of a Qore exception");
+            jenv->DeleteLocalRef(cls);
+        }
     }
+    return nullptr;
 }
 
 static jstring JNICALL qore_object_class_name(JNIEnv* jenv, jclass, jlong ptr) {

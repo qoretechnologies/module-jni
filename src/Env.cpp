@@ -209,6 +209,11 @@ jint Env::throwNew(JNIEnv* env, jclass cls, const char* utf8, size_t len) noexce
     if (isAscii(utf8, len)) {
         return env->ThrowNew(cls, utf8);
     }
+    // the exception replaces a pending one, as with ThrowNew(); the JNI calls below cannot be made while one is
+    // pending
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
     jstring msg;
     try {
         std::vector<jchar> utf16;

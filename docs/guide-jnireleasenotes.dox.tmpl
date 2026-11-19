@@ -29,6 +29,10 @@
         modified UTF-8 that they take, which failed
       - the output of \c JavaArray::deepToString() and the error messages of \c org.qore.jni.QoreSandbox were cut at a
         NUL character
+      - <b>Incompatible change</b>: a string that cannot be converted to UTF-8 from its encoding now raises an
+        exception instead of being passed to Java with its bytes as they are, and with a default encoding other than
+        UTF-8, a Java \c Map key or JDBC column label that the default encoding cannot represent now raises
+        \c ENCODING-CONVERSION-ERROR instead of becoming a hash key in UTF-8
     - fixed a module that Java's loading of a \c qoremod.* class could not load: its error was raised in Java, and
       also printed as an unhandled %Qore exception
     - fixed %Qore handlers for \c SIGUSR2 never running while the JVM was loaded: HotSpot suspends and resumes its

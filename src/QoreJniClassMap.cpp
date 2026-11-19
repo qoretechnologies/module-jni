@@ -3503,14 +3503,16 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
             // get java name for error message
             Env::GetStringUtfChars java_name(env, jname);
             ReferenceHolder<QoreListNode> feature_list(pgm->getFeatureList(), &xsink);
-            QoreStringMaker desc("Java class '%s' cannot be generated, because Qore class '%s' cannot be found; loaded " \
+            // the message in UTF-8: the Java name, and the Qore path made from it, are UTF-8
+            QoreString desc(QCS_UTF8);
+            desc.sprintf("Java class '%s' cannot be generated, because Qore class '%s' cannot be found; loaded " \
                 "modules: ", java_name.c_str(), qpath.c_str());
             ConstListIterator fi(*feature_list);
             while (fi.next()) {
                 QoreValue feature = fi.getValue();
                 if (feature.getType() == NT_STRING) {
-                    QoreStringValueHelper str(feature);
-                    desc.sprintf("%s, ", str->c_str());
+                    jni_append_utf8(desc, feature);
+                    desc.concat(", ");
                 }
             }
             desc.terminate(desc.size() - 2);
@@ -3581,7 +3583,9 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
             }
             if (class_under_module_ns) {
                 const char* rest = strchr(jn.c_str() + 5, '.') + 1;
-                QoreStringMaker desc("Java class '%s' refers to module-owned class '%s' (module '%s') " \
+                // the message in UTF-8: the Java name, and the Qore path made from it, are UTF-8
+                QoreString desc(QCS_UTF8);
+                desc.sprintf("Java class '%s' refers to module-owned class '%s' (module '%s') " \
                     "via the legacy qore.<X>.<Y> binary name; module classes are exposed only under " \
                     "the canonical qoremod.<mod>.<rest> form.  Re-emit / re-import as " \
                     "'qoremod.%s.%s'.",
@@ -3836,7 +3840,9 @@ LocalReference<jbyteArray> JniExternalProgramData::generateFunctionClassIntern(E
 
     if (!ns) {
         assert(ns_path);
-        QoreStringMaker desc("cannot find Qore namespace '%s' to generate '%s' class for importing functions to Java",
+        // the message in UTF-8: the namespace path comes from the Java name
+        QoreString desc(QCS_UTF8);
+        desc.sprintf("cannot find Qore namespace '%s' to generate '%s' class for importing functions to Java",
             ns_path, JniImportedFunctionClassName.c_str());
         env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
         return nullptr;
@@ -3945,7 +3951,9 @@ LocalReference<jbyteArray> JniExternalProgramData::generateConstantClassIntern(E
 
     if (!ns) {
         assert(ns_path);
-        QoreStringMaker desc("cannot find Qore namespace '%s' to generate '%s' class for importing constants to Java",
+        // the message in UTF-8: the namespace path comes from the Java name
+        QoreString desc(QCS_UTF8);
+        desc.sprintf("cannot find Qore namespace '%s' to generate '%s' class for importing constants to Java",
             ns_path, JniImportedConstantClassName.c_str());
         env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
         return nullptr;

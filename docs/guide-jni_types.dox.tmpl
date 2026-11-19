@@ -138,8 +138,8 @@
 
     @section jni_strings Strings and Character Encodings
 
-    A %Qore string can be in any encoding, and a Java string is UTF-16; every string that the \c jni module passes
-    between them is converted exactly, through UTF-8:
+    A %Qore string can be in any encoding, and a Java string is UTF-16; the strings that the \c jni module passes
+    between them as data (see below) are converted exactly, through UTF-8:
     - a %Qore string is converted from its encoding to UTF-8, and then strictly to UTF-16: a character outside the
       Basic Multilingual Plane (ex: an emoji) becomes a surrogate pair, and an invalid sequence (an invalid byte, a
       truncated or overlong sequence, an encoded surrogate) becomes U+FFFD
@@ -154,9 +154,18 @@
     \c jdbc driver, bind values, SQL, column labels, metadata names and the connection values of a datasource (its
     user, password and database name, in the datasource's encoding, and its \c url option).
 
+    A string that cannot be converted to UTF-8 from its encoding raises an exception (ex:
+    \c ENCODING-CONVERSION-ERROR) instead of being passed with its bytes as they are.
+
     Hash keys, and the codes of %Qore exceptions, are in the default encoding: a Java \c Map key or JDBC column label
-    is converted to it, and a hash key is converted from it to UTF-16; as a hash key cannot have a NUL character, a
-    \c Map key or column label is cut at its first one.
+    is converted to it, and a hash key is converted from it to UTF-16.  With a default encoding other than UTF-8, a
+    \c Map key or column label that the default encoding cannot represent (ex: an emoji in ISO-8859-1) raises
+    \c ENCODING-CONVERSION-ERROR, and the code of an \c org.qore.jni.QoreException that it cannot represent is kept
+    in UTF-8.  As a hash key cannot have a NUL character, a \c Map key or column label is cut at its first one, so
+    two Java keys that differ only after a NUL character name the same hash key.
+
+    The names of Java and %Qore classes, methods, fields and functions are passed as they are (in UTF-8), apart from
+    the class names below.
 
     A class name given to \c load_class(), \c define_class(), an import or the \c define-class module command is
     converted to the modified UTF-8 that JNI's \c FindClass() and \c DefineClass() take, so a class name can have

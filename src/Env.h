@@ -1463,7 +1463,8 @@ public:
     //! Throws a new Java exception of the given class with a message in UTF-8, without C++ exceptions
     /** JNI's ThrowNew() takes the message in modified UTF-8, so only an ASCII message is passed to it; any other
         message is made a Java string as by newString() (strictly, from UTF-16), and the exception is made with the
-        class's constructor that takes a \c String, and thrown.
+        class's constructor that takes a \c String, and thrown.  As with \c ThrowNew(), the exception replaces a
+        pending one.
 
         @param env the JNI environment of the thread
         @param cls the class of the exception, which must have a constructor taking a \c String
