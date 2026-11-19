@@ -1786,10 +1786,19 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
             jname_str.name("Java class name", "Java class names");
         }
 
-        // verify that program is still valid
-        QoreExternalProgramContextHelper pch(&xsink, pgm);
-        if (xsink) {
-            throw XsinkException(xsink);
+        // generating the byte code of a Java class for a Qore class reads the Program's definitions under its parse
+        // lock and runs none of its code, so the Program is not entered when it is current: a module command that
+        // defines or imports a Java class that extends a Qore class generates the byte code of its superclass while
+        // the Program can have code pending, which no runtime entry is allowed into (qore#6785); see
+        // jni_enter_program_for_class_add().  xsink, declared above, outlives the entry, which uses it when it is left
+        std::optional<QoreExternalProgramContextHelper> epch;
+        jni_enter_program_for_class_add(epch, pgm, xsink);
+        // the parse lock is taken immediately after: when the Program is current and not entered, it is what keeps
+        // the Program from being torn down while its definitions are read; it is re-entrant, and the byte code
+        // generation below takes it again
+        CurrentProgramRuntimeExternalParseContextHelper parse_lock;
+        if (!parse_lock) {
+            throw BasicException("could not attach to deleted Qore Program during Java byte code generation");
         }
 
         JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
@@ -2302,10 +2311,17 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
     }
 
     try {
-        // set program context before converting arguments
-        QoreExternalProgramContextHelper pch(&xsink, pgm);
-        if (xsink) {
-            throw XsinkException(xsink);
+        // listing the classes of a namespace reads the Program's definitions under its parse lock and runs none of
+        // its code, so the Program is not entered when it is current already, as it can have code pending, which no
+        // runtime entry is allowed into (qore#6785); see jni_enter_program_for_class_add().  xsink, declared above,
+        // outlives the entry, which uses it when it is left
+        std::optional<QoreExternalProgramContextHelper> epch;
+        jni_enter_program_for_class_add(epch, pgm, xsink);
+        // the parse lock is taken immediately after: when the Program is current and not entered, it is what keeps
+        // the Program from being torn down while its namespaces are read
+        CurrentProgramRuntimeExternalParseContextHelper parse_lock;
+        if (!parse_lock) {
+            throw BasicException("could not attach to deleted Qore Program to list the classes of a namespace");
         }
 
         const QoreNamespace* ns;
