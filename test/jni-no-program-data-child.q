@@ -11,6 +11,7 @@
 # "caught: <err>: <desc>"; then "after: <case>" is printed, and the process exits with status 0
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 # the classes that the child uses, which it could not import itself without creating its jni data; the child inherits
