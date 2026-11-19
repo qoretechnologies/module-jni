@@ -25,6 +25,18 @@
     A classpath with a NUL character is refused with \c JNI-ERROR by the classpath commands above (and with
     \c JDBC-OPTION-ERROR as the \c classpath option of the \c jdbc driver), as a file path cannot have one.
 
+    The entries of a classpath are separated by the system path separator (\c ":" on UNIX) or by \c ";"; each entry
+    is a directory, a \c .jar or \c .zip file, or a pattern with \c "*" in its last path element, which is the
+    \c .jar and \c .zip files in its directory that match the pattern (ex: <tt>lib/</tt><tt>*.jar</tt>); a wildcard
+    in a directory element is not supported.  A relative entry of the
+    \c add-classpath and \c global-add-classpath module commands, of the \c classpath option of the \c jdbc driver
+    and of the \c QORE_JNI_CLASSPATH environment variable is resolved against the JVM's \c user.dir, which is
+    normally the current directory of the process when the JVM is started, not the current directory of the process
+    when the classpath is added; this includes a wildcard with no directory part, so that \c *.jar is the jar files
+    in \c user.dir.  The path of the \c add-relative-classpath and \c global-add-relative-classpath module commands is
+    relative to the directory of the Program's script (or to the current directory of the process if the Program has
+    no script directory), so that \c *.jar is the jar files there.
+
     All classes in \c java.lang.* are imported implicitly.  Referencing an imported class in %Qore code
     causes a %Qore class to be generated dynamically that presents the Java class.   Instantiating a %Qore class
     based on a Java class also instantiates an internal Java object that is attached to the %Qore object.  Calling

@@ -1262,6 +1262,16 @@ public class QoreURLClassLoader extends URLClassLoader {
         return rv;
     }
 
+    //! Returns a classpath entry as addPath() uses it: an absolute path, as the JVM resolves it
+    /** A relative entry is resolved against the \c user.dir of the JVM, not the current directory of the process;
+        this includes a wildcard with no directory part (ex: \c "*.jar"), which is the matching files in \c user.dir.
+        The path is absolute, so a wildcard entry always has a parent directory.  The sandbox check of a classpath
+        (QoreSandbox.encodeClasspath()) checks this path, so that it checks each entry where it is used.
+    */
+    static File resolveClasspathEntry(String pathentry) {
+        return new File(pathentry).getAbsoluteFile();
+    }
+
     //! Adds a path to the classpath
     public void addPath(String classpath) {
         //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
@@ -1270,9 +1280,10 @@ public class QoreURLClassLoader extends URLClassLoader {
             //debugLog("addPath(): " + pathentry);
             String basename = null;
 
-            File fileentry = new File(pathentry);
+            File fileentry = resolveClasspathEntry(pathentry);
             if (fileentry.getName().indexOf('*') != -1) {
                 basename = fileentry.getName();
+                // not null: the path is absolute, and a root directory has no name with a wildcard
                 fileentry = fileentry.getParentFile();
                 if (fileentry.getName().indexOf('*') != -1) {
                     errorLog("Ignoring wildcard in classpath directory element '" + pathentry + "'");
@@ -1280,9 +1291,6 @@ public class QoreURLClassLoader extends URLClassLoader {
                 }
             }
 
-            if (!fileentry.isAbsolute() && pathentry.charAt(0) != '/' && pathentry.charAt(0) != '\\') {
-                fileentry = new File(fileentry.getPath());
-            }
             try {
                 fileentry = fileentry.getCanonicalFile();
             } catch (IOException thr) {
@@ -1353,27 +1361,18 @@ public class QoreURLClassLoader extends URLClassLoader {
         return rv;
     }
 
+    //! Returns the entries of a classpath as addPath() resolves them, with a wildcard entry as its pattern in its
+    //! directory
     public static ArrayList<File> splitClassPath(String classpath) {
-        //debugLog("addPath: " + classpath);
-        String seps = File.pathSeparator; // separators
-
         ArrayList<File> rv = new ArrayList<File>();
 
-        // want to accept both system separator and ';'
-        if (!File.pathSeparator.equals(";")) {
-            seps += ";";
-        }
-        for (StringTokenizer st = new StringTokenizer(classpath, seps, false); st.hasMoreTokens();) {
-            String pathentry = st.nextToken();
+        for (String pathentry : classpathEntries(classpath)) {
             String basename = null;
 
-            if (pathentry.length() == 0) {
-                continue;
-            }
-
-            File fileentry = new File(pathentry);
+            File fileentry = resolveClasspathEntry(pathentry);
             if (fileentry.getName().indexOf('*') != -1) {
                 basename = fileentry.getName();
+                // not null: the path is absolute, and a root directory has no name with a wildcard
                 fileentry = fileentry.getParentFile();
                 if (fileentry.getName().indexOf('*') != -1) {
                     errorLog("Ignoring wildcard in classpath directory element '" + pathentry + "'");
@@ -1381,9 +1380,6 @@ public class QoreURLClassLoader extends URLClassLoader {
                 }
             }
 
-            if (!fileentry.isAbsolute() && pathentry.charAt(0) != '/' && pathentry.charAt(0) != '\\') {
-                fileentry = new File(fileentry.getPath());
-            }
             try {
                 fileentry = fileentry.getCanonicalFile();
             } catch (IOException thr) {
