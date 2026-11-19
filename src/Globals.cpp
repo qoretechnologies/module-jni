@@ -161,6 +161,7 @@ jmethodID Globals::methodQoreInvocationHandlerDestroy;
 
 GlobalReference<jclass> Globals::classQoreJavaApi;
 GlobalReference<jclass> Globals::classQoreSandbox;
+jmethodID Globals::methodQoreSandboxEncodeClasspath;
 jmethodID Globals::methodQoreJavaApiGetStackTrace;
 GlobalReference<jclass> Globals::classJavaCollectionTypes;
 jmethodID Globals::methodJavaCollectionTypesIsStringKeyMap;
@@ -3797,6 +3798,8 @@ bool Globals::init() {
     findDefineClass(env, "org.qore.jni.QoreSandbox$Policy", nullptr, java_org_qore_jni_QoreSandbox_Policy_class,
         java_org_qore_jni_QoreSandbox_Policy_class_len);
     jni_register_qore_sandbox_natives(env, classQoreSandbox);
+    methodQoreSandboxEncodeClasspath = env.getStaticMethod(classQoreSandbox, "encodeClasspath",
+        "(Ljava/lang/String;)[[B");
 
     classJavaCollectionTypes = findDefineClass(env, "org.qore.jni.JavaCollectionTypes", nullptr,
         java_org_qore_jni_JavaCollectionTypes_class, java_org_qore_jni_JavaCollectionTypes_class_len).makeGlobal();

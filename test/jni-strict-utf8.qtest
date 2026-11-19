@@ -83,6 +83,8 @@ class JniStrictUtf8Test inherits QUnit::Test {
         addTestCase("coverage: a sandbox argument error", \sandboxArgumentError());
         addTestCase("coverage: hash keys and Map keys", \hashKeys());
         addTestCase("regression: a default encoding other than UTF-8", \nonUtf8DefaultEncoding());
+        addTestCase("regression: a classpath entry is checked against the sandbox as the JVM uses it",
+            \classpathSandboxCheck());
         set_return_value(main());
     }
 
@@ -436,6 +438,23 @@ public class %s {
             "result: JDBC column label: OK",
             "result: JDBC column label that the default encoding cannot represent: OK",
             "result: JDBC metadata name: OK",
+        ), lines, out);
+        assertEq(0, rc, "exit code: " + out);
+    }
+
+    #! with ISO-8859-1 as the default encoding and as the JVM's file name encoding, a classpath entry with a
+    #! non-ASCII character in a directory that the sandbox allows was refused or not usable: the sandbox did not check
+    #! the representation of the entry that the JVM uses; see classpath_case() in test/jni-strict-utf8-child.q
+    classpathSandboxCheck() {
+        int rc;
+        string out = backquote(childCmd("QORE_CHARSET=ISO-8859-1 LC_ALL=en_US.iso88591", "classpath"), \rc);
+        if (out =~ /^result: classpath: skipped/m) {
+            testSkip(trim(out));
+        }
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq((
+            "result: classpath entry in an allowed directory: OK",
+            "result: classpath entry outside the allowed directory: OK",
         ), lines, out);
         assertEq(0, rc, "exit code: " + out);
     }

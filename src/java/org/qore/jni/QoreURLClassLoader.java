@@ -1242,23 +1242,33 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Adds a path to the classpath
-    public void addPath(String classpath) {
-        //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
-
+    //! Returns the entries of a classpath as addPath() uses them
+    /** The entries are separated by the system path separator or \c ';'; empty entries are left out.  The sandbox
+        check of a classpath (QoreSandbox.encodeClasspath()) checks the same entries.
+    */
+    static ArrayList<String> splitClasspath(String classpath) {
         String seps = File.pathSeparator; // separators
 
         // want to accept both system separator and ';'
         if (!File.pathSeparator.equals(";")) {
             seps += ";";
         }
+        ArrayList<String> rv = new ArrayList<String>();
         for (StringTokenizer st = new StringTokenizer(classpath, seps, false); st.hasMoreTokens();) {
             String pathentry = st.nextToken();
+            if (pathentry.length() != 0) {
+                rv.add(pathentry);
+            }
+        }
+        return rv;
+    }
+
+    public void addPath(String classpath) {
+        //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
+
+        for (String pathentry : splitClasspath(classpath)) {
             //debugLog("addPath(): " + pathentry);
             String basename = null;
-
-            if (pathentry.length() == 0) {
-                continue;
-            }
 
             File fileentry = new File(pathentry);
             if (fileentry.getName().indexOf('*') != -1) {

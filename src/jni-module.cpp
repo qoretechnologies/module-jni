@@ -1105,51 +1105,69 @@ static void jni_check_define_class_restricted(const char* cmd, const QoreProgram
 
     @see jni_check_classpath_policy()
 */
-void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const char* classpath, bool global) {
+void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, Env& env, jstring classpath,
+        bool global) {
     if (global) {
         jni_check_uncontrolled_cmd(cmd, pgm, "changes the classpath of every Program");
         return;
     }
     // the filesystem policy, as for Qore's own file operations
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-    jni_check_classpath_policy(smh.get(), classpath);
+    jni_check_classpath_policy(smh.get(), env, classpath);
 }
 
-void jni_check_classpath_policy(QoreSandboxManager* policy, const char* classpath) {
+void jni_check_classpath_policy(QoreSandboxManager* policy, Env& env, jstring classpath) {
     if (!policy) {
         return;
     }
-    std::string cp(classpath);
-    size_t start = 0;
-    while (start <= cp.size()) {
-        size_t end = cp.find_first_of(
-#ifdef _Q_WINDOWS
-            ";",
-#else
-            ":;",
-#endif
-            start);
-        if (end == std::string::npos) {
-            end = cp.size();
+    // each entry as the bytes that the JVM uses for it, so that the policy judges the representation that is used:
+    // the entries are those that QoreURLClassLoader.addPath() makes of the same Java string, encoded in the JVM's
+    // file name encoding
+    jvalue jarg;
+    jarg.l = classpath;
+    LocalReference<jobjectArray> entries = env.callStaticObjectMethod(Globals::classQoreSandbox,
+        Globals::methodQoreSandboxEncodeClasspath, &jarg).as<jobjectArray>();
+    jsize count = env.getArrayLength(entries);
+    for (jsize i = 0; i < count; ++i) {
+        LocalReference<jbyteArray> bytes = env.getObjectArrayElement(entries, i).as<jbyteArray>();
+        jsize len = env.getArrayLength(bytes);
+        // the bytes have no NUL: an entry with one is refused when it is encoded
+        std::string entry(static_cast<size_t>(len), '\0');
+        if (len) {
+            env.getByteArrayRegion(bytes, 0, len, reinterpret_cast<jbyte*>(&entry[0]));
         }
-        std::string entry = cp.substr(start, end - start);
-        if (!entry.empty()) {
-            ExceptionSink xsink;
-            if (!policy->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
-                throw XsinkException(xsink);
-            }
+        ExceptionSink xsink;
+        if (!policy->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
+            throw XsinkException(xsink);
         }
-        start = end + 1;
     }
+}
+
+//! Returns a classpath module command's argument in the default encoding
+/** The command is processed in UTF-8 (see jni_module_parse_cmd()); a path is made in the default encoding, the
+    encoding of Qore's file names, of the Program's script directory and of the environment variables that
+    q_env_subst() substitutes, before it is converted once to the Java string that is both checked and used
+
+    @throw XsinkException the argument cannot be converted to the default encoding
+*/
+static QoreString jni_cmd_path_arg(const QoreString& arg) {
+    ExceptionSink xsink;
+    TempEncodingHelper str(arg, QCS_DEFAULT, &xsink);
+    if (xsink) {
+        throw XsinkException(xsink);
+    }
+    return QoreString(*str);
 }
 
 static void qore_jni_mc_global_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
-    QoreString arg(cmd_arg);
+    QoreString arg = jni_cmd_path_arg(cmd_arg);
     q_env_subst(arg);
-    jni_check_classpath_sandbox("global-add-classpath", pgm, arg.c_str(), true);
+    Env env;
+    LocalReference<jstring> jcp = env.newPathString(arg);
+    jni_check_classpath_sandbox("global-add-classpath", pgm, env, jcp, true);
     printd(LogLevel, "qore_jni_mc_global_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
-    jpc->addParentClasspath(arg.c_str());
+    jpc->addParentClasspath(env, jcp);
 }
 
 static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, QoreProgram* pgm,
@@ -1170,25 +1188,31 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
         cwd_str = new QoreStringNode(cwd);
     }
 
+    // the path in the default encoding, as the script directory is
     cwd_str->concat(QORE_DIR_SEP);
-    cwd_str->concat(arg.c_str());
+    cwd_str->concat(jni_cmd_path_arg(arg).c_str());
     q_normalize_path(**cwd_str);
 
     cwd_str->concat('/');
 
     printd(LogLevel, "qore_jni_mc_global_add_relative_classpath() arg: '%s' cwd: '%s'\n", arg.c_str(),
         cwd_str->c_str());
-    jni_check_classpath_sandbox("global-add-relative-classpath", pgm, cwd_str->c_str(), true);
+    Env env;
+    LocalReference<jstring> jcp = env.newPathString(QoreString(cwd_str->c_str(), QCS_DEFAULT));
+    jni_check_classpath_sandbox("global-add-relative-classpath", pgm, env, jcp, true);
 
-    jpc->addParentClasspath(cwd_str->c_str());
+    jpc->addParentClasspath(env, jcp);
 }
 
 static void qore_jni_mc_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
-    QoreString arg(cmd_arg);
+    QoreString arg = jni_cmd_path_arg(cmd_arg);
     q_env_subst(arg);
     printd(LogLevel, "qore_jni_mc_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
-    jni_check_classpath_sandbox("add-classpath", pgm, arg.c_str(), false);
-    jpc->addClasspath(arg.c_str());
+    // one Java string is both checked and added
+    Env env;
+    LocalReference<jstring> jcp = env.newPathString(arg);
+    jni_check_classpath_sandbox("add-classpath", pgm, env, jcp, false);
+    jpc->addClasspath(env, jcp);
 }
 
 static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
@@ -1207,16 +1231,20 @@ static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgra
         cwd_str = new QoreStringNode(cwd);
     }
 
+    // the path in the default encoding, as the script directory is
     cwd_str->concat(QORE_DIR_SEP);
-    cwd_str->concat(arg.c_str());
+    cwd_str->concat(jni_cmd_path_arg(arg).c_str());
     q_normalize_path(**cwd_str);
 
     cwd_str->concat('/');
 
     printd(LogLevel, "qore_jni_mc_add_relative_classpath() arg: '%s' cwd: '%s'\n", arg.c_str(), cwd_str->c_str());
-    jni_check_classpath_sandbox("add-relative-classpath", pgm, cwd_str->c_str(), false);
+    // one Java string is both checked and added
+    Env env;
+    LocalReference<jstring> jcp = env.newPathString(QoreString(cwd_str->c_str(), QCS_DEFAULT));
+    jni_check_classpath_sandbox("add-relative-classpath", pgm, env, jcp, false);
 
-    jpc->addClasspath(cwd_str->c_str());
+    jpc->addClasspath(env, jcp);
 }
 
 static void qore_jni_mc_define_pending_class(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {

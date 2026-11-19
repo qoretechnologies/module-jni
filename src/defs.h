@@ -470,20 +470,30 @@ DLLLOCAL void jni_append_utf8(QoreString& utf8, QoreValue v);
 
 } // namespace jni
 
+namespace jni {
+class Env;
+}
+
 //! Refuses a classpath to sandboxed code where its policy does not allow it (see jni-module.cpp)
-/** @throw JNI-SANDBOX-ERROR sandboxed or restricted code changes the classpath of every Program
+/** @param classpath the classpath as the Java string that is then given to QoreURLClassLoader.addPath()
+
+    @throw JNI-SANDBOX-ERROR sandboxed or restricted code changes the classpath of every Program
     @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
 */
-DLLLOCAL void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, const char* classpath, bool global);
+DLLLOCAL void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, jni::Env& env, jstring classpath,
+        bool global);
 
-//! Checks the entries of a classpath against a filesystem policy (see jni-module.cpp)
+//! Checks the entries of a classpath against a filesystem policy, as the JVM uses them (see jni-module.cpp)
 /** @param policy the policy to check the entries against; nullptr: no policy, every entry is allowed
-    @param classpath the classpath: entries separated by the system path separator or \c ';', as
-    QoreURLClassLoader.addPath() splits them
+    @param env the JNI environment
+    @param classpath the classpath as the Java string that is then given to QoreURLClassLoader.addPath(), which
+    splits it into entries at the system path separator or \c ';'; each entry is checked as the bytes that the JVM
+    passes to the operating system for it
 
     @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a classpath entry
+    @throw JNI-SANDBOX-ERROR an entry cannot be represented in the file name encoding of the JVM
 */
-DLLLOCAL void jni_check_classpath_policy(QoreSandboxManager* policy, const char* classpath);
+DLLLOCAL void jni_check_classpath_policy(QoreSandboxManager* policy, jni::Env& env, jstring classpath);
 
 extern "C" DLLEXPORT int jni_module_import(ExceptionSink* xsink, QoreProgram* pgm, const char* import);
 extern "C" DLLEXPORT QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg, QoreProgram* pgm);

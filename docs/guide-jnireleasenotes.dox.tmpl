@@ -29,6 +29,13 @@
         \c load_class() was passed to JNI's \c DefineClass() or \c FindClass() in standard UTF-8 instead of the
         modified UTF-8 that they take, which failed
       - the output of \c JavaArray::deepToString() was cut at a NUL character
+      - <b>Security</b>: a classpath (the \c add-classpath and \c add-relative-classpath module commands, their
+        \c global-* forms, the \c jdbc driver's \c classpath option and \c QORE_JNI_CLASSPATH) is now converted once
+        from the default encoding to the Java string that the class loader uses, and the sandbox's filesystem policy
+        checks each entry as the bytes that the JVM uses for it; with a default encoding other than UTF-8, an entry
+        with a non-ASCII character was checked in another representation than the one that was used, so it could be
+        refused although allowed, or not be usable; under a sandbox, an entry that the JVM's file name encoding cannot
+        represent exactly is refused with \c JNI-SANDBOX-ERROR
       - <b>Incompatible change</b>: a string that cannot be converted to UTF-8 from its encoding now raises an
         exception instead of being passed to Java with its bytes as they are (except in the message of an exception,
         whose invalid sequences become U+FFFD), and with a default encoding other than UTF-8, a Java \c Map key or

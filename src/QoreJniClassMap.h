@@ -571,8 +571,10 @@ public:
         return jni;
     }
 
-    DLLLOCAL void addClasspath(const char* path);
-    DLLLOCAL void addParentClasspath(const char* path);
+    //! Adds a classpath (the Java string that was checked: see jni_check_classpath_policy()) to the class loader
+    DLLLOCAL void addClasspath(Env& env, jstring path);
+    //! Adds a classpath (the Java string that was checked) to the parent class loader
+    DLLLOCAL void addParentClasspath(Env& env, jstring path);
 
     // returns Java byte code (byte[]) for a Qore class
     DLLLOCAL LocalReference<jbyteArray> generateByteCode(Env& env, jobject class_loader,

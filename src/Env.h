@@ -1069,6 +1069,17 @@ public:
     */
     DLLLOCAL LocalReference<jstring> newString(const QoreString& str);
 
+    //! Creates a Java string from a %Qore string with a file path or a classpath, in any encoding
+    /** The string is cut at its first NUL character, as the C string APIs that %Qore passes paths to cut it, and
+        converted to UTF-8; the Java string is the one value that a path is both checked as and used as (see
+        jni_check_classpath_policy())
+
+        @throw XsinkException the string cannot be converted to UTF-8
+    */
+    DLLLOCAL LocalReference<jstring> newPathString(const QoreString& path) {
+        return newString(QoreString(path.c_str(), path.getEncoding()));
+    }
+
     //! Returns true if a string has only ASCII characters other than NUL
     DLLLOCAL static bool isAscii(const char* str, size_t len) {
         for (size_t i = 0; i < len; ++i) {

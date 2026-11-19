@@ -386,7 +386,12 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                 JDBC_OPT_CLASSPATH, val.getFullTypeName());
             return -1;
         }
-        QoreStringValueHelper cp_str(val);
+        // the classpath in the default encoding, the encoding of Qore's file names and of the environment variables
+        // that q_env_subst() substitutes
+        QoreStringValueHelper cp_str(val, QCS_DEFAULT, xsink);
+        if (*xsink) {
+            return -1;
+        }
         const char* cp = cp_str->c_str();
 
         // the value is judged by the code that sets it before it is compared with the current classpath: the same
@@ -461,25 +466,27 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
             // connection, and the policy of the code that opens it does not refuse a configuration that is not its own.
             // A setter that a refusing sandbox governs was refused above, so this is the policy of trusted code that a
             // sandbox governs only for its limits and interrupts (it allows uncontrolled APIs)
+            // one Java string is both checked and added
+            Env env;
+            LocalReference<jstring> jcp = env.newPathString(arg);
 #ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
             if (setter_known) {
                 ReferenceHolder<QoreSandboxManager> setter_policy(ds->getOptionPolicyManagerRef(opt), xsink);
-                ::jni_check_classpath_policy(*setter_policy, arg.c_str());
+                ::jni_check_classpath_policy(*setter_policy, env, jcp);
             } else {
-                ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
+                ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
             }
 #else
-            ::jni_check_classpath_sandbox("jdbc classpath option", pgm, arg.c_str(), false);
+            ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
 #endif
             // the classpath of the connection is already this value: nothing to add
             if (classpath == arg.c_str()) {
                 return 0;
             }
-            jpc->addClasspath(arg.c_str());
+            jpc->addClasspath(env, jcp);
             classpath = arg.c_str();
 
             // try to load new drivers
-            Env env;
 
             printd(5, "QoreJdbcConnection::setOption() %p '%s' jpc: %p (%x) add classpath: '%s' (driver: %p)\n", this,
                 opt, jpc, env.callIntMethod(jpc->getClassLoader(), jni::Globals::methodObjectHashCode, nullptr),

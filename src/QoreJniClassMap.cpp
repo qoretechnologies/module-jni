@@ -4789,7 +4789,8 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
     // setup classpath
     TempString classpath(SystemEnvironment::get("QORE_JNI_CLASSPATH"));
     if (classpath) {
-        addClasspath(classpath->c_str());
+        // the variable is in the default encoding
+        addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)));
     }
     jni_pgm_data_register(pgm);
 }
@@ -4923,11 +4924,9 @@ void JniExternalProgramData::initDynamicApi(Env& env) {
         (jclass)Globals::classQoreJavaClassBase);
 }
 
-void JniExternalProgramData::addClasspath(const char* path) {
-    Env env;
-    LocalReference<jstring> jname = env.newString(path);
+void JniExternalProgramData::addClasspath(Env& env, jstring path) {
     jvalue jarg;
-    jarg.l = jname;
+    jarg.l = path;
     try {
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddPath, &jarg);
     } catch (jni::Exception& e) {
@@ -4937,11 +4936,9 @@ void JniExternalProgramData::addClasspath(const char* path) {
     }
 }
 
-void JniExternalProgramData::addParentClasspath(const char* path) {
-    Env env;
-    LocalReference<jstring> jname = env.newString(path);
+void JniExternalProgramData::addParentClasspath(Env& env, jstring path) {
     jvalue jarg;
-    jarg.l = jname;
+    jarg.l = path;
     try {
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddParentPath, &jarg);
     } catch (jni::Exception& e) {

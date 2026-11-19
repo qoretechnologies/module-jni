@@ -166,6 +166,10 @@
     in UTF-8.  As a hash key cannot have a NUL character, a \c Map key or column label is cut at its first one, so
     two Java keys that differ only after a NUL character name the same hash key.
 
+    A classpath is in the default encoding, as %Qore's file names are; it is converted once to the Java string that
+    the class loader uses, and the sandbox's filesystem policy checks each of its entries as the bytes that the JVM
+    uses for it (in the JVM's file name encoding, \c sun.jnu.encoding).
+
     The names of Java and %Qore classes, methods, fields and functions are passed as they are (in UTF-8), apart from
     the class names below.
 
