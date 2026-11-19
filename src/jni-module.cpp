@@ -36,6 +36,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <algorithm>
 #include <cstdlib>
 #include <map>
 #include <string>
@@ -63,11 +64,39 @@ using namespace jni;
 #include <pthread.h>
 #endif
 
-sig_vec_t sig_vec = {
+//! the signals that the module reserves for the JVM, which can also be reserved by the library itself
+static const sig_vec_t jvm_sys_signals = {
 #ifndef Q_WINDOWS
     SIGTRAP, SIGSEGV, SIGBUS, SIGCHLD, SIGILL, SIGFPE
 #endif
 };
+
+//! the signals that the module has reserved for the JVM
+/** jvm_sys_signals and the JVM's suspend/resume signal (see jvm_sr_signal()); set when the module is initialized
+*/
+sig_vec_t sig_vec;
+
+#ifndef Q_WINDOWS
+//! Returns the signal that HotSpot uses to suspend and resume threads (qore#6707)
+/** HotSpot uses \c SIGUSR2, or the signal in the \c _JAVA_SR_SIGNUM environment variable if it is a decimal number
+    greater than \c SIGSEGV and \c SIGBUS and less than \c NSIG (otherwise it warns and uses \c SIGUSR2).  It handles
+    the signal in its own threads, which it unblocks it in, so the signal is delivered to them and a %Qore handler for
+    it never runs; the signal is therefore reserved for the JVM.
+*/
+static int jvm_sr_signal() {
+    QoreString val;
+    if (SystemEnvironment::get("_JAVA_SR_SIGNUM", val) || val.empty()) {
+        return SIGUSR2;
+    }
+    errno = 0;
+    char* end = nullptr;
+    long sig = strtol(val.c_str(), &end, 10);
+    if (errno || *end || sig <= std::max(SIGSEGV, SIGBUS) || sig >= NSIG) {
+        return SIGUSR2;
+    }
+    return static_cast<int>(sig);
+}
+#endif
 
 static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 #if defined(QORE_JNI_HAS_COMMAND_CONTEXT) && !defined(NDEBUG)
@@ -334,8 +363,30 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 
     qore_set_module_option("jni", "jni-version", JNI_VERSION_21);
 
+    sig_vec = jvm_sys_signals;
+#ifndef Q_WINDOWS
+    // the JVM's suspend/resume signal is reserved too (qore#6707); unlike the signals above, it cannot be taken over
+    // from the library (ex: if _JAVA_SR_SIGNUM names the library's internal signal), so it is reserved alone first,
+    // which fails if the library or another module manages it
+    int sr_sig = jvm_sr_signal();
+    bool sr_alone = std::find(sig_vec.begin(), sig_vec.end(), sr_sig) == sig_vec.end();
+    if (sr_alone) {
+        QoreStringNode* err = qore_reassign_signal(sr_sig, QORE_JNI_MODULE_NAME, false);
+        if (err) {
+            xsink.raiseException("MODULE-INIT-ERROR", err);
+            return;
+        }
+        sig_vec.push_back(sr_sig);
+    }
+#endif
     QoreStringNode* err = qore_reassign_signals(sig_vec, QORE_JNI_MODULE_NAME, true);
     if (err) {
+#ifndef Q_WINDOWS
+        if (sr_alone) {
+            qore_release_signal(sr_sig, QORE_JNI_MODULE_NAME);
+            sig_vec.pop_back();
+        }
+#endif
         xsink.raiseException("MODULE-INIT-ERROR", err);
         return;
     }

@@ -37,9 +37,15 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
     |\c SIGCHLD|Child process terminated
     |\c SIGILL|Illegal instruction
     |\c SIGFPE|Floating-point exception
+    |\c SIGUSR2|Suspends and resumes the JVM's threads (or the signal in \c _JAVA_SR_SIGNUM; see below)
 
     If any %Qore code has a signal handler assigned to any of the above signals (for the signals that can be
-    assigned), the \c jni module cannot be initialized and will fail to load.
+    assigned), the \c jni module cannot be initialized and will fail to load (\c MODULE-INIT-ERROR); while the module
+    is loaded, @ref Qore::set_signal_handler() "set_signal_handler()" raises \c SIGNAL-HANDLER-ERROR for them.  The
+    JVM handles its suspend/resume signal in its own threads, so a %Qore handler for it would never run (qore#6707).
+    The JVM uses the signal in the \c _JAVA_SR_SIGNUM environment variable instead of \c SIGUSR2 if it is a number
+    greater than \c SIGSEGV and \c SIGBUS and less than \c NSIG, and the module then reserves that signal; if it names a
+    signal that %Qore uses itself (ex: \c SIGALRM), the module cannot be loaded.
 
     When the \c jni module creates the JVM, it always initializes it with reduced signals, also when \c libjsig (the
     JVM's signal-chaining library) is preloaded or linked into the process: %Qore is the host process and owns the
@@ -49,8 +55,9 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
     Java host decides the JVM's options.)  With reduced signals, the JVM:
     - still handles the synchronous signals that it needs to run (\c SIGSEGV, \c SIGBUS, \c SIGFPE and \c SIGILL),
       which it uses for implicit null checks, stack overflow checks and safepoints; \c libjsig, if present, chains
-      them with the handlers of other runtimes in the process; it also keeps its handlers for \c SIGUSR2 (which it
-      uses internally), \c SIGPIPE and \c SIGXFSZ
+      them with the handlers of other runtimes in the process; it also keeps its handlers for \c SIGUSR2 (its
+      suspend/resume signal, reserved; see above), \c SIGPIPE and \c SIGXFSZ (which stay blocked in its threads, so
+      %Qore handlers for these two still run when the signal is sent to the process)
     - does not run Java shutdown hooks when the process gets a shutdown signal; they run when the JVM is destroyed as
       the process ends normally, and do not run when %Qore ends the process immediately, as for a shutdown signal
       without a handler

@@ -1,0 +1,233 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The jni module reserves the signal that the JVM uses to suspend and resume its threads (SIGUSR2, or the signal in
+# _JAVA_SR_SIGNUM), as it does the other signals that the JVM needs, so that no Qore signal handler can be set for it
+# while the module is loaded (qore#6707).
+#
+# The JVM handles that signal in its own threads, which it unblocks it in, so a handler set for it with
+# set_signal_handler() never ran: the signal was delivered to a JVM thread instead of to the Qore signal thread.
+#
+# Each case runs a child process; the parent reads the child's output until the child has exited, so no case waits
+# for a time.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires jni
+%requires QUnit
+%requires FsUtil
+
+%exec-class JniReservedSignalsTest
+
+class JniReservedSignalsTest inherits QUnit::Test {
+    private:internal {
+        #! the code of the child process; run with: <mode> <signal> <other signal>
+        /** modes:
+            - \c loaded: jni is loaded first; a handler for the signal is refused, and one for the other signal, which
+              is not reserved, runs
+            - \c before: a handler for the signal is set first; then loading jni fails
+            - \c load: jni is loaded; the result is reported
+        */
+        const ChildSource = "%modern
+string mode = ARGV[0];
+int sig = ARGV[1].toInt();
+int other = ARGV[2].toInt();
+
+#! returns True if libjsig is mapped in the process
+bool sub has_libjsig() {
+    return (ReadOnlyFile::readTextFile(\"/proc/self/maps\") =~ /\\/libjsig\\./);
+}
+
+#! loads jni and makes a Java call, which starts the JVM
+sub load_jni() {
+    load_module(\"jni\");
+    Program p(PO_NEW_STYLE);
+    p.parse(\"%requires jni\\n%module-cmd(jni) import java.lang.System\\n\"
+        \"string sub v() { return System::getProperty(\\\"java.version\\\"); }\", \"java-call\");
+    stdout.printf(\"java: %s\\n\", p.callFunction(\"v\"));
+}
+
+#! sets a handler for the signal, then loads jni
+sub before(int sig) {
+    set_signal_handler(sig, sub (int s) {});
+    try {
+        load_jni();
+        stdout.print(\"load: ok\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        stdout.printf(\"load: %s: %s\\n\", ex.err, ex.desc);
+    }
+    remove_signal_handler(sig);
+}
+
+#! loads jni, then sets handlers for the signal and for the other signal
+sub loaded(int sig, int other) {
+    load_jni();
+    stdout.printf(\"libjsig: %y\\n\", has_libjsig());
+    try {
+        set_signal_handler(sig, sub (int s) {});
+        stdout.print(\"set: ok\\n\");
+        remove_signal_handler(sig);
+    } catch (hash<ExceptionInfo> ex) {
+        stdout.printf(\"set: %s: %s\\n\", ex.err, ex.desc);
+    }
+
+    # a handler for a signal that is not reserved runs
+    Queue q();
+    set_signal_handler(other, sub (int s) { q.push(s); });
+    kill(getpid(), other);
+    stdout.printf(\"other handled: %d\\n\", q.get());
+    remove_signal_handler(other);
+}
+
+stdout.printf(\"pid: %d\\n\", getpid());
+if (mode == \"before\") {
+    before(sig);
+} else if (mode == \"load\") {
+    try {
+        load_jni();
+        stdout.print(\"load: ok\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        stdout.printf(\"load: %s: %s\\n\", ex.err, ex.desc);
+    }
+} else {
+    loaded(sig, other);
+}
+";
+    }
+
+    private {
+        #! the temporary directory with the child's script
+        TmpDir tmp("jni-reserved-signals-");
+
+        #! the child's script
+        string script;
+
+        #! the path of libjsig.so of the JVM that this process runs, if found
+        *string libjsig;
+    }
+
+    constructor() : Test("JniReservedSignals", "1.0") {
+        addTestCase("SIGUSR2 reserved with libjsig", \libjsigTest());
+        addTestCase("SIGUSR2 reserved without libjsig", \noLibjsigTest());
+        addTestCase("handler set before jni is loaded", \beforeTest());
+        addTestCase("_JAVA_SR_SIGNUM", \srSignumTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        script = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ChildSource);
+        f.close();
+        libjsig = findLibjsig();
+    }
+
+    libjsigTest() {
+        if (!libjsig) {
+            testSkip("libjsig.so of the JVM was not found");
+        }
+        loadedCase(libjsig, True, SIGUSR2, SIGUSR1);
+    }
+
+    noLibjsigTest() {
+        loadedCase("", False, SIGUSR2, SIGUSR1);
+    }
+
+    beforeTest() {
+        hash<auto> res = run("", "before", SIGUSR2, SIGUSR1);
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)load: MODULE-INIT-ERROR: .*signal " + SIGUSR2 + "\\b", res.out,
+            "jni cannot be loaded while a handler is set for SIGUSR2");
+    }
+
+    srSignumTest() {
+        # the JVM uses the signal in _JAVA_SR_SIGNUM instead of SIGUSR2 for its threads
+        loadedCase("", False, SIGVTALRM, SIGUSR2, {"_JAVA_SR_SIGNUM": SIGVTALRM});
+        # ... if it is greater than SIGSEGV and SIGBUS (the JVM warns and uses SIGUSR2 otherwise)
+        loadedCase("", False, SIGUSR2, SIGUSR1, {"_JAVA_SR_SIGNUM": SIGUSR1});
+        # a signal that the library uses itself is not taken over: jni cannot be loaded
+        hash<auto> res = run("", "load", SIGALRM, SIGUSR1, {"_JAVA_SR_SIGNUM": SIGALRM});
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)load: MODULE-INIT-ERROR: .*signal " + SIGALRM + " .*already managed", res.out,
+            "jni cannot be loaded when _JAVA_SR_SIGNUM names SIGALRM");
+    }
+
+    private:internal loadedCase(string preload, bool with_libjsig, int sig, int other, *hash<auto> env) {
+        if (!is_file("/proc/self/maps")) {
+            testSkip("no /proc file system");
+        }
+        hash<auto> res = run(preload, "loaded", sig, other, env);
+        checkLibjsig(res, with_libjsig);
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)set: SIGNAL-HANDLER-ERROR: .*signal " + sig + " .*'jni'", res.out,
+            sprintf("a handler for %s is refused", SignalToName{sig}));
+        assertRegex("(^|\n)other handled: " + other + "\n", res.out,
+            sprintf("a handler for %s runs", SignalToName{other}));
+    }
+
+    #! checks the child's report of libjsig; skips the test case if a process without libjsig cannot be tested
+    private:internal checkLibjsig(hash<auto> res, bool with_libjsig) {
+        *string jsig = (res.out =~ x/(?:^|\n)libjsig: (True|False)\n/)[0];
+        if (!exists jsig) {
+            fail("the child did not report libjsig: " + res.out);
+        }
+        if (!with_libjsig && jsig == "True") {
+            testSkip("libjsig is linked into qore, so a process without it cannot be tested");
+        }
+        assertEq(with_libjsig ? "True" : "False", jsig, "libjsig in the child");
+    }
+
+    #! runs the child with the jni module of this process and returns its exit status and output
+    private:internal hash<auto> run(string preload, string mode, int sig, int other, *hash<auto> env) {
+        string vars;
+        foreach hash<auto> i in (env.pairIterator()) {
+            vars += sprintf("%s=%s ", i.key, shellQuote(string(i.value)));
+        }
+        int rc;
+        string out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u _JAVA_SR_SIGNUM "
+            "-u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG %sQORE_MODULE_DIR=%s LD_PRELOAD=%s %s --enable-debug %s %s %d %d "
+            "2>&1",
+            vars, shellQuote(getModuleDir()), shellQuote(preload), shellQuote(QORE_ARGV[0]), shellQuote(script),
+            mode, sig, other), \rc);
+        if (m_options.verbose > 2) {
+            printf("mode %s sig %d preload %y env %y: rc %d\n%s\n", mode, sig, preload, env, rc, out);
+        }
+        # with reduced signals, the JVM creates its attach socket at startup and removes it at exit() only
+        *string pid = (out =~ x/(?:^|\n)pid: ([0-9]+)\n/)[0];
+        if (pid) {
+            string sock = "/tmp/.java_pid" + pid;
+            if (is_socket(sock)) {
+                unlink(sock);
+            }
+        }
+        return {"rc": rc, "out": out};
+    }
+
+    #! returns the module path for the child: the directory of this process's jni module first
+    private:internal static string getModuleDir() {
+        string dir = dirname(get_module_hash().jni.filename);
+        return exists ENV.QORE_MODULE_DIR ? dir + ":" + ENV.QORE_MODULE_DIR : dir;
+    }
+
+    private:internal static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! returns the path of libjsig.so in the directory of the libjvm.so that this process has loaded
+    private:internal static *string findLibjsig() {
+        if (!is_file("/proc/self/maps")) {
+            return;
+        }
+        *string jvm = (ReadOnlyFile::readTextFile("/proc/self/maps") =~ x/(\/\S*\/libjvm\.so)$/m)[0];
+        if (!jvm) {
+            return;
+        }
+        string path = dirname(jvm) + DirSep + "libjsig.so";
+        return is_file(path) ? path : NOTHING;
+    }
+}
