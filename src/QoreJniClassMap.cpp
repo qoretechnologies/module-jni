@@ -5097,7 +5097,7 @@ void JniExternalProgramData::setAttachContext(Env& env) {
     // threads), the context of the new attachment was the global context Program, which no longer existed and was
     // created again, and never deleted; during the shutdown, a thread in no Program with jni data gets no Java context
     QoreProgram* pgm = nullptr;
-    // the Program found here, if any, is passed on, so that setContext() does not look it up again
+    // the Program found here, if any, is passed on, so that setContext() takes it directly
     if (Globals::isShuttingDown() && !jni_get_context(pgm)) {
         return;
     }
