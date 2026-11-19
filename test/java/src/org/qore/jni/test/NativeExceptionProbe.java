@@ -29,7 +29,7 @@ public final class NativeExceptionProbe {
     /** \a setup is called with \a arg first, then \a function, whose result or error is returned
     */
     public static String callFunctionInThread(String setup, String arg, String function) throws InterruptedException {
-        final String[] rv = new String[1];
+        final String[] rv = {"no result from the Java thread"};
         Thread t = new Thread(() -> {
             try {
                 QoreJavaApi.callFunction(setup, arg);

@@ -31,7 +31,8 @@ destroyed before the handler runs, so the conversion of a Qore exception attache
 attached.  It is not attempted once libqore or the module is shut down, or if the thread cannot be attached; a
 `java.lang.Error` is raised instead, and the Qore exception of a `jni::XsinkException` is deliberately leaked
 (`XsinkException::leak()`), as freeing it there would report it as unhandled and free Qore values in an invalid
-state.  A C++ exception other than `jni::JavaException` replaces a pending Java
+state.  Only `jni::XsinkException` holds Qore values among the C++ exceptions that the module throws by value;
+libqore's `QoreXSinkException` cannot be leaked this way.  A C++ exception other than `jni::JavaException` replaces a pending Java
 exception.
 
 The handler is the last resort: native methods still handle the errors that they expect themselves (ex: a Qore

@@ -703,7 +703,12 @@ static void jni_native_raise_qore_exception(JNIEnv* jenv, AbstractException& e) 
             QoreToJava::wrapException(env, xsink);
             return;
         } catch (...) {
+            // the exceptions are freed while the thread is attached
             xsink.clear();
+            jni::Exception* je = dynamic_cast<jni::Exception*>(&e);
+            if (je) {
+                je->ignore();
+            }
             throw;
         }
     } catch (JavaException&) {

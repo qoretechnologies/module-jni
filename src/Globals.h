@@ -847,25 +847,29 @@ DLLLOCAL void jni_throw_new(JNIEnv* jenv, jclass cls, const char* cls_name, cons
 //! Throws a new \c java.lang.Error, without C++ exceptions; see jni_throw_new()
 template <typename T>
 static inline void jni_throw_error(JNIEnv* jenv, const T& msg) noexcept {
-    jni_throw_new(jenv, Globals::classError.load(std::memory_order_acquire), "java/lang/Error", msg);
+    jni_throw_new(jenv, Globals::classError.load(std::memory_order_acquire),
+        "java/lang/Error", msg);
 }
 
 //! Throws a new \c java.lang.RuntimeException, without C++ exceptions; see jni_throw_new()
 template <typename T>
 static inline void jni_throw_runtime_exception(JNIEnv* jenv, const T& msg) noexcept {
-    jni_throw_new(jenv, Globals::classRuntimeException.load(std::memory_order_acquire), "java/lang/RuntimeException", msg);
+    jni_throw_new(jenv, Globals::classRuntimeException.load(std::memory_order_acquire),
+        "java/lang/RuntimeException", msg);
 }
 
 //! Throws a new \c java.lang.OutOfMemoryError, without C++ exceptions; see jni_throw_new()
 template <typename T>
 static inline void jni_throw_out_of_memory(JNIEnv* jenv, const T& msg) noexcept {
-    jni_throw_new(jenv, Globals::classOutOfMemoryError.load(std::memory_order_acquire), "java/lang/OutOfMemoryError", msg);
+    jni_throw_new(jenv, Globals::classOutOfMemoryError.load(std::memory_order_acquire),
+        "java/lang/OutOfMemoryError", msg);
 }
 
 //! Throws a new \c java.lang.ClassNotFoundException, without C++ exceptions; see jni_throw_new()
 template <typename T>
 static inline void jni_throw_class_not_found(JNIEnv* jenv, const T& msg) noexcept {
-    jni_throw_new(jenv, Globals::classClassNotFoundException.load(std::memory_order_acquire), "java/lang/ClassNotFoundException", msg);
+    jni_throw_new(jenv, Globals::classClassNotFoundException.load(std::memory_order_acquire),
+        "java/lang/ClassNotFoundException", msg);
 }
 
 //! Raises the C++ exception being handled as a pending Java exception, without C++ exceptions (qore#6739)

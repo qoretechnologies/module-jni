@@ -299,7 +299,7 @@ public:
    }
 
    //! Leaves the %Qore exception unfreed, for where it cannot be freed safely (no %Qore thread, or %Qore shut down)
-   DLLLOCAL void leak() {
+   DLLLOCAL void leak() noexcept {
       // deliberately leaked: freeing it there would report it as unhandled and free Qore values in an invalid state
       static_cast<void>(sink.release());
    }

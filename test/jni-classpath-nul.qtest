@@ -151,10 +151,10 @@ list<string> sub loader_urls() {
     /** the classpath is shown escaped and possibly shortened, so only the text around it and the byte offset of the
         NUL character are checked
     */
-    private checkDesc(string cp, string desc, string label) {
+    private checkDesc(string cp, string desc, string label, *bool exact) {
         int offset = cp.substr(0, cp.find(nul)).size();
         assertRegex(sprintf("^classpath \".*\" contains a NUL character at byte offset %d; classpaths cannot contain "
-            "NUL characters", offset), desc, label);
+            "NUL characters%s", offset, exact ? "$" : ""), desc, label);
     }
 
     #! checks that the module command is refused for the classpath, with the error for its NUL character
@@ -192,7 +192,7 @@ list<string> sub loader_urls() {
                 "contain NUL characters", ex.desc);
         } else {
             assertEq("JDBC-OPTION-ERROR", ex.err);
-            checkDesc(cp, ex.desc, "jdbc classpath option");
+            checkDesc(cp, ex.desc, "jdbc classpath option", True);
         }
     }
 
