@@ -823,6 +823,38 @@ protected:
         LocalReference<jobject>& bb, QoreProgram* pgm);
 };
 
+//! Sets the thread's Java context for a read of a Java value only if converting the value runs Java code (qore#6551)
+/** A read of a Java field or array element runs no Java code of its own, but converting its value to Qore runs Java
+    code for some values (ex: \c entrySet() of a \c Map, \c toString() of a \c java.sql.Timestamp, which a subclass
+    can override), and that code runs in the context of the calling code: the read marks the context as pending for
+    the conversion, and the conversion sets it, once, with set() before it runs such code, so that a read whose value
+    runs no Java code makes no call into Java for the context
+*/
+class JniPendingContextHelper {
+public:
+    DLLLOCAL JniPendingContextHelper() : prev(pending) {
+        pending = true;
+    }
+
+    DLLLOCAL ~JniPendingContextHelper() {
+        pending = prev;
+    }
+
+    //! Sets the thread's Java context to the context of the calling code if a read on the thread has marked it as
+    //! pending; called by the conversion of a value before it runs Java code that the value's class can override
+    DLLLOCAL static void set(Env& env) {
+        if (pending) {
+            // cleared first: the context is set once per read, also if setting it raises an exception
+            pending = false;
+            JniExternalProgramData::setContext(env);
+        }
+    }
+
+private:
+    bool prev;
+    DLLLOCAL static thread_local bool pending;
+};
+
 DLLLOCAL QoreProgram* jni_get_program_context();
 DLLLOCAL JniExternalProgramData* jni_get_context();
 DLLLOCAL JniExternalProgramData* jni_get_context(QoreProgram*& pgm);

@@ -120,7 +120,10 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
         return QoreValue(new DateTimeNode(chars.c_str()));
     }
 
+    // the classes below are not final: a subclass's Java code can run, in the context of the calling code
+    // (qore#6551, see JniPendingContextHelper)
     if (env.isInstanceOf(v, Globals::classTimestamp)) {
+        JniPendingContextHelper::set(env);
         LocalReference<jstring> date_str = env.callObjectMethod(v,
             Globals::methodTimestampToString, nullptr).as<jstring>();
         Env::GetStringUtfChars chars(env, date_str);
@@ -128,6 +131,7 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
     }
 
     if (env.isInstanceOf(v, Globals::classDate)) {
+        JniPendingContextHelper::set(env);
         LocalReference<jstring> date_str = env.callObjectMethod(v,
             Globals::methodDateToString, nullptr).as<jstring>();
         Env::GetStringUtfChars chars(env, date_str);
@@ -135,6 +139,7 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
     }
 
     if (env.isInstanceOf(v, Globals::classTime)) {
+        JniPendingContextHelper::set(env);
         LocalReference<jstring> time_str = env.callObjectMethod(v,
             Globals::methodTimeToString, nullptr).as<jstring>();
         Env::GetStringUtfChars chars(env, time_str);
@@ -143,6 +148,7 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
     }
 
     if (env.isInstanceOf(v, Globals::classBigDecimal)) {
+        JniPendingContextHelper::set(env);
         LocalReference<jstring> num_str = env.callObjectMethod(v,
             Globals::methodBigDecimalToString, nullptr).as<jstring>();
         Env::GetStringUtfChars chars(env, num_str);
@@ -173,19 +179,24 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
     }
 
     if (env.isInstanceOf(v, Globals::classQoreObjectBase)) {
+        JniPendingContextHelper::set(env);
         QoreObject* obj = JniObjectHandle::fromJava(env.callLongMethod(v,
             Globals::methodQoreObjectBaseGet, nullptr))->getObject();
         return obj->refSelf();
     }
 
     if (env.isInstanceOf(v, Globals::classQoreClosure)) {
+        // QoreClosure.get() is not final (qore#6551, see JniPendingContextHelper)
+        JniPendingContextHelper::set(env);
         const JniClosureHandle* handle = reinterpret_cast<const JniClosureHandle*>(env.callLongMethod(v,
             Globals::methodQoreClosureGet, nullptr));
         return handle->getCall()->refRefSelf();
     }
 
     if (env.isInstanceOf(v, Globals::classMap) && !JniExternalProgramData::compatTypes()) {
-        // create hash from Map
+        // create hash from Map; the Map's methods are Java code of its class, which runs in the context of the
+        // calling code (qore#6551)
+        JniPendingContextHelper::set(env);
         LocalReference<jobject> set = env.callObjectMethod(v,
             Globals::methodMapEntrySet, nullptr);
         if (!set) {
@@ -300,7 +311,9 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
     }
 
     if (env.isInstanceOf(v, Globals::classList)) {
-        // create list from List
+        // create list from List; the List's methods are Java code of its class, which runs in the context of the
+        // calling code (qore#6551)
+        JniPendingContextHelper::set(env);
         jint size = env.callIntMethod(v, Globals::methodListSize, nullptr);
 
         ExceptionSink xsink;

@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# JniCtxLoad.qm - test module that Java loads for a qoremod.JniCtxLoad.* class, whose initialization code makes a
+# Java call in another Program (test/jni-context-direct-calls.qtest)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%requires JniCtxHelper
+
+module JniCtxLoad {
+    version = "1.0";
+    desc = "test module for the thread's Java context during class loading (qore#6551)";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        # a Java call in the helper module's Program, made while Java loads a class of this module
+        JniCtxHelper::touch();
+    };
+}
+
+public namespace JniCtxLoad {
+    #! a class that Java loads as qoremod.JniCtxLoad.Probe, which loads this module
+    public class Probe {
+        int value() {
+            return 1;
+        }
+    }
+}

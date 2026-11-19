@@ -6,6 +6,22 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed Java code that \c Jni::org::qore::jni::invoke(), \c invoke_nonvirtual(), \c kotlin_eval(),
+      \c JavaArray::toString() and \c JavaArray::deepToString() run (also the static initializers that the lookup of
+      the method of \c invoke() runs, and the discovery of the Kotlin script engine by these functions,
+      \c kotlin_scripting_available(), \c kotlin_scripting_retry() and the \c kotlin-eval module command, which
+      failed for the caller when only its class loader had the scripting jars), the static initializers that the
+      lookup of a Java class and the creation of its %Qore class run (also for a class of the JVM's system class
+      path), and Java code that converting the value of a Java field or of a
+      \c JavaArray element runs (ex: the methods of a \c Map or a \c List), calling into %Qore through the Program of
+      an earlier Java call made for another Program instead of the calling code's Program (the Program that the class
+      is created in, for a static initializer): these now set the thread's Java context to that Program's context (a
+      read of a value only when converting it runs Java code that the value's class can override, so that other reads
+      cost no further call into Java); and a
+      call into %Qore from a Java class generated from a %Qore class, and the loading of a \c qore.* or
+      \c qoremod.* class, which can load a %Qore module whose initialization code makes Java calls for other
+      Programs, now save the thread's Java context and restore it when they return to Java, as the other calls from
+      Java into %Qore do (qore#6551, see @ref jni_callback_sandbox)
     - <b>Security</b>: with a %Qore library that checks the destinations of connections against the sandbox of the
       code that chose them (qore#5747), the \c jdbc driver, which cannot report its destinations, is refused for a
       connection chosen by code (the code that created the datasource or set its database name or connection
@@ -21,10 +37,10 @@
       loader) for the Java code it runs, as Java method calls do, which costs one more JNI call per closure call; a
       static method uses the jni context of the Program that %Qore runs it in (the class's source Program, or the
       caller's Program once the source Program has released the class), instead of reading the data of the class's
-      namespace Program, which the thread is not necessarily in; and a Java call whose Program is deleted by another thread just before the call enters it is now made in the
-      context of the calling code, as for a Program deleted before the call, instead of raising \c PROGRAM-ERROR (a
-      Java callback of such a Program is still refused with \c PROGRAM-ERROR, as its %Qore code belongs to the
-      deleted Program) (qore#6485, see @ref jni_callback_sandbox)
+      namespace Program, which the thread is not necessarily in; and a Java call whose Program is deleted by another
+      thread just before the call enters it is now made in the context of the calling code, as for a Program deleted
+      before the call, instead of raising \c PROGRAM-ERROR (a Java callback of such a Program is still refused with
+      \c PROGRAM-ERROR, as its %Qore code belongs to the deleted Program) (qore#6485, see @ref jni_callback_sandbox)
     - fixed a crash calling a Java object used as a %Qore closure (an object implementing
       \c org.qore.jni.QoreClosureMarker) after the Program that it was returned to had been deleted: the closure kept
       an unreferenced pointer to the Program; it now keeps the Program allocated, and is called in the context of the

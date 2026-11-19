@@ -119,8 +119,11 @@ QoreValue JniQoreClass::memberGate(const QoreMethod& meth, void* m, QoreObject* 
         JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
         assert(jpc);
 
-        return JavaToQore::convertToQore(env.callStaticObjectMethod(jpc->getDynamicApi(), jpc->getFieldId(),
-            &jargs[0]), pgm, compat_types);
+        LocalReference<jobject> v = env.callStaticObjectMethod(jpc->getDynamicApi(), jpc->getFieldId(), &jargs[0]);
+        // qore#6551: converting the value can run its Java code (ex: entrySet() of a Map), which runs in the context
+        // of the class's Program, which the thread has entered and which is therefore the current Program
+        JniPendingContextHelper pending_ctx;
+        return JavaToQore::convertToQore(std::move(v), pgm, compat_types);
     } catch (jni::JavaException& e) {
         e.convert(xsink);
         return QoreValue();
