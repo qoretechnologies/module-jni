@@ -4927,7 +4927,8 @@ void Globals::stopNativeCleanupThread() {
         stopNativeCleanupThreadIntern();
     } catch (...) {
         // the teardown continues without the worker having been stopped (qore#6788); if it was not woken, it stays
-        // blocked in the JVM, and if a reference wakes it, it dispatches nothing more
+        // blocked in the JVM, and a reference that wakes it afterwards is dropped (a dispatch already in progress
+        // still runs)
         native_cleanup_abandoned.store(true, std::memory_order_release);
         throw;
     }

@@ -594,7 +594,8 @@ public:
         thread, then releases outstanding native pointers. Native clients must
         be quiescent. Called from Jvm::destroyVM before DestroyJavaVM.
 
-        Throws a jni::Exception if it fails (ex: the thread cannot be attached to the JVM); the worker is then
+        Throws a C++ exception if it fails (ex: a jni::Exception if the thread cannot be attached to the JVM); the
+        worker is then
         abandoned: a reference that wakes it afterwards is dropped instead of dispatched (qore#6788). */
     DLLLOCAL static void stopNativeCleanupThread();
 
