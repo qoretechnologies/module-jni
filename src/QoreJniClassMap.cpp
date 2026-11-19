@@ -5220,15 +5220,30 @@ bool JniExternalProgramData::isInjectedModule(const char* mod) const {
 static std::atomic<int> jni_pgm_deref_count{0};
 
 void JniExternalProgramData::doDeref() {
+    // no C++ exception may leave this function (qore#6773): AbstractQoreProgramExternalData::doDeref() has no
+    // exception sink and does not document that it may throw, and libqore calls it in the teardown of the Program;
+    // every exception raised here is caught and converted to a Qore exception in this local sink, whose destructor
+    // reports it as an unhandled exception on stderr when the function returns
     ExceptionSink xsink;
-    if (save_object_callback) {
-        save_object_callback->deref(&xsink);
+    // the callback is released before the object is deleted, as it is a member; releasing it can run Qore code, for
+    // example the destructor of an object that only the callback holds, which can raise a Qore exception, and which
+    // can also set a new callback, as the Program's jni data can still be found: that one is released in turn
+    while (ResolvedCallReferenceNode* callback = save_object_callback) {
+        save_object_callback = nullptr;
+        try {
+            callback->deref(&xsink);
+        } catch (AbstractException& e) {
+            e.convert(&xsink);
+        } catch (std::exception& e) {
+            xsink.raiseException("JNI-ERROR", "error releasing the save object callback of a Program: %s",
+                e.what());
+        } catch (...) {
+            xsink.raiseException("JNI-ERROR", "unknown error releasing the save object callback of a Program");
+        }
     }
-    try {
-        delete this;
-    } catch (jni::Exception& e) {
-        e.convert(&xsink);
-    }
+    // the destructor is implicitly noexcept and reports the exceptions that it catches itself; nothing after this
+    // statement may use a member of the object
+    delete this;
     // hint the JVM to collect orphaned classloaders periodically; the destructor above
     // released GlobalReferences, making Java objects eligible for GC.  Without this,
     // the JVM never runs GC because only native memory is under pressure, causing
@@ -5238,16 +5253,21 @@ void JniExternalProgramData::doDeref() {
     // lookups via findClass/getStaticMethod crash during the Qore destruction chain.
     // Batched (every 20 destructions) to avoid overhead.
     if (++jni_pgm_deref_count % 20 == 0) {
+        // a cancellation of the thread stays pending for the code that follows: Env's constructor raises a pending
+        // cancellation, which would be reported here as an unhandled exception and lost (libqore defers it in the
+        // destructor of a Program object already, but the Program can also be released elsewhere)
+        QoreCancelDeferralHelper cancel_deferral;
         try {
             Env env;
             env.callStaticVoidMethod(Globals::classSystem, Globals::methodSystemGC, nullptr);
         } catch (UnableToAttachException&) {
-        } catch (jni::Exception& e) {
+        } catch (AbstractException& e) {
             e.convert(&xsink);
+        } catch (std::exception& e) {
+            xsink.raiseException("JNI-ERROR", "error running the JVM garbage collector: %s", e.what());
+        } catch (...) {
+            xsink.raiseException("JNI-ERROR", "unknown error running the JVM garbage collector");
         }
-    }
-    if (xsink) {
-        throw new QoreXSinkException(xsink);
     }
 }
 }

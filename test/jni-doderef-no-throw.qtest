@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# The release of a Program's jni data must never throw a C++ exception into libqore (qore#6773): when the release of
+# the save-object callback raised a Qore exception, for example in the destructor of an object that only the callback
+# held, JniExternalProgramData::doDeref() threw a pointer to a C++ exception out of the Program's teardown, which no
+# handler caught, and the process was terminated.  The exception is now reported as unhandled on stderr, and the
+# process continues.  An exception raised when the callback is replaced is raised to the caller of
+# set_save_object_callback(); it was reported as unhandled instead.
+#
+# Each case runs test/jni-doderef-no-throw-child.q in a new process, as the failure terminated the process.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniDoDerefNoThrowTest
+
+class JniDoDerefNoThrowTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI Program data release does not throw", "1.0") {
+        addTestCase("regression: the Program is deleted", \deleteCase());
+        addTestCase("regression: the Program goes out of scope", \scopeCase());
+        addTestCase("regression: nested destructor exceptions", \nestedCase());
+        addTestCase("regression: many Programs, with the garbage collection hint", \manyCase());
+        addTestCase("coverage: a pending cancellation stays pending", \cancelCase());
+        addTestCase("regression: the callback is replaced", \replaceCase());
+        addTestCase("regression: the callback is removed", \clearCase());
+        addTestCase("regression: the object's class belongs to the released Program", \childClassCase());
+        addTestCase("negative: a callback that raises nothing", \okCase());
+        set_return_value(main());
+    }
+
+    deleteCase() {
+        string out = runChild("delete");
+        checkReported(out, "delete", "User", ("DOREF-TEST-ERROR: destructor of delete",));
+    }
+
+    scopeCase() {
+        string out = runChild("scope");
+        checkReported(out, "scope", "User", ("DOREF-TEST-ERROR: destructor of scope",));
+    }
+
+    nestedCase() {
+        string out = runChild("nested");
+        checkReported(out, "nested", "User", ("DOREF-TEST-ERROR: destructor of outer",
+            "DOREF-TEST-ERROR: destructor of inner"));
+    }
+
+    manyCase() {
+        # the garbage collection hint runs in every 20th release of a Program's jni data in the process, so in one of
+        # these releases
+        string out = runChild("many");
+        list<string> descs = ();
+        for (int i = 1; i <= 25; ++i) {
+            descs += sprintf("DOREF-TEST-ERROR: destructor of many-%d\n", i);
+        }
+        checkReported(out, "many", "User", descs);
+    }
+
+    cancelCase() {
+        # the garbage collection hint runs in one of the 25 releases, in a thread with a pending cancellation, which
+        # must not be raised there, where it would be reported as unhandled and lost (libqore defers it in the
+        # destructor of a Program object too)
+        string out = runChild("cancel");
+        assertEq("wait: THREAD-CANCELLED", getLine(out, "wait: "), out);
+        assertEq("pending after: True", getLine(out, "pending after: "), out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertFalse(out =~ /^caught: /m, out);
+        assertEq("after: cancel", getLine(out, "after: "), out);
+    }
+
+    childClassCase() {
+        # the code of the released Program cannot run when its jni data is released, so the destructor call fails;
+        # that exception is reported in the same way
+        string out = runChild("child-class");
+        checkReported(out, "child-class", "System", ("\nPROGRAM-ERROR: ",));
+    }
+
+    replaceCase() {
+        checkCaught("replace");
+    }
+
+    clearCase() {
+        checkCaught("clear");
+    }
+
+    okCase() {
+        string out = runChild("ok");
+        assertEq(1, countOf(out, "quiet destructor"), out);
+        assertFalse(out =~ /DOREF-TEST-ERROR/, out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertFalse(out =~ /^caught: /m, out);
+        assertEq("after: ok", getLine(out, "after: "), out);
+    }
+
+    #! checks the cases where the callback is replaced or removed while the Program is alive: the old callback is
+    #! released in set_save_object_callback(), whose caller gets the exception, and nothing raises an exception when
+    #! the Program is released
+    private checkCaught(string case_name) {
+        string out = runChild(case_name);
+        assertEq("caught: DOREF-TEST-ERROR: destructor of " + case_name, getLine(out, "caught: "), out);
+        assertEq(1, countOf(out, "DOREF-TEST-ERROR"), out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+    }
+
+    #! checks that each exception was reported as unhandled once, that the caller got no exception, and that the
+    #! process continued
+    private checkReported(string out, string case_name, string kind, list<string> descs) {
+        assertEq(descs.size(), countOf(out, "unhandled QORE " + kind + " exception"), out);
+        assertEq(0, countOf(out, "unhandled QORE " + (kind == "User" ? "System" : "User") + " exception"), out);
+        foreach string desc in (descs) {
+            assertEq(1, countOf(out, desc), out);
+        }
+        assertFalse(out =~ /^caught: /m, out);
+        assertFalse(out =~ /terminate called/, out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+        return "";
+    }
+
+    #! returns the number of times that the string appears in the output
+    private static int countOf(string out, string str) {
+        int count = 0;
+        int pos = 0;
+        while ((pos = out.find(str, pos)) >= 0) {
+            ++count;
+            pos += str.size();
+        }
+        return count;
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr), checking that it exited with status 0
+    private string runChild(string case_name) {
+        string child = normalize_dir(get_script_dir() + "/jni-doderef-no-throw-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is checked
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b --enable-debug %s "
+            "%s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child), case_name);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}
