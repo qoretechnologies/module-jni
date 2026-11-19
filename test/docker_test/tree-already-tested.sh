@@ -8,7 +8,7 @@
 # same job runs in qore's pipelines (examples/test/docker_test/tree-already-tested.sh there).
 #
 # The candidates are the commit itself (a fast-forward merge, or a pipeline on another ref) and each parent with the
-# same tree (the merged pull request head).  The first candidate with a successful pipeline other than this one is
+# same tree, plus the verified head of a squash-merged pull request.  The first candidate with a successful pipeline other than this one is
 # written to tree-tested.env (a dotenv report):
 #   QORE_TREE_TESTED_IN    the ID of the pipeline that passed the tree
 #   QORE_TREE_TESTED_SHA   its commit
@@ -54,6 +54,13 @@ pipelines() {
     fi
     return 1
 }
+
+# A squash merge's tested tip is not a parent. Apply the same pipeline checks to
+# that tip only after GitHub confirms the merged PR and its identical Git tree.
+squash=$(python3 "$(dirname "$0")/squash_head.py" "$(git rev-parse HEAD)" "$tree") || squash=
+if [ -n "$squash" ]; then
+    candidates="$candidates $squash"
+fi
 
 for commit in $candidates; do
     if ! json=$(pipelines "$commit"); then

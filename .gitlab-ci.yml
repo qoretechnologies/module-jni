@@ -111,6 +111,7 @@ tree-already-tested:
   rules:
     - if: $CI_COMMIT_BRANCH == "develop" && $CI_PIPELINE_SOURCE == "push"
   script:
+    - python3 -B -W error test/docker_test/test_squash_head.py
     - sh test/docker_test/tree-already-tested.sh
   artifacts:
     reports:
