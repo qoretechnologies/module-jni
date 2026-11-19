@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# A classpath entry that is only a wildcard with no directory part, such as "*.jar", is the matching files in the
+# JVM's user.dir, as any relative entry is (qore#6740): the class loader raised a NullPointerException for it, which
+# was printed as an unhandled exception, and the entry was not added.  Under a sandbox, the entry is checked as it is
+# used: in the JVM's user.dir, not in the current directory of the process.
+#
+# Each case runs test/jni-classpath-wildcard-child.q in a new directory that holds the test jar, which is then the
+# JVM's user.dir, as the user.dir of a JVM cannot change once it has started.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniClasspathWildcardTest
+
+class JniClasspathWildcardTest inherits QUnit::Test {
+    public {
+        #! the name of the test jar, in the directory of this script
+        const TestJarName = "qore-jni-test.jar";
+    }
+
+    constructor() : QUnit::Test("JNI classpath with a bare wildcard entry", "1.0") {
+        addTestCase("regression: add-classpath", \addClasspath());
+        addTestCase("coverage: add-relative-classpath", \addRelativeClasspath());
+        addTestCase("regression: global-add-classpath", \globalAddClasspath());
+        addTestCase("coverage: global-add-relative-classpath", \globalAddRelativeClasspath());
+        addTestCase("regression: the jdbc classpath option", \jdbcClasspathOption());
+        addTestCase("regression: QORE_JNI_CLASSPATH", \envClasspath());
+        addTestCase("regression: the sandbox checks a bare wildcard in the JVM's user.dir", \sandbox());
+        set_return_value(main());
+    }
+
+    addClasspath() {
+        checkCase("add-classpath", (
+            "result: add-classpath: the jar in user.dir is added: OK",
+            "result: add-classpath: the class is loaded: OK",
+            "result: add-classpath with ./: the jar in user.dir is added: OK",
+            "result: add-classpath after a change of the current directory: the jar in user.dir is added: OK",
+            "result: add-classpath with a wildcard that matches no file: the jar in user.dir is added: OK",
+        ));
+    }
+
+    #! a bare wildcard of a relative classpath is the matching files in the script directory
+    addRelativeClasspath() {
+        checkCase("add-relative-classpath", (
+            "result: add-relative-classpath: the jar in the script directory is added: OK",
+            "result: add-relative-classpath: the class is loaded: OK",
+        ));
+    }
+
+    globalAddClasspath() {
+        checkCase("global-add-classpath", (
+            "result: global-add-classpath: the class is loaded in a new Program: OK",
+        ));
+    }
+
+    globalAddRelativeClasspath() {
+        checkCase("global-add-relative-classpath", (
+            "result: global-add-relative-classpath: the class is loaded in a new Program: OK",
+        ));
+    }
+
+    jdbcClasspathOption() {
+        checkCase("jdbc", (
+            "result: jdbc classpath option: the class is loaded: OK",
+        ));
+    }
+
+    envClasspath() {
+        checkCase("env", (
+            "result: QORE_JNI_CLASSPATH: the class is loaded: OK",
+        ), "QORE_JNI_CLASSPATH='*.jar'");
+    }
+
+    sandbox() {
+        checkCase("sandbox", (
+            "result: sandbox: allowed user.dir: OK",
+            "result: sandbox: user.dir not allowed: OK",
+            "result: sandbox: user.dir not allowed, the current directory allowed: OK",
+            "result: sandbox: user.dir allowed, the current directory not allowed: OK",
+        ));
+    }
+
+    #! runs a case of the child and checks its results, and that it printed no Java exception
+    private checkCase(string name, list<string> expected, string env = "") {
+        string out = runInTempDir(name, env);
+        if (out =~ /^result: [^:]+: skipped/m) {
+            testSkip(trim(out));
+        }
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq(expected, lines, out);
+        assertFalse(out =~ /NullPointerException/, "a NullPointerException was printed: " + out);
+        assertFalse(out =~ /unhandled QORE System exception/, "an unhandled exception was printed: " + out);
+    }
+
+    #! runs the child in a new directory with the test jar, a subdirectory "rel" with another copy of it and an empty
+    #! subdirectory "other", and returns its output
+    private string runInTempDir(string name, string env) {
+        string dir = tmp_location() + DirSep + sprintf("jni-classpath-wildcard-%d-%d", getpid(),
+            now_us().durationMicroseconds());
+        list<string> files = (dir + DirSep + TestJarName, dir + DirSep + "rel" + DirSep + TestJarName);
+        list<string> dirs = (dir + DirSep + "rel", dir + DirSep + "other", dir);
+        on_exit {
+            foreach string file in (files) {
+                unlink(file);
+            }
+            foreach string d in (dirs) {
+                rmdir(d);
+            }
+        }
+        foreach string d in (reverse(dirs)) {
+            if (mkdir(d, 0700)) {
+                throw "TEST-ERROR", sprintf("cannot create directory %y: %s", d, strerror());
+            }
+        }
+        binary jar = ReadOnlyFile::readBinaryFile(get_script_dir() + DirSep + TestJarName);
+        foreach string file in (files) {
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(jar);
+        }
+
+        # an absolute path, as the child runs in another directory; the variables that make the JVM print a notice
+        # on startup are removed, as the whole output of the child is checked
+        string child = normalize_dir(get_script_dir() + "/jni-classpath-wildcard-child.q");
+        string cmd = sprintf("cd %s && env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s %s -b "
+            "--enable-debug %s %s 2>&1", shellQuote(dir), env, shellQuote(QORE_ARGV[0]), shellQuote(child), name);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}
