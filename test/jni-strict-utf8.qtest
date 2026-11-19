@@ -43,6 +43,8 @@ class JniStrictUtf8Test inherits QUnit::Test {
         addTestCase("regression: a Qore exception message in ISO-8859-1 to Java", \qoreToJavaMessageLatin1());
         addTestCase("regression: a QoreException description with NUL to Qore", \javaToQoreDescNul());
         addTestCase("coverage: class loading error messages", \classLoadErrors());
+        addTestCase("regression: a module load error raised in Java is not also reported as unhandled",
+            \moduleLoadErrorNotUnhandled());
         addTestCase("coverage: define_class() and load_class() with a BMP class name", \bmpClassName());
         addTestCase("regression: define_class() and load_class() with a class name outside the BMP",
             \supplementaryClassName());
@@ -105,6 +107,17 @@ class JniStrictUtf8Test inherits QUnit::Test {
         # a Java class for a Qore class that does not exist
         *string msg = Utf8Boundary::loadError("qore.NoSuch" + text + "Class");
         assertEq(True, (msg ?? "").find("NoSuch" + text + "Class") >= 0, msg ?? "<no error>");
+    }
+
+    #! the error of a module that Java's loading of a qoremod.* class could not load was raised in Java as a
+    #! ClassNotFoundException, and also printed as an unhandled Qore exception, as its exception sink was not cleared
+    moduleLoadErrorNotUnhandled() {
+        string cmd = sprintf("%s -b --enable-debug %s load-error 2>&1", shellQuote(QORE_ARGV[0]),
+            shellQuote(get_script_dir() + "/jni-strict-utf8-child.q"));
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq("result: load error: OK\n", out);
+        assertEq(0, rc, "exit code");
     }
 
     #! returns the byte code of a class with the given binary name (ex: "org.qore.test.Name"), whose method name()

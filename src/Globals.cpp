@@ -1494,6 +1494,8 @@ static int load_module(Env& env, Env::GetStringUtfChars& mod_str, QoreProgram* p
         jni_append_utf8(errdesc, xsink.getExceptionErr());
         errdesc.concat(": ");
         jni_append_utf8(errdesc, xsink.getExceptionDesc());
+        // the error is raised in Java only: the exception sink would report it as an unhandled exception
+        xsink.clear();
         env.throwNew(env.findClass("java/lang/ClassNotFoundException"), errdesc);
         //printd(5, "load_module() '%s': %s\n", mod_str.c_str(), errdesc.c_str());
         return -1;

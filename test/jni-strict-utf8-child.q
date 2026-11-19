@@ -6,6 +6,9 @@
 # encoding of hash keys, exception codes and the connection values of a jdbc datasource; prints
 # "result: <case>: OK" for each case that passes, or the values found; this file has ASCII text only, so that its
 # string literals mean the same in any default encoding
+#
+# with the argument "load-error", it loads a Java class of a module that does not exist instead (in any default
+# encoding), so that the test can check its whole output
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../build"
@@ -27,6 +30,13 @@ sub result(string name, auto expected, auto found) {
 }
 
 sub main() {
+    if (ARGV[0] == "load-error") {
+        # Java loads a class of a module that does not exist: the class is not found, and the error of the module
+        # is raised in Java only
+        *string msg = Utf8Boundary::loadError("qoremod.JniUtf8NoSuchModule.Cls");
+        printf("result: load error: %s\n", msg ? "OK" : sprintf("%y", msg));
+        return;
+    }
     if (get_default_encoding() != "ISO-8859-1") {
         printf("the default encoding is %y; expected ISO-8859-1\n", get_default_encoding());
         exit(1);
