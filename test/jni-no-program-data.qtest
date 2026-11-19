@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# A child Program that does not inherit the jni data of its parent (PO_NO_INHERIT_PROGRAM_DATA, or when the copy of
+# the parent's jni data fails) has the namespaces and the feature of the jni module, but no jni data; the jni APIs
+# that Qore code calls in it must not crash the process (qore#6801): get_class_loader() dereferenced a null Program
+# pointer, define_class(), get_byte_code() and get_java_name() asserted or dereferenced a null jni data pointer,
+# implement_interface(), invoke() and invoke_nonvirtual() crashed too.  The Program's jni data is now created on
+# demand, as for a jni module command issued in the Program.
+#
+# Each case runs test/jni-no-program-data-child.q in a new process, as the failure terminated the process.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniNoProgramDataTest
+
+class JniNoProgramDataTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI APIs in a Program without jni data", "1.0") {
+        addTestCase("regression: get_class_loader()", \getClassLoaderCase());
+        addTestCase("regression: get_class_loader() twice returns the same class loader", \getClassLoaderTwiceCase());
+        addTestCase("regression: the child's class loader is its own", \distinctLoaderCase());
+        addTestCase("regression: define_class()", \defineClassCase());
+        addTestCase("regression: get_byte_code()", \getByteCodeCase());
+        addTestCase("regression: get_java_name()", \getJavaNameCase());
+        addTestCase("regression: implement_interface()", \implementInterfaceCase());
+        addTestCase("regression: invoke()", \invokeCase());
+        addTestCase("regression: invoke_nonvirtual()", \invokeNonvirtualCase());
+        addTestCase("coverage: load_class()", \loadClassCase());
+        addTestCase("coverage: new_array()", \newArrayCase());
+        addTestCase("coverage: a Java object and its methods", \newObjectCase());
+        addTestCase("coverage: a static Java method", \staticMethodCase());
+        addTestCase("coverage: a Java field", \fieldAccessCase());
+        addTestCase("coverage: JavaArray::get()", \javaArrayGetCase());
+        addTestCase("coverage: set_save_object_callback()", \saveObjectCallbackCase());
+        addTestCase("negative: an unknown case is refused by the child", \unknownCase());
+        set_return_value(main());
+    }
+
+    getClassLoaderCase() {
+        checkResult("get_class_loader", "result: org.qore.jni.QoreURLClassLoader");
+    }
+
+    getClassLoaderTwiceCase() {
+        # the jni data is created once
+        checkResult("get_class_loader_twice", "result: same: True");
+    }
+
+    distinctLoaderCase() {
+        # the child's jni data is not the parent's
+        checkResult("distinct_loader", "result: distinct: True");
+    }
+
+    defineClassCase() {
+        # the byte code is invalid: the child's class loader refuses it with a Java exception
+        string out = runChild("define_class");
+        assertRegex("^caught: JNI-ERROR: java.lang.ClassFormatError: ", getLine(out, "caught: "), out);
+        checkAfter(out, "define_class");
+    }
+
+    getByteCodeCase() {
+        checkResult("get_byte_code", "result: has byte code: True");
+    }
+
+    getJavaNameCase() {
+        checkResult("get_java_name", "result: qore.ChildLocal");
+    }
+
+    implementInterfaceCase() {
+        checkResult("implement_interface", "result: proxy");
+    }
+
+    invokeCase() {
+        # the Java method runs in the context of the calling code: the child, whose function which() it calls
+        checkResult("invoke", "result: \"child\" \"child\" 4");
+    }
+
+    invokeNonvirtualCase() {
+        checkResult("invoke_nonvirtual", "result: \"child\" \"child\"");
+    }
+
+    loadClassCase() {
+        checkResult("load_class", "result: java.lang.String");
+    }
+
+    newArrayCase() {
+        checkResult("new_array", "result: length 3");
+    }
+
+    newObjectCase() {
+        checkResult("new_object", "result: no-data-6801");
+    }
+
+    staticMethodCase() {
+        checkResult("static_method", "result: 6801");
+    }
+
+    fieldAccessCase() {
+        checkResult("field_access", "result: 68");
+    }
+
+    javaArrayGetCase() {
+        checkResult("java_array_get", "result: length 3");
+    }
+
+    saveObjectCallbackCase() {
+        checkResult("save_object_callback", "result: set");
+    }
+
+    unknownCase() {
+        int rc;
+        string out = runChildRc("no-such-case", \rc);
+        assertEq(2, rc, out);
+        assertRegex("unknown case", out);
+        assertEq("", getLine(out, "after: "), out);
+    }
+
+    #! checks that the child printed the expected result line, no exception, and completed
+    private checkResult(string case_name, string expected) {
+        string out = runChild(case_name);
+        assertEq(expected, getLine(out, "result: "), out);
+        assertEq("", getLine(out, "caught: "), out);
+        checkAfter(out, case_name);
+    }
+
+    private checkAfter(string out, string case_name) {
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+        return "";
+    }
+
+    #! runs the child with the case and returns its output, checking that it exited with status 0
+    private string runChild(string case_name) {
+        int rc;
+        string out = runChildRc(case_name, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr) and its exit code
+    private string runChildRc(string case_name, reference<int> rc) {
+        string child = normalize_dir(get_script_dir() + "/jni-no-program-data-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is
+        # checked; no core file is written for a crash
+        string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b "
+            "--enable-debug %s %s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child), shellQuote(case_name));
+        return backquote(cmd, \rc);
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}
