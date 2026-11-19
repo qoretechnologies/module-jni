@@ -216,17 +216,19 @@ public:
         }
         char val[16];
         snprintf(val, sizeof val, "%d", sig);
-        if (SystemEnvironment::set("_JAVA_SR_SIGNUM", val)) {
+        // not overwritten: another thread can have set the variable since the module checked that it is not set
+        if (SystemEnvironment::set("_JAVA_SR_SIGNUM", val, false)) {
             return -1;
         }
-        is_set = true;
         lock.emplace();
-        // another thread could have changed the variable before the lock was taken
+        // the value must be the module's: another thread can have set the variable before, or changed it after
         QoreString cur;
         if (SystemEnvironment::get("_JAVA_SR_SIGNUM", cur) || cur != val) {
+            // not the module's value, which is left as it is
             errno = EAGAIN;
             return -1;
         }
+        is_set = true;
         return 0;
     }
 
@@ -610,7 +612,10 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
             // _JAVA_SR_SIGNUM is set only while the JVM is created
             JniSrSignalEnv sr_env;
             if (sr_env.set(sr_chosen)) {
-                err = new QoreStringNodeMaker("cannot set _JAVA_SR_SIGNUM to %d: %s", sr_chosen, strerror(errno));
+                err = errno == EAGAIN
+                    ? new QoreStringNodeMaker("cannot set _JAVA_SR_SIGNUM to %d: another thread set or changed the "
+                        "variable meanwhile", sr_chosen)
+                    : new QoreStringNodeMaker("cannot set _JAVA_SR_SIGNUM to %d: %s", sr_chosen, strerror(errno));
             } else {
                 err = jni::Jvm::createVM();
             }

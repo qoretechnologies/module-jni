@@ -70,8 +70,8 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
     if the variable is set (\c SIGUSR2 if the JVM does not accept its value); or \c SIGUSR2 on platforms without
     real-time signals that the JVM accepts (macOS; FreeBSD, where they are above \c NSIG) and when a Java process has
     loaded %Qore and so has created the JVM itself.  In those cases a %Qore handler for \c SIGUSR2 cannot be set while
-    the module is loaded.  If
-    \c _JAVA_SR_SIGNUM names a signal that %Qore uses itself (ex: \c SIGALRM), the module cannot be loaded.
+    the module is loaded.  If \c _JAVA_SR_SIGNUM names a signal that %Qore uses itself (ex: \c SIGALRM), the module
+    cannot be loaded.
 
     When the \c jni module creates the JVM, it always initializes it with reduced signals, also when \c libjsig (the
     JVM's signal-chaining library) is preloaded or linked into the process: %Qore is the host process and owns the
