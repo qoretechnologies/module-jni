@@ -6,6 +6,31 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed strings that cross between %Qore and Java outside the conversion of values: they are now converted
+      strictly to and from UTF-8 with their lengths, as values are (qore#6604, see @ref jni_strings):
+      - the messages of Java exceptions that the module raises with the text of a %Qore exception, and the message of
+        a %Qore exception read in Java (\c QoreExceptionWrapper.getMessage()), were cut at a NUL character, and a code
+        or description in another encoding than UTF-8 was not converted; JNI's \c ThrowNew(), which takes modified
+        UTF-8, is no longer used for a message that is not ASCII
+      - the description of an \c org.qore.jni.QoreException thrown in Java was cut at a NUL character, and its code
+        was not converted to the default encoding
+      - in the \c jdbc driver, a string bind value and SQL were cut at a NUL character, a bind value and the \c url
+        option in another encoding than UTF-8 were not converted, nor were the user, password and database name of a
+        datasource with a default encoding other than UTF-8, and with such a default encoding, column labels were
+        hash keys in UTF-8 and the metadata names (\c getServerVersion(), \c getClientVersion(),
+        \c getDriverRealName()) were not marked as UTF-8
+      - a Kotlin script given to \c kotlin_eval() was cut at a NUL character and was not converted from another
+        encoding than UTF-8; the arguments of the \c kotlin-eval, \c set-property and other module commands were cut
+        at a NUL character, and with a default encoding other than UTF-8, they were not converted
+      - with a default encoding other than UTF-8, a hash key converted to a Java \c Map key, and a \c Map key
+        converted to a hash key, were not converted
+      - a class name with a character outside the Basic Multilingual Plane given to \c define_class() or
+        \c load_class() was passed to JNI's \c DefineClass() or \c FindClass() in standard UTF-8 instead of the
+        modified UTF-8 that they take, which failed
+      - the output of \c JavaArray::deepToString() and the error messages of \c org.qore.jni.QoreSandbox were cut at a
+        NUL character
+    - fixed a module that Java's loading of a \c qoremod.* class could not load: its error was raised in Java, and
+      also printed as an unhandled %Qore exception
     - fixed %Qore handlers for \c SIGUSR2 never running while the JVM was loaded: HotSpot suspends and resumes its
       threads with \c SIGUSR2 by default and handles it in its own threads; the module now gives the JVM that it
       creates a free real-time signal in \c _JAVA_SR_SIGNUM (only while the JVM is created, and only if the variable
@@ -37,16 +62,16 @@
       \c kotlin_scripting_available(), \c kotlin_scripting_retry() and the \c kotlin-eval module command, which
       failed for the caller when only its class loader had the scripting jars), the static initializers that the
       lookup of a Java class and the creation of its %Qore class run (also for a class of the JVM's system class
-      path), and Java code that converting the value of a Java field or of a
-      \c JavaArray element runs (ex: the methods of a \c Map or a \c List), calling into %Qore through the Program of
-      an earlier Java call made for another Program instead of the calling code's Program (the Program that the class
-      is created in, for a static initializer): these now set the thread's Java context to that Program's context (a
-      read of a value only when converting it runs Java code that the value's class can override, so that other reads
-      cost no further call into Java); and a
-      call into %Qore from a Java class generated from a %Qore class, and the loading of a \c qore.* or
-      \c qoremod.* class, which can load a %Qore module whose initialization code makes Java calls for other
-      Programs, now save the thread's Java context and restore it when they return to Java, as the other calls from
-      Java into %Qore do (qore#6551, see @ref jni_callback_sandbox)
+      path), and Java code that converting the value of a Java field or of a \c JavaArray element runs (ex: the
+      methods of a \c Map or a \c List), calling into %Qore through the Program of an earlier Java call made for
+      another Program instead of the calling code's Program (the Program that the class is created in, for a static
+      initializer): these now set the thread's Java context to that Program's context (a read of a value only when
+      converting it runs Java code that the value's class can override, so that other reads cost no further call into
+      Java); and a call into %Qore from a Java class generated from a %Qore class, and the loading of a \c qore.* or
+      \c qoremod.* class and the listing of the classes of such a package
+      (\c QoreURLClassLoader.getClassesInNamespace()), either of which can load a %Qore module whose initialization
+      code makes Java calls for other Programs, now save the thread's Java context and restore it when they return to
+      Java, as the other calls from Java into %Qore do (qore#6551, see @ref jni_callback_sandbox)
     - <b>Security</b>: with a %Qore library that checks the destinations of connections against the sandbox of the
       code that chose them (qore#5747), the \c jdbc driver, which cannot report its destinations, is refused for a
       connection chosen by code (the code that created the datasource or set its database name or connection

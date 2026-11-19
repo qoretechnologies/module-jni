@@ -136,6 +136,32 @@
 
     @note see @ref jni_arrays for more information about conversions between %Qore lists and Java arrays
 
+    @section jni_strings Strings and Character Encodings
+
+    A %Qore string can be in any encoding, and a Java string is UTF-16; every string that the \c jni module passes
+    between them is converted exactly, through UTF-8:
+    - a %Qore string is converted from its encoding to UTF-8, and then strictly to UTF-16: a character outside the
+      Basic Multilingual Plane (ex: an emoji) becomes a surrogate pair, and an invalid sequence (an invalid byte, a
+      truncated or overlong sequence, an encoded surrogate) becomes U+FFFD
+    - a Java string becomes a UTF-8 string in %Qore: a surrogate pair becomes one 4-byte sequence, and an unpaired
+      surrogate becomes U+FFFD
+    - a NUL character is kept in both directions (JNI's own string functions use "modified" UTF-8, in which it is the
+      two bytes \c C0 \c 80, and which a C string would cut at a NUL byte)
+
+    This applies to values as well as to the other strings that cross between %Qore and Java: the messages of Java
+    exceptions made from %Qore exceptions and of %Qore exceptions made from Java exceptions, the Kotlin scripts of
+    \c kotlin_eval() and the \c kotlin-eval module command, the arguments of module commands, and in the
+    \c jdbc driver, bind values, SQL, column labels, metadata names and the connection values of a datasource (its
+    user, password and database name, in the datasource's encoding, and its \c url option).
+
+    Hash keys, and the codes of %Qore exceptions, are in the default encoding: a Java \c Map key or JDBC column label
+    is converted to it, and a hash key is converted from it to UTF-16; as a hash key cannot have a NUL character, a
+    \c Map key or column label is cut at its first one.
+
+    A class name given to \c load_class(), \c define_class(), an import or the \c define-class module command is
+    converted to the modified UTF-8 that JNI's \c FindClass() and \c DefineClass() take, so a class name can have
+    characters outside the Basic Multilingual Plane.
+
     @section jni_declared_value_types Declared Types of Java Values
 
     A Java value of a reference type (an object, including a \c java.lang.String or a boxed value such as a
