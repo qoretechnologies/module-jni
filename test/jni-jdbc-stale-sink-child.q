@@ -82,7 +82,8 @@ sub close_case() {
 }
 
 #! the statement is executed after the callback returned and loses the connection, which cannot be re-established:
-#! the statement is reset, and its bind arguments are released into exec()'s sink
+#! the statement is reset, and its bind arguments are released into exec()'s sink (by the driver's reset, or by the
+#! close of the statement for the aborted connection when the Qore library holds them too)
 sub reset_case() {
     Datasource ds("jdbc:@qore-transaction-test:fixture");
     SQLStatement stmt(ds);

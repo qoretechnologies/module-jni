@@ -677,10 +677,13 @@ int QoreJdbcStatement::reconnectLostConnection(Env& env, ExceptionSink* xsink) {
         reset(env, xsink);
 
         // Reconnect failed; marking connection as closed
-        // The following call will close any open statements and then the datasource
+        // The following call will close any open statements and then the datasource; the errors of closing the
+        // statements go to this call's sink: the deprecated variant without a sink discarded them, also the
+        // exception of the destructor of a bind argument that the Qore library holds for the statement and releases
+        // when it closes it (qore#6807)
         // NOTE: the statements closed include a prepared statement executing this call, which is deleted then:
         // "this" must not be used after this call
-        conn->getDatasource()->connectionAborted();
+        conn->getDatasource()->connectionAborted(xsink);
         return -1;
     }
 

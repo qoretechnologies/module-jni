@@ -38,7 +38,10 @@ class JniJdbcStaleSinkTest inherits QUnit::Test {
 
     resetCase() {
         # the connection is lost when the statement is executed, and cannot be re-established: the statement is
-        # reset, and its bind arguments are released into exec()'s sink, with the errors of the connection
+        # reset, and its bind arguments are released into exec()'s sink, with the errors of the connection; a Qore
+        # library that keeps the values given to bind() for the statement (qore#6690) holds the last reference, which
+        # it releases when the aborted connection closes the statement: the driver gives exec()'s sink to that close
+        # too, so the exception is raised in the same place with either library
         string out = runChild("reset");
         list<string> exec_lines = getLines(out, "exec: ");
         assertEq(("exec: JNI-ERROR: java.sql.SQLException: injected connect", BoomLine("exec"),
