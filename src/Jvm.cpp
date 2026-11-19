@@ -33,6 +33,7 @@
 #include <cctype>
 #include <cerrno>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -40,6 +41,36 @@
 #include "GeneratedBinding.h"
 #include "Globals.h"
 #include "QoreJniClassMap.h"
+
+//! Ends the process for the JVM through %Qore's process exit (qore#6698)
+/** Set as the JVM's \c exit hook: Java's \c System.exit() and \c Runtime.halt() end the process with \c vm_exit(),
+    which, after Java's shutdown hooks have run (for \c System.exit() only), brings the JVM to its final safepoint on
+    the VM Thread, marks the JVM as exited, and calls this hook there instead of C \c exit().
+
+    C \c exit() on the VM Thread ran the \c atexit() handlers and libqore's static destructors while %Qore threads were
+    still running (at least the thread whose Java call called \c System.exit(), which never returns), and libqore
+    aborted when a \c ThreadPool worker was active.  qore_exit_process() ends the process as the %Qore \c exit()
+    function does: with C \c exit() only in a process whose only thread is the calling %Qore thread, and with
+    \c _Exit() otherwise.  The VM Thread is not a %Qore thread, and the calling thread is still blocked in the JVM,
+    so the process always ends with \c _Exit() and the status given here.
+
+    This cannot deadlock: it runs no %Qore or Java code and makes no JNI call (each would block for ever, as Java
+    threads stay stopped at the final safepoint and the JVM blocks every thread that enters it once it has exited),
+    and qore_exit_process() only reads libqore's thread counts before it ends the process.  It never returns.
+
+    @param code the exit status that Java gave
+*/
+static void JNICALL jni_vm_exit_hook(jint code) {
+#ifdef __linux__
+    // on Linux, the JVM's attach listener, which reduced signals start at startup, removes its socket in an atexit()
+    // handler, which does not run with _Exit()
+    char sock[64];
+    if (snprintf(sock, sizeof sock, "/tmp/.java_pid%d", static_cast<int>(getpid())) < static_cast<int>(sizeof sock)) {
+        unlink(sock);
+    }
+#endif
+    qore_exit_process(code);
+}
 
 namespace jni {
 
@@ -234,8 +265,8 @@ QoreStringNode* Jvm::createVM() {
         }
     }
 
-    // -Xss and -Xrs are always set (see below for why the JVM always uses reduced signals)
-    size_t num_options = 2 + (set_headless ? 1 : 0);
+    // -Xss, -Xrs and the exit hook are always set (see below for why the JVM always uses reduced signals)
+    size_t num_options = 3 + (set_headless ? 1 : 0);
     bool disable_jit = false;
     bool enable_native_access = true;
     bool native_access_explicit = false;
@@ -387,15 +418,18 @@ QoreStringNode* Jvm::createVM() {
     // signals, which its signal thread accepts with sigwait() while all other threads block them.  Without -Xrs,
     // HotSpot installs handlers for SIGTERM, SIGINT and SIGHUP (and SIGQUIT for thread dumps) and unblocks the
     // shutdown signals in its own threads and in the threads that attach to it, so the kernel delivers them to a
-    // JVM thread instead of to the signal thread: %Qore signal handlers never run, and the JVM runs System.exit(),
-    // which calls C exit() on its VM Thread while %Qore threads are still running, so libqore's static destructors
-    // abort the process.  libjsig does not prevent this, as it only chains handlers installed with sigaction(), and
-    // %Qore installs none for these signals.  -Xrs does not change the JVM's handling of the synchronous signals
+    // JVM thread instead of to the signal thread: %Qore signal handlers never run, and the JVM ends the process with
+    // System.exit() (which, without the exit hook below, called C exit() on its VM Thread while %Qore threads were
+    // still running, so libqore's static destructors aborted the process).  libjsig does not prevent this, as it
+    // only chains handlers installed with sigaction(), and %Qore installs none for these signals.  -Xrs does not change the JVM's handling of the synchronous signals
     // SIGSEGV, SIGBUS, SIGFPE and SIGILL, which it needs for implicit null checks, stack banging and safepoint polls,
     // and libjsig, if present, still chains them with the handlers of other runtimes in the process.
     // It is set after the options from QORE_JNI_JVM_ARGS, as the last occurrence of an option is used, so that
     // -XX:-ReduceSignalUsage there cannot turn it off
     options[vm_args.nOptions++].optionString = (char*)"-Xrs";
+    // Java's System.exit() and Runtime.halt() end the process through Qore's process exit (qore#6698)
+    options[vm_args.nOptions].optionString = (char*)"exit";
+    options[vm_args.nOptions++].extraInfo = reinterpret_cast<void*>(jni_vm_exit_hook);
 
 #ifdef QORE_JNI_SUPPORT_CLASSPATH
     if (!classpath.empty()) {

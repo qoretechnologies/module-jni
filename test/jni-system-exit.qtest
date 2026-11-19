@@ -1,0 +1,218 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Java code that ends the process with System.exit() or Runtime.halt() in a Qore process ends it through Qore's
+# process exit (qore_exit_process(), as the Qore exit() function does), with the status given, also while Qore
+# threads run (qore#6698).
+#
+# The JVM ends the process on its VM Thread, after Java's shutdown hooks have run (for System.exit()).  It called C
+# exit() there, which ran libqore's static destructors while Qore threads were still running, so libqore aborted
+# ("external native threads still active while stopping the cleanup worker") when a ThreadPool worker was active.
+#
+# Each case runs a child process; the parent reads the child's output until the child has exited, so no case waits
+# for a time.  A child that is not ended waits forever (the test runner's time limit is only a guard).
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires jni
+%requires QUnit
+%requires FsUtil
+
+%exec-class JniSystemExitTest
+
+class JniSystemExitTest inherits QUnit::Test {
+    private:internal {
+        #! the code of the child process after its parse directives; run with: <mode> <status> <worker>
+        /** modes:
+            - \c exit: System.exit() in the Qore thread's Java call
+            - \c halt: Runtime.halt() in the Qore thread's Java call
+            - \c thread: System.exit() in a Java thread that Qore did not create, while the Qore thread waits for it
+            - \c qore: the Qore exit() function, for reference
+
+            \c worker is 1 to run a ThreadPool worker while the process ends, or 0
+        */
+        const ChildSource = "
+%module-cmd(jni) import org.qore.jni.test.JvmSignals
+%module-cmd(jni) import java.lang.System
+
+#! returns True if libjsig is mapped in the process
+bool sub has_libjsig() {
+    return (ReadOnlyFile::readTextFile(\"/proc/self/maps\") =~ /\\/libjsig\\./);
+}
+
+string mode = ARGV[0];
+int status = ARGV[1].toInt();
+bool worker = ARGV[2] == \"1\";
+
+# a Java call starts the JVM
+stdout.printf(\"java: %s\\n\", System::getProperty(\"java.version\"));
+stdout.printf(\"pid: %d\\n\", getpid());
+stdout.printf(\"libjsig: %y\\n\", has_libjsig());
+JvmSignals::addShutdownHookMarker(\"java-shutdown-hook\");
+register_exit_hook(sub () { stdout.print(\"qore-exit-hook\\n\"); });
+
+# a long-lived Qore thread with an external lifecycle: a ThreadPool worker that runs until the process ends
+*ThreadPool tp;
+Queue started();
+Queue stop();
+if (worker) {
+    tp = new ThreadPool(1);
+    tp.submit(sub () { started.push(1); stop.get(); });
+    started.get();
+}
+
+stdout.print(\"ready\\n\");
+switch (mode) {
+    case \"exit\": JvmSignals::exit(status); break;
+    case \"halt\": JvmSignals::halt(status); break;
+    case \"thread\": JvmSignals::exitInJavaThread(status); break;
+    case \"qore\": exit(status); break;
+}
+stdout.print(\"after\\n\");
+";
+
+        #! the line that libqore writes before it aborts when it is torn down with an active ThreadPool worker
+        const AbortLine = "external native threads still active";
+
+        #! the exit status of each mode; distinct, to show that the status given is used
+        const Status = {
+            "exit": 7,
+            "halt": 9,
+            "thread": 11,
+            "qore": 13,
+        };
+    }
+
+    private {
+        #! the temporary directory with the child's script
+        TmpDir tmp("jni-system-exit-");
+
+        #! the child's script
+        string script;
+
+        #! the path of libjsig.so of the JVM that this process runs, if found
+        *string libjsig;
+    }
+
+    constructor() : Test("JniSystemExit", "1.0") {
+        addTestCase("libjsig preloaded", \libjsigTest());
+        addTestCase("without libjsig", \noLibjsigTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        script = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n%%prepend-module-path \"%s\"\n%%requires jni\n"
+            "%%module-cmd(jni) add-classpath %s\n", dirname(get_module_hash().jni.filename),
+            get_script_dir() + "qore-jni-test.jar") + ChildSource);
+        f.close();
+        libjsig = findLibjsig();
+    }
+
+    libjsigTest() {
+        if (!libjsig) {
+            testSkip("libjsig.so of the JVM was not found");
+        }
+        exitCases(libjsig, True);
+    }
+
+    noLibjsigTest() {
+        exitCases("", False);
+    }
+
+    private:internal exitCases(string preload, bool with_libjsig) {
+        checkProc();
+        foreach bool worker in ((True, False)) {
+            string wlabel = worker ? "with a ThreadPool worker" : "without other threads";
+            # Qore's own exit(), whose behavior Java's exit is compared with
+            hash<auto> ref = run(preload, "qore", worker);
+            checkLibjsig(ref, with_libjsig);
+            assertEq(Status.qore, ref.rc, "Qore exit() " + wlabel + ": exit status: " + ref.out);
+            bool qore_hook = ref.out.find("qore-exit-hook") >= 0;
+
+            foreach string mode in (("exit", "halt", "thread")) {
+                hash<auto> res = run(preload, mode, worker);
+                string label = sprintf("%s %s", mode, wlabel);
+                checkLibjsig(res, with_libjsig);
+                assertRegex("(^|\n)ready\n", res.out, label + ": the child was ready");
+                assertEq(-1, res.out.find(AbortLine), label + ": no abort");
+                assertEq(Status{mode}, res.rc, label + ": exit status: " + res.out);
+                assertNRegex("(^|\n)after\n", res.out, label + ": the call did not return");
+                # Java runs its shutdown hooks for System.exit() before the JVM ends the process, not for halt()
+                assertEq(mode != "halt", res.out.find("java-shutdown-hook") >= 0,
+                    label + ": Java shutdown hooks: " + res.out);
+                # the process ends as with Qore's exit()
+                assertEq(qore_hook, res.out.find("qore-exit-hook") >= 0,
+                    label + ": Qore exit hooks as with Qore exit(): " + res.out);
+            }
+        }
+    }
+
+    #! checks the child's report of libjsig; skips the test case if a process without libjsig cannot be tested
+    private:internal checkLibjsig(hash<auto> res, bool with_libjsig) {
+        *string jsig = (res.out =~ x/(?:^|\n)libjsig: (True|False)\n/)[0];
+        if (!exists jsig) {
+            fail("the child did not report libjsig: " + res.out);
+        }
+        if (!with_libjsig && jsig == "True") {
+            testSkip("libjsig is linked into qore, so a process without it cannot be tested");
+        }
+        assertEq(with_libjsig ? "True" : "False", jsig, "libjsig in the child");
+    }
+
+    #! runs the child and returns its exit status and output
+    /** JVM settings inherited from the environment are removed
+    */
+    private:internal hash<auto> run(string preload, string mode, bool worker) {
+        int rc;
+        string out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "-u QORE_JNI_DISABLE_JIT -u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG -u QORE_JNI_MIN_HEAP_SIZE "
+            "-u QORE_JNI_MAX_HEAP_SIZE -u QORE_JNI_DISABLE_NATIVE_ACCESS "
+            "-u QORE_JNI_DISABLE_UNSAFE_WARNING_SUPPRESSION -u QORE_JNI_CLASSPATH -u QORE_CLASSPATH "
+            "LD_PRELOAD=%s %s --enable-debug %s %s %d %d 2>&1", shellQuote(preload), shellQuote(QORE_ARGV[0]),
+            shellQuote(script), mode, Status{mode}, worker ? 1 : 0), \rc);
+        if (m_options.verbose > 2) {
+            printf("mode %s worker %y preload %y: rc %d\n%s\n", mode, worker, preload, rc, out);
+        }
+        # with reduced signals, the JVM creates its attach socket at startup and removes it at exit() only, so a
+        # child that ended with _Exit() leaves it behind
+        *string pid = (out =~ x/(?:^|\n)pid: ([0-9]+)\n/)[0];
+        if (pid) {
+            string sock = "/tmp/.java_pid" + pid;
+            if (is_socket(sock)) {
+                unlink(sock);
+            }
+        }
+        return {"rc": rc, "out": out};
+    }
+
+    private:internal static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! skips the test case if the process cannot be inspected through /proc
+    private:internal checkProc() {
+        if (!is_file("/proc/self/maps")) {
+            testSkip("no /proc file system");
+        }
+    }
+
+    #! returns the path of libjsig.so in the directory of the libjvm.so that this process has loaded
+    private:internal static *string findLibjsig() {
+        if (!is_file("/proc/self/maps")) {
+            return;
+        }
+        *string jvm = (ReadOnlyFile::readTextFile("/proc/self/maps") =~ x/(\/\S*\/libjvm\.so)$/m)[0];
+        if (!jvm) {
+            return;
+        }
+        string path = dirname(jvm) + DirSep + "libjsig.so";
+        return is_file(path) ? path : NOTHING;
+    }
+}
