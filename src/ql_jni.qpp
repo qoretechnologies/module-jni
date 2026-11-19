@@ -466,6 +466,10 @@ set_save_object_callback(save_object_callback: callback);
     the Program cannot run any more at that point, so the destructor of an object of a class of the Program that only
     the callback holds then raises a \c PROGRAM-ERROR exception
 
+    The callback can be replaced or removed while it runs, by the callback itself or by another thread; the running
+    callback stays valid until it returns, and is then released; an exception raised by that release is raised to the
+    Java code that created the object
+
     @see @ref jni_qore_object_lifecycle_managementguide for more information
 */
 set_save_object_callback(*code save_object_callback) [dom=PROCESS;flags=NAMED_ARGS] {

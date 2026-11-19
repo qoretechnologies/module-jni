@@ -5261,8 +5261,18 @@ void JniExternalProgramData::doDeref() {
     // the callback is released before the object is deleted, as it is a member; releasing it can run Qore code, for
     // example the destructor of an object that only the callback holds, which can raise a Qore exception; should that
     // code set a new callback for this Program, which can still find its jni data, that one is released in turn
-    while (ResolvedCallReferenceNode* callback = save_object_callback) {
-        save_object_callback = nullptr;
+    // the member is taken under its lock, which is released before the callback is, as for setSaveObjectCallback()
+    // (qore#6790)
+    while (true) {
+        ResolvedCallReferenceNode* callback;
+        {
+            AutoLocker al(save_object_callback_lock);
+            callback = save_object_callback;
+            save_object_callback = nullptr;
+        }
+        if (!callback) {
+            break;
+        }
         try {
             callback->deref(&xsink);
         } catch (AbstractException& e) {
