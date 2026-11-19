@@ -33,6 +33,7 @@
 
 #include <qore/Qore.h>
 
+#include <atomic>
 #include <cassert>
 #include <jni.h>
 
@@ -120,6 +121,23 @@ public:
     }
 
     /**
+     * \brief Returns true once the JVM has started to end the process for Java's System.exit() or Runtime.halt()
+     *
+     * Set by the JVM's exit hook (see Jvm.cpp) on the VM Thread at the JVM's final safepoint, where Java threads stay
+     * stopped for ever: the JVM can then be neither called nor destroyed.
+     */
+    static bool isExiting() {
+        return exiting.load(std::memory_order_acquire);
+    }
+
+    /**
+     * \brief Marks the JVM as ending the process (see isExiting())
+     */
+    static void setExiting() {
+        exiting.store(true, std::memory_order_release);
+    }
+
+    /**
      * \brief Registers the fork handler that marks a child process created with fork() (see isForkedChild())
      *
      * Called in the module's initialization function, as fork handlers must be (see QoreForkHandler.h).
@@ -161,6 +179,8 @@ private:
         child sees it; never set in the process that created the JVM
     */
     static bool forked_child;
+    //! true once the JVM has started to end the process; see isExiting()
+    static std::atomic<bool> exiting;
     //! the registration of forkChild()
     static QoreForkHandlerRegistration* fork_reg;
 };

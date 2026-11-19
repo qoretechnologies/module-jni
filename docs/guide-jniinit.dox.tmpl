@@ -71,7 +71,29 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
 
     The JVM reads \c JAVA_TOOL_OPTIONS first and the module adds <tt>-Xrs</tt> after the options in
     \c QORE_JNI_JVM_ARGS, so <tt>-XX:-ReduceSignalUsage</tt> there has no effect; it must not be set in
-    \c _JAVA_OPTIONS either, which the JVM applies last: a shutdown signal would then end the process with
-    \c System.exit() on a thread of the JVM while %Qore threads still run, %Qore signal handlers would not be called,
-    and the process could abort.
+    \c _JAVA_OPTIONS either, which the JVM applies last: a shutdown signal would then end the process with Java's
+    \c System.exit() (see @ref jni_process_exit), and %Qore signal handlers would not be called.
+
+    @section jni_process_exit Process Exit From Java
+
+    When Java code calls \c System.exit() or \c Runtime.halt() in a JVM that the \c jni module created, the process
+    ends through %Qore's process exit, as it does with the %Qore @ref Qore::exit() "exit()" function, with the status
+    given (qore#6698):
+    - for \c System.exit(), Java runs its shutdown hooks first, as usual; \c Runtime.halt() runs none, as usual; both
+      also end the process when they are called in a Java thread that %Qore did not create
+    - the JVM then stops all Java threads and calls the module's exit hook on its VM Thread instead of C \c exit();
+      the hook calls \c qore_exit_process(), which the %Qore \c exit() function calls too
+    - as the VM Thread is not a %Qore thread, %Qore ends the process immediately (with \c _Exit()), as \c exit()
+      does when it is called in a process with other %Qore threads: no %Qore code runs after Java's shutdown hooks
+      (neither the hooks set with @ref Qore::register_exit_hook() "register_exit_hook()", which %Qore runs only when
+      a program ends normally, nor the delete functions of modules), the JVM is not destroyed (its threads stay
+      stopped), and the Java call that ended the process never returns; the attach listener's socket
+      (<tt>/tmp/.java_pid<i>pid</i></tt>) is removed on Linux
+
+    Before, the JVM called C \c exit() on its VM Thread, which ran libqore's static destructors while %Qore threads
+    were still running, and the process aborted (<tt>external native threads still active while stopping the cleanup
+    worker</tt>) when a \c ThreadPool worker was active.
+
+    When a Java process loads %Qore and so has created the JVM itself, the Java host decides how the JVM ends the
+    process.
 */

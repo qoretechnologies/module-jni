@@ -61,4 +61,28 @@ public final class JvmSignals {
             System.out.flush();
         }));
     }
+
+    /** Calls System.exit() in the calling thread */
+    public static void exit(int status) {
+        System.exit(status);
+    }
+
+    /** Calls Runtime.halt() in the calling thread, which does not run the shutdown hooks */
+    public static void halt(int status) {
+        Runtime.getRuntime().halt(status);
+    }
+
+    /** Calls System.exit() in a new Java thread and waits for it: the process ends while the caller waits */
+    public static void exitInJavaThread(int status) throws InterruptedException {
+        Thread t = new Thread(() -> System.exit(status), "JvmSignals-exit");
+        t.start();
+        t.join();
+    }
+
+    /** Calls Runtime.halt() in a new Java thread and waits for it: the process ends while the caller waits */
+    public static void haltInJavaThread(int status) throws InterruptedException {
+        Thread t = new Thread(() -> Runtime.getRuntime().halt(status), "JvmSignals-halt");
+        t.start();
+        t.join();
+    }
 }

@@ -11,6 +11,12 @@
       now reserves that signal as it does the other signals that the JVM needs, so
       @ref Qore::set_signal_handler() "set_signal_handler()" raises \c SIGNAL-HANDLER-ERROR for it while the module
       is loaded, and the module cannot be loaded while a handler is set for it (qore#6707, see @ref jni_signals)
+    - fixed Java's \c System.exit() and \c Runtime.halt() aborting the process
+      (<tt>external native threads still active while stopping the cleanup worker</tt>) when a \c ThreadPool worker
+      was active: the JVM called C \c exit() on its VM Thread, which ran libqore's static destructors while %Qore
+      threads were still running; the JVM now ends the process through %Qore's process exit (as the %Qore \c exit()
+      function does) with the status given, after Java's shutdown hooks have run for \c System.exit(), also when the
+      call is made in a Java thread that %Qore did not create (qore#6698, see @ref jni_process_exit)
     - fixed the handling of \c SIGTERM, \c SIGINT and \c SIGHUP in a process with \c libjsig preloaded or linked in:
       the JVM was started without reduced signals (<tt>-Xrs</tt>) in that case, so it handled these signals itself;
       %Qore signal handlers were not called, and the JVM ended the process with \c System.exit(), which called C
