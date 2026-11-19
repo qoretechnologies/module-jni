@@ -31,7 +31,7 @@ class JniSigtermLibjsigTest inherits QUnit::Test {
         /** modes:
             - \c handler: a Qore handler for the signal ends the ThreadPool worker, and the program ends normally
             - \c default: no Qore handler; Qore ends the process for the signal
-            - \c npe: no signal; a Java NullPointerException raised by an implicit null check in JIT-compiled code
+            - \c npe: no signal; Java NullPointerExceptions raised by a field read in JIT-compiled code
         */
         const ChildSource = "
 %module-cmd(jni) import org.qore.jni.test.JvmSignals
@@ -48,7 +48,7 @@ string sub caught_signals() {
     return line ?? \"\";
 }
 
-#! raises NullPointerExceptions with implicit null checks in JIT-compiled code
+#! raises NullPointerExceptions in JIT-compiled code, which checks references for null implicitly (with a fault)
 sub npe() {
     # JvmSignals::read() is compiled by the JIT compilers in the loop (synchronously, as the parent runs the child
     # with -Xbatch), then called with null
@@ -93,6 +93,7 @@ sub send_signal(string mode, int sig) {
 
 # a Java call starts the JVM
 stdout.printf(\"java: %s\\n\", System::getProperty(\"java.version\"));
+stdout.printf(\"pid: %d\\n\", getpid());
 stdout.printf(\"libjsig: %y\\n\", has_libjsig());
 stdout.printf(\"sigcgt: %s\\n\", caught_signals());
 JvmSignals::addShutdownHookMarker(\"java-shutdown-hook\");
@@ -205,14 +206,22 @@ stdout.sync();
         checkHandlers(res);
     }
 
+    #! checks that the JVM's own use of SIGSEGV still works with reduced signals
+    /** This guards against side effects of reduced signals, with and without libjsig: it passes without the fix too.
+        A NullPointerException raised by compiled code can come from the implicit null check (a SIGSEGV that the
+        JVM's handler turns into the exception) or from code that the JIT compilers recompiled with an explicit check
+        after earlier null calls
+    */
     private:internal npeCase(string preload, bool with_libjsig) {
         checkProc();
-        # -Xbatch makes compilation synchronous, so JvmSignals::read() is compiled before it is called with null,
-        # and its compilation is logged
-        hash<auto> res = run(preload, "npe", 0, "-Xbatch -XX:+PrintCompilation");
+        # -Xbatch makes compilation synchronous, so JvmSignals::read() is compiled before it is called with null;
+        # compilations are logged to a file, as JVM threads writing to the child's output could split its lines
+        string jit_log = tmp.path + DirSep + "jit.log";
+        hash<auto> res = run(preload, "npe", 0, "-Xbatch -Xlog:jit+compilation=debug:file=" + jit_log);
         checkLibjsig(res, with_libjsig);
         assertEq(0, res.rc, "exit status: " + res.out);
-        assertRegex("org\\.qore\\.jni\\.test\\.JvmSignals::read \\(", res.out, "the JIT compiled the field read");
+        assertRegex("org\\.qore\\.jni\\.test\\.JvmSignals::read \\(", ReadOnlyFile::readTextFile(jit_log),
+            "the JIT compiled the field read");
         assertRegex("(^|\n)npes: 1000\n", res.out, "each null call raised a NullPointerException");
         assertRegex("(^|\n)readNull: JNI-ERROR: java.lang.NullPointerException", res.out,
             "the NullPointerException is raised to Qore");
@@ -254,11 +263,21 @@ stdout.sync();
     private:internal hash<auto> run(string preload, string mode, int sig, string jvm_args = "") {
         int rc;
         string out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
-            "-u QORE_JNI_DISABLE_JIT -u QORE_JNI_JVM_ARGS %sLD_PRELOAD=%s %s --enable-debug %s %s %d 2>&1",
+            "-u QORE_JNI_DISABLE_JIT -u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG -u QORE_JNI_MIN_HEAP_SIZE "
+            "-u QORE_JNI_MAX_HEAP_SIZE %sLD_PRELOAD=%s %s --enable-debug %s %s %d 2>&1",
             jvm_args ? "QORE_JNI_JVM_ARGS=" + shellQuote(jvm_args) + " " : "", shellQuote(preload),
             shellQuote(QORE_ARGV[0]), shellQuote(script), mode, sig), \rc);
         if (m_options.verbose > 2) {
             printf("mode %s sig %d preload %y JVM args %y: rc %d\n%s\n", mode, sig, preload, jvm_args, rc, out);
+        }
+        # with reduced signals, the JVM creates its attach socket at startup and removes it at exit() only, so a
+        # child that Qore ended with _Exit() leaves it behind
+        *string pid = (out =~ x/(?:^|\n)pid: ([0-9]+)\n/)[0];
+        if (pid) {
+            string sock = "/tmp/.java_pid" + pid;
+            if (is_socket(sock)) {
+                unlink(sock);
+            }
         }
         return {"rc": rc, "out": out};
     }
