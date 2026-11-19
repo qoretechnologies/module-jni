@@ -6,6 +6,17 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - fixed the handling of \c SIGTERM, \c SIGINT and \c SIGHUP in a process with \c libjsig preloaded or linked in:
+      the JVM was started without reduced signals (<tt>-Xrs</tt>) in that case, so it handled these signals itself;
+      %Qore signal handlers were not called, and the JVM ended the process with \c System.exit(), which called C
+      \c exit() on the JVM's VM Thread while %Qore threads were still running, so the process aborted
+      (<tt>external native threads still active while stopping the cleanup worker</tt>) when a \c ThreadPool worker
+      was active; the JVM is now always started with reduced signals, so %Qore owns the asynchronous signals and the
+      JVM still handles \c SIGSEGV, \c SIGBUS, \c SIGFPE and \c SIGILL, which \c libjsig still chains with the handlers
+      of other runtimes; in this case, Java shutdown hooks no longer run when the process gets a shutdown signal
+      (they run when the JVM is destroyed at the normal end of the process), and \c SIGQUIT no longer prints a Java
+      thread dump (use <tt>jcmd <i>pid</i> Thread.print</tt>); <tt>-XX:-ReduceSignalUsage</tt> in
+      \c QORE_JNI_JVM_ARGS no longer turns reduced signals off (see @ref jni_signals)
     - fixed Java code that \c Jni::org::qore::jni::invoke(), \c invoke_nonvirtual(), \c kotlin_eval(),
       \c JavaArray::toString() and \c JavaArray::deepToString() run (also the static initializers that the lookup of
       the method of \c invoke() runs, and the discovery of the Kotlin script engine by these functions,

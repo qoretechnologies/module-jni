@@ -27,7 +27,6 @@
 
 #include <qore/Qore.h>
 
-#include <dlfcn.h>
 #include <unistd.h>
 #include <sys/resource.h>
 
@@ -41,19 +40,6 @@
 #include "GeneratedBinding.h"
 #include "Globals.h"
 #include "QoreJniClassMap.h"
-
-//! Returns true if libjsig is linked into the process
-/** libjsig provides signal chaining so the JVM, V8, and Python can coexist.
-    When libjsig is active, -Xrs must NOT be used because it prevents the JVM from
-    installing the signal handlers that libjsig chains with other runtimes.
-    Without libjsig, -Xrs is needed to prevent the JVM from clobbering signal handlers
-    installed by V8 or Python.
-*/
-static bool hasLibjsig() {
-    // libjsig interposes on sigaction(); if linked, its JVM_begin_signal_setting symbol is present
-    void* sym = dlsym(RTLD_DEFAULT, "JVM_begin_signal_setting");
-    return sym != nullptr;
-}
 
 namespace jni {
 
@@ -248,13 +234,8 @@ QoreStringNode* Jvm::createVM() {
         }
     }
 
-    // When libjsig is linked into the process (qore links it by default), it chains signal
-    // handlers between the JVM, V8, and Python so they can coexist. In that case, -Xrs must
-    // NOT be used — it prevents the JVM from installing the handlers that libjsig chains.
-    // Without libjsig, -Xrs is the only way to prevent the JVM from clobbering other runtimes'
-    // signal handlers.
-    bool use_reduced_signals = !hasLibjsig();
-    size_t num_options = 1 + (use_reduced_signals ? 1 : 0) + (set_headless ? 1 : 0);
+    // -Xss and -Xrs are always set (see below for why the JVM always uses reduced signals)
+    size_t num_options = 2 + (set_headless ? 1 : 0);
     bool disable_jit = false;
     bool enable_native_access = true;
     bool native_access_explicit = false;
@@ -357,13 +338,6 @@ QoreStringNode* Jvm::createVM() {
     }
 #endif
     JavaVMOption options[num_options];
-    if (use_reduced_signals) {
-        // "reduced signals" — only when libjsig is not available for signal chaining
-        options[vm_args.nOptions++].optionString = (char*)"-Xrs";
-        printd(LogLevel, "jni module: using -Xrs (libjsig not detected)\n");
-    } else {
-        printd(LogLevel, "jni module: libjsig detected, signal chaining active\n");
-    }
     // thread stack size; use a minimum of 1MB if stack size is unknown/0
     // (can happen when module links against a different libqore than the running executable)
     size_t stack_size_kb = q_thread_get_stack_size() / 1024;
@@ -409,6 +383,19 @@ QoreStringNode* Jvm::createVM() {
             options[vm_args.nOptions++].optionString = (char*)str.c_str();
         }
     }
+    // "reduced signals", whether or not libjsig is in the process: %Qore is the host and owns the asynchronous
+    // signals, which its signal thread accepts with sigwait() while all other threads block them.  Without -Xrs,
+    // HotSpot installs handlers for SIGTERM, SIGINT and SIGHUP (and SIGQUIT for thread dumps) and unblocks the
+    // shutdown signals in its own threads and in the threads that attach to it, so the kernel delivers them to a
+    // JVM thread instead of to the signal thread: %Qore signal handlers never run, and the JVM runs System.exit(),
+    // which calls C exit() on its VM Thread while %Qore threads are still running, so libqore's static destructors
+    // abort the process.  libjsig does not prevent this, as it only chains handlers installed with sigaction(), and
+    // %Qore installs none for these signals.  -Xrs does not change the JVM's handling of the synchronous signals
+    // SIGSEGV, SIGBUS, SIGFPE and SIGILL, which it needs for implicit null checks, stack banging and safepoint polls,
+    // and libjsig, if present, still chains them with the handlers of other runtimes in the process.
+    // It is set after the options from QORE_JNI_JVM_ARGS, as the last occurrence of an option is used, so that
+    // -XX:-ReduceSignalUsage there cannot turn it off
+    options[vm_args.nOptions++].optionString = (char*)"-Xrs";
 
 #ifdef QORE_JNI_SUPPORT_CLASSPATH
     if (!classpath.empty()) {
