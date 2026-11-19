@@ -143,7 +143,7 @@ module MqttDataProvider {
 
     @tableofcontents
 
-    @section mqttdataproviderintro Introduction to the MqttDataProvider Module
+    @section mqttdataproviderintro MqttDataProvider Module Introduction
 
     <img src="mqtt-logo.svg" width="96" alt="MqttDataProvider module logo"/>
 
@@ -214,9 +214,14 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
 });
     @endcode
 
-    @section MqttDataProvider_relnotes Release Notes
+    @anchor MqttDataProvider_relnotes
 
-    @subsection MqttDataProvider_v3_0 MqttDataProvider v3.0
+    @subpage mqttdataproviderreleasenotes
+*/
+
+/** @page mqttdataproviderreleasenotes MqttDataProvider Release Notes
+
+    @section MqttDataProvider_v3_0 MqttDataProvider v3.0
     - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
       callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
@@ -252,11 +257,11 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
       \c validator, and \c asyncapi_channel options; \c validator accepts AsyncAPI schema file data or a schema
       location
 
-    @subsection MqttDataProvider_v2_0 MqttDataProvider v2.0
+    @section MqttDataProvider_v2_0 MqttDataProvider v2.0
     - added support for the data provider action catalog API
-      (<a href="https://github.com/qorelanguage/qore/issues/4808">issue 4808</a>)
+      (<a href="https://github.com/qoretechnologies/qore/issues/4808">issue 4808</a>)
 
-    @subsection MqttDataProvider_v1_0 MqttDataProvider v1.0
+    @section MqttDataProvider_v1_0 MqttDataProvider v1.0
     - initial release
 */
 

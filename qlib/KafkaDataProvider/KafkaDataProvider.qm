@@ -125,7 +125,7 @@ module KafkaDataProvider {
 
     @tableofcontents
 
-    @section kafkadataproviderintro Introduction to the KafkaDataProvider Module
+    @section kafkadataproviderintro KafkaDataProvider Module Introduction
 
     <img src="kafka-logo.svg" width="96" alt="KafkaDataProvider module logo"/>
 
@@ -146,9 +146,14 @@ module KafkaDataProvider {
     @verbatim qdp 'Kafka{xxx}'/consumer ix
     @endverbatim
 
-    @section kafkadataprovider_relnotes Release Notes
+    @anchor kafkadataprovider_relnotes
 
-    @subsection kafkadataprovider_v2_1 KafkaDataProvider v2.1
+    @subpage kafkadataproviderreleasenotes
+*/
+
+/** @page kafkadataproviderreleasenotes KafkaDataProvider Release Notes
+
+    @section kafkadataprovider_v2_1 KafkaDataProvider v2.1
     - the consumer delivers records at least once: it commits a record only after every observer has accepted it,
       and a refused record is delivered again after a back-off instead of stopping the consumer and being lost, so
       an observer can see a record twice (see @ref kafkaconsumerdataprovider_delivery;
@@ -173,7 +178,7 @@ module KafkaDataProvider {
       \c asyncapi, \c validator, and \c asyncapi_channel options; \c validator accepts AsyncAPI schema file data or
       a schema location
 
-    @subsection kafkadataprovider_v1_0 KafkaDataProvider v1.0
+    @section kafkadataprovider_v1_0 KafkaDataProvider v1.0
     - initial release
 */
 

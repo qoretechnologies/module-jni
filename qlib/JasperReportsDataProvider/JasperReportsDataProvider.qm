@@ -141,14 +141,14 @@ module JasperReportsDataProvider {
 
     @tableofcontents
 
-    @section jasperreportsdataproviderintro Introduction to the JasperReportsDataProvider Module
+    @section jasperreportsdataproviderintro JasperReportsDataProvider Module Introduction
 
     <img src="jasperreports-logo.svg" width="96" alt="JasperReportsDataProvider module logo"/>
 
     The %JasperReportsDataProvider module provides a data provider API for generating reports from
     JasperReports templates through the @ref dataproviderintro "DataProvider" API. It supports
     JasperReports 6.21 using the
-    <a href="https://community.jaspersoft.com/downloads/community-edition/">JasperReports</a> Java
+    <a href="https://community.jaspersoft.com/download-jaspersoft/community-edition/">JasperReports</a> Java
     library.
 
     The following classes are provided by this module:
@@ -156,6 +156,13 @@ module JasperReportsDataProvider {
       generating reports
     - @ref JasperReportsDataProvider::JasperReportsDataProviderFactory
       "JasperReportsDataProviderFactory" - factory for report generation providers
+
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
+    Report templates are refused to sandboxed code, as their expressions are compiled and run as Java code
+      (\c JNI-SANDBOX-ERROR).
 
     @section JasperReportsDataProvider_generating Generating Reports
 
@@ -241,15 +248,15 @@ module JasperReportsDataProvider {
     - \c JASPERREPORTS-OPTION-ERROR: Invalid or missing options
     - \c JASPERREPORTS-GENERATE-ERROR: Error during report generation
 
-    @section JasperReportsDataProvider_relnotes Release Notes
+    @anchor JasperReportsDataProvider_relnotes
 
-    @subsection JasperReportsDataProvider_v1_0 JasperReportsDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
-      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
-      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
+    @subpage jasperreportsdataproviderreleasenotes
+*/
+
+/** @page jasperreportsdataproviderreleasenotes JasperReportsDataProvider Release Notes
+
+    @section JasperReportsDataProvider_v1_0 JasperReportsDataProvider Module Version 1.0
     - initial release
-    - report templates are refused to sandboxed code, as their expressions are compiled and run as Java code
-      (\c JNI-SANDBOX-ERROR)
 */
 
 #! contains all public definitions in the JasperReportsDataProvider module

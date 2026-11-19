@@ -449,7 +449,7 @@ module OpcUaDataProvider {
 
     @tableofcontents
 
-    @section opcuadataproviderintro Introduction to the OpcUaDataProvider Module
+    @section opcuadataproviderintro OpcUaDataProvider Module Introduction
 
     <img src="opc-ua-logo.svg" width="96" alt="OpcUaDataProvider module logo"/>
 
@@ -476,6 +476,12 @@ module OpcUaDataProvider {
     - <b>Connection lifecycle</b>: connected/disconnected events with auto-reconnect
     - <b>SSL/TLS</b>: keystore and truststore configuration for secure connections
     - <b>Cooperative cancellation</b>: all blocking operations support thread/program cancellation
+
+    @par Sandbox access
+    Connection option labels and descriptions are localized in all twelve standard locales.
+
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
 
     @section opcuadataproviderexamples OPC UA Data Provider Examples
 
@@ -528,147 +534,14 @@ module OpcUaDataProvider {
     \c max_history_values option caps retained values per variable; the default is 1024 and 0 disables
     implicit history retention.  Runtime callbacks may still return explicit values for \c history-read.
 
-    @section opcuadataproviderrelnotes Release Notes
+    @anchor opcuadataproviderrelnotes
 
-    @subsection opcuadataproviderv110 OpcUaDataProvider v1.10.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
-      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
-      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
-    - @ref OpcUaDataProvider::OpcUaServerRuntime "OpcUaServerRuntime": a \c port of 0 lets the OS assign a free port,
-      which is held from the runtime's creation until it is stopped and returned by the new
-      @ref OpcUaDataProvider::OpcUaServerRuntime::getPort() "getPort()" method
-    - added source-owned connection option catalogs in all twelve standard locales; unchanged inherited
-      presentation keeps its original producer identity, including HTTP/REST options and allowed values
-    - added the parse-only @ref OpcUaDataProvider::describeAddressSpace() entry point for validating and
-      normalizing native OPC UA address-space documents without constructing a runtime or binding a port;
-      invalid documents raise \c OPCUA-SCHEMA-ERROR with a JSON pointer and endpoint identity
-    - added @ref OpcUaDataProvider::nodeSet2ToAddressSpace() and the document overload
-      @ref OpcUaDataProvider::exportNodeSet2() for offline NodeSet2 conversion
-    - native address-space snapshots now accept and emit the explicit \c opcua: "1" root marker; legacy
-      documents without the marker remain accepted and are normalized with the marker
-    - the server runtime now consumes the same validated document representation used by the parse-only API,
-      and live, imported, schema-only, and materialized snapshots all carry the discriminator
+    @subpage opcuadataproviderreleasenotes
+*/
 
-    @subsection opcuadataproviderv192 OpcUaDataProvider v1.9.2
-    - every API-management endpoint now reports a \c display_name, so a listing can name the node instead of
-      showing its address; an endpoint is keyed by a node-derived id (\c "ns=1;s=Setpoint"), and a schema
-      handed over as a snapshot need not carry the node's own DisplayName, in which case the browse name is
-      used, without its per-session namespace index
+/** @page opcuadataproviderreleasenotes OpcUaDataProvider Release Notes
 
-    @subsection opcuadataproviderv191 OpcUaDataProvider v1.9.1
-    - fixed a bug where connecting to (or disconnecting from) an unreachable or unresponsive OPC UA
-      server could block indefinitely; connection and disconnection now respect the \c connect_timeout
-      option so a dead server can no longer hang connection monitoring, object teardown, or reconnection
-    - a write rejected by the server now reports the OPC UA \c StatusCode as a structured exception argument
-      (\c status_code, \c symbolic_name, \c severity, \c diagnostics, and the \c node_id, plus the \c index
-      of the failed item for batch writes) instead of formatting it into the description only; the description
-      is presentation text, and the generic data provider APIs replace the error code with their own, so a
-      caller had no reliable way to tell an expected protocol rejection from a transport failure
-
-    @subsection opcuadataproviderv19 OpcUaDataProvider v1.9
-    - added Qorus-agnostic JSON Schema 2020-12 and OpenAPI 3.1 projections for generic OPC UA schema
-      snapshots through @ref OpcUaDataProvider::OpcUaSchemaProjection "OpcUaSchemaProjection"
-    - \c OpcUaDataProvider and \c OpcUaServerRuntime now expose \c getJsonSchemaProjection(),
-      \c getOpenApiProjection(), and \c getSchemaProjectionArtifacts() helpers so embedders can publish
-      schema contracts, API projections, and callback payload contracts from either schema-only providers
-      or materialized runtime servers
-    - projection artifacts include stable \c snapshot_hash and \c hash values for stale-contract detection
-      and carry only generic OPC UA metadata, without Qorus-specific coupling
-    - OPC UA endpoint selection and data-change subscription callbacks now use compiled Java bridge classes,
-      avoiding dynamic proxy dispatch on Milo callback threads
-
-    @subsection opcuadataproviderv18 OpcUaDataProvider v1.8
-    - added \c OpcUaServerRuntime, a generic Qorus-agnostic OPC UA server runtime that materializes
-      the existing schema snapshot contract through the bundled Milo 1.1.4 server SDK
-    - \c OpcUaServerRuntime supports lifecycle management, schema/endpoint accessors, data-change
-      publishing, application event dispatching, and a NodeSet2 export subset
-    - generic runtime endpoints are loopback-only while using anonymous \c SecurityPolicy.None security
-      and reject non-loopback bind or advertised host names
-    - generic runtime listener startup honors active Qore network sandbox bind restrictions before opening
-      the Java/Milo server socket
-    - implicit generic runtime history is bounded per historizing variable by \c max_history_values
-    - the runtime accepts an optional callback dispatcher for authorization, browse, read, write,
-      call, subscription, history-read, data-change, and event operations
-    - the \c opcua data provider factory now advertises generic API-management capability through the
-      \c opcua API profile
-    - added schema-only API-management endpoint accessors on the \c OpcUaDataProvider provider so embedders can
-      scan schema endpoints by stable \c endpoint_id without opening a client connection
-
-    @subsection opcuadataproviderv17 OpcUaDataProvider v1.7
-    - made the declared response data types consistent with the actual runtime responses: the enriched
-      status fields (\c symbolic_name, \c severity, and \c diagnostics) produced for every response are
-      now declared in the browse, history-read, and server-status response types as well (previously
-      only in the read, read-attributes, call-method, and data-change types)
-    - the \c severity and (backwards-compatible) \c status_text fields now advertise \c allowed_values
-      (\c Good, \c Uncertain, \c Bad) for introspection and UI form generation rather than only
-      describing the value set in text; the \c status_text field description was corrected to reflect
-      that it carries the status severity (retained under that name for backwards compatibility), with
-      the human-readable status description now available in \c diagnostics
-
-    @subsection opcuadataproviderv16 OpcUaDataProvider v1.6
-    - added offline OPC UA NodeSet2 import: \c importNodeSet2() retrieves a NodeSet2 XML model with
-      \c FileLocationHandler (path / \c file:// / \c resource://) and parses it into the same schema
-      snapshot shape as live introspection, including the namespace table, resolved variable/method
-      endpoints (with the same deterministic \c endpoint_id derivation), \c required_models, and
-      \c missing_dependencies (required model namespaces not present in the model). Parsing uses the
-      compiled Java \c org.qore.dataprovider.opcua.NodeSet2Importer with the JDK's built-in XML parser,
-      so no \c module-xml or JAXB dependency is required
-
-    @subsection opcuadataproviderv15 OpcUaDataProvider v1.5
-    - added a compiled Java value codec (\c org.qore.dataprovider.opcua.ValueCodec):
-      - \c write-value / \c write-values now support the full set of OPC UA built-in scalar types via
-        the \c data_type hint, including the narrow signed types \c SByte / \c Int16 / \c Int32 and
-        single-precision \c Float that previously could not be typed exactly across the Qore/JNI
-        boundary (they are no longer rejected)
-      - values read from the server now unwrap the OPC UA unsigned wrapper types
-        (\c Byte / \c UInt16 / \c UInt32 / \c UInt64) to native Qore integers instead of Java objects
-
-    @subsection opcuadataproviderv14 OpcUaDataProvider v1.4
-    - the schema snapshot (\c getSchemaSnapshot()) is now enriched with live introspection metadata:
-      variable endpoints carry \c data_type, \c value_rank, \c array_dimensions, \c access_level /
-      \c user_access_level, \c readable / \c writable, \c directions, \c historizing, and
-      \c minimum_sampling_interval; method endpoints carry resolved \c input_arguments and
-      \c output_arguments (name, data type, value rank, description)
-
-    @subsection opcuadataproviderv13 OpcUaDataProvider v1.3
-    - added a generic, versioned OPC UA schema snapshot: \c AbstractFunctionalOpcUaDataProvider's
-      \c getSchemaSnapshot() browses the connected server's address space and returns a contract-versioned
-      snapshot (namespace table plus resolved variable/method endpoints, each with a stable, deterministic
-      \c endpoint_id derived from the namespace URI, browse path, and endpoint kind)
-    - the snapshot is produced by a compiled first-party Java resolver
-      (\c org.qore.dataprovider.opcua.SchemaResolver in \c src/java) returning an \c org.qore.jni.Hash,
-      so the whole address-space walk is one JNI round-trip
-
-    @subsection opcuadataproviderv12 OpcUaDataProvider v1.2
-    - upgraded the bundled Eclipse Milo OPC UA SDK from 0.6.13 to <b>1.1.4</b>; the client API was
-      migrated to the new Milo 1.1.x APIs (config/identity packages, list-based \c call(), the
-      redesigned \c OpcUaSubscription / \c OpcUaMonitoredItem subscription API, and the
-      \c EncodingContext), preserving the existing provider behavior and options
-    - <b>requires JDK 17 or later</b> (the Milo 1.1.x baseline); the dependency set drops the Guava and
-      JAXB libraries and adds \c milo-transport
-    - added a deterministic in-process OPC UA test server (Milo 1.1.4) and an integration test that
-      exercises read, write (including typed \c data_type hints), browse, read-attributes, call-method
-      (with argument-metadata resolution), batch reads, server status, and endpoint discovery against it
-
-    @subsection opcuadataproviderv11 OpcUaDataProvider v1.1
-    - added a generic OPC UA status mapping (@ref OpcUaDataProvider::OpcUaStatusMapping "OpcUaStatusMapping")
-      that resolves status codes to symbolic names, spec-defined severity, and diagnostics; all responses
-      and events now expose additive \c symbolic_name, \c severity, and \c diagnostics fields instead of
-      collapsing status to \c Good / \c Bad / \c Uncertain
-    - the \c write-value / \c write-values \c data_type hint is now honored: values are converted to the
-      requested OPC UA built-in type via
-      @ref OpcUaDataProvider::OpcUaTypeConversion "OpcUaTypeConversion" (narrow signed/single-precision
-      types are rejected with an actionable error rather than silently widened)
-    - \c read-attributes now also returns \c value_rank, \c array_dimensions, \c user_access_level,
-      \c user_writable, and \c minimum_sampling_interval
-    - \c call-method now resolves and validates method \c InputArguments / \c OutputArguments metadata
-      (best-effort) and rejects argument-count mismatches before invocation
-    - node metadata is cached per NodeId and invalidated deterministically on reconnect/session recreation
-    - connection-loss detection for auto-reconnect is now based on the OPC UA status code in the exception
-      chain rather than fragile text matching
-    - batch writes are fully validated before any write is sent (no partial writes on validation failure)
-
-    @subsection opcuadataproviderv10 OpcUaDataProvider v1.0
+    @section opcuadataproviderv1100 OpcUaDataProvider Module Version 1.10.0
     - initial release
 */
 

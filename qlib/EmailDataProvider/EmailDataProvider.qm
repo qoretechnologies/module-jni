@@ -334,6 +334,10 @@ module EmailDataProvider {
     - @ref EmailDataProvider::MboxReadDataProvider "MboxReadDataProvider" - for reading MBOX files
     - @ref EmailDataProvider::MboxReadDataProviderFactory "MboxReadDataProviderFactory" - factory for MBOX read providers
 
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
     @section EmailDataProvider_reading Reading Email Messages
 
     @subsection EmailDataProvider_reading_eml Reading EML Files
@@ -434,14 +438,14 @@ module EmailDataProvider {
     - \c MSG-READ-OPTION-ERROR: Invalid read options or option conflicts for MSG provider
     - \c MBOX-READ-OPTION-ERROR: Invalid read options or option conflicts for MBOX provider
 
-    @section EmailDataProvider_relnotes Release Notes
+    @anchor EmailDataProvider_relnotes
 
-    @subsection EmailDataProvider_v1_0 EmailDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
-      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
-      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
-      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
-      middle of a call; the module requires \c DataProvider 3.12 or later
+    @subpage emaildataproviderreleasenotes
+*/
+
+/** @page emaildataproviderreleasenotes EmailDataProvider Release Notes
+
+    @section EmailDataProvider_v1_0 EmailDataProvider Module Version 1.0
     - initial release
 */
 

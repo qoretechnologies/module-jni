@@ -178,7 +178,7 @@ module JakartaJmsDataProvider {
 
     @tableofcontents
 
-    @section jakartajmsdataproviderintro Introduction to the JakartaJmsDataProvider Module
+    @section jakartajmsdataproviderintro JakartaJmsDataProvider Module Introduction
 
     <img src="jms-logo.svg" width="96" alt="JakartaJmsDataProvider module logo"/>
 
@@ -187,6 +187,13 @@ module JakartaJmsDataProvider {
 
     This data provider provides JMS functionality with the \c jms factory and data provider with the
     same name (class @ref JakartaJmsDataProvider::JmsDataProvider "JmsDataProvider").
+
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
+    The \c provider_classpath and \c connection_factory_class options are refused to sandboxed code
+      (\c JNI-SANDBOX-ERROR).
 
     @subsection jakartajmsdataprovider_usecases Business Use Cases
 
@@ -254,6 +261,17 @@ module JakartaJmsDataProvider {
     Destinations are specified in URI format:
     - \c queue://order-queue — point-to-point queue
     - \c topic://price-updates — publish-subscribe topic
+
+    @section jakartajmsdataproviderdocumentation Documentation
+
+    - @subpage jakartajmsdataprovidercookbook
+    - @subpage jakartajmsdataprovideractions
+    - @anchor JakartaJmsDataProvider_relnotes @subpage jakartajmsdataproviderreleasenotes
+*/
+
+/** @page jakartajmsdataprovidercookbook JMS Provider Examples
+
+    @tableofcontents
 
     @section jakartajmsdataprovider_examples JMS Data Provider Examples
 
@@ -367,6 +385,11 @@ module JakartaJmsDataProvider {
     polling.registerObserver(new PriceUpdateHandler());
     polling.observersReady();
     @endcode
+*/
+
+/** @page jakartajmsdataprovideractions JMS Actions and Troubleshooting
+
+    @tableofcontents
 
     @section jakartajmsdataprovider_actions App Action Reference
 
@@ -388,16 +411,12 @@ module JakartaJmsDataProvider {
     - <b>Message selector syntax error</b>: selectors use JMS SQL-92 syntax
       (e.g., \c "color = 'red' AND priority > 5"); property names must be valid Java identifiers
       (no hyphens — use underscores)
+*/
 
-    @section JakartaJmsDataProvider_relnotes Release Notes
+/** @page jakartajmsdataproviderreleasenotes JakartaJmsDataProvider Release Notes
 
-    @subsection JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
-      network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
-      callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
+    @section JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider Module Version 1.0
     - initial release
-    - the \c provider_classpath and \c connection_factory_class options are refused to sandboxed code
-      (\c JNI-SANDBOX-ERROR)
 */
 
 #! contains all public definitions in the JakartaJmsDataProvider module

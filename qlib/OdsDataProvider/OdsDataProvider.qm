@@ -426,6 +426,10 @@ module OdsDataProvider {
     - @ref OdsDataProvider::OdsListWorksheetsDataProvider "OdsListWorksheetsDataProvider" - for listing the
       worksheets of a spreadsheet (the \c list-worksheets action)
 
+    @par Sandbox access
+    The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
+    Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
+
     @section OdsDataProvider_writing_sheets Writing Several Worksheets
 
     The \c sheets option writes the records to several worksheets: each worksheet is a hash with its name in
@@ -496,14 +500,14 @@ module OdsDataProvider {
     \c ODS-WRITE-OPTION-ERROR naming the worksheet.  As the conditions can use fields that are not written, the
     record type of the provider is open with \c sheets.
 
-    @section OdsDataProvider_relnotes Release Notes
+    @anchor OdsDataProvider_relnotes
 
-    @subsection OdsDataProvider_v1_0 OdsDataProvider v1.0
-    - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
-      calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
-      code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data
-      provider classes refuse sandboxed callers up front (\c APP-SANDBOX-ACCESS-DENIED) instead of failing in the
-      middle of a call; the module requires \c DataProvider 3.12 or later
+    @subpage odsdataproviderreleasenotes
+*/
+
+/** @page odsdataproviderreleasenotes OdsDataProvider Release Notes
+
+    @section OdsDataProvider_v1_0 OdsDataProvider Module Version 1.0
     - initial release
 */
 
