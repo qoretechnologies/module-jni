@@ -204,10 +204,8 @@ static bool deferred_ns_init = false;
 // normal del path already ran.  Only registered when we created the VM ourselves
 // (not when a host process passed in an existing JVM via the jvm-ptr option).
 static void jni_atexit_destroy_vm() {
-    // when the JVM ends the process (see Jvm::isExiting()), it can be neither called nor destroyed
-    if (jni::Jvm::isExiting()) {
-        return;
-    }
+    // when the JVM ends the process (see Jvm::isExiting()), destroyVM() leaves the JVM, which can be neither called
+    // nor destroyed; the global Program is abandoned in any case, as its static destructor must not run
     try {
         // Prevent the global Program's static destructor from running after
         // function-local libqore synchronization objects have been torn down.

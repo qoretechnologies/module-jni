@@ -65,6 +65,8 @@ if (worker) {
     started.get();
 }
 
+# with reduced signals, the JVM's attach listener creates its socket at startup, in its own thread
+stdout.printf(\"socket: %y\\n\", is_socket(\"/tmp/.java_pid\" + getpid()));
 stdout.print(\"ready\\n\");
 switch (mode) {
     case \"exit\": JvmSignals::exit(status); break;
@@ -153,14 +155,15 @@ stdout.print(\"after\\n\");
                 # Java runs its shutdown hooks for System.exit() before the JVM ends the process, not for halt()
                 assertEq(!HaltModes{mode}, res.out.find("java-shutdown-hook") >= 0,
                     label + ": Java shutdown hooks: " + res.out);
-                # Qore's exit() in a process with a ThreadPool worker ends it immediately, as the JVM's exit does;
-                # without other threads, Qore's exit() calls C exit() in its thread, which the JVM's exit cannot do
-                if (worker) {
-                    assertEq(qore_hook, res.out.find("qore-exit-hook") >= 0,
-                        label + ": Qore exit hooks as with Qore exit(): " + res.out);
+                # no Qore code runs after Java's shutdown hooks: the Qore exit hooks run only when a program ends
+                # normally, and not with Qore's exit() either
+                assertEq(False, qore_hook, "Qore exit() " + wlabel + ": no Qore exit hook: " + ref.out);
+                assertEq(-1, res.out.find("qore-exit-hook"), label + ": no Qore exit hook: " + res.out);
+                # the module's exit hook removes the JVM's attach socket, which _Exit() leaves otherwise; the attach
+                # listener creates it in its own thread at startup, so it is checked only if the child saw it
+                if (res.out =~ /(^|\n)socket: True\n/) {
+                    assertFalse(res.socket_left, label + ": the attach socket was removed");
                 }
-                # the module's exit hook removes the JVM's attach socket, which _Exit() leaves otherwise
-                assertFalse(res.socket_left, label + ": the attach socket was removed");
             }
         }
     }

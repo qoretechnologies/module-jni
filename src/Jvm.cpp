@@ -56,12 +56,17 @@
     process ends with \c _Exit() and the status given here.
 
     In a libqore built without signal handling, qore_exit_process() does not check the TID and can call C \c exit()
-    here; the JVM is therefore marked as exiting first, which makes the module's \c atexit() handler skip the JVM's
-    teardown, which would wait for ever for Java threads stopped at the final safepoint.
+    here, in a process whose only %Qore thread is the one blocked in the JVM.  The JVM is therefore marked as exiting
+    first: the module's \c atexit() handler then still abandons the global Program, but Jvm::destroyVM() skips the
+    JVM's teardown, which would wait for ever for Java threads stopped at the final safepoint; the static global
+    references of the module fail to attach the VM Thread to the JVM in their destructors and are left.  libqore's own
+    static destructors then run on this thread, which is not a %Qore thread, as with any C \c exit() that
+    qore_exit_process() calls.
 
-    This cannot deadlock: it runs no %Qore or Java code and makes no JNI call (each would block for ever, as Java
-    threads stay stopped at the final safepoint and the JVM blocks every thread that enters it once it has exited),
-    and qore_exit_process() only reads libqore's thread counts before it ends the process.  It never returns.
+    With signal handling (the default), this cannot deadlock: it runs no %Qore or Java code and makes no JNI call
+    (each would block for ever, as Java threads stay stopped at the final safepoint and the JVM blocks every thread
+    that enters it once it has exited), and qore_exit_process() only reads libqore's thread counts before it ends the
+    process with \c _Exit().  It never returns.
 
     @param code the exit status that Java gave
 */
@@ -69,7 +74,9 @@ static void JNICALL jni_vm_exit_hook(jint code) {
     jni::Jvm::setExiting();
 #ifdef __linux__
     // on Linux, the JVM's attach listener, which reduced signals start at startup, removes its socket in an atexit()
-    // handler, which does not run with _Exit()
+    // handler, which does not run with _Exit(); as HotSpot always creates it at this path on Linux, it is removed here
+    // (with a /tmp shared by processes in different PID namespaces, a socket of another JVM with the same PID could be
+    // removed instead, as by any cleanup that goes by the PID)
     char sock[64];
     int len = snprintf(sock, sizeof sock, "/tmp/.java_pid%d", static_cast<int>(getpid()));
     if (len > 0 && len < static_cast<int>(sizeof sock)) {

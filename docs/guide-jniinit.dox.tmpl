@@ -80,7 +80,7 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
       does when it is called in a process with other %Qore threads: no %Qore code runs after Java's shutdown hooks
       (neither the hooks set with @ref Qore::register_exit_hook() "register_exit_hook()", which %Qore runs only when
       a program ends normally, nor the delete functions of modules), the JVM is not destroyed (its threads stay
-      stopped), and the thread whose Java call made the call never returns from it; the attach listener's socket
+      stopped), and the Java call that ended the process never returns; the attach listener's socket
       (<tt>/tmp/.java_pid<i>pid</i></tt>) is removed on Linux
 
     Before, the JVM called C \c exit() on its VM Thread, which ran libqore's static destructors while %Qore threads
