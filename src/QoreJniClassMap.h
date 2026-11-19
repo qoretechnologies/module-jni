@@ -678,7 +678,10 @@ public:
     //! Sets the Java context of a thread that has just been attached to the JVM (see jni::Env's constructor)
     /** As setContext(), but once the module's shutdown has started (see Globals::isShuttingDown()), a thread with no
         Program context gets no Java context: the global Java context Program, which is being deleted or has been
-        deleted, is not created again; a Program created then would never be deleted (qore#6799)
+        deleted, is not created again; a Program created then would never be deleted (qore#6799).  The shutdown starts
+        just before the global context Program is deleted, so a thread attached in another thread in between gets no
+        Java context either, which matters little, as Java calls of %Qore code through proxies are refused then (see
+        QoreCodeDispatcher::dispatch()).
     */
     DLLLOCAL static void setAttachContext(Env& env);
 
