@@ -61,10 +61,13 @@ class JniDoDerefNoThrowTest inherits QUnit::Test {
 
     cancelCase() {
         # the garbage collection hint runs in one of the 25 releases, in a thread with a pending cancellation, which
-        # must not be raised there, where it would be reported as unhandled and lost (libqore defers it in the
-        # destructor of a Program object too)
+        # must not be raised there, where it would be reported as an unhandled exception; libqore itself defers a
+        # pending cancellation in the destructor of a Program object, so this case passes without the module's own
+        # deferral too: it checks that the releases in a cancelled thread report nothing and that the thread completes
         string out = runChild("cancel");
         assertEq("wait: THREAD-CANCELLED", getLine(out, "wait: "), out);
+        # the thread completed the releases; a raised cancellation stays pending, so this does not show that none was
+        # raised
         assertEq("pending after: True", getLine(out, "pending after: "), out);
         assertFalse(out =~ /unhandled QORE/, out);
         assertFalse(out =~ /^caught: /m, out);

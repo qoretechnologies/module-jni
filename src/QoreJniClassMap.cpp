@@ -4965,8 +4965,13 @@ JniExternalProgramData::~JniExternalProgramData() {
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderClearProgramPtr, nullptr);
     } catch (UnableToAttachException& e) {
         // ignore error - raised when destructions is run after the JVM has shut down
-    } catch (jni::Exception& e) {
+    } catch (AbstractException& e) {
         e.convert(&xsink);
+    } catch (std::exception& e) {
+        // the destructor is implicitly noexcept: no exception may leave it (qore#6773)
+        xsink.raiseException("JNI-ERROR", "error releasing the class loader of a Program: %s", e.what());
+    } catch (...) {
+        xsink.raiseException("JNI-ERROR", "unknown error releasing the class loader of a Program");
     }
 
     // delete fake "$" classes
@@ -5221,13 +5226,15 @@ static std::atomic<int> jni_pgm_deref_count{0};
 
 void JniExternalProgramData::doDeref() {
     // no C++ exception may leave this function (qore#6773): AbstractQoreProgramExternalData::doDeref() has no
-    // exception sink and does not document that it may throw, and libqore calls it in the teardown of the Program;
+    // exception sink and does not document that it may throw; the teardown of the Program catches an
+    // AbstractException thrown as an object, not as a pointer (qore_program_private::del()), but other callers of
+    // doDeref() do not, so
     // every exception raised here is caught and converted to a Qore exception in this local sink, whose destructor
     // reports it as an unhandled exception on stderr when the function returns
     ExceptionSink xsink;
     // the callback is released before the object is deleted, as it is a member; releasing it can run Qore code, for
-    // example the destructor of an object that only the callback holds, which can raise a Qore exception, and which
-    // can also set a new callback, as the Program's jni data can still be found: that one is released in turn
+    // example the destructor of an object that only the callback holds, which can raise a Qore exception; should that
+    // code set a new callback for this Program, which can still find its jni data, that one is released in turn
     while (ResolvedCallReferenceNode* callback = save_object_callback) {
         save_object_callback = nullptr;
         try {
@@ -5241,7 +5248,7 @@ void JniExternalProgramData::doDeref() {
             xsink.raiseException("JNI-ERROR", "unknown error releasing the save object callback of a Program");
         }
     }
-    // the destructor is implicitly noexcept and reports the exceptions that it catches itself; nothing after this
+    // the destructor is implicitly noexcept and catches and reports every exception itself; nothing after this
     // statement may use a member of the object
     delete this;
     // hint the JVM to collect orphaned classloaders periodically; the destructor above
@@ -5253,9 +5260,10 @@ void JniExternalProgramData::doDeref() {
     // lookups via findClass/getStaticMethod crash during the Qore destruction chain.
     // Batched (every 20 destructions) to avoid overhead.
     if (++jni_pgm_deref_count % 20 == 0) {
-        // a cancellation of the thread stays pending for the code that follows: Env's constructor raises a pending
-        // cancellation, which would be reported here as an unhandled exception and lost (libqore defers it in the
-        // destructor of a Program object already, but the Program can also be released elsewhere)
+        // a pending cancellation of the thread is deferred, so that the hint is not skipped and the cancellation is not
+        // reported here as an unhandled exception, as Env's constructor would raise it otherwise; it stays pending for
+        // the code that follows (libqore itself defers it in the destructor of a Program object, but the Program can
+        // also be released elsewhere)
         QoreCancelDeferralHelper cancel_deferral;
         try {
             Env env;
