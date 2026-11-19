@@ -50,9 +50,14 @@
     C \c exit() on the VM Thread ran the \c atexit() handlers and libqore's static destructors while %Qore threads were
     still running (at least the thread whose Java call called \c System.exit(), which never returns), and libqore
     aborted when a \c ThreadPool worker was active.  qore_exit_process() ends the process as the %Qore \c exit()
-    function does: with C \c exit() only in a process whose only thread is the calling %Qore thread, and with
-    \c _Exit() otherwise.  The VM Thread is not a %Qore thread, and the calling thread is still blocked in the JVM,
-    so the process always ends with \c _Exit() and the status given here.
+    function does: with C \c exit() only when it is called by a %Qore thread (a thread with a %Qore TID; with signal
+    handling, which libqore has by default) in a process with no other %Qore thread and no \c ThreadPool worker, and
+    with \c _Exit() otherwise.  The VM Thread is not a %Qore thread (its TID is 0), so with signal handling the
+    process ends with \c _Exit() and the status given here.
+
+    In a libqore built without signal handling, qore_exit_process() does not check the TID and can call C \c exit()
+    here; the JVM is therefore marked as exiting first, which makes the module's \c atexit() handler skip the JVM's
+    teardown, which would wait for ever for Java threads stopped at the final safepoint.
 
     This cannot deadlock: it runs no %Qore or Java code and makes no JNI call (each would block for ever, as Java
     threads stay stopped at the final safepoint and the JVM blocks every thread that enters it once it has exited),
@@ -61,11 +66,13 @@
     @param code the exit status that Java gave
 */
 static void JNICALL jni_vm_exit_hook(jint code) {
+    jni::Jvm::setExiting();
 #ifdef __linux__
     // on Linux, the JVM's attach listener, which reduced signals start at startup, removes its socket in an atexit()
     // handler, which does not run with _Exit()
     char sock[64];
-    if (snprintf(sock, sizeof sock, "/tmp/.java_pid%d", static_cast<int>(getpid())) < static_cast<int>(sizeof sock)) {
+    int len = snprintf(sock, sizeof sock, "/tmp/.java_pid%d", static_cast<int>(getpid()));
+    if (len > 0 && len < static_cast<int>(sizeof sock)) {
         unlink(sock);
     }
 #endif
@@ -223,6 +230,7 @@ JavaVM* Jvm::vm = nullptr;
 thread_local JNIEnv* Jvm::env;
 bool Jvm::native_access_option_enabled = false;
 bool Jvm::forked_child = false;
+std::atomic<bool> Jvm::exiting{false};
 QoreForkHandlerRegistration* Jvm::fork_reg = nullptr;
 
 void Jvm::forkChild(void*) {
@@ -421,9 +429,10 @@ QoreStringNode* Jvm::createVM() {
     // JVM thread instead of to the signal thread: %Qore signal handlers never run, and the JVM ends the process with
     // System.exit() (which, without the exit hook below, called C exit() on its VM Thread while %Qore threads were
     // still running, so libqore's static destructors aborted the process).  libjsig does not prevent this, as it
-    // only chains handlers installed with sigaction(), and %Qore installs none for these signals.  -Xrs does not change the JVM's handling of the synchronous signals
-    // SIGSEGV, SIGBUS, SIGFPE and SIGILL, which it needs for implicit null checks, stack banging and safepoint polls,
-    // and libjsig, if present, still chains them with the handlers of other runtimes in the process.
+    // only chains handlers installed with sigaction(), and %Qore installs none for these signals.  -Xrs does not
+    // change the JVM's handling of the synchronous signals SIGSEGV, SIGBUS, SIGFPE and SIGILL, which it needs for
+    // implicit null checks, stack banging and safepoint polls, and libjsig, if present, still chains them with the
+    // handlers of other runtimes in the process.
     // It is set after the options from QORE_JNI_JVM_ARGS, as the last occurrence of an option is used, so that
     // -XX:-ReduceSignalUsage there cannot turn it off
     options[vm_args.nOptions++].optionString = (char*)"-Xrs";
@@ -465,6 +474,12 @@ void Jvm::destroyVM() {
     //      Qore module-manager teardown).
     // Only the first call does the work; subsequent calls are no-ops.
     if (!vm) {
+        return;
+    }
+
+    if (isExiting()) {
+        // the JVM is ending the process for System.exit() or Runtime.halt(): its Java threads, including the
+        // NativeCleanup thread, stay stopped at its final safepoint, so nothing can be joined or called
         return;
     }
 

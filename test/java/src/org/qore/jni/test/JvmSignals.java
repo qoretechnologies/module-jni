@@ -78,4 +78,11 @@ public final class JvmSignals {
         t.start();
         t.join();
     }
+
+    /** Calls Runtime.halt() in a new Java thread and waits for it: the process ends while the caller waits */
+    public static void haltInJavaThread(int status) throws InterruptedException {
+        Thread t = new Thread(() -> Runtime.getRuntime().halt(status), "JvmSignals-halt");
+        t.start();
+        t.join();
+    }
 }

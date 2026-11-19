@@ -30,6 +30,7 @@ class JniSystemExitTest inherits QUnit::Test {
             - \c exit: System.exit() in the Qore thread's Java call
             - \c halt: Runtime.halt() in the Qore thread's Java call
             - \c thread: System.exit() in a Java thread that Qore did not create, while the Qore thread waits for it
+            - \c thread-halt: Runtime.halt() in a Java thread that Qore did not create
             - \c qore: the Qore exit() function, for reference
 
             \c worker is 1 to run a ThreadPool worker while the process ends, or 0
@@ -69,6 +70,7 @@ switch (mode) {
     case \"exit\": JvmSignals::exit(status); break;
     case \"halt\": JvmSignals::halt(status); break;
     case \"thread\": JvmSignals::exitInJavaThread(status); break;
+    case \"thread-halt\": JvmSignals::haltInJavaThread(status); break;
     case \"qore\": exit(status); break;
 }
 stdout.print(\"after\\n\");
@@ -82,8 +84,12 @@ stdout.print(\"after\\n\");
             "exit": 7,
             "halt": 9,
             "thread": 11,
+            "thread-halt": 15,
             "qore": 13,
         };
+
+        #! the modes that end the process with Runtime.halt(), which runs no Java shutdown hooks
+        const HaltModes = {"halt": True, "thread-halt": True};
     }
 
     private {
@@ -136,7 +142,7 @@ stdout.print(\"after\\n\");
             assertEq(Status.qore, ref.rc, "Qore exit() " + wlabel + ": exit status: " + ref.out);
             bool qore_hook = ref.out.find("qore-exit-hook") >= 0;
 
-            foreach string mode in (("exit", "halt", "thread")) {
+            foreach string mode in (("exit", "halt", "thread", "thread-halt")) {
                 hash<auto> res = run(preload, mode, worker);
                 string label = sprintf("%s %s", mode, wlabel);
                 checkLibjsig(res, with_libjsig);
@@ -145,11 +151,16 @@ stdout.print(\"after\\n\");
                 assertEq(Status{mode}, res.rc, label + ": exit status: " + res.out);
                 assertNRegex("(^|\n)after\n", res.out, label + ": the call did not return");
                 # Java runs its shutdown hooks for System.exit() before the JVM ends the process, not for halt()
-                assertEq(mode != "halt", res.out.find("java-shutdown-hook") >= 0,
+                assertEq(!HaltModes{mode}, res.out.find("java-shutdown-hook") >= 0,
                     label + ": Java shutdown hooks: " + res.out);
-                # the process ends as with Qore's exit()
-                assertEq(qore_hook, res.out.find("qore-exit-hook") >= 0,
-                    label + ": Qore exit hooks as with Qore exit(): " + res.out);
+                # Qore's exit() in a process with a ThreadPool worker ends it immediately, as the JVM's exit does;
+                # without other threads, Qore's exit() calls C exit() in its thread, which the JVM's exit cannot do
+                if (worker) {
+                    assertEq(qore_hook, res.out.find("qore-exit-hook") >= 0,
+                        label + ": Qore exit hooks as with Qore exit(): " + res.out);
+                }
+                # the module's exit hook removes the JVM's attach socket, which _Exit() leaves otherwise
+                assertFalse(res.socket_left, label + ": the attach socket was removed");
             }
         }
     }
@@ -181,15 +192,17 @@ stdout.print(\"after\\n\");
             printf("mode %s worker %y preload %y: rc %d\n%s\n", mode, worker, preload, rc, out);
         }
         # with reduced signals, the JVM creates its attach socket at startup and removes it at exit() only, so a
-        # child that ended with _Exit() leaves it behind
+        # child that ended with _Exit() leaves it behind, unless the module removed it
+        bool socket_left = False;
         *string pid = (out =~ x/(?:^|\n)pid: ([0-9]+)\n/)[0];
         if (pid) {
             string sock = "/tmp/.java_pid" + pid;
             if (is_socket(sock)) {
+                socket_left = True;
                 unlink(sock);
             }
         }
-        return {"rc": rc, "out": out};
+        return {"rc": rc, "out": out, "socket_left": socket_left};
     }
 
     private:internal static string shellQuote(string arg) {
