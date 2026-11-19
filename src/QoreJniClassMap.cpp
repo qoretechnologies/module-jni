@@ -5168,7 +5168,7 @@ JniExternalProgramData* JniExternalProgramData::getCreateJniProgramData(QoreProg
         // another thread can have created the data after the check above, while this thread waited for the parse
         // lock: the jni APIs create it on demand, so two threads of a Program without jni data can try to create it
         // at the same time (qore#6801)
-        jpc =static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+        jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
         if (jpc) {
             return jpc;
         }

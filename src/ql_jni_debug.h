@@ -54,9 +54,9 @@ enum class DbgJniGatePoint {
 };
 
 //! Runs the one-shot gate set with Jni::dbg_jni_set_context_gate() if it was set by the current thread for the point
-/** Called at the given point of a call (see DbgJniGatePoint, JniExternalProgramData::setContext() and
-    jni_enter_call_program()), so that a test can run code exactly in that window; throws jni::XsinkException if the
-    gate's code raises an exception
+/** Called at the given point of a call (see DbgJniGatePoint, JniExternalProgramData::setContext(),
+    jni_enter_call_program() and JniExternalProgramData::getCreateJniProgramData()), so that a test can run code
+    exactly in that window; throws jni::XsinkException if the gate's code raises an exception
 */
 DLLLOCAL void dbg_jni_run_context_gate(DbgJniGatePoint point);
 

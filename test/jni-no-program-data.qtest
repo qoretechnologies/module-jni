@@ -43,8 +43,9 @@ class JniNoProgramDataTest inherits QUnit::Test {
     }
 
     concurrentCreateCase() {
-        # a debug gate of the module makes another thread create the jni data while this one waits for the parse lock
-        # to create it; the second creation, which libqore refuses with an assertion or leaks, must not happen
+        # a debug gate of the module makes another thread create the jni data after this thread found no jni data and
+        # before it takes the parse lock to create it; the second creation, which libqore refuses with an assertion
+        # or leaks, must not happen
         string out = runChild("concurrent_create");
         string line = getLine(out, "result: ");
         if (line == "result: no debug gate") {
