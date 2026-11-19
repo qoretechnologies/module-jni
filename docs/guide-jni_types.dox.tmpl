@@ -155,7 +155,9 @@
     user, password and database name, in the datasource's encoding, and its \c url option).
 
     A string that cannot be converted to UTF-8 from its encoding raises an exception (ex:
-    \c ENCODING-CONVERSION-ERROR) instead of being passed with its bytes as they are.
+    \c ENCODING-CONVERSION-ERROR) instead of being passed with its bytes as they are, except in the code and
+    description of an exception, which are passed in the message of the Java exception with their bytes decoded as
+    UTF-8 (each invalid sequence becoming U+FFFD), as an error cannot be raised while an error is reported.
 
     Hash keys, and the codes of %Qore exceptions, are in the default encoding: a Java \c Map key or JDBC column label
     is converted to it, and a hash key is converted from it to UTF-16.  With a default encoding other than UTF-8, a

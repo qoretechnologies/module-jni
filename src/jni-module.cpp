@@ -976,9 +976,9 @@ static void jni_module_parse_cmd(const QoreString& cmd_arg, ExceptionSink* xsink
 
     if (!p) {
         // the description is in UTF-8, as the command is here
-        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
         desc->sprintf("missing command name in parse command: '%s'", cmd.c_str());
-        xsink->raiseException("JNI-PARSE-COMMAND-ERROR", desc);
+        xsink->raiseException("JNI-PARSE-COMMAND-ERROR", desc.release());
         return;
     }
 
@@ -992,15 +992,16 @@ static void jni_module_parse_cmd(const QoreString& cmd_arg, ExceptionSink* xsink
     mcmap_t::const_iterator i = mcmap.find(str.c_str());
     if (i == mcmap.end()) {
         // the description is in UTF-8, as the command is here
-        QoreStringNode* desc = new QoreStringNode(QCS_UTF8);
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
         desc->sprintf("unrecognized command '%s' in '%s' (valid commands: ", str.c_str(), cmd.c_str());
         for (mcmap_t::const_iterator i = mcmap.begin(), e = mcmap.end(); i != e; ++i) {
-            if (i != mcmap.begin())
+            if (i != mcmap.begin()) {
                 desc->concat(", ");
+            }
             desc->sprintf("'%s'", i->first.c_str());
         }
         desc->concat(')');
-        xsink->raiseException("JNI-PARSE-COMMAND-ERROR", desc);
+        xsink->raiseException("JNI-PARSE-COMMAND-ERROR", desc.release());
         return;
     }
 

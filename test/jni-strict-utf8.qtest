@@ -52,7 +52,8 @@ class JniStrictUtf8Test inherits QUnit::Test {
         addTestCase("regression: a Qore exception message with NUL to Java", \qoreToJavaMessageNul());
         addTestCase("regression: a Qore exception message in ISO-8859-1 to Java", \qoreToJavaMessageLatin1());
         addTestCase("regression: a QoreException description with NUL to Qore", \javaToQoreDescNul());
-        addTestCase("coverage: class loading error messages", \classLoadErrors());
+        addTestCase("regression: the message of a Java exception that the module raises (ThrowNew())",
+            \classLoadErrors());
         addTestCase("regression: a module load error raised in Java is not also reported as unhandled",
             \moduleLoadErrorNotUnhandled());
         addTestCase("coverage: define_class() and load_class() with a BMP class name", \bmpClassName());
@@ -115,12 +116,23 @@ class JniStrictUtf8Test inherits QUnit::Test {
         }
     }
 
-    #! the error message of a Java class that cannot be loaded, which the module raises in Java with a dynamic text
-    #! (HotSpot's ThrowNew() accepts a 4-byte sequence, so this passed before)
+    #! the error message of a Java class that cannot be generated, which the module raises in Java with a dynamic text,
+    #! was passed to JNI's ThrowNew() in standard UTF-8, which garbled a character outside the BMP (U+1F600 became
+    #! "ð"), and the list of the loaded modules had no opening parenthesis
     classLoadErrors() {
-        # a Java class for a Qore class that does not exist
-        *string msg = Utf8Boundary::loadError("qore.NoSuch" + text + "Class");
-        assertEq(True, (msg ?? "").find("NoSuch" + text + "Class") >= 0, msg ?? "<no error>");
+        # the byte code of a Java class for a Qore class that does not exist: the class loader's own lookup, which a
+        # class load falls back to, would replace the module's error with its own
+        string msg;
+        try {
+            QoreURLClassLoader loader = QoreURLClassLoader::getCurrent();
+            loader.generateByteCode("qore.NoSuch" + text + "Class");
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            msg = ex.desc;
+        }
+        assertEq(True, msg.find("Java class 'qore.NoSuch" + text + "Class' cannot be generated") >= 0, msg);
+        # the list of the loaded modules is in parentheses
+        assertRegex("cannot be found \\(loaded modules: [^()]*\\)", msg);
     }
 
     #! the error of a module that Java's loading of a qoremod.* class could not load was raised in Java as a
@@ -385,8 +397,8 @@ public class %s {
         assertEq("[" + with_nul + "]", a.deepToString());
     }
 
-    #! the message of a JNI-SANDBOX-ERROR that org.qore.jni.QoreSandbox raises for an invalid argument (an ASCII
-    #! text) is passed to Qore with its length
+    #! the path of the JNI-SANDBOX-ERROR that org.qore.jni.QoreSandbox raises for an invalid argument, whose message
+    #! is now passed to Qore with its length and as UTF-8 (the messages are ASCII texts, so this passed before)
     sandboxArgumentError() {
         assertThrows("JNI-SANDBOX-ERROR", "must not contain a NUL character", \QoreSandbox::checkFileAccess(),
             (with_nul, False));

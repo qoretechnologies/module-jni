@@ -3505,17 +3505,20 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
             ReferenceHolder<QoreListNode> feature_list(pgm->getFeatureList(), &xsink);
             // the message in UTF-8: the Java name, and the Qore path made from it, are UTF-8
             QoreString desc(QCS_UTF8);
-            desc.sprintf("Java class '%s' cannot be generated, because Qore class '%s' cannot be found; loaded " \
+            desc.sprintf("Java class '%s' cannot be generated, because Qore class '%s' cannot be found (loaded " \
                 "modules: ", java_name.c_str(), qpath.c_str());
+            bool first = true;
             ConstListIterator fi(*feature_list);
             while (fi.next()) {
                 QoreValue feature = fi.getValue();
                 if (feature.getType() == NT_STRING) {
+                    if (!first) {
+                        desc.concat(", ");
+                    }
+                    first = false;
                     jni_append_utf8(desc, feature);
-                    desc.concat(", ");
                 }
             }
-            desc.terminate(desc.size() - 2);
             desc.concat(')');
             env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
             return nullptr;
