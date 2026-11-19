@@ -65,8 +65,13 @@ the process in `std::terminate()`.
   rollback of a failed initialization (`jni_module_init_rollback()`) and `Jvm::destroyVM()` are `noexcept`; each
   step that can throw runs in `jni_teardown_step()` (`src/defs.h`), which reports a C++ exception on stderr with
   `jni_report_current_exception()` (`jni module: <step> failed: <err>: <desc>`) and continues with the next step
-  (qore#6788).  A failure to stop the NativeCleanup thread leaves it running; it is a daemon thread, which
-  `DestroyJavaVM()` does not wait for.
+  (qore#6788).  The `atexit()` handler, which can run after the Qore library has been cleaned up, reports a
+  `jni::Exception` without converting it to a Qore exception (`jni_report_set_plain()`).  If stopping the
+  NativeCleanup thread fails before the worker is woken, the worker stays blocked in the JVM (a daemon thread, which
+  `DestroyJavaVM()` does not wait for; with a JVM passed in with `jvm-ptr`, the JVM is not destroyed); the failure
+  sets `native_cleanup_abandoned`, so that a reference that wakes it later is dropped (its native object is leaked)
+  instead of dispatched during or after the teardown.  If it fails after the worker was joined, the handles not yet
+  released are leaked.
 - `JniExternalProgramData::copy()`, which libqore calls from the constructor of a child Program, is `noexcept`:
   `AbstractQoreProgramExternalData::copy()` cannot report an error, so a failure is reported on stderr, and
   `nullptr` is returned, with which the child Program is created without the module's data, as with

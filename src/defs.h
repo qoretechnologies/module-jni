@@ -571,6 +571,12 @@ DLLLOCAL QoreString jni_utf8_to_default(const char* utf8);
 */
 DLLLOCAL void jni_report_current_exception(const char* step) noexcept;
 
+//! Makes jni_report_current_exception() report a jni::Exception without converting it to a %Qore exception
+/** For the module's \c atexit() handler, which can run after the %Qore library has been cleaned up, when the
+    conversion, which creates a %Qore exception, can no longer be relied on to run
+*/
+DLLLOCAL void jni_report_set_plain() noexcept;
+
 //! Runs a step of the module's teardown, reporting a C++ exception that it throws and continuing (qore#6788)
 /** see jni_report_current_exception()
 */

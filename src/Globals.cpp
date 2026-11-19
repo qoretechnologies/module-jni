@@ -4759,6 +4759,10 @@ jfieldID fieldNativeCleanupRefKind = nullptr;
 // — the kernel reaps the thread when the process is torn down.
 std::thread* native_cleanup_thread = nullptr;
 std::atomic<bool> native_cleanup_thread_started{false};
+// set when Globals::stopNativeCleanupThread() fails in the module's teardown, which continues without the worker
+// having been stopped (qore#6788): the worker then dispatches nothing more, as the module and libqore are being torn
+// down, and stops at its next wakeup
+std::atomic<bool> native_cleanup_abandoned{false};
 
 void native_cleanup_dispatch(jlong ptr, jint kind) {
     if (!ptr) {
@@ -4841,6 +4845,12 @@ void native_cleanup_thread_main(JavaVM* vm) {
             // remove() with no timeout shouldn't return null; defensive break
             break;
         }
+        if (native_cleanup_abandoned.load(std::memory_order_acquire)) {
+            // the teardown continued without stopping this thread (see Globals::stopNativeCleanupThread()): the
+            // native object is leaked, as the code that releases it can no longer run safely
+            env->DeleteLocalRef(ref);
+            break;
+        }
 
         jlong ptr = env->CallLongMethod(ref, methodNativeCleanupAcquire);
         if (env->ExceptionCheck()) {
@@ -4912,6 +4922,17 @@ void Globals::stopNativeCleanupThread() {
     if (!native_cleanup_thread_started.load()) {
         return;
     }
+    try {
+        stopNativeCleanupThreadIntern();
+    } catch (...) {
+        // the teardown continues without the worker having been stopped (qore#6788); if it was not woken, it stays
+        // blocked in the JVM, and if a reference wakes it, it dispatches nothing more
+        native_cleanup_abandoned.store(true, std::memory_order_release);
+        throw;
+    }
+}
+
+void Globals::stopNativeCleanupThreadIntern() {
 #ifdef DEBUG
     // a test fail point: the thread cannot be attached to the JVM to stop the worker
     if (dbg_jni_fail_at(DbgJniFailPoint::NativeCleanupStop)) {

@@ -595,6 +595,9 @@ public:
         be quiescent. Called from Jvm::destroyVM before DestroyJavaVM. */
     DLLLOCAL static void stopNativeCleanupThread();
 
+    //! Stops the NativeCleanup thread; see stopNativeCleanupThread()
+    DLLLOCAL static void stopNativeCleanupThreadIntern();
+
     DLLLOCAL static jlong getContextProgram(jobject new_syscl, bool& created);
     DLLLOCAL static QoreProgram* createJavaContextProgram();
     DLLLOCAL static QoreProgram* getJavaContextProgram();

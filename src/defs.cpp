@@ -24,6 +24,8 @@
 //
 //------------------------------------------------------------------------------
 #include "defs.h"
+
+#include <atomic>
 #include <qore/Qore.h>
 #include "Jvm.h"
 #include "LocalReference.h"
@@ -519,10 +521,22 @@ QoreString jni_utf8_to_default(const char* utf8) {
     return QoreString(*str);
 }
 
+// set by the module's atexit() handler, where a jni::Exception is not converted to describe it (see
+// jni_report_set_plain())
+static std::atomic<bool> report_plain{false};
+
+void jni_report_set_plain() noexcept {
+    report_plain.store(true, std::memory_order_release);
+}
+
 void jni_report_current_exception(const char* step) noexcept {
     try {
         throw;
     } catch (Exception& e) {
+        if (report_plain.load(std::memory_order_acquire)) {
+            fprintf(stderr, "jni module: %s failed with a jni exception\n", step);
+            return;
+        }
         try {
             // there is no exception sink in the teardown: the exception is converted to describe it
             ExceptionSink xsink;
