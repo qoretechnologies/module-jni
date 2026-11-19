@@ -116,7 +116,9 @@ QoreValue JniQoreClass::memberGate(const QoreMethod& meth, void* m, QoreObject* 
         if (*xsink) {
             return QoreValue();
         }
-        JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+        // the Program has no jni data when it does not inherit the jni data of its parent: it is created then
+        // (qore#6801)
+        JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
         assert(jpc);
 
         LocalReference<jobject> v = env.callStaticObjectMethod(jpc->getDynamicApi(), jpc->getFieldId(), &jargs[0]);
@@ -124,7 +126,9 @@ QoreValue JniQoreClass::memberGate(const QoreMethod& meth, void* m, QoreObject* 
         // of the class's Program, which the thread has entered and which is therefore the current Program
         JniPendingContextHelper pending_ctx;
         return JavaToQore::convertToQore(std::move(v), pgm, compat_types);
-    } catch (jni::JavaException& e) {
+    } catch (jni::Exception& e) {
+        // every C++ exception of the module is converted here, not only Java exceptions: ex: the creation of the
+        // Program's jni data can raise another one (qore#6801)
         e.convert(xsink);
         return QoreValue();
     }

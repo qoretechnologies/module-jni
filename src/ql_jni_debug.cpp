@@ -89,8 +89,11 @@ std::atomic<bool> dbg_jni_context_gate_set{false};
 //! Sets or clears a one-shot gate that runs the given code on this thread at one point of a call
 /** \a point \c "lookup" (the default): between the lookup of a Program's jni context and its use (see
     JniExternalProgramData::setContext()); \c "entry": between the check that a Program has jni data and the entry
-    into it for a call made in another Program (see jni_enter_call_program()); so that a test can delete the Program
-    exactly in that window - see test/jni-cross-program-call.qtest; with no code, a gate that has not run is cleared
+    into it for a call made in another Program (see jni_enter_call_program()); \c "create": between the check that a
+    Program has no jni data and taking its parse lock to create it (see
+    JniExternalProgramData::getCreateJniProgramData()); so that a test can delete the Program exactly in that window -
+    see test/jni-cross-program-call.qtest - or create the jni data in another thread first - see
+    test/jni-no-program-data.qtest; with no code, a gate that has not run is cleared
 */
 static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
@@ -104,9 +107,11 @@ static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeCon
         const char* p = point_arg.get<const QoreStringNode>()->c_str();
         if (!strcmp(p, "entry")) {
             point = DbgJniGatePoint::Entry;
+        } else if (!strcmp(p, "create")) {
+            point = DbgJniGatePoint::Create;
         } else if (strcmp(p, "lookup")) {
-            xsink->raiseException("DBG-JNI-GATE-ERROR", "unknown gate point '%s'; expecting \"lookup\" or "
-                "\"entry\"", p);
+            xsink->raiseException("DBG-JNI-GATE-ERROR", "unknown gate point '%s'; expecting \"lookup\", "
+                "\"entry\" or \"create\"", p);
             return QoreValue();
         }
     }

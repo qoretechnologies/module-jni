@@ -1366,8 +1366,23 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
         return false;
     }
 
+    // it can happen that no Program in the context has jni data, as in a child Program that does not inherit the jni
+    // data of its parent (qore#6801): the class is then looked up in the current Program, as the lookup needs no jni
+    // data, or, with no current Program, in the global Java context Program, as for other calls from Java without a
+    // Program context
+    QoreProgram* pgm = jni_get_program_context();
+    if (!pgm) {
+        pgm = ::getProgram();
+    }
+    if (!pgm) {
+        pgm = Globals::getJavaContextProgram();
+        if (!pgm) {
+            // the module is being shut down
+            return false;
+        }
+    }
     ExceptionSink xsink;
-    const QoreClass* cls = jni_get_program_context()->findClass(class_name.c_str(), &xsink);
+    const QoreClass* cls = pgm->findClass(class_name.c_str(), &xsink);
     //printd(5, "qore_object_instance_of() cls: %p (%s) xsink: %d\n", cls, class_name.c_str(), (bool)xsink);
     if (!cls) {
         xsink.clear();

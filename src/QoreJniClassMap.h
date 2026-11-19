@@ -900,6 +900,41 @@ DLLLOCAL JniExternalProgramData* jni_get_context(QoreProgram*& pgm);
 DLLLOCAL JniExternalProgramData* jni_get_context_unconditional();
 DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm);
 
+//! Returns the jni data of the Program context of a call of a jni API from Qore code, creating it if necessary
+/** The Program is found as by jni_get_context(); when no Program in the context has jni data, the jni data of the
+    Program of the calling code is created (JniExternalProgramData::getCreateJniProgramData()), as by a jni module
+    command issued in the Program: a child Program that does not inherit the jni data of its parent
+    (\c PO_NO_INHERIT_PROGRAM_DATA, or when the copy of the parent's jni data fails) has the namespaces and the feature
+    of the jni module, but no jni data (qore#6801)
+
+    @param pgm set to the Program of the returned jni data: the global Java context Program when there is no Program
+    context; never nullptr
+
+    @return the jni data; never nullptr
+
+    @throw jni::Exception the jni data could not be created, or there is no Program context and no global Java
+    context Program (the module is being shut down)
+
+    @note to be called only from code that Qore code calls, as it can take the parse lock of the Program
+*/
+DLLLOCAL JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm);
+
+//! Returns the jni data of the Program of the calling Qore code, creating it if necessary
+/** For the APIs that must use the caller's Program in all cases (qore_get_call_program_context()); the jni data is
+    created as by jni_get_create_context() when the Program has none (qore#6801)
+
+    @param pgm set to the Program of the returned jni data: the global Java context Program when there is no Program
+    context; never nullptr
+
+    @return the jni data; never nullptr
+
+    @throw jni::Exception the jni data could not be created, or there is no Program context and no global Java
+    context Program (the module is being shut down)
+
+    @note to be called only from code that Qore code calls, as it can take the parse lock of the Program
+*/
+DLLLOCAL JniExternalProgramData* jni_get_create_call_context(QoreProgram*& pgm);
+
 //! Enters the Program of a Java call made in another Program, before its jni data is looked up
 /** A call of a Java method of an object that the given Program owns, or of a Java closure that it created, runs in
     that Program: when it is not the current Program, it is entered, so that its jni data cannot be destroyed while the
