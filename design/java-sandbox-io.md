@@ -87,7 +87,8 @@ Qore exceptions raised by a check are thrown in Java as `QoreExceptionWrapper` (
 original Qore exception when they reach Qore.  Argument errors detected in Java (`argumentError0()`) and the use of
 a closed policy (`closedError0()`) are created natively with `QoreToJava::newExceptionWrapper()`, which builds the
 wrapper without throwing it, so Java code throws them with normal control flow.  C++ exceptions never cross the JNI
-boundary: `sandbox_native()` converts them to Java exceptions.
+boundary: `sandbox_native()` converts them to Java exceptions, and every native method ends with `JNI_NATIVE_CATCH()`
+as the last resort (see `jni-native-exceptions.md`).
 
 ## Lifetime and concurrency of `Policy`
 

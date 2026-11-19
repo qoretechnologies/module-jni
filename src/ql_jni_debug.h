@@ -30,6 +30,8 @@
 
 #include <qore/Qore.h>
 
+#include <jni.h>
+
 #include <atomic>
 
 #ifdef DEBUG
@@ -58,6 +60,21 @@ DLLLOCAL void dbg_jni_run_context_gate(DbgJniGatePoint point);
 //! True while a gate is set; checked inline before dbg_jni_run_context_gate(), so that a lookup made with no gate
 //! set costs only this load
 DLLLOCAL extern std::atomic<bool> dbg_jni_context_gate_set;
+
+//! True while a class name is set with Jni::dbg_jni_fail_find_class(); checked inline in jni::Env::findClass()
+DLLLOCAL extern std::atomic<bool> dbg_jni_find_class_fail_set;
+
+//! Returns true if jni::Env::findClass() of the class must fail (see Jni::dbg_jni_fail_find_class())
+/** If it returns true, the Java exception of a failed class lookup (\c NoClassDefFoundError) is pending in \a jenv,
+    as when JNI's \c FindClass() fails
+*/
+DLLLOCAL bool dbg_jni_find_class_fails(JNIEnv* jenv, const char* name);
+
+//! Throws the C++ exception set with Jni::dbg_jni_native_throw() for this thread, if any, once
+/** Called at the start of the natives that call %Qore code from Java (see test/jni-native-exception.qtest), so that a
+    test can prove that no C++ exception leaves a JNI native method (qore#6739)
+*/
+DLLLOCAL void dbg_jni_native_throw_point();
 #endif
 
 #endif // QORE_JNI_QL_JNI_DEBUG_H

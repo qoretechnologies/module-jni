@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# No C++ exception leaves a JNI native method (qore#6739).
+#
+# A C++ exception that leaves a JNI native method unwinds through JVM frames, which ends the process in
+# std::terminate().  The native methods converted C++ exceptions to Java exceptions in their catch handlers, but they
+# looked up the class of the Java exception there with jni::Env::findClass(), which throws a C++ exception if the
+# lookup fails, and some natives and the helpers that they call had no handler for some C++ exceptions at all.  Every
+# native method now has a top-level handler (JNI_NATIVE_CATCH()) that raises any C++ exception as a pending Java
+# exception without throwing, and the classes of the Java exceptions that natives raise are looked up when the module
+# is initialized.
+#
+# The C++ exceptions and the failed class lookups are made with debug functions that a debug build of the module has
+# (Jni::org::qore::jni::dbg_jni_native_throw() and dbg_jni_fail_find_class()); the test is skipped otherwise.  Before
+# the fix, each regression case aborted the process (exit code 134).
+#
+# Each test case is marked:
+# - regression: it aborts the process without the fix
+# - coverage: it passes with and without the fix
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.NativeExceptionProbe
+%exec-class JniNativeExceptionTest
+
+#! a function that Java code calls with QoreJavaApi.callFunction()
+string sub jni_native_exception_echo() {
+    return "function";
+}
+
+#! a class whose method Java code calls
+class JniNativeExceptionTarget {
+    string method() {
+        return "method";
+    }
+}
+
+class JniNativeExceptionTest inherits QUnit::Test {
+    public {
+        #! the C++ exceptions that dbg_jni_native_throw() makes, and the Java exceptions that they are raised as by
+        #! the top-level handler of a native method
+        const Kinds = {
+            "bad_alloc": "^java\\.lang\\.OutOfMemoryError: std::bad_alloc$",
+            "std": "^java\\.lang\\.Error: dbg_jni_native_throw\\(\\) std::runtime_error$",
+            "unknown": "^java\\.lang\\.Error: Unknown exception type$",
+            "qore": "^org\\.qore\\.jni\\.QoreExceptionWrapper: DBG-JNI-NATIVE-ERROR: dbg_jni_native_throw\\(\\) "
+                "QoreJniException$",
+            "xsink": "^org\\.qore\\.jni\\.QoreExceptionWrapper: DBG-JNI-NATIVE-ERROR: dbg_jni_native_throw\\(\\) "
+                "XsinkException$",
+        };
+
+        #! a jni::JavaException with no Java exception pending, which breaks the invariant of the class (a debug
+        #! build asserts it when it is converted to a Qore exception, as the catch handlers of the calls of closures and
+        #! methods do), raised by the top-level handler of QoreJavaApi.callFunction()
+        const JavaNotPending = "^java\\.lang\\.Error: internal error: a JNI call failed with no Java exception "
+            "pending$";
+
+        #! the classes of the Java exceptions that native methods raise for C++ exceptions
+        const ErrorClasses = (
+            "java/lang/OutOfMemoryError",
+            "java/lang/Error",
+            "java/lang/RuntimeException",
+        );
+
+        #! the code of the Program that calls the debug functions
+        const DbgSource = "%requires jni
+nothing sub native_throw(*string kind) {
+    Jni::org::qore::jni::dbg_jni_native_throw(kind);
+}
+nothing sub fail_find_class(*string name) {
+    Jni::org::qore::jni::dbg_jni_fail_find_class(name);
+}
+";
+    }
+
+    private {
+        #! the Program that calls the debug functions, if the module is a debug build
+        *Program dbg;
+
+        #! the reason the test is skipped, if the module is not a debug build
+        *string skip_reason;
+    }
+
+    constructor() : QUnit::Test("JNI native method C++ exceptions", "1.0") {
+        try {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse(DbgSource, "dbg");
+            dbg = p;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
+                rethrow;
+            }
+            skip_reason = ex.desc;
+        }
+
+        addTestCase("regression: a C++ exception in QoreJavaApi.callFunction()", \functionTest());
+        addTestCase("regression: a C++ exception in a call of a QoreClosure", \closureTest());
+        addTestCase("regression: a C++ exception in a call of a QoreObject method", \methodTest());
+        addTestCase("regression: the lookup of the class of the Java exception fails", \classLookupTest());
+        addTestCase("coverage: the calls without a C++ exception", \callsOkTest());
+        set_return_value(main());
+    }
+
+    #! QoreJavaApi.callFunction() had no handler before the thread was attached to Qore
+    functionTest() {
+        checkDebug();
+        foreach hash<auto> i in ((Kinds + {"java": JavaNotPending}).pairIterator()) {
+            dbg.callFunction("native_throw", i.key);
+            on_exit dbg.callFunction("native_throw");
+            assertRegex(i.value, NativeExceptionProbe::callFunction("jni_native_exception_echo"), i.key);
+            # the call works again
+            assertEq("ok: function", NativeExceptionProbe::callFunction("jni_native_exception_echo"), i.key);
+        }
+    }
+
+    #! the call of a closure converted C++ exceptions in its catch handlers
+    closureTest() {
+        checkDebug();
+        code closure = string sub () { return "closure"; };
+        foreach hash<auto> i in (Kinds.pairIterator()) {
+            dbg.callFunction("native_throw", i.key);
+            on_exit dbg.callFunction("native_throw");
+            assertRegex(i.value, NativeExceptionProbe::callClosure(closure), i.key);
+            assertEq("ok: closure", NativeExceptionProbe::callClosure(closure), i.key);
+        }
+    }
+
+    #! the call of a method converted C++ exceptions in its catch handlers
+    methodTest() {
+        checkDebug();
+        JniNativeExceptionTarget obj();
+        foreach hash<auto> i in (Kinds.pairIterator()) {
+            dbg.callFunction("native_throw", i.key);
+            on_exit dbg.callFunction("native_throw");
+            assertRegex(i.value, NativeExceptionProbe::callMethod(obj, "method"), i.key);
+            assertEq("ok: method", NativeExceptionProbe::callMethod(obj, "method"), i.key);
+        }
+    }
+
+    #! the catch handlers looked up the class of the Java exception with jni::Env::findClass(), which throws a C++
+    #! exception out of the handler, and so out of the native method, if the lookup fails: the class is now looked up
+    #! when the module is initialized, so the Java exception is raised as when the lookup works
+    classLookupTest() {
+        checkDebug();
+        on_exit dbg.callFunction("fail_find_class");
+        foreach string cls in (ErrorClasses) {
+            dbg.callFunction("fail_find_class", cls);
+            code closure = string sub () { return "closure"; };
+            JniNativeExceptionTarget obj();
+            foreach hash<auto> i in (Kinds.pairIterator()) {
+                string label = sprintf("%s: %s", cls, i.key);
+                dbg.callFunction("native_throw", i.key);
+                on_exit dbg.callFunction("native_throw");
+                assertRegex(i.value, NativeExceptionProbe::callFunction("jni_native_exception_echo"), label);
+                dbg.callFunction("native_throw", i.key);
+                assertRegex(i.value, NativeExceptionProbe::callClosure(closure), label);
+                dbg.callFunction("native_throw", i.key);
+                assertRegex(i.value, NativeExceptionProbe::callMethod(obj, "method"), label);
+            }
+        }
+    }
+
+    #! the natives still return the results of the calls
+    callsOkTest() {
+        assertEq("ok: function", NativeExceptionProbe::callFunction("jni_native_exception_echo"));
+        assertEq("ok: closure", NativeExceptionProbe::callClosure(string sub () { return "closure"; }));
+        assertEq("ok: method", NativeExceptionProbe::callMethod(new JniNativeExceptionTarget(), "method"));
+    }
+
+    #! skips the test case if the module is not a debug build
+    private checkDebug() {
+        if (skip_reason) {
+            testSkip("the jni module is not a debug build: %s", skip_reason);
+        }
+    }
+}

@@ -3602,7 +3602,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
                 }
             }
             desc.concat(')');
-            env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
+            jni_throw_class_not_found(*env, desc);
             return nullptr;
         }
     }
@@ -3675,7 +3675,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
                     "the canonical qoremod.<mod>.<rest> form.  Re-emit / re-import as " \
                     "'qoremod.%s.%s'.",
                     jn.c_str(), qpath.c_str(), qcls->getModuleName(), qcls->getModuleName(), rest);
-                env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
+                jni_throw_class_not_found(*env, desc);
                 return nullptr;
             }
         }
@@ -3929,7 +3929,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateFunctionClassIntern(E
         QoreString desc(QCS_UTF8);
         desc.sprintf("cannot find Qore namespace '%s' to generate '%s' class for importing functions to Java",
             ns_path, JniImportedFunctionClassName.c_str());
-        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
+        jni_throw_class_not_found(*env, desc);
         return nullptr;
     }
 
@@ -4040,7 +4040,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateConstantClassIntern(E
         QoreString desc(QCS_UTF8);
         desc.sprintf("cannot find Qore namespace '%s' to generate '%s' class for importing constants to Java",
             ns_path, JniImportedConstantClassName.c_str());
-        env.throwNew(env.findClass("java/lang/ClassNotFoundException"), desc);
+        jni_throw_class_not_found(*env, desc);
         return nullptr;
     }
     assert(jname);

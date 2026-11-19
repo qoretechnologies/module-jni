@@ -33,6 +33,7 @@
 
 #include "Jvm.h"
 #include "LocalReference.h"
+#include "ql_jni_debug.h"
 
 #include <cstdint>
 #include <cstring>
@@ -83,6 +84,12 @@ public:
     * \throws JavaException if the class cannot be found
     */
    DLLLOCAL LocalReference<jclass> findClass(const char* name) {
+#ifdef DEBUG
+      // a test can make the lookup of a class fail (see Jni::dbg_jni_fail_find_class())
+      if (dbg_jni_find_class_fail_set.load(std::memory_order_acquire) && dbg_jni_find_class_fails(env, name)) {
+         throw JavaException();
+      }
+#endif
       jclass c = env->FindClass(ClassName(name).c_str());
       if (c == nullptr) {
          throw JavaException();
