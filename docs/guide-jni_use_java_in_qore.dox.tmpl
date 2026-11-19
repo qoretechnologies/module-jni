@@ -26,9 +26,9 @@
     \c JDBC-OPTION-ERROR as the \c classpath option of the \c jdbc driver), as a file path cannot have one.
 
     The entries of a classpath are separated by the system path separator (\c ":" on UNIX) or by \c ";"; each entry
-    is a directory, a \c .jar or \c .zip file, or a wildcard in its last path element, which is the \c .jar and
-    \c .zip files in its directory whose names match the pattern, with \c "*" matching any characters (ex:
-    <tt>lib/</tt><tt>*.jar</tt>); a wildcard in a directory element is ignored with an error message.  A relative entry of the
+    is a directory, a \c .jar or \c .zip file, or a pattern with \c "*" in its last path element, which is the
+    \c .jar and \c .zip files in its directory that match the pattern (ex: <tt>lib/</tt><tt>*.jar</tt>); a wildcard
+    in a directory element is not supported.  A relative entry of the
     \c add-classpath and \c global-add-classpath module commands, of the \c classpath option of the \c jdbc driver
     and of the \c QORE_JNI_CLASSPATH environment variable is resolved against the JVM's \c user.dir, which is
     normally the current directory of the process when the JVM is started, not the current directory of the process
