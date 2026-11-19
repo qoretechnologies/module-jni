@@ -392,6 +392,10 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
         if (*xsink) {
             return -1;
         }
+        // a classpath with a NUL character is refused before it is used in any way (qore#6771)
+        if (jni_check_classpath(cp_str->c_str(), cp_str->size(), "JDBC-OPTION-ERROR", xsink)) {
+            return -1;
+        }
         const char* cp = cp_str->c_str();
 
         // the value is judged by the code that sets it before it is compared with the current classpath: the same

@@ -1172,6 +1172,8 @@ static QoreString jni_cmd_default_arg(const QoreString& arg) {
 static void qore_jni_mc_global_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
     QoreString arg = jni_cmd_default_arg(cmd_arg);
+    // a classpath with a NUL character is refused before it is used in any way (qore#6771)
+    jni_check_classpath(arg, "JNI-ERROR");
     q_env_subst(arg);
     Env env;
     LocalReference<jstring> jcp = env.newPathString(arg);
@@ -1198,9 +1200,12 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
         cwd_str = new QoreStringNode(cwd);
     }
 
-    // the path in the default encoding, as the script directory is
+    // the path in the default encoding, as the script directory is; a path with a NUL character is refused before
+    // it is used in any way (qore#6771)
+    QoreString rel = jni_cmd_default_arg(arg);
+    jni_check_classpath(rel, "JNI-ERROR");
     cwd_str->concat(QORE_DIR_SEP);
-    cwd_str->concat(jni_cmd_default_arg(arg).c_str());
+    cwd_str->concat(rel.c_str(), rel.size());
     q_normalize_path(**cwd_str);
 
     cwd_str->concat('/');
@@ -1216,6 +1221,8 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
 
 static void qore_jni_mc_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
     QoreString arg = jni_cmd_default_arg(cmd_arg);
+    // a classpath with a NUL character is refused before it is used in any way (qore#6771)
+    jni_check_classpath(arg, "JNI-ERROR");
     q_env_subst(arg);
     printd(LogLevel, "qore_jni_mc_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
     // one Java string is both checked and added
@@ -1241,9 +1248,12 @@ static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgra
         cwd_str = new QoreStringNode(cwd);
     }
 
-    // the path in the default encoding, as the script directory is
+    // the path in the default encoding, as the script directory is; a path with a NUL character is refused before
+    // it is used in any way (qore#6771)
+    QoreString rel = jni_cmd_default_arg(arg);
+    jni_check_classpath(rel, "JNI-ERROR");
     cwd_str->concat(QORE_DIR_SEP);
-    cwd_str->concat(jni_cmd_default_arg(arg).c_str());
+    cwd_str->concat(rel.c_str(), rel.size());
     q_normalize_path(**cwd_str);
 
     cwd_str->concat('/');

@@ -6,6 +6,12 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: a classpath with a NUL character is now refused with an exception instead of being cut at the
+      NUL character, which made it another classpath, both for the sandbox's filesystem policy check and for the
+      class loader: the \c add-classpath and \c add-relative-classpath module commands and their \c global-* forms
+      raise \c JNI-ERROR, and the \c classpath option of the \c jdbc driver raises \c JDBC-OPTION-ERROR (a %Qore
+      library that refuses a NUL character in every DBI option value raises \c DBI-OPTION-ERROR first);
+      \c QORE_JNI_CLASSPATH, an environment variable, cannot have a NUL character (qore#6771)
     - <b>Incompatible change</b>: a Java string with a NUL character that is used as a %Qore hash key or as a name is
       now refused with an exception instead of being cut at the NUL character, silently, which made it another key
       or name (qore#6738, see @ref jni_strings):

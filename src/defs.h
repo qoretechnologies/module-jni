@@ -335,6 +335,35 @@ static inline void jni_check_name(const char* name, size_t len, const char* what
     }
 }
 
+//! Raises an exception if a classpath has a NUL character (qore#6771)
+/** A classpath entry is a file path, a NUL-terminated string for the operating system, so a classpath with a NUL
+    character would be cut at it, and the cut classpath would be both checked against the sandbox and used: it is
+    refused instead, as libqore's q_check_path() refuses a path, with an error like <tt>classpath "/dir\x00junk"
+    contains a NUL character at byte offset 4; classpaths cannot contain NUL characters</tt>.  Every classpath that
+    the module adds is checked with this function before it is used in any way (the \c add-classpath and
+    \c add-relative-classpath module commands, their \c global-* forms and the \c classpath option of the \c jdbc
+    driver); \c QORE_JNI_CLASSPATH, an environment variable, is a C string and cannot have a NUL character.
+
+    @param cp the classpath, which need not be NUL-terminated
+    @param len the length of the classpath in bytes
+    @param err the error code of the exception
+    @param xsink the exception is raised here if the classpath has a NUL character
+
+    @return 0 if the classpath has no NUL character, -1 if it has one and the exception was raised
+*/
+static inline int jni_check_classpath(const char* cp, size_t len, const char* err, ExceptionSink* xsink) {
+    return q_check_no_nul(cp, len, "classpath", "classpaths", err, xsink);
+}
+
+//! Throws XsinkException if a classpath has a NUL character (qore#6771); see jni_check_classpath()
+static inline void jni_check_classpath(const QoreString& cp, const char* err) {
+    if (jni_has_nul(cp.c_str(), cp.size())) {
+        ExceptionSink xsink;
+        jni_check_classpath(cp.c_str(), cp.size(), err, &xsink);
+        throw XsinkException(xsink);
+    }
+}
+
 //! Throws XsinkException with \c HASH-KEY-ERROR if a string that becomes a hash key has a NUL character (qore#6738)
 /** A hash key is a NUL-terminated string, so a key with a NUL character would be cut at it, and name another key: it
     is refused instead, with the error of QoreHashNode::checkKey() (ex: <tt>Java Map key "a\x00b" contains a NUL
