@@ -162,10 +162,14 @@ sub classpath_case() {
     # current directory of the process: in the allowed directory, "sub" is the JVM's ./sub, outside it, and in the
     # other directory, the allowed directory's name is the JVM's allowed directory
     on_exit chdir(base);
-    chdir(allowed);
+    if (chdir(allowed)) {
+        throw "TEST-ERROR", sprintf("chdir %y: %s", allowed, strerror());
+    }
     result("relative classpath entry after a change of the current directory", "FILESYSTEM-ACCESS-DENIED",
         classpath_result(sm, "sub"));
-    chdir(outside);
+    if (chdir(outside)) {
+        throw "TEST-ERROR", sprintf("chdir %y: %s", outside, strerror());
+    }
     result("relative classpath entry in the allowed directory after a change of the current directory",
         "parsed: allowed", classpath_result(sm, basename(allowed)));
 }
