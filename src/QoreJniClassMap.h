@@ -887,16 +887,24 @@ DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelp
 /** Adding a class to a Program changes its definitions, as parsing does, and runs none of its code: when the Program
     is the current one already, it is not entered.  It is current for a module command (an \c import, also one issued
     with Program::issueModuleCmd() while the Program has code pending, which no runtime entry is allowed into) and for
-    a parse in the Program; the caller holds it then.  Otherwise (ex: a class loaded in a thread that Java started),
-    it is entered, which also holds it while it is changed.
+    a parse in the Program.  The code that made it current then holds only a reference to it, not its thread count,
+    which keeps its memory but not its data: the caller must take the Program's parse lock immediately after this
+    call (CurrentProgramRuntimeExternalParseContextHelper), as that is what keeps the Program from being torn down
+    while it is changed (the parse lock is refused once the Program's teardown has begun, and the teardown waits for
+    the parse lock to be released).  Otherwise (ex: a class loaded in a thread that Java started, or an import into
+    another Program with jni_module_import()), the Program is entered, which takes its thread count.
 
     @param epch holds the entry; it is left empty when the Program is current
+    @param pgm the Program that the class is added to
+    @param xsink the sink of the entry, which the entry uses also when it is left: it must outlive \a epch (declared
+    before it), and an exception that leaving the entry raises is handled by the sink as for any other exception left
+    in it
 
     @throw XsinkException the Program cannot be entered (PROGRAM-ERROR if it is being torn down or parsed), or its
-    entry handler or thread initialization code raised an exception
+    entry handler or thread initialization code raised an exception; the entry is then left when \a epch is destroyed
 */
 DLLLOCAL void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch,
-        QoreProgram* pgm);
+        QoreProgram* pgm, ExceptionSink& xsink);
 }
 
 #endif

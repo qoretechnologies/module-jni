@@ -11,6 +11,14 @@
 # and runs none of its code, so the jni module must not enter the Program for it; it did, and the import failed with
 # "PROGRAM-ERROR: the Program accessed is currently undergoing parsing and cannot be accessed at runtime" for a class
 # that the base class loader loads, both when the class was new and when another Program had imported it first.
+#
+# The regression cases need a Qore library with qore#6185: with an older library, the thread kept the calling
+# Program's thread-local data, the entry was skipped, and they pass with or without the fix.  The wildcard import
+# case is coverage: a wildcard import adds no class to the Program when it is issued.
+#
+# A class added to a Program that is not current (ex: in a thread that Java started) enters the Program; those cases
+# use Jni::org::qore::jni::dbg_jni_import_into_program(), which a debug build of the module has, and are skipped
+# otherwise.
 
 %modern
 %no-child-restrictions
@@ -24,6 +32,9 @@ class JniImportPendingProgramTest inherits QUnit::Test {
     public {
         #! the code that each Program has pending when the classes are imported
         const PendingCode = "string sub pending() { return 'pending'; }";
+
+        #! the test jar, built with the module
+        const TestJar = get_script_dir() + "qore-jni-test.jar";
     }
 
     constructor() : Test("jni import into a Program with code pending", "1.0", \ARGV) {
@@ -35,6 +46,12 @@ class JniImportPendingProgramTest inherits QUnit::Test {
         addTestCase("an import of a class that does not exist", \missingClassTest());
         addTestCase("the Program's code still cannot run before the commit", \noRuntimeEntryTest());
         addTestCase("an import from a thread other than the one that parsed the code", \otherThreadTest());
+        addTestCase("a class from a jar added to the Program's classpath", \classpathTest());
+        addTestCase("a class defined from byte code", \defineClassTest());
+        addTestCase("a class added to a Program that is not current enters it", \notCurrentTest());
+        addTestCase("a class added to a Program that is not current from the Program's loader", \notCurrentLoaderTest());
+        addTestCase("an exception from the exit handler of that entry", \notCurrentExitExceptionTest());
+        addTestCase("a class added to a Program that is not current and has code pending", \notCurrentPendingTest());
         set_return_value(main());
     }
 
@@ -130,6 +147,137 @@ class JniImportPendingProgramTest inherits QUnit::Test {
         assertEq(True, result.get());
         p.parseCommit();
         assertEq("ConcurrentLinkedQueue", newObjectClassName(p, "ConcurrentLinkedQueue"));
+    }
+
+    classpathTest() {
+        # the classes are loaded by the Program's own class loader, so they are created in the Program itself
+        # (QoreJniClassMap::findCreateQoreClassInProgram()), with their superclasses
+        Program p = getPendingProgram();
+        p.issueModuleCmd("jni", "add-classpath " + TestJar);
+        p.issueModuleCmd("jni", "import org.qore.jni.test.C");
+        p.parseCommit();
+        assertEq("C", newObjectClassName(p, "C"));
+        assertTrue(p.getExpression("new C() instanceof Jni::org::qore::jni::test::A", "instanceof").eval(),
+            "the superclass is created with the class");
+        assertEq("pending", p.callFunction("pending"));
+    }
+
+    defineClassTest() {
+        # define-class creates the class in the Program itself, from its byte code
+        binary byte_code = readJarEntry("org/qore/jni/test/A.class");
+        Program p = getPendingProgram();
+        p.issueModuleCmd("jni", "define-class org.qore.jni.test.A " + byte_code.toBase64());
+        p.parseCommit();
+        assertEq("A", newObjectClassName(p, "A"));
+        assertEq(Type::Int, p.getExpression("new A().f()", "f").eval().type());
+        assertEq("pending", p.callFunction("pending"));
+    }
+
+    notCurrentTest() {
+        Program importer = getImporter();
+        Program p = getCommittedProgram();
+        Counter enter();
+        Counter exit();
+        p.setThreadEntryHandler(sub () { enter.inc(); }, sub () { exit.inc(); });
+
+        # a class that the base class loader loads, which is added to the Program in addClassToProgram(), as are the
+        # classes that its superclasses and methods use
+        importer.callFunction("import_into", p, "java.util.concurrent.DelayQueue");
+        # the Program is entered for each class added to it, and left again
+        assertTrue(enter.getCount() > 0, "the entry handler runs");
+        assertEq(enter.getCount(), exit.getCount(), "the exit handler runs when each entry is left");
+
+        p.setThreadEntryHandler();
+        assertEq("DelayQueue", newObjectClassName(p, "DelayQueue"));
+    }
+
+    notCurrentLoaderTest() {
+        Program importer = getImporter();
+        Program p = getCommittedProgram();
+        p.issueModuleCmd("jni", "add-classpath " + TestJar);
+        Counter enter();
+        Counter exit();
+        p.setThreadEntryHandler(sub () { enter.inc(); }, sub () { exit.inc(); });
+
+        # a class that the Program's loader loads, which is created in findCreateQoreClassInProgram()
+        importer.callFunction("import_into", p, "org.qore.jni.test.B");
+        assertTrue(enter.getCount() > 0, "the entry handler runs");
+        assertEq(enter.getCount(), exit.getCount(), "the exit handler runs when each entry is left");
+
+        p.setThreadEntryHandler();
+        assertEq("B", newObjectClassName(p, "B"));
+    }
+
+    notCurrentExitExceptionTest() {
+        Program importer = getImporter();
+        Program p = getCommittedProgram();
+        Counter exit();
+        # the exit handler raises its exception in the sink of the entry, which must still exist when the entry is
+        # left: it is the sink of the function that adds the class, which handles an exception left in it as an
+        # unhandled exception (it is printed), so the handler raises one only once; the import is not stopped by it
+        p.setThreadEntryHandler(NOTHING, sub () {
+            exit.inc();
+            if (exit.getCount() == 1) {
+                throw "EXIT-HANDLER-ERROR", "raised on exit (expected: printed as an unhandled exception)";
+            }
+        });
+
+        importer.callFunction("import_into", p, "java.util.concurrent.LinkedTransferQueue");
+        assertTrue(exit.getCount() > 0, "the exit handler runs when the entry is left");
+
+        p.setThreadEntryHandler();
+        assertEq("LinkedTransferQueue", newObjectClassName(p, "LinkedTransferQueue"));
+    }
+
+    notCurrentPendingTest() {
+        # a Program that is not current is entered at runtime to add a class to it, which is refused while it has code
+        # pending, as before
+        Program importer = getImporter();
+        Program p = getPendingProgram();
+        assertThrows("PROGRAM-ERROR", "currently undergoing parsing", \importer.callFunction(),
+            ("import_into", p, "java.util.concurrent.PriorityBlockingQueue"));
+        # the Program is unchanged: its code is committed, and the class can be imported then
+        p.parseCommit();
+        assertEq("pending", p.callFunction("pending"));
+        p.issueModuleCmd("jni", "import java.util.concurrent.PriorityBlockingQueue");
+        assertEq("PriorityBlockingQueue", newObjectClassName(p, "PriorityBlockingQueue"));
+    }
+
+    #! returns a Program that imports a class into another Program with dbg_jni_import_into_program()
+    /** The test is skipped if the module is not a debug build, which has the function
+    */
+    private Program getImporter() {
+        Program importer(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        importer.loadModule("jni");
+        try {
+            importer.parse("sub import_into(Program p, string import) {\n"
+                "    Jni::org::qore::jni::dbg_jni_import_into_program(p, import);\n"
+                "}", "importer");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the jni module is not a debug build: " + ex.desc);
+        }
+        return importer;
+    }
+
+    #! returns a new Program with the jni module loaded and no code pending
+    private Program getCommittedProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        p.parse(PendingCode, "committed");
+        return p;
+    }
+
+    #! returns the bytes of an entry of the test jar
+    private binary readJarEntry(string entry) {
+        Program reader(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        reader.loadModule("jni");
+        reader.parse("%module-cmd(jni) import java.util.zip.ZipFile\n"
+            "binary sub read(string jar, string entry) {\n"
+            "    ZipFile z(jar);\n"
+            "    on_exit z.close();\n"
+            "    return z.getInputStream(z.getEntry(entry)).readAllBytes();\n"
+            "}", "reader");
+        return reader.callFunction("read", TestJar, entry);
     }
 
     #! returns a new Program with the jni module loaded and code pending

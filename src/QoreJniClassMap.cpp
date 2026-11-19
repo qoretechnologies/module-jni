@@ -759,9 +759,10 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
 
     assert(pgm);
     // no runtime entry when the Program is current: a module command can add the class to a Program that has code
-    // pending (see jni_enter_program_for_class_add())
+    // pending (see jni_enter_program_for_class_add()); xsink, declared above, outlives the entry, which uses it when it
+    // is left
     std::optional<QoreExternalProgramContextHelper> epch;
-    jni_enter_program_for_class_add(epch, pgm);
+    jni_enter_program_for_class_add(epch, pgm, xsink);
 
     // grab current Program's parse lock before manipulating namespaces
     CurrentProgramRuntimeExternalParseContextHelper pch;
@@ -1056,9 +1057,11 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
 
     assert(pgm);
     // no runtime entry when the Program is current: a module command can add the class to a Program that has code
-    // pending (see jni_enter_program_for_class_add())
+    // pending (see jni_enter_program_for_class_add()); the sink is declared before the entry, which uses it when it is
+    // left
+    ExceptionSink xsink;
     std::optional<QoreExternalProgramContextHelper> epch;
-    jni_enter_program_for_class_add(epch, pgm);
+    jni_enter_program_for_class_add(epch, pgm, xsink);
 
     // grab current Program's parse lock before manipulating namespaces
     CurrentProgramRuntimeExternalParseContextHelper pch;
@@ -4717,15 +4720,18 @@ bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
     return reg.pgms.find(pgm) != reg.pgms.end();
 }
 
-void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram* pgm) {
+void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram* pgm,
+        ExceptionSink& xsink) {
     assert(pgm);
+    assert(!xsink);
     if (pgm == ::getProgram()) {
         return;
     }
-    ExceptionSink xsink;
+    // the entry keeps a pointer to the caller's sink, which it uses when it is left
     epch.emplace(&xsink, pgm);
     if (xsink) {
-        epch.reset();
+        // the entry is left by the caller's unwinding, after the exceptions have been taken from the sink, as when
+        // the caller held the entry itself
         throw XsinkException(xsink);
     }
 }
