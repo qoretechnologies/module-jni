@@ -592,7 +592,11 @@ public:
     //! Stop the NativeCleanup C++ background thread and join it.
     /** Closes registration, snapshots live handles, wakes and joins the cleanup
         thread, then releases outstanding native pointers. Native clients must
-        be quiescent. Called from Jvm::destroyVM before DestroyJavaVM. */
+        be quiescent. Called from Jvm::destroyVM before DestroyJavaVM.
+
+        Throws a C++ exception if it fails (ex: a jni::Exception if the thread cannot be attached to the JVM); the
+        worker is then
+        abandoned: a reference that wakes it afterwards is dropped instead of dispatched (qore#6788). */
     DLLLOCAL static void stopNativeCleanupThread();
 
     DLLLOCAL static jlong getContextProgram(jobject new_syscl, bool& created);
@@ -688,6 +692,9 @@ public:
     DLLLOCAL static void removeCanonicalLoaderCacheEntries(jobject loader);
 
 private:
+    //! Stops the NativeCleanup thread; see stopNativeCleanupThread()
+    DLLLOCAL static void stopNativeCleanupThreadIntern();
+
     //! Returns the exception sink of the global context Program, which receives the exceptions raised when it is
     //! created and deleted
     /** The sink is allocated once and never destroyed: an ExceptionSink with static storage duration reports the

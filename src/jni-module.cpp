@@ -262,7 +262,7 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static bool jni_command_rules_match_commands();
 #endif
 static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
-static void jni_module_delete();
+static void jni_module_delete() noexcept;
 static void jni_module_parse_cmd(const QoreString& cmd, ExceptionSink* xsink);
 static bool jni_exported_import_allowed(const QoreProgram* pgm, std::string& refused);
 static QoreNamespace* jni_find_create_java_namespace_intern(QoreString& arg, QoreProgram* pgm);
@@ -391,17 +391,19 @@ static bool deferred_ns_init = false;
 // handler runs first.  destroyVM() is idempotent, so this is a no-op when the
 // normal del path already ran.  Only registered when we created the VM ourselves
 // (not when a host process passed in an existing JVM via the jvm-ptr option).
-static void jni_atexit_destroy_vm() {
+static void jni_atexit_destroy_vm() noexcept {
     // when the JVM ends the process (see Jvm::isExiting()), destroyVM() leaves the JVM, which can be neither called
     // nor destroyed; the global Program is abandoned in any case, as its static destructor must not run
-    try {
-        // Prevent the global Program's static destructor from running after
-        // function-local libqore synchronization objects have been torn down.
-        Globals::abandonGlobalContext();
-        jni::Jvm::destroyVM();
-    } catch (...) {
-        // an atexit handler must never propagate an exception
-    }
+    // an atexit handler must never propagate an exception: a failure is reported, and the JVM is destroyed
+    // nonetheless (qore#6788)
+    // Prevent the global Program's static destructor from running after
+    // function-local libqore synchronization objects have been torn down.
+    // the handler does work only if the module's delete function did not run (ex: the process ended with the Qore
+    // exit() function), when the state of the Qore library cannot be relied on, so an error is not converted to a
+    // Qore exception to report it
+    jni::jni_report_set_plain();
+    jni::jni_teardown_step("abandoning the global context", [] () { Globals::abandonGlobalContext(); });
+    jni::Jvm::destroyVM();
 }
 
 QoreStringNode* jni_module_init_finalize(bool system) {
@@ -447,9 +449,14 @@ QoreStringNode* jni_module_init_finalize(bool system) {
 /** Called by libqore for every Program before its namespace data is cleared - see
     qore_register_program_cleanup_callback().
 */
-static void jni_program_cleanup(QoreProgram* pgm) {
-    jni::purge_generated_bindings(pgm);
-    jni::purge_module_root_ns_cache(pgm);
+static void jni_program_cleanup(QoreProgram* pgm) noexcept {
+    // libqore calls this from the teardown of the Program, where no C++ exception may propagate (qore#6788)
+    jni::jni_teardown_step("purging the generated bindings of a Program", [pgm] () {
+        jni::purge_generated_bindings(pgm);
+    });
+    jni::jni_teardown_step("purging the module root namespace cache of a Program", [pgm] () {
+        jni::purge_module_root_ns_cache(pgm);
+    });
 }
 
 //! Undoes what a failed jni_module_init() set up
@@ -462,18 +469,20 @@ static void jni_program_cleanup(QoreProgram* pgm) {
     @param vm_created true if the initialization created the JVM, which is then destroyed, as its native methods and
     threads run the module's code; a JVM passed in with the \c jvm-ptr option is left to its owner
 */
-static void jni_module_init_rollback(bool vm_created) {
-    clear_generated_bindings();
+static void jni_module_init_rollback(bool vm_created) noexcept {
+    // called from a scope guard, also while an exception propagates: a step that fails is reported, and the rollback
+    // continues (qore#6788)
+    jni::jni_teardown_step("clearing the generated bindings", [] () { clear_generated_bindings(); });
     // the Program created for the Java context, if any, is destroyed while the program cleanup callback is still
     // registered, so its cached entries are purged
-    Globals::clearGlobalContext();
-    {
+    jni::jni_teardown_step("clearing the global context", [] () { Globals::clearGlobalContext(); });
+    jni::jni_teardown_step("destroying the class map", [] () {
         // the class map's namespaces exist from the module's load on, also if they were never initialized
         ExceptionSink xsink;
         qjcm.destroy(xsink);
         // a failure to release them cannot be reported, as the module initialization already failed
         xsink.clear();
-    }
+    });
     if (vm_created) {
         // stops the NativeCleanup thread, releases the global references, and destroys the JVM; the atexit handler
         // registered for the JVM then has nothing to do
@@ -717,17 +726,19 @@ static void jni_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exception
     }
 }
 
-static void jni_module_delete() {
+// qore#6788: libqore calls this from its own teardown, where a C++ exception ends the process in std::terminate(), so
+// a step that fails is reported (there is no exception sink) and the teardown continues with the next step
+static void jni_module_delete() noexcept {
     // stop libqore calling into this module's code once it is unloaded
     qore_deregister_program_cleanup_callback(jni_program_cleanup);
-    clear_generated_bindings();
+    jni::jni_teardown_step("clearing the generated bindings", [] () { clear_generated_bindings(); });
 
     // clear all objects from stored classes before destroying the JVM (releases all global references)
-    Globals::clearGlobalContext();
-    {
+    jni::jni_teardown_step("clearing the global context", [] () { Globals::clearGlobalContext(); });
+    jni::jni_teardown_step("destroying the class map", [] () {
         ExceptionSink xsink;
         qjcm.destroy(xsink);
-    }
+    });
     tclist.pop(false);
     jni::Jvm::destroyVM();
     jni::Jvm::unregisterForkHandler();

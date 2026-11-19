@@ -1,0 +1,247 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# No C++ exception escapes from the module into libqore (qore#6787, qore#6788, qore#6789).
+#
+# libqore does not expect C++ exceptions from the code of a module that it calls, so a jni::Exception that escapes
+# there ends the process in std::terminate() (exit code 134):
+# - qore#6789: set_save_object_callback() and the static JavaArray::get() did not convert a jni::Exception to a Qore
+#   exception, as every other builtin does
+# - qore#6788: the module's delete function, which libqore calls in its teardown, let a jni::Exception thrown while
+#   stopping the NativeCleanup thread escape; a failed step of the teardown is now reported on stderr, and the
+#   teardown continues
+# - qore#6787: JniExternalProgramData::copy(), which libqore calls from the constructor of a child Program, let a
+#   jni::Exception escape; libqore gives copy() no way to report an error (qoretechnologies/qore#6786), so the error is
+#   now reported on stderr, and the child Program is created without the jni data of its parent (the interim
+#   behaviour until libqore can fail the creation of the child Program)
+#
+# The C++ exceptions are made with Jni::org::qore::jni::dbg_jni_fail_point(), which a debug build of the module has;
+# the test is skipped otherwise.  Each case runs in a child process, as the process ended before the fixes.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires jni
+%requires QUnit
+%requires FsUtil
+
+%exec-class JniCppExceptionEscapeTest
+
+class JniCppExceptionEscapeTest inherits QUnit::Test {
+    private:internal {
+        #! the code of the child process after its parse directives; run with: <mode> [<point>]
+        /** \c point: the fail point to set before the case runs (see dbg_jni_fail_point()), \c "none" for none, or
+            \c "cleared" to set the case's fail point and clear it
+        */
+        const ChildSource = "
+string mode = ARGV[0];
+*string point = ARGV[1];
+const Points = {
+    \"program-data\": \"program-data\",
+    \"array-get\": \"attach\",
+    \"copy\": \"program-copy\",
+    \"shutdown\": \"native-cleanup-stop\",
+};
+if (point == \"cleared\") {
+    Jni::org::qore::jni::dbg_jni_fail_point(Points{mode});
+    Jni::org::qore::jni::dbg_jni_fail_point();
+} else if (point != \"none\") {
+    Jni::org::qore::jni::dbg_jni_fail_point(point ?? Points{mode});
+}
+switch (mode) {
+    case \"program-data\": {
+        try {
+            Jni::org::qore::jni::set_save_object_callback(sub (object o) {});
+            stdout.print(\"result: set\\n\");
+        } catch (hash<ExceptionInfo> ex) {
+            stdout.printf(\"exception: %s: %s\\n\", ex.err, ex.desc);
+        }
+        break;
+    }
+    case \"array-get\": {
+        try {
+            Jni::org::qore::jni::JavaArray a = Jni::org::qore::jni::JavaArray::get(<0102>);
+            stdout.printf(\"result: %d\\n\", a.length());
+        } catch (hash<ExceptionInfo> ex) {
+            stdout.printf(\"exception: %s: %s\\n\", ex.err, ex.desc);
+        }
+        break;
+    }
+    case \"copy\": {
+        try {
+            Program p(PO_NEW_STYLE);
+            stdout.print(\"result: created\\n\");
+            # the child Program can use Java
+            p.parse(\"%requires jni\\nint sub len() { return Jni::org::qore::jni::JavaArray::get(<010203>).length(); }\",
+                \"child\");
+            stdout.printf(\"child: %d\\n\", p.callFunction(\"len\"));
+        } catch (hash<ExceptionInfo> ex) {
+            stdout.printf(\"exception: %s: %s\\n\", ex.err, ex.desc);
+        }
+        break;
+    }
+    case \"shutdown\": {
+        # the NativeCleanup thread runs once the JVM has started
+        stdout.printf(\"result: %d\\n\", Jni::org::qore::jni::JavaArray::get(<01>).length());
+        break;
+    }
+    case \"bad-point\": {
+        break;
+    }
+}
+stdout.print(\"end\\n\");
+";
+
+        #! the description of the Qore exception that a failed attach converts to
+        const AttachError = "JNI-ERROR: Unable to attach thread to the JVM, error -1";
+
+        #! the line that the C++ runtime writes before std::terminate() aborts the process
+        const TerminateLine = "terminate called";
+    }
+
+    private {
+        #! the temporary directory with the child's script
+        TmpDir tmp("jni-cpp-exception-escape-");
+
+        #! the child's script
+        string script;
+
+        #! the reason the test is skipped, if the module is not a debug build
+        *string skip_reason;
+    }
+
+    constructor() : Test("JniCppExceptionEscape", "1.0") {
+        try {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse("%requires jni\nnothing sub t() { Jni::org::qore::jni::dbg_jni_fail_point(); }", "dbg");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
+                rethrow;
+            }
+            skip_reason = ex.desc;
+        }
+
+        addTestCase("regression: set_save_object_callback() (qore#6789)", \programDataTest());
+        addTestCase("regression: static JavaArray::get() (qore#6789)", \arrayGetTest());
+        addTestCase("regression: module teardown (qore#6788)", \shutdownTest());
+        addTestCase("regression: child Program creation (qore#6787)", \copyTest());
+        addTestCase("negative: unknown fail point", \badPointTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        script = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n%%prepend-module-path \"%s\"\n%%requires jni\n",
+            dirname(get_module_hash().jni.filename)) + ChildSource);
+        f.close();
+    }
+
+    #! a jni::Exception thrown while the Program's jni context is created is raised as a Qore exception
+    programDataTest() {
+        checkDebug();
+        hash<auto> res = run("program-data");
+        checkOk(res, "program-data");
+        assertRegex("(^|\n)exception: JNI-ERROR: dbg_jni_fail_point\\(\\): the jni context of the Program cannot be "
+            "created\n", res.out);
+        checkCoverage("program-data", "result: set");
+    }
+
+    #! a jni::Exception thrown while the thread is attached to the JVM is raised as a Qore exception
+    arrayGetTest() {
+        checkDebug();
+        hash<auto> res = run("array-get");
+        checkOk(res, "array-get");
+        assertRegex("(^|\n)exception: " + AttachError + "\n", res.out);
+        checkCoverage("array-get", "result: 2");
+    }
+
+    #! a jni::Exception thrown while the NativeCleanup thread is stopped in the module's teardown is reported, and
+    #! the process ends normally
+    shutdownTest() {
+        checkDebug();
+        hash<auto> res = run("shutdown");
+        checkOk(res, "shutdown");
+        assertRegex("(^|\n)result: 1\n", res.out);
+        assertRegex("(^|\n)jni module: stopping the NativeCleanup thread failed: " + AttachError + "\n", res.out);
+        # without the fail point, nothing is reported
+        foreach string point in (("none", "cleared")) {
+            hash<auto> ok = run("shutdown", point);
+            checkOk(ok, "shutdown " + point);
+            assertEq(-1, ok.out.find("jni module:"), "shutdown " + point + ": nothing reported: " + ok.out);
+        }
+    }
+
+    #! a jni::Exception thrown while the jni data of a Program is copied for a child Program is reported, and the
+    #! child Program is created without it (the interim behaviour until qoretechnologies/qore#6786)
+    copyTest() {
+        checkDebug();
+        hash<auto> res = run("copy");
+        checkOk(res, "copy");
+        assertRegex("(^|\n)jni module: copying the jni data of a Program for a child Program failed: " + AttachError
+            + "\n", res.out);
+        assertRegex("(^|\n)result: created\n", res.out);
+        # the child Program can use Java nevertheless
+        assertRegex("(^|\n)child: 3\n", res.out);
+        foreach string point in (("none", "cleared")) {
+            hash<auto> ok = run("copy", point);
+            checkOk(ok, "copy " + point);
+            assertEq(-1, ok.out.find("jni module:"), "copy " + point + ": nothing reported: " + ok.out);
+            assertRegex("(^|\n)result: created\n", ok.out, "copy " + point);
+            assertRegex("(^|\n)child: 3\n", ok.out, "copy " + point);
+        }
+    }
+
+    #! an unknown fail point is refused
+    badPointTest() {
+        checkDebug();
+        hash<auto> res = run("bad-point", "no-such-point");
+        assertNeq(0, res.rc, res.out);
+        assertRegex("DBG-JNI-FAIL-POINT-ERROR: unknown point 'no-such-point'", res.out);
+        assertEq(-1, res.out.find(TerminateLine), res.out);
+    }
+
+    #! runs the case without a fail point and with a fail point that was cleared: the call succeeds
+    private:internal checkCoverage(string mode, string result) {
+        foreach string point in (("none", "cleared")) {
+            hash<auto> ok = run(mode, point);
+            string label = mode + " " + point;
+            checkOk(ok, label);
+            assertRegex("(^|\n)" + result + "\n", ok.out, label);
+        }
+    }
+
+    #! checks that the child ended normally
+    private:internal checkOk(hash<auto> res, string label) {
+        assertEq(-1, res.out.find(TerminateLine), label + ": no std::terminate(): " + res.out);
+        assertEq(0, res.rc, label + ": exit status: " + res.out);
+        assertRegex("(^|\n)end\n", res.out, label + ": the child ran to its end");
+    }
+
+    #! runs the child and returns its exit status and its output (stdout and stderr)
+    private:internal hash<auto> run(string mode, *string point) {
+        int rc;
+        string out = backquote(sprintf("ulimit -c 0; %s --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
+            shellQuote(script), mode, point ? shellQuote(point) : ""), \rc);
+        if (m_options.verbose > 2) {
+            printf("mode %s point %y: rc %d\n%s\n", mode, point, rc, out);
+        }
+        return {"rc": rc, "out": out};
+    }
+
+    #! quotes an argument for the shell
+    private:internal static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! skips the test case if the module is not a debug build
+    private:internal checkDebug() {
+        if (skip_reason) {
+            testSkip("the jni module is not a debug build: %s", skip_reason);
+        }
+    }
+}

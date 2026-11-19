@@ -38,6 +38,7 @@
 #include <new>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <cstring>
 
 //! Returns the number of Programs holding entries in the module root namespace cache
@@ -277,6 +278,58 @@ void dbg_jni_native_throw_point() {
     }
 }
 
+// the fail point set with Jni::dbg_jni_fail_point() and the thread that set it; set, read and cleared under the lock
+static std::mutex fail_point_lock;
+static DbgJniFailPoint fail_point = DbgJniFailPoint::Attach;
+static std::thread::id fail_point_thread;
+std::atomic<bool> dbg_jni_fail_point_set{false};
+
+//! Makes the code at the given point fail once with the C++ exception that it throws when it fails, or with no point,
+//! clears a fail point that has not been reached
+/** \a point: \c "attach" (the next jni::Env on the calling thread fails to attach the thread to the JVM),
+    \c "program-data" (JniExternalProgramData::getCreateJniProgramData() fails, as for a Program that is being
+    deleted), \c "program-copy" (the copy of the jni data of a Program for a child Program fails to attach the thread
+    to the JVM), \c "native-cleanup-stop" (stopping the NativeCleanup thread in the module's teardown fails to attach
+    the thread to the JVM).  The point fails only on the thread that set it (the module is torn down on the thread
+    that ends the process), so that a test can prove that the C++ exception thrown there does not escape into libqore
+    (qore#6787, qore#6788, qore#6789) - see test/jni-cpp-exception-escape.qtest.  DEBUG builds only.
+*/
+static QoreValue f_dbg_jni_fail_point(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    const QoreStringNode* point = get_param_value(args, 0).get<const QoreStringNode>();
+    if (!point) {
+        std::lock_guard<std::mutex> guard(fail_point_lock);
+        dbg_jni_fail_point_set.store(false, std::memory_order_release);
+        return QoreValue();
+    }
+    static const std::map<std::string, DbgJniFailPoint> points = {
+        {"attach", DbgJniFailPoint::Attach},
+        {"program-data", DbgJniFailPoint::ProgramData},
+        {"program-copy", DbgJniFailPoint::ProgramCopy},
+        {"native-cleanup-stop", DbgJniFailPoint::NativeCleanupStop},
+    };
+    auto i = points.find(point->c_str());
+    if (i == points.end()) {
+        xsink->raiseException("DBG-JNI-FAIL-POINT-ERROR", "unknown point '%s'; expecting \"attach\", "
+            "\"program-data\", \"program-copy\" or \"native-cleanup-stop\"", point->c_str());
+        return QoreValue();
+    }
+    std::lock_guard<std::mutex> guard(fail_point_lock);
+    fail_point = i->second;
+    fail_point_thread = std::this_thread::get_id();
+    dbg_jni_fail_point_set.store(true, std::memory_order_release);
+    return QoreValue();
+}
+
+bool dbg_jni_fail_point_hit(DbgJniFailPoint point) {
+    std::lock_guard<std::mutex> guard(fail_point_lock);
+    if (!dbg_jni_fail_point_set.load(std::memory_order_relaxed) || fail_point != point
+            || fail_point_thread != std::this_thread::get_id()) {
+        return false;
+    }
+    dbg_jni_fail_point_set.store(false, std::memory_order_release);
+    return true;
+}
+
 void init_jni_debug_functions(QoreNamespace& ns) {
     ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
@@ -295,6 +348,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         nothingTypeInfo, 1, stringOrNothingTypeInfo, QoreValue(), "name");
     ns.addBuiltinVariant("dbg_jni_native_throw", f_dbg_jni_native_throw, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 1, stringOrNothingTypeInfo, QoreValue(), "kind");
+    ns.addBuiltinVariant("dbg_jni_fail_point", f_dbg_jni_fail_point, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
+        stringOrNothingTypeInfo, QoreValue(), "point");
 }
 
 #endif // DEBUG

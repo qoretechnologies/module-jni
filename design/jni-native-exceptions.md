@@ -53,6 +53,33 @@ Java exception is pending instead.  Only if no Java exception at all can be made
 is the process ended with `FatalError()`, as returning with no exception pending would report a failed call as a
 call that succeeded.
 
+## Code that libqore calls
+
+libqore does not expect C++ exceptions from the code of a module that it calls either; one that escapes there ends
+the process in `std::terminate()`.
+
+- Builtin functions and methods (`src/*.qpp`) convert a `jni::Exception` to a Qore exception with
+  `catch (jni::Exception& e) { e.convert(xsink); }` around all code that can reach JNI (qore#6789).
+- The teardown paths, where there is no exception sink: the module's delete function (`jni_module_delete()`), its
+  `atexit()` handler (`jni_atexit_destroy_vm()`), the Program cleanup callback (`jni_program_cleanup()`), the
+  rollback of a failed initialization (`jni_module_init_rollback()`) and `Jvm::destroyVM()` are `noexcept`; each
+  step that can throw runs in `jni_teardown_step()` (`src/defs.h`), which reports a C++ exception on stderr with
+  `jni_report_current_exception()` (`jni module: <step> failed: <err>: <desc>`) and continues with the next step
+  (qore#6788).  The `atexit()` handler, which can run after the Qore library has been cleaned up, reports a
+  `jni::Exception` without converting it to a Qore exception (`jni_report_set_plain()`).  If stopping the
+  NativeCleanup thread fails before the worker is woken, the worker stays blocked in the JVM (a daemon thread, which
+  `DestroyJavaVM()` does not wait for; with a JVM passed in with `jvm-ptr`, the JVM is not destroyed); the failure
+  sets `native_cleanup_abandoned`, so that a reference that wakes it later is dropped (its native object is leaked)
+  instead of dispatched during or after the teardown; a dispatch already in progress when the stop failed still runs.
+  If it fails after the sentinel was queued, the worker ends on the sentinel or drops it.  If it fails after the
+  worker was joined, the handles not yet released are leaked.  The test covers the failure before the worker is
+  woken.
+- `JniExternalProgramData::copy()`, which libqore calls from the constructor of a child Program, is `noexcept`:
+  `AbstractQoreProgramExternalData::copy()` cannot report an error, so a failure is reported on stderr, and
+  `nullptr` is returned, with which the child Program is created without the module's data, as with
+  `PO_NO_INHERIT_PROGRAM_DATA` (qore#6787; failing the creation of the child Program needs a sink-taking
+  `copy()` in libqore, qoretechnologies/qore#6786).
+
 ## Tests
 
 `test/jni-native-exception.qtest` uses two functions of a debug build of the module (`src/ql_jni_debug.cpp`):
@@ -62,3 +89,7 @@ method from Java on the thread, and `dbg_jni_fail_find_class()` makes `jni::Env:
 `test/test-jni-native-catch.py` (ctest `jni_native_catch`) checks the sources: every function in a `JNINativeMethod`
 table is a function-try-block that ends with `JNI_NATIVE_CATCH(jenv, ...)`, and no error path calls
 `throwNew(env.findClass(...))`.  A new native method that lacks the handler fails it.
+
+`test/jni-cpp-exception-escape.qtest` uses `dbg_jni_fail_point()` of a debug build, which makes the code at a point
+(attaching a thread in `jni::Env`, creating or copying a Program's jni data, stopping the NativeCleanup thread) throw
+the C++ exception that it throws when it fails, once, on the thread that set it; each case runs in a child process.

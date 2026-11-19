@@ -95,8 +95,11 @@ public:
 
     /**
      * \brief Destroys the JVM.
+     *
+     * Called from the module's teardown, where no C++ exception may propagate: a step that fails is reported on
+     * stderr and the JVM is destroyed nonetheless (qore#6788).
      */
-    static void destroyVM();
+    static void destroyVM() noexcept;
 
     /**
      * \brief Detaches the current thread from the JVM.
