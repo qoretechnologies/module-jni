@@ -106,14 +106,19 @@ static int jvm_sr_reserved = 0;
     process if it were delivered to that thread after a failed initialization released it
 */
 static bool jvm_sr_was_blocked = false;
+//! the thread that reserved the suspend/resume signal alone
+static pthread_t jvm_sr_thread;
 
-//! after the suspend/resume signal has been released: blocks it again in the calling thread if it was blocked there
-//! before the module reserved it alone
+//! after the suspend/resume signal has been released: blocks it again in the calling thread if it is the thread that
+//! reserved it alone and it was blocked there before
+/** jni_module_init_finalize() can also fail in a Java thread in bootstrap mode (when a Java process loads %Qore),
+    after the module's initialization has succeeded; the mask of the reserving thread cannot be restored there
+*/
 static void jni_reblock_sr_signal() {
     if (!jvm_sr_reserved) {
         return;
     }
-    if (jvm_sr_was_blocked) {
+    if (jvm_sr_was_blocked && pthread_equal(jvm_sr_thread, pthread_self())) {
         sigset_t set;
         sigemptyset(&set);
         sigaddset(&set, jvm_sr_reserved);
@@ -394,6 +399,13 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
             // jni_module_init_finalize() releases them itself when it fails, in which case this has no effect
             jni_release_signals();
         }
+#ifndef Q_WINDOWS
+        else if (jvm_sr_reserved) {
+            // the suspend/resume signal was reserved alone, but the reservation of the others did not complete
+            qore_release_signal(jvm_sr_reserved, QORE_JNI_MODULE_NAME);
+            jni_reblock_sr_signal();
+        }
+#endif
         qore_deregister_program_cleanup_callback(jni_program_cleanup);
     });
 
@@ -418,6 +430,7 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         }
         jvm_sr_reserved = sr_sig;
         jvm_sr_was_blocked = was_blocked;
+        jvm_sr_thread = pthread_self();
         sig_vec.push_back(sr_sig);
     }
 #endif
@@ -562,6 +575,8 @@ static void jni_module_delete() {
     tclist.pop(false);
     jni::Jvm::destroyVM();
     jni::Jvm::unregisterForkHandler();
+    // the signals reserved for the JVM stay reserved: the module is deleted as the library is torn down, or the JVM
+    // belongs to the Java host (the jvm-ptr option) and keeps running, and its handlers stay installed in either case
 }
 
 static QoreNamespace* qore_jni_wildcard_import(QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
