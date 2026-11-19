@@ -19,6 +19,19 @@
       teardown of the Program; it now never throws, and the exception is reported as an unhandled exception on
       \c stderr; an exception raised when the callback is replaced with \c set_save_object_callback() is now raised
       to its caller instead of being reported as an unhandled exception (qore#6773)
+    - fixed \c set_save_object_callback() and the static \c JavaArray::get() method, which ended the process in
+      \c std::terminate() (exit code 134) when a JNI error occurred in them (ex: the thread could not be attached to
+      the JVM): they now raise it as a %Qore exception, as all other functions and methods of the module do
+      (qore#6789)
+    - fixed the module's teardown at process exit, which ended the process in \c std::terminate() (exit code 134)
+      when a step of it failed with a JNI error (ex: stopping the module's native cleanup thread): the module's delete
+      function, its \c atexit() handler, its Program cleanup callback and the rollback of a failed module
+      initialization now report the error on \c stderr and continue the teardown (qore#6788)
+    - fixed the creation of a child Program from a Program that uses the module, which ended the process in
+      \c std::terminate() (exit code 134) when the module's data could not be copied for the child Program (ex: the
+      thread could not be attached to the JVM): the error is now reported on \c stderr, and the child Program is
+      created without the module data of its parent, as the %Qore library offers no way yet to fail the creation of
+      the child Program with the error (qore#6787)
     - fixed bare wildcard classpath entries such as \c *.jar being dropped by the class loader. They now load matching
       archives from the JVM's working directory (qore#6740, see @ref jniimport).
     - fixed a C++ exception in a JNI native method of the module, which ended the process in \c std::terminate()
