@@ -535,6 +535,11 @@ void jni_report_current_exception(const char* step) noexcept {
     } catch (Exception& e) {
         if (report_plain.load(std::memory_order_acquire)) {
             fprintf(stderr, "jni module: %s failed with a jni exception\n", step);
+            // a Java exception must not stay pending for the JNI calls that follow
+            try {
+                e.ignore();
+            } catch (...) {
+            }
             return;
         }
         try {

@@ -4760,8 +4760,9 @@ jfieldID fieldNativeCleanupRefKind = nullptr;
 std::thread* native_cleanup_thread = nullptr;
 std::atomic<bool> native_cleanup_thread_started{false};
 // set when Globals::stopNativeCleanupThread() fails in the module's teardown, which continues without the worker
-// having been stopped (qore#6788): the worker then dispatches nothing more, as the module and libqore are being torn
-// down, and stops at its next wakeup
+// having been stopped (qore#6788): a reference that wakes the worker afterwards is dropped instead of dispatched, as
+// the module and libqore are being torn down, and the worker stops; a dispatch already in progress when the stop
+// failed still runs
 std::atomic<bool> native_cleanup_abandoned{false};
 
 void native_cleanup_dispatch(jlong ptr, jint kind) {

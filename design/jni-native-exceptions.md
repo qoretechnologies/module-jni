@@ -70,8 +70,10 @@ the process in `std::terminate()`.
   NativeCleanup thread fails before the worker is woken, the worker stays blocked in the JVM (a daemon thread, which
   `DestroyJavaVM()` does not wait for; with a JVM passed in with `jvm-ptr`, the JVM is not destroyed); the failure
   sets `native_cleanup_abandoned`, so that a reference that wakes it later is dropped (its native object is leaked)
-  instead of dispatched during or after the teardown.  If it fails after the worker was joined, the handles not yet
-  released are leaked.
+  instead of dispatched during or after the teardown; a dispatch already in progress when the stop failed still runs.
+  If it fails after the sentinel was queued, the worker ends on the sentinel or drops it.  If it fails after the
+  worker was joined, the handles not yet released are leaked.  The test covers the failure before the worker is
+  woken.
 - `JniExternalProgramData::copy()`, which libqore calls from the constructor of a child Program, is `noexcept`:
   `AbstractQoreProgramExternalData::copy()` cannot report an error, so a failure is reported on stderr, and
   `nullptr` is returned, with which the child Program is created without the module's data, as with

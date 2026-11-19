@@ -398,8 +398,9 @@ static void jni_atexit_destroy_vm() noexcept {
     // nonetheless (qore#6788)
     // Prevent the global Program's static destructor from running after
     // function-local libqore synchronization objects have been torn down.
-    // the Qore library can have been cleaned up already, so an error is not converted to a Qore exception to report
-    // it
+    // the handler does work only if the module's delete function did not run (ex: the process ended with the Qore
+    // exit() function), when the state of the Qore library cannot be relied on, so an error is not converted to a
+    // Qore exception to report it
     jni::jni_report_set_plain();
     jni::jni_teardown_step("abandoning the global context", [] () { Globals::abandonGlobalContext(); });
     jni::Jvm::destroyVM();
