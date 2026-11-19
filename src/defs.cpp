@@ -518,4 +518,26 @@ QoreString jni_utf8_to_default(const char* utf8) {
     }
     return QoreString(*str);
 }
+
+void jni_report_teardown_exception(const char* step) noexcept {
+    try {
+        throw;
+    } catch (Exception& e) {
+        try {
+            // there is no exception sink in the teardown: the exception is converted to describe it
+            ExceptionSink xsink;
+            e.convert(&xsink);
+            QoreStringValueHelper err(xsink.getExceptionErr());
+            QoreStringValueHelper desc(xsink.getExceptionDesc());
+            fprintf(stderr, "jni module: %s failed: %s: %s\n", step, err->c_str(), desc->c_str());
+            xsink.clear();
+        } catch (...) {
+            fprintf(stderr, "jni module: %s failed with a jni exception that cannot be described\n", step);
+        }
+    } catch (std::exception& e) {
+        fprintf(stderr, "jni module: %s failed: %s\n", step, e.what());
+    } catch (...) {
+        fprintf(stderr, "jni module: %s failed with an unknown C++ exception\n", step);
+    }
+}
 } // namespace jni

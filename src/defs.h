@@ -560,6 +560,28 @@ DLLLOCAL void jni_append_utf8(QoreString& utf8, QoreValue v);
 */
 DLLLOCAL QoreString jni_utf8_to_default(const char* utf8);
 
+//! Reports the C++ exception being handled on stderr as the failure of a step of the module's teardown
+/** Must be called in a \c catch block; for the teardown paths that libqore or the C library call, where there is no
+    exception sink and from which no C++ exception may propagate (the module's delete function, the \c atexit()
+    handler, the rollback of a failed initialization), so that the teardown continues after the step fails
+    (qore#6788).  A jni::Exception is described with the %Qore exception that it converts to.  Never throws.
+
+    @param step what failed (ex: \c "stopping the NativeCleanup thread")
+*/
+DLLLOCAL void jni_report_teardown_exception(const char* step) noexcept;
+
+//! Runs a step of the module's teardown, reporting a C++ exception that it throws and continuing (qore#6788)
+/** see jni_report_teardown_exception()
+*/
+template <typename F>
+DLLLOCAL void jni_teardown_step(const char* step, F&& f) noexcept {
+    try {
+        f();
+    } catch (...) {
+        jni_report_teardown_exception(step);
+    }
+}
+
 } // namespace jni
 
 namespace jni {

@@ -469,7 +469,7 @@ QoreStringNode* Jvm::createVM() {
     return 0;
 }
 
-void Jvm::destroyVM() {
+void Jvm::destroyVM() noexcept {
     // Idempotent teardown.  destroyVM() can be reached by two paths that may both
     // run during a single process exit:
     //   1. jni_module_delete() — the normal Qore module-manager teardown; and
@@ -502,7 +502,10 @@ void Jvm::destroyVM() {
     // Drain and join the NativeCleanup C++ background thread before the JVM
     // teardown begins.  Must happen before Globals::cleanup() so the JNI ID
     // caches the thread relies on are still valid.
-    Globals::stopNativeCleanupThread();
+    // qore#6788: a failure to stop it (ex: the thread cannot be attached to the JVM) must not end the process in the
+    // teardown: it is reported, and the JVM is destroyed nonetheless; the thread is a daemon thread of the JVM, which
+    // DestroyJavaVM() does not wait for
+    jni_teardown_step("stopping the NativeCleanup thread", [] () { Globals::stopNativeCleanupThread(); });
 
     Globals::cleanup();
     // Only destroy the JVM if we created it.  In JVM-primary mode the host process owns the VM
