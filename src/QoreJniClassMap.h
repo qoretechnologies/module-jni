@@ -615,17 +615,13 @@ public:
         return save_object_callback;
     }
 
-    DLLLOCAL virtual AbstractQoreProgramExternalData* copy(QoreProgram* pgm) const {
-#ifdef DEBUG
-        // a test fail point: the thread cannot be attached to the JVM
-        if (dbg_jni_fail_at(DbgJniFailPoint::ProgramCopy)) {
-            throw UnableToAttachException(JNI_ERR);
-        }
-#endif
-        // issue #3862: ensure that the thread is registered for this call
-        Env env;
-        return new JniExternalProgramData(*this, env, pgm);
-    }
+    //! Returns the jni data of a child Program created from the Program of this object
+    /** Never throws: libqore calls it from the constructor of the child Program, where a C++ exception ends the
+        process in std::terminate(), and it cannot report an error, so if the data cannot be copied, the error is
+        reported on stderr, and nullptr is returned: the child Program is created without the jni data of its parent
+        (qore#6787)
+    */
+    DLLLOCAL virtual AbstractQoreProgramExternalData* copy(QoreProgram* pgm) const noexcept;
 
     DLLLOCAL virtual void doDeref();
 

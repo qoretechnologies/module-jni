@@ -519,7 +519,7 @@ QoreString jni_utf8_to_default(const char* utf8) {
     return QoreString(*str);
 }
 
-void jni_report_teardown_exception(const char* step) noexcept {
+void jni_report_current_exception(const char* step) noexcept {
     try {
         throw;
     } catch (Exception& e) {
