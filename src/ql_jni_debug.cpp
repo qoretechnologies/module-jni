@@ -140,7 +140,33 @@ void dbg_jni_run_context_gate(DbgJniGatePoint point) {
     }
 }
 
+//! Imports a Java class into the given Program as jni_module_import() does, without making the Program current
+/** jni_module_import(), the entry point of other modules (module-python's Java loader), takes the target Program as
+    an argument; its callers make it current first, as a module command is run, so the class is added to it without an
+    entry.  This calls it from the calling code's Program, so that the class is added to a Program that is not
+    current, which enters it, as for a class that a thread that Java started loads - see
+    test/jni-import-pending-program.qtest.  DEBUG builds only.
+*/
+static QoreValue f_dbg_jni_import_into_program(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(args, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const QoreStringNode* import = get_param_value(args, 1).get<const QoreStringNode>();
+    TempEncodingHelper str(import, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    jni_module_import(xsink, *pgm, str->c_str());
+    return QoreValue();
+}
+
 void init_jni_debug_functions(QoreNamespace& ns) {
+    ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
     ns.addBuiltinVariant("dbg_jni_set_context_gate", f_dbg_jni_set_context_gate, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, codeOrNothingTypeInfo, QoreValue(), "code", stringOrNothingTypeInfo, QoreValue(),
         "point");
