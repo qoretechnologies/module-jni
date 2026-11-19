@@ -282,10 +282,7 @@ Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateDa
         // (qore#6801), so that its class loader is the context class loader of the call
         QoreProgram* pgm;
         jni_get_create_context(pgm);
-        {
-            QoreProgram* ctx_pgm = pgm;
-            JniExternalProgramData::setContext(env, ctx_pgm);
-        }
+        JniExternalProgramData::setContext(env, pgm);
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
             Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
         BaseMethod m(method->getObject(), *cls);
@@ -317,10 +314,7 @@ Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJ
         // (qore#6801), so that its class loader is the context class loader of the call
         QoreProgram* pgm;
         jni_get_create_context(pgm);
-        {
-            QoreProgram* ctx_pgm = pgm;
-            JniExternalProgramData::setContext(env, ctx_pgm);
-        }
+        JniExternalProgramData::setContext(env, pgm);
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
             Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
         BaseMethod m(method->getObject(), *cls);
@@ -567,10 +561,7 @@ binary get_byte_code(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] 
         // the Program's jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
         JniExternalProgramData* jpc = jni_get_create_context(pgm);
-        if (!pgm) {
-            xsink->raiseException("JNI-ERROR", "no Program context is available to find the Qore class");
-            return QoreValue();
-        }
+        assert(pgm);
 
         // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
         jni_check_name(cn->c_str(), cn->size(), "class name", "class names");
@@ -625,10 +616,7 @@ string get_java_name(string class_name) [flags=NAMED_ARGS] {
         // the Program's jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
         JniExternalProgramData* jpc = jni_get_create_context(pgm);
-        if (!pgm) {
-            xsink->raiseException("JNI-ERROR", "no Program context is available to find the Qore class");
-            return QoreValue();
-        }
+        assert(pgm);
 
         // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
         jni_check_name(cn->c_str(), cn->size(), "class name", "class names");

@@ -48,6 +48,9 @@ enum class DbgJniGatePoint {
     Lookup,
     //! between the check that a Program has jni data and the entry into it
     Entry,
+    //! in JniExternalProgramData::getCreateJniProgramData(), between the check that a Program has no jni data and
+    //! taking the Program's parse lock to create it (qore#6801)
+    Create,
 };
 
 //! Runs the one-shot gate set with Jni::dbg_jni_set_context_gate() if it was set by the current thread for the point

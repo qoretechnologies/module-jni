@@ -79,6 +79,12 @@ the process in `std::terminate()`.
   `nullptr` is returned, with which the child Program is created without the module's data, as with
   `PO_NO_INHERIT_PROGRAM_DATA` (qore#6787; failing the creation of the child Program needs a sink-taking
   `copy()` in libqore, qoretechnologies/qore#6786).
+- A Program without jni data (above, or created with `PO_NO_INHERIT_PROGRAM_DATA`) still has the module's feature
+  and namespaces, so its code can call the jni builtins; `jni_get_program_context()` returns `nullptr` there.  The
+  builtins get their Program with `jni_get_create_context()` (the Program found as by `jni_get_context()`, else the
+  calling code's) or `jni_get_create_call_context()` (always the calling code's), which create the Program's jni
+  data on demand with `JniExternalProgramData::getCreateJniProgramData()`, as a jni module command issued in the
+  Program does; the creation can throw a `jni::Exception`, which the builtin converts (qore#6801).
 
 ## Tests
 

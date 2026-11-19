@@ -8,7 +8,8 @@
 # that Qore code calls in it must not crash the process (qore#6801): get_class_loader() dereferenced a null Program
 # pointer, define_class(), get_byte_code() and get_java_name() asserted or dereferenced a null jni data pointer,
 # implement_interface(), invoke() and invoke_nonvirtual() crashed too.  The Program's jni data is now created on
-# demand, as for a jni module command issued in the Program.
+# demand, as for a jni module command issued in the Program; two threads that create it at the same time create it
+# once (with a debug build of the module, which has the gate that makes the threads meet).
 #
 # Each case runs test/jni-no-program-data-child.q in a new process, as the failure terminated the process.
 
@@ -33,11 +34,25 @@ class JniNoProgramDataTest inherits QUnit::Test {
         addTestCase("coverage: new_array()", \newArrayCase());
         addTestCase("coverage: a Java object and its methods", \newObjectCase());
         addTestCase("coverage: a static Java method", \staticMethodCase());
-        addTestCase("coverage: a Java field", \fieldAccessCase());
+        addTestCase("coverage: a declared public Java field", \fieldAccessCase());
         addTestCase("coverage: JavaArray::get()", \javaArrayGetCase());
         addTestCase("coverage: set_save_object_callback()", \saveObjectCallbackCase());
+        addTestCase("regression: two threads create the jni data at the same time", \concurrentCreateCase());
         addTestCase("negative: an unknown case is refused by the child", \unknownCase());
         set_return_value(main());
+    }
+
+    concurrentCreateCase() {
+        # a debug gate of the module makes another thread create the jni data while this one waits for the parse lock
+        # to create it; the second creation, which libqore refuses with an assertion or leaks, must not happen
+        string out = runChild("concurrent_create");
+        string line = getLine(out, "result: ");
+        if (line == "result: no debug gate") {
+            testSkip("the module is not a debug build");
+        }
+        assertEq("result: other created: True same: True", line, out);
+        assertEq("", getLine(out, "caught: "), out);
+        checkAfter(out, "concurrent_create");
     }
 
     getClassLoaderCase() {

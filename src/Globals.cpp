@@ -1355,10 +1355,10 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
         return false;
     }
 
-    // no Program in the context can have jni data, as in a child Program that does not inherit the jni data of its
-    // parent (qore#6801): the class is then looked up in the current Program, as the lookup needs no jni data, or,
-    // with no current Program, in the global Java context Program, as for other calls from Java without a Program
-    // context
+    // it can happen that no Program in the context has jni data, as in a child Program that does not inherit the jni
+    // data of its parent (qore#6801): the class is then looked up in the current Program, as the lookup needs no jni
+    // data, or, with no current Program, in the global Java context Program, as for other calls from Java without a
+    // Program context
     QoreProgram* pgm = jni_get_program_context();
     if (!pgm) {
         pgm = ::getProgram();

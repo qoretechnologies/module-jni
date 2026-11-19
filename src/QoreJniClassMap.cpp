@@ -5153,11 +5153,24 @@ JniExternalProgramData* JniExternalProgramData::getCreateJniProgramData(QoreProg
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     //printd(5, "parse-cmd '%s' jpc: %p jnins: %p\n", arg.c_str(), jpc, jpc ? jpc->getJniNamespace() : nullptr);
     if (!jpc) {
+#ifdef DEBUG
+        // a test gate that runs code between the check above and taking the parse lock below
+        if (dbg_jni_context_gate_set.load(std::memory_order_acquire)) {
+            dbg_jni_run_context_gate(DbgJniGatePoint::Create);
+        }
+#endif
 #if QORE_VERSION_CODE >= 10013
         ProgramRuntimeExternalParseContextHelper pch(pgm);
         // the Program is being deleted: its parse lock could not be taken, so nothing may be added to it
         if (!pch) {
             throw BasicException("the Program is being deleted; its jni context cannot be created");
+        }
+        // another thread can have created the data after the check above, while this thread waited for the parse
+        // lock: the jni APIs create it on demand, so two threads of a Program without jni data can try to create it
+        // at the same time (qore#6801)
+        jpc =static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+        if (jpc) {
+            return jpc;
         }
 #endif
         QoreNamespace* jnins = pgm->findNamespace("::Jni");

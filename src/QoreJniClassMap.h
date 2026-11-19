@@ -878,8 +878,8 @@ DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm
     (\c PO_NO_INHERIT_PROGRAM_DATA, or when the copy of the parent's jni data fails) has the namespaces and the feature
     of the jni module, but no jni data (qore#6801)
 
-    @param pgm set to the Program of the returned jni data, or to nullptr when there is no Program context, in which
-    case the jni data of the global Java context Program is returned
+    @param pgm set to the Program of the returned jni data: the global Java context Program when there is no Program
+    context; never nullptr
 
     @return the jni data; never nullptr
 
@@ -894,8 +894,8 @@ DLLLOCAL JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm);
 /** For the APIs that must use the caller's Program in all cases (qore_get_call_program_context()); the jni data is
     created as by jni_get_create_context() when the Program has none (qore#6801)
 
-    @param pgm set to the Program of the returned jni data, or to nullptr when there is no Program context, in which
-    case the jni data of the global Java context Program is returned
+    @param pgm set to the Program of the returned jni data: the global Java context Program when there is no Program
+    context; never nullptr
 
     @return the jni data; never nullptr
 

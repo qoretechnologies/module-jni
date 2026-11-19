@@ -121,13 +121,41 @@ string sub save_object_callback() {
     jni::set_save_object_callback(sub (object o) {});
     return \"set\";
 }
+
+# two threads create the jni data at the same time: a debug gate of the module runs in this thread after it found no
+# jni data and before it takes the Program's parse lock to create it; the gate makes another thread create the data
+# then, and waits for it; this thread must then use the data that the other thread created
+string sub concurrent_create() {
+    *object other;
+    Counter done(1);
+    code gate = sub () {
+        background sub () {
+            on_exit {
+                done.dec();
+            }
+            other = jni::get_class_loader();
+        }();
+        done.waitForZero();
+    };
+    try {
+        call_function(\"Jni::org::qore::jni::dbg_jni_set_context_gate\", gate, \"create\");
+    } catch (hash<ExceptionInfo> ex) {
+        # a release build of the module has no debug gates
+        if (ex.err == \"NO-FUNCTION\") {
+            return \"no debug gate\";
+        }
+        rethrow;
+    }
+    object mine = jni::get_class_loader();
+    return sprintf(\"other created: %y same: %y\", exists other, exists other && mine.equals(other));
+}
 ";
 
 #! the case names
 const Cases = (
-    "get_class_loader", "get_class_loader_twice", "distinct_loader", "load_class", "define_class", "get_byte_code", "get_java_name", "new_array",
-    "implement_interface", "invoke", "invoke_nonvirtual", "new_object", "static_method", "field_access",
-    "java_array_get", "save_object_callback",
+    "get_class_loader", "get_class_loader_twice", "distinct_loader", "load_class", "define_class", "get_byte_code",
+    "get_java_name", "new_array", "implement_interface", "invoke", "invoke_nonvirtual", "new_object", "static_method",
+    "field_access", "java_array_get", "save_object_callback", "concurrent_create",
 );
 
 string case_name = ARGV[0] ?? "get_class_loader";
