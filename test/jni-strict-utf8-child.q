@@ -45,12 +45,13 @@ sub result(string name, auto expected, auto found) {
 }
 
 #! returns the error code of parsing the source in a new Program with the sandbox, or "parsed"
-string sub parse_sandboxed(SandboxManager sm, string src, *reference<Program> pgm) {
+string sub parse_sandboxed(SandboxManager sm, string src, *reference<Program> pgm, *reference<string> desc) {
     Program p(PO_NEW_STYLE);
     p.setSandboxManager(sm);
     try {
         p.parse(src, "jni-strict-utf8-classpath");
     } catch (hash<ExceptionInfo> ex) {
+        desc = ex.desc;
         return ex.err;
     }
     pgm = p;
@@ -62,15 +63,16 @@ const ClasspathSource = "%requires jni
 %module-cmd(jni) import org.qore.jni.QoreURLClassLoader
 %module-cmd(jni) add-classpath %PATH%
 string sub res() {
-    return QoreURLClassLoader::getCurrent().getResourceAsStream(\"res.txt\").readAllBytes().toString();
+    *object stream = QoreURLClassLoader::getCurrent().getResourceAsStream(\"res.txt\");
+    return stream ? stream.readAllBytes().toString() : \"<no resource>\";
 }
 ";
 
 #! returns the error of adding the classpath in a sandboxed Program, or "parsed: " and the resource it reads (or the
 #! error of reading it)
-string sub classpath_result(SandboxManager sm, string classpath) {
+string sub classpath_result(SandboxManager sm, string classpath, *reference<string> desc) {
     Program p;
-    string rc = parse_sandboxed(sm, replace(ClasspathSource, "%PATH%", classpath), \p);
+    string rc = parse_sandboxed(sm, replace(ClasspathSource, "%PATH%", classpath), \p, \desc);
     if (rc != "parsed") {
         return rc;
     }
@@ -150,19 +152,22 @@ sub classpath_case() {
         classpath_result(sm, outside));
     # the entries of one classpath are checked each
     result("classpath with an allowed and a refused entry", "FILESYSTEM-ACCESS-DENIED",
-        classpath_result(sm, allowed + ":" + outside));
-    # a wildcard entry is checked as its directory with the pattern
+        classpath_result(sm, allowed + PathSep + outside));
+    # a wildcard entry is checked as its directory with the pattern (the directory has no jar)
     result("wildcard classpath entry in an allowed directory", "parsed: <no resource>",
-        replace(classpath_result(sm, allowed + DirSep + "*.jar"), "parsed: PSEUDO-METHOD-DOES-NOT-EXIST",
-            "parsed: <no resource>"));
+        classpath_result(sm, allowed + DirSep + "*.jar"));
     result("wildcard classpath entry outside the allowed directory", "FILESYSTEM-ACCESS-DENIED",
         classpath_result(sm, outside + DirSep + "*.jar"));
     # a relative entry is resolved as the JVM resolves it (against its user.dir, this directory), not against the
-    # current directory of the process: in the allowed directory, "sub" is the JVM's ./sub, outside it
-    chdir(allowed);
+    # current directory of the process: in the allowed directory, "sub" is the JVM's ./sub, outside it, and in the
+    # other directory, the allowed directory's name is the JVM's allowed directory
     on_exit chdir(base);
+    chdir(allowed);
     result("relative classpath entry after a change of the current directory", "FILESYSTEM-ACCESS-DENIED",
         classpath_result(sm, "sub"));
+    chdir(outside);
+    result("relative classpath entry in the allowed directory after a change of the current directory",
+        "parsed: allowed", classpath_result(sm, basename(allowed)));
 }
 
 #! a classpath entry that the JVM's file name encoding cannot represent exactly is refused under a sandbox
@@ -182,8 +187,10 @@ sub classpath_unmappable_case() {
         printf("result: classpath: skipped (this Qore library cannot allow uncontrolled APIs in a sandbox)\n");
         return;
     }
-    result("classpath entry that the JVM cannot represent", "JNI-SANDBOX-ERROR",
-        classpath_result(sm, allowed + DirSep + binary_to_string(EmojiUtf8, "UTF-8")));
+    *string desc;
+    string rc = classpath_result(sm, allowed + DirSep + binary_to_string(EmojiUtf8, "UTF-8"), \desc);
+    result("classpath entry that the JVM cannot represent", ("JNI-SANDBOX-ERROR", True),
+        (rc, (desc ?? "") =~ /cannot be represented in the file name encoding of the JVM/));
 }
 
 sub main() {

@@ -144,7 +144,8 @@ try {
     #! Asserts that the module's path check refused the command for the jar: \a rv is the result of issue()
     private assertFilesystemDenied(string rv, string cmd, string label) {
         assertRegex("^FILESYSTEM-ACCESS-DENIED: ", rv, label);
-        assertRegex("'" + getJar() + "'.*module command error from command '" + cmd.split(" ")[0], rv,
+        # the jar is named by the absolute path that it is checked as, as the JVM resolves it
+        assertRegex("'" + realpath(getJar()) + "'.*module command error from command '" + cmd.split(" ")[0], rv,
             label + " (reason)");
     }
 

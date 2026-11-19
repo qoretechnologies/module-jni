@@ -460,6 +460,7 @@ public class %s {
             "result: wildcard classpath entry in an allowed directory: OK",
             "result: wildcard classpath entry outside the allowed directory: OK",
             "result: relative classpath entry after a change of the current directory: OK",
+            "result: relative classpath entry in the allowed directory after a change of the current directory: OK",
         ), lines, out);
         # a classpath entry that the JVM's file name encoding cannot represent exactly is refused
         out = runInTempDir("QORE_CHARSET=UTF-8 LC_ALL=en_US.iso88591", "classpath-unmappable");
@@ -473,7 +474,9 @@ public class %s {
     private string runInTempDir(string env, string args) {
         string dir = tmp_location() + DirSep + sprintf("jni-strict-utf8-%d-%d", getpid(),
             now_us().durationMicroseconds());
-        mkdir(dir);
+        if (mkdir(dir, 0700)) {
+            throw "TEST-ERROR", sprintf("cannot create directory %y: %s", dir, strerror());
+        }
         on_exit rmdir(dir);
         int rc;
         string out = backquote("cd " + shellQuote(dir) + " && " + childCmd(env, args), \rc);
