@@ -599,11 +599,16 @@ public:
         return setting < 0 ? jni_compat_types : setting != 0;
     }
 
-    DLLLOCAL void setSaveObjectCallback(const ResolvedCallReferenceNode* save_object_callback) {
-        if (this->save_object_callback) {
-            this->save_object_callback->deref(nullptr);
-        }
+    //! Sets the save object callback, releasing the old one
+    /** The old callback is released after the new one is set, as releasing it can run Qore code, for example the
+        destructor of an object that only the callback holds; an exception raised by that code is raised in \a xsink
+    */
+    DLLLOCAL void setSaveObjectCallback(const ResolvedCallReferenceNode* save_object_callback, ExceptionSink* xsink) {
+        ResolvedCallReferenceNode* old = this->save_object_callback;
         this->save_object_callback = save_object_callback ? save_object_callback->refRefSelf() : nullptr;
+        if (old) {
+            old->deref(xsink);
+        }
     }
 
     DLLLOCAL ResolvedCallReferenceNode* getSaveObjectCallback() const {
