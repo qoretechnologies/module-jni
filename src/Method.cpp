@@ -343,21 +343,21 @@ QoreValue BaseMethod::invoke(jobject object, const QoreListNode* args, QoreProgr
             std::vector<jvalue> jargs = convertArgs(env, args, offset, jpc);
             switch (retValType) {
                 case Type::Boolean:
-                    return JavaToQore::convert(env.callBooleanMethod(object, id, &jargs[0]));
+                    return JavaToQore::convert(env.callBooleanMethod(object, id, jargs.data()));
                 case Type::Byte:
-                    return JavaToQore::convert(env.callByteMethod(object, id, &jargs[0]));
+                    return JavaToQore::convert(env.callByteMethod(object, id, jargs.data()));
                 case Type::Char:
-                    return JavaToQore::convert(env.callCharMethod(object, id, &jargs[0]));
+                    return JavaToQore::convert(env.callCharMethod(object, id, jargs.data()));
                 case Type::Short:
-                    return JavaToQore::convert(env.callShortMethod(object, id, &jargs[0]));
+                    return JavaToQore::convert(env.callShortMethod(object, id, jargs.data()));
                 case Type::Int:
-                    return JavaToQore::convert(env.callIntMethod(object, id, &jargs[0]));
+                    return JavaToQore::convert(env.callIntMethod(object, id, jargs.data()));
                 case Type::Long:
-                    return JavaToQore::convert(env.callLongMethod(object, id, &jargs[0]));
+                    return JavaToQore::convert(env.callLongMethod(object, id, jargs.data()));
                 case Type::Float:
-                    return JavaToQore::convert(env.callFloatMethod(object, id, &jargs[0]));
+                    return JavaToQore::convert(env.callFloatMethod(object, id, jargs.data()));
                 case Type::Double:
-                    return JavaToQore::convert(env.callDoubleMethod(object, id, &jargs[0]));
+                    return JavaToQore::convert(env.callDoubleMethod(object, id, jargs.data()));
                 case Type::Reference: {
                     if (!pgm) {
                         pgm = jni_get_program_context();
@@ -365,12 +365,12 @@ QoreValue BaseMethod::invoke(jobject object, const QoreListNode* args, QoreProgr
                             pgm = Globals::getJavaContextProgram();
                         }
                     }
-                    return JavaToQore::convertToQore(env.callObjectMethod(object, id, &jargs[0]), pgm, false);
+                    return JavaToQore::convertToQore(env.callObjectMethod(object, id, jargs.data()), pgm, false);
                 }
                 case Type::Void:
                 default:
                     assert(retValType == Type::Void);
-                    env.callVoidMethod(object, id, &jargs[0]);
+                    env.callVoidMethod(object, id, jargs.data());
                     return QoreValue();
             }
         } catch (JavaException& e) {
@@ -445,7 +445,7 @@ QoreValue BaseMethod::newInstance(const QoreListNode* args, QoreProgram* pgm) {
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
     Env env;
     std::vector<jvalue> jargs = convertArgs(env, args, 0, jpc);
-    return JavaToQore::convertToQore(env.newObject(cls->getJavaObject(), id, &jargs[0]), pgm, jpc->getCompatTypes());
+    return JavaToQore::convertToQore(env.newObject(cls->getJavaObject(), id, jargs.data()), pgm, jpc->getCompatTypes());
 }
 
 LocalReference<jobject> BaseMethod::newQoreInstance(const QoreListNode* args, JniExternalProgramData* jpc) {

@@ -12,6 +12,13 @@
       raise \c JNI-ERROR, and the \c classpath option of the \c jdbc driver raises \c JDBC-OPTION-ERROR (a %Qore
       library that refuses a NUL character in every DBI option value raises \c DBI-OPTION-ERROR first);
       \c QORE_JNI_CLASSPATH, an environment variable, cannot have a NUL character (qore#6771)
+    - fixed the jni APIs in a Program that has no jni data, a child Program created with
+      \c PO_NO_INHERIT_PROGRAM_DATA, or one whose copy of its parent's jni data failed, which has the namespaces of the
+      jni module but not its data: \c get_class_loader() crashed the process with a null pointer dereference, as did
+      \c define_class(), \c get_byte_code(), \c get_java_name(), \c implement_interface(), \c invoke() and
+      \c invoke_nonvirtual(); the Program's jni data, with its own class loader, is now created on demand, as for a jni
+      module command issued in the Program; that class loader does not delegate to the parent Program's, so the child
+      cannot load classes from the parent's classpath with it (qore#6801)
     - fixed the release of a Program's jni data, which ended the process in \c std::terminate() (exit code 134) when
       the release of the Program's save object callback (see \c set_save_object_callback()) raised a %Qore exception,
       for example in the destructor of an object that only the callback held, or when the object's class belonged to
