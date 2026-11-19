@@ -601,7 +601,9 @@ public:
 
     //! Sets the save object callback, releasing the old one
     /** The old callback is released after the new one is set, as releasing it can run Qore code, for example the
-        destructor of an object that only the callback holds; an exception raised by that code is raised in \a xsink
+        destructor of an object that only the callback holds; an exception raised by that code is raised in \a xsink;
+        if the old callback is running (see getSaveObjectCallbackRef()), its last reference is released, and such an
+        exception is raised, by save_object() when it returns
     */
     DLLLOCAL void setSaveObjectCallback(const ResolvedCallReferenceNode* save_object_callback, ExceptionSink* xsink) {
         ResolvedCallReferenceNode* new_callback = save_object_callback ? save_object_callback->refRefSelf()

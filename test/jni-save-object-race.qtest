@@ -108,7 +108,8 @@ class JniSaveObjectRaceTest inherits QUnit::Test {
             jvm_args = env_args + " " + jvm_args;
         }
         string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
-            "QORE_JNI_JVM_ARGS=%s GLIBC_TUNABLES=glibc.malloc.tcache_count=0 MALLOC_PERTURB_=165 %s -b "
+            "QORE_JNI_JVM_ARGS=%s GLIBC_TUNABLES=${GLIBC_TUNABLES:+$GLIBC_TUNABLES:}glibc.malloc.tcache_count=0 "
+            "MALLOC_PERTURB_=165 %s -b "
             "--enable-debug %s %s 2>&1", shellQuote(jvm_args), shellQuote(QORE_ARGV[0]), shellQuote(child),
             case_name);
         int rc;
