@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# The module's shutdown must not leave a global Java context Program behind (qore#6799): when the main thread was
+# never attached to the JVM (all jni work ran in other threads), the deletion of the global context Program at the
+# module's shutdown attached the main thread to release the Program's class loader, and the context of that
+# attachment was the global context Program, which no longer existed: it was created again, and never deleted
+# (valgrind: a definite leak from Globals::createJavaContextProgram()).
+#
+# Each case runs test/jni-shutdown-context-leak-child.q in a new process, as the module is shut down when the process
+# exits; a debug build of the module prints the number of global context Programs created and deleted at its shutdown
+# when QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT is set, and each one created must have been deleted.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniShutdownContextLeakTest
+
+class JniShutdownContextLeakTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI module shutdown context Program leak", "1.0") {
+        addTestCase("regression: the main thread was never attached", \backgroundCase());
+        addTestCase("negative: the main thread was attached", \mainCase());
+        addTestCase("negative: no report without the variable", \noReportCase());
+        set_return_value(main());
+    }
+
+    backgroundCase() {
+        checkCase("background");
+    }
+
+    mainCase() {
+        checkCase("main");
+    }
+
+    noReportCase() {
+        string out = runChild("background", False);
+        assertEq("result: abcdef", getLine(out, "result: "), out);
+        assertEq("", getLine(out, "jni-dbg: "), out);
+        assertEq("after: background", getLine(out, "after: "), out);
+    }
+
+    #! checks that the child did the jni work and that the module's shutdown deleted the one global context Program
+    #! created in the process, and created no other
+    private checkCase(string case_name) {
+        string out = runChild(case_name, True);
+        assertEq("result: abcdef", getLine(out, "result: "), out);
+        assertFalse(out =~ /^caught: /m, out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+        if (getLine(out, "debug: ") != "debug: True") {
+            assertEq("debug: False", getLine(out, "debug: "), out);
+            # the report and the counts exist in debug builds only
+            assertEq("", getLine(out, "jni-dbg: "), out);
+            testSkip("the jni module's debug diagnostics require a debug build");
+        }
+        # the global context Program is created when the module is initialized, and deleted only at its shutdown
+        assertEq("counts: 1/0", getLine(out, "counts: "), out);
+        # each global context Program created must have been deleted: the one created when the module was
+        # initialized, and no other
+        assertEq("jni-dbg: global context Programs created: 1 deleted: 1", getLine(out, "jni-dbg: "), out);
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr), checking that it exited with status 0
+    private string runChild(string case_name, bool report) {
+        string child = normalize_dir(get_script_dir() + "/jni-shutdown-context-leak-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is checked
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "%s %s -b --enable-debug %s %s 2>&1", report ? "QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT=1"
+                : "-u QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT", shellQuote(QORE_ARGV[0]), shellQuote(child), case_name);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+        return "";
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

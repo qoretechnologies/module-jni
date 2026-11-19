@@ -69,6 +69,10 @@ ExceptionSink& Globals::getGlobalXsink() {
 
 bool Globals::already_initialized = false;
 std::atomic<bool> Globals::jni_shutting_down{false};
+#ifdef DEBUG
+std::atomic<int> Globals::dbg_context_programs_created{0};
+std::atomic<int> Globals::dbg_context_programs_deleted{0};
+#endif
 
 GlobalReference<jobject> Globals::syscl;
 bool Globals::bootstrap = false;
@@ -5147,6 +5151,9 @@ QoreProgram* Globals::createJavaContextProgram() {
             rns->addNamespace(jnins);
             (*qph)->setExternalData("jni", new JniExternalProgramData(jnins, **qph));
             (*qph)->setScriptPath("Qore jni module global Program context");
+#ifdef DEBUG
+            dbg_context_programs_created.fetch_add(1, std::memory_order_relaxed);
+#endif
             printd(5, "Globals::createJavaContextProgram() created %p\n", **qph);
         } catch (jni::JavaException& e) {
 #ifdef DEBUG

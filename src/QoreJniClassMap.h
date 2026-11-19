@@ -675,6 +675,13 @@ public:
 
     DLLLOCAL static JniExternalProgramData* setContext(Env& env, QoreProgram*& pgm);
 
+    //! Sets the Java context of a thread that has just been attached to the JVM (see jni::Env's constructor)
+    /** As setContext(), but once the module's shutdown has started (see Globals::isShuttingDown()), a thread with no
+        Program context gets no Java context: the global Java context Program, which is being deleted or has been
+        deleted, is not created again; a Program created then would never be deleted (qore#6799)
+    */
+    DLLLOCAL static void setAttachContext(Env& env);
+
     DLLLOCAL static bool compatTypes();
 
     //! Returns true if the given Program's jni data exists (it has been created and not yet destroyed)

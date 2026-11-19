@@ -613,9 +613,20 @@ public:
         jni_shutting_down.store(true, std::memory_order_release);
         if (qph) {
             qph.reset();
+#ifdef DEBUG
+            dbg_context_programs_deleted.fetch_add(1, std::memory_order_relaxed);
+#endif
         }
         getGlobalXsink().handleExceptions();
     }
+
+#ifdef DEBUG
+    //! The number of global context Programs created by createJavaContextProgram() in the process (debug builds
+    //! only); see Jni::dbg_jni_context_program_counts() and dbg_jni_report_context_programs() (qore#6799)
+    DLLLOCAL static std::atomic<int> dbg_context_programs_created;
+    //! The number of global context Programs deleted by clearGlobalContext() in the process (debug builds only)
+    DLLLOCAL static std::atomic<int> dbg_context_programs_deleted;
+#endif
 
     //! Abandons the global context during process exit without running Qore destructors
     /** C atexit ordering cannot guarantee that function-local libqore synchronization

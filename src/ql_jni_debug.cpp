@@ -40,6 +40,8 @@
 #include <string>
 #include <thread>
 #include <cstring>
+#include <cstdio>
+#include <cstdlib>
 
 //! Returns the number of Programs holding entries in the module root namespace cache
 /** The cache is keyed by the raw QoreProgram pointer, so an entry that outlives its Program is a
@@ -330,6 +332,30 @@ bool dbg_jni_fail_point_hit(DbgJniFailPoint point) {
     return true;
 }
 
+//! Returns the number of global context Programs created and deleted in the process (qore#6799)
+/** Returns a hash with the keys \c created and \c deleted; see dbg_jni_report_context_programs() for the counts at
+    the module's shutdown
+*/
+static QoreValue f_dbg_jni_context_program_counts(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(bigIntTypeInfo), xsink);
+    rv->setKeyValue("created", (int64)jni::Globals::dbg_context_programs_created.load(std::memory_order_relaxed),
+        xsink);
+    rv->setKeyValue("deleted", (int64)jni::Globals::dbg_context_programs_deleted.load(std::memory_order_relaxed),
+        xsink);
+    return rv.release();
+}
+
+void dbg_jni_report_context_programs() noexcept {
+    if (!getenv("QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT")) {
+        return;
+    }
+    fprintf(stderr, "jni-dbg: global context Programs created: %d deleted: %d\n",
+        jni::Globals::dbg_context_programs_created.load(std::memory_order_relaxed),
+        jni::Globals::dbg_context_programs_deleted.load(std::memory_order_relaxed));
+    fflush(stderr);
+}
+
 void init_jni_debug_functions(QoreNamespace& ns) {
     ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
@@ -350,6 +376,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         nothingTypeInfo, 1, stringOrNothingTypeInfo, QoreValue(), "kind");
     ns.addBuiltinVariant("dbg_jni_fail_point", f_dbg_jni_fail_point, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
         stringOrNothingTypeInfo, QoreValue(), "point");
+    ns.addBuiltinVariant("dbg_jni_context_program_counts", f_dbg_jni_context_program_counts, QCF_NO_FLAGS,
+        QDOM_DEFAULT, hashTypeInfo);
 }
 
 #endif // DEBUG
