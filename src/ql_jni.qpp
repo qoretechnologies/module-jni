@@ -656,8 +656,10 @@ auto kotlin_eval(string script) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
                 Globals::methodKotlinScriptEngineGetInitError, nullptr).as<jstring>();
             if (errMsg) {
                 Env::GetStringUtfChars err(env, errMsg);
-                xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
-                    "Kotlin scripting is not available: %s", err.c_str());
+                // the message from Java is UTF-8
+                SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
+                desc->sprintf("Kotlin scripting is not available: %s", err.c_str());
+                xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE", desc.release());
             } else {
                 xsink->raiseException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
                     "Kotlin scripting is not available - ensure kotlin-scripting-jsr223 JARs are in the classpath");

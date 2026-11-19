@@ -432,6 +432,7 @@ public class %s {
             "result: QoreException code: OK",
             "result: QoreException code that the default encoding cannot represent: OK",
             "result: module command: OK",
+            "result: module command error text: OK",
             "result: JDBC user: OK",
             "result: JDBC password: OK",
             "result: JDBC URL: OK",

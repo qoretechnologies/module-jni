@@ -272,8 +272,6 @@ public:
         xsink->raiseException(err.c_str(), "%s", desc.c_str());
     }
 
-
-
 private:
     std::string err;
     QoreString desc;
@@ -467,6 +465,13 @@ private:
     @param v the value to append
 */
 DLLLOCAL void jni_append_utf8(QoreString& utf8, QoreValue v);
+
+//! Returns a UTF-8 string (ex: a Java name) in the default encoding, for the text of an error that is in it
+/** The text of an error raised in a module command is in the default encoding, as Qore appends the command to it as
+    it is; a string that cannot be converted is returned as it is.  No C++ exception is raised other than
+    \c std::bad_alloc.
+*/
+DLLLOCAL QoreString jni_utf8_to_default(const char* utf8);
 
 } // namespace jni
 

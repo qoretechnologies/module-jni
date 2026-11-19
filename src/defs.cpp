@@ -506,4 +506,16 @@ void jni_append_utf8(QoreString& utf8, QoreValue v) {
     }
     utf8.concat(str->c_str(), str->size());
 }
+
+QoreString jni_utf8_to_default(const char* utf8) {
+    QoreString src(utf8, QCS_UTF8);
+    ExceptionSink xsink;
+    TempEncodingHelper str(src, QCS_DEFAULT, &xsink);
+    if (xsink) {
+        // the string cannot be converted: it is returned as it is
+        xsink.clear();
+        return src;
+    }
+    return QoreString(*str);
+}
 } // namespace jni

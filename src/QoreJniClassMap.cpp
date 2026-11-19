@@ -680,8 +680,9 @@ Class* QoreJniClassMap::loadClass(Env& env, const char* name, bool& base, JniExt
         if (!jpc) {
             printd(5, "failed to load class '%s' with default classloader; no program-specific classloader present",
                 name);
-            throw QoreJniException("JNI-IMPORT-ERROR", "failed to load class '%s' with default classloader; no " \
-                "program-specific classloader present", name);
+            // the Java class name is UTF-8; the text of the error is in the default encoding
+            throw QoreJniException("JNI-IMPORT-ERROR", "failed to load class '%s' with default classloader; no "
+                "program-specific classloader present", jni_utf8_to_default(name).c_str());
         }
     }
     return loadProgramClass(env, name, jpc);
@@ -792,8 +793,9 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
             // are QoreBuiltinClass, not JniQoreClass, and are already usable directly, so importing
             // the underlying Java class is both impossible and unnecessary
             if (strcmp(ec->getLanguage(), "Java")) {
-                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in "
-                    "Qore class with that name already exists in the Jni namespace", name.c_str());
+                // the Java class name is UTF-8; the text of the error is in the default encoding
+                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in Qore class "
+                    "with that name already exists in the Jni namespace", jni_utf8_to_default(name.c_str()).c_str());
             }
             qc = static_cast<JniQoreClass*>(ec);
             // make sure the class is not already a representation of the new class
@@ -961,8 +963,9 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInBase(Env& env, QoreString& n
             // (that reads JniQoreClass-only members and crashes); they are already usable directly, so
             // importing the underlying Java class is both impossible and unnecessary
             if (strcmp(existing->getLanguage(), "Java")) {
-                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in "
-                    "Qore class with that name already exists in the Jni namespace", name.c_str());
+                // the Java class name is UTF-8; the text of the error is in the default encoding
+                throw QoreJniException("JNI-IMPORT-ERROR", "cannot import Java class '%s': a built-in Qore class "
+                    "with that name already exists in the Jni namespace", jni_utf8_to_default(name.c_str()).c_str());
             }
             JniQoreClass* je = static_cast<JniQoreClass*>(existing);
             if (je->getJavaName() == name.c_str()) {

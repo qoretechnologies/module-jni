@@ -875,7 +875,10 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
             }
             if (!cls) {
                 if (!xsink) {
-                    xsink.raiseException("UNKNOWN-CLASS", "cannot resolve class '%s'", cname.c_str());
+                    // the class name from Java is UTF-8
+                    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
+                    desc->sprintf("cannot resolve class '%s'", cname.c_str());
+                    xsink.raiseException("UNKNOWN-CLASS", desc.release());
                 }
                 QoreToJava::wrapException(env, xsink);
                 return nullptr;
@@ -979,7 +982,10 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
     }
 
     if (!cls && !xsink) {
-        xsink.raiseException("CREATE-OBJECT-ERROR", "class '%s' cannot be found", clsname.c_str());
+        // the class name from Java is UTF-8
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
+        desc->sprintf("class '%s' cannot be found", clsname.c_str());
+        xsink.raiseException("CREATE-OBJECT-ERROR", desc.release());
     }
 
     if (xsink) {

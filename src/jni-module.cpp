@@ -737,7 +737,9 @@ static void jni_module_delete() {
 
 static QoreNamespace* qore_jni_wildcard_import(QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
     if (arg[-2] != '.' || arg.strlen() < 3) {
-        throw QoreJniException("JNI-IMPORT-ERROR", "invalid import argument: '%s'", arg.c_str());
+        // the argument of the module command is UTF-8; the text of the error is in the default encoding
+        throw QoreJniException("JNI-IMPORT-ERROR", "invalid import argument: '%s'",
+            jni_utf8_to_default(arg.c_str()).c_str());
         return nullptr;
     }
 
@@ -975,9 +977,9 @@ static void jni_module_parse_cmd(const QoreString& cmd_arg, ExceptionSink* xsink
     const char* p = strchr(cmd.c_str(), ' ');
 
     if (!p) {
-        // the description is in UTF-8, as the command is here
-        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
-        desc->sprintf("missing command name in parse command: '%s'", cmd.c_str());
+        // the description shows the command as it was given, in its encoding, as Qore appends it to the description
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(cmd_arg.getEncoding()));
+        desc->sprintf("missing command name in parse command: '%s'", cmd_arg.c_str());
         xsink->raiseException("JNI-PARSE-COMMAND-ERROR", desc.release());
         return;
     }
@@ -991,9 +993,11 @@ static void jni_module_parse_cmd(const QoreString& cmd_arg, ExceptionSink* xsink
 
     mcmap_t::const_iterator i = mcmap.find(str.c_str());
     if (i == mcmap.end()) {
-        // the description is in UTF-8, as the command is here
-        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
-        desc->sprintf("unrecognized command '%s' in '%s' (valid commands: ", str.c_str(), cmd.c_str());
+        // the description shows the command as it was given, in its encoding, as Qore appends it to the description
+        const char* cmd_end = strchr(cmd_arg.c_str(), ' ');
+        QoreString name(&cmd_arg, cmd_end ? cmd_end - cmd_arg.c_str() : cmd_arg.size());
+        SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(cmd_arg.getEncoding()));
+        desc->sprintf("unrecognized command '%s' in '%s' (valid commands: ", name.c_str(), cmd_arg.c_str());
         for (mcmap_t::const_iterator i = mcmap.begin(), e = mcmap.end(); i != e; ++i) {
             if (i != mcmap.begin()) {
                 desc->concat(", ");
@@ -1143,14 +1147,15 @@ void jni_check_classpath_policy(QoreSandboxManager* policy, Env& env, jstring cl
     }
 }
 
-//! Returns a classpath module command's argument in the default encoding
-/** The command is processed in UTF-8 (see jni_module_parse_cmd()); a path is made in the default encoding, the
+//! Returns a module command's argument in the default encoding
+/** The command is processed in UTF-8 (see jni_module_parse_cmd()); a classpath is made in the default encoding, the
     encoding of Qore's file names, of the Program's script directory and of the environment variables that
-    q_env_subst() substitutes, before it is converted once to the Java string that is both checked and used
+    q_env_subst() substitutes, before it is converted once to the Java string that is both checked and used; a
+    module name is compared with Qore's module names, which are in the default encoding too
 
     @throw XsinkException the argument cannot be converted to the default encoding
 */
-static QoreString jni_cmd_path_arg(const QoreString& arg) {
+static QoreString jni_cmd_default_arg(const QoreString& arg) {
     ExceptionSink xsink;
     TempEncodingHelper str(arg, QCS_DEFAULT, &xsink);
     if (xsink) {
@@ -1161,7 +1166,7 @@ static QoreString jni_cmd_path_arg(const QoreString& arg) {
 
 static void qore_jni_mc_global_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
-    QoreString arg = jni_cmd_path_arg(cmd_arg);
+    QoreString arg = jni_cmd_default_arg(cmd_arg);
     q_env_subst(arg);
     Env env;
     LocalReference<jstring> jcp = env.newPathString(arg);
@@ -1190,7 +1195,7 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
 
     // the path in the default encoding, as the script directory is
     cwd_str->concat(QORE_DIR_SEP);
-    cwd_str->concat(jni_cmd_path_arg(arg).c_str());
+    cwd_str->concat(jni_cmd_default_arg(arg).c_str());
     q_normalize_path(**cwd_str);
 
     cwd_str->concat('/');
@@ -1205,7 +1210,7 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
 }
 
 static void qore_jni_mc_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
-    QoreString arg = jni_cmd_path_arg(cmd_arg);
+    QoreString arg = jni_cmd_default_arg(cmd_arg);
     q_env_subst(arg);
     printd(LogLevel, "qore_jni_mc_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
     // one Java string is both checked and added
@@ -1233,7 +1238,7 @@ static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgra
 
     // the path in the default encoding, as the script directory is
     cwd_str->concat(QORE_DIR_SEP);
-    cwd_str->concat(jni_cmd_path_arg(arg).c_str());
+    cwd_str->concat(jni_cmd_default_arg(arg).c_str());
     q_normalize_path(**cwd_str);
 
     cwd_str->concat('/');
@@ -1345,8 +1350,10 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
         // a direct use of an uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that
         // restricts nothing but does not trust the code still refuses it
         if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
+            // the class name of the module command is UTF-8; the text of the error is in the default encoding
             throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"define-class\" module "
-                "command to define class '%s', which belongs to another Program", binary_name.c_str());
+                "command to define class '%s', which belongs to another Program",
+                jni_utf8_to_default(binary_name.c_str()).c_str());
         }
     }
 
@@ -1403,7 +1410,8 @@ static void qore_jni_mc_mark_module_injected(const QoreString& arg, QoreProgram*
     assert(pgm->checkFeature(QORE_JNI_MODULE_NAME));
     assert(jpc);
 
-    jpc->addInjectedModule(arg.c_str());
+    // module names are in the default encoding
+    jpc->addInjectedModule(jni_cmd_default_arg(arg).c_str());
 }
 
 static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram* pgm,
@@ -1450,8 +1458,9 @@ static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, Jni
             Globals::methodKotlinScriptEngineGetInitError, nullptr).as<jstring>();
         if (errMsg) {
             Env::GetStringUtfChars err(env, errMsg);
-            throw QoreJniException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
-                "Kotlin scripting is not available: %s", err.c_str());
+            // the message from Java is UTF-8; the text of the error is in the default encoding
+            throw QoreJniException("KOTLIN-SCRIPTING-NOT-AVAILABLE", "Kotlin scripting is not available: %s",
+                jni_utf8_to_default(err.c_str()).c_str());
         } else {
             throw QoreJniException("KOTLIN-SCRIPTING-NOT-AVAILABLE",
                 "Kotlin scripting is not available - ensure kotlin-scripting-jsr223 JARs are in the classpath");

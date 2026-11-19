@@ -175,6 +175,17 @@ sub main() {
         p.loadModule("jni");
         p.issueModuleCmd("jni", "set-property qore.test.utf8.child " + fass);
         result("module command", Units, Utf8Boundary::propertyUnits("qore.test.utf8.child"));
+
+        # the error of a module command shows its argument as given, in the default encoding, as the command that
+        # Qore appends to the description is
+        *string desc;
+        try {
+            p.issueModuleCmd("jni", "import x" + fass + "*");
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+        }
+        string expected = "invalid import argument: 'x" + fass + "*'";
+        result("module command error text", expected, (desc ?? "").substr(0, expected.length()));
     }
 
     # the connection values of a jdbc datasource, in the default encoding
