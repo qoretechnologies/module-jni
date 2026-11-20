@@ -107,6 +107,19 @@ DLLLOCAL extern std::atomic<bool> dbg_jni_context_program_hook_set;
 */
 DLLLOCAL void dbg_jni_run_context_program_hook() noexcept;
 
+//! True while a hook is set with Jni::dbg_jni_set_java_program_ptr_hook(); checked inline before
+//! dbg_jni_run_java_program_ptr_hook(), so that a call made with no hook set costs only this load
+DLLLOCAL extern std::atomic<bool> dbg_jni_java_program_ptr_hook_set;
+
+//! Runs the java.util.function.BooleanSupplier set with Jni::dbg_jni_set_java_program_ptr_hook(), if any
+/** Called by the natives that receive a Program pointer from Java (ex: the pointer of an
+    org.qore.jni.QoreURLClassLoader), once they have received it and before they use it, on any thread, so that a test
+    can hold a thread exactly there while the Program is deleted; the hook decides from the thread whether it runs,
+    and returns true if it ran, which clears it.  It is not run while a Java exception is pending or from within a
+    hook; an error running it is reported on \c stderr
+*/
+DLLLOCAL void dbg_jni_run_java_program_ptr_hook() noexcept;
+
 //! Runs the java.lang.Runnable set with Jni::dbg_jni_set_context_program_wait_hook(), if any, once
 /** Called by Globals::clearGlobalContext() once the module's shutdown has started and has seen that another thread
     holds the global context Program, before it waits for it, so that a test can release that thread there, which

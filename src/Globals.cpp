@@ -967,7 +967,11 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
         jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
-    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
+    // the Program of the pointer that Java passed is validated and held, as it can have been deleted; declared before
+    // the other entries, so that it is left last
+    ExceptionSink java_pgm_xsink;
+    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr);
+    QoreProgram* pgm = java_pgm.get();
     // holds the global context Program, if the call is made in it; declared before the entry, so that the entry is
     // left first (qore#6829)
     JniContextProgramHolder ctx_holder;
@@ -1046,8 +1050,10 @@ static jobject JNICALL java_api_call_function_save(JNIEnv* jenv, jobject obj, jl
     return java_api_call_function_internal(jenv, obj, ptr, true, name, args);
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, jlong ptr, jboolean save,
-        jstring class_name, jstring method_name, jobjectArray args, const QoreClass* cls = nullptr,
+// \a java_ptr: \a ptr is a Program pointer that Java passed, which is validated (see JniJavaProgramRef); otherwise it is
+// the Program of a generated binding, which the caller holds
+static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, jlong ptr, bool java_ptr,
+        jboolean save, jstring class_name, jstring method_name, jobjectArray args, const QoreClass* cls = nullptr,
         const QoreMethod* m = nullptr, const QoreExternalMethodVariant* v = nullptr) {
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
@@ -1058,7 +1064,17 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
         return nullptr;
     }
 
-    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
+    // the Program of a pointer that Java passed is validated and held, as it can have been deleted; declared before
+    // the other entries, so that it is left last
+    ExceptionSink java_pgm_xsink;
+    std::optional<JniJavaProgramRef> java_pgm;
+    QoreProgram* pgm;
+    if (java_ptr) {
+        java_pgm.emplace(env, java_pgm_xsink, ptr);
+        pgm = java_pgm->get();
+    } else {
+        pgm = reinterpret_cast<QoreProgram*>(ptr);
+    }
     // holds the global context Program, if the call is made in it; declared before the entry, so that the entry is
     // left first (qore#6829)
     JniContextProgramHolder ctx_holder;
@@ -1159,19 +1175,17 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
 
 static jobject JNICALL java_api_call_static_method(JNIEnv* jenv, jobject obj, jlong ptr, jstring class_name,
     jstring method_name, jobjectArray args) try {
-    return java_api_call_static_method_internal(jenv, obj, ptr, false, class_name, method_name, args);
+    return java_api_call_static_method_internal(jenv, obj, ptr, true, false, class_name, method_name, args);
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL java_api_call_static_method_save(JNIEnv* jenv, jobject obj, jlong ptr, jstring class_name,
     jstring method_name, jobjectArray args) try {
-    return java_api_call_static_method_internal(jenv, obj, ptr, true, class_name, method_name, args);
+    return java_api_call_static_method_internal(jenv, obj, ptr, true, true, class_name, method_name, args);
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
 // private native static QoreObject newObjectSave0(long pgm_ptr, String class_name, Object...args);
 static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong ptr, jstring cname,
         jobjectArray args) try {
-    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
-
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
     try {
@@ -1181,15 +1195,18 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
         return nullptr;
     }
 
-    // create the object in the current program context if possible
-    {
-        QoreProgram* pgm0 = qore_get_call_program_context();
-        if (pgm0 && pgm0 != pgm) {
-            printd(5, "java_api_new_object_save() using call context for new pbject: %p (was: %p)\n", pgm0, pgm);
-            pgm = pgm0;
-        } else {
-            printd(5, "java_api_new_object_save() using pgm: %p call ctx: %p current: %p\n", pgm, pgm0, getProgram());
-        }
+    // the object is created in the current program context if possible; otherwise, the Program of the pointer that
+    // Java passed is validated and held, as it can have been deleted; declared before the other entries, so that it is
+    // left last
+    ExceptionSink java_pgm_xsink;
+    std::optional<JniJavaProgramRef> java_pgm;
+    QoreProgram* pgm = qore_get_call_program_context();
+    if (pgm) {
+        printd(5, "java_api_new_object_save() using call context for new object: %p (ptr: %p)\n", pgm, (void*)ptr);
+    } else {
+        java_pgm.emplace(env, java_pgm_xsink, ptr);
+        pgm = java_pgm->get();
+        printd(5, "java_api_new_object_save() using pgm: %p current: %p\n", pgm, getProgram());
     }
 
     // holds the global context Program, if the object is created in it; declared before the entry, so that the
@@ -1537,24 +1554,43 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
     return nullptr;
 }
 
-static jobject JNICALL qore_object_call_method(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
+// calls a method of a Qore object or a closure in the Program of the pointer that Java passed (QoreObject.callMethod0(),
+// QoreClosure.call0() and their variants, which pass QoreURLClassLoader.getProgramPtr()), which is validated and held,
+// as it can have been deleted (see JniJavaProgramRef)
+static jobject qore_object_closure_call_java_ptr(JNIEnv* jenv, jclass jcls, jlong ptr, jlong obj_ptr, jboolean save,
+        jstring mname, jobjectArray args) {
+    Env env(jenv);
+    // the thread is attached before the Program is entered
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
+        return nullptr;
+    }
+    ExceptionSink java_pgm_xsink;
+    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr);
+    return qore_object_closure_call_internal(jenv, jcls, java_pgm.get(), obj_ptr, save, mname, args);
+}
+
+static jobject JNICALL qore_object_call_method(JNIEnv* jenv, jclass jcls, jlong ptr, jlong obj_ptr,
         jstring mname, jobjectArray args) try {
-    return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, false, mname, args);
+    return qore_object_closure_call_java_ptr(jenv, jcls, ptr, obj_ptr, false, mname, args);
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jobject JNICALL qore_object_call_method_save(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
+static jobject JNICALL qore_object_call_method_save(JNIEnv* jenv, jclass jcls, jlong ptr, jlong obj_ptr,
         jstring mname, jobjectArray args) try {
-    return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, true, mname, args);
+    return qore_object_closure_call_java_ptr(jenv, jcls, ptr, obj_ptr, true, mname, args);
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jobject JNICALL qore_closure_call(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
+static jobject JNICALL qore_closure_call(JNIEnv* jenv, jclass jcls, jlong ptr, jlong obj_ptr,
         jobjectArray args) try {
-    return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, false, nullptr, args);
+    return qore_object_closure_call_java_ptr(jenv, jcls, ptr, obj_ptr, false, nullptr, args);
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jobject JNICALL qore_closure_call_save(JNIEnv* jenv, jclass jcls, QoreProgram* pgm, jlong obj_ptr,
+static jobject JNICALL qore_closure_call_save(JNIEnv* jenv, jclass jcls, jlong ptr, jlong obj_ptr,
         jobjectArray args) try {
-    return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, true, nullptr, args);
+    return qore_object_closure_call_java_ptr(jenv, jcls, ptr, obj_ptr, true, nullptr, args);
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
 static jobject JNICALL qore_object_get_member_value(JNIEnv* jenv, jobject jobj, jlong obj_ptr,
@@ -1727,8 +1763,8 @@ static jobject JNICALL java_class_builder_do_static_call(JNIEnv* jenv, jclass jc
         if (reserved || cls->cls != binding->cls) {
             throw std::runtime_error("Invalid class or variant in generated Qore static method call");
         }
-        return java_api_call_static_method_internal(jenv, nullptr, reinterpret_cast<jlong>(binding->pgm), true,
-            nullptr, mname, args, binding->cls, binding->method,
+        return java_api_call_static_method_internal(jenv, nullptr, reinterpret_cast<jlong>(binding->pgm), false,
+            true, nullptr, mname, args, binding->cls, binding->method,
             static_cast<const QoreExternalMethodVariant*>(binding->variant));
     });
 } JNI_NATIVE_CATCH(jenv, nullptr)
@@ -1819,7 +1855,6 @@ int load_python_module(Env& env, QoreProgram* pgm) {
 static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, jobject class_loader, jlong ptr,
         jstring nspath, jstring jname, jstring module, jboolean python, jboolean kotlin, jlong class_ptr) try {
     assert(ptr);
-    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
     Env env(jenv);
     QoreString qpath;
     if (nspath) {
@@ -1851,9 +1886,11 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
         // lock and runs none of its code, so the Program is not entered when it is current: a module command that
         // defines or imports a Java class that extends a Qore class generates the byte code of its superclass while
         // the Program can have code pending, which no runtime entry is allowed into (qore#6785); see
-        // jni_enter_program_for_class_add().  xsink, declared above, outlives the entry, which uses it when it is left
-        std::optional<QoreExternalProgramContextHelper> epch;
-        jni_enter_program_for_class_add(epch, pgm, xsink);
+        // jni_enter_program_for_class_add().  xsink, declared above, outlives the entry, which uses it when it is left.
+        // The Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
+        // validated and held, and entered as above (see JniJavaProgramRef)
+        JniJavaProgramRef java_pgm(env, xsink, ptr, class_loader);
+        QoreProgram* pgm = java_pgm.get();
         // the parse lock is taken immediately after: when the Program is current and not entered, it is what keeps
         // the Program from being torn down while its definitions are read; it is re-entrant, and the byte code
         // generation below takes it again
@@ -2277,7 +2314,7 @@ static bool ns_has_foreign_members(const QoreNamespace& ns, const char* mod) {
     return false;
 }
 
-static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jenv, jclass jcls, jlong ptr,
+static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jenv, jobject class_loader, jlong ptr,
         jstring qname, jstring module, jboolean python, jboolean kotlin, jobject arraylist) try {
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
@@ -2289,7 +2326,11 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
     }
 
     assert(ptr);
-    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
+    // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
+    // validated, held and entered (see JniJavaProgramRef); declared before the other entries, so that it is left last
+    ExceptionSink java_pgm_xsink;
+    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr, class_loader);
+    QoreProgram* pgm = java_pgm.get();
 
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     if (!jpc) {
@@ -2639,11 +2680,24 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     return rv;
 } JNI_NATIVE_CATCH(jenv, 0)
 
-static jobject JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv, jclass jcls, jlong ptr) try {
-    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
-    JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
+static jobject JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv, jobject class_loader, jlong ptr)
+        try {
+    Env env(jenv);
+    // the thread is attached before the Program is entered
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
+        return nullptr;
+    }
+    // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
+    // validated, held and entered (see JniJavaProgramRef)
+    ExceptionSink java_pgm_xsink;
+    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr, class_loader);
+    QoreProgram* pgm = java_pgm.get();
+    JniExternalProgramData* jpc = pgm ? static_cast<JniExternalProgramData*>(pgm->getExternalData("jni")) : nullptr;
     if (!jpc) {
-        Env env(jenv);
         jni_throw_runtime_exception(*env, "No JNI context for Qore Program");
         return nullptr;
     }
@@ -3105,8 +3159,8 @@ static jbyteArray qore_url_classloader_get_internal_class(JNIEnv* jenv, jclass j
     return array.release();
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
-static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNIEnv* jenv, jclass jcls, jlong ptr,
-        jstring pkg, jobject arraylist) try {
+static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNIEnv* jenv, jobject class_loader,
+        jlong ptr, jstring pkg, jobject arraylist) try {
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
     try {
@@ -3117,7 +3171,11 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
     }
 
     assert(ptr);
-    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
+    // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
+    // validated, held and entered (see JniJavaProgramRef)
+    ExceptionSink java_pgm_xsink;
+    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr, class_loader);
+    QoreProgram* pgm = java_pgm.get();
 
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
     if (!jpc) {

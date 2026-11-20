@@ -86,8 +86,20 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! Program pointer for the associated Qore Program
     /** Using AtomicLong for thread-safe access to the program pointer.
         A value of 0 indicates no program or that the program has been released.
+
+        A class loader created with the pointer of its parent class loader (ex: the class loader of a QoreJavaCompiler,
+        see QoreURLClassLoader(long, ClassLoader)) shares the parent's holder, so that the pointer that it passes to
+        native methods is cleared with the parent's when the Program's jni data is destroyed: a copy of the pointer
+        would name the Program after it has been deleted.  It stops sharing it when its own pointer is set or cleared
+        (see setPtrIntern()).
     */
-    private final AtomicLong pgm_ptr = new AtomicLong(0);
+    private volatile AtomicLong pgm_ptr = new AtomicLong(0);
+
+    //! true while pgm_ptr is the holder of the parent class loader; guarded by ptr_lock
+    private boolean shared_ptr = false;
+
+    //! guards the replacement of pgm_ptr and shared_ptr
+    private final Object ptr_lock = new Object();
 
     private boolean enable_cache = false;
     // when used as the system class loader
@@ -195,10 +207,24 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! constructor with a QoreProgram pointer and a parent
+    /** If \a parent is a QoreURLClassLoader with the same Program pointer, the pointer is shared with it, and is cleared
+        when the parent's is cleared, as when the Program's jni data is destroyed
+    */
     public QoreURLClassLoader(long p_ptr, ClassLoader parent) {
         super("QoreURLClassLoader", new URL[]{}, parent);
+        if (p_ptr != 0 && parent instanceof QoreURLClassLoader) {
+            // if the parent's pointer has been cleared since it was read, the holder shared is cleared as well
+            AtomicLong parent_ptr = ((QoreURLClassLoader) parent).pgm_ptr;
+            if (parent_ptr.get() == p_ptr) {
+                pgm_ptr = parent_ptr;
+                shared_ptr = true;
+            } else {
+                pgm_ptr.set(p_ptr);
+            }
+        } else {
+            pgm_ptr.set(p_ptr);
+        }
         // set the current classloader as the thread context classloader
-        pgm_ptr.set(p_ptr);
         setContext();
         //System.out.printf("QoreURLClassLoader(long p_ptr: %x, ClassLoader parent: %s: %x) this: %x\n",
         //    p_ptr, (parent == null ? "null" : parent.getClass().getCanonicalName()),
@@ -1135,7 +1161,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         that require a valid Qore Program.
     */
     public void clearProgramPtr() {
-        pgm_ptr.set(0);
+        setPtrIntern(0);
         sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
     }
 
@@ -1160,7 +1186,21 @@ public class QoreURLClassLoader extends URLClassLoader {
         if (cl == null) {
             throw new IllegalStateException("No classloader context set for current thread");
         }
-        cl.pgm_ptr.set(ptr);
+        cl.setPtrIntern(ptr);
+    }
+
+    //! Sets the Program pointer of this class loader only
+    /** A holder shared with the parent class loader is replaced, so that the parent's pointer is not changed
+    */
+    private void setPtrIntern(long ptr) {
+        synchronized (ptr_lock) {
+            if (shared_ptr) {
+                pgm_ptr = new AtomicLong(ptr);
+                shared_ptr = false;
+            } else {
+                pgm_ptr.set(ptr);
+            }
+        }
     }
 
     //! Returns the current thread's classloader context
@@ -1791,12 +1831,13 @@ public class QoreURLClassLoader extends URLClassLoader {
     static private native byte[] getInternalClass0(String name);
     private native byte[] generateByteCode0(long ptr, String qname, String name, String qore_module, boolean python,
         boolean kotlin, long class_ptr) throws Throwable;
-    static private native void getClassesInNamespace0(long ptr, String packageName, String mod, boolean python,
+    // instance methods, as the native method checks that the Program pointer is still this class loader's
+    private native void getClassesInNamespace0(long ptr, String packageName, String mod, boolean python,
         boolean kotlin, ArrayList<String> result);
-    static private native void getInternalClassesForPackage0(long ptr, String packageName, ArrayList<String> result);
+    private native void getInternalClassesForPackage0(long ptr, String packageName, ArrayList<String> result);
     static private native long getContextProgram0(QoreURLClassLoader syscl, BooleanWrapper created, boolean finalize_init);
     static private native void shutdownContext0();
-    static private native void clearCompilationCache0(long ptr);
+    private native void clearCompilationCache0(long ptr);
     static private native void dummy0();
     static private native void debug0(long ptr);
 

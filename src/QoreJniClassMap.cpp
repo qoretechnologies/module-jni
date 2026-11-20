@@ -4865,6 +4865,59 @@ void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHel
     }
 }
 
+// the error of a Program pointer received from Java whose Program has been deleted
+static constexpr const char* JAVA_PROGRAM_DELETED = "the Qore Program of the Java class loader has been deleted";
+
+JniJavaProgramRef::JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader) {
+#ifdef DEBUG
+    // a test can hold the thread here, once it has received the Program pointer from Java and before it uses it
+    if (dbg_jni_java_program_ptr_hook_set.load(std::memory_order_acquire)) {
+        dbg_jni_run_java_program_ptr_hook();
+    }
+#endif
+    if (!ptr) {
+        return;
+    }
+    QoreProgram* p = reinterpret_cast<QoreProgram*>(ptr);
+    {
+        // a Program is registered while it has jni data, which its teardown destroys before it frees the Program: the
+        // reference taken under the lock keeps its memory
+        JniProgramDataRegistry& reg = jni_pgm_data();
+        std::lock_guard<std::mutex> guard(reg.lock);
+        if (reg.pgms.find(p) == reg.pgms.end()) {
+            throw BasicException(JAVA_PROGRAM_DELETED);
+        }
+        p->depRef();
+    }
+    pgm = p;
+    try {
+        // the Program found can have been created at the address of the deleted Program of the class loader, whose
+        // pointer was cleared before the deleted Program was freed: the pointer must still be the class loader's
+        LocalReference<jobject> current;
+        if (!loader) {
+            current = env.callStaticObjectMethod(Globals::classQoreURLClassLoader,
+                Globals::methodQoreURLClassLoaderGetCurrent, nullptr);
+            loader = current;
+        }
+        if (!loader || env.callLongMethod(loader, Globals::methodQoreURLClassLoaderGetPtr, nullptr) != ptr) {
+            throw BasicException(JAVA_PROGRAM_DELETED);
+        }
+        jni_enter_program_for_class_add(epch, pgm, xsink);
+    } catch (...) {
+        release();
+        throw;
+    }
+}
+
+void JniJavaProgramRef::release() noexcept {
+    // the entry is left before the reference is released, which can be the Program's last
+    epch.reset();
+    if (pgm) {
+        pgm->depDeref();
+        pgm = nullptr;
+    }
+}
+
 int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
         ExceptionSink* xsink) {
     assert(!*xsink);
