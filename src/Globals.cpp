@@ -69,6 +69,7 @@ ExceptionSink& Globals::getGlobalXsink() {
 
 bool Globals::already_initialized = false;
 std::atomic<bool> Globals::jni_shutting_down{false};
+std::atomic<QoreProgram*> Globals::context_pgm{nullptr};
 #ifdef DEBUG
 std::atomic<int> Globals::dbg_context_programs_created{0};
 std::atomic<int> Globals::dbg_context_programs_deleted{0};
@@ -5217,6 +5218,7 @@ QoreProgram* Globals::createJavaContextProgram() {
             rns->addNamespace(jnins);
             (*qph)->setExternalData("jni", new JniExternalProgramData(jnins, **qph));
             (*qph)->setScriptPath("Qore jni module global Program context");
+            context_pgm.store(**qph, std::memory_order_release);
 #ifdef DEBUG
             dbg_context_programs_created.fetch_add(1, std::memory_order_relaxed);
 #endif
@@ -5226,9 +5228,11 @@ QoreProgram* Globals::createJavaContextProgram() {
             SimpleRefHolder<QoreStringNode> err(e.toString());
             printd(5, "Globals::createJavaContextProgram(): %s\n", err->c_str());
 #endif
+            context_pgm.store(nullptr, std::memory_order_release);
             qph.reset();
             throw;
         } catch (...) {
+            context_pgm.store(nullptr, std::memory_order_release);
             qph.reset();
             throw;
         }
@@ -5239,7 +5243,15 @@ QoreProgram* Globals::createJavaContextProgram() {
 }
 
 QoreProgram* Globals::getJavaContextProgram() {
-    // createJavaContextProgram() reads qph under the lock, as clearGlobalContext() can release it on another thread
+    // the shutdown flag is set before the Program is cleared, so no Program is returned once it is set
+    if (isShuttingDown()) {
+        return nullptr;
+    }
+    QoreProgram* rv = context_pgm.load(std::memory_order_acquire);
+    if (rv) {
+        return rv;
+    }
+    // created under the lock, which serializes the creation with the start of the shutdown
     return createJavaContextProgram();
 }
 
@@ -5248,6 +5260,7 @@ void Globals::clearGlobalContext() {
     {
         std::lock_guard<std::recursive_mutex> guard(getContextLock());
         jni_shutting_down.store(true, std::memory_order_release);
+        context_pgm.store(nullptr, std::memory_order_release);
         old = std::move(qph);
     }
     if (old) {
@@ -5262,6 +5275,7 @@ void Globals::clearGlobalContext() {
 void Globals::abandonGlobalContext() {
     std::lock_guard<std::recursive_mutex> guard(getContextLock());
     jni_shutting_down.store(true, std::memory_order_release);
+    context_pgm.store(nullptr, std::memory_order_release);
     qph.release();
 }
 

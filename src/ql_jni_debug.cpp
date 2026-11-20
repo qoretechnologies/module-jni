@@ -433,8 +433,9 @@ void dbg_jni_run_shutdown_window_hook() noexcept {
         return;
     }
     try {
-        jni::GlobalReference<jobject> holder(hook);
+        // the thread is attached first, as the holder of the reference checks it with the thread's JNI environment
         jni::Env env(false);
+        jni::GlobalReference<jobject> holder(hook);
         jni::LocalReference<jclass> runnable = env.findClass("java/lang/Runnable");
         jmethodID run = env.getMethod(runnable, "run", "()V");
         env.callVoidMethod(holder, run, nullptr);

@@ -620,7 +620,7 @@ public:
 
     //! Returns the global context Program, creating it if necessary; nullptr once the module's shutdown has started
     /** see createJavaContextProgram(); a caller that needs a Program uses jni_get_context_unconditional(), which
-        raises an exception instead
+        raises an exception instead; an existing Program is returned with no lock taken
     */
     DLLLOCAL static QoreProgram* getJavaContextProgram();
 
@@ -735,6 +735,9 @@ private:
     DLLLOCAL static ExceptionSink& getGlobalXsink();
 
     DLLLOCAL static std::unique_ptr<QoreProgramHelper> qph;
+    //! The global context Program in qph, or nullptr, for the lookup with no lock in getJavaContextProgram(); set and
+    //! cleared under getContextLock()
+    DLLLOCAL static std::atomic<QoreProgram*> context_pgm;
     //! Returns the lock that serializes the creation of the global context Program (qph) with the start of the
     //! module's shutdown
     /** Recursive, as the creation of the Program can look it up again on the same thread; never destroyed, as
