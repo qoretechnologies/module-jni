@@ -6,6 +6,14 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - with a %Qore library that reports the errors of the external data of a Program in an exception sink (qore#6786),
+      a failure to copy the module's data for a child Program (ex: the thread cannot be attached to the JVM) now
+      fails the creation of the child Program with the module's exception, instead of being reported on \c stderr
+      and creating the child Program without the module's data (qore#6787), and an exception raised when the
+      module's data of a deleted Program is released (ex: in the destructor of an object that only the save object
+      callback of the Program held, see \c set_save_object_callback()) is now raised to the code that deletes the
+      Program (ex: of \c delete, or at the end of the scope of the Program object), instead of being reported as an
+      unhandled exception (qore#6773); with an older %Qore library, the behaviour is unchanged (qore#6917)
     - Clearing a Program's compilation cache, which the Java compiler does when it ends, did not take the Program's
       code generation lock, so a class generated at the same time could be stored in the cache as it was cleared and
       stay there; the clear is now serialized with code generation without waiting for its lock: it is made at once,

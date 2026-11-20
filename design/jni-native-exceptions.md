@@ -122,16 +122,26 @@ the process in `std::terminate()`.
   If it fails after the sentinel was queued, the worker ends on the sentinel or drops it.  If it fails after the
   worker was joined, the handles not yet released are leaked.  The test covers the failure before the worker is
   woken.
-- `JniExternalProgramData::copy()`, which libqore calls from the constructor of a child Program, is `noexcept`:
-  `AbstractQoreProgramExternalData::copy()` cannot report an error, so a failure is reported on stderr, and
-  `nullptr` is returned, with which the child Program is created without the module's data, as with
-  `PO_NO_INHERIT_PROGRAM_DATA` (qore#6787; failing the creation of the child Program needs a sink-taking
-  `copy()` in libqore, qoretechnologies/qore#6786).
-- A Program without jni data (above, or created with `PO_NO_INHERIT_PROGRAM_DATA`) still has the module's feature
-  and namespaces, so its code can call the jni builtins; `jni_get_program_context()` returns `nullptr` there.  The
-  builtins get their Program with `jni_get_create_context()` (the Program found as by `jni_get_context()`, else the
-  calling code's) or `jni_get_create_call_context()` (always the calling code's), which create the Program's jni
-  data on demand with `JniExternalProgramData::getCreateJniProgramData()`, as a jni module command issued in the
+- `JniExternalProgramData`, the jni data of a Program, derives from `AbstractQoreProgramExternalDataEx` when the
+  Qore headers define `_QORE_HAS_PROGRAM_EXTERNAL_DATA_EX` (qore#6786; `QORE_JNI_PROGRAM_DATA_SINK` in
+  `src/defs.h`), and from `AbstractQoreProgramExternalData` otherwise (qore#6917).  Its callbacks are `noexcept`
+  either way:
+  - with the sink, `copy(QoreProgram*, ExceptionSink*)` converts any C++ exception (an `AbstractException`, such as a
+    `jni::Exception`, with `convert()`) into the sink, and returns `nullptr`; libqore then fails the creation of the
+    child Program with that exception (`Program::constructor()` raises it).  `doDeref(ExceptionSink*)` raises the errors
+    of the release (of the save object callback, which can run Qore code; of the class loader's pointer to the Program,
+    raised by the destructor, which `doDeref()` gives the sink in `deref_xsink`; of the JVM garbage collection hint) in
+    the sink of the code that deletes the Program.  The data needs no `init()`, so a copy that libqore releases without
+    calling `init()` (when the copy of another module's data fails) is released in the same way.  The module never
+    removes its data with `QoreProgram::removeExternalData()`.
+  - without it, `copy(QoreProgram*)` reports a failure on stderr and returns `nullptr`, with which the child Program
+    is created without the module's data, as with `PO_NO_INHERIT_PROGRAM_DATA` (qore#6787), and `doDeref()` reports
+    the errors of the release as unhandled exceptions with a local sink (qore#6773).
+- A Program without jni data (with the legacy path above, or created with `PO_NO_INHERIT_PROGRAM_DATA`) still has the
+  module's feature and namespaces, so its code can call the jni builtins; `jni_get_program_context()` returns `nullptr`
+  there.  The builtins get their Program with `jni_get_create_context()` (the Program found as by `jni_get_context()`,
+  else the calling code's) or `jni_get_create_call_context()` (always the calling code's), which create the Program's
+  jni data on demand with `JniExternalProgramData::getCreateJniProgramData()`, as a jni module command issued in the
   Program does; the creation can throw a `jni::Exception`, which the builtin converts (qore#6801).
 
 ## Tests
@@ -147,3 +157,13 @@ table is a function-try-block that ends with `JNI_NATIVE_CATCH(jenv, ...)`, and 
 `test/jni-cpp-exception-escape.qtest` uses `dbg_jni_fail_point()` of a debug build, which makes the code at a point
 (attaching a thread in `jni::Env`, creating or copying a Program's jni data, stopping the NativeCleanup thread) throw
 the C++ exception that it throws when it fails, once, on the thread that set it; each case runs in a child process.
+
+`test/jni-program-data-sink.qtest` checks the Program data with an exception sink (qore#6917): a failed copy fails
+the creation of the child Program (fail point `program-copy`), a copy that libqore releases without calling its
+`init()` (fail point `program-copy-result`, which makes the copy and raises an exception with it, as when the copy
+of another module's data fails after it), and the exceptions of the release raised to the code that deletes the
+Program, also the error of the release of the class loader in the destructor (fail point `program-release`, which
+the `release-fail` case of `test/jni-doderef-no-throw.qtest` checks on both paths).  It is skipped when
+`dbg_jni_program_data_sink()` of a debug build returns `False` (the module was built without
+`_QORE_HAS_PROGRAM_EXTERNAL_DATA_EX`); `test/jni-cpp-exception-escape.qtest` and `test/jni-doderef-no-throw.qtest`
+check either behaviour, as the function reports.

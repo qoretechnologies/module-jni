@@ -519,7 +519,19 @@ private:
     LocalReference<jobject> plist;
 };
 
-class JniExternalProgramData : public AbstractQoreProgramExternalData, public QoreJniClassMapBase {
+/* With QORE_JNI_PROGRAM_DATA_SINK (Qore with qore#6786, see defs.h), the jni data of a Program derives from
+   AbstractQoreProgramExternalDataEx, whose callbacks report errors in an ExceptionSink: a failed copy fails the
+   creation of the child Program with the module's exception, and the errors of the release reach the code that
+   deletes the Program (qore#6917); with an older Qore, from AbstractQoreProgramExternalData, whose callbacks cannot
+   report errors.  libqore finds the class with dynamic_cast, so the multiple inheritance is supported.
+*/
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+typedef AbstractQoreProgramExternalDataEx JniExternalProgramDataBase;
+#else
+typedef AbstractQoreProgramExternalData JniExternalProgramDataBase;
+#endif
+
+class JniExternalProgramData : public JniExternalProgramDataBase, public QoreJniClassMapBase {
 public:
     DLLLOCAL JniExternalProgramData(QoreNamespace* n_jni, QoreProgram* pgm);
 
@@ -651,6 +663,25 @@ public:
         return save_object_callback ? save_object_callback->refRefSelf() : nullptr;
     }
 
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+    // the legacy (final) callbacks stay visible through this type
+    using AbstractQoreProgramExternalDataEx::copy;
+    using AbstractQoreProgramExternalDataEx::doDeref;
+
+    //! Returns the jni data of a child Program created from the Program of this object
+    /** Never throws: an error is raised in \a xsink, which fails the creation of the child Program with the module's
+        exception (qore#6917), and nullptr is returned
+    */
+    DLLLOCAL AbstractQoreProgramExternalData* copy(QoreProgram* pgm, ExceptionSink* xsink) const noexcept override;
+
+    //! Releases the data and deletes the object
+    /** Never throws: the errors of the release (of the save object callback, which can run %Qore code, of the class
+        loader and of the JVM garbage collection hint) are raised in \a xsink, the sink of the code that deletes the
+        Program (qore#6917).  The data needs no init(), so a copy whose init() never ran (when the copy of the data of
+        another module fails) is released in the same way.
+    */
+    DLLLOCAL void doDeref(ExceptionSink* xsink) noexcept override;
+#else
     //! Returns the jni data of a child Program created from the Program of this object
     /** Never throws: libqore calls it from the constructor of the child Program, where a C++ exception ends the
         process in std::terminate(), and it cannot report an error, so if the data cannot be copied, the error is
@@ -660,6 +691,7 @@ public:
     DLLLOCAL virtual AbstractQoreProgramExternalData* copy(QoreProgram* pgm) const noexcept;
 
     DLLLOCAL virtual void doDeref();
+#endif
 
     //! Clears the compilation cache (the map of Qore classes to Java classes)
     /** The cache is guarded by codeGenLock, which this never waits for (qore#6855): it is taken by the thread that
@@ -759,6 +791,11 @@ protected:
     GlobalReference<jobject> classLoader;
     //! true if \c classLoader is the system class loader, whose reference \c Globals::syscl owns (bootstrap mode)
     bool borrowedClassLoader = false;
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+    //! the sink for the errors of the destructor, set by doDeref(ExceptionSink*) just before it deletes the object;
+    //! if null, the destructor reports them as unhandled exceptions
+    ExceptionSink* deref_xsink = nullptr;
+#endif
     // dynamic API class
     GlobalReference<jclass> dynamicApi;
     // call reference for saving object references; save_object_callback_lock must be held when accessing it

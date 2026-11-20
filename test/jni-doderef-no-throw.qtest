@@ -7,8 +7,12 @@
 # the save-object callback raised a Qore exception, for example in the destructor of an object that only the callback
 # held, JniExternalProgramData::doDeref() threw a pointer to a C++ exception out of the Program's teardown, which no
 # handler caught, and the process was terminated.  The exception is now reported as unhandled on stderr, and the
-# process continues.  An exception raised when the callback is replaced is raised to the caller of
-# set_save_object_callback(); it was reported as unhandled instead.
+# process continues; with a Qore library that has AbstractQoreProgramExternalDataEx (qore#6786), the module raises it
+# to the code that deletes the Program instead (qore#6917).  A debug build of the module tells which behaviour it has
+# (Jni::org::qore::jni::dbg_jni_program_data_sink()); with a release build, the behaviour is taken from the output of
+# the first case, and all cases must show the same one (a release build checks only that the behaviour is
+# consistent, not which one the module should have).  An exception raised when the callback is replaced is raised
+# to the caller of set_save_object_callback(); it was reported as unhandled instead.
 #
 # Each case runs test/jni-doderef-no-throw-child.q in a new process, as the failure terminated the process.
 
@@ -19,6 +23,16 @@
 %exec-class JniDoDerefNoThrowTest
 
 class JniDoDerefNoThrowTest inherits QUnit::Test {
+    private {
+        #! True if the module raises the exceptions of the release to the code that deletes the Program (qore#6917),
+        #! False if it reports them as unhandled; NOTHING if the module is not a debug build, which cannot tell, until
+        #! the first case that checks the release sets it from its output
+        *bool sink;
+
+        #! the reason that sink is NOTHING
+        *string sink_unknown;
+    }
+
     constructor() : QUnit::Test("JNI Program data release does not throw", "1.0") {
         addTestCase("regression: the Program is deleted", \deleteCase());
         addTestCase("regression: the Program goes out of scope", \scopeCase());
@@ -29,22 +43,37 @@ class JniDoDerefNoThrowTest inherits QUnit::Test {
         addTestCase("regression: the callback is removed", \clearCase());
         addTestCase("regression: the object's class belongs to the released Program", \childClassCase());
         addTestCase("negative: a callback that raises nothing", \okCase());
+        addTestCase("negative: the release of the class loader raises an error", \releaseFailCase());
         set_return_value(main());
+    }
+
+    globalSetUp() {
+        string out = runChild("sink");
+        string line = getLine(out, "sink: ");
+        if (line == "sink: True") {
+            sink = True;
+        } else if (line == "sink: False") {
+            sink = False;
+        } else if (line.equalPartial("sink: unknown: ")) {
+            sink_unknown = line.substr(15);
+        } else {
+            throw "TEST-ERROR", sprintf("unexpected output of the sink case: %s", out);
+        }
     }
 
     deleteCase() {
         string out = runChild("delete");
-        checkReported(out, "delete", "User", ("DOREF-TEST-ERROR: destructor of delete",));
+        checkReleased(out, "delete", "User", ("DOREF-TEST-ERROR: destructor of delete",));
     }
 
     scopeCase() {
         string out = runChild("scope");
-        checkReported(out, "scope", "User", ("DOREF-TEST-ERROR: destructor of scope",));
+        checkReleased(out, "scope", "User", ("DOREF-TEST-ERROR: destructor of scope",));
     }
 
     nestedCase() {
         string out = runChild("nested");
-        checkReported(out, "nested", "User", ("DOREF-TEST-ERROR: destructor of outer",
+        checkReleased(out, "nested", "User", ("DOREF-TEST-ERROR: destructor of outer",
             "DOREF-TEST-ERROR: destructor of inner"));
     }
 
@@ -54,9 +83,10 @@ class JniDoDerefNoThrowTest inherits QUnit::Test {
         string out = runChild("many");
         list<string> descs = ();
         for (int i = 1; i <= 25; ++i) {
-            descs += sprintf("DOREF-TEST-ERROR: destructor of many-%d\n", i);
+            descs += sprintf("DOREF-TEST-ERROR: destructor of many-%d", i);
         }
-        checkReported(out, "many", "User", descs);
+        # reported as unhandled, each description is followed by the end of its line, as many-1 starts many-10
+        checkReleased(out, "many", "User", descs, map $1 + "\n", descs);
     }
 
     cancelCase() {
@@ -74,11 +104,24 @@ class JniDoDerefNoThrowTest inherits QUnit::Test {
         assertEq("after: cancel", getLine(out, "after: "), out);
     }
 
+    #! the error of the release of the class loader of the Program, which the destructor of the jni data raises, is
+    #! handled as the other exceptions of the release (qore#6917)
+    releaseFailCase() {
+        string out = runChild("release-fail");
+        string unsupported = getLine(out, "release: unsupported: ");
+        if (unsupported) {
+            testSkip("the jni module is not a debug build: %s", unsupported.substr(22));
+        }
+        assertEq(1, countOf(out, "quiet destructor"), out);
+        checkReleased(out, "release-fail", "System", ("JNI-ERROR: dbg_jni_fail_point(): an error is raised when the "
+            "class loader of the Program is released",));
+    }
+
     childClassCase() {
         # the code of the released Program cannot run when its jni data is released, so the destructor call fails;
         # that exception is reported in the same way
         string out = runChild("child-class");
-        checkReported(out, "child-class", "System", ("\nPROGRAM-ERROR: ",));
+        checkReleased(out, "child-class", "System", ("PROGRAM-ERROR: ",), ("\nPROGRAM-ERROR: ",));
     }
 
     replaceCase() {
@@ -106,6 +149,48 @@ class JniDoDerefNoThrowTest inherits QUnit::Test {
         assertEq("caught: DOREF-TEST-ERROR: destructor of " + case_name, getLine(out, "caught: "), out);
         assertEq(1, countOf(out, "DOREF-TEST-ERROR"), out);
         assertFalse(out =~ /unhandled QORE/, out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+    }
+
+    #! checks the exceptions of the release of the Program's jni data: raised to the code that deletes the Program
+    #! with a sink (qore#6917), else reported as unhandled
+    /** @param descs the start of the error and description of each exception, in the order raised
+        @param reported_descs the strings that the output has once each when the exceptions are reported as unhandled;
+        if not given, \a descs
+    */
+    private checkReleased(string out, string case_name, string kind, list<string> descs,
+            *list<string> reported_descs) {
+        if (!exists sink) {
+            # a release build cannot tell which behaviour it has: it is taken from this output, and all cases must
+            # then show the same one
+            bool caught = (out =~ /^caught: /m);
+            bool unhandled = (out =~ /unhandled QORE/);
+            assertTrue(caught != unhandled, sprintf("the exceptions of the release are either raised or reported "
+                "(module not a debug build: %s): %s", sink_unknown, out));
+            sink = caught;
+        }
+        if (sink) {
+            checkCaughtRelease(out, case_name, descs);
+        } else {
+            checkReported(out, case_name, kind, reported_descs ?? descs);
+        }
+    }
+
+    #! checks that each exception was raised to the code that deletes the Program, in order, that none was reported
+    #! as unhandled, and that the process continued
+    private checkCaughtRelease(string out, string case_name, list<string> descs) {
+        list<string> caught = map $1, out.split("\n"), $1.equalPartial("caught: ");
+        assertEq(descs.size(), caught.size(), out);
+        foreach string desc in (descs) {
+            string line = caught[$#] ?? "";
+            assertTrue(line.equalPartial("caught: " + desc), sprintf("%y starts with %y: %s", line, desc, out));
+            if (desc =~ /destructor of/) {
+                # the whole description
+                assertEq("caught: " + desc, line, out);
+            }
+        }
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertFalse(out =~ /terminate called/, out);
         assertEq("after: " + case_name, getLine(out, "after: "), out);
     }
 

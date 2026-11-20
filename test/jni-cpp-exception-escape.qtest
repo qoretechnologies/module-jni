@@ -13,9 +13,10 @@
 #   stopping the NativeCleanup thread escape; a failed step of the teardown is now reported on stderr, and the
 #   teardown continues
 # - qore#6787: JniExternalProgramData::copy(), which libqore calls from the constructor of a child Program, let a
-#   jni::Exception escape; libqore gives copy() no way to report an error (qoretechnologies/qore#6786), so the error is
-#   now reported on stderr, and the child Program is created without the jni data of its parent (the interim
-#   behaviour until libqore can fail the creation of the child Program)
+#   jni::Exception escape; with a Qore library that gives copy() no way to report an error, the error is now reported
+#   on stderr, and the child Program is created without the jni data of its parent; with a Qore library that has
+#   AbstractQoreProgramExternalDataEx (qore#6786), the creation of the child Program fails with the module's exception
+#   (qore#6917, see test/jni-program-data-sink.qtest)
 #
 # The C++ exceptions are made with Jni::org::qore::jni::dbg_jni_fail_point(), which a debug build of the module has;
 # the test is skipped otherwise.  Each case runs in a child process, as the process ended before the fixes.
@@ -111,12 +112,17 @@ stdout.print(\"end\\n\");
 
         #! the reason the test is skipped, if the module is not a debug build
         *string skip_reason;
+
+        #! True if the module reports the errors of its Program data in an exception sink (qore#6917)
+        bool sink;
     }
 
     constructor() : Test("JniCppExceptionEscape", "1.0") {
         try {
             Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
-            p.parse("%requires jni\nnothing sub t() { Jni::org::qore::jni::dbg_jni_fail_point(); }", "dbg");
+            p.parse("%requires jni\nbool sub t() { Jni::org::qore::jni::dbg_jni_fail_point(); "
+                "return Jni::org::qore::jni::dbg_jni_program_data_sink(); }", "dbg");
+            sink = p.callFunction("t");
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
                 rethrow;
@@ -176,17 +182,24 @@ stdout.print(\"end\\n\");
         }
     }
 
-    #! a jni::Exception thrown while the jni data of a Program is copied for a child Program is reported, and the
-    #! child Program is created without it (the interim behaviour until qoretechnologies/qore#6786)
+    #! a jni::Exception thrown while the jni data of a Program is copied for a child Program fails the creation of
+    #! the child Program with the exception (qore#6917), or, with a Qore library without
+    #! AbstractQoreProgramExternalDataEx, is reported, and the child Program is created without it
     copyTest() {
         checkDebug();
         hash<auto> res = run("copy");
         checkOk(res, "copy");
-        assertRegex("(^|\n)jni module: copying the jni data of a Program for a child Program failed: " + AttachError
-            + "\n", res.out);
-        assertRegex("(^|\n)result: created\n", res.out);
-        # the child Program can use Java nevertheless
-        assertRegex("(^|\n)child: 3\n", res.out);
+        if (sink) {
+            assertRegex("(^|\n)exception: " + AttachError + "\n", res.out);
+            assertEq(-1, res.out.find("result: created"), "no child Program: " + res.out);
+            assertEq(-1, res.out.find("jni module:"), "nothing reported: " + res.out);
+        } else {
+            assertRegex("(^|\n)jni module: copying the jni data of a Program for a child Program failed: "
+                + AttachError + "\n", res.out);
+            assertRegex("(^|\n)result: created\n", res.out);
+            # the child Program can use Java nevertheless
+            assertRegex("(^|\n)child: 3\n", res.out);
+        }
         foreach string point in (("none", "cleared")) {
             hash<auto> ok = run("copy", point);
             checkOk(ok, "copy " + point);
