@@ -4903,11 +4903,9 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
 
     static bool once = false;
 
-    // true if the class loader is the system class loader, whose reference Globals::syscl owns
-    bool borrowed = false;
     if (!once && Globals::bootstrap) {
         once = true;
-        borrowed = true;
+        borrowedClassLoader = true;
         classLoader = GlobalReference<jobject>((jobject)Globals::syscl);
     } else {
         // set up QoreURLClassLoader constructor args
@@ -4932,24 +4930,24 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
             // fails (qore#6778, qore#6779)
             addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)), "QORE_JNI_CLASSPATH");
         }
+        jni_pgm_data_register(pgm);
     } catch (JavaException& e) {
         // the Java exception stays pending for the caller; no JNI call may be made while it is pending
-        jthrowable je = e.save();
-        releaseFailedClassLoader(env, borrowed, once);
+        LocalReference<jthrowable> je(e.save());
+        releaseFailedClassLoader(env);
         e.restore(je);
         throw;
     } catch (...) {
-        releaseFailedClassLoader(env, borrowed, once);
+        releaseFailedClassLoader(env);
         throw;
     }
-    jni_pgm_data_register(pgm);
 }
 
-void JniExternalProgramData::releaseFailedClassLoader(Env& env, bool borrowed, bool& once) noexcept {
-    if (borrowed) {
-        // Globals::syscl keeps its reference, and the next jni data of a root Program takes it again
+void JniExternalProgramData::releaseFailedClassLoader(Env& env) noexcept {
+    if (borrowedClassLoader) {
+        // Globals::syscl keeps its reference; the system class loader is not taken again for the jni data of another
+        // root Program, as the classes of the dynamic API may already be defined in it
         classLoader.release();
-        once = false;
         return;
     }
     // the class loader refers to the Program, which has no jni data, and its constructor made it the context class
@@ -5064,7 +5062,12 @@ JniExternalProgramData::~JniExternalProgramData() {
     for (auto& i : fake_cls_map) {
         delete i.second;
     }
-    classLoader = nullptr;
+    if (borrowedClassLoader) {
+        // Globals::syscl owns the reference
+        classLoader.release();
+    } else {
+        classLoader = nullptr;
+    }
 }
 
 // defines a class built in to the module with the given class loader and returns it

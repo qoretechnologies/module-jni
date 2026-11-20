@@ -42,8 +42,9 @@
     When a sandbox applies a filesystem policy to \c add-classpath or the JDBC \c classpath option, it checks
     a bare wildcard against the JVM's \c user.dir.
 
-    An entry that does not exist is left out, as are a wildcard whose directory does not exist and a file that is
-    not a \c .jar or \c .zip file, which are reported on the console.  An error while a classpath is added (a Java
+    An entry that does not exist is left out, as are other entries that cannot be used (ex: a wildcard whose
+    directory does not exist or cannot be read, or a file that is not a \c .jar or \c .zip file), which are
+    reported on the console.  An error while a classpath is added (a Java
     exception raised by the class loader) is raised to the caller as \c JNI-CLASSPATH-ERROR, whose description names
     the input that the classpath comes from and the classpath: the classpath commands above raise it, as does the
     \c classpath option of the \c jdbc driver when a connection is opened, and the module's initialization fails

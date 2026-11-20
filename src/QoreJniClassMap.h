@@ -587,11 +587,7 @@ public:
 
 private:
     //! Releases the class loader of a root Program's jni data whose constructor failed
-    /** @param env the JNI environment
-        @param borrowed true if the class loader is the system class loader, whose reference \c Globals::syscl owns
-        @param once the flag of the constructor that is set when the system class loader is taken, which is reset
-    */
-    DLLLOCAL void releaseFailedClassLoader(Env& env, bool borrowed, bool& once) noexcept;
+    DLLLOCAL void releaseFailedClassLoader(Env& env) noexcept;
 
 public:
 
@@ -718,6 +714,8 @@ protected:
     QoreNamespace* jni;
     // class loader
     GlobalReference<jobject> classLoader;
+    //! true if \c classLoader is the system class loader, whose reference \c Globals::syscl owns (bootstrap mode)
+    bool borrowedClassLoader = false;
     // dynamic API class
     GlobalReference<jclass> dynamicApi;
     // call reference for saving object references; save_object_callback_lock must be held when accessing it
