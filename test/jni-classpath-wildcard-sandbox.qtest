@@ -4,8 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 # Under a sandbox with a filesystem policy, a wildcard classpath entry is expanded once, and each file that it
-# selects is checked against the policy as its real path, with symbolic links resolved; the files that are added are
-# exactly the files that were checked (qore#6818).  If the policy denies any file that the wildcard selects, the
+# selects is checked against the policy as its real path, with symbolic links resolved; the entries that are given
+# to the class loader are exactly the paths that were checked (qore#6818).  If the policy denies any file that the wildcard selects, the
 # whole entry is refused with JNI-CLASSPATH-ERROR, naming the file, and nothing is added.  With no sandbox, wildcards
 # are expanded as before.
 #
@@ -13,7 +13,8 @@
 #   mix/a.jar           the jni test jar; mix/d.jar: the Kotlin test jar, which the policy of the case denies
 #   esc/a.jar           the jni test jar; esc/out.jar: a link to outside/k.jar; esc/outdir: a link to outside
 #   outside/k.jar       the Kotlin test jar, outside every allowed directory
-#   in/link.jar         a link to in/sub/k.jar, the Kotlin test jar
+#   in/link.jar         a link to in/sub/k.jar, the Kotlin test jar; in/link2.jar: another link to it;
+#                       in/dangling.jar: a link to a file that does not exist; in/subdir: a link to in/sub
 #   plain/a.jar         the jni test jar
 
 %modern
@@ -67,6 +68,9 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
         makeLink(root + "/outside/k.jar", "esc/out.jar");
         makeLink(root + "/outside", "esc/outdir");
         makeLink("sub/k.jar", "in/link.jar");
+        makeLink("sub/k.jar", "in/link2.jar");
+        makeLink("none.jar", "in/dangling.jar");
+        makeLink("sub", "in/subdir");
     }
 
     globalTearDown() {
@@ -90,6 +94,11 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
             "result: deny: the class of the allowed jar is loaded: OK",
             "result: deny: the class of the denied jar is still not loaded: OK",
             "result: deny: the denied file as an entry: OK",
+            "result: deny: a missing entry outside: OK",
+            "result: deny: a classpath with a refused wildcard is refused: OK",
+            "result: deny: no entry of it is added: OK",
+            "result: deny: add-relative-classpath is refused: OK",
+            "result: deny: add-relative-classpath adds nothing: OK",
         ));
     }
 
@@ -112,6 +121,10 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
             "result: inside: the wildcard is added: OK",
             "result: inside: the file that the link points to is added: OK",
             "result: inside: its class is loaded: OK",
+            "result: inside: a wildcard in a linked directory inside: OK",
+            "result: inside: its file is added as its real path: OK",
+            "result: inside: a link as an entry: OK",
+            "result: inside: the link is added as its real path: OK",
         ));
     }
 

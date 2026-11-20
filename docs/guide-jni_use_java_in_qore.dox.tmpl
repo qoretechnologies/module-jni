@@ -422,8 +422,8 @@ public class Fetcher {
       policy as a read: each entry is checked as its real path, with symbolic links resolved, and a denied entry
       raises \c FILESYSTEM-ACCESS-DENIED.  A wildcard entry is expanded once, and its directory and each file that it
       selects are checked, each as its real path, so that a symbolic link is judged by the file that it points to;
-      the classpath is then added from the same expansion, so the files that are added are exactly the files that
-      were checked.  If the policy denies any file that a wildcard selects, the whole entry is refused with
+      the classpath is then added from the same expansion, so the entries that are given to the class loader are
+      exactly the paths that were checked.  If the policy denies any file that a wildcard selects, the whole entry is refused with
       \c JNI-CLASSPATH-ERROR, whose description names that file, as adding only some of its files would load
       another classpath than the one given (fail closed).  A denial refuses the whole classpath: nothing of it is
       added.  The files that the class loader reads under a directory entry are not checked one by one

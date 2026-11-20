@@ -1215,6 +1215,8 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
         if (len) {
             env.getByteArrayRegion(bytes, 0, len, reinterpret_cast<jbyte*>(&entry[0]));
         }
+        // read before the check, so that no Java call is made while the sink holds an exception
+        bool match = env.callBooleanMethod(rc, Globals::methodResolvedClasspathIsWildcardMatch, &ji);
         ExceptionSink xsink;
         if (policy->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
             continue;
@@ -1222,8 +1224,7 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
         // any denial refuses the whole classpath, and nothing is added; a file that a wildcard selected is refused as
         // a classpath error that names it, as a wildcard entry that would add only some of its files would load
         // another classpath than the one given (qore#6818)
-        if (env.callBooleanMethod(rc, Globals::methodResolvedClasspathIsWildcardMatch, &ji)
-                && jni_is_filesystem_denial(xsink)) {
+        if (match && jni_is_filesystem_denial(xsink)) {
             QoreValue desc = xsink.getExceptionDesc();
             std::string desc_str = desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "";
             xsink.clear();

@@ -9,8 +9,8 @@
     - <b>Security</b>: under a sandbox with a filesystem policy, a wildcard classpath entry was checked as its pattern
       path as a whole, not file by file, so the policy was not applied to each file that the wildcard selected; a
       wildcard entry is now expanded once, each file that it selects is checked as its real path (with symbolic links
-      resolved), and the classpath is added from that same expansion, so that the files added are exactly the files
-      checked; if the policy denies any selected file, the whole entry is refused with \c JNI-CLASSPATH-ERROR, naming
+      resolved), and the classpath is added from that same expansion, so that the entries given to the class loader
+      are exactly the paths checked; if the policy denies any selected file, the whole entry is refused with \c JNI-CLASSPATH-ERROR, naming
       the file, and nothing is added.  Every other entry is likewise checked and added as its real path.  The
       \c add-classpath and \c add-relative-classpath module commands and the \c classpath option of the \c jdbc
       driver are affected; with no filesystem policy, classpaths are added as before (qore#6818, see @ref jni_sandbox)

@@ -133,6 +133,27 @@ sub deny_case(string root) {
     # the denied file, given as it is, is refused by the policy
     result("deny: the denied file as an entry", "FILESYSTEM-ACCESS-DENIED",
         add_classpath(new_program(sm), root + "/mix/d.jar").err);
+    # an entry that does not exist, outside the allowed directories, is refused by the policy
+    result("deny: a missing entry outside", "FILESYSTEM-ACCESS-DENIED",
+        add_classpath(new_program(sm), root + "/outside/none.jar").err);
+
+    # a refused wildcard refuses the whole classpath: an allowed entry before it is not added either
+    SandboxManager sm2 = get_sandbox(root, ("mix", "plain"), ("mix/d.jar",));
+    Program p2 = new_program(sm2);
+    h = add_classpath(p2, root + "/plain/a.jar" + PathSep + root + "/mix/*");
+    result("deny: a classpath with a refused wildcard is refused", "JNI-CLASSPATH-ERROR", h.err);
+    result("deny: no entry of it is added", (), jar_paths(p2, root));
+
+    # a relative wildcard is checked in the same way
+    Program p3 = new_program(sm);
+    p3.setScriptPath(root + DirSep + "script.q");
+    try {
+        p3.issueModuleCmd("jni", "add-relative-classpath mix/*");
+        result("deny: add-relative-classpath is refused", "JNI-CLASSPATH-ERROR", "ok");
+    } catch (hash<ExceptionInfo> ex) {
+        result("deny: add-relative-classpath is refused", "JNI-CLASSPATH-ERROR", ex.err);
+    }
+    result("deny: add-relative-classpath adds nothing", (), jar_paths(p3, root));
 }
 
 #! a symbolic link in an allowed directory that points outside it is not followed
@@ -167,6 +188,16 @@ sub inside_case(string root) {
     result("inside: the wildcard is added", "ok", h.err);
     result("inside: the file that the link points to is added", ("in/sub/k.jar",), jar_paths(p, root));
     result("inside: its class is loaded", True, p.callFunction("can_load", KotlinClass));
+
+    # a linked directory inside the allowed directory: its wildcard is added as the files it points to
+    Program p2 = new_program(get_sandbox(root, ("in",)));
+    result("inside: a wildcard in a linked directory inside", "ok", add_classpath(p2, root + "/in/subdir/*").err);
+    result("inside: its file is added as its real path", ("in/sub/k.jar",), jar_paths(p2, root));
+
+    # a link given as it is, is added as the file that it points to
+    Program p3 = new_program(get_sandbox(root, ("in",)));
+    result("inside: a link as an entry", "ok", add_classpath(p3, root + "/in/link.jar").err);
+    result("inside: the link is added as its real path", ("in/sub/k.jar",), jar_paths(p3, root));
 }
 
 #! a wildcard in an allowed directory with allowed files only is added
