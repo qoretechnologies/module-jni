@@ -4,7 +4,7 @@
 
 # run by test/jni-shutdown-window-context.qtest: a Java thread calls into Qore exactly in the window of the module's
 # shutdown between the deletion of the global Java context Program (Globals::clearGlobalContext()) and the
-# destruction of the JVM, held there by the hook set with Jni::dbg_jni_set_shutdown_window_hook()
+# destruction of the JVM, held there by the hook set with Jni::dbg_jni_set_shutdown_window_hook() (qore#6827)
 #
 # the argument names the call that the Java thread makes (see org.qore.jni.test.ShutdownWindowProbe):
 # - "function": QoreJavaApi.callFunction()

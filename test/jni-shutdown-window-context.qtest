@@ -9,7 +9,7 @@
 # QoreJavaApi.callFunction() or QoreJavaApi.newObjectSave() in a thread whose class loader's Program is gone) fell
 # back to Globals::getJavaContextProgram(), which created the global context Program again; that Program was never
 # deleted (valgrind: a definite leak from Globals::createJavaContextProgram()).  Such a call now raises a Java
-# exception instead.
+# exception instead (qore#6827).
 #
 # Each case runs test/jni-shutdown-window-context-child.q in a new process, as the module is shut down when the
 # process exits.  A debug build of the module runs the java.lang.Runnable set with
