@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# Under a sandbox with a filesystem policy, a wildcard classpath entry is expanded once, and each file that it
+# selects is checked against the policy as its real path, with symbolic links resolved; the files that are added are
+# exactly the files that were checked (qore#6818).  If the policy denies any file that the wildcard selects, the
+# whole entry is refused with JNI-CLASSPATH-ERROR, naming the file, and nothing is added.  With no sandbox, wildcards
+# are expanded as before.
+#
+# Each case runs test/jni-classpath-wildcard-sandbox-child.q in a new process, with a test tree made here:
+#   mix/a.jar           the jni test jar; mix/d.jar: the Kotlin test jar, which the policy of the case denies
+#   esc/a.jar           the jni test jar; esc/out.jar: a link to outside/k.jar; esc/outdir: a link to outside
+#   outside/k.jar       the Kotlin test jar, outside every allowed directory
+#   in/link.jar         a link to in/sub/k.jar, the Kotlin test jar
+#   plain/a.jar         the jni test jar
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniClasspathWildcardSandboxTest
+
+class JniClasspathWildcardSandboxTest inherits QUnit::Test {
+    public {
+        #! the jni test jar, in the directory of this script
+        const TestJarName = "qore-jni-test.jar";
+        #! the Kotlin test jar, in the directory of this script
+        const KotlinJarName = "kotlin-test.jar";
+    }
+
+    private {
+        #! the root of the test tree, as a real path
+        string root;
+        #! the files and links of the test tree, removed at the end
+        list<string> files = ();
+        #! the directories of the test tree, removed at the end, deepest first
+        list<string> dirs = ();
+    }
+
+    constructor() : QUnit::Test("JNI wildcard classpath entries under a sandbox", "1.0") {
+        addTestCase("regression: a wildcard that selects a denied file is refused", \denyTest());
+        addTestCase("regression: a link out of the allowed directory is refused", \escapeTest());
+        addTestCase("coverage: a link inside the allowed directory is added", \insideTest());
+        addTestCase("coverage: a wildcard of allowed files is added", \plainTest());
+        addTestCase("coverage: wildcards with no sandbox are unchanged", \unsandboxedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string base = sprintf("%s%sjni-classpath-wildcard-sandbox-%d-%d", tmp_location(), DirSep, getpid(),
+            now_us().durationMicroseconds());
+        makeDir(base);
+        root = realpath(base);
+        foreach string d in (("mix", "esc", "outside", "in", "in/sub", "plain")) {
+            makeDir(root + DirSep + d);
+        }
+        binary test_jar = ReadOnlyFile::readBinaryFile(get_script_dir() + DirSep + TestJarName);
+        binary kotlin_jar = ReadOnlyFile::readBinaryFile(get_script_dir() + DirSep + KotlinJarName);
+        writeFile("mix/a.jar", test_jar);
+        writeFile("mix/d.jar", kotlin_jar);
+        writeFile("esc/a.jar", test_jar);
+        writeFile("outside/k.jar", kotlin_jar);
+        writeFile("in/sub/k.jar", kotlin_jar);
+        writeFile("plain/a.jar", test_jar);
+        makeLink(root + "/outside/k.jar", "esc/out.jar");
+        makeLink(root + "/outside", "esc/outdir");
+        makeLink("sub/k.jar", "in/link.jar");
+    }
+
+    globalTearDown() {
+        foreach string file in (files) {
+            unlink(file);
+        }
+        foreach string d in (dirs) {
+            rmdir(d);
+        }
+    }
+
+    denyTest() {
+        checkCase("deny", (
+            "result: deny: the wildcard is refused: OK",
+            "result: deny: the error names the denied file: OK",
+            "result: deny: nothing is added: OK",
+            "result: deny: the class of the allowed jar is not loaded: OK",
+            "result: deny: the class of the denied jar is not loaded: OK",
+            "result: deny: a wildcard that selects only the allowed jar is added: OK",
+            "result: deny: only the allowed jar is added: OK",
+            "result: deny: the class of the allowed jar is loaded: OK",
+            "result: deny: the class of the denied jar is still not loaded: OK",
+            "result: deny: the denied file as an entry: OK",
+        ));
+    }
+
+    escapeTest() {
+        checkCase("escape", (
+            "result: escape: the wildcard is refused: OK",
+            "result: escape: the error names the file that the link points to: OK",
+            "result: escape: nothing is added: OK",
+            "result: escape: the class of the allowed jar is not loaded: OK",
+            "result: escape: the class of the jar outside is not loaded: OK",
+            "result: escape: a wildcard in a linked directory outside: OK",
+            "result: escape: the link as an entry: OK",
+            "result: escape: a wildcard that selects only the allowed jar is added: OK",
+            "result: escape: only the allowed jar is added: OK",
+        ));
+    }
+
+    insideTest() {
+        checkCase("inside", (
+            "result: inside: the wildcard is added: OK",
+            "result: inside: the file that the link points to is added: OK",
+            "result: inside: its class is loaded: OK",
+        ));
+    }
+
+    plainTest() {
+        checkCase("plain", (
+            "result: plain: the wildcard is added: OK",
+            "result: plain: the jar is added: OK",
+            "result: plain: its class is loaded: OK",
+            "result: plain: a wildcard that selects no file: OK",
+        ));
+    }
+
+    unsandboxedTest() {
+        checkCase("unsandboxed", (
+            "result: unsandboxed: the wildcard is added: OK",
+            "result: unsandboxed: every jar is added: OK",
+            "result: unsandboxed: the class of a.jar is loaded: OK",
+            "result: unsandboxed: the class of d.jar is loaded: OK",
+            "result: unsandboxed: a wildcard with a link is added: OK",
+            "result: unsandboxed: the link is added as it is named: OK",
+            "result: unsandboxed: the class of the linked jar is loaded: OK",
+        ));
+    }
+
+    #! runs a case of the child and checks its results, and that it reached its end
+    private checkCase(string name, list<string> expected) {
+        # the variables that could add to the child's classpath or make the JVM print a notice are removed
+        string child = normalize_dir(get_script_dir() + "/jni-classpath-wildcard-sandbox-child.q");
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS -u QORE_JNI_CLASSPATH "
+            "-u QORE_JNI_JVM_ARGS %s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child),
+            name, shellQuote(root));
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq(expected, lines, out);
+        assertTrue(out =~ /^end$/m, "the child did not reach its end: " + out);
+        assertFalse(out =~ /unhandled QORE System exception/, "an unhandled exception was printed: " + out);
+    }
+
+    private makeDir(string dir) {
+        if (mkdir(dir, 0700)) {
+            throw "TEST-ERROR", sprintf("cannot create directory %y: %s", dir, strerror());
+        }
+        unshift dirs, dir;
+    }
+
+    private writeFile(string path, binary data) {
+        string file = root + DirSep + path;
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        push files, file;
+        f.write(data);
+    }
+
+    private makeLink(string target, string path) {
+        string link = root + DirSep + path;
+        if (symlink(target, link)) {
+            throw "TEST-ERROR", sprintf("cannot create link %y: %s", link, strerror());
+        }
+        push files, link;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

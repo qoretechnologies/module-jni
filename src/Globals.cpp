@@ -170,7 +170,7 @@ jmethodID Globals::methodQoreInvocationHandlerDestroy;
 
 GlobalReference<jclass> Globals::classQoreJavaApi;
 GlobalReference<jclass> Globals::classQoreSandbox;
-jmethodID Globals::methodQoreSandboxEncodeClasspath;
+jmethodID Globals::methodQoreSandboxResolveClasspath;
 jmethodID Globals::methodQoreJavaApiGetStackTrace;
 GlobalReference<jclass> Globals::classJavaCollectionTypes;
 jmethodID Globals::methodJavaCollectionTypesIsStringKeyMap;
@@ -215,6 +215,11 @@ jmethodID Globals::methodClassLoaderLoadClass;
 GlobalReference<jclass> Globals::classQoreURLClassLoader;
 jmethodID Globals::ctorQoreURLClassLoader;
 jmethodID Globals::methodQoreURLClassLoaderAddPath;
+jmethodID Globals::methodQoreURLClassLoaderAddResolvedPath;
+GlobalReference<jclass> Globals::classQoreURLClassLoaderResolvedClasspath;
+jmethodID Globals::methodResolvedClasspathSize;
+jmethodID Globals::methodResolvedClasspathEncodedPath;
+jmethodID Globals::methodResolvedClasspathIsWildcardMatch;
 jmethodID Globals::methodQoreURLClassLoaderAddParentPath;
 jmethodID Globals::methodQoreURLClassLoaderLoadClass;
 jmethodID Globals::methodQoreURLClassLoaderLoadClassWithPtr;
@@ -2930,6 +2935,7 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassQoreURLClassLoader.inc"
 #include "JavaClassQoreURLClassLoader_1.inc"
 #include "JavaClassQoreURLClassLoader_2.inc"
+#include "JavaClassQoreURLClassLoader_ResolvedClasspath.inc"
 #include "JavaClassQoreJavaFileObject.inc"
 #include "JavaClassQoreJavaObjectPtr.inc"
 #include "JavaClassJavaClassBuilder.inc"
@@ -3029,6 +3035,8 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreURLClassLoader", {java_org_qore_jni_QoreURLClassLoader_class_len, java_org_qore_jni_QoreURLClassLoader_class}},
     {"org.qore.jni.QoreURLClassLoader$1", {java_org_qore_jni_QoreURLClassLoader_1_class_len, java_org_qore_jni_QoreURLClassLoader_1_class}},
     {"org.qore.jni.QoreURLClassLoader$2", {java_org_qore_jni_QoreURLClassLoader_2_class_len, java_org_qore_jni_QoreURLClassLoader_2_class}},
+    {"org.qore.jni.QoreURLClassLoader$ResolvedClasspath", {java_org_qore_jni_QoreURLClassLoader_ResolvedClasspath_class_len,
+        java_org_qore_jni_QoreURLClassLoader_ResolvedClasspath_class}},
     {"org.qore.jni.compiler.CompilerOutput", {java_org_qore_jni_CompilerOutput_class_len, java_org_qore_jni_CompilerOutput_class}},
     {"org.qore.jni.compiler.CustomJavaFileObject", {java_org_qore_jni_CustomJavaFileObject_class_len, java_org_qore_jni_CustomJavaFileObject_class}},
     {"org.qore.jni.compiler.PackageInternalsFinder", {java_org_qore_jni_PackageInternalsFinder_class_len, java_org_qore_jni_PackageInternalsFinder_class}},
@@ -3837,6 +3845,15 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         java_org_qore_jni_QoreURLClassLoader_1_class_len);
     findDefineClass(env, "org.qore.jni.QoreURLClassLoader$2", nullptr, java_org_qore_jni_QoreURLClassLoader_2_class,
         java_org_qore_jni_QoreURLClassLoader_2_class_len);
+    // a classpath resolved once for its sandbox check and its use (qore#6818)
+    classQoreURLClassLoaderResolvedClasspath = findDefineClass(env, "org.qore.jni.QoreURLClassLoader$ResolvedClasspath",
+        nullptr, java_org_qore_jni_QoreURLClassLoader_ResolvedClasspath_class,
+        java_org_qore_jni_QoreURLClassLoader_ResolvedClasspath_class_len).makeGlobal();
+    methodResolvedClasspathSize = env.getMethod(classQoreURLClassLoaderResolvedClasspath, "size", "()I");
+    methodResolvedClasspathEncodedPath = env.getMethod(classQoreURLClassLoaderResolvedClasspath, "encodedPath",
+        "(I)[B");
+    methodResolvedClasspathIsWildcardMatch = env.getMethod(classQoreURLClassLoaderResolvedClasspath,
+        "isWildcardMatch", "(I)Z");
 
     // create our class loader to load module classes
     classQoreURLClassLoader = findDefineClass(env, "org.qore.jni.QoreURLClassLoader", nullptr,
@@ -3847,6 +3864,8 @@ void Globals::defineQoreURLClassLoader(Env& env) {
 
     ctorQoreURLClassLoader = env.getMethod(classQoreURLClassLoader, "<init>", "(JLjava/lang/ClassLoader;)V");
     methodQoreURLClassLoaderAddPath = env.getMethod(classQoreURLClassLoader, "addPath", "(Ljava/lang/String;)V");
+    methodQoreURLClassLoaderAddResolvedPath = env.getMethod(classQoreURLClassLoader, "addResolvedPath",
+        "(Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;)V");
     methodQoreURLClassLoaderAddParentPath = env.getMethod(classQoreURLClassLoader, "addParentPath",
         "(Ljava/lang/String;)V");
     methodQoreURLClassLoaderLoadClass = env.getMethod(classQoreURLClassLoader, "loadClass",
@@ -4090,8 +4109,8 @@ bool Globals::init() {
     findDefineClass(env, "org.qore.jni.QoreSandbox$Policy", nullptr, java_org_qore_jni_QoreSandbox_Policy_class,
         java_org_qore_jni_QoreSandbox_Policy_class_len);
     jni_register_qore_sandbox_natives(env, classQoreSandbox);
-    methodQoreSandboxEncodeClasspath = env.getStaticMethod(classQoreSandbox, "encodeClasspath",
-        "(Ljava/lang/String;)[[B");
+    methodQoreSandboxResolveClasspath = env.getStaticMethod(classQoreSandbox, "resolveClasspath",
+        "(Ljava/lang/String;)Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;");
 
     classJavaCollectionTypes = findDefineClass(env, "org.qore.jni.JavaCollectionTypes", nullptr,
         java_org_qore_jni_JavaCollectionTypes_class, java_org_qore_jni_JavaCollectionTypes_class_len).makeGlobal();
@@ -5040,6 +5059,7 @@ void Globals::cleanup() {
     classProxy = nullptr;
     classClassLoader = nullptr;
     classQoreURLClassLoader = nullptr;
+    classQoreURLClassLoaderResolvedClasspath = nullptr;
     classJavaClassBuilder = nullptr;
     classKotlinMetadataHelper = nullptr;
     classKotlinScriptEngine = nullptr;

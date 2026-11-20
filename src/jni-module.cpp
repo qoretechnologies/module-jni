@@ -1154,8 +1154,8 @@ static void jni_check_define_class_restricted(const char* cmd, const QoreProgram
 //! Refuses a classpath module command to sandboxed code where its policy does not allow it
 /** A \c global-* command changes the classpath that every Program shares, so a sandboxed Program could make trusted
     Programs load its classes: it is refused as jni_check_uncontrolled_cmd() describes.  A Program's own classpath is
-    checked entry by entry against the filesystem policy, so that sandboxed code reads no class or resource from a
-    path its policy denies.
+    checked against the filesystem policy file by file, as jni_check_classpath_policy() describes, so that sandboxed
+    code reads no class or resource from a path its policy denies.
 
     @param cmd the module command, for the error
     @param pgm the Program that the command is issued in
@@ -1163,47 +1163,76 @@ static void jni_check_define_class_restricted(const char* cmd, const QoreProgram
     QoreURLClassLoader.addPath() splits them
     @param global if the command changes the classpath that every Program shares
 
+    @return the checked classpath, to be given to JniExternalProgramData::addClasspath(), or a null reference if no
+    filesystem policy governs the classpath, and for a \c global-* command
+
     @throw JNI-SANDBOX-ERROR sandboxed or restricted code uses a \c global-* classpath command
     @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
+    @throw JNI-CLASSPATH-ERROR the sandbox policy denies reading a file that a wildcard entry selects
 
     @see jni_check_classpath_policy()
 */
-void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, Env& env, jstring classpath,
-        bool global) {
+LocalReference<jobject> jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, Env& env,
+        jstring classpath, bool global) {
     if (global) {
         jni_check_uncontrolled_cmd(cmd, pgm, "changes the classpath of every Program");
-        return;
+        return nullptr;
     }
     // the filesystem policy, as for Qore's own file operations
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-    jni_check_classpath_policy(smh.get(), env, classpath);
+    return jni_check_classpath_policy(smh.get(), env, classpath);
 }
 
-void jni_check_classpath_policy(QoreSandboxManager* policy, Env& env, jstring classpath) {
+//! Returns true if the exception raised is the denial of a filesystem policy
+static bool jni_is_filesystem_denial(ExceptionSink& xsink) {
+    QoreValue err = xsink.getExceptionErr();
+    return err.getType() == NT_STRING
+        && !strcmp(err.get<const QoreStringNode>()->c_str(), "FILESYSTEM-ACCESS-DENIED");
+}
+
+LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, Env& env, jstring classpath) {
     if (!policy) {
-        return;
+        return nullptr;
     }
-    // each entry as the bytes that the JVM uses for it, so that the policy judges the representation that is used:
-    // the entries are those that QoreURLClassLoader.addPath() makes of the same Java string, encoded in the JVM's
-    // file name encoding
+    // the classpath is resolved once, in Java, and the same object is then added, so that the files that are added
+    // are exactly the files that are checked here (qore#6818); each path is as the JVM uses it (made absolute
+    // against its user.dir, with symbolic links resolved), in the bytes that the JVM passes to the operating system
+    // for it, so that the policy judges the representation that is used, and a wildcard entry is its directory and
+    // each file that it selects
     jvalue jarg;
     jarg.l = classpath;
-    LocalReference<jobjectArray> entries = env.callStaticObjectMethod(Globals::classQoreSandbox,
-        Globals::methodQoreSandboxEncodeClasspath, &jarg).as<jobjectArray>();
-    jsize count = env.getArrayLength(entries);
-    for (jsize i = 0; i < count; ++i) {
-        LocalReference<jbyteArray> bytes = env.getObjectArrayElement(entries, i).as<jbyteArray>();
+    LocalReference<jobject> rc = env.callStaticObjectMethod(Globals::classQoreSandbox,
+        Globals::methodQoreSandboxResolveClasspath, &jarg);
+    jint count = env.callIntMethod(rc, Globals::methodResolvedClasspathSize, nullptr);
+    for (jint i = 0; i < count; ++i) {
+        jvalue ji;
+        ji.i = i;
+        LocalReference<jbyteArray> bytes = env.callObjectMethod(rc, Globals::methodResolvedClasspathEncodedPath,
+            &ji).as<jbyteArray>();
         jsize len = env.getArrayLength(bytes);
-        // the bytes have no NUL: an entry with one is refused when it is encoded
+        // the bytes have no NUL: a path with one is refused when it is encoded
         std::string entry(static_cast<size_t>(len), '\0');
         if (len) {
             env.getByteArrayRegion(bytes, 0, len, reinterpret_cast<jbyte*>(&entry[0]));
         }
         ExceptionSink xsink;
-        if (!policy->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
-            throw XsinkException(xsink);
+        if (policy->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
+            continue;
         }
+        // any denial refuses the whole classpath, and nothing is added; a file that a wildcard selected is refused as
+        // a classpath error that names it, as a wildcard entry that would add only some of its files would load
+        // another classpath than the one given (qore#6818)
+        if (env.callBooleanMethod(rc, Globals::methodResolvedClasspathIsWildcardMatch, &ji)
+                && jni_is_filesystem_denial(xsink)) {
+            QoreValue desc = xsink.getExceptionDesc();
+            std::string desc_str = desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "";
+            xsink.clear();
+            throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add a wildcard classpath entry: the file '%s' that "
+                "it selects is not allowed by the sandbox filesystem policy: %s", entry.c_str(), desc_str.c_str());
+        }
+        throw XsinkException(xsink);
     }
+    return rc;
 }
 
 //! Returns a module command's argument in the default encoding
@@ -1282,8 +1311,8 @@ static void qore_jni_mc_add_classpath(const QoreString& cmd_arg, QoreProgram* pg
     // one Java string is both checked and added
     Env env;
     LocalReference<jstring> jcp = env.newPathString(arg);
-    jni_check_classpath_sandbox("add-classpath", pgm, env, jcp, false);
-    jpc->addClasspath(env, jcp, "add-classpath");
+    LocalReference<jobject> checked = jni_check_classpath_sandbox("add-classpath", pgm, env, jcp, false);
+    jpc->addClasspath(env, jcp, "add-classpath", checked);
 }
 
 static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
@@ -1316,9 +1345,9 @@ static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgra
     // one Java string is both checked and added
     Env env;
     LocalReference<jstring> jcp = env.newPathString(QoreString(cwd_str->c_str(), QCS_DEFAULT));
-    jni_check_classpath_sandbox("add-relative-classpath", pgm, env, jcp, false);
+    LocalReference<jobject> checked = jni_check_classpath_sandbox("add-relative-classpath", pgm, env, jcp, false);
 
-    jpc->addClasspath(env, jcp, "add-relative-classpath");
+    jpc->addClasspath(env, jcp, "add-relative-classpath", checked);
 }
 
 static void qore_jni_mc_define_pending_class(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {

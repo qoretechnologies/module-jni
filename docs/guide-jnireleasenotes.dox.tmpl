@@ -6,6 +6,14 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: under a sandbox with a filesystem policy, a wildcard classpath entry was checked as its pattern
+      path as a whole, not file by file, so the policy was not applied to each file that the wildcard selected; a
+      wildcard entry is now expanded once, each file that it selects is checked as its real path (with symbolic links
+      resolved), and the classpath is added from that same expansion, so that the files added are exactly the files
+      checked; if the policy denies any selected file, the whole entry is refused with \c JNI-CLASSPATH-ERROR, naming
+      the file, and nothing is added.  Every other entry is likewise checked and added as its real path.  The
+      \c add-classpath and \c add-relative-classpath module commands and the \c classpath option of the \c jdbc
+      driver are affected; with no filesystem policy, classpaths are added as before (qore#6818, see @ref jni_sandbox)
     - <b>Behaviour change</b>: an error while a classpath is added (a Java exception raised by the class loader) is now
       raised to the caller as \c JNI-CLASSPATH-ERROR instead of being printed as an unhandled exception (or, for
       \c QORE_JNI_CLASSPATH in a release build, ignored), which left the classpath silently ineffective so that code

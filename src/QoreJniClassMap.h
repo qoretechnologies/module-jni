@@ -571,14 +571,17 @@ public:
         return jni;
     }
 
-    //! Adds a classpath (the Java string that was checked: see jni_check_classpath_policy()) to the class loader
+    //! Adds a classpath to the class loader
     /** @param env the JNI environment
         @param path the classpath
         @param source the input that the classpath comes from (ex: the module command), for the error
+        @param checked the classpath as a filesystem policy checked it (the result of jni_check_classpath_policy()):
+        if not null, exactly its files are added, and \a path is not resolved again (qore#6818); if null (no policy
+        governs the classpath), \a path is added
 
         @throw JNI-CLASSPATH-ERROR the class loader raised a Java exception while the classpath was added (qore#6779)
     */
-    DLLLOCAL void addClasspath(Env& env, jstring path, const char* source);
+    DLLLOCAL void addClasspath(Env& env, jstring path, const char* source, jobject checked);
     //! Adds a classpath (the Java string that was checked) to the parent class loader
     /** With no parent class loader that is a QoreURLClassLoader, the classpath is added to this class loader; see
         addClasspath() for the parameters and the error

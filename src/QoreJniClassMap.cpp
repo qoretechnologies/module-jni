@@ -4928,7 +4928,8 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
         if (classpath) {
             // the variable is in the default encoding; an error is thrown to the code that creates the data, which
             // fails (qore#6778, qore#6779)
-            addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)), "QORE_JNI_CLASSPATH");
+            addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)), "QORE_JNI_CLASSPATH",
+                nullptr);
         }
         jni_pgm_data_register(pgm);
     } catch (JavaException& e) {
@@ -5141,9 +5142,10 @@ static void jni_throw_classpath_error(Env& env, jstring path, const char* source
         jni_utf8_to_default(desc.c_str()).c_str(), jni_utf8_to_default(jdesc->c_str()).c_str());
 }
 
-void JniExternalProgramData::addClasspath(Env& env, jstring path, const char* source) {
+void JniExternalProgramData::addClasspath(Env& env, jstring path, const char* source, jobject checked) {
     jvalue jarg;
-    jarg.l = path;
+    // a checked classpath is added as it was checked, with no second resolution of the string (qore#6818)
+    jarg.l = checked ? checked : path;
 #ifdef DEBUG
     // a test fail point: the class loader raises a Java exception (an IllegalArgumentException for a null classpath)
     if (dbg_jni_fail_at(DbgJniFailPoint::Classpath)) {
@@ -5151,7 +5153,8 @@ void JniExternalProgramData::addClasspath(Env& env, jstring path, const char* so
     }
 #endif
     try {
-        env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddPath, &jarg);
+        env.callVoidMethod(classLoader, checked ? Globals::methodQoreURLClassLoaderAddResolvedPath
+            : Globals::methodQoreURLClassLoaderAddPath, &jarg);
     } catch (JavaException& e) {
         jni_throw_classpath_error(env, path, source, e);
     }
