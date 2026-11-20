@@ -4,6 +4,10 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %prepend-module-path "${SCRIPT_DIR}/../qlib"
+# the jni module of this tree is loaded here, by trusted code: restricted code cannot load native code from outside
+# the module path (qore#6776), so a restricted Program that loaded it first would be refused for that reason, not for
+# the provider module's code
+%requires jni
 %requires QUnit
 
 %exec-class JniClassOptionsRestrictedLoadTest
