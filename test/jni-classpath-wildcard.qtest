@@ -8,6 +8,9 @@
 # was printed as an unhandled exception, and the entry was not added.  Under a sandbox, the entry is checked as it is
 # used: in the JVM's user.dir, not in the current directory of the process.
 #
+# A wildcard that matches no file adds nothing; the class loader printed a debug message for it unconditionally, which
+# it now prints only if the qore.QoreURLClassLoader.debug Java system property is "true" (qore#6819).
+#
 # Each case runs test/jni-classpath-wildcard-child.q in a new directory that holds the test jar, which is then the
 # JVM's user.dir, as the user.dir of a JVM cannot change once it has started.
 
@@ -31,6 +34,10 @@ class JniClasspathWildcardTest inherits QUnit::Test {
         addTestCase("regression: the jdbc classpath option", \jdbcClasspathOption());
         addTestCase("regression: QORE_JNI_CLASSPATH", \envClasspath());
         addTestCase("regression: the sandbox checks a bare wildcard in the JVM's user.dir", \sandbox());
+        addTestCase("regression: no debug message without the debug property", \debugDisabled());
+        addTestCase("coverage: a debug message with the debug property as a JVM option", \debugJvmOption());
+        addTestCase("coverage: a debug message with the debug property set with set-property",
+            \debugSetProperty());
         set_return_value(main());
     }
 
@@ -92,8 +99,30 @@ class JniClasspathWildcardTest inherits QUnit::Test {
         ));
     }
 
-    #! runs a case of the child and checks its results, and that it printed no Java exception
-    private checkCase(string name, list<string> expected, string env = "") {
+    #! the class loader printed a debug message for a wildcard that matches no file unconditionally (qore#6819)
+    debugDisabled() {
+        string out = checkCase("debug", ("result: debug: a wildcard that matches no file adds nothing: OK",));
+        assertFalse(out =~ /QoreURLClassLoader DEBUG/, "a debug message was printed: " + out);
+    }
+
+    #! the debug message is printed if the qore.QoreURLClassLoader.debug system property is set as a JVM option
+    debugJvmOption() {
+        string out = checkCase("debug", ("result: debug: a wildcard that matches no file adds nothing: OK",),
+            "QORE_JNI_JVM_ARGS=-Dqore.QoreURLClassLoader.debug=true");
+        assertRegex("(?m)^QoreURLClassLoader DEBUG: no matching files for classpath element '.*\\*\\.zip'$", out);
+    }
+
+    #! the debug message is printed if the qore.QoreURLClassLoader.debug system property is set at runtime
+    debugSetProperty() {
+        string out = checkCase("debug set-property",
+            ("result: debug: a wildcard that matches no file adds nothing: OK",));
+        assertRegex("(?m)^QoreURLClassLoader DEBUG: no matching files for classpath element '.*\\*\\.zip'$", out);
+    }
+
+    #! runs a case of the child and checks its results, and that it printed no Java exception, and returns its output
+    /** A debug message of the class loader is printed only by the \c debug case, which checks it
+    */
+    private string checkCase(string name, list<string> expected, string env = "") {
         string out = runInTempDir(name, env);
         if (out =~ /^result: [^:]+: skipped/m) {
             testSkip(trim(out));
@@ -102,6 +131,11 @@ class JniClasspathWildcardTest inherits QUnit::Test {
         assertEq(expected, lines, out);
         assertFalse(out =~ /NullPointerException/, "a NullPointerException was printed: " + out);
         assertFalse(out =~ /unhandled QORE System exception/, "an unhandled exception was printed: " + out);
+        # the add-classpath case adds a wildcard that matches no file, for which a debug message was printed
+        if (name !~ /^debug/) {
+            assertFalse(out =~ /QoreURLClassLoader DEBUG/, "a debug message was printed: " + out);
+        }
+        return out;
     }
 
     #! runs the child in a new directory with the test jar, a subdirectory "rel" with another copy of it and an empty

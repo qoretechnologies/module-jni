@@ -164,6 +164,19 @@ sub add_classpath_case() {
         jar_urls(p));
 }
 
+#! a bare wildcard that matches no file adds nothing; the class loader prints a debug message for it only if its
+#! debugging is enabled with the qore.QoreURLClassLoader.debug system property (qore#6819): with the "set-property"
+#! argument, the property is set with the set-property module command first
+sub debug_case(*string arg) {
+    Program p = get_program();
+    if (arg == "set-property") {
+        p.issueModuleCmd("jni", "set-property qore.QoreURLClassLoader.debug true");
+    }
+    list<string> before = p.callFunction("loader_urls");
+    p.issueModuleCmd("jni", "add-classpath *.zip");
+    result("debug: a wildcard that matches no file adds nothing", before, p.callFunction("loader_urls"));
+}
+
 #! a bare wildcard entry of a relative classpath is the matching files in the Program's script directory
 sub add_relative_classpath_case() {
     Program p = get_program(get_user_dir() + "/rel/script.q");
@@ -256,6 +269,7 @@ sub main() {
         case "jdbc": jdbc_case(); break;
         case "env": env_case(); break;
         case "sandbox": sandbox_case(); break;
+        case "debug": debug_case(ARGV[1]); break;
         default:
             printf("unknown case %y\n", ARGV[0]);
             exit(1);
