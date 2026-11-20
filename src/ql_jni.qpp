@@ -268,11 +268,19 @@ Jni::java::lang::Class load_class(string class_name) [dom=UNCONTROLLED_API;flags
 /** @param method the method to invoke
     @param object the object to use to invoke the method; for static methods, this argument can be @ref nothing
 
+    @return the value returned by the method, converted to %Qore
+
     @note
     - reflection is not used, so exceptions are thrown directly (i.e. not wrapped as \c java.lang.reflect.InvocationTargetException objects)
     - for static method invocations, this function is identical to @ref invoke_nonvirtual()
+    - the return type is @ref auto_type "auto": the value is converted to %Qore as for a direct call of the method
+      (see @ref jni_java_to_qore and @ref jni_declared_value_types), so it can be any %Qore value: for example, a
+      primitive value is an @ref int_type "int" (also for a \c char), a @ref float_type "float" or a
+      @ref bool_type "bool", a \c java.lang.String is a @ref string_type "string", a boxed value is converted as
+      the primitive value, a \c null reference and the result of a \c void method are @ref nothing, and an object
+      of a class that is not converted is a Java object
  */
-Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
+auto invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
         Env env;
         // qore#6551: the Java method runs in the context of the calling code, which is also the context that the
@@ -300,11 +308,19 @@ Jni::java::lang::Object invoke(Jni::java::lang::reflect::Method[QoreJniPrivateDa
 /** @param method the method to invoke
     @param object the object to use to invoke the method; for static methods, this argument can be @ref nothing
 
+    @return the value returned by the method, converted to %Qore
+
     @note
     - reflection is not used, so exceptions are thrown directly (i.e. not wrapped as \c java.lang.reflect.InvocationTargetException objects)
     - for static method invocations, this function is identical to @ref invoke()
+    - the return type is @ref auto_type "auto": the value is converted to %Qore as for a direct call of the method
+      (see @ref jni_java_to_qore and @ref jni_declared_value_types), so it can be any %Qore value: for example, a
+      primitive value is an @ref int_type "int" (also for a \c char), a @ref float_type "float" or a
+      @ref bool_type "bool", a \c java.lang.String is a @ref string_type "string", a boxed value is converted as
+      the primitive value, a \c null reference and the result of a \c void method are @ref nothing, and an object
+      of a class that is not converted is a Java object
  */
-Jni::java::lang::Object invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
+auto invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
     try {
         Env env;
         // qore#6551: the Java method runs in the context of the calling code, which is also the context that the
