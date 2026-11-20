@@ -7,9 +7,9 @@
     @section jni_3_0_0 jni Module Version 3.0.0
 
     - The module builds against %Qore cores with either form of the reflection API's
-      \c qore_type_get_type_arguments(): the form that returns the type arguments, and the %Qore 3.0 form that copies
-      them to a caller's vector (#6419, module API 2.3); both report the same Java generic type signatures, and the
-      form is detected when the module is configured (qore#6936)
+      \c qore_type_get_type_arguments() in module API 2.3: the earlier form that returns the type arguments, and the
+      form introduced by qore#6419 that copies them to a caller's vector; both report the same Java generic type
+      signatures, and the form is detected when the module is configured (qore#6936)
     - Clearing a Program's compilation cache, which the Java compiler does when it ends, did not take the Program's
       code generation lock, so a class generated at the same time could be stored in the cache as it was cleared and
       stay there; the clear is now serialized with code generation without waiting for its lock: it is made at once,

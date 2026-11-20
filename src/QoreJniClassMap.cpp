@@ -4523,7 +4523,7 @@ LocalReference<jobject> JniExternalProgramData::getJavaTypeDefinition(Env& env, 
         }
 
 #ifdef QORE_JNI_TYPE_ARGS_BY_REF
-        // Qore 3.0 (#6419): the type arguments are copied to a caller-owned vector
+        // the form introduced by qore#6419 copies the type arguments to a caller-owned vector
         type_vec_t type_args_vec;
         const type_vec_t* type_args = qore_type_get_type_arguments(ti, type_args_vec) ? &type_args_vec : nullptr;
 #else

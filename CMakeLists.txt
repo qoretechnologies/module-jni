@@ -158,6 +158,8 @@ if(QORE_JNI_HAVE_GENERIC_CLASS_TYPES)
     set(_save_CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
     set(CMAKE_REQUIRED_INCLUDES ${QORE_INCLUDE_DIRS})
     set(CMAKE_REQUIRED_LIBRARIES ${QORE_LIBRARY})
+    # check again on every configure, so a build directory reconfigured against another Qore gets the right form
+    unset(QORE_JNI_TYPE_ARGS_BY_REF CACHE)
     check_cxx_source_compiles("
 #include <qore/Qore.h>
 
