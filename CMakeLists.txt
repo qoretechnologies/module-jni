@@ -1325,6 +1325,35 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar ${CMAKE_SOURCE_DIR}/test
 )
 
+# the jars of the manifest Class-Path tests (test/jni-classpath-manifest-sandbox.qtest): each has one class, and
+# most have a manifest with a Class-Path attribute; they are copied to test/jni-classpath-manifest-jars
+set(CPMAN_JAR_DIR ${CMAKE_CURRENT_BINARY_DIR}/jni-classpath-manifest-jars)
+set(CPMAN_SRC_DIR test/java/cpman/src/org/qore/jni/test/cpman)
+set(CPMAN_MF_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test/java/cpman/manifest)
+set(CPMAN_JARS)
+function(add_cpman_jar name class)
+    if (ARGC GREATER 2)
+        add_jar(${name} ${CPMAN_SRC_DIR}/${class}.java MANIFEST ${CPMAN_MF_DIR}/${ARGV2} OUTPUT_DIR ${CPMAN_JAR_DIR})
+    else()
+        add_jar(${name} ${CPMAN_SRC_DIR}/${class}.java OUTPUT_DIR ${CPMAN_JAR_DIR})
+    endif()
+    set(CPMAN_JARS ${CPMAN_JARS} ${name} PARENT_SCOPE)
+endfunction()
+add_cpman_jar(cp-ref CpRef cp-ref.mf)
+add_cpman_jar(cp-target CpTarget)
+add_cpman_jar(cp-http CpHttp cp-http.mf)
+add_cpman_jar(cp-up CpUp cp-up.mf)
+add_cpman_jar(cp-upref CpUpRef cp-upref.mf)
+add_cpman_jar(cp-cyca CycA cp-cyca.mf)
+add_cpman_jar(cp-cycb CycB cp-cycb.mf)
+add_cpman_jar(cp-nesta NestA cp-nesta.mf)
+add_cpman_jar(cp-nestb NestB cp-nestb.mf)
+add_cpman_jar(cp-nestc NestC)
+add_custom_target(jni-classpath-manifest-jars ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CPMAN_JAR_DIR} ${CMAKE_SOURCE_DIR}/test/jni-classpath-manifest-jars
+)
+add_dependencies(jni-classpath-manifest-jars ${CPMAN_JARS})
+
 set(QPP_SRC
     src/ql_jni.qpp
     src/QC_JavaArray.qpp

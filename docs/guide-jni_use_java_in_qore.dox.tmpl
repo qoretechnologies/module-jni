@@ -421,13 +421,24 @@ public class Fetcher {
       commands, and with the \c classpath option of the \c jdbc database driver, is checked against its filesystem
       policy as a read: each entry is checked as its real path, with symbolic links resolved, and a denied entry
       raises \c FILESYSTEM-ACCESS-DENIED.  A wildcard entry is expanded once, and its directory and each file that it
-      selects are checked, each as its real path, so that a symbolic link is judged by the file that it points to;
-      the classpath is then added from the same expansion, so every entry that is given to the class loader is one
-      of the paths that were checked, and nothing is resolved again.  If the policy denies any file that a wildcard
-      selects, the whole entry is refused with \c JNI-CLASSPATH-ERROR, whose description names that file, as adding
-      only some of its files would load another classpath than the one given (fail closed).  A denial refuses the
-      whole classpath: nothing of it is added.  The files that the class loader reads under a directory entry are not
-      checked one by one
+      selects are checked, each as its real path, so that a symbolic link is judged by the file that it points to; the
+      classpath is then added from the same expansion, so every entry that is given to the class loader is one of the
+      paths that were checked, and nothing is resolved again.  If the policy denies any file that a wildcard selects,
+      the whole entry is refused with \c JNI-CLASSPATH-ERROR, whose description names that file, as adding only some
+      of its files would load another classpath than the one given (fail closed).  The jars and directories that the
+      manifest \c Class-Path attributes of the classpath's jars name, which the class loader opens as well, are
+      checked in the same way, recursively and each once: each is checked as the file that the class loader opens for
+      it (a relative entry resolved against the location of the jar that names it, as the class loader resolves it),
+      with symbolic links resolved, before its own manifest is read.  If the policy denies any of them, or a
+      \c Class-Path entry cannot be checked (ex: it is not a file, a jar is not a regular file, a manifest cannot be
+      read, or, before Java 22, a jar has a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR,
+      naming the file.  The class loader still follows the manifests itself, so the classpath that is used is the one
+      that was given, and every file of it is one that was checked.  That resolution follows the JDK's class loader,
+      and it has been verified for JDK feature version 25; on any other JDK version, a classpath with a jar that has a
+      manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason, while a classpath
+      whose jars have no \c Class-Path attribute is checked and added as usual.  A denial refuses the whole classpath:
+      nothing of it is added.  The files that the class loader reads under a directory entry are not checked one by
+      one, and the files are checked when the classpath is added, not again when the class loader opens them
     - the commands that change state of the JVM that every Program shares (\c global-add-classpath,
       \c global-add-relative-classpath, \c set-property, \c register-shared-class) or that run Java code
       (\c kotlin-eval) raise \c JNI-SANDBOX-ERROR under a sandbox that does not allow uncontrolled APIs, also through

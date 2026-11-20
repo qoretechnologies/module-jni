@@ -172,6 +172,7 @@ jmethodID Globals::methodQoreInvocationHandlerDestroy;
 GlobalReference<jclass> Globals::classQoreJavaApi;
 GlobalReference<jclass> Globals::classQoreSandbox;
 jmethodID Globals::methodQoreSandboxResolveClasspath;
+jmethodID Globals::methodQoreSandboxExpandClasspath;
 jmethodID Globals::methodQoreJavaApiGetStackTrace;
 GlobalReference<jclass> Globals::classJavaCollectionTypes;
 jmethodID Globals::methodJavaCollectionTypesIsStringKeyMap;
@@ -221,6 +222,8 @@ GlobalReference<jclass> Globals::classQoreURLClassLoaderResolvedClasspath;
 jmethodID Globals::methodResolvedClasspathSize;
 jmethodID Globals::methodResolvedClasspathEncodedPath;
 jmethodID Globals::methodResolvedClasspathIsWildcardMatch;
+jmethodID Globals::methodResolvedClasspathManifestReferrer;
+jmethodID Globals::methodResolvedClasspathRefusal;
 jmethodID Globals::methodQoreURLClassLoaderAddParentPath;
 jmethodID Globals::methodQoreURLClassLoaderLoadClass;
 jmethodID Globals::methodQoreURLClassLoaderLoadClassWithPtr;
@@ -3863,6 +3866,10 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         "(I)[B");
     methodResolvedClasspathIsWildcardMatch = env.getMethod(classQoreURLClassLoaderResolvedClasspath,
         "isWildcardMatch", "(I)Z");
+    methodResolvedClasspathManifestReferrer = env.getMethod(classQoreURLClassLoaderResolvedClasspath,
+        "manifestReferrer", "(I)Ljava/lang/String;");
+    methodResolvedClasspathRefusal = env.getMethod(classQoreURLClassLoaderResolvedClasspath, "refusal",
+        "(I)Ljava/lang/String;");
 
     // create our class loader to load module classes
     classQoreURLClassLoader = findDefineClass(env, "org.qore.jni.QoreURLClassLoader", nullptr,
@@ -4119,7 +4126,9 @@ bool Globals::init() {
         java_org_qore_jni_QoreSandbox_Policy_class_len);
     jni_register_qore_sandbox_natives(env, classQoreSandbox);
     methodQoreSandboxResolveClasspath = env.getStaticMethod(classQoreSandbox, "resolveClasspath",
-        "(Ljava/lang/String;)Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;");
+        "(Ljava/lang/String;I)Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;");
+    methodQoreSandboxExpandClasspath = env.getStaticMethod(classQoreSandbox, "expandClasspath",
+        "(Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;I)V");
 
     classJavaCollectionTypes = findDefineClass(env, "org.qore.jni.JavaCollectionTypes", nullptr,
         java_org_qore_jni_JavaCollectionTypes_class, java_org_qore_jni_JavaCollectionTypes_class_len).makeGlobal();
