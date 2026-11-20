@@ -57,7 +57,8 @@ public final class NativeCleanup {
         acquireForCleanup() (module-jni's cleanup thread and shutdown). */
     public static final class Ref extends PhantomReference<Object> {
         /** The native pointer; volatile for wrapper accessors. Release paths
-            must use {@link #acquireAndClear}, never a separate read and clear.
+            must claim it with {@link #acquireAndClear} or {@link #acquireForCleanup},
+            never with a separate read and clear.
             A native call that uses the pointer must hold it with
             {@link #enter} and {@link #exit} instead of reading this field. */
         public volatile long ptr;
