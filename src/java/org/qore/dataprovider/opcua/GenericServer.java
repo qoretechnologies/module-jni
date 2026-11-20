@@ -31,9 +31,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOutboundHandlerAdapter;
+import io.netty.channel.ChannelPromise;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.ChannelMatcher;
 import io.netty.channel.group.ChannelMatchers;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -41,6 +45,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
 import io.netty.util.concurrent.GlobalEventExecutor;
+import io.netty.util.concurrent.ImmediateEventExecutor;
 
 import org.qore.jni.Hash;
 import org.qore.jni.QoreClosure;
@@ -147,6 +152,9 @@ public class GenericServer {
     private static final long DEFAULT_PORT_RELEASE_TIMEOUT_MILLIS = 30000;
     // the bound of the wait for the release of an OS-assigned port (see setPortReleaseTimeoutForTest())
     private static volatile long portReleaseTimeoutMillis = DEFAULT_PORT_RELEASE_TIMEOUT_MILLIS;
+    // test hook (see completeListenerCloseFirstForTest()): whether the next listener channel bound returns from a
+    // close() made outside its event loop only once the close has completed
+    private static volatile boolean listenerCloseCompletesFirst;
 
     /** Creates a server without a runtime callback dispatcher. */
     public GenericServer(Map<String, Object> options) throws Exception {
@@ -320,6 +328,17 @@ public class GenericServer {
         }
     }
 
+    /** Test hook: makes a close() of the next listener channel bound, made outside its event loop, return only once
+        the close has completed
+
+        This gives deterministically the order in which a close made by the event loop completes before the caller of
+        close() can wait for it, so a test can check that stop() does not depend on the event loop to learn that the
+        listener closed (the event loop may be held by holdPortReleaseForTest()).  Not for production use.
+    */
+    public static void completeListenerCloseFirstForTest(boolean enable) {
+        listenerCloseCompletesFirst = enable;
+    }
+
     /** Test hook: sets the bound of the wait for the release of an OS-assigned port when the server is stopped
 
         @param millis the bound in milliseconds; 0 restores the default of 30 seconds
@@ -410,6 +429,20 @@ public class GenericServer {
                         }
                     })
                     .register().sync().channel();
+                if (listenerCloseCompletesFirst) {
+                    listenerCloseCompletesFirst = false;
+                    // run by the thread that closes the channel, which it holds until the close has completed
+                    listenerChannel.pipeline().addFirst(ImmediateEventExecutor.INSTANCE, "qore-close-completes-first",
+                        new ChannelOutboundHandlerAdapter() {
+                            @Override
+                            public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+                                super.close(ctx, promise);
+                                if (!ctx.channel().eventLoop().inEventLoop()) {
+                                    promise.awaitUninterruptibly();
+                                }
+                            }
+                        });
+                }
                 listenerChannel.closeFuture().addListener(f -> holdPortRelease(listenerChannel));
                 channels.add(listenerChannel);
             }
@@ -419,10 +452,30 @@ public class GenericServer {
                 // the connections are closed before the listener, which shares their event loop, so a test hold of
                 // the port release, which the listener's close queues on the event loop, does not delay their close;
                 // a connection accepted meanwhile is closed when the event loop terminates
-                channels.close(ChannelMatchers.isNonServerChannel()).awaitUninterruptibly();
-                channels.close(ChannelMatchers.isServerChannel()).awaitUninterruptibly();
+                closeAndWait(channels, ChannelMatchers.isNonServerChannel());
+                closeAndWait(channels, ChannelMatchers.isServerChannel());
             }
         });
+    }
+
+    /** Closes the matching channels of the given group and waits until they are closed
+
+        Each channel's closeFuture() is waited for, not the group's ChannelGroupFuture: that future learns of a close
+        from a listener added to the close's promise after close() returns, and if the event loop has completed the
+        close by then, the listener runs as a task of the event loop, which can be busy for any time (qore#6891).  A
+        close future wakes its waiters itself when the channel closes.
+    */
+    static void closeAndWait(ChannelGroup channels, ChannelMatcher matcher) {
+        List<io.netty.channel.Channel> closing = new ArrayList<>();
+        for (io.netty.channel.Channel channel : channels) {
+            if (matcher.matches(channel)) {
+                channel.close();
+                closing.add(channel);
+            }
+        }
+        for (io.netty.channel.Channel channel : closing) {
+            channel.closeFuture().awaitUninterruptibly();
+        }
     }
 
     /** Starts the server and blocks until the endpoint is listening. */

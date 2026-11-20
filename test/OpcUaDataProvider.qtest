@@ -98,6 +98,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             \genericServerRuntimeStopReleasesPortTest());
         addTestCase("generic OPC UA server runtime stop fails if an OS-assigned port is not released in time",
             \genericServerRuntimeStopReleaseTimeoutTest());
+        addTestCase("generic OPC UA server runtime stop does not need the event loop to learn that the listener closed",
+            \genericServerRuntimeStopListenerCloseCompletesFirstTest());
         addTestCase("generic OPC UA server runtime stop releases an OS-assigned port when never started",
             \genericServerRuntimeStopUnstartedReleasesPortTest());
         addTestCase("generic OPC UA server runtime", \genericServerRuntimeTest());
@@ -1910,6 +1912,45 @@ sub sandboxProbe() {
         # stopping a stopped runtime again does nothing
         runtime.stop();
         assertFalse(processHoldsPort(port), "the port stays released");
+    }
+
+    #! stop() learns that the listener closed without the event loop, which may be busy (qore#6891)
+    /** The listener's close completes before the caller of close() can wait for it, and the event loop is then held
+        by the port release hold: a wait that needs the event loop to report the close (as a ChannelGroupFuture's
+        does) lasts until the hold's 60 second bound expires, and the bounded wait for the release never expires
+    */
+    genericServerRuntimeStopListenerCloseCompletesFirstTest() {
+        OpcUaServerRuntime runtime({
+            "port": 0,
+            "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-stop-close-first-test"),
+        }, NOTHING);
+        on_exit {
+            GenericServer::completeListenerCloseFirstForTest(False);
+            GenericServer::setPortReleaseTimeoutForTest(0);
+            GenericServer::releasePortReleaseHoldForTest();
+            runtime.stop();
+        }
+
+        int port = runtime.getPort();
+        *bool holds = processHoldsPort(port);
+        if (!exists holds) {
+            testSkip("no /proc: the port release cannot be checked without binding the port");
+        }
+        GenericServer::completeListenerCloseFirstForTest(True);
+        runtime.start();
+
+        GenericServer::holdPortReleaseForTest(False);
+        GenericServer::setPortReleaseTimeoutForTest(1);
+        assertThrows("JNI-ERROR", "IllegalStateException: the OS-assigned port " + port + " was not released within " +
+            "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
+        assertTrue(GenericServer::isPortReleaseHeldForTest(), "the event loop is held after the listener closed");
+        assertFalse(GenericServer::isPortReleaseHoldTimedOutForTest(),
+            "stop() returned while the event loop was held");
+
+        GenericServer::setPortReleaseTimeoutForTest(0);
+        GenericServer::releasePortReleaseHoldForTest();
+        runtime.stop();
+        assertFalse(processHoldsPort(port), "a stop() made again waits for the release");
     }
 
     #! A runtime that is never started holds an OS-assigned port until stop(), which releases it
