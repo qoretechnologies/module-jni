@@ -100,6 +100,10 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             \genericServerRuntimeStopReleaseTimeoutTest());
         addTestCase("generic OPC UA server runtime stop releases a configured port",
             \genericServerRuntimeConfiguredPortStopTest());
+        addTestCase("generic OPC UA server runtime can be started again after stop()",
+            \genericServerRuntimeRestartTest());
+        addTestCase("the network sandbox checks the bind that a generic OPC UA server runtime makes",
+            \genericServerRuntimeBindCheckTest());
         addTestCase("generic OPC UA server runtime stop does not need the event loop to learn that the listener closed",
             \genericServerRuntimeStopListenerCloseCompletesFirstTest());
         addTestCase("generic OPC UA server runtime stop releases an OS-assigned port when never started",
@@ -1966,6 +1970,125 @@ sub sandboxProbe() {
             s.bind("127.0.0.1:" + port);
             s.close();
         }
+    }
+
+    #! A stopped runtime can be started again: it serves the same schema, its endpoints keep their values, and its port,
+    #! OS-assigned or configured, is bound again and released by the next stop() (qore#6915)
+    genericServerRuntimeRestartTest() {
+        foreach bool configured in ((False, True)) {
+            # 0: assigned by the OS (a port option that is not set is the default port, 48400)
+            int port = 0;
+            if (configured) {
+                # a port that the OS reports free now (see genericServerRuntimeConfiguredPortStopTest())
+                Socket s();
+                s.bind("127.0.0.1:0");
+                port = s.getSocketInfo().port;
+                s.close();
+            }
+            OpcUaServerRuntime runtime({
+                "port": port,
+                "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-restart-test"),
+            }, NOTHING);
+            on_exit runtime.stop();
+            string label = configured ? "configured port" : "OS-assigned port";
+            runtime.start();
+            runtime.setValue("temperature", 42);
+            int first_port = runtime.getPort();
+            runtime.stop();
+            *bool holds = processHoldsPort(first_port);
+            if (exists holds) {
+                assertFalse(holds, label + ": the port is released by stop()");
+            }
+
+            runtime.start();
+            int second_port = runtime.getPort();
+            if (configured) {
+                assertEq(port, second_port, label + ": the runtime serves its configured port again");
+            }
+            if (exists holds) {
+                assertTrue(processHoldsPort(second_port), label + ": the restarted runtime holds its port");
+            }
+            string node_id = (map $1.node_id, runtime.getSchemaSnapshot().endpoints,
+                $1.endpoint_id == "temperature")[0];
+            {
+                OpcUaDataProvider prov({"url": runtime.getEndpointUrl(), "monitored_nodes": ()});
+                assertEq(42, prov.doRequest({"action": "read-value", "node_id": node_id}).value,
+                    label + ": the endpoint keeps its value");
+            }
+            runtime.stop();
+            if (exists holds) {
+                assertFalse(processHoldsPort(second_port), label + ": the port is released by the second stop()");
+            }
+        }
+    }
+
+    #! The network sandbox checks the bind that the runtime makes: an OS-assigned port as port 0, also when a stopped
+    #! runtime is started again and binds a new one, and a configured port as that port (qore#6915)
+    genericServerRuntimeBindCheckTest() {
+        if (!networkSandboxPropagatesAcrossPrograms()) {
+            testSkip("the running qore runtime does not propagate an active network SandboxManager across the "
+                "program-context stack to module-context code");
+        }
+        # a port that the OS reports free now (see genericServerRuntimeConfiguredPortStopTest())
+        int port;
+        {
+            Socket s();
+            s.bind("127.0.0.1:0");
+            port = s.getSocketInfo().port;
+            s.close();
+        }
+        # the runtime started, stopped, started again and stopped again in a Program whose sandbox allows binds to
+        # the given ports only; returns the error, if any
+        code run = *string sub (list<int> allowed_ports, int runtime_port) {
+            SandboxManager sm();
+            sm.setNetworkDefaultPolicy(True);
+            map sm.addNetworkAllowedPort($1), allowed_ports;
+            # the runtime is Java code, which the sandbox must allow for its bind to reach the network check (qore#5741)
+            if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+                call_object_method(sm, "setUncontrolledApiPolicy", True);
+            }
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.setScriptPath(get_script_path());
+            p.setSandboxManager(sm);
+            p.parse("
+%modern
+%prepend-module-path \"${SCRIPT_DIR}/../qlib\"
+%requires OpcUaDataProvider
+
+*string sub cycle(int port) {
+    try {
+        OpcUaServerRuntime runtime({
+            \"port\": port,
+            \"schema\": {
+                \"contract_version\": 1,
+                \"source\": \"bind-check-test\",
+                \"namespaces\": {\"1\": \"urn:qore:opcua:generic-runtime-bind-check-test\"},
+                \"endpoints\": ({
+                    \"endpoint_id\": \"value\",
+                    \"browse_name\": \"1:Value\",
+                    \"browse_path\": \"/1:BindCheck/1:Value\",
+                    \"kind\": \"variable\",
+                    \"data_type\": \"Int32\",
+                    \"value_rank\": -1,
+                    \"value\": 1,
+                },),
+            },
+        }, NOTHING);
+        on_exit runtime.stop();
+        runtime.start();
+        runtime.stop();
+        runtime.start();
+        runtime.stop();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+", "opcua_runtime_bind_check");
+            return p.callFunction("cycle", runtime_port);
+        };
+        assertNothing(run((0,), 0), "an OS-assigned port is checked as port 0, also for a restart");
+        assertNothing(run((port,), port), "a configured port is checked as that port");
+        assertEq("NETWORK-ACCESS-DENIED", run((0,), port), "a configured port that the sandbox denies is refused");
     }
 
     #! stop() learns that the listener closed without the event loop, which may be busy (qore#6891)
