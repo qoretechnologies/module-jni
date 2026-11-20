@@ -9,8 +9,9 @@
 %modern
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../build"
-# the jni module of this tree is loaded here, by trusted code: sandboxed code cannot load native code from outside the
-# module path (qore#6776), and the sandboxed Programs here use the module, they do not test loading it
+# the jni module of this tree is loaded here, by trusted code: sandboxed code cannot load a module from outside the
+# module path under the name of a module in the module path (qore#6776), and the sandboxed Programs here use the
+# module, they do not test loading it
 %requires jni
 
 #! a class of the jni test jar (a.jar in the test tree)

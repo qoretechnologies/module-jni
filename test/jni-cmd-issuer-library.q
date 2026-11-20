@@ -15,6 +15,10 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %prepend-module-path "${SCRIPT_DIR}/../qlib"
+# the jni module of this tree is loaded here, by trusted code, so that the issuer Programs use it: a sandboxed Program
+# cannot load a module from outside the module path under the name of a module in the module path (qore#6776); the
+# issuer Program is still the first to load the fixture modules
+%requires jni
 
 const Kinds = {
     "trusted": 0,
