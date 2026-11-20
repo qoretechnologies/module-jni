@@ -1859,13 +1859,13 @@ sub sandboxProbe() {
         runtime.stop();
         # checked before the hold is released, which would let a release that stop() did not wait for happen
         bool held = GenericServer::isPortReleaseHeldForTest();
+        bool timed_out = GenericServer::isPortReleaseHoldTimedOutForTest();
         holds = processHoldsPort(port);
         GenericServer::releasePortReleaseHoldForTest();
 
         assertTrue(held, "the port release was held after the listener's channel was closed");
         # a hold that ended at its bound would have released the port whether stop() waited for it or not
-        assertFalse(GenericServer::isPortReleaseHoldTimedOutForTest(),
-            "the hold ended when stop() waited for the release, not at its bound");
+        assertFalse(timed_out, "the hold ended when stop() waited for the release, not at its bound");
         assertFalse(holds, "the port is released when stop() returns");
     }
 

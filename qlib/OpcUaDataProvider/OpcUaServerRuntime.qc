@@ -74,6 +74,10 @@ public class OpcUaServerRuntime {
     /** Returns once the server has shut down; an OS-assigned port (a \c port option of 0) is released by then, so
         this process no longer holds a socket with it
 
+        @note a configured (non-zero) \c port is served by Milo's own transport on Milo's shared event loop, whose
+            listening socket can still exist for a moment after stop() returns, so a new bind to that port made at
+            once can fail
+
         @throw JNI-ERROR (\c java.lang.IllegalStateException) if an OS-assigned port is not released within 30
             seconds; stop() can then be called again to wait for the release
     */
