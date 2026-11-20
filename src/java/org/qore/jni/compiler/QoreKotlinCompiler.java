@@ -76,7 +76,8 @@ public class QoreKotlinCompiler implements AutoCloseable {
      * @param options The compiler options (passed to kotlinc)
      */
     public QoreKotlinCompiler(QoreURLClassLoader loader, List<String> options) {
-        this.classLoader = new QoreURLClassLoader(loader.getPtr(), loader);
+        // the class loader shares the Program pointer of loader, so that it is cleared when the Program is deleted
+        this.classLoader = QoreURLClassLoader.createDerived(loader);
         this.options = options != null ? new ArrayList<>(options) : new ArrayList<>();
     }
 
@@ -153,7 +154,7 @@ public class QoreKotlinCompiler implements AutoCloseable {
             // Add URLs from the whole class loader CHAIN, not just this one.
             //
             // The constructor wraps the loader it is given in a fresh child
-            // (`new QoreURLClassLoader(loader.getPtr(), loader)`), and
+            // (`QoreURLClassLoader.createDerived(loader)`), and
             // `URLClassLoader.getURLs()` reports only the URLs of the loader it
             // is called on - never the parent's. Every path the caller added
             // with `QoreURLClassLoader.addPath()` therefore sat on the parent

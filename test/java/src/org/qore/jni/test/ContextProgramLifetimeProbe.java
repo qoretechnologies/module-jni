@@ -44,7 +44,7 @@ public final class ContextProgramLifetimeProbe implements BooleanSupplier {
         thread = new Thread(() -> {
             // the thread's Java context is a class loader with no Qore Program, so that its calls into Qore are made
             // in the global context Program
-            new QoreURLClassLoader(0L, ContextProgramLifetimeProbe.class.getClassLoader());
+            QoreURLClassLoader.createWithoutProgram(ContextProgramLifetimeProbe.class.getClassLoader());
             first = call(function);
             firstDone.countDown();
             // start() also returns if the call was not held (ex: it did not use the global context Program)

@@ -496,18 +496,41 @@ void dbg_jni_run_context_program_wait_hook() noexcept {
     run_runnable_hook(context_program_wait_hook_lock, context_program_wait_hook, "context Program wait");
 }
 
-// the java.util.function.BooleanSupplier run where a caller has obtained the global context Program, as a global
-// reference; see dbg_jni_run_context_program_hook()
-static std::mutex context_program_hook_lock;
-static jobject context_program_hook = nullptr;
-std::atomic<bool> dbg_jni_context_program_hook_set{false};
-// set while this thread runs the hook, so that a lookup that the hook makes does not run it again
-static thread_local bool context_program_hook_running = false;
+namespace {
+//! A java.util.function.BooleanSupplier hook that a native runs at one point of a call, on any thread: the hook decides
+//! from the thread whether it runs, and returns true if it ran, which clears it
+struct BooleanSupplierHook {
+    //! the hook's name, for the errors reported on \c stderr
+    const char* name;
+    //! true while a hook is set; checked inline before the hook is run, so that a call made with no hook set costs only
+    //! this load
+    std::atomic<bool>& set;
+    //! guards hook
+    std::mutex lock;
+    //! the hook, as a global reference, or nullptr
+    jobject hook = nullptr;
 
-//! Sets or clears the java.util.function.BooleanSupplier run where a caller has obtained the global context Program
-//! (see dbg_jni_run_context_program_hook())
-static QoreValue f_dbg_jni_set_context_program_hook(const QoreListNode* args, RuntimeConfig& rtcfg,
-        ExceptionSink* xsink) {
+    BooleanSupplierHook(const char* name, std::atomic<bool>& set) : name(name), set(set) {
+    }
+};
+
+//! set while the thread runs a BooleanSupplierHook, so that a call that a hook makes does not run a hook again
+thread_local bool supplier_hook_running = false;
+
+//! marks the thread as running a BooleanSupplierHook for its lifetime
+class SupplierHookRunning {
+public:
+    SupplierHookRunning() {
+        supplier_hook_running = true;
+    }
+    ~SupplierHookRunning() {
+        supplier_hook_running = false;
+    }
+};
+}
+
+//! Sets or clears the hook from the first argument
+static void set_supplier_hook(const QoreListNode* args, BooleanSupplierHook& h, ExceptionSink* xsink) {
     QoreValue arg = get_param_value(args, 0);
     try {
         jni::Env env;
@@ -517,16 +540,16 @@ static QoreValue f_dbg_jni_set_context_program_hook(const QoreListNode* args, Ru
             jni::LocalReference<jclass> supplier = env.findClass("java/util/function/BooleanSupplier");
             if (!obj || !env.isInstanceOf(obj, supplier)) {
                 xsink->raiseException("DBG-JNI-HOOK-ERROR", "the hook must be a java.util.function.BooleanSupplier");
-                return QoreValue();
+                return;
             }
             ref = jni::GlobalReference<jobject>::fromLocal(obj).release();
         }
         jobject old;
         {
-            std::lock_guard<std::mutex> guard(context_program_hook_lock);
-            old = context_program_hook;
-            context_program_hook = ref;
-            dbg_jni_context_program_hook_set.store(ref != nullptr, std::memory_order_release);
+            std::lock_guard<std::mutex> guard(h.lock);
+            old = h.hook;
+            h.hook = ref;
+            h.set.store(ref != nullptr, std::memory_order_release);
         }
         if (old) {
             (*env)->DeleteGlobalRef(old);
@@ -534,24 +557,12 @@ static QoreValue f_dbg_jni_set_context_program_hook(const QoreListNode* args, Ru
     } catch (jni::Exception& e) {
         e.convert(xsink);
     }
-    return QoreValue();
 }
 
-namespace {
-// marks the thread as running the context Program hook for its lifetime
-class ContextProgramHookRunning {
-public:
-    ContextProgramHookRunning() {
-        context_program_hook_running = true;
-    }
-    ~ContextProgramHookRunning() {
-        context_program_hook_running = false;
-    }
-};
-}
-
-void dbg_jni_run_context_program_hook() noexcept {
-    if (context_program_hook_running) {
+//! Runs the hook, if set; it is not run while a Java exception is pending or from within a hook; an error running it
+//! is reported on \c stderr
+static void run_supplier_hook(BooleanSupplierHook& h) noexcept {
+    if (supplier_hook_running) {
         return;
     }
     try {
@@ -564,16 +575,16 @@ void dbg_jni_run_context_program_hook() noexcept {
         // a reference of its own, so that the hook is not deleted while it runs if it is cleared in the meantime
         jni::LocalReference<jobject> hook;
         {
-            std::lock_guard<std::mutex> guard(context_program_hook_lock);
-            if (!context_program_hook) {
+            std::lock_guard<std::mutex> guard(h.lock);
+            if (!h.hook) {
                 return;
             }
-            hook = (*env)->NewLocalRef(context_program_hook);
+            hook = (*env)->NewLocalRef(h.hook);
         }
         if (!hook) {
             return;
         }
-        ContextProgramHookRunning running;
+        SupplierHookRunning running;
         jni::LocalReference<jclass> supplier = env.findClass("java/util/function/BooleanSupplier");
         jmethodID get = env.getMethod(supplier, "getAsBoolean", "()Z");
         if (!env.callBooleanMethod(hook, get, nullptr)) {
@@ -582,23 +593,55 @@ void dbg_jni_run_context_program_hook() noexcept {
         // the hook ran: it is cleared, unless it was replaced in the meantime
         jobject old = nullptr;
         {
-            std::lock_guard<std::mutex> guard(context_program_hook_lock);
-            if (context_program_hook && env.isSameObject(context_program_hook, hook)) {
-                old = context_program_hook;
-                context_program_hook = nullptr;
-                dbg_jni_context_program_hook_set.store(false, std::memory_order_release);
+            std::lock_guard<std::mutex> guard(h.lock);
+            if (h.hook && env.isSameObject(h.hook, hook)) {
+                old = h.hook;
+                h.hook = nullptr;
+                h.set.store(false, std::memory_order_release);
             }
         }
         if (old) {
             (*env)->DeleteGlobalRef(old);
         }
     } catch (jni::JavaException& e) {
-        fprintf(stderr, "jni-dbg: the context Program hook raised a Java exception\n");
+        fprintf(stderr, "jni-dbg: the %s hook raised a Java exception\n", h.name);
         e.ignore();
     } catch (...) {
-        fprintf(stderr, "jni-dbg: the context Program hook failed\n");
+        fprintf(stderr, "jni-dbg: the %s hook failed\n", h.name);
     }
     fflush(stderr);
+}
+
+// the hook run where a caller has obtained the global context Program; see dbg_jni_run_context_program_hook()
+std::atomic<bool> dbg_jni_context_program_hook_set{false};
+static BooleanSupplierHook context_program_hook("context Program", dbg_jni_context_program_hook_set);
+
+//! Sets or clears the java.util.function.BooleanSupplier run where a caller has obtained the global context Program
+//! (see dbg_jni_run_context_program_hook())
+static QoreValue f_dbg_jni_set_context_program_hook(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    set_supplier_hook(args, context_program_hook, xsink);
+    return QoreValue();
+}
+
+void dbg_jni_run_context_program_hook() noexcept {
+    run_supplier_hook(context_program_hook);
+}
+
+// the hook run where a native has received a Program pointer from Java; see dbg_jni_run_java_program_ptr_hook()
+std::atomic<bool> dbg_jni_java_program_ptr_hook_set{false};
+static BooleanSupplierHook java_program_ptr_hook("Java Program pointer", dbg_jni_java_program_ptr_hook_set);
+
+//! Sets or clears the java.util.function.BooleanSupplier run where a native has received a Program pointer from Java
+//! (see dbg_jni_run_java_program_ptr_hook())
+static QoreValue f_dbg_jni_set_java_program_ptr_hook(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    set_supplier_hook(args, java_program_ptr_hook, xsink);
+    return QoreValue();
+}
+
+void dbg_jni_run_java_program_ptr_hook() noexcept {
+    run_supplier_hook(java_program_ptr_hook);
 }
 
 void init_jni_debug_functions(QoreNamespace& ns) {
@@ -628,6 +671,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
     ns.addBuiltinVariant("dbg_jni_set_shutdown_window_hook", f_dbg_jni_set_shutdown_window_hook, QCF_NO_FLAGS,
         QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
     ns.addBuiltinVariant("dbg_jni_set_context_program_hook", f_dbg_jni_set_context_program_hook, QCF_NO_FLAGS,
+        QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
+    ns.addBuiltinVariant("dbg_jni_set_java_program_ptr_hook", f_dbg_jni_set_java_program_ptr_hook, QCF_NO_FLAGS,
         QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
     ns.addBuiltinVariant("dbg_jni_set_context_program_wait_hook", f_dbg_jni_set_context_program_wait_hook,
         QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
