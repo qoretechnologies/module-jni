@@ -1,0 +1,67 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+
+%exec-class JniSandboxProgramReachTest
+
+#! Java code that sandboxed code calls cannot run Qore code in another Program (qoretechnologies/qore#6845)
+/** Java code is not governed by a sandbox, and the Program pointers that it passes to the native methods are not
+    trusted: for code that a sandbox governs, a call from Java into Qore is made only in the Program of the calling code.
+    A tenant that a host trusts with uncontrolled APIs, whose Java code made the class loader of the host's Program its
+    context, ran Qore code in the host's Program before the change.
+*/
+class JniSandboxProgramReachTest inherits QUnit::Test {
+    public {
+        const TenantSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+string sub tenant_fn() {
+    return \"tenant\";
+}
+string sub reach(object loader) {
+    return GovernedProgramProbe::callIn(loader, \"host_fn\");
+}
+string sub own() {
+    return GovernedProgramProbe::callIn(get_class_loader(), \"tenant_fn\");
+}
+";
+        const NotGoverned = "cannot call into a Qore Program other than the one of the calling code";
+    }
+
+    constructor() : QUnit::Test("jni sandbox Program reach", "1.0") {
+        addTestCase("trusted code reaches its own Program", \trustedTest());
+        addTestCase("sandboxed code cannot reach another Program through Java", \sandboxedTest());
+        set_return_value(main());
+    }
+
+    trustedTest() {
+        assertEq("ok: host", GovernedProgramProbe::callIn(get_class_loader(), "host_fn"));
+    }
+
+    sandboxedTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        SandboxManager sm();
+        # only a tenant trusted with uncontrolled APIs can call Java code
+        sm.setUncontrolledApiPolicy(True);
+        p.setSandboxManager(sm);
+        object host_loader = get_class_loader();
+        string rv = p.callFunction("reach", host_loader);
+        assertRegex(NotGoverned, rv, rv);
+        # the tenant's own Program is reachable
+        string own_rv = p.callFunction("own");
+        assertEq("ok: tenant", own_rv, own_rv);
+    }
+}
+
+string sub host_fn() {
+    return "host";
+}
