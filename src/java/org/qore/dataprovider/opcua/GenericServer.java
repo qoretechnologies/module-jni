@@ -416,9 +416,9 @@ public class GenericServer {
 
             @Override
             public void unbind() {
-                // the connections are closed before the listener, which shares their event loop: no connection is
-                // accepted while they are closed, and a test hold of the port release, which the listener's close
-                // queues on the event loop, does not delay their close
+                // the connections are closed before the listener, which shares their event loop, so a test hold of
+                // the port release, which the listener's close queues on the event loop, does not delay their close;
+                // a connection accepted meanwhile is closed when the event loop terminates
                 channels.close(ChannelMatchers.isNonServerChannel()).awaitUninterruptibly();
                 channels.close(ChannelMatchers.isServerChannel()).awaitUninterruptibly();
             }
