@@ -34,6 +34,7 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.group.ChannelGroup;
+import io.netty.channel.group.ChannelMatchers;
 import io.netty.channel.group.DefaultChannelGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
@@ -138,6 +139,8 @@ public class GenericServer {
     private static volatile CountDownLatch portReleaseHold;
     private static volatile boolean portReleaseHoldUntilWaited;
     private static volatile boolean portReleaseHeld;
+    // whether a test hold ended because its bound expired, not because it was released
+    private static volatile boolean portReleaseHoldTimedOut;
     // the bound of a test hold, which a test that fails before releasing it does not hold forever
     private static final long PORT_RELEASE_HOLD_TIMEOUT_SECONDS = 60;
     // the default bound of the wait for the release of an OS-assigned port when the server is stopped
@@ -291,6 +294,7 @@ public class GenericServer {
     public static void holdPortReleaseForTest(boolean untilWaited) {
         CountDownLatch hold = new CountDownLatch(1);
         portReleaseHeld = false;
+        portReleaseHoldTimedOut = false;
         portReleaseHoldUntilWaited = untilWaited;
         portReleaseHold = hold;
         portReleaseHoldArmed.set(hold);
@@ -301,9 +305,15 @@ public class GenericServer {
         return portReleaseHeld;
     }
 
+    /** Test hook: returns true if a hold made by holdPortReleaseForTest() ended because its bound expired */
+    public static boolean isPortReleaseHoldTimedOutForTest() {
+        return portReleaseHoldTimedOut;
+    }
+
     /** Test hook: releases a hold made by holdPortReleaseForTest(), if any */
     public static void releasePortReleaseHoldForTest() {
         portReleaseHoldArmed.set(null);
+        portReleaseHoldUntilWaited = false;
         CountDownLatch hold = portReleaseHold;
         if (hold != null) {
             hold.countDown();
@@ -333,7 +343,9 @@ public class GenericServer {
         // queued, so the close completes first, and run before the channel is deregistered, which releases the port
         channel.eventLoop().execute(() -> {
             try {
-                hold.await(PORT_RELEASE_HOLD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (!hold.await(PORT_RELEASE_HOLD_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    portReleaseHoldTimedOut = true;
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -404,7 +416,11 @@ public class GenericServer {
 
             @Override
             public void unbind() {
-                channels.close().awaitUninterruptibly();
+                // the connections are closed before the listener, which shares their event loop: no connection is
+                // accepted while they are closed, and a test hold of the port release, which the listener's close
+                // queues on the event loop, does not delay their close
+                channels.close(ChannelMatchers.isNonServerChannel()).awaitUninterruptibly();
+                channels.close(ChannelMatchers.isServerChannel()).awaitUninterruptibly();
             }
         });
     }
