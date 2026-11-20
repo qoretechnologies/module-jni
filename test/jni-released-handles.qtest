@@ -126,8 +126,9 @@ class JniReleasedHandlesTest inherits QUnit::Test {
         string out = runChild("exit-unmatched", "live");
         # each unmatched end of a use is refused and changes nothing: the object is still usable, a valid use still
         # begins and ends, and the release that follows does not wait for a use that was never begun
-        assertEq("live: before: " + NoUse + "; call: ok: ReleasedHandleObject; valid: ok; released: " + NoUse
-            + "; after: " + ObjectReleased, getLine(out, "live: "), out);
+        # (the number of uses in progress after each refused end is still 0)
+        assertEq("live: before: " + NoUse + " (uses: 0); call: ok: ReleasedHandleObject; valid: ok; released: "
+            + NoUse + " (uses: 0); after: " + ObjectReleased, getLine(out, "live: "), out);
     }
 
     #! runs the child and returns its output (stdout and stderr), checking that it ran to the end and exited with

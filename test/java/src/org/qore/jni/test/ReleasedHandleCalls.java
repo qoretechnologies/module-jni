@@ -10,6 +10,7 @@ import java.util.function.Supplier;
 
 import org.qore.jni.QoreClosure;
 import org.qore.jni.QoreObject;
+import org.qore.jni.QoreObjectBase;
 import org.qore.jni.QoreSandbox;
 
 /** Uses Qore objects, closures and proxies that Java keeps after the jni module's shutdown has released their native
@@ -244,13 +245,29 @@ public final class ReleasedHandleCalls {
             + "; after: " + call("classname");
     }
 
+    //! ends a use of the object's handle that was never begun; returns the exception and the number of uses in
+    //! progress afterwards (read from the object's NativeCleanup.Ref with reflection), which must still be 0
     private static String exitResult(QoreObject obj) {
+        String rv;
         try {
             obj.qoreJniExitHandle();
-            return "no exception";
+            rv = "no exception";
         } catch (Throwable t) {
-            return t.getClass().getName() + ": " + t.getMessage();
+            rv = t.getClass().getName() + ": " + t.getMessage();
         }
+        try {
+            Field refField = QoreObjectBase.class.getDeclaredField("ref");
+            refField.setAccessible(true);
+            Object ref = refField.get(obj);
+            Field users = ref.getClass().getDeclaredField("users");
+            users.setAccessible(true);
+            synchronized (ref) {
+                rv += " (uses: " + users.getInt(ref) + ")";
+            }
+        } catch (ReflectiveOperationException e) {
+            rv += " (uses: " + e + ")";
+        }
+        return rv;
     }
 
     //! releases the object kept; called by its Qore method in callReleaseSelf(), while the call uses the object
