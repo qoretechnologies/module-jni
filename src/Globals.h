@@ -35,6 +35,7 @@
 #include "Env.h"
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 
 DLLLOCAL QoreStringNode* jni_module_init_intern();
@@ -42,6 +43,8 @@ DLLLOCAL QoreStringNode* jni_module_init_intern();
 #define QORE_JNI_MODULE_NAME "jni"
 
 namespace jni {
+
+class JniContextProgramHolder;
 
 // Registered class binding handle, used for construction and native type lookup
 constexpr const char* JAVA_QORE_CLASS_FIELD = "$qore_cls_handle";
@@ -621,11 +624,13 @@ public:
     */
     DLLLOCAL static QoreProgram* createJavaContextProgram();
 
-    //! Returns the global context Program, creating it if necessary; nullptr once the module's shutdown has started
-    /** see createJavaContextProgram(); a caller that needs a Program uses jni_get_context_unconditional(), which
-        raises an exception instead; an existing Program is returned with no lock taken
+    //! Returns the global context Program, creating it if necessary, held by \a holder; nullptr once the module's
+    //! shutdown has started
+    /** The Program is not deleted while \a holder holds it (see JniContextProgramHolder; qore#6829); see
+        createJavaContextProgram(); a caller that needs a Program uses jni_get_context_unconditional(), which raises
+        an exception instead; an existing Program is returned with no lock taken
     */
-    DLLLOCAL static QoreProgram* getJavaContextProgram();
+    DLLLOCAL static QoreProgram* getJavaContextProgram(JniContextProgramHolder& holder);
 
     //! Deletes the global context Program and reports the exceptions raised by its creation and deletion
     /** The exceptions are reported here, while the library is still initialized: the destructors of the objects in
@@ -636,7 +641,12 @@ public:
         The module's shutdown starts here (see isShuttingDown()): the flag is set under the lock that the creation of
         the global context Program takes, so no Program is created after it, also by a Java thread that calls into
         Qore while the JVM still runs (createJavaContextProgram()); the Program is deleted outside the lock, as its
-        deletion can call back into the module
+        deletion can call back into the module.
+
+        The Program is deleted once no other thread holds it (JniContextProgramHolder): a thread that obtained it
+        before the shutdown started can still be using it (qore#6829), and no thread can obtain it once the flag is
+        set.  If the calling thread holds it itself, it cannot wait for itself, and the Program is then left
+        allocated, as abandonGlobalContext() leaves it, instead of being deleted under that thread.
     */
     DLLLOCAL static void clearGlobalContext();
 
@@ -749,10 +759,92 @@ private:
     */
     DLLLOCAL static std::recursive_mutex& getContextLock();
 
+    //! The number of JniContextProgramHolder objects that hold the global context Program, in all threads
+    /** Incremented before the shutdown flag is checked, and the flag is set before clearGlobalContext() reads it,
+        both sequentially consistent, so that either the holder sees the flag and holds nothing, or
+        clearGlobalContext() sees the holder and waits for it (qore#6829)
+    */
+    DLLLOCAL static std::atomic<int> context_holders;
+
+    //! Returns the lock of the condition that clearGlobalContext() waits on for the holders of the global context
+    //! Program (getContextHolderCond()); never destroyed, as getContextLock()
+    DLLLOCAL static std::mutex& getContextHolderLock();
+
+    //! Returns the condition signaled when a holder of the global context Program releases it during the module's
+    //! shutdown; never destroyed, as getContextLock()
+    DLLLOCAL static std::condition_variable& getContextHolderCond();
+
+    //! Counts a holder of the global context Program in this thread; see context_holders
+    DLLLOCAL static void holdContextProgram() noexcept;
+
+    //! Releases a holder of the global context Program in this thread, and wakes clearGlobalContext() if it waits
+    //! for the holders
+    DLLLOCAL static void releaseContextProgram() noexcept;
+
+    //! Waits until no other thread holds the global context Program, and returns the number of holders of this
+    //! thread, which it cannot wait for
+    DLLLOCAL static int waitForContextHolders();
+
+    friend class JniContextProgramHolder;
+
     DLLLOCAL static bool already_initialized;
     DLLLOCAL static std::atomic<bool> jni_shutting_down;
 
     DLLLOCAL static void defineQoreURLClassLoader(Env& env);
+};
+
+//! Holds the global Java context Program, which the module's shutdown does not delete while it is held (qore#6829)
+/** A caller that uses the global context Program (Globals::getJavaContextProgram(), jni_get_context_or_global(),
+    jni_get_context_unconditional() and the functions that fall back to it) holds it with one of these for as long as
+    it uses the Program, its jni data, or anything that the Program owns: Globals::clearGlobalContext() deletes the
+    Program once no holder in another thread holds it.  A holder holds nothing once the module's shutdown has started,
+    as no Program can be obtained then.
+
+    The holder does not reference the Program, and does not delete it: the Program is deleted where it always was, by
+    the thread that shuts the module down, which waits for the holders before it deletes it.  A holder must not be
+    kept while waiting for another thread that can be shutting the module down; it is meant to live in the scope of
+    one call.
+
+    The shutdown waits for a holder as it waits for a thread that runs in the Program (the deletion of the Program
+    waits for its threads to leave it): a call that holds the Program for a Java call that uses its class loader (ex:
+    a call of a Java method from %Qore code with no Program context) delays the shutdown until the Java call
+    returns, and a Java call that waits for the shutdown itself (ex: \c System.exit() in the JVM's shutdown hooks)
+    never returns then.  A holder is therefore kept only for as long as the Program, its jni data or its class loader
+    is used.
+*/
+class JniContextProgramHolder {
+public:
+    DLLLOCAL JniContextProgramHolder() = default;
+
+    DLLLOCAL ~JniContextProgramHolder() {
+        release();
+    }
+
+    JniContextProgramHolder(const JniContextProgramHolder&) = delete;
+    JniContextProgramHolder& operator=(const JniContextProgramHolder&) = delete;
+
+    //! Returns the global context Program, creating it if necessary, and holds it until release(); nullptr, holding
+    //! nothing, once the module's shutdown has started
+    /** Returns the Program already held, if any; throws a C++ exception if the Program cannot be created, holding
+        nothing then
+    */
+    DLLLOCAL QoreProgram* acquire();
+
+    //! Releases the Program, if held
+    DLLLOCAL void release() noexcept {
+        if (pgm) {
+            pgm = nullptr;
+            Globals::releaseContextProgram();
+        }
+    }
+
+    //! Returns the Program held, or nullptr
+    DLLLOCAL QoreProgram* get() const {
+        return pgm;
+    }
+
+private:
+    QoreProgram* pgm = nullptr;
 };
 
 class QoreJniStackLocationHelper;

@@ -410,10 +410,13 @@ static QoreValue f_dbg_jni_set_classpath_jdk_feature(const QoreListNode* args, R
 static std::mutex shutdown_window_hook_lock;
 static jobject shutdown_window_hook = nullptr;
 
-//! Sets or clears the java.lang.Runnable run once by the module's delete function between the deletion of the global
-//! context Program and the destruction of the JVM (see dbg_jni_run_shutdown_window_hook())
-static QoreValue f_dbg_jni_set_shutdown_window_hook(const QoreListNode* args, RuntimeConfig& rtcfg,
-        ExceptionSink* xsink) {
+// the java.lang.Runnable run once by Globals::clearGlobalContext() before it waits for the threads that hold the global
+// context Program, as a global reference; see dbg_jni_run_context_program_wait_hook()
+static std::mutex context_program_wait_hook_lock;
+static jobject context_program_wait_hook = nullptr;
+
+//! Sets or clears the one-shot java.lang.Runnable hook in \a hook_ref, guarded by \a lock, from the first argument
+static void set_runnable_hook(const QoreListNode* args, std::mutex& lock, jobject& hook_ref, ExceptionSink* xsink) {
     QoreValue arg = get_param_value(args, 0);
     try {
         jni::Env env;
@@ -423,15 +426,15 @@ static QoreValue f_dbg_jni_set_shutdown_window_hook(const QoreListNode* args, Ru
             jni::LocalReference<jclass> runnable = env.findClass("java/lang/Runnable");
             if (!obj || !env.isInstanceOf(obj, runnable)) {
                 xsink->raiseException("DBG-JNI-HOOK-ERROR", "the hook must be a java.lang.Runnable");
-                return QoreValue();
+                return;
             }
             ref = jni::GlobalReference<jobject>::fromLocal(obj).release();
         }
         jobject old;
         {
-            std::lock_guard<std::mutex> guard(shutdown_window_hook_lock);
-            old = shutdown_window_hook;
-            shutdown_window_hook = ref;
+            std::lock_guard<std::mutex> guard(lock);
+            old = hook_ref;
+            hook_ref = ref;
         }
         if (old) {
             (*env)->DeleteGlobalRef(old);
@@ -439,15 +442,16 @@ static QoreValue f_dbg_jni_set_shutdown_window_hook(const QoreListNode* args, Ru
     } catch (jni::Exception& e) {
         e.convert(xsink);
     }
-    return QoreValue();
 }
 
-void dbg_jni_run_shutdown_window_hook() noexcept {
+//! Runs the one-shot java.lang.Runnable hook in \a hook_ref, guarded by \a lock, if any, and clears it; an error is
+//! reported on \c stderr with the hook's \a name
+static void run_runnable_hook(std::mutex& lock, jobject& hook_ref, const char* name) noexcept {
     jobject hook;
     {
-        std::lock_guard<std::mutex> guard(shutdown_window_hook_lock);
-        hook = shutdown_window_hook;
-        shutdown_window_hook = nullptr;
+        std::lock_guard<std::mutex> guard(lock);
+        hook = hook_ref;
+        hook_ref = nullptr;
     }
     if (!hook) {
         return;
@@ -460,10 +464,139 @@ void dbg_jni_run_shutdown_window_hook() noexcept {
         jmethodID run = env.getMethod(runnable, "run", "()V");
         env.callVoidMethod(holder, run, nullptr);
     } catch (jni::JavaException& e) {
-        fprintf(stderr, "jni-dbg: the shutdown window hook raised a Java exception\n");
+        fprintf(stderr, "jni-dbg: the %s hook raised a Java exception\n", name);
         e.ignore();
     } catch (...) {
-        fprintf(stderr, "jni-dbg: the shutdown window hook failed\n");
+        fprintf(stderr, "jni-dbg: the %s hook failed\n", name);
+    }
+    fflush(stderr);
+}
+
+//! Sets or clears the java.lang.Runnable run once by the module's delete function between the deletion of the global
+//! context Program and the destruction of the JVM (see dbg_jni_run_shutdown_window_hook())
+static QoreValue f_dbg_jni_set_shutdown_window_hook(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    set_runnable_hook(args, shutdown_window_hook_lock, shutdown_window_hook, xsink);
+    return QoreValue();
+}
+
+void dbg_jni_run_shutdown_window_hook() noexcept {
+    run_runnable_hook(shutdown_window_hook_lock, shutdown_window_hook, "shutdown window");
+}
+
+//! Sets or clears the java.lang.Runnable run once by Globals::clearGlobalContext() before it waits for the threads
+//! that hold the global context Program (see dbg_jni_run_context_program_wait_hook())
+static QoreValue f_dbg_jni_set_context_program_wait_hook(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    set_runnable_hook(args, context_program_wait_hook_lock, context_program_wait_hook, xsink);
+    return QoreValue();
+}
+
+void dbg_jni_run_context_program_wait_hook() noexcept {
+    run_runnable_hook(context_program_wait_hook_lock, context_program_wait_hook, "context Program wait");
+}
+
+// the java.util.function.BooleanSupplier run where a caller has obtained the global context Program, as a global
+// reference; see dbg_jni_run_context_program_hook()
+static std::mutex context_program_hook_lock;
+static jobject context_program_hook = nullptr;
+std::atomic<bool> dbg_jni_context_program_hook_set{false};
+// set while this thread runs the hook, so that a lookup that the hook makes does not run it again
+static thread_local bool context_program_hook_running = false;
+
+//! Sets or clears the java.util.function.BooleanSupplier run where a caller has obtained the global context Program
+//! (see dbg_jni_run_context_program_hook())
+static QoreValue f_dbg_jni_set_context_program_hook(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    QoreValue arg = get_param_value(args, 0);
+    try {
+        jni::Env env;
+        jobject ref = nullptr;
+        if (arg.getType() != NT_NOTHING) {
+            jni::LocalReference<jobject> obj(jni::QoreToJava::toAnyObject(env, arg));
+            jni::LocalReference<jclass> supplier = env.findClass("java/util/function/BooleanSupplier");
+            if (!obj || !env.isInstanceOf(obj, supplier)) {
+                xsink->raiseException("DBG-JNI-HOOK-ERROR", "the hook must be a java.util.function.BooleanSupplier");
+                return QoreValue();
+            }
+            ref = jni::GlobalReference<jobject>::fromLocal(obj).release();
+        }
+        jobject old;
+        {
+            std::lock_guard<std::mutex> guard(context_program_hook_lock);
+            old = context_program_hook;
+            context_program_hook = ref;
+            dbg_jni_context_program_hook_set.store(ref != nullptr, std::memory_order_release);
+        }
+        if (old) {
+            (*env)->DeleteGlobalRef(old);
+        }
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+    }
+    return QoreValue();
+}
+
+namespace {
+// marks the thread as running the context Program hook for its lifetime
+class ContextProgramHookRunning {
+public:
+    ContextProgramHookRunning() {
+        context_program_hook_running = true;
+    }
+    ~ContextProgramHookRunning() {
+        context_program_hook_running = false;
+    }
+};
+}
+
+void dbg_jni_run_context_program_hook() noexcept {
+    if (context_program_hook_running) {
+        return;
+    }
+    try {
+        // the thread's class loader context is not set, as setting it looks up the context Program
+        jni::Env env(false);
+        // no JNI call may be made while a Java exception is pending (ex: one that is being converted)
+        if ((*env)->ExceptionCheck()) {
+            return;
+        }
+        // a reference of its own, so that the hook is not deleted while it runs if it is cleared in the meantime
+        jni::LocalReference<jobject> hook;
+        {
+            std::lock_guard<std::mutex> guard(context_program_hook_lock);
+            if (!context_program_hook) {
+                return;
+            }
+            hook = (*env)->NewLocalRef(context_program_hook);
+        }
+        if (!hook) {
+            return;
+        }
+        ContextProgramHookRunning running;
+        jni::LocalReference<jclass> supplier = env.findClass("java/util/function/BooleanSupplier");
+        jmethodID get = env.getMethod(supplier, "getAsBoolean", "()Z");
+        if (!env.callBooleanMethod(hook, get, nullptr)) {
+            return;
+        }
+        // the hook ran: it is cleared, unless it was replaced in the meantime
+        jobject old = nullptr;
+        {
+            std::lock_guard<std::mutex> guard(context_program_hook_lock);
+            if (context_program_hook && env.isSameObject(context_program_hook, hook)) {
+                old = context_program_hook;
+                context_program_hook = nullptr;
+                dbg_jni_context_program_hook_set.store(false, std::memory_order_release);
+            }
+        }
+        if (old) {
+            (*env)->DeleteGlobalRef(old);
+        }
+    } catch (jni::JavaException& e) {
+        fprintf(stderr, "jni-dbg: the context Program hook raised a Java exception\n");
+        e.ignore();
+    } catch (...) {
+        fprintf(stderr, "jni-dbg: the context Program hook failed\n");
     }
     fflush(stderr);
 }
@@ -494,6 +627,10 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         QDOM_DEFAULT, hashTypeInfo);
     ns.addBuiltinVariant("dbg_jni_set_shutdown_window_hook", f_dbg_jni_set_shutdown_window_hook, QCF_NO_FLAGS,
         QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
+    ns.addBuiltinVariant("dbg_jni_set_context_program_hook", f_dbg_jni_set_context_program_hook, QCF_NO_FLAGS,
+        QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
+    ns.addBuiltinVariant("dbg_jni_set_context_program_wait_hook", f_dbg_jni_set_context_program_wait_hook,
+        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
 }
 
 #endif // DEBUG

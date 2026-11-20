@@ -359,11 +359,15 @@ QoreValue BaseMethod::invoke(jobject object, const QoreListNode* args, QoreProgr
                 case Type::Double:
                     return JavaToQore::convert(env.callDoubleMethod(object, id, jargs.data()));
                 case Type::Reference: {
+                    LocalReference<jobject> rv = env.callObjectMethod(object, id, jargs.data());
+                    // holds the global context Program, if it is the Program of the conversion, for the conversion
+                    // only, not for the Java call (qore#6829)
+                    JniContextProgramHolder ctx_holder;
                     if (!pgm) {
                         // raises an exception during the module's shutdown, when no global context Program exists
-                        jni_get_context_unconditional(pgm);
+                        jni_get_context_unconditional(pgm, ctx_holder);
                     }
-                    return JavaToQore::convertToQore(env.callObjectMethod(object, id, jargs.data()), pgm, false);
+                    return JavaToQore::convertToQore(std::move(rv), pgm, false);
                 }
                 case Type::Void:
                 default:
@@ -402,7 +406,8 @@ QoreValue BaseMethod::invokeNonvirtual(jobject object, const QoreListNode* args,
     }
 
     assert(pgm);
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
     assert(jpc);
 
     // add the object as the first argument
@@ -423,8 +428,10 @@ QoreValue BaseMethod::invokeNonvirtual(jobject object, const QoreListNode* args,
 QoreValue BaseMethod::invokeStatic(const QoreListNode* args, QoreProgram* pgm, int offset) const {
     Env env;
 
-    // make the call through the dynamic API
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    // make the call through the dynamic API; the global context Program is held, if it is the Program of the call
+    // (qore#6829)
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
     assert(jpc);
 
     LocalReference<jarray> vargs = args ? convertArgsToArray(env, args, offset, 0, jpc).release() : nullptr;
@@ -440,7 +447,8 @@ QoreValue BaseMethod::invokeStatic(const QoreListNode* args, QoreProgram* pgm, i
 }
 
 QoreValue BaseMethod::newInstance(const QoreListNode* args, QoreProgram* pgm) {
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
     Env env;
     std::vector<jvalue> jargs = convertArgs(env, args, 0, jpc);
     return JavaToQore::convertToQore(env.newObject(cls->getJavaObject(), id, jargs.data()), pgm, jpc->getCompatTypes());

@@ -131,6 +131,9 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
         QoreProgram* pgm = this->pgm;
         // Set up full program context including tlpd for thread pool threads; the Program is entered before its jni
         // data is looked up, as the Program's teardown can destroy the data of a Program that the thread is not in
+        // holds the global context Program, if the callback is made in it (qore#6829); declared before the entry,
+        // so that the entry is left first
+        JniContextProgramHolder ctx_holder;
         std::optional<QoreExternalProgramContextHelper> pctx;
         JniExternalProgramData* jpc = nullptr;
         // a Program with no jni data, also one that has been deleted, whose jni data has been destroyed: the callback
@@ -165,13 +168,13 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
                 // the data exists for the whole callback: the teardown destroys it only after it has refused new
                 // entries (an entry made after the check above, once the teardown had started, has failed) and no
                 // thread is in the Program
-                jpc = jni_get_context_unconditional(pgm);
+                jpc = jni_get_context_unconditional(pgm, ctx_holder);
             }
         }
         if (!pgm) {
-            // the current Program, the Program of the calling code, or the global Java context Program, which do not
-            // go away while the thread is in them or the module is loaded
-            jpc = jni_get_context_unconditional(pgm);
+            // the current Program or the Program of the calling code, which do not go away while the thread is in
+            // them, or the global Java context Program, which ctx_holder holds (qore#6829)
+            jpc = jni_get_context_unconditional(pgm, ctx_holder);
             pctx.emplace(&xsink, pgm);
             if (xsink) {
                 QoreToJava::wrapException(xsink);
