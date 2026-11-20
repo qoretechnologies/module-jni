@@ -207,11 +207,20 @@ sub deny_case(string root) {
     h = add_classpath(p, root + "/v/fifo.jar");
     result("deny: an entry that is not a regular file is refused", "JNI-CLASSPATH-ERROR", h.err);
     result("deny: its error says that it is not a regular file", True, h.desc =~ /not a regular file/);
+    result("deny: the entry is not added", (), jar_paths(p, root));
+    # v/*.jar selects the regular jar cp-ref.jar and the FIFO
     p = new_program(smv);
-    h = add_classpath(p, root + "/v/lib/*.jar");
+    h = add_classpath(p, root + "/v/*.jar");
     result("deny: a wildcard that selects a file that is not a regular file is refused", "JNI-CLASSPATH-ERROR",
         h.err);
-    result("deny: the wildcard adds nothing either", (), jar_paths(p, root));
+    result("deny: its error says that the match is not a regular file", True, h.desc =~ /not a regular file/);
+    result("deny: the regular jar of the wildcard is not added either", (), jar_paths(p, root));
+    result("deny: the class of the regular jar of the wildcard is not loaded", False, loads(p, "CpRef"));
+    # a match that is a link to a device is refused in the same way
+    p = new_program(smv);
+    h = add_classpath(p, root + "/v/lib/*.jar");
+    result("deny: a wildcard that selects a link to a device is refused", "JNI-CLASSPATH-ERROR", h.err);
+    result("deny: its error says that the device is not a regular file", True, h.desc =~ /not a regular file/);
 }
 
 #! a manifest Class-Path through a symbolic link out of the allowed directory refuses the classpath

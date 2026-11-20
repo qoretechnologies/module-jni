@@ -134,8 +134,13 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
             "result: deny: the jar that names the special file is not added: OK",
             "result: deny: an entry that is not a regular file is refused: OK",
             "result: deny: its error says that it is not a regular file: OK",
+            "result: deny: the entry is not added: OK",
             "result: deny: a wildcard that selects a file that is not a regular file is refused: OK",
-            "result: deny: the wildcard adds nothing either: OK",
+            "result: deny: its error says that the match is not a regular file: OK",
+            "result: deny: the regular jar of the wildcard is not added either: OK",
+            "result: deny: the class of the regular jar of the wildcard is not loaded: OK",
+            "result: deny: a wildcard that selects a link to a device is refused: OK",
+            "result: deny: its error says that the device is not a regular file: OK",
         ));
     }
 
