@@ -29,6 +29,7 @@ class JniReleasedHandlesTest inherits QUnit::Test {
         const ObjectReleased = "java.lang.IllegalStateException: the Qore object has been released";
         const ClosureReleased = "java.lang.IllegalStateException: the Qore closure has been released";
         const HandlerReleased = "java.lang.IllegalStateException: Invocation handler has already been destroyed";
+        const PolicyAfterShutdown = "java.lang.IllegalStateException: Native cleanup has shut down";
 
         #! op -> [the result of a live call, the result of a call after the module's shutdown]
         const Cases = {
@@ -47,6 +48,9 @@ class JniReleasedHandlesTest inherits QUnit::Test {
         addTestCase("regression: calls after the module's shutdown released the native handle", \shutdownCase());
         addTestCase("regression: a release waits for a call on another thread", \releaseInUseCase());
         addTestCase("negative: a release on the thread of a call that uses the handle", \releaseSelfCase());
+        addTestCase("negative: Qore converts a QoreObject whose handle has been released", \convertReleasedCase());
+        addTestCase("negative: a generated class after its release", \generatedReleasedCase());
+        addTestCase("regression: a QoreSandbox.Policy after the module's shutdown", \policyCase());
         set_return_value(main());
     }
 
@@ -76,6 +80,27 @@ class JniReleasedHandlesTest inherits QUnit::Test {
         # the release is refused, and the object is not released
         assertEq("live: ok: java.lang.IllegalStateException: the Qore handle cannot be released while a call on the "
             "same thread uses it; after: ok: ReleasedHandleObject", getLine(out, "live: "), out);
+    }
+
+    convertReleasedCase() {
+        string out = runChild("convert-released", "live");
+        # the conversion holds the handle (qoreJniEnterHandle()), which raises the error of a released object
+        assertEq("live: JNI-ERROR: " + ObjectReleased, getLine(out, "live: "), out);
+    }
+
+    generatedReleasedCase() {
+        string out = runChild("generated-released", "live");
+        # the generated method passes the object, whose handle JavaClassBuilder.doNormalCall() holds
+        assertEq("live: before: ok: 0; after: " + ObjectReleased, getLine(out, "live: "), out);
+    }
+
+    policyCase() {
+        string out = runChild("policy", "live");
+        assertEq("live: ok: false", getLine(out, "live: "), out);
+        out = runChild("policy", "shutdown");
+        # the closed-policy error is a QoreExceptionWrapper, which can no longer be registered with NativeCleanup;
+        # the class of the wrapper had been deleted by the module's cleanup, and the process crashed in NewObject()
+        assertEq("shutdown: " + PolicyAfterShutdown, getLine(out, "shutdown: "), out);
     }
 
     #! runs the child and returns its output (stdout and stderr), checking that it ran to the end and exited with

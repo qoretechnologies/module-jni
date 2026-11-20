@@ -5195,7 +5195,10 @@ void Globals::cleanup() {
     classMethod = nullptr;
     classConstructor = nullptr;
     classQoreInvocationHandler = nullptr;
-    classQoreExceptionWrapper = nullptr;
+    // the class of the Java exception of a Qore exception is not deleted either: Java threads still run until the JVM
+    // is destroyed (ex: a JVM shutdown hook), and a native method that they call raises a Qore exception as a
+    // QoreExceptionWrapper (QoreToJava::newExceptionWrapper()), whose constructor then raises an
+    // IllegalStateException, as NativeCleanup has shut down; a deleted reference crashed the process (qore#6864)
     classQoreException = nullptr;
     classQoreObjectBase = nullptr;
     classQoreJavaClassBase = nullptr;

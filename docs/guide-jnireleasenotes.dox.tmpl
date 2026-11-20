@@ -154,6 +154,10 @@
       therefore must not be made while a call that uses the object waits for the releasing thread; the module's
       shutdown likewise waits for such calls in progress on other threads before it releases the handles, so a call
       that never returns delays the exit of the process (qore#6864)
+    - fixed a crash when a native method raised a %Qore exception in Java after the module's cleanup, while the JVM
+      was being destroyed (ex: \c QoreSandbox.Policy.isSandboxed() of a released policy in a JVM shutdown hook): the
+      class of \c QoreExceptionWrapper had been deleted; it is kept now, and the wrapper's constructor raises
+      \c java.lang.IllegalStateException then (qore#6864)
     - <b>Behaviour change</b>: the module describes a pending \c QoreExceptionWrapper (ex: in the error of a
       classpath that cannot be added) with its message, the code and the description of its %Qore exception, without
       the exception's argument (qore#6864)
