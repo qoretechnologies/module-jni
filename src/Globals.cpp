@@ -3055,7 +3055,6 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 }
 
 #include "JavaClassQoreInvocationHandler.inc"
-#include "JavaClassQoreInvocationHandler_State.inc"
 #include "JavaClassQoreExceptionWrapper.inc"
 #include "JavaClassQoreException.inc"
 #include "JavaClassQoreObjectBase.inc"
@@ -3151,7 +3150,6 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreException", {java_org_qore_jni_QoreException_class_len, java_org_qore_jni_QoreException_class}},
     {"org.qore.jni.QoreExceptionWrapper", {java_org_qore_jni_QoreExceptionWrapper_class_len, java_org_qore_jni_QoreExceptionWrapper_class}},
     {"org.qore.jni.QoreInvocationHandler", {java_org_qore_jni_QoreInvocationHandler_class_len, java_org_qore_jni_QoreInvocationHandler_class}},
-    {"org.qore.jni.QoreInvocationHandler$State", {java_org_qore_jni_QoreInvocationHandler_State_class_len, java_org_qore_jni_QoreInvocationHandler_State_class}},
     {"org.qore.jni.NativeCleanup", {java_org_qore_jni_NativeCleanup_class_len, java_org_qore_jni_NativeCleanup_class}},
     {"org.qore.jni.NativeCleanup$Ref", {java_org_qore_jni_NativeCleanup_Ref_class_len, java_org_qore_jni_NativeCleanup_Ref_class}},
     {"org.qore.jni.QoreJavaApi", {java_org_qore_jni_QoreJavaApi_class_len, java_org_qore_jni_QoreJavaApi_class}},
@@ -4232,12 +4230,8 @@ bool Globals::init() {
     classQoreInvocationHandler = findDefineClass(env, "org.qore.jni.QoreInvocationHandler", nullptr,
         java_org_qore_jni_QoreInvocationHandler_class, java_org_qore_jni_QoreInvocationHandler_class_len).makeGlobal();
     env.registerNatives(classQoreInvocationHandler, invocationHandlerNativeMethods, 2);
-    // QoreInvocationHandler's inner class is now $State (formerly $CleanupState).
-    // It serves only the explicit-destroy synchronisation; phantom-driven release
-    // runs in the NativeCleanup C++ thread (see Jvm.cpp).
-    findDefineClass(env, "org.qore.jni.QoreInvocationHandler$State", nullptr,
-        java_org_qore_jni_QoreInvocationHandler_State_class,
-        java_org_qore_jni_QoreInvocationHandler_State_class_len);
+    // QoreInvocationHandler has no inner class: its calls hold its handle with NativeCleanup.Ref (qore#6864), and
+    // phantom-driven release runs in the NativeCleanup C++ thread (see Jvm.cpp)
     ctorQoreInvocationHandler = env.getMethod(classQoreInvocationHandler, "<init>", "(J)V");
     methodQoreInvocationHandlerDestroy = env.getMethod(classQoreInvocationHandler, "destroy", "()V");
 
