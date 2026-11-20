@@ -23,6 +23,9 @@ public class OpcUaServerRuntime {
     private {
         GenericServer server;
         *code<hash<auto>(string, hash<auto>)> callback;
+        #! the bind address and the port that the options give (a port of 0: assigned by the OS), which the network
+        #! sandbox checks for each bind (qore#6915)
+        hash<auto> bind_target;
     }
 
     #! Creates a generic OPC UA server runtime
@@ -41,10 +44,10 @@ public class OpcUaServerRuntime {
             made when the runtime is created
     */
     constructor(hash<auto> options, *code<hash<auto>(string, hash<auto>)> runtime_callback) {
-        hash<auto> target = GenericServer::getBindTarget(options);
-        if (!target.port) {
+        bind_target = GenericServer::getBindTarget(options);
+        if (!bind_target.port) {
             # an OS-assigned port is bound when the server is created, not when it is started
-            Jni::org::qore::jni::check_network_bind(target.bind_address, 0, self);
+            Jni::org::qore::jni::check_network_bind(bind_target.bind_address, 0, self);
         }
         callback = runtime_callback;
         if (callback) {
@@ -63,23 +66,26 @@ public class OpcUaServerRuntime {
     }
 
     #! Starts the server endpoint
-    /** @throw NETWORK-ACCESS-DENIED if an active Qore network sandbox denies the configured TCP bind address or port.
+    /** A runtime that was stopped can be started again: it serves the same schema, and its endpoints keep their values
+        and history; an OS-assigned port (a \c port option of 0) is assigned again, so getPort() can return another
+        port then
+
+        @throw NETWORK-ACCESS-DENIED if an active Qore network sandbox denies the configured TCP bind address or port
+            (for an OS-assigned port: port 0)
     */
     start() {
-        Jni::org::qore::jni::check_network_bind(server.getBindAddress(), server.getPort(), self);
+        # the bind that the start makes, or that the creation made: an OS-assigned port is checked as port 0, the bind
+        # that is requested, also when a stopped runtime is started again, which binds a new one (qore#6915)
+        Jni::org::qore::jni::check_network_bind(bind_target.bind_address, bind_target.port, self);
         server.start();
     }
 
     #! Stops the server endpoint
-    /** Returns once the server has shut down; an OS-assigned port (a \c port option of 0) is released by then, so
-        this process no longer holds a socket with it
+    /** Returns once the server has shut down and its port, OS-assigned (a \c port option of 0) or configured, is
+        released, so this process no longer holds a socket with it and the port can be bound again at once
 
-        @note a configured (non-zero) \c port is served by Milo's own transport on Milo's shared event loop, whose
-            listening socket can still exist for a moment after stop() returns, so a new bind to that port made at
-            once can fail
-
-        @throw JNI-ERROR (\c java.lang.IllegalStateException) if an OS-assigned port is not released within 30
-            seconds; stop() can then be called again to wait for the release
+        @throw JNI-ERROR (\c java.lang.IllegalStateException) if the port is not released within 30 seconds; stop()
+            can then be called again to wait for the release
     */
     stop() {
         if (server) {

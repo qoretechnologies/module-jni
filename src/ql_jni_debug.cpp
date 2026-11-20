@@ -96,8 +96,10 @@ std::atomic<bool> dbg_jni_context_gate_set{false};
     JniExternalProgramData::getCreateJniProgramData()); so that a test can delete the Program exactly in that window -
     see test/jni-cross-program-call.qtest - or create the jni data in another thread first - see
     test/jni-no-program-data.qtest; \c "issued-class": in the byte code generator, once it has accepted a class
-    pointer that the module's own code gave, while it is issued on the thread - see test/jni-class-ptr.qtest; with no
-    code, a gate that has not run is cleared
+    pointer that the module's own code gave, while it is issued on the thread - see test/jni-class-ptr.qtest;
+    \c "code-gen-save": while the code generation lock is held, before a generated class is stored in the
+    compilation cache - see test/jni-compilation-cache-clear.qtest; with no code, a gate that has not run is
+    cleared
 */
 static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
@@ -115,9 +117,11 @@ static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeCon
             point = DbgJniGatePoint::Create;
         } else if (!strcmp(p, "issued-class")) {
             point = DbgJniGatePoint::IssuedClass;
+        } else if (!strcmp(p, "code-gen-save")) {
+            point = DbgJniGatePoint::CodeGenSave;
         } else if (strcmp(p, "lookup")) {
             xsink->raiseException("DBG-JNI-GATE-ERROR", "unknown gate point '%s'; expecting \"lookup\", "
-                "\"entry\", \"create\" or \"issued-class\"", p);
+                "\"entry\", \"create\", \"issued-class\" or \"code-gen-save\"", p);
             return QoreValue();
         }
     }
@@ -206,6 +210,35 @@ static QoreValue f_dbg_jni_get_class_ptr(const QoreListNode* args, RuntimeConfig
         return QoreValue();
     }
     return static_cast<int64>(reinterpret_cast<intptr_t>(cls));
+}
+
+//! Clears the compilation cache of the given Program as a Java compiler does when it ends (qore#6855)
+/** Returns False if the Program has no jni data.  DEBUG builds only.
+*/
+static QoreValue f_dbg_jni_clear_compilation_cache(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(args, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return jni::JniExternalProgramData::clearCompilationCache(*pgm);
+}
+
+//! Returns the number of entries in the compilation cache of the given Program, -1 if it has no jni data (qore#6855)
+/** Waits for the code generation lock of the Program; a test calls it while no thread generates code for it.  DEBUG
+    builds only.
+*/
+static QoreValue f_dbg_jni_compilation_cache_size(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(args, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    return jni::JniExternalProgramData::getCompilationCacheSizeForTest(*pgm);
 }
 
 // the class name for which jni::Env::findClass() fails (see f_dbg_jni_fail_find_class()); set and read under the lock
@@ -672,6 +705,31 @@ static void run_supplier_hook(BooleanSupplierHook& h) noexcept {
     fflush(stderr);
 }
 
+//! Describes a java.lang.Throwable as the module describes a pending Java exception (JavaException::toString())
+/** So that a test can check that describing a QoreExceptionWrapper neither takes nor leaks its Qore exception
+    (qore#6864) - see test/jni-exception-wrapper-released.qtest.  DEBUG builds only.
+*/
+static QoreValue f_dbg_jni_describe_throwable(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    try {
+        jni::Env env;
+        jni::LocalReference<jobject> obj(jni::QoreToJava::toAnyObject(env, get_param_value(args, 0)));
+        if (!obj || !env.isInstanceOf(obj, jni::Globals::classThrowable)) {
+            xsink->raiseException("DBG-JNI-ERROR", "the argument must be a java.lang.Throwable");
+            return QoreValue();
+        }
+        if ((*env)->Throw(obj.cast<jthrowable>()) != JNI_OK) {
+            xsink->raiseException("DBG-JNI-ERROR", "the Throwable cannot be thrown");
+            return QoreValue();
+        }
+        jni::JavaException e;
+        return e.toString(true);
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+    }
+    return QoreValue();
+}
+
 // the hook run where a caller has obtained the global context Program; see dbg_jni_run_context_program_hook()
 std::atomic<bool> dbg_jni_context_program_hook_set{false};
 static BooleanSupplierHook context_program_hook("context Program", dbg_jni_context_program_hook_set);
@@ -705,12 +763,18 @@ void dbg_jni_run_java_program_ptr_hook() noexcept {
 }
 
 void init_jni_debug_functions(QoreNamespace& ns) {
+    ns.addBuiltinVariant("dbg_jni_describe_throwable", f_dbg_jni_describe_throwable, QCF_NO_FLAGS, QDOM_DEFAULT,
+        stringTypeInfo, 1, objectTypeInfo, QoreValue(), "throwable");
     ns.addBuiltinVariant("dbg_jni_set_classpath_jdk_feature", f_dbg_jni_set_classpath_jdk_feature, QCF_NO_FLAGS,
         QDOM_DEFAULT, nothingTypeInfo, 1, bigIntOrNothingTypeInfo, QoreValue(), "feature");
     ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
     ns.addBuiltinVariant("dbg_jni_get_class_ptr", f_dbg_jni_get_class_ptr, QCF_NO_FLAGS, QDOM_DEFAULT,
         bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "path");
+    ns.addBuiltinVariant("dbg_jni_clear_compilation_cache", f_dbg_jni_clear_compilation_cache, QCF_NO_FLAGS,
+        QDOM_DEFAULT, boolTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm");
+    ns.addBuiltinVariant("dbg_jni_compilation_cache_size", f_dbg_jni_compilation_cache_size, QCF_NO_FLAGS,
+        QDOM_DEFAULT, bigIntTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm");
     ns.addBuiltinVariant("dbg_jni_set_context_gate", f_dbg_jni_set_context_gate, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, codeOrNothingTypeInfo, QoreValue(), "code", stringOrNothingTypeInfo, QoreValue(),
         "point");

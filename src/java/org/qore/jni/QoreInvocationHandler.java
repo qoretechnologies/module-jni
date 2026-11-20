@@ -1,84 +1,48 @@
 // Copyright (C) 2026 Qore Technologies, s.r.o.
 package org.qore.jni;
 
+import java.lang.ref.Reference;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
 public class QoreInvocationHandler implements InvocationHandler {
-    /** State holder for the explicit invoke()/destroy() ref-count protocol.
-        Phantom-driven cleanup goes through {@link NativeCleanup}; this state
-        only protects the explicit-destroy path against concurrent invokers. */
-    private static class State {
-        private long ptr;
-        private int counter;
-
-        State(long ptr) {
-            this.ptr = ptr;
-            this.counter = 1;
-        }
-
-        synchronized long ref() {
-            if (counter == 0) {
-                throw new IllegalStateException("Invocation handler has already been destroyed");
-            }
-            ++counter;
-            return ptr;
-        }
-
-        synchronized void deref() {
-            --counter;
-            if (counter == 1) {
-                notifyAll();
-            }
-        }
-
-        /** Wait for in-flight invokers, then take ownership of the pointer
-            and reset state.  Returns the pointer to release (0 if already
-            destroyed); caller is responsible for the native release.  Does
-            not call release0 itself so the explicit-destroy path can also
-            inform NativeCleanup to suppress phantom dispatch. */
-        synchronized long acquireAndClearForDestroy() {
-            while (counter > 1) {
-                try {
-                    wait();
-                } catch (InterruptedException e) {
-                    // ignored — re-enter the wait loop
-                }
-            }
-            long p = ptr;
-            ptr = 0;
-            counter = 0;
-            return p;
-        }
-    }
-
-    private final State state;
-
     /** Native cleanup handle for phantom-driven release.  See
-        {@link NativeCleanup}. */
+        {@link NativeCleanup}.  A call holds the handle for its duration
+        (NativeCleanup.Ref.enter()): destroy() waits until the calls on other
+        threads have returned, and the shutdown of the jni module leaves the
+        handle of a call in progress unreleased (qore#6864). */
     private final NativeCleanup.Ref ref;
 
     QoreInvocationHandler(long ptr) {
-        this.state = new State(ptr);
         this.ref = NativeCleanup.register(this, ptr, NativeCleanup.KIND_INVOCATION_HANDLER);
     }
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        // the thread's classloader context is restored when the callback returns to Java (qore#6485); saved before
-        // the reference is taken, which the finally block below releases
-        Object[] ctx = QoreURLClassLoader.saveContext();
-        long p = state.ref();
+        long p = ref.enter();
+        if (p == 0) {
+            throw new IllegalStateException("Invocation handler has already been destroyed");
+        }
         try {
-            return invoke0(p, proxy, method, args);
+            // the thread's classloader context is restored when the callback returns to Java (qore#6485)
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return invoke0(p, proxy, method, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
-            state.deref();
+            ref.exit();
+            // the handler stays reachable until the use has ended, so that the C++ cleanup thread never sees a use
+            // (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
+    //! waits until the calls of the handler on other threads have returned, and releases it
+    /** @throws IllegalStateException if a call of the handler on the current thread is in progress
+    */
     private void destroy() {
-        state.acquireAndClearForDestroy();
         long p = ref.acquireAndClear();
         NativeCleanup.unregister(ref);
         if (p != 0) {

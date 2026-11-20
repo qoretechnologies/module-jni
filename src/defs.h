@@ -224,7 +224,14 @@ public:
 
     DLLLOCAL void restore(jthrowable je);
 
+    //! Describes the pending Java exception, which is cleared if \a clear is true and pending again otherwise
+    /** The exception is not converted: a QoreExceptionWrapper keeps its %Qore exception (qore#6864).
+    */
     DLLLOCAL QoreStringNode* toString(bool clear = true) const;
+
+private:
+    //! Describes a Java exception and its causes; no Java exception may be pending
+    DLLLOCAL static QoreStringNode* describe(JNIEnv* env, jthrowable throwable);
 };
 
 /**

@@ -2851,8 +2851,33 @@ std::unique_ptr<GeneratedBindingLease> JniExternalProgramData::tryGetQoreClass(E
     return nullptr;
 }
 
+void JniExternalProgramData::clearCompilationCache() {
+    // never waits for codeGenLock (see the header): a recursive lock that this thread holds is acquired again
+    if (!codeGenLock.trylock()) {
+        q2jmap.clear();
+        codeGenLock.unlock();
+        return;
+    }
+    // another thread holds it: it clears the cache when it releases its outermost hold; if it released it before it
+    // could see the request, the lock is taken now, by this thread or by another holder, which clears the cache
+    clearPending.store(true, std::memory_order_release);
+    if (!codeGenLock.trylock()) {
+        if (clearPending.exchange(false, std::memory_order_acq_rel)) {
+            q2jmap.clear();
+        }
+        codeGenLock.unlock();
+    }
+}
+
+#ifdef DEBUG
+size_t JniExternalProgramData::getCompilationCacheSizeForTest() {
+    CodeGenLocker al(*this);
+    return q2jmap.size();
+}
+#endif
+
 void JniExternalProgramData::saveClass(const QoreClass& qc, LocalReference<jclass> jcls) {
-    AutoLocker al(codeGenLock);
+    CodeGenLocker al(*this);
 
     std::string cls_hash = get_class_hash(qc);
     q2jmap_t::iterator i = q2jmap.lower_bound(cls_hash);
@@ -3598,7 +3623,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
         }
         if (cname == JniImportedFunctionClassName) {
             // ensure exclusive access while creating java classes
-            AutoLocker al(codeGenLock);
+            CodeGenLocker al(*this);
 
             if (i > 0) {
                 QoreString ns_path(qpath.c_str(), i);
@@ -3612,7 +3637,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
         }
         if (cname == JniImportedConstantClassName) {
             // ensure exclusive access while creating java classes
-            AutoLocker al(codeGenLock);
+            CodeGenLocker al(*this);
 
             if (i > 0) {
                 QoreString ns_path(qpath.c_str(), i);
@@ -3726,7 +3751,7 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCode(Env& env, jo
     }
 
     // ensure exclusive access while creating java classes
-    AutoLocker al(codeGenLock);
+    CodeGenLocker al(*this);
 
     //printd(5, "JniExternalProgramData::generateByteCode() qpath: '%s' (%p)\n", qpath.c_str(), qcls);
     LocalReference<jbyteArray> rv = generateByteCodeIntern(env, class_loader, qcls, jname).as<jbyteArray>();
@@ -4866,6 +4891,22 @@ bool JniExternalProgramData::clearCompilationCache(const QoreProgram* pgm) {
     return true;
 }
 
+#ifdef DEBUG
+int64 JniExternalProgramData::getCompilationCacheSizeForTest(const QoreProgram* pgm) {
+    JniProgramDataRegistry& reg = jni_pgm_data();
+    std::lock_guard<std::mutex> guard(reg.lock);
+    auto range = reg.pgms.equal_range(pgm);
+    if (range.first == range.second) {
+        return -1;
+    }
+    int64 rv = 0;
+    for (auto i = range.first; i != range.second; ++i) {
+        rv += (int64)i->second->getCompilationCacheSizeForTest();
+    }
+    return rv;
+}
+#endif
+
 bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);
@@ -5493,7 +5534,7 @@ LocalReference<jclass> JniExternalProgramData::getJavaClassForQoreClass(Env& env
     // (the JVM serializes class definition per name, so both threads produce the same class).
     std::string cls_hash = get_class_hash(*qc);
     {
-        AutoLocker al(codeGenLock);
+        CodeGenLocker al(*this);
         q2jmap_t::iterator i = q2jmap.find(cls_hash);
         if (i != q2jmap.end()) {
             return i->second.toLocal();
@@ -5512,7 +5553,13 @@ LocalReference<jclass> JniExternalProgramData::getJavaClassForQoreClass(Env& env
     assert(jcls);
 
     // store the generated class, double-checking for a concurrent insert
-    AutoLocker al(codeGenLock);
+    CodeGenLocker al(*this);
+#ifdef DEBUG
+    // a test gate that runs code while code generation holds its lock, before the class is stored (qore#6855)
+    if (dbg_jni_context_gate_set.load(std::memory_order_acquire)) {
+        dbg_jni_run_context_gate(DbgJniGatePoint::CodeGenSave);
+    }
+#endif
     q2jmap_t::iterator i = q2jmap.lower_bound(cls_hash);
     if (i == q2jmap.end() || i->first != cls_hash) {
         i = q2jmap.insert(i, q2jmap_t::value_type(cls_hash, jcls.makeGlobal()));

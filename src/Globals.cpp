@@ -195,6 +195,8 @@ GlobalReference<jclass> Globals::classQoreObjectBase;
 
 GlobalReference<jclass> Globals::classQoreJavaClassBase;
 jmethodID Globals::methodQoreObjectBaseGet;
+jmethodID Globals::methodQoreObjectBaseEnterHandle;
+jmethodID Globals::methodQoreObjectBaseExitHandle;
 
 GlobalReference<jclass> Globals::classQoreObject;
 jmethodID Globals::ctorQoreObject;
@@ -202,6 +204,8 @@ jmethodID Globals::ctorQoreObject;
 GlobalReference<jclass> Globals::classQoreClosure;
 jmethodID Globals::ctorQoreClosure;
 jmethodID Globals::methodQoreClosureGet;
+jmethodID Globals::methodQoreClosureEnterHandle;
+jmethodID Globals::methodQoreClosureExitHandle;
 
 GlobalReference<jclass> Globals::classQoreObjectWrapper;
 
@@ -691,6 +695,15 @@ static void jni_native_leak_qore_exception(AbstractException& e) noexcept {
 /** The %Qore exception is raised as an \c org.qore.jni.QoreExceptionWrapper.  The locals of the native method,
     including the helper that attached the thread to %Qore, have been destroyed, so the thread is attached here for the
     conversion if it is not attached.
+
+    The catch blocks of native methods that convert a jni::Exception themselves while the thread is attached (ex:
+    generated_native_call(), qore_object_closure_call_internal(), the java_api_* natives) do not check for the
+    module's shutdown, and do not use this function, deliberately (qore#6864): in the window of the module's delete
+    function between Globals::clearGlobalContext() and Jvm::destroyVM(), q_libqore_shutdown() is already true while
+    the Qore library is still alive, so the check here cannot tell that window from a library that has been torn
+    down, and leaks the Qore exception of a jni::XsinkException; routing those catch blocks here would add that leak
+    in the window only to change the type of the Java exception (a QoreExceptionWrapper there, whose Qore exception
+    the module's shutdown releases, instead of a java.lang.Error).
 */
 static void jni_native_raise_qore_exception(JNIEnv* jenv, AbstractException& e) noexcept {
     // the C++ exception replaces a pending Java exception
@@ -1371,6 +1384,12 @@ static void JNICALL java_api_delete_connection_waiter(JNIEnv* jenv, jclass, jlon
 
 static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, jlong ptr) try {
     ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
+    if (!xsink) {
+        // the exception has been released; QoreExceptionWrapper.getMessage() does not call the method then, and
+        // returns this message itself (QoreExceptionWrapper.RELEASED_MESSAGE, which this text must match)
+        return jenv->NewStringUTF("Qore exception (the message is unavailable: the exception has been taken by Qore, "
+            "or released by the shutdown of the jni module)");
+    }
 
     // Java can get the message on any thread, also one that Java started, which is not attached to Qore: the thread
     // is attached for the conversion of the code and the description, as a description that cannot be converted to
@@ -3116,7 +3135,6 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 }
 
 #include "JavaClassQoreInvocationHandler.inc"
-#include "JavaClassQoreInvocationHandler_State.inc"
 #include "JavaClassQoreExceptionWrapper.inc"
 #include "JavaClassQoreException.inc"
 #include "JavaClassQoreObjectBase.inc"
@@ -3213,7 +3231,6 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreException", {java_org_qore_jni_QoreException_class_len, java_org_qore_jni_QoreException_class}},
     {"org.qore.jni.QoreExceptionWrapper", {java_org_qore_jni_QoreExceptionWrapper_class_len, java_org_qore_jni_QoreExceptionWrapper_class}},
     {"org.qore.jni.QoreInvocationHandler", {java_org_qore_jni_QoreInvocationHandler_class_len, java_org_qore_jni_QoreInvocationHandler_class}},
-    {"org.qore.jni.QoreInvocationHandler$State", {java_org_qore_jni_QoreInvocationHandler_State_class_len, java_org_qore_jni_QoreInvocationHandler_State_class}},
     {"org.qore.jni.NativeCleanup", {java_org_qore_jni_NativeCleanup_class_len, java_org_qore_jni_NativeCleanup_class}},
     {"org.qore.jni.NativeCleanup$Ref", {java_org_qore_jni_NativeCleanup_Ref_class_len, java_org_qore_jni_NativeCleanup_Ref_class}},
     {"org.qore.jni.QoreJavaApi", {java_org_qore_jni_QoreJavaApi_class_len, java_org_qore_jni_QoreJavaApi_class}},
@@ -4226,6 +4243,8 @@ bool Globals::init() {
     classQoreJavaClassBase = findDefineClass(env, "org.qore.jni.QoreJavaClassBase", nullptr,
         java_org_qore_jni_QoreJavaClassBase_class, java_org_qore_jni_QoreJavaClassBase_class_len).makeGlobal();
     methodQoreObjectBaseGet = env.getMethod(classQoreObjectBase, "get", "()J");
+    methodQoreObjectBaseEnterHandle = env.getMethod(classQoreObjectBase, "qoreJniEnterHandle", "()J");
+    methodQoreObjectBaseExitHandle = env.getMethod(classQoreObjectBase, "qoreJniExitHandle", "()V");
 
     classQoreClosureMarker = findDefineClass(env, "org.qore.jni.QoreClosureMarker", nullptr,
         java_org_qore_jni_QoreClosureMarker_class, java_org_qore_jni_QoreClosureMarker_class_len).makeGlobal();
@@ -4241,6 +4260,8 @@ bool Globals::init() {
     // runs in the NativeCleanup C++ thread; see Jvm.cpp.
     ctorQoreClosure = env.getMethod(classQoreClosure, "<init>", "(J)V");
     methodQoreClosureGet = env.getMethod(classQoreClosure, "get", "()J");
+    methodQoreClosureEnterHandle = env.getMethod(classQoreClosure, "qoreJniEnterHandle", "()J");
+    methodQoreClosureExitHandle = env.getMethod(classQoreClosure, "qoreJniExitHandle", "()V");
 
     classQoreObjectWrapper = findDefineClass(env, "org.qore.jni.QoreObjectWrapper", nullptr,
         java_org_qore_jni_QoreObjectWrapper_class, java_org_qore_jni_QoreObjectWrapper_class_len).makeGlobal();
@@ -4300,12 +4321,8 @@ bool Globals::init() {
     classQoreInvocationHandler = findDefineClass(env, "org.qore.jni.QoreInvocationHandler", nullptr,
         java_org_qore_jni_QoreInvocationHandler_class, java_org_qore_jni_QoreInvocationHandler_class_len).makeGlobal();
     env.registerNatives(classQoreInvocationHandler, invocationHandlerNativeMethods, 2);
-    // QoreInvocationHandler's inner class is now $State (formerly $CleanupState).
-    // It serves only the explicit-destroy synchronisation; phantom-driven release
-    // runs in the NativeCleanup C++ thread (see Jvm.cpp).
-    findDefineClass(env, "org.qore.jni.QoreInvocationHandler$State", nullptr,
-        java_org_qore_jni_QoreInvocationHandler_State_class,
-        java_org_qore_jni_QoreInvocationHandler_State_class_len);
+    // QoreInvocationHandler has no inner class: its calls hold its handle with NativeCleanup.Ref (qore#6864), and
+    // phantom-driven release runs in the NativeCleanup C++ thread (see Jvm.cpp)
     ctorQoreInvocationHandler = env.getMethod(classQoreInvocationHandler, "<init>", "(J)V");
     methodQoreInvocationHandlerDestroy = env.getMethod(classQoreInvocationHandler, "destroy", "()V");
 
@@ -5168,7 +5185,7 @@ void Globals::startNativeCleanupThread() {
     nativeCleanupClass = env.findClass("org/qore/jni/NativeCleanup").makeGlobal();
     nativeCleanupRefClass = env.findClass("org/qore/jni/NativeCleanup$Ref").makeGlobal();
 
-    methodNativeCleanupAcquire = env.getMethod(nativeCleanupRefClass, "acquireAndClear", "()J");
+    methodNativeCleanupAcquire = env.getMethod(nativeCleanupRefClass, "acquireForCleanup", "()J");
     fieldNativeCleanupRefKind = env.getField(nativeCleanupRefClass, "kind", "I");
 
     jfieldID fieldQueue = env.getStaticField(nativeCleanupClass, "queue", "Ljava/lang/ref/ReferenceQueue;");
@@ -5263,7 +5280,10 @@ void Globals::cleanup() {
     classMethod = nullptr;
     classConstructor = nullptr;
     classQoreInvocationHandler = nullptr;
-    classQoreExceptionWrapper = nullptr;
+    // the class of the Java exception of a Qore exception is not deleted either: Java threads still run until the JVM
+    // is destroyed (ex: a JVM shutdown hook), and a native method that they call raises a Qore exception as a
+    // QoreExceptionWrapper (QoreToJava::newExceptionWrapper()), whose constructor then raises an
+    // IllegalStateException, as NativeCleanup has shut down; a deleted reference crashed the process (qore#6864)
     classQoreException = nullptr;
     classQoreObjectBase = nullptr;
     classQoreJavaClassBase = nullptr;

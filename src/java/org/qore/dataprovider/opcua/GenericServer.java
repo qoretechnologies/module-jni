@@ -105,7 +105,6 @@ import org.eclipse.milo.opcua.stack.core.types.structured.WriteValue;
 import org.eclipse.milo.opcua.stack.core.transport.TransportProfile;
 import org.eclipse.milo.opcua.stack.transport.server.OpcServerTransport;
 import org.eclipse.milo.opcua.stack.transport.server.ServerApplicationContext;
-import org.eclipse.milo.opcua.stack.transport.server.tcp.OpcTcpServerTransport;
 import org.eclipse.milo.opcua.stack.transport.server.tcp.OpcTcpServerTransportConfig;
 import org.eclipse.milo.opcua.stack.transport.server.uasc.UascServerHelloHandler;
 
@@ -123,19 +122,27 @@ public class GenericServer {
     private final QoreClosure callback;
     private final String bindAddress;
     private final String hostname;
-    private final int port;
-    // the listener holding an OS-assigned port (a port option of 0), or null for a configured port
+    // the port; an OS-assigned port is assigned again when a stopped server is started again
+    private volatile int port;
+    // whether the port is assigned by the OS (a port option of 0)
+    private final boolean osAssignedPort;
+    // the listener holding the port: an OS-assigned port from the server's creation, a configured port from its start,
+    // until the port is released; null otherwise
     private volatile ServerSocketChannel listener;
-    // the event loop serving the listener of an OS-assigned port and its connections, from the server's start until
-    // the port is released, or null
+    // the event loop serving the listener and its connections, from the server's start until the port is released,
+    // or null
     private volatile EventLoopGroup listenerEventLoop;
     private final String path;
     private final String namespaceUri;
     private final int maxHistoryValues;
-    private final OpcUaServer server;
-    private final RuntimeNamespace namespace;
+    // the Milo server and its namespace; a Milo server cannot be started again once it has been shut down, so both
+    // are made again when a stopped server is started again (qore#6915)
+    private volatile OpcUaServer server;
+    private volatile RuntimeNamespace namespace;
     private final Hash schemaSnapshot = new Hash();
     private volatile boolean started;
+    // true once the Milo server has been shut down, until it has been made again
+    private boolean shutDown;
 
     // test hook (see holdPortReleaseForTest()): the hold armed for the next listener channel closed, the hold last
     // armed, whether the hold ends once stop() waits for the release, and whether a closed listener channel took the
@@ -182,7 +189,8 @@ public class GenericServer {
         // A port of 0 lets the OS assign a free port.  The port is reserved now, as the endpoint configuration, which
         // discovery returns to clients, needs it, and is held until the server is stopped: a port chosen in advance can
         // be taken by another socket before the server binds it.
-        if (requestedPort == 0) {
+        osAssignedPort = requestedPort == 0;
+        if (osAssignedPort) {
             listener = reservePort(bindAddress, 0);
             this.port = ((InetSocketAddress) listener.getLocalAddress()).getPort();
         } else {
@@ -277,7 +285,8 @@ public class GenericServer {
         }
         long timeout = portReleaseTimeoutMillis;
         if (!group.terminationFuture().await(timeout, TimeUnit.MILLISECONDS)) {
-            throw new IllegalStateException("the OS-assigned port " + port + " was not released within " + timeout
+            throw new IllegalStateException((osAssignedPort ? "the OS-assigned port " : "the configured port ") + port
+                + " was not released within " + timeout
                 + " ms after the server was stopped; stop() can be called again to wait for the release");
         }
         listenerEventLoop = null;
@@ -394,12 +403,11 @@ public class GenericServer {
             .setIdentityValidator(AnonymousIdentityValidator.INSTANCE)
             .build();
 
-        if (listener == null) {
-            return new OpcUaServer(config, transportProfile ->
-                new OpcTcpServerTransport(OpcTcpServerTransportConfig.newBuilder().build()));
-        }
-        // Milo's TCP transport cannot adopt a bound socket: the reserved listener is registered with Netty, with
-        // Milo's protocol handler, so the port is never released between its reservation and the server's start
+        // Milo's TCP transport cannot adopt a bound socket, and it serves its listener on Milo's shared event loop,
+        // which is never terminated, so its stop cannot wait for the release of the port (qore#6870): the listener is
+        // registered with Netty here, with Milo's protocol handler, on an event loop of its own.  An OS-assigned port
+        // is reserved when the server is created, so it is never released between its reservation and the server's
+        // start; a configured port is bound when the server starts.
         return new OpcUaServer(config, transportProfile -> new OpcServerTransport() {
             private final ChannelGroup channels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
@@ -407,8 +415,13 @@ public class GenericServer {
             public void bind(ServerApplicationContext context, InetSocketAddress address) throws Exception {
                 ServerSocketChannel l = listener;
                 if (l == null) {
-                    throw new IllegalStateException("the reserved port " + port + " was released");
+                    if (osAssignedPort) {
+                        throw new IllegalStateException("the reserved port " + port + " was released");
+                    }
+                    l = reservePort(bindAddress, port);
+                    listener = l;
                 }
+                final ServerSocketChannel bound = l;
                 OpcTcpServerTransportConfig transportConfig = OpcTcpServerTransportConfig.newBuilder().build();
                 // a dedicated event loop, not Milo's shared one, which is never terminated: stop() waits for its
                 // termination, as only that releases the port for certain (see awaitListenerEventLoopTermination())
@@ -418,7 +431,7 @@ public class GenericServer {
                     listenerEventLoop = group;
                 }
                 io.netty.channel.Channel listenerChannel = new ServerBootstrap()
-                    .channelFactory(() -> new NioServerSocketChannel(l))
+                    .channelFactory(() -> new NioServerSocketChannel(bound))
                     .group(group)
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
@@ -478,24 +491,54 @@ public class GenericServer {
         }
     }
 
-    /** Starts the server and blocks until the endpoint is listening. */
+    /** Starts the server and blocks until the endpoint is listening
+
+        A server that was stopped is started again with the same options; the values and history of its endpoints are
+        kept.  An OS-assigned port is assigned again, so getPort() can return another port then.
+    */
     public synchronized void start() throws Exception {
         if (!started) {
+            if (shutDown) {
+                recreateServer();
+            }
             server.startup().get();
             started = true;
         }
     }
 
-    /** Stops the server and blocks until shutdown is complete; releases an OS-assigned port
+    // makes the Milo server and its namespace again for a start after a stop, with the values and history of the
+    // endpoints of the previous namespace (qore#6915)
+    private void recreateServer() throws Exception {
+        if (osAssignedPort) {
+            listener = reservePort(bindAddress, 0);
+            port = ((InetSocketAddress) listener.getLocalAddress()).getPort();
+        }
+        RuntimeNamespace previous = namespace;
+        try {
+            OpcUaServer newServer = createServer();
+            RuntimeNamespace newNamespace = new RuntimeNamespace(newServer);
+            newNamespace.startup();
+            newNamespace.takeValuesFrom(previous);
+            server = newServer;
+            namespace = newNamespace;
+            shutDown = false;
+        } catch (Exception | Error e) {
+            releasePort(e);
+            throw e;
+        }
+    }
 
-        @throws IllegalStateException if an OS-assigned port is not released within 30 seconds; stop() can then be
-        called again to wait for the release
+    /** Stops the server and blocks until shutdown is complete and its port, OS-assigned or configured, is released
+
+        @throws IllegalStateException if the port is not released within 30 seconds; stop() can then be called again
+        to wait for the release
     */
     public synchronized void stop() throws Exception {
         try {
             if (started) {
                 server.shutdown().get();
                 started = false;
+                shutDown = true;
             }
         } catch (Exception | Error e) {
             releasePort(e);
@@ -977,6 +1020,26 @@ public class GenericServer {
         @Override public void onMonitoringModeChanged(List<MonitoredItem> monitoredItems) {
             subscriptionModel.onMonitoringModeChanged(monitoredItems);
             callbackOnly("subscription", null, "event", "mode-changed", "count", monitoredItems.size());
+        }
+
+        // takes the values and the history of the endpoints of the given namespace, of the same schema, for the
+        // endpoints with the same IDs (a server started again; qore#6915)
+        void takeValuesFrom(RuntimeNamespace previous) {
+            for (Endpoint old : previous.orderedEndpoints) {
+                Endpoint endpoint = byEndpointId.get(old.endpointId);
+                if (endpoint == null) {
+                    continue;
+                }
+                if (endpoint.node != null && old.node != null) {
+                    endpoint.node.setValue(old.node.getValue());
+                }
+                Deque<DataValue> values = previous.history.get(old.nodeId);
+                if (values != null) {
+                    synchronized (values) {
+                        history.put(endpoint.nodeId, new ArrayDeque<>(values));
+                    }
+                }
+            }
         }
 
         void setEndpointValue(String endpointId, Object value, boolean invokeEventCallback)

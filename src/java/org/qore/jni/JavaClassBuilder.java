@@ -3,6 +3,8 @@
 
 package org.qore.jni;
 
+import java.lang.ref.Reference;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
@@ -83,9 +85,11 @@ public class JavaClassBuilder {
             args[5] = objArray;
             mStaticCall = JavaClassBuilder.class.getDeclaredMethod("doStaticCall", args);
 
+            // the generated methods pass the object itself, so that its native handle is held for the call
+            // (qore#6864)
             args = new Class<?>[5];
             args[0] = String.class;
-            args[1] = Long.TYPE;
+            args[1] = QoreObjectBase.class;
             args[2] = Long.TYPE;
             args[3] = Long.TYPE;
             args[4] = objArray;
@@ -93,7 +97,7 @@ public class JavaClassBuilder {
 
             args = new Class<?>[6];
             args[0] = String.class;
-            args[1] = Long.TYPE;
+            args[1] = QoreObjectBase.class;
             args[2] = Long.TYPE;
             args[3] = Long.TYPE;
             args[4] = Class.class;
@@ -364,7 +368,7 @@ public class JavaClassBuilder {
             bb = (DynamicType.Builder<?>)eb.intercept(
                     MethodCall.invoke(mNormalCall)
                     .with(methodName)
-                    .withField("obj")
+                    .withThis()
                     .with(mptr)
                     .with(vptr)
                     .with((Object)null)
@@ -374,7 +378,7 @@ public class JavaClassBuilder {
             bb = (DynamicType.Builder<?>)eb.intercept(
                     MethodCall.invoke(mNormalCall)
                     .with(methodName)
-                    .withField("obj")
+                    .withThis()
                     .with(mptr)
                     .with(vptr)
                     .withArgumentArray()
@@ -437,7 +441,7 @@ public class JavaClassBuilder {
                 .throwing(Throwable.class);
         MethodCall call = MethodCall.invoke(mNormalCallTyped)
             .with(methodName)
-            .withField("obj")
+            .withThis()
             .with(mptr)
             .with(vptr)
             .with(getTypeDescription(rtype));
@@ -526,6 +530,26 @@ public class JavaClassBuilder {
 
     /** makes a call to a Qore method overriding a Java method, converting its return value to the method's return
      *  type; see @ref doNormalCall() and <tt>convertReturnValue()</tt>
+     *
+     *  The native handle of the object is held for the duration of the call (qore#6864).
+     *
+     *  @throws IllegalStateException if the native handle of the object has been released
+     */
+    @RuntimeType
+    public static Object doNormalCallTyped(String methodName, QoreObjectBase self, long mptr, long vptr,
+            Class<?> rtype, @Argument(0) Object... args) throws Throwable {
+        long qobjptr = self.qoreJniEnterHandle();
+        try {
+            return doNormalCallTyped(methodName, qobjptr, mptr, vptr, rtype, args);
+        } finally {
+            self.qoreJniExitHandle();
+            // the object stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(self);
+        }
+    }
+
+    /** makes a call to a Qore method overriding a Java method with the native handle of the object; for classes
+     *  generated before qore#6864, which pass the handle instead of the object
      */
     @RuntimeType
     public static Object doNormalCallTyped(String methodName, long qobjptr, long mptr, long vptr, Class<?> rtype,
@@ -603,6 +627,33 @@ public class JavaClassBuilder {
     }
 
     /** makes a normal method call
+     *
+     * @param methodName the name of the method
+     * @param self the object; its native handle is held for the duration of the call (qore#6864)
+     * @param mptr the registered method binding handle
+     * @param vptr reserved; must be zero
+     * @param args the arguments to the call, if any, can be null
+     *
+     * @return the result of the call
+     *
+     * @throws Throwable any exception thrown in Qore; IllegalStateException if the handle of the object has
+     * been released
+     */
+    @RuntimeType
+    public static Object doNormalCall(String methodName, QoreObjectBase self, long mptr, long vptr,
+            @Argument(0) Object... args) throws Throwable {
+        long qobjptr = self.qoreJniEnterHandle();
+        try {
+            return doNormalCall(methodName, qobjptr, mptr, vptr, args);
+        } finally {
+            self.qoreJniExitHandle();
+            // the object stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(self);
+        }
+    }
+
+    /** makes a normal method call with the native handle of the object; for classes generated before qore#6864,
+     *  which pass the handle instead of the object
      *
      * @param methodName the name of the method
      * @param qobjptr the pointer to the Qore object

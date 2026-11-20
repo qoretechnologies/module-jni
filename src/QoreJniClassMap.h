@@ -693,10 +693,19 @@ public:
     DLLLOCAL virtual void doDeref();
 #endif
 
-    DLLLOCAL void clearCompilationCache() {
-        //printd(5, "JniExternalProgramData::clearCompilationCache() clearing %d entries\n", (int)q2jmap.size());
-        q2jmap.clear();
-    }
+    //! Clears the compilation cache (the map of Qore classes to Java classes)
+    /** The cache is guarded by codeGenLock, which this never waits for (qore#6855): it is taken by the thread that
+        generates code, which can wait for a Java compiler running on another thread, and that compiler clears the
+        cache when it ends.  So the cache is cleared at once if codeGenLock is free or held by this thread; otherwise
+        the clear is left to the thread that holds it, which clears the cache when it releases its outermost hold
+        (see CodeGenLocker), after the code it generates, as if the clear had come after it.
+    */
+    DLLLOCAL void clearCompilationCache();
+
+#ifdef DEBUG
+    //! Returns the number of entries in the compilation cache (DEBUG builds only, for tests)
+    DLLLOCAL size_t getCompilationCacheSizeForTest();
+#endif
 
     DLLLOCAL void saveClass(const QoreClass& qc, LocalReference<jclass> jcls);
 
@@ -758,6 +767,12 @@ public:
     */
     DLLLOCAL static bool clearCompilationCache(const QoreProgram* pgm);
 
+#ifdef DEBUG
+    //! Returns the number of entries in the compilation cache of the Program, -1 if it has no jni data (DEBUG builds
+    //! only, for tests; waits for its code generation lock, so it must be called while no thread generates code)
+    DLLLOCAL static int64 getCompilationCacheSizeForTest(const QoreProgram* pgm);
+#endif
+
     // get / create JNI program data in the given Qore program
     DLLLOCAL static JniExternalProgramData* getCreateJniProgramData(QoreProgram* pgm);
 
@@ -803,6 +818,38 @@ protected:
 
     // code generation mutex
     QoreRecursiveThreadLock codeGenLock;
+    //! the number of holds of codeGenLock by the thread that holds it; codeGenLock must be held to access it
+    unsigned codeGenDepth = 0;
+    //! set by clearCompilationCache() when another thread held codeGenLock: that thread clears the compilation cache
+    //! when it releases its outermost hold (qore#6855)
+    std::atomic<bool> clearPending{false};
+
+    //! Holds codeGenLock for its scope; the outermost hold of a thread runs a pending clear of the compilation cache
+    //! when it is taken and when it is released (see clearCompilationCache())
+    class CodeGenLocker {
+    public:
+        DLLLOCAL CodeGenLocker(JniExternalProgramData& data) : data(data) {
+            data.codeGenLock.lock();
+            // a clear requested while the previous holder was releasing its hold, after it checked for one, is run
+            // before the cache is used
+            if (!data.codeGenDepth++ && data.clearPending.exchange(false, std::memory_order_acq_rel)) {
+                data.q2jmap.clear();
+            }
+        }
+
+        DLLLOCAL ~CodeGenLocker() {
+            if (!--data.codeGenDepth && data.clearPending.exchange(false, std::memory_order_acq_rel)) {
+                data.q2jmap.clear();
+            }
+            data.codeGenLock.unlock();
+        }
+
+        CodeGenLocker(const CodeGenLocker&) = delete;
+        CodeGenLocker& operator=(const CodeGenLocker&) = delete;
+
+    private:
+        JniExternalProgramData& data;
+    };
 
     // map of Qore class hashes to Java classes; class signature hash -> jclass
     /** codeGenLock must be held when accessing this data
