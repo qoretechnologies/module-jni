@@ -801,6 +801,13 @@ private:
     the thread that shuts the module down, which waits for the holders before it deletes it.  A holder must not be
     kept while waiting for another thread that can be shutting the module down; it is meant to live in the scope of
     one call.
+
+    The shutdown waits for a holder as it waits for a thread that runs in the Program (the deletion of the Program
+    waits for its threads to leave it): a call that holds the Program for a Java call that uses its class loader (ex:
+    a call of a Java method from %Qore code with no Program context) delays the shutdown until the Java call
+    returns, and a Java call that waits for the shutdown itself (ex: \c System.exit() in the JVM's shutdown hooks)
+    never returns then.  A holder is therefore kept only for as long as the Program, its jni data or its class loader
+    is used.
 */
 class JniContextProgramHolder {
 public:

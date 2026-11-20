@@ -359,13 +359,15 @@ QoreValue BaseMethod::invoke(jobject object, const QoreListNode* args, QoreProgr
                 case Type::Double:
                     return JavaToQore::convert(env.callDoubleMethod(object, id, jargs.data()));
                 case Type::Reference: {
-                    // holds the global context Program, if it is the Program of the conversion (qore#6829)
+                    LocalReference<jobject> rv = env.callObjectMethod(object, id, jargs.data());
+                    // holds the global context Program, if it is the Program of the conversion, for the conversion
+                    // only, not for the Java call (qore#6829)
                     JniContextProgramHolder ctx_holder;
                     if (!pgm) {
                         // raises an exception during the module's shutdown, when no global context Program exists
                         jni_get_context_unconditional(pgm, ctx_holder);
                     }
-                    return JavaToQore::convertToQore(env.callObjectMethod(object, id, jargs.data()), pgm, false);
+                    return JavaToQore::convertToQore(std::move(rv), pgm, false);
                 }
                 case Type::Void:
                 default:

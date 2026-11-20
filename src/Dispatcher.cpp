@@ -172,8 +172,8 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
             }
         }
         if (!pgm) {
-            // the current Program, the Program of the calling code, or the global Java context Program, which do not
-            // go away while the thread is in them or the module is loaded
+            // the current Program or the Program of the calling code, which do not go away while the thread is in
+            // them, or the global Java context Program, which ctx_holder holds (qore#6829)
             jpc = jni_get_context_unconditional(pgm, ctx_holder);
             pctx.emplace(&xsink, pgm);
             if (xsink) {

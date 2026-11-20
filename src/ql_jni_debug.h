@@ -108,8 +108,9 @@ DLLLOCAL extern std::atomic<bool> dbg_jni_context_program_hook_set;
 DLLLOCAL void dbg_jni_run_context_program_hook() noexcept;
 
 //! Runs the java.lang.Runnable set with Jni::dbg_jni_set_context_program_wait_hook(), if any, once
-/** Called by Globals::clearGlobalContext() once the module's shutdown has started, before it waits for the threads
-    that hold the global context Program, so that a test can release a thread that holds it there (qore#6829); an
+/** Called by Globals::clearGlobalContext() once the module's shutdown has started and has seen that another thread
+    holds the global context Program, before it waits for it, so that a test can release that thread there, which
+    then uses the Program while the shutdown waits (qore#6829); not called if no other thread holds the Program; an
     error running it is reported on \c stderr, as no exception can be raised there
 */
 DLLLOCAL void dbg_jni_run_context_program_wait_hook() noexcept;

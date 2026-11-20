@@ -5291,6 +5291,8 @@ void Globals::releaseContextProgram() noexcept {
     // clearGlobalContext() reads the count after it has set the flag: if the flag is not set here, it sees this
     // release; if it is, it is woken, the lock making sure that it either has not checked the count yet or waits
     if (jni_shutting_down.load(std::memory_order_seq_cst)) {
+        // std::mutex::lock() throws only for a system error (ex: EDEADLK, which this lock cannot raise, as it is never
+        // taken recursively), which ends the process here, as the release is noexcept
         std::lock_guard<std::mutex> guard(getContextHolderLock());
         getContextHolderCond().notify_all();
     }
@@ -5299,6 +5301,15 @@ void Globals::releaseContextProgram() noexcept {
 int Globals::waitForContextHolders() {
     int own = context_holders_in_thread;
     std::unique_lock<std::mutex> lock(getContextHolderLock());
+#ifdef DEBUG
+    // a test can release a thread that holds the Program here, once the shutdown has seen that another thread holds it
+    // and before it waits for it (qore#6829); run without the lock, as the thread released can release the Program
+    if (context_holders.load(std::memory_order_seq_cst) != own) {
+        lock.unlock();
+        dbg_jni_run_context_program_wait_hook();
+        lock.lock();
+    }
+#endif
     while (context_holders.load(std::memory_order_seq_cst) != own) {
         getContextHolderCond().wait(lock);
     }
@@ -5345,10 +5356,6 @@ void Globals::clearGlobalContext() {
         old = std::move(qph);
     }
     if (old) {
-#ifdef DEBUG
-        // a test can release a thread that holds the Program here, before the shutdown waits for it (qore#6829)
-        dbg_jni_run_context_program_wait_hook();
-#endif
         // a thread that obtained the Program before the shutdown started can still be using it (qore#6829)
         if (waitForContextHolders()) {
             // this thread holds the Program, and cannot wait for itself: it is left allocated, as
@@ -5369,7 +5376,7 @@ void Globals::clearGlobalContext() {
 void Globals::abandonGlobalContext() {
     std::lock_guard<std::recursive_mutex> guard(getContextLock());
     jni_shutting_down.store(true, std::memory_order_seq_cst);
-    context_pgm.store(nullptr, std::memory_order_release);
+    context_pgm.store(nullptr, std::memory_order_seq_cst);
     qph.release();
 }
 

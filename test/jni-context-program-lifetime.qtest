@@ -14,8 +14,10 @@
 # Each case runs test/jni-context-program-lifetime-child.q in a new process, as the module is shut down when the
 # process exits.  A Java thread (org.qore.jni.test.ContextProgramLifetimeProbe) with no Qore Program context calls
 # get_script_path(), which runs in the global context Program and returns its script path; in the "held" case, a debug
-# build of the module holds the thread there once it has obtained the Program and its jni data, until the module's
-# shutdown releases it (Jni::dbg_jni_set_context_program_hook(), Jni::dbg_jni_set_context_program_wait_hook()).  The
+# build of the module holds the thread there once it has obtained the Program and its jni data
+# (Jni::dbg_jni_set_context_program_hook()); the module's shutdown releases it once it has seen that the thread holds
+# the Program, before it waits for it (Jni::dbg_jni_set_context_program_wait_hook()), so the thread uses the Program
+# while the shutdown waits; without the hold, the thread would be released only after the deletion.  The
 # thread calls the function again between the deletion of the Program and the destruction of the JVM
 # (Jni::dbg_jni_set_shutdown_window_hook()), which fails, as no global context Program exists then (qore#6827).  With
 # QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT set, the module prints the number of global context Programs created and
@@ -48,6 +50,9 @@ class JniContextProgramLifetimeTest inherits QUnit::Test {
 
     heldCase() {
         string out = checkCase("held");
+        # the shutdown saw that the thread held the Program, and released it before waiting for it; had it not seen
+        # the thread, the thread would have been released only after the deletion, by the shutdown window hook
+        assertEq("probe: released by: release", getLine(out, "probe: released by: "), out);
         # the thread obtained the Program before the shutdown started, and could use it until its call returned
         assertEq(FirstOk, getLine(out, "probe: first: "), out);
         # a call made once the Program is gone gets the error, and no Program
@@ -56,6 +61,7 @@ class JniContextProgramLifetimeTest inherits QUnit::Test {
 
     unheldCase() {
         string out = checkCase("unheld");
+        assertEq("probe: released by: none", getLine(out, "probe: released by: "), out);
         assertEq(FirstOk, getLine(out, "probe: first: "), out);
         assertRegex(ShutdownError, getLine(out, "probe: second: "), out);
     }
