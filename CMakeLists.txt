@@ -149,6 +149,33 @@ if(QORE_JNI_HAVE_GENERIC_CLASS_TYPES)
 endif()
 message(STATUS "Qore generic class type API support: ${QORE_JNI_HAVE_GENERIC_CLASS_TYPES}")
 
+# Qore #6419 changed qore_type_get_type_arguments() within the unreleased module API 2.3 from returning a
+# "const type_vec_t*" to copying the arguments to a caller's type_vec_t and returning bool; the module API version
+# is the same for both forms and Qore defines no feature macro, so the form is detected by compiling a call
+if(QORE_JNI_HAVE_GENERIC_CLASS_TYPES)
+    include(CheckCXXSourceCompiles)
+    set(_save_CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES}")
+    set(_save_CMAKE_REQUIRED_LIBRARIES "${CMAKE_REQUIRED_LIBRARIES}")
+    set(CMAKE_REQUIRED_INCLUDES ${QORE_INCLUDE_DIRS})
+    set(CMAKE_REQUIRED_LIBRARIES ${QORE_LIBRARY})
+    check_cxx_source_compiles("
+#include <qore/Qore.h>
+
+int main() {
+    const QoreTypeInfo* ti = nullptr;
+    type_vec_t args;
+    bool rv = qore_type_get_type_arguments(ti, args);
+    return rv ? 0 : 1;
+}
+" QORE_JNI_TYPE_ARGS_BY_REF)
+    set(CMAKE_REQUIRED_INCLUDES "${_save_CMAKE_REQUIRED_INCLUDES}")
+    set(CMAKE_REQUIRED_LIBRARIES "${_save_CMAKE_REQUIRED_LIBRARIES}")
+    if(QORE_JNI_TYPE_ARGS_BY_REF)
+        add_definitions(-DQORE_JNI_TYPE_ARGS_BY_REF=1)
+    endif()
+    message(STATUS "Qore type arguments copied to a caller's vector (#6419): ${QORE_JNI_TYPE_ARGS_BY_REF}")
+endif()
+
 if(DEFINED QORE_HAVE_COLUMNAR_RESULT_V2)
     set(QORE_JNI_HAVE_COLUMNAR_RESULT_V2 ${QORE_HAVE_COLUMNAR_RESULT_V2})
 else()
