@@ -26,6 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
@@ -122,6 +125,14 @@ public class GenericServer {
     private final Hash schemaSnapshot = new Hash();
     private volatile boolean started;
 
+    // test hook (see holdPortReleaseForTest()): the hold armed for the next listener channel closed, the hold last
+    // armed, and whether a closed listener channel took the armed hold
+    private static final AtomicReference<CountDownLatch> portReleaseHoldArmed = new AtomicReference<>();
+    private static volatile CountDownLatch portReleaseHold;
+    private static volatile boolean portReleaseHeld;
+    // the bound of a test hold, which a test that fails before releasing it does not hold forever
+    private static final long PORT_RELEASE_HOLD_TIMEOUT_SECONDS = 60;
+
     /** Creates a server without a runtime callback dispatcher. */
     public GenericServer(Map<String, Object> options) throws Exception {
         this(options, null);
@@ -217,6 +228,51 @@ public class GenericServer {
         }
     }
 
+    /** Test hook: holds the release of the next OS-assigned port whose listener channel is closed
+
+        The event loop that serves the listener is held right after the listener's channel is closed, before the
+        channel releases the port, until releasePortReleaseHoldForTest() is called (or for at most 60 seconds); this
+        lets a test check deterministically that stop() returns only once the port is released.  Not for production
+        use.
+    */
+    public static void holdPortReleaseForTest() {
+        CountDownLatch hold = new CountDownLatch(1);
+        portReleaseHeld = false;
+        portReleaseHold = hold;
+        portReleaseHoldArmed.set(hold);
+    }
+
+    /** Test hook: returns true if a listener channel closed since holdPortReleaseForTest() took the hold */
+    public static boolean isPortReleaseHeldForTest() {
+        return portReleaseHeld;
+    }
+
+    /** Test hook: releases a hold made by holdPortReleaseForTest(), if any */
+    public static void releasePortReleaseHoldForTest() {
+        portReleaseHoldArmed.set(null);
+        CountDownLatch hold = portReleaseHold;
+        if (hold != null) {
+            hold.countDown();
+        }
+    }
+
+    // holds the event loop of the given closed listener channel if a test armed a hold
+    private static void holdPortRelease(io.netty.channel.Channel channel) {
+        CountDownLatch hold = portReleaseHoldArmed.getAndSet(null);
+        if (hold == null) {
+            return;
+        }
+        portReleaseHeld = true;
+        // queued, so the close completes first, and run before the channel is deregistered, which releases the port
+        channel.eventLoop().execute(() -> {
+            try {
+                hold.await(PORT_RELEASE_HOLD_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+    }
+
     private OpcUaServer createServer() {
         MemoryCertificateQuarantine quarantine = new MemoryCertificateQuarantine();
         DefaultCertificateManager certificateManager = new DefaultCertificateManager(quarantine);
@@ -256,7 +312,7 @@ public class GenericServer {
                     throw new IllegalStateException("the reserved port " + port + " was released");
                 }
                 OpcTcpServerTransportConfig transportConfig = OpcTcpServerTransportConfig.newBuilder().build();
-                channels.add(new ServerBootstrap()
+                io.netty.channel.Channel listenerChannel = new ServerBootstrap()
                     .channelFactory(() -> new NioServerSocketChannel(l))
                     .group(transportConfig.getEventLoop())
                     .childHandler(new ChannelInitializer<SocketChannel>() {
@@ -267,7 +323,9 @@ public class GenericServer {
                                 transportConfig, context, TransportProfile.TCP_UASC_UABINARY));
                         }
                     })
-                    .register().sync().channel());
+                    .register().sync().channel();
+                listenerChannel.closeFuture().addListener(f -> holdPortRelease(listenerChannel));
+                channels.add(listenerChannel);
             }
 
             @Override
