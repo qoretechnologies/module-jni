@@ -273,6 +273,8 @@ Env::Env(bool set_context) {
 
    bool new_attach;
    env = Jvm::attachAndGetEnv(new_attach);
-   if (set_context && new_attach)
-      JniExternalProgramData::setContext(*this);
+   if (set_context && new_attach) {
+      // does not create the global Java context Program once the module's shutdown has started (qore#6799)
+      JniExternalProgramData::setAttachContext(*this);
+   }
 }

@@ -35,6 +35,11 @@
       reference to it, so replacing it could free it during the call; it now runs through a reference that is
       released when it returns, and an exception raised by that release (ex: in the destructor of an object that only
       the replaced callback held) is raised to the Java code that created the object (qore#6790)
+    - fixed a memory leak at the module's shutdown when the main thread was never attached to the JVM (all jni work
+      ran in other threads): deleting the module's global Java context Program attached the main thread to the JVM,
+      and setting the Java context of that new attachment created the global context Program again, which was never
+      deleted; a thread that is newly attached to the JVM once the module's shutdown has started, outside a Program
+      with the module's data, now gets no Java context (qore#6799)
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a
