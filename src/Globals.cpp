@@ -876,7 +876,14 @@ static jlong JNICALL java_api_init_qore(JNIEnv* jenv, jobject obj) try {
         assert(Globals::bootstrap);
         // set current classloader
         env.callVoidMethod(Globals::syscl, Globals::methodQoreURLClassLoaderSetContext, nullptr);
-        return reinterpret_cast<jlong>(Globals::getJavaContextProgram());
+        QoreProgram* pgm = Globals::getJavaContextProgram();
+        if (!pgm) {
+            // no global context Program exists during the module's shutdown
+            jni_throw_runtime_exception(*env, "the jni module is being shut down; no Program context is "
+                "available");
+            return 0;
+        }
+        return reinterpret_cast<jlong>(pgm);
     } catch (Exception& e) {
         jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return 0;
@@ -2804,10 +2811,11 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
         // caller's loader is needed when constructing Java subclasses of Qore classes.
         QoreProgram* pgm = jni_get_program_context();
         if (!pgm) {
-            pgm = Globals::getJavaContextProgram();
+            // raises an exception during the module's shutdown, when no global context Program exists
+            jni_get_context_unconditional(pgm);
         }
         GeneratedBindingContext binding(class_handle, GeneratedBindingKind::Class, &xsink);
-        if (!pgm || reserved_method || reserved_variant) {
+        if (reserved_method || reserved_variant) {
             throw std::runtime_error("Invalid context or constructor binding; regenerate the class");
         }
         const QoreClass* qc = binding->cls;
@@ -4515,7 +4523,12 @@ bool Globals::init() {
         printd(5, "Globals::init() creating syscl\n");
         jmethodID ctorQoreURLClassLoaderSys = env.getMethod(classQoreURLClassLoader, "<init>", "(J)V");
         jvalue jarg;
-        jarg.j = (jlong)Globals::createJavaContextProgram();
+        QoreProgram* pgm = Globals::createJavaContextProgram();
+        if (!pgm) {
+            // no global context Program is created once the module's shutdown has started
+            throw BasicException("the jni module is being shut down; it cannot be initialized");
+        }
+        jarg.j = (jlong)pgm;
         printd(5, "Global syscl pgm: %p\n", jarg.j);
         syscl = env.newObject(classQoreURLClassLoader, ctorQoreURLClassLoaderSys, &jarg).makeGlobal();
 
@@ -5161,13 +5174,23 @@ Type Globals::getType(jclass cls) {
     return Type::Reference;
 }
 
+std::recursive_mutex& Globals::getContextLock() {
+    static std::recursive_mutex* lock = new std::recursive_mutex;
+    return *lock;
+}
+
 jlong Globals::getContextProgram(jobject new_syscl, bool& created) {
     created = false;
 
+    std::lock_guard<std::recursive_mutex> guard(getContextLock());
     if (!qph) {
-        createJavaContextProgram();
+        QoreProgram* pgm = createJavaContextProgram();
+        if (!pgm) {
+            // the module is being shut down
+            return 0;
+        }
 
-        printd(5, "Globals::getContextProgram() new_sycl: %p syscl: %p pgm: %p\n", new_syscl, (jobject)syscl, **qph);
+        printd(5, "Globals::getContextProgram() new_sycl: %p syscl: %p pgm: %p\n", new_syscl, (jobject)syscl, pgm);
         if (new_syscl && !syscl) {
             syscl = GlobalReference<jobject>::fromLocal(new_syscl);
             created = true;
@@ -5178,7 +5201,13 @@ jlong Globals::getContextProgram(jobject new_syscl, bool& created) {
 }
 
 QoreProgram* Globals::createJavaContextProgram() {
+    std::lock_guard<std::recursive_mutex> guard(getContextLock());
     if (!qph) {
+        // the global context Program is deleted when the module's shutdown starts (clearGlobalContext()), and a
+        // Program created after that would never be deleted
+        if (isShuttingDown()) {
+            return nullptr;
+        }
         try {
             // create global QoreProgram object
             qph.reset(new QoreProgramHelper(PO_NEW_STYLE, getGlobalXsink()));
@@ -5210,14 +5239,30 @@ QoreProgram* Globals::createJavaContextProgram() {
 }
 
 QoreProgram* Globals::getJavaContextProgram() {
-    QoreProgram* rv = qph ? **qph : nullptr;
-    if (rv) {
-        return rv;
-    }
-
-    static QoreThreadLock jcl;
-    AutoLocker al(jcl);
+    // createJavaContextProgram() reads qph under the lock, as clearGlobalContext() can release it on another thread
     return createJavaContextProgram();
+}
+
+void Globals::clearGlobalContext() {
+    std::unique_ptr<QoreProgramHelper> old;
+    {
+        std::lock_guard<std::recursive_mutex> guard(getContextLock());
+        jni_shutting_down.store(true, std::memory_order_release);
+        old = std::move(qph);
+    }
+    if (old) {
+        old.reset();
+#ifdef DEBUG
+        dbg_context_programs_deleted.fetch_add(1, std::memory_order_relaxed);
+#endif
+    }
+    getGlobalXsink().handleExceptions();
+}
+
+void Globals::abandonGlobalContext() {
+    std::lock_guard<std::recursive_mutex> guard(getContextLock());
+    jni_shutting_down.store(true, std::memory_order_release);
+    qph.release();
 }
 
 QoreJniStackLocationHelper::QoreJniStackLocationHelper() {

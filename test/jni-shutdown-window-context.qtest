@@ -26,9 +26,10 @@
 
 class JniShutdownWindowContextTest inherits QUnit::Test {
     public {
-        #! the Java exception that a call from Java raises during the module's shutdown
-        const ShutdownError = "^probe: org\\.qore\\.jni\\.QoreExceptionWrapper: JNI-ERROR: the jni module is being "
-            "shut down";
+        #! the Java exception that a call from Java raises during the module's shutdown (the native method's handler
+        #! raises a java.lang.Error, as no Qore exception can be raised in Java once the module's shutdown has started)
+        const ShutdownError = "^probe: java\\.lang\\.Error: cannot raise the Qore exception of a JNI native method in "
+            "Java; the Qore library or the jni module has been shut down$";
     }
 
     constructor() : QUnit::Test("JNI module shutdown window context Program", "1.0") {

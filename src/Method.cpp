@@ -360,10 +360,8 @@ QoreValue BaseMethod::invoke(jobject object, const QoreListNode* args, QoreProgr
                     return JavaToQore::convert(env.callDoubleMethod(object, id, jargs.data()));
                 case Type::Reference: {
                     if (!pgm) {
-                        pgm = jni_get_program_context();
-                        if (!pgm) {
-                            pgm = Globals::getJavaContextProgram();
-                        }
+                        // raises an exception during the module's shutdown, when no global context Program exists
+                        jni_get_context_unconditional(pgm);
                     }
                     return JavaToQore::convertToQore(env.callObjectMethod(object, id, jargs.data()), pgm, false);
                 }

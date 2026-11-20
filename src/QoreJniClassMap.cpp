@@ -250,18 +250,26 @@ JniExternalProgramData* jni_get_context_unconditional() {
     return jni_get_context_unconditional(pgm);
 }
 
-JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm) {
+JniExternalProgramData* jni_get_context_or_global(QoreProgram*& pgm) {
     JniExternalProgramData* jpc = jni_get_context(pgm);
     if (!jpc) {
         pgm = Globals::getJavaContextProgram();
         if (!pgm) {
-            // Can happen when a Java callback fires during or after JNI
-            // module shutdown (e.g. ActiveMQ/JMS listener thread); the
-            // global context program has been cleared by clearGlobalContext()
+            // a Java thread can call into Qore during the module's shutdown (ex: an ActiveMQ/JMS listener thread),
+            // after the global context Program has been deleted by Globals::clearGlobalContext(), which is not
+            // created again then
             return nullptr;
         }
         jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
         assert(jpc);
+    }
+    return jpc;
+}
+
+JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm) {
+    JniExternalProgramData* jpc = jni_get_context_or_global(pgm);
+    if (!jpc) {
+        throw BasicException("the jni module is being shut down; no Program context is available");
     }
     return jpc;
 }
@@ -274,11 +282,7 @@ static JniExternalProgramData* jni_get_create_program_data(QoreProgram*& pgm) {
         assert(jpc);
         return jpc;
     }
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
-    if (!jpc) {
-        throw BasicException("no Program context is available for the jni module; it is being shut down");
-    }
-    return jpc;
+    return jni_get_context_unconditional(pgm);
 }
 
 JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm) {
@@ -653,7 +657,9 @@ public:
         if (!Globals::methodQoreURLClassLoaderSetContext || !Globals::methodQoreURLClassLoaderGetCurrent) {
             return;
         }
-        JniExternalProgramData* ctx = jpc ? jpc : jni_get_context_unconditional();
+        QoreProgram* pgm = nullptr;
+        // no context is set during the module's shutdown, when no global context Program exists
+        JniExternalProgramData* ctx = jpc ? jpc : jni_get_context_or_global(pgm);
         if (!ctx || !ctx->getClassLoader()) {
             return;
         }

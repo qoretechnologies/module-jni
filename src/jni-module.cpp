@@ -435,6 +435,10 @@ QoreStringNode* jni_module_init_finalize(bool system) {
 
     try {
         QoreProgram* pgm = Globals::createJavaContextProgram();
+        if (!pgm) {
+            // no global context Program is created once the module's shutdown has started
+            throw jni::BasicException("the jni module is being shut down; it cannot be initialized");
+        }
         printd(5, "jni_module_init_finalize() pgm: %p\n", pgm);
         // issue #4006: ensure there is a program context for initialization
         QoreProgramContextHelper pgm_ctx(pgm);
