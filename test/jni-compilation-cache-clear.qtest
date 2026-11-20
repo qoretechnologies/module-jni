@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# Clearing a Program's compilation cache (as a Java compiler does when it ends) is serialized with code generation for
+# the Program, without waiting for its code generation lock (qore#6855): the clear did not take the lock, so a class
+# that code generation stored after a clear made during the generation stayed in the cleared cache.  A debug gate
+# holds code generation, with its lock held, before it stores a generated class, while another thread clears the
+# cache.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+
+%exec-class JniCompilationCacheClearTest
+
+#! The bound on a blocking wait: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+public class JniCompilationCacheClearTest inherits QUnit::Test {
+    constructor() : Test("JniCompilationCacheClearTest", "1.0") {
+        addTestCase("a clear made while another thread generates code applies to the class it stores",
+            \clearDuringGenerationTest());
+        addTestCase("a clear made while no thread generates code applies at once", \clearIdleTest());
+        set_return_value(main());
+    }
+
+    #! a Program that gives a Java method objects of its own classes, so that their Java classes are generated
+    private Program getProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%requires jni
+%module-cmd(jni) import java.util.ArrayList
+class First {
+}
+class Second {
+}
+string sub run(string cls) {
+    object o = create_object(cls);
+    ArrayList l();
+    l.add(o);
+    return l.toString();
+}
+", "cache-clear");
+        return p;
+    }
+
+    #! returns the size of the Program's compilation cache, or skips the case in a release build
+    private int cacheSize(Program p) {
+        try {
+            return call_function("Jni::org::qore::jni::dbg_jni_compilation_cache_size", p);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION") {
+                testSkip("the jni module's debug functions require a debug build");
+            }
+            rethrow;
+        }
+    }
+
+    clearDuringGenerationTest() {
+        Program p = getProgram();
+        # the cache of a new Program holds the entries that its jni data took from its parent (qore#6787)
+        int before = cacheSize(p);
+        Queue cleared();
+        # runs on the thread that generates the Java class of First, with its code generation lock held, before
+        # the class is stored: another thread clears the cache, which must not wait for that lock
+        code gate = sub () {
+            Counter done(1);
+            background sub () {
+                on_exit done.dec();
+                cleared.push(call_function("Jni::org::qore::jni::dbg_jni_clear_compilation_cache", p));
+            }();
+            assertEq(0, done.waitForZero(HangGuard), "the clear ended while code generation held its lock");
+        };
+        call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", gate, "code-gen-save");
+        on_exit call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", NOTHING, "code-gen-save");
+        assertRegex("First", p.callFunction("run", "First"), "the Java class of First was generated");
+        assertEq(1, cleared.size(), "the gate ran");
+        assertGe(0, before);
+        assertTrue(cleared.get(), "the Program has jni data");
+        # the clear came during the generation: the class it stored is not kept
+        assertEq(0, cacheSize(p), "the class stored after the clear was requested is not in the cache");
+        # the class is generated again, and stored
+        assertRegex("First", p.callFunction("run", "First"), "the Java class of First is used again");
+        assertEq(1, cacheSize(p), "the class is stored again");
+    }
+
+    clearIdleTest() {
+        Program p = getProgram();
+        int before = cacheSize(p);
+        assertRegex("First", p.callFunction("run", "First"));
+        assertRegex("Second", p.callFunction("run", "Second"));
+        assertEq(before + 2, cacheSize(p), "both classes are stored");
+        assertTrue(call_function("Jni::org::qore::jni::dbg_jni_clear_compilation_cache", p));
+        assertEq(0, cacheSize(p), "the clear applies at once");
+        assertRegex("Second", p.callFunction("run", "Second"), "the Java class of Second is used again");
+        assertEq(1, cacheSize(p));
+    }
+}
