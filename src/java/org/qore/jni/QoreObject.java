@@ -28,6 +28,10 @@ public class QoreObject extends QoreObjectBase {
     }
 
     //! returns true if the object is an instance of the given class
+    /** The class is looked up in the %Qore Program context of the calling thread; on a thread with none, such as a
+        Java thread that Java started, in the Program of the object; a class that is not found gives \c false.  It
+        can be called on any thread.
+    */
     public boolean instanceOf(String class_name) {
         return instanceOf0(obj, class_name);
     }
