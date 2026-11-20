@@ -4922,8 +4922,9 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
     // setup classpath
     TempString classpath(SystemEnvironment::get("QORE_JNI_CLASSPATH"));
     if (classpath) {
-        // the variable is in the default encoding
-        addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)));
+        // the variable is in the default encoding; an error is thrown to the code that creates the data, which
+        // fails (qore#6778, qore#6779)
+        addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)), "QORE_JNI_CLASSPATH");
     }
     jni_pgm_data_register(pgm);
 }
@@ -5082,35 +5083,57 @@ void JniExternalProgramData::initDynamicApi(Env& env) {
         (jclass)Globals::classQoreJavaClassBase);
 }
 
-void JniExternalProgramData::addClasspath(Env& env, jstring path) {
+//! Throws the error of a classpath that a Java exception kept from being added (qore#6779)
+/** The pending Java exception is described as text, with no Program context: the classpath of the
+    \c QORE_JNI_CLASSPATH environment variable is added while the jni data of a Program is created, before it can
+    be found, so the Java exception cannot be converted to a %Qore exception with its Java object there (qore#6778)
+
+    @param env the JNI environment
+    @param path the classpath
+    @param source the input that the classpath comes from, for the error
+    @param e the Java exception, which is cleared
+
+    @throw JNI-CLASSPATH-ERROR always
+*/
+static void jni_throw_classpath_error(Env& env, jstring path, const char* source, JavaException& e) {
+    SimpleRefHolder<QoreStringNode> jdesc(e.toString());
+    // the classpath as Java has it, which is the string that was checked and used
+    Env::GetStringUtfChars cp(env, path);
+    std::string desc(cp.c_str(), cp.size());
+    throw QoreJniException("JNI-CLASSPATH-ERROR", "%s: cannot add classpath '%s': %s", source,
+        jni_utf8_to_default(desc.c_str()).c_str(), jni_utf8_to_default(jdesc->c_str()).c_str());
+}
+
+void JniExternalProgramData::addClasspath(Env& env, jstring path, const char* source) {
     jvalue jarg;
     jarg.l = path;
+#ifdef DEBUG
+    // a test fail point: the class loader raises a Java exception (a NullPointerException for a null classpath)
+    if (dbg_jni_fail_at(DbgJniFailPoint::Classpath)) {
+        jarg.l = nullptr;
+    }
+#endif
     try {
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddPath, &jarg);
-    } catch (jni::Exception& e) {
-        // display exception info on the console as an unhandled exception
-        ExceptionSink xsink;
-        e.convert(&xsink);
+    } catch (JavaException& e) {
+        jni_throw_classpath_error(env, path, source, e);
     }
 }
 
-void JniExternalProgramData::addParentClasspath(Env& env, jstring path) {
+void JniExternalProgramData::addParentClasspath(Env& env, jstring path, const char* source) {
     jvalue jarg;
     jarg.l = path;
+#ifdef DEBUG
+    // a test fail point: the class loader raises a Java exception (a NullPointerException for a null classpath)
+    if (dbg_jni_fail_at(DbgJniFailPoint::Classpath)) {
+        jarg.l = nullptr;
+    }
+#endif
+    // with no parent QoreURLClassLoader (ex: the bootstrap Program), the classpath is added to this class loader
     try {
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddParentPath, &jarg);
-    } catch (jni::Exception& e) {
-        // fallback: if the parent classloader is not a QoreURLClassLoader
-        // (e.g., PlatformClassLoader for the bootstrap program), add to this
-        // classloader directly
-        e.ignore();
-        try {
-            env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderAddPath, &jarg);
-        } catch (jni::Exception& e2) {
-            // display exception info on the console as an unhandled exception
-            ExceptionSink xsink;
-            e2.convert(&xsink);
-        }
+    } catch (JavaException& e) {
+        jni_throw_classpath_error(env, path, source, e);
     }
 }
 

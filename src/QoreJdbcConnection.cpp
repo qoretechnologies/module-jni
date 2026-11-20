@@ -487,7 +487,7 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
             if (classpath == arg.c_str()) {
                 return 0;
             }
-            jpc->addClasspath(env, jcp);
+            jpc->addClasspath(env, jcp, "jdbc classpath option");
             classpath = arg.c_str();
 
             // try to load new drivers

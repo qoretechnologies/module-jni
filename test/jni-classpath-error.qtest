@@ -1,0 +1,532 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# Classpath errors:
+# - qore#6777: the file name pattern of a wildcard classpath entry was used as a regular expression in which only "*"
+#   was translated: "a[*.jar" raised a PatternSyntaxException, which was printed as an unhandled exception, and the
+#   entry was dropped, and "a.*.jar" also matched "aX1.jar".  Only "*" is a wildcard now; every other character
+#   matches itself, both where the entry is used and where the sandbox checks it
+# - qore#6778: a Java exception raised while the QORE_JNI_CLASSPATH environment variable was processed was converted
+#   before the Program's jni data was registered, which aborted a debug build in an assertion; it is now a module
+#   initialization error
+# - qore#6779: a Java exception raised while a classpath was added was printed as an unhandled exception, and the
+#   classpath was silently ineffective; the add-classpath and add-relative-classpath module commands, their global-*
+#   forms and the classpath option of the jdbc driver now raise JNI-CLASSPATH-ERROR, and the module's initialization
+#   from QORE_JNI_CLASSPATH fails (fail closed)
+#
+# With the regular expression fixed, no classpath entry raises a Java exception where it is added: the errors of
+# qore#6778 and qore#6779 are made with the "classpath" fail point of Jni::org::qore::jni::dbg_jni_fail_point() (and
+# the QORE_JNI_DBG_FAIL_POINT environment variable for the module's initialization), which a debug build of the module
+# has; those cases are skipped otherwise.  The cases for QORE_JNI_CLASSPATH run test/jni-classpath-error-child.q in a
+# child process, as the process ended before the fix.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires QUnit
+%requires FsUtil
+%requires jni
+%module-cmd(jni) import java.net.URLClassLoader
+%module-cmd(jni) import java.net.URL
+%module-cmd(jni) import java.io.File
+
+%exec-class JniClasspathErrorTest
+
+class JniClasspathErrorTest inherits QUnit::Test {
+    public {
+        #! the name of the test jar, in the directory of this script
+        const TestJarName = "qore-jni-test.jar";
+
+        #! a class that is only in the test jar
+        const TestClass = "org.qore.jni.test.Utf8Boundary";
+
+        #! the files made in the test directory, each a copy of the test jar
+        const JarFiles = (
+            "a[1.jar", "a(1.jar", "a+1.jar", "aa1.jar", "a.1.jar", "aX1.jar", "a?1.jar", "a\\E1.jar", "a{1.jar",
+            "a^1.jar", "a|1.jar", "a1.jar", "b.jar",
+        );
+
+        #! the wildcard patterns, each with the files that it matches
+        /** a pattern used as a regular expression either raised a PatternSyntaxException or matched other files
+        */
+        const Patterns = {
+            # an unclosed character class, an unclosed group, an unclosed repetition
+            "a[*.jar": ("a[1.jar",),
+            "a(*.jar": ("a(1.jar",),
+            "a{*.jar": ("a{1.jar",),
+            # quantifiers: "a+" also matched "aa1.jar", and "a?" every file
+            "a+*.jar": ("a+1.jar",),
+            "a?*.jar": ("a?1.jar",),
+            # "." matched any character
+            "a.*.jar": ("a.1.jar",),
+            # anchors and alternation
+            "a^*.jar": ("a^1.jar",),
+            "a|*.jar": ("a|1.jar",),
+            # the end of a quoted sequence
+            "a\\E*.jar": ("a\\E1.jar",),
+            # a wildcard can match an empty string, and more than one wildcard
+            "a*1.jar": ("a(1.jar", "a+1.jar", "a.1.jar", "a1.jar", "a?1.jar", "aX1.jar", "a[1.jar", "a\\E1.jar",
+                "a^1.jar", "aa1.jar", "a{1.jar", "a|1.jar"),
+            "*[*.jar": ("a[1.jar",),
+            "a*.*.jar": ("a.1.jar",),
+            # no wildcard: the file itself
+            "a[1.jar": ("a[1.jar",),
+            # no matching file
+            "a]*.jar": (),
+        };
+
+        #! the code that lists the classpath of a Program's own class loader
+        const LoaderSource = "%requires jni
+%module-cmd(jni) import java.net.URLClassLoader
+%module-cmd(jni) import java.net.URL
+list<string> sub loader_urls() {
+    list<string> rv = ();
+    foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(
+            Jni::org::qore::jni::get_class_loader()).getURLs()) {
+        rv += url.toString();
+    }
+    return rv;
+}
+list<string> sub chain_urls() {
+    list<string> rv = ();
+    for (*Jni::java::lang::ClassLoader cl = Jni::org::qore::jni::get_class_loader(); cl; cl = cl.getParent()) {
+        if (cl instanceof Jni::java::net::URLClassLoader) {
+            foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(cl).getURLs()) {
+                rv += url.toString();
+            }
+        }
+    }
+    return rv;
+}
+";
+
+        #! the source of a sandboxed Program that adds a classpath and imports the class of the test jar
+        const SandboxSource = "%requires jni
+%module-cmd(jni) add-classpath %s
+%module-cmd(jni) import " + TestClass + "
+%module-cmd(jni) import java.net.URLClassLoader
+%module-cmd(jni) import java.net.URL
+hash<auto> sub map_of() {
+    return Utf8Boundary::mapOf(\"key\", 1);
+}
+list<string> sub loader_urls() {
+    list<string> rv = ();
+    foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(
+            Jni::org::qore::jni::get_class_loader()).getURLs()) {
+        rv += url.toString();
+    }
+    return rv;
+}
+";
+
+        #! the description of the error of a classpath that the fail point keeps from being added
+        const FailPointDesc = "cannot add classpath '%s': java.lang.NullPointerException";
+    }
+
+    private {
+        #! the temporary directory with the test jars, a subdirectory "rel" with "a[1.jar", and an empty "other"
+        TmpDir tmp("jni-classpath-error-");
+
+        #! the canonical path of the temporary directory, as the class loader adds it
+        string dir;
+
+        #! the reason the fail point cases are skipped, if the module is not a debug build
+        *string skip_reason;
+    }
+
+    constructor() : QUnit::Test("JNI classpath errors", "1.0") {
+        try {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse("%requires jni\nnothing sub t() { Jni::org::qore::jni::dbg_jni_fail_point(); }", "dbg");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
+                rethrow;
+            }
+            skip_reason = ex.desc;
+        }
+
+        addTestCase("regression: wildcard patterns are matched literally (qore#6777)", \wildcardTest());
+        addTestCase("regression: wildcard patterns of add-relative-classpath (qore#6777)", \relativeWildcardTest());
+        addTestCase("regression: wildcard patterns of global-add-classpath (qore#6777)", \globalWildcardTest());
+        addTestCase("regression: a wildcard pattern of the jdbc classpath option (qore#6777)", \jdbcWildcardTest());
+        addTestCase("regression: the sandbox checks a wildcard pattern where it is used (qore#6777)",
+            \sandboxTest());
+        addTestCase("regression: a wildcard pattern in QORE_JNI_CLASSPATH (qore#6777, qore#6778)", \envWildcardTest());
+        addTestCase("regression: add-classpath raises a classpath error (qore#6779)", \addClasspathErrorTest());
+        addTestCase("regression: add-relative-classpath raises a classpath error (qore#6779)",
+            \addRelativeClasspathErrorTest());
+        addTestCase("regression: global-add-classpath raises a classpath error (qore#6779)",
+            \globalAddClasspathErrorTest());
+        addTestCase("regression: global-add-relative-classpath raises a classpath error (qore#6779)",
+            \globalAddRelativeClasspathErrorTest());
+        addTestCase("regression: a parse directive raises a classpath error (qore#6779)", \parseErrorTest());
+        addTestCase("regression: the jdbc classpath option raises a classpath error (qore#6779)", \jdbcErrorTest());
+        addTestCase("regression: a classpath error in QORE_JNI_CLASSPATH fails the module's initialization "
+            "(qore#6778, qore#6779)", \envErrorTest());
+        addTestCase("regression: a classpath error in QORE_JNI_CLASSPATH fails the module's initialization in a "
+            "Program (qore#6779)", \envNsInitErrorTest());
+        addTestCase("negative: an unknown fail point in QORE_JNI_DBG_FAIL_POINT", \envBadPointTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        binary jar = ReadOnlyFile::readBinaryFile(get_script_dir() + DirSep + TestJarName);
+        foreach string d in (("rel", "other")) {
+            mkdir(tmp.path + DirSep + d, 0700);
+        }
+        foreach string name in (JarFiles + ("rel" + DirSep + "a[1.jar",)) {
+            File f();
+            f.open2(tmp.path + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(jar);
+            f.close();
+        }
+        dir = (new Jni::java::io::File(tmp.path)).getCanonicalPath();
+    }
+
+    #! each pattern adds the files that it matches literally, with no exception
+    wildcardTest() {
+        foreach hash<auto> i in (Patterns.pairIterator()) {
+            Program p = getProgram();
+            p.issueModuleCmd("jni", "add-classpath " + dir + DirSep + i.key);
+            assertEq(sort(i.value), jarNames(p.callFunction("loader_urls"), dir), i.key);
+        }
+        # the class of a jar added by a pattern is loaded
+        Program p = getProgram();
+        p.issueModuleCmd("jni", "add-classpath " + dir + DirSep + "a[*.jar");
+        p.issueModuleCmd("jni", "import " + TestClass);
+    }
+
+    #! the pattern of a relative classpath is resolved against the Program's script directory
+    relativeWildcardTest() {
+        Program p = getProgram(dir + DirSep + "rel" + DirSep + "script.q");
+        p.issueModuleCmd("jni", "add-relative-classpath a[*.jar");
+        assertEq(("a[1.jar",), jarNames(p.callFunction("loader_urls"), dir + DirSep + "rel"));
+        p = getProgram(dir + DirSep + "script.q");
+        p.issueModuleCmd("jni", "add-relative-classpath a.*.jar");
+        assertEq(("a.1.jar",), jarNames(p.callFunction("loader_urls"), dir));
+    }
+
+    #! the global classpath is the classpath of every Program
+    globalWildcardTest() {
+        getProgram().issueModuleCmd("jni", "global-add-classpath " + dir + DirSep + "a+*.jar");
+        assertEq(("a+1.jar",), jarNames(getProgram().callFunction("chain_urls"), dir));
+    }
+
+    #! the classpath option is added to this Program's class loader when a connection is opened
+    /** this Program's classpath can have jars of the test directory that other cases added globally: only the jars
+        that the option adds are checked
+    */
+    jdbcWildcardTest() {
+        list<string> before = jarNames(getThisChainUrls(), dir);
+        Datasource ds({"type": "jdbc", "user": "u", "pass": "p", "db": "jdbc:qore-none://x",
+            "options": {"classpath": dir + DirSep + "a(*.jar"}});
+        # no driver accepts the URL: the classpath is added before the driver is looked up
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            assertNeq("JNI-CLASSPATH-ERROR", ex.err);
+        }
+        assertEq(("a(1.jar",), (select jarNames(getThisChainUrls(), dir), !inlist($1, before)));
+    }
+
+    #! a pattern is checked against the sandbox in its directory, where the files that it matches are read
+    sandboxTest() {
+        if (!(new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
+            testSkip("this Qore library cannot allow uncontrolled APIs in a sandbox");
+        }
+        foreach string pattern in (("a[*.jar", "a.*.jar", "a?*.jar")) {
+            string cp = dir + DirSep + pattern;
+            # allowed: the Program adds the files that the pattern matches, as it does without a sandbox, and loads
+            # the class of the test jar from them
+            hash<auto> res = sandboxResult(cp, dir);
+            assertEq("parsed: 1", res.result, pattern + ": allowed");
+            assertEq(Patterns{pattern}, res.files, pattern + ": the files added");
+            # not allowed: refused, whatever the pattern matches
+            assertEq("FILESYSTEM-ACCESS-DENIED", sandboxResult(cp, dir + DirSep + "other").result,
+                pattern + ": not allowed");
+        }
+        # the directory of the pattern is checked, not a directory that a regular expression could name
+        assertEq("FILESYSTEM-ACCESS-DENIED", sandboxResult(dir + DirSep + "rel" + DirSep + "a[*.jar",
+            dir + DirSep + "other").result, "rel: not allowed");
+        hash<auto> res = sandboxResult(dir + DirSep + "rel" + DirSep + "a[*.jar", dir + DirSep + "rel");
+        assertEq("parsed: 1", res.result, "rel: allowed");
+        assertEq(("a[1.jar",), res.files, "rel: the files added");
+    }
+
+    #! QORE_JNI_CLASSPATH with a pattern: the module is loaded, and the matching file is added; a debug build aborted
+    #! before the fix
+    envWildcardTest() {
+        hash<auto> res = runChild("env-wildcard", dir + DirSep + "a[*.jar");
+        checkChildOk(res, "env-wildcard");
+        assertEq((
+            "result: env-wildcard: the module is loaded: True",
+            "result: env-wildcard: the matching jar is added: OK",
+        ), getResults(res.out), res.out);
+    }
+
+    addClasspathErrorTest() {
+        checkDebug();
+        string cp = dir + DirSep + "a1.jar";
+        Program p = getProgram();
+        checkCommandError(p, "add-classpath", cp, cp);
+        # nothing was added
+        assertEq((), jarNames(p.callFunction("loader_urls"), dir), "nothing added");
+        # coverage: the classpath is added once the error is cleared
+        p.issueModuleCmd("jni", "add-classpath " + cp);
+        assertEq(("a1.jar",), jarNames(p.callFunction("loader_urls"), dir), "added");
+    }
+
+    addRelativeClasspathErrorTest() {
+        checkDebug();
+        Program p = getProgram(dir + DirSep + "script.q");
+        checkCommandError(p, "add-relative-classpath", "a1.jar", dir + DirSep + "a1.jar/");
+        assertEq((), jarNames(p.callFunction("loader_urls"), dir), "nothing added");
+        p.issueModuleCmd("jni", "add-relative-classpath a1.jar");
+        assertEq(("a1.jar",), jarNames(p.callFunction("loader_urls"), dir), "added");
+    }
+
+    globalAddClasspathErrorTest() {
+        checkDebug();
+        string cp = dir + DirSep + "aa1.jar";
+        checkCommandError(getProgram(), "global-add-classpath", cp, cp);
+        assertEq((), (select jarNames(getProgram().callFunction("chain_urls"), dir), $1 == "aa1.jar"),
+            "nothing added");
+        getProgram().issueModuleCmd("jni", "global-add-classpath " + cp);
+        assertEq(("aa1.jar",), (select jarNames(getProgram().callFunction("chain_urls"), dir), $1 == "aa1.jar"),
+            "added");
+    }
+
+    globalAddRelativeClasspathErrorTest() {
+        checkDebug();
+        checkCommandError(getProgram(dir + DirSep + "script.q"), "global-add-relative-classpath", "aX1.jar",
+            dir + DirSep + "aX1.jar/");
+        assertEq((), (select jarNames(getProgram().callFunction("chain_urls"), dir), $1 == "aX1.jar"),
+            "nothing added");
+        getProgram(dir + DirSep + "script.q").issueModuleCmd("jni", "global-add-relative-classpath aX1.jar");
+        assertEq(("aX1.jar",), (select jarNames(getProgram().callFunction("chain_urls"), dir), $1 == "aX1.jar"),
+            "added");
+    }
+
+    #! the error of a classpath parse directive is raised when the Program is parsed
+    parseErrorTest() {
+        checkDebug();
+        string cp = dir + DirSep + "a1.jar";
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        failClasspath();
+        *hash<ExceptionInfo> ex;
+        try {
+            p.parse("%requires jni\n%module-cmd(jni) add-classpath " + cp + "\n", "parse");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        if (!ex) {
+            fail("the parse directive raised no error");
+            return;
+        }
+        assertEq("JNI-CLASSPATH-ERROR", ex.err);
+        assertRegex("^add-classpath: " + quoteRegex(sprintf(FailPointDesc, cp)), ex.desc);
+    }
+
+    #! the classpath option raises the error when a connection is opened
+    jdbcErrorTest() {
+        checkDebug();
+        string cp = dir + DirSep + "a^1.jar";
+        Datasource ds({"type": "jdbc", "user": "u", "pass": "p", "db": "jdbc:qore-none://x",
+            "options": {"classpath": cp}});
+        failClasspath();
+        *hash<ExceptionInfo> ex;
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        if (!ex) {
+            fail("the classpath option raised no error");
+            return;
+        }
+        assertEq("JNI-CLASSPATH-ERROR", ex.err);
+        assertRegex("^jdbc classpath option: " + quoteRegex(sprintf(FailPointDesc, cp)), ex.desc);
+        assertEq((), (select jarNames(getThisChainUrls(), dir), $1 == "a^1.jar"), "nothing added");
+        # coverage: the classpath is added when the next connection is opened, as it was not added before
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> e) {
+            assertNeq("JNI-CLASSPATH-ERROR", e.err);
+        }
+        assertEq(("a^1.jar",), (select jarNames(getThisChainUrls(), dir), $1 == "a^1.jar"), "added");
+    }
+
+    #! the error fails the module's initialization, with no assertion or abort
+    envErrorTest() {
+        checkDebug();
+        string cp = dir + DirSep + "a1.jar";
+        hash<auto> res = runChild("init-error", cp, "QORE_JNI_DBG_FAIL_POINT=classpath");
+        checkChildOk(res, "init-error");
+        assertRegex("(^|\n)exception: MODULE-INIT-ERROR: JVM initialization failed: JNI-CLASSPATH-ERROR: "
+            "QORE_JNI_CLASSPATH: "
+            + quoteRegex(sprintf(FailPointDesc, cp)), res.out);
+        assertEq(("result: init-error: the module is loaded: False",), getResults(res.out), res.out);
+        # coverage: without the fail point, the module is loaded
+        res = runChild("init-error", cp);
+        checkChildOk(res, "init-error: no fail point");
+        assertEq(("result: init-error: the module is loaded: True",), getResults(res.out), res.out);
+    }
+
+    #! the error fails the initialization of the module in a Program once the module is loaded
+    envNsInitErrorTest() {
+        checkDebug();
+        string cp = dir + DirSep + "a[1.jar";
+        hash<auto> res = runChild("ns-init-error", cp);
+        checkChildOk(res, "ns-init-error");
+        assertRegex("(^|\n)exception: JNI-CLASSPATH-ERROR: QORE_JNI_CLASSPATH: "
+            + quoteRegex(sprintf(FailPointDesc, cp)), res.out);
+        assertEq((
+            "result: ns-init-error: the module is initialized in the Program: False",
+            "result: ns-init-error: without an error, the module is initialized in a Program: True",
+            "result: ns-init-error: the jar of the variable is added: OK",
+        ), getResults(res.out), res.out);
+    }
+
+    envBadPointTest() {
+        checkDebug();
+        hash<auto> res = runChild("init-error", dir, "QORE_JNI_DBG_FAIL_POINT=no-such-point");
+        checkChildOk(res, "bad point");
+        assertRegex("MODULE-INIT-ERROR.*QORE_JNI_DBG_FAIL_POINT: unknown fail point 'no-such-point'", res.out);
+    }
+
+    #! returns a new Program with the jni module and the loader_urls() and chain_urls() functions
+    private Program getProgram(*string script_path) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        if (script_path) {
+            p.setScriptPath(script_path);
+        }
+        p.parse(LoaderSource, "loader");
+        return p;
+    }
+
+    #! returns the URLs of the classpath of this Program's class loader and of its parent class loaders
+    private static list<string> getThisChainUrls() {
+        list<string> rv = ();
+        for (*Jni::java::lang::ClassLoader cl = Jni::org::qore::jni::get_class_loader(); cl; cl = cl.getParent()) {
+            if (cl instanceof Jni::java::net::URLClassLoader) {
+                foreach Jni::java::net::URL url in (cast<Jni::java::net::URLClassLoader>(cl).getURLs()) {
+                    rv += url.toString();
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! returns the sorted unique names of the jar files of the directory in the class loader URLs
+    private static list<string> jarNames(list<string> urls, string dir) {
+        hash<string, bool> names;
+        foreach string url in (urls) {
+            *string path = (url =~ x/^jar:file:(.*)!\/$/)[0];
+            if (!path) {
+                continue;
+            }
+            path = decode_url(path);
+            if (dirname(path) == dir) {
+                names{basename(path)} = True;
+            }
+        }
+        return names ? sort(keys names) : ();
+    }
+
+    #! returns the result of parsing SandboxSource for the classpath in a new Program with a sandbox that allows
+    #! reading only the given directory: "result": the error code, or "parsed: " and the result of calling the class of
+    #! the test jar; "files": the names of the jars of the test directory that the Program added
+    private hash<auto> sandboxResult(string cp, string allowed) {
+        SandboxManager sm();
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        try {
+            p.parse(sprintf(SandboxSource, cp), "sandboxed");
+        } catch (hash<ExceptionInfo> ex) {
+            return {"result": ex.err};
+        }
+        return {
+            "result": "parsed: " + p.callFunction("map_of").key,
+            "files": jarNames(p.callFunction("loader_urls"), dirname(cp)),
+        };
+    }
+
+    #! checks that the module command raises the error of the fail point and adds nothing
+    /** @param p the Program
+        @param cmd the module command
+        @param arg the argument of the command
+        @param cp the classpath that the command adds, as the error shows it
+    */
+    private checkCommandError(Program p, string cmd, string arg, string cp) {
+        failClasspath();
+        *hash<ExceptionInfo> ex;
+        try {
+            p.issueModuleCmd("jni", cmd + " " + arg);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        if (!ex) {
+            fail(cmd + " raised no error");
+            return;
+        }
+        assertEq("JNI-CLASSPATH-ERROR", ex.err, cmd);
+        assertRegex("^" + cmd + ": " + quoteRegex(sprintf(FailPointDesc, cp)), ex.desc, cmd);
+    }
+
+    #! sets the fail point that makes the class loader raise a Java exception when the next classpath is added
+    private static failClasspath() {
+        Jni::org::qore::jni::dbg_jni_fail_point("classpath");
+    }
+
+    #! runs the child with the classpath in QORE_JNI_CLASSPATH and returns its exit status and its output
+    private hash<auto> runChild(string mode, string cp, string env = "") {
+        # the variables that make the JVM print a notice on startup, or that set the JVM's arguments, are removed
+        string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "-u QORE_JNI_JVM_ARGS -u QORE_JNI_DBG_FAIL_POINT QORE_JNI_CLASSPATH=%s %s %s -b --enable-debug %s %s %s "
+            "2>&1", shellQuote(cp), env, shellQuote(QORE_ARGV[0]),
+            shellQuote(get_script_dir() + DirSep + "jni-classpath-error-child.q"), mode, shellQuote(dirname(cp)));
+        int rc;
+        string out = backquote(cmd, \rc);
+        if (m_options.verbose > 2) {
+            printf("%s: rc %d\n%s\n", mode, rc, out);
+        }
+        return {"rc": rc, "out": out};
+    }
+
+    #! checks that the child ran to its end, with no assertion or abort and no unhandled exception
+    private checkChildOk(hash<auto> res, string label) {
+        assertEq(0, res.rc, label + ": exit status: " + res.out);
+        assertRegex("(^|\n)end\n", res.out, label + ": the child ran to its end");
+        assertFalse(res.out =~ /Assertion/, label + ": an assertion failed: " + res.out);
+        assertFalse(res.out =~ /unhandled QORE System exception/, label + ": an unhandled exception was printed: "
+            + res.out);
+    }
+
+    #! returns the result lines of the child's output
+    private static list<string> getResults(string out) {
+        return select out.split("\n"), $1 =~ /^result: /;
+    }
+
+    #! skips the test case if the module is not a debug build
+    private checkDebug() {
+        if (skip_reason) {
+            testSkip("the jni module is not a debug build: %s", skip_reason);
+        }
+    }
+
+    #! returns the string quoted for a regular expression
+    private static string quoteRegex(string str) {
+        return regex_subst(str, "([\\\\^$.|?*+()\\[\\]{}])", "\\\\$1", RE_Global);
+    }
+
+    #! quotes an argument for the shell
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

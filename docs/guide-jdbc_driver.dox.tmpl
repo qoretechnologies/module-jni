@@ -381,6 +381,10 @@ foreach hash<auto> column in (result.schemaV2()) {
     initial driver is loaded, otherwise the \c java.sql.DriverManager will not see the new drivers as they were not
     present in the classpath during on-demand static initialization).
 
+    The entries of the classpath are those of the \c add-classpath module command (see @ref jniimport): an error while
+    the classpath is added is raised as \c JNI-CLASSPATH-ERROR when the connection is opened, and the classpath is
+    added again when the next connection is opened.
+
     The option adds jars to the class loader of a %Qore %Program, so it follows the rule of the \c add-classpath module
     command (see @ref jni_sandbox): sandboxed code (under a sandbox that does not allow uncontrolled APIs) and code with
     \c PO_NO_UNCONTROLLED_APIS or \c PO_NO_FILESYSTEM cannot use it (\c JNI-SANDBOX-ERROR), and its entries are checked

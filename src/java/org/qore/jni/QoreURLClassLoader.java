@@ -47,6 +47,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 //! Main ClassLoader for Java <-> %Qore and Java <-> Python integration
 /** This ClassLoader supports dynamic imports from %Qore and Java using the following special packages:
@@ -1228,17 +1229,18 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
     }
 
-    //! Adds a path to the classpath
+    //! Adds a path to the classpath of the parent class loader, the classpath that every Program shares
+    /** With no parent class loader that is a QoreURLClassLoader (ex: the class loader of the bootstrap Program, whose
+        parent is the platform class loader), the path is added to this class loader.  An error while the path is
+        added is thrown to the caller (qore#6779).
+    */
     public void addParentPath(String classpath) {
         ClassLoader parent = getParent();
-        if (parent == null) {
-            throw new RuntimeException("No parent ClassLoader present");
+        if (parent instanceof QoreURLClassLoader) {
+            ((QoreURLClassLoader)parent).addPath(classpath);
+        } else {
+            addPath(classpath);
         }
-        if (!(parent instanceof QoreURLClassLoader)) {
-            throw new RuntimeException(String.format("Parent ClassLoader is not a QoreURLClassLoader (%s)",
-                parent.getClass().getCanonicalName()));
-        }
-        ((QoreURLClassLoader)parent).addPath(classpath);
     }
 
     //! Returns the entries of a classpath as addPath() uses them
@@ -1273,6 +1275,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Adds a path to the classpath
+    /** An entry that does not exist or cannot be used is logged and left out; an error while an entry is added is
+        thrown to the caller (qore#6779).
+    */
     public void addPath(String classpath) {
         //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
 
@@ -1411,9 +1416,33 @@ public class QoreURLClassLoader extends URLClassLoader {
         System.out.println("QoreURLClassLoader ERROR: " + msg);
     }
 
+    //! Returns the regular expression that matches the file names of a wildcard classpath entry
+    /** Only \c '*' is a wildcard, which matches any sequence of characters, also an empty one; every other character
+        of the pattern matches itself, also a character that is special in a regular expression, such as \c '.',
+        \c '[', \c '(', \c '+' or \c '?' (qore#6777).  The expression matches the whole file name.
+    */
+    static Pattern wildcardPattern(String nam) {
+        StringBuilder regex = new StringBuilder();
+        int start = 0;
+        while (true) {
+            int star = nam.indexOf('*', start);
+            String literal = nam.substring(start, star == -1 ? nam.length() : star);
+            if (!literal.isEmpty()) {
+                regex.append(Pattern.quote(literal));
+            }
+            if (star == -1) {
+                break;
+            }
+            regex.append(".*");
+            start = star + 1;
+        }
+        // DOTALL: a wildcard also matches a line terminator, which a file name can contain
+        return Pattern.compile(regex.toString(), Pattern.DOTALL);
+    }
+
     /**
      * Adds a set of files using a generic base name to this loader's classpath.  See @ref addPath() for
-     * details of the generic base name.
+     * details of the generic base name; only \c '*' is a wildcard (see wildcardPattern()).
      */
     public void addWildcard(File dir, String nam) {
         if (!dir.exists()) {
@@ -1426,15 +1455,14 @@ public class QoreURLClassLoader extends URLClassLoader {
             return;
         }
 
-        // make a regex pattern from the glob pattern
-        final String pattern = nam.replace(new StringBuffer("*"), new StringBuffer(".*"));
+        final Pattern pattern = wildcardPattern(nam);
 
         //debugLog("dir: " + dir + " pattern: " + pattern);
 
         File[] files = dir.listFiles(new FilenameFilter() {
             @Override
             public boolean accept(File dir, String name) {
-                return name.matches("^" + pattern + "$");
+                return pattern.matcher(name).matches();
             }
         });
 

@@ -572,9 +572,18 @@ public:
     }
 
     //! Adds a classpath (the Java string that was checked: see jni_check_classpath_policy()) to the class loader
-    DLLLOCAL void addClasspath(Env& env, jstring path);
+    /** @param env the JNI environment
+        @param path the classpath
+        @param source the input that the classpath comes from (ex: the module command), for the error
+
+        @throw JNI-CLASSPATH-ERROR the class loader raised a Java exception while the classpath was added (qore#6779)
+    */
+    DLLLOCAL void addClasspath(Env& env, jstring path, const char* source);
     //! Adds a classpath (the Java string that was checked) to the parent class loader
-    DLLLOCAL void addParentClasspath(Env& env, jstring path);
+    /** With no parent class loader that is a QoreURLClassLoader, the classpath is added to this class loader; see
+        addClasspath() for the parameters and the error
+    */
+    DLLLOCAL void addParentClasspath(Env& env, jstring path, const char* source);
 
     // returns Java byte code (byte[]) for a Qore class
     DLLLOCAL LocalReference<jbyteArray> generateByteCode(Env& env, jobject class_loader,
