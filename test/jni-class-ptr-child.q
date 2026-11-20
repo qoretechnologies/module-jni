@@ -6,6 +6,7 @@
 # instead of being used as a class (qore#6854); before the fix, the process crashed
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.ClassPtrProbe

@@ -9,6 +9,7 @@
 # module's own use of class pointers, for the Java class of a Qore object given to Java, still works.
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
 %requires QUnit
 %requires Util
 %requires jni
