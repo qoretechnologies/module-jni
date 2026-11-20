@@ -2926,23 +2926,15 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
     if (!jname) {
         return nullptr;
     }
-    // the thread is attached, as the Program that the class loader's pointer names can be held by the lookup (see
-    // getClassLoaderProgram()), and its release destroys it on this thread if it has been deleted meanwhile
-    QoreThreadAttachHelper attach_helper;
-    try {
-        attach_helper.attach();
-    } catch (Exception& e) {
-        e.ignore();
-        // null tells the Java caller to fall back to local generation
-        return nullptr;
-    }
     Env::JniUtfChars utf(jenv, jname);
     if (!utf.get()) {
         return nullptr;
     }
     // a class is loaded on any thread, also one that Java started, which is not attached to Qore: the thread is
     // attached before the module manager and the Programs are used (qore#6828); if it cannot be attached, null is
-    // returned, which tells the Java caller to fall back to local generation, as for any other error here
+    // returned, which tells the Java caller to fall back to local generation, as for any other error here; the
+    // attachment also covers the release of the Program that the lookup holds for the class loader's pointer (see
+    // getClassLoaderProgram()), which destroys the Program on this thread if it has been deleted meanwhile
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
