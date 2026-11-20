@@ -1356,7 +1356,7 @@ static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, 
     ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
     if (!xsink) {
         // the exception has been released; QoreExceptionWrapper.getMessage() does not call the method then, and
-        // returns this message itself
+        // returns this message itself (QoreExceptionWrapper.RELEASED_MESSAGE, which this text must match)
         return jenv->NewStringUTF("Qore exception (the message is unavailable: the exception has been taken by Qore, "
             "or released by the shutdown of the jni module)");
     }

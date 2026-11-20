@@ -36,7 +36,7 @@ class JniExceptionWrapperReleasedTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JNI QoreExceptionWrapper with a released exception", "1.0") {
-        addTestCase("negative: the message of a wrapper with its exception", \liveCase());
+        addTestCase("control: the message of a wrapper with its exception", \liveCase());
         addTestCase("regression: the message of a wrapper whose exception Qore took", \takenCase());
         addTestCase("regression: a wrapper whose exception Qore took thrown to Qore again", \takenRethrowCase());
         addTestCase("regression: the message of a wrapper after the module's shutdown", \shutdownCase());

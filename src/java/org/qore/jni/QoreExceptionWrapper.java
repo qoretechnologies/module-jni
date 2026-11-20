@@ -9,7 +9,8 @@ public class QoreExceptionWrapper extends RuntimeException {
         this.ref = NativeCleanup.register(this, xsink, NativeCleanup.KIND_EXCEPTION_WRAPPER);
     }
 
-    /** The message of a wrapper whose %Qore exception has been released */
+    /** The message of a wrapper whose %Qore exception has been released; the native method returns the same text
+        for a released exception (qore_exception_wrapper_get_message() in Globals.cpp) */
     static final String RELEASED_MESSAGE = "Qore exception (the message is unavailable: the exception has been "
         + "taken by Qore, or released by the shutdown of the jni module)";
 
