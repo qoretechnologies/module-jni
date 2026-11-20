@@ -94,6 +94,19 @@ DLLLOCAL void dbg_jni_report_context_programs() noexcept;
 */
 DLLLOCAL void dbg_jni_run_shutdown_window_hook() noexcept;
 
+//! True while a hook is set with Jni::dbg_jni_set_context_program_hook(); checked inline before
+//! dbg_jni_run_context_program_hook(), so that a lookup made with no hook set costs only this load
+DLLLOCAL extern std::atomic<bool> dbg_jni_context_program_hook_set;
+
+//! Runs the java.util.function.BooleanSupplier set with Jni::dbg_jni_set_context_program_hook(), if any
+/** Called where a caller has obtained the global context Program and has not used it yet (see
+    jni_get_context_or_global()), on any thread, so that a test can hold a thread exactly there while the module's
+    shutdown deletes the Program (qore#6829); the hook decides from the thread whether it runs, and returns true if
+    it ran, which clears it.  It is not run while a Java exception is pending or from within itself; an error running
+    it is reported on \c stderr
+*/
+DLLLOCAL void dbg_jni_run_context_program_hook() noexcept;
+
 //! The points at which Jni::dbg_jni_fail_point() can make the module fail with a C++ exception
 enum class DbgJniFailPoint {
     //! jni::Env's constructor fails to attach the thread to the JVM (jni::UnableToAttachException)

@@ -262,6 +262,13 @@ JniExternalProgramData* jni_get_context_or_global(QoreProgram*& pgm) {
         }
         jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
         assert(jpc);
+#ifdef DEBUG
+        // a test can hold the thread here, after it has obtained the Program and its jni data and before it uses them
+        // (qore#6829)
+        if (dbg_jni_context_program_hook_set.load(std::memory_order_acquire)) {
+            dbg_jni_run_context_program_hook();
+        }
+#endif
     }
     return jpc;
 }
