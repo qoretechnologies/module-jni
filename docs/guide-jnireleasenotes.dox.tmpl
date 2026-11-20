@@ -12,6 +12,15 @@
       raise \c JNI-ERROR, and the \c classpath option of the \c jdbc driver raises \c JDBC-OPTION-ERROR (a %Qore
       library that refuses a NUL character in every DBI option value raises \c DBI-OPTION-ERROR first);
       \c QORE_JNI_CLASSPATH, an environment variable, cannot have a NUL character (qore#6771)
+    - fixed \c Jni::org::qore::jni::invoke() and \c invoke_nonvirtual(), which were declared to return
+      \c Jni::java::lang::Object, but return the value of the method converted to %Qore, as a direct call of the
+      method does, which is often not an object: for example, an \c int, a \c float or a \c bool for a primitive
+      type or a boxed value, a \c string for a \c java.lang.String, and \c NOTHING for \c null or a \c void method
+      (see @ref jni_java_to_qore); a method call
+      made directly on the result (ex: <tt>jni::invoke(m, o).toString()</tt>) crashed the process when the result
+      was not an object, and assigning the result to a variable of its type (ex:
+      <tt>int len = jni::invoke(m, o);</tt>) was a parse-time type error; they are now declared to return \c auto;
+      the values that they return are unchanged (qore#6808)
     - fixed the jni APIs in a Program that has no jni data, a child Program created with
       \c PO_NO_INHERIT_PROGRAM_DATA, or one whose copy of its parent's jni data failed, which has the namespaces of the
       jni module but not its data: \c get_class_loader() crashed the process with a null pointer dereference, as did
