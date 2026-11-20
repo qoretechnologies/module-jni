@@ -7,13 +7,13 @@
     @section jni_3_0_0 jni Module Version 3.0.0
 
     - <b>Behaviour change</b>: an error while a classpath is added (a Java exception raised by the class loader) is now
-      raised to the caller as \c JNI-CLASSPATH-ERROR instead of being printed as an unhandled exception, which left
-      the classpath silently ineffective so that code depending on it failed later with a misleading
+      raised to the caller as \c JNI-CLASSPATH-ERROR instead of being printed as an unhandled exception (or, for
+      \c QORE_JNI_CLASSPATH in a release build, ignored), which left the classpath silently ineffective so that code
+      depending on it failed later with a misleading
       \c ClassNotFoundException (fail closed): the \c add-classpath and \c add-relative-classpath module commands
       and their \c global-* forms raise it, as does the \c classpath option of the \c jdbc driver when a connection
       is opened, and the module's initialization fails with it for the \c QORE_JNI_CLASSPATH environment variable;
-      an entry that does not exist or cannot be used is still reported on the console and left out
-      (qore#6779, see @ref jniimport)
+      an entry that does not exist or cannot be used is still left out (qore#6779, see @ref jniimport)
     - fixed a Java exception raised while the \c QORE_JNI_CLASSPATH environment variable was processed when the
       module was loaded, which aborted a debug build in an assertion, as it was converted before the jni data of the
       Program was registered, and which a release build ignored: it is now a module initialization error
@@ -22,7 +22,8 @@
       was translated: a pattern with a character that is special in a regular expression raised an error (ex:
       <tt>a[</tt><tt>*.jar</tt>, a \c PatternSyntaxException, which was printed as an unhandled exception, and the entry
       was dropped) or matched other files (ex: <tt>a.</tt><tt>*.jar</tt> also matched \c aX1.jar); only \c "*" is a
-      wildcard now, and every other character matches itself (qore#6777, see @ref jniimport)
+      wildcard now, and every other character matches itself; a pattern with many wildcards no longer takes time
+      exponential in their number to match a file name (qore#6777, see @ref jniimport)
     - <b>Security</b>: a classpath with a NUL character is now refused with an exception instead of being cut at the
       NUL character, which made it another classpath, both for the sandbox's filesystem policy check and for the
       class loader: the \c add-classpath and \c add-relative-classpath module commands and their \c global-* forms

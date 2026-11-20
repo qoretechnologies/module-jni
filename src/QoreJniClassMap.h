@@ -585,6 +585,16 @@ public:
     */
     DLLLOCAL void addParentClasspath(Env& env, jstring path, const char* source);
 
+private:
+    //! Releases the class loader of a root Program's jni data whose constructor failed
+    /** @param env the JNI environment
+        @param borrowed true if the class loader is the system class loader, whose reference \c Globals::syscl owns
+        @param once the flag of the constructor that is set when the system class loader is taken, which is reset
+    */
+    DLLLOCAL void releaseFailedClassLoader(Env& env, bool borrowed, bool& once) noexcept;
+
+public:
+
     // returns Java byte code (byte[]) for a Qore class
     DLLLOCAL LocalReference<jbyteArray> generateByteCode(Env& env, jobject class_loader,
             const QoreString& qpath, jstring jname, const char* module, const QoreClass* qc);

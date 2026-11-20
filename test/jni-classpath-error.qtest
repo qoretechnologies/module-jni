@@ -46,8 +46,11 @@ class JniClasspathErrorTest inherits QUnit::Test {
         #! the files made in the test directory, each a copy of the test jar
         const JarFiles = (
             "a[1.jar", "a(1.jar", "a+1.jar", "aa1.jar", "a.1.jar", "aX1.jar", "a?1.jar", "a\\E1.jar", "a{1.jar",
-            "a^1.jar", "a|1.jar", "a1.jar", "b.jar",
+            "a^1.jar", "a|1.jar", "a1.jar", "b.jar", LongName,
         );
+
+        #! a long file name that a pattern with many wildcards does not match
+        const LongName = strmul("a", 64) + ".jar";
 
         #! the wildcard patterns, each with the files that it matches
         /** a pattern used as a regular expression either raised a PatternSyntaxException or matched other files
@@ -76,6 +79,9 @@ class JniClasspathErrorTest inherits QUnit::Test {
             "a[1.jar": ("a[1.jar",),
             # no matching file
             "a]*.jar": (),
+            # many wildcards and no match: a regular expression took minutes to fail to match the long name
+            "*a*a*a*a*a*a*a*a*a*a*z.jar": (),
+            "*a*a*a*a*a*a*a*a*a*a.jar": (LongName,),
         };
 
         #! the code that lists the classpath of a Program's own class loader
@@ -123,7 +129,8 @@ list<string> sub loader_urls() {
 ";
 
         #! the description of the error of a classpath that the fail point keeps from being added
-        const FailPointDesc = "cannot add classpath '%s': java.lang.NullPointerException";
+        const FailPointDesc = "cannot add classpath '%s': java.lang.IllegalArgumentException: the classpath must not be "
+            "null";
     }
 
     private {
@@ -148,12 +155,13 @@ list<string> sub loader_urls() {
             skip_reason = ex.desc;
         }
 
+        # first: the class of the test jar must not be in the parent class loader yet (see sandboxTest())
+        addTestCase("regression: the sandbox checks a wildcard pattern where it is used (qore#6777)",
+            \sandboxTest());
         addTestCase("regression: wildcard patterns are matched literally (qore#6777)", \wildcardTest());
         addTestCase("regression: wildcard patterns of add-relative-classpath (qore#6777)", \relativeWildcardTest());
         addTestCase("regression: wildcard patterns of global-add-classpath (qore#6777)", \globalWildcardTest());
         addTestCase("regression: a wildcard pattern of the jdbc classpath option (qore#6777)", \jdbcWildcardTest());
-        addTestCase("regression: the sandbox checks a wildcard pattern where it is used (qore#6777)",
-            \sandboxTest());
         addTestCase("regression: a wildcard pattern in QORE_JNI_CLASSPATH (qore#6777, qore#6778)", \envWildcardTest());
         addTestCase("regression: add-classpath raises a classpath error (qore#6779)", \addClasspathErrorTest());
         addTestCase("regression: add-relative-classpath raises a classpath error (qore#6779)",
@@ -233,6 +241,9 @@ list<string> sub loader_urls() {
     }
 
     #! a pattern is checked against the sandbox in its directory, where the files that it matches are read
+    /** run before any case adds a test jar to the global classpath: the classes of the module's package are loaded
+        parent first, so the class of the test jar must come from the jar that the sandboxed Program adds
+    */
     sandboxTest() {
         if (!(new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
             testSkip("this Qore library cannot allow uncontrolled APIs in a sandbox");
@@ -315,10 +326,13 @@ list<string> sub loader_urls() {
         checkDebug();
         string cp = dir + DirSep + "a1.jar";
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # the module is initialized in the Program first, so that the fail point is reached by the directive, also if
+        # QORE_JNI_CLASSPATH is set
+        p.parsePending("%requires jni\n", "requires");
         failClasspath();
         *hash<ExceptionInfo> ex;
         try {
-            p.parse("%requires jni\n%module-cmd(jni) add-classpath " + cp + "\n", "parse");
+            p.parsePending("%module-cmd(jni) add-classpath " + cp + "\n", "parse");
         } catch (hash<ExceptionInfo> e) {
             ex = e;
         }

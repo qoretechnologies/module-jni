@@ -312,10 +312,13 @@ int dbg_jni_set_fail_point(const char* name) {
 
 QoreStringNode* dbg_jni_set_env_fail_point() {
     TempString name(SystemEnvironment::get("QORE_JNI_DBG_FAIL_POINT"));
-    if (!name || name->empty() || !dbg_jni_set_fail_point(name->c_str())) {
+    if (!name || name->empty()) {
         return nullptr;
     }
-    return new QoreStringNodeMaker("QORE_JNI_DBG_FAIL_POINT: unknown fail point '%s'", name->c_str());
+    if (dbg_jni_set_fail_point(name->c_str())) {
+        return new QoreStringNodeMaker("QORE_JNI_DBG_FAIL_POINT: unknown fail point '%s'", name->c_str());
+    }
+    return nullptr;
 }
 
 //! Makes the code at the given point fail once with the C++ exception that it throws when it fails, or with no point,

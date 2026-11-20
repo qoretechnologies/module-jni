@@ -4903,8 +4903,11 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
 
     static bool once = false;
 
+    // true if the class loader is the system class loader, whose reference Globals::syscl owns
+    bool borrowed = false;
     if (!once && Globals::bootstrap) {
         once = true;
+        borrowed = true;
         classLoader = GlobalReference<jobject>((jobject)Globals::syscl);
     } else {
         // set up QoreURLClassLoader constructor args
@@ -4917,16 +4920,47 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
             &jargs[0]).makeGlobal();
     }
 
-    initDynamicApi(env);
+    // the constructor can fail once the class loader exists: then the destructor does not run, so the class loader
+    // is released here (qore#6779)
+    try {
+        initDynamicApi(env);
 
-    // setup classpath
-    TempString classpath(SystemEnvironment::get("QORE_JNI_CLASSPATH"));
-    if (classpath) {
-        // the variable is in the default encoding; an error is thrown to the code that creates the data, which
-        // fails (qore#6778, qore#6779)
-        addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)), "QORE_JNI_CLASSPATH");
+        // setup classpath
+        TempString classpath(SystemEnvironment::get("QORE_JNI_CLASSPATH"));
+        if (classpath) {
+            // the variable is in the default encoding; an error is thrown to the code that creates the data, which
+            // fails (qore#6778, qore#6779)
+            addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)), "QORE_JNI_CLASSPATH");
+        }
+    } catch (JavaException& e) {
+        // the Java exception stays pending for the caller; no JNI call may be made while it is pending
+        jthrowable je = e.save();
+        releaseFailedClassLoader(env, borrowed, once);
+        e.restore(je);
+        throw;
+    } catch (...) {
+        releaseFailedClassLoader(env, borrowed, once);
+        throw;
     }
     jni_pgm_data_register(pgm);
+}
+
+void JniExternalProgramData::releaseFailedClassLoader(Env& env, bool borrowed, bool& once) noexcept {
+    if (borrowed) {
+        // Globals::syscl keeps its reference, and the next jni data of a root Program takes it again
+        classLoader.release();
+        once = false;
+        return;
+    }
+    // the class loader refers to the Program, which has no jni data, and its constructor made it the context class
+    // loader of the thread: neither may be used any more
+    try {
+        env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderClearProgramPtr, nullptr);
+        env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderClearContext, nullptr);
+    } catch (jni::Exception& e) {
+        // nothing more can be done; the error of the constructor is the one reported
+        e.ignore();
+    }
 }
 
 JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& parent, Env& env, QoreProgram* pgm) :
@@ -5108,7 +5142,7 @@ void JniExternalProgramData::addClasspath(Env& env, jstring path, const char* so
     jvalue jarg;
     jarg.l = path;
 #ifdef DEBUG
-    // a test fail point: the class loader raises a Java exception (a NullPointerException for a null classpath)
+    // a test fail point: the class loader raises a Java exception (an IllegalArgumentException for a null classpath)
     if (dbg_jni_fail_at(DbgJniFailPoint::Classpath)) {
         jarg.l = nullptr;
     }
@@ -5124,7 +5158,7 @@ void JniExternalProgramData::addParentClasspath(Env& env, jstring path, const ch
     jvalue jarg;
     jarg.l = path;
 #ifdef DEBUG
-    // a test fail point: the class loader raises a Java exception (a NullPointerException for a null classpath)
+    // a test fail point: the class loader raises a Java exception (an IllegalArgumentException for a null classpath)
     if (dbg_jni_fail_at(DbgJniFailPoint::Classpath)) {
         jarg.l = nullptr;
     }

@@ -47,7 +47,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.regex.Pattern;
 
 //! Main ClassLoader for Java <-> %Qore and Java <-> Python integration
 /** This ClassLoader supports dynamic imports from %Qore and Java using the following special packages:
@@ -1280,6 +1279,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     public void addPath(String classpath) {
         //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
+        if (classpath == null) {
+            throw new IllegalArgumentException("the classpath must not be null");
+        }
 
         for (String pathentry : classpathEntries(classpath)) {
             //debugLog("addPath(): " + pathentry);
@@ -1308,8 +1310,6 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (classPathElements.contains(fileentry.getPath())) {
                 //errorLog("Skipping duplicate classpath element '" + fileentry + "'.");
                 continue;
-            } else {
-                classPathElements.add(fileentry.getPath());
             }
 
             if (basename != null && !basename.isEmpty()) {
@@ -1327,6 +1327,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                 errorLog("ClassPath element '" + fileentry + "' is not an existing directory and is not a file " +
                     "ending with '.zip' or '.jar'");
             }
+            // recorded once it has been added: an entry whose addition raised an error is added again the next time
+            classPathElements.add(fileentry.getPath());
         }
         //infoLog("Class loader is using classpath: \"" + classPath + "\".");
     }
@@ -1416,33 +1418,43 @@ public class QoreURLClassLoader extends URLClassLoader {
         System.out.println("QoreURLClassLoader ERROR: " + msg);
     }
 
-    //! Returns the regular expression that matches the file names of a wildcard classpath entry
+    //! Returns true if a file name matches the pattern of a wildcard classpath entry
     /** Only \c '*' is a wildcard, which matches any sequence of characters, also an empty one; every other character
         of the pattern matches itself, also a character that is special in a regular expression, such as \c '.',
-        \c '[', \c '(', \c '+' or \c '?' (qore#6777).  The expression matches the whole file name.
+        \c '[', \c '(', \c '+' or \c '?' (qore#6777).  The pattern matches the whole file name.  The match takes
+        time proportional to the product of the lengths of the pattern and the name at most, whatever the pattern,
+        unlike a regular expression with several wildcards, which can backtrack exponentially.
     */
-    static Pattern wildcardPattern(String nam) {
-        StringBuilder regex = new StringBuilder();
-        int start = 0;
-        while (true) {
-            int star = nam.indexOf('*', start);
-            String literal = nam.substring(start, star == -1 ? nam.length() : star);
-            if (!literal.isEmpty()) {
-                regex.append(Pattern.quote(literal));
+    static boolean wildcardMatches(String pattern, String name) {
+        int p = 0;
+        int n = 0;
+        // the position of the last '*' in the pattern, and the position in the name that it was tried at
+        int star = -1;
+        int mark = 0;
+        while (n < name.length()) {
+            if (p < pattern.length() && pattern.charAt(p) == '*') {
+                star = p++;
+                mark = n;
+            } else if (p < pattern.length() && pattern.charAt(p) == name.charAt(n)) {
+                ++p;
+                ++n;
+            } else if (star != -1) {
+                // the last '*' matches one more character
+                p = star + 1;
+                n = ++mark;
+            } else {
+                return false;
             }
-            if (star == -1) {
-                break;
-            }
-            regex.append(".*");
-            start = star + 1;
         }
-        // DOTALL: a wildcard also matches a line terminator, which a file name can contain
-        return Pattern.compile(regex.toString(), Pattern.DOTALL);
+        while (p < pattern.length() && pattern.charAt(p) == '*') {
+            ++p;
+        }
+        return p == pattern.length();
     }
 
     /**
      * Adds a set of files using a generic base name to this loader's classpath.  See @ref addPath() for
-     * details of the generic base name; only \c '*' is a wildcard (see wildcardPattern()).
+     * details of the generic base name; only \c '*' is a wildcard (see wildcardMatches()).
      */
     public void addWildcard(File dir, String nam) {
         if (!dir.exists()) {
@@ -1455,14 +1467,12 @@ public class QoreURLClassLoader extends URLClassLoader {
             return;
         }
 
-        final Pattern pattern = wildcardPattern(nam);
-
-        //debugLog("dir: " + dir + " pattern: " + pattern);
+        //debugLog("dir: " + dir + " pattern: " + nam);
 
         File[] files = dir.listFiles(new FilenameFilter() {
             @Override
             public boolean accept(File dir, String name) {
-                return pattern.matcher(name).matches();
+                return wildcardMatches(nam, name);
             }
         });
 
