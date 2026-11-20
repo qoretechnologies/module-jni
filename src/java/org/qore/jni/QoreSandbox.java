@@ -385,21 +385,24 @@ public final class QoreSandbox {
         }
     }
 
-    //! Returns the entries of a classpath as the bytes that the JVM passes to the operating system for them
-    /** Called by the module before the same classpath string is given to QoreURLClassLoader.addPath(), so that
-        each entry is checked against the sandbox policy as the JVM uses it: the entries are those that addPath()
-        uses (QoreURLClassLoader.classpathEntries()), each made absolute as addPath() resolves it
-        (QoreURLClassLoader.resolveClasspathEntry(): against the \c user.dir of the JVM, not the current directory of
-        the process, also for a wildcard with no directory part, such as \c "*.jar"), and encoded as encode() does,
-        which raises JNI-SANDBOX-ERROR for an entry that the file name encoding cannot represent exactly.
+    //! Resolves a classpath once for its sandbox check and its use (qore#6818)
+    /** Called by the module for a classpath that a filesystem policy governs: the module checks each element of the
+        result against the policy, and then gives the same object to QoreURLClassLoader.addResolvedPath(), which adds
+        only files that were checked, so that the classpath is not resolved again between the check and the use.  The
+        elements are those of QoreURLClassLoader.resolveClasspath(): each entry as the JVM resolves it (against its
+        \c user.dir, not the current directory of the process, also for a wildcard with no directory part, such as
+        \c "*.jar"), with symbolic links resolved, and for a wildcard entry, its directory and each file that it
+        selects.  Each checked path is encoded as encode() does, which raises JNI-SANDBOX-ERROR for a path that the
+        file name encoding cannot represent exactly.
     */
-    static byte[][] encodeClasspath(String classpath) {
-        java.util.ArrayList<String> entries = QoreURLClassLoader.classpathEntries(classpath);
-        byte[][] rv = new byte[entries.size()][];
-        for (int i = 0; i < rv.length; ++i) {
-            rv[i] = encode(QoreURLClassLoader.resolveClasspathEntry(entries.get(i)).getPath(), "classpath entry");
+    static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath) {
+        QoreURLClassLoader.ResolvedClasspath rc = QoreURLClassLoader.resolveClasspath(classpath);
+        byte[][] encoded = new byte[rc.size()][];
+        for (int i = 0; i < encoded.length; ++i) {
+            encoded[i] = encode(rc.path(i).getPath(), "classpath entry");
         }
-        return rv;
+        rc.setEncoded(encoded);
+        return rc;
     }
 
     //! Returns the encoding that the JVM uses for file names and other strings passed to the operating system

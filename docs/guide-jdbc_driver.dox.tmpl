@@ -388,7 +388,9 @@ foreach hash<auto> column in (result.schemaV2()) {
     The option adds jars to the class loader of a %Qore %Program, so it follows the rule of the \c add-classpath module
     command (see @ref jni_sandbox): sandboxed code (under a sandbox that does not allow uncontrolled APIs) and code with
     \c PO_NO_UNCONTROLLED_APIS or \c PO_NO_FILESYSTEM cannot use it (\c JNI-SANDBOX-ERROR), and its entries are checked
-    against the filesystem policy of a sandbox that allows uncontrolled APIs (\c FILESYSTEM-ACCESS-DENIED).
+    against the filesystem policy of a sandbox that allows uncontrolled APIs (\c FILESYSTEM-ACCESS-DENIED), as for
+    \c add-classpath: a wildcard entry is checked file by file, and a denied file that it selects refuses it with
+    \c JNI-CLASSPATH-ERROR.
 
     The option is applied when a connection is opened, but it is judged by the code that set it: whoever configures
     the datasource decides (with a %Qore library that records the code that sets each datasource option, qore#5741).

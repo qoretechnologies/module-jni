@@ -1251,7 +1251,7 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Returns the entries of a classpath as addPath() uses them
     /** The entries are separated by the system path separator or \c ';'; empty entries are left out.  The sandbox
-        check of a classpath (QoreSandbox.encodeClasspath()) checks the same entries.
+        check of a classpath (resolveClasspath()) resolves the same entries.
     */
     static ArrayList<String> classpathEntries(String classpath) {
         String seps = File.pathSeparator; // separators
@@ -1274,7 +1274,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     /** A relative entry is resolved against the \c user.dir of the JVM, not the current directory of the process;
         this includes a wildcard with no directory part (ex: \c "*.jar"), which is the matching files in \c user.dir.
         The path is absolute, so a wildcard entry always has a parent directory.  The sandbox check of a classpath
-        (QoreSandbox.encodeClasspath()) checks this path, so that it checks each entry where it is used.
+        (resolveClasspath()) resolves each entry from this path, so that it checks each entry where it is used.
     */
     static File resolveClasspathEntry(String pathentry) {
         return new File(pathentry).getAbsoluteFile();
@@ -1282,7 +1282,9 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Adds a path to the classpath
     /** An entry that does not exist or cannot be used is logged and left out; an error while an entry is added is
-        thrown to the caller (qore#6779).
+        thrown to the caller (qore#6779).  A classpath that a sandbox filesystem policy governs is not added here, but
+        with resolveClasspath() and addResolvedPath(), so that every file that is added is one that the policy
+        checked (qore#6818).
     */
     public void addPath(String classpath) {
         //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
@@ -1338,6 +1340,167 @@ public class QoreURLClassLoader extends URLClassLoader {
             classPathElements.add(fileentry.getPath());
         }
         //infoLog("Class loader is using classpath: \"" + classPath + "\".");
+    }
+
+    //! A classpath resolved once, for both its sandbox check and its use (qore#6818)
+    /** Made by resolveClasspath(); each element is a path that the sandbox check of the classpath checks, and the
+        file that addResolvedPath() adds for it, if any.  The check and the use take their paths from this one object,
+        so every file that is added is one that was checked, with no second resolution in between.
+
+        The sandbox check (see QoreSandbox.resolveClasspath()) reads each element with size(), encodedPath() and
+        isWildcardMatch(); a denial refuses the whole classpath, so the classpath is then not added at all.
+    */
+    static final class ResolvedClasspath {
+        //! the path that is checked for each element
+        private final ArrayList<File> paths = new ArrayList<File>();
+        //! the file that is added for each element, or null for an element that is only checked
+        private final ArrayList<File> files = new ArrayList<File>();
+        //! for each element: true if a wildcard selected it
+        private final ArrayList<Boolean> matches = new ArrayList<Boolean>();
+        //! for each element: a message logged when the element is used, or null
+        private final ArrayList<String> notes = new ArrayList<String>();
+        //! the checked paths as the bytes that the JVM uses for them, set by the sandbox check
+        private byte[][] encoded;
+
+        private ResolvedClasspath() {
+        }
+
+        private void add(File path, File file, boolean match, String note) {
+            paths.add(path);
+            files.add(file);
+            matches.add(match);
+            notes.add(note);
+        }
+
+        //! Returns the number of elements
+        int size() {
+            return paths.size();
+        }
+
+        //! Returns the path that is checked for an element
+        File path(int i) {
+            return paths.get(i);
+        }
+
+        //! Sets the checked paths as the bytes that the JVM uses for them (see QoreSandbox.resolveClasspath())
+        void setEncoded(byte[][] encoded) {
+            if (encoded.length != paths.size()) {
+                throw new IllegalArgumentException("the encoded paths do not match the classpath");
+            }
+            this.encoded = encoded;
+        }
+
+        //! Returns the path that is checked for an element as the bytes that the JVM uses for it
+        byte[] encodedPath(int i) {
+            return encoded[i];
+        }
+
+        //! Returns true if a wildcard selected the element, so that its denial is reported as such
+        boolean isWildcardMatch(int i) {
+            return matches.get(i);
+        }
+    }
+
+    //! Returns the real path of a file (symbolic links resolved), or null if it cannot be resolved
+    private static File realFile(File f) {
+        try {
+            return f.toPath().toRealPath().toFile();
+        } catch (IOException | java.nio.file.InvalidPathException | SecurityException e) {
+            return null;
+        }
+    }
+
+    //! Resolves a classpath once for its sandbox check and its use (qore#6818)
+    /** The entries are those of addPath() (classpathEntries()), each made absolute as addPath() resolves it
+        (resolveClasspathEntry()).  Each entry is resolved to its real path, with symbolic links resolved, which is
+        the path that is checked and added.  A wildcard entry is expanded here, once: its directory is an element
+        that is only checked, as its listing is read, and each matching file is an element of its own, with its real
+        path, so that the policy judges each file that the wildcard selects, wherever a symbolic link points.  An
+        entry that cannot be resolved (ex: it does not exist) is checked as given, and nothing is added for it.
+    */
+    static ResolvedClasspath resolveClasspath(String classpath) {
+        if (classpath == null) {
+            throw new IllegalArgumentException("the classpath must not be null");
+        }
+        ResolvedClasspath rc = new ResolvedClasspath();
+        for (String pathentry : classpathEntries(classpath)) {
+            File fileentry = resolveClasspathEntry(pathentry);
+            if (fileentry.getName().indexOf('*') == -1) {
+                File real = realFile(fileentry);
+                if (real == null) {
+                    // as addPath() does, an entry that does not exist is left out with no message
+                    rc.add(fileentry, null, false, null);
+                } else {
+                    rc.add(real, real, false, null);
+                }
+                continue;
+            }
+
+            String pattern = fileentry.getName();
+            // not null: the path is absolute, and a root directory has no name with a wildcard
+            File dir = fileentry.getParentFile();
+            if (dir.getName().indexOf('*') != -1) {
+                rc.add(fileentry, null, false, "Ignoring wildcard in classpath directory element '" + pathentry
+                    + "'");
+                continue;
+            }
+            File realdir = realFile(dir);
+            if (realdir == null) {
+                rc.add(dir, null, false, "Cannot find directory for classpath element '" + dir + File.separator
+                    + pattern + "'");
+                continue;
+            }
+            File[] list = realdir.listFiles();
+            if (list == null) {
+                rc.add(realdir, null, false, "Error accessing directory for classpath element '" + realdir
+                    + File.separator + pattern + "'");
+                continue;
+            }
+            // the directory, whose listing is read
+            rc.add(realdir, null, false, null);
+            for (File f : list) {
+                if (!wildcardMatches(pattern, f.getName()) || !isLoadable(f.getName())) {
+                    continue;
+                }
+                // a match that cannot be resolved (ex: a dangling symbolic link) cannot be read, and is not added
+                File real = realFile(f);
+                if (real != null) {
+                    rc.add(real, real, true, null);
+                }
+            }
+        }
+        return rc;
+    }
+
+    //! Adds a classpath that the sandbox check has resolved and checked (qore#6818)
+    /** Adds the files of the resolved classpath, each of which was checked; nothing is resolved again.  An error while
+        an element is added is thrown to the caller (qore#6779).
+    */
+    void addResolvedPath(ResolvedClasspath rc) {
+        if (rc == null) {
+            throw new IllegalArgumentException("the classpath must not be null");
+        }
+        if (rc.encoded == null) {
+            throw new IllegalArgumentException("the classpath has not been checked");
+        }
+        for (int i = 0; i < rc.size(); ++i) {
+            String note = rc.notes.get(i);
+            if (note != null) {
+                errorLog(note);
+            }
+            File fileentry = rc.files.get(i);
+            if (fileentry == null || classPathElements.contains(fileentry.getPath())) {
+                continue;
+            }
+            if (rc.isWildcardMatch(i) || fileentry.isDirectory() || isLoadable(fileentry.getName())) {
+                addURL(createUrl(fileentry));
+            } else {
+                errorLog("ClassPath element '" + fileentry + "' is not an existing directory and is not a file " +
+                    "ending with '.zip' or '.jar'");
+            }
+            // recorded once it has been added: an entry whose addition raised an error is added again the next time
+            classPathElements.add(fileentry.getPath());
+        }
     }
 
     //! Returns a list of classes in the given dynamic package

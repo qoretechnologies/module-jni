@@ -473,21 +473,23 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
             // one Java string is both checked and added
             Env env;
             LocalReference<jstring> jcp = env.newPathString(arg);
+            // the classpath as it was checked, which is added as it is (qore#6818)
+            LocalReference<jobject> checked;
 #ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
             if (setter_known) {
                 ReferenceHolder<QoreSandboxManager> setter_policy(ds->getOptionPolicyManagerRef(opt), xsink);
-                ::jni_check_classpath_policy(*setter_policy, env, jcp);
+                checked = ::jni_check_classpath_policy(*setter_policy, env, jcp);
             } else {
-                ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
+                checked = ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
             }
 #else
-            ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
+            checked = ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
 #endif
             // the classpath of the connection is already this value: nothing to add
             if (classpath == arg.c_str()) {
                 return 0;
             }
-            jpc->addClasspath(env, jcp, "jdbc classpath option");
+            jpc->addClasspath(env, jcp, "jdbc classpath option", checked);
             classpath = arg.c_str();
 
             // try to load new drivers

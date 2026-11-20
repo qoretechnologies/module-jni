@@ -593,28 +593,42 @@ DLLLOCAL void jni_teardown_step(const char* step, F&& f) noexcept {
 
 namespace jni {
 class Env;
+template<typename T> class LocalReference;
 }
 
 //! Refuses a classpath to sandboxed code where its policy does not allow it (see jni-module.cpp)
 /** @param classpath the classpath as the Java string that is then given to QoreURLClassLoader.addPath()
 
+    @return the checked classpath to add with JniExternalProgramData::addClasspath(), or a null reference if no
+    filesystem policy governs it, and for a \c global-* command
+
     @throw JNI-SANDBOX-ERROR sandboxed or restricted code changes the classpath of every Program
     @throw FILESYSTEM-ACCESS-DENIED the sandbox policy denies reading a classpath entry
 */
-DLLLOCAL void jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm, jni::Env& env, jstring classpath,
-        bool global);
+DLLLOCAL jni::LocalReference<jobject> jni_check_classpath_sandbox(const char* cmd, const QoreProgram* pgm,
+        jni::Env& env, jstring classpath, bool global);
 
-//! Checks the entries of a classpath against a filesystem policy, as the JVM uses them (see jni-module.cpp)
-/** @param policy the policy to check the entries against; nullptr: no policy, every entry is allowed
+//! Checks a classpath against a filesystem policy, file by file, as the JVM uses them (see jni-module.cpp)
+/** The classpath is resolved once (QoreSandbox.resolveClasspath()) into the paths that are checked and the files
+    that are added, so that every file added is one that was checked (qore#6818): each entry is checked as the
+    absolute path that the JVM resolves it to (against its \c user.dir), with symbolic links resolved, in the bytes
+    that the JVM passes to the operating system for it; a wildcard entry is checked as its directory and as each file
+    that it selects.  Any denial refuses the whole classpath, and nothing is added; the denial of a file that a
+    wildcard selects is raised as \c JNI-CLASSPATH-ERROR, naming the file.
+
+    @param policy the policy to check the classpath against; nullptr: no policy, every entry is allowed
     @param env the JNI environment
-    @param classpath the classpath as the Java string that is then given to QoreURLClassLoader.addPath(), which
-    splits it into entries at the system path separator or \c ';'; each entry is checked as the absolute path that
-    the JVM resolves it to (against its \c user.dir), in the bytes that the JVM passes to the operating system for it
+    @param classpath the classpath as a Java string, with entries separated by the system path separator or \c ';'
+
+    @return the checked classpath to add with JniExternalProgramData::addClasspath(), or a null reference if there
+    is no policy
 
     @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a classpath entry
-    @throw JNI-SANDBOX-ERROR an entry cannot be represented in the file name encoding of the JVM
+    @throw JNI-CLASSPATH-ERROR the policy denies reading a file that a wildcard entry selects
+    @throw JNI-SANDBOX-ERROR a path cannot be represented in the file name encoding of the JVM
 */
-DLLLOCAL void jni_check_classpath_policy(QoreSandboxManager* policy, jni::Env& env, jstring classpath);
+DLLLOCAL jni::LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, jni::Env& env,
+        jstring classpath);
 
 extern "C" DLLEXPORT int jni_module_import(ExceptionSink* xsink, QoreProgram* pgm, const char* import);
 extern "C" DLLEXPORT QoreNamespace* jni_module_find_create_java_namespace(QoreString& arg, QoreProgram* pgm);
