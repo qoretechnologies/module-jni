@@ -135,6 +135,17 @@
       and its jni data, while or after they were deleted (\c PROGRAM-ERROR, or the use of freed data); a caller now
       holds the global context Program for as long as it uses it, and the shutdown deletes it once no other thread
       holds it (qore#6829)
+    - <b>Security</b>: fixed the use of a deleted %Qore Program by Java's calls into %Qore: the native methods that
+      Java calls with the Program pointer of a class loader (\c QoreJavaApi.callFunction(), \c callStaticMethod()
+      and \c newObjectSave(), \c QoreObject.callMethod(), \c QoreClosure.call(), and the generation and listing of
+      the Java classes of %Qore classes) used the pointer as it was, so that a call made while or after the Program
+      was deleted used the deleted Program's memory; and the class loader of a \c QoreJavaCompiler or
+      \c QoreKotlinCompiler kept a copy of the pointer of its parent that was never cleared.  The pointer is now
+      validated against the Programs that use the module and the Program is held for the call (and entered, for the
+      calls that run its code), and a call for a deleted Program raises a Java exception (\c JNI-ERROR) instead
+      (fail closed); the compilers' class loaders now share the pointer of their parent, so that it is cleared when the
+      Program is deleted, with the new \c QoreURLClassLoader.createDerived(), which is to be used instead of
+      <tt>new QoreURLClassLoader(parent.getPtr(), parent)</tt> (qore#TBD)
     - <b>Behaviour change</b>: at the module's shutdown, the module now waits for %Qore code that runs in a callback
       from a Java thread (ex: through \c QoreJavaApi.callFunction()) to return before it deletes the global Java
       context Program; before, such a callback could run against the deleted Program; a callback that never returns

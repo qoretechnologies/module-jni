@@ -1058,7 +1058,7 @@ generate_java(org/qore/jni/QoreInvocationHandler.java $State)
 generate_java(org/qore/jni/NativeCleanup.java $Ref)
 generate_java(org/qore/jni/BooleanWrapper.java)
 generate_java(org/qore/jni/ClassModInfo.java)
-generate_java(org/qore/jni/QoreURLClassLoader.java 1 2 $ResolvedClasspath)
+generate_java(org/qore/jni/QoreURLClassLoader.java 1 2 $ResolvedClasspath $ProgramDeletedException)
 generate_java(org/qore/jni/QoreRelativeTime.java)
 generate_java(org/qore/jni/JdbcColumnarBatch.java)
 generate_java(org/qore/jni/QoreClosureMarker.java)
@@ -1248,6 +1248,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
     test/java/src/org/qore/jni/test/ClassPtrProbe.java
+    test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/SandboxIo.java
     test/java/src/org/qore/jni/test/CrossProgramCalls.java
     test/java/src/org/qore/jni/test/CrossProgramStatic.java
@@ -1305,6 +1306,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/OverloadedMethods.java
     test/java/src/org/qore/jni/test/JvmPrimaryReaperExit.java
     test/java/src/org/qore/jni/test/GeneratedBindings.java
+    test/java/src/org/qore/jni/test/CachedProgramPtrProbe.java
     test/java/src/org/qore/jni/test/ContextProgramLifetimeProbe.java
     test/java/src/org/qore/jni/test/GlobalContextTeardownFixture.java
     test/java/src/org/qore/jni/test/JvmSignals.java

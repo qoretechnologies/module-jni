@@ -1050,6 +1050,10 @@ public:
     */
     DLLLOCAL static bool isIssued(const void* cls, const QoreProgram* pgm);
 
+    //! Returns true if the module's own code gave the class pointer for the innermost call that runs on the current
+    //! thread, for any Program
+    DLLLOCAL static bool isIssued(const void* cls);
+
     DLLLOCAL JniIssuedClassHelper(const JniIssuedClassHelper&) = delete;
     DLLLOCAL JniIssuedClassHelper& operator=(const JniIssuedClassHelper&) = delete;
 };

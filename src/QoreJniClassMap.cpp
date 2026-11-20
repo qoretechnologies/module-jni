@@ -35,6 +35,7 @@
 #include <stdexcept>
 #include <mutex>
 #include <unordered_set>
+#include <unordered_map>
 
 #include "defs.h"
 #include "Jvm.h"
@@ -4823,7 +4824,8 @@ void QoreJniClassMap::doFields(JniQoreClass& qc, jni::Class* jc, QoreProgram* pg
 namespace {
 struct JniProgramDataRegistry {
     std::mutex lock;
-    std::unordered_multiset<const QoreProgram*> pgms;
+    //! the jni data of each Program; the data is valid while it is registered, as its destructor unregisters it first
+    std::unordered_multimap<const QoreProgram*, JniExternalProgramData*> pgms;
 };
 
 JniProgramDataRegistry& jni_pgm_data() {
@@ -4832,19 +4834,36 @@ JniProgramDataRegistry& jni_pgm_data() {
 }
 }  // namespace
 
-static void jni_pgm_data_register(const QoreProgram* pgm) {
+static void jni_pgm_data_register(const QoreProgram* pgm, JniExternalProgramData* jpc) {
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);
-    reg.pgms.insert(pgm);
+    reg.pgms.emplace(pgm, jpc);
 }
 
-static void jni_pgm_data_unregister(const QoreProgram* pgm) {
+static void jni_pgm_data_unregister(const QoreProgram* pgm, JniExternalProgramData* jpc) {
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);
-    auto i = reg.pgms.find(pgm);
-    if (i != reg.pgms.end()) {
-        reg.pgms.erase(i);
+    auto range = reg.pgms.equal_range(pgm);
+    for (auto i = range.first; i != range.second; ++i) {
+        if (i->second == jpc) {
+            reg.pgms.erase(i);
+            break;
+        }
     }
+}
+
+bool JniExternalProgramData::clearCompilationCache(const QoreProgram* pgm) {
+    JniProgramDataRegistry& reg = jni_pgm_data();
+    // the data is kept alive by the lock, as its destructor, which can run at the same time, unregisters it first
+    std::lock_guard<std::mutex> guard(reg.lock);
+    auto range = reg.pgms.equal_range(pgm);
+    if (range.first == range.second) {
+        return false;
+    }
+    for (auto i = range.first; i != range.second; ++i) {
+        i->second->clearCompilationCache();
+    }
+    return true;
 }
 
 bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
@@ -4866,6 +4885,93 @@ void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHel
         // the entry is left by the caller's unwinding, after the exceptions have been taken from the sink, as when
         // the caller held the entry itself
         throw XsinkException(xsink);
+    }
+}
+
+// the error of a Program pointer received from Java whose Program has been deleted
+static constexpr const char* JAVA_PROGRAM_DELETED = "the Qore Program of the Java class loader has been deleted";
+// the error of a Program pointer received from Java that names a Program other than the one of the calling code, when
+// the calling code is governed by a sandbox (qore#6845)
+static constexpr const char* JAVA_PROGRAM_NOT_GOVERNED = "Java code called by code that a sandbox governs cannot call "
+    "into a Qore Program other than the one of the calling code";
+
+JniJavaProgramRef::JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader) {
+    acquire(env, ptr, loader);
+    if (!pgm) {
+        return;
+    }
+    try {
+        jni_enter_program_for_class_add(epch, pgm, xsink);
+    } catch (...) {
+        release();
+        throw;
+    }
+}
+
+JniJavaProgramRef::JniJavaProgramRef(Env& env, jlong ptr, jobject loader) {
+    acquire(env, ptr, loader);
+}
+
+void JniJavaProgramRef::acquire(Env& env, jlong ptr, jobject loader) {
+#ifdef DEBUG
+    // a test can hold the thread here, once it has received the Program pointer from Java and before it uses it
+    if (dbg_jni_java_program_ptr_hook_set.load(std::memory_order_acquire)) {
+        dbg_jni_run_java_program_ptr_hook();
+    }
+#endif
+    if (!ptr) {
+        return;
+    }
+    QoreProgram* p = reinterpret_cast<QoreProgram*>(ptr);
+    {
+        // a Program is registered while it has jni data, which its teardown destroys before it frees the Program: the
+        // reference taken under the lock keeps its memory
+        JniProgramDataRegistry& reg = jni_pgm_data();
+        std::lock_guard<std::mutex> guard(reg.lock);
+        if (reg.pgms.find(p) == reg.pgms.end()) {
+            throw BasicException(JAVA_PROGRAM_DELETED);
+        }
+        p->depRef();
+    }
+    pgm = p;
+    try {
+        // the Program found can have been created at the address of the deleted Program of the class loader, whose
+        // pointer was cleared before the deleted Program was freed: the pointer must still be the class loader's
+        LocalReference<jobject> current;
+        if (!loader) {
+            current = env.callStaticObjectMethod(Globals::classQoreURLClassLoader,
+                Globals::methodQoreURLClassLoaderGetCurrent, nullptr);
+            loader = current;
+        }
+        if (!loader || env.callLongMethod(loader, Globals::methodQoreURLClassLoaderGetPtr, nullptr) != ptr) {
+            throw BasicException(JAVA_PROGRAM_DELETED);
+        }
+        // Java code is not governed by a sandbox: for code that a sandbox governs, the Program must be the Program of
+        // the calling code (the Program context of the call; the current Program can be the Program of the class of a
+        // Java method that the code called), which the sandbox governs; Java code then cannot run Qore code in another
+        // Program, such as a Program of another tenant or the global Java context Program (qore#6845)
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
+        if (governing) {
+            QoreProgram* code_pgm = qore_get_call_program_context();
+            if (!code_pgm) {
+                code_pgm = ::getProgram();
+            }
+            if (p != code_pgm) {
+                throw BasicException(JAVA_PROGRAM_NOT_GOVERNED);
+            }
+        }
+    } catch (...) {
+        release();
+        throw;
+    }
+}
+
+void JniJavaProgramRef::release() noexcept {
+    // the entry is left before the reference is released, which can be the Program's last
+    epch.reset();
+    if (pgm) {
+        pgm->depDeref();
+        pgm = nullptr;
     }
 }
 
@@ -4952,7 +5058,7 @@ JniExternalProgramData::JniExternalProgramData(QoreNamespace* jni, QoreProgram* 
             addClasspath(env, env.newPathString(QoreString(classpath->c_str(), QCS_DEFAULT)), "QORE_JNI_CLASSPATH",
                 nullptr);
         }
-        jni_pgm_data_register(pgm);
+        jni_pgm_data_register(pgm, this);
     } catch (JavaException& e) {
         // the Java exception stays pending for the caller; no JNI call may be made while it is pending
         LocalReference<jthrowable> je(e.save());
@@ -4996,26 +5102,39 @@ JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& par
             &jargs[0]).makeGlobal();
     }
 
-    initDynamicApi(env);
+    // the class loader has the pointer of the Program, which gets no jni data if this fails: its pointer is cleared,
+    // as it would never be cleared otherwise, and would name the Program once it has been deleted
+    try {
+        initDynamicApi(env);
 
-    // copy the parent's class map to this one; another thread can add a class to the parent's map at the same time
-    // (the writers hold the class-map lock), and the copy for a child Program can run concurrently with them
-    {
-        JniClassMapLocker al;
-        jcmap = parent.jcmap;
-    }
+        // copy the parent's class map to this one; another thread can add a class to the parent's map at the same
+        // time (the writers hold the class-map lock), and the copy for a child Program can run concurrently with them
+        {
+            JniClassMapLocker al;
+            jcmap = parent.jcmap;
+        }
 
 #if QORE_VERSION_CODE >= 10013
-    ProgramRuntimeExternalParseContextHelper pch(pgm);
+        ProgramRuntimeExternalParseContextHelper pch(pgm);
 #endif
 
-    // find Jni namespace in new Program if present
-    jni = pgm->findNamespace("Jni");
-    if (!jni) {
-        jni = qjcm.copyProgramJniNs();
-        pgm->getRootNS()->addNamespace(jni);
+        // find Jni namespace in new Program if present
+        jni = pgm->findNamespace("Jni");
+        if (!jni) {
+            jni = qjcm.copyProgramJniNs();
+            pgm->getRootNS()->addNamespace(jni);
+        }
+        jni_pgm_data_register(pgm, this);
+    } catch (JavaException& e) {
+        // the Java exception stays pending for the caller; no JNI call may be made while it is pending
+        LocalReference<jthrowable> je(e.save());
+        releaseFailedClassLoader(env);
+        e.restore(je);
+        throw;
+    } catch (...) {
+        releaseFailedClassLoader(env);
+        throw;
     }
-    jni_pgm_data_register(pgm);
 }
 
 AbstractQoreProgramExternalData* JniExternalProgramData::copy(QoreProgram* pgm) const noexcept {
@@ -5039,7 +5158,7 @@ AbstractQoreProgramExternalData* JniExternalProgramData::copy(QoreProgram* pgm) 
 }
 
 JniExternalProgramData::~JniExternalProgramData() {
-    jni_pgm_data_unregister(pgm);
+    jni_pgm_data_unregister(pgm, this);
     // NOTE: the module root namespace cache is NOT purged here.  It is keyed by the Program that
     // owns each class (qc.getProgram()), which for a module class is the module's own Program and
     // need not have a JniExternalProgramData at all, so this destructor cannot see every entry.

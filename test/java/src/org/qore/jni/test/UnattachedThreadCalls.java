@@ -58,31 +58,23 @@ public final class UnattachedThreadCalls {
     }
 
     //! QoreObject.callMethod() with no Program in the class loader context of the thread
-    /** The Program pointer of the class loader context is 0 for the call (and then restored), so the native method
-        looks up the Program context of the thread
+    /** The class loader context of the thread has no Program, so the native method looks up the Program context of
+        the thread
     */
     public static String callMethodNoProgram(QoreObject obj, String name) throws InterruptedException {
         return inThread(() -> {
-            long ptr = QoreURLClassLoader.getProgramPtr();
-            QoreURLClassLoader.setProgramPtr(0);
-            try {
-                return obj.callMethod(name);
-            } finally {
-                QoreURLClassLoader.setProgramPtr(ptr);
-            }
+            // a class loader with no Program becomes the context of this thread of its own
+            QoreURLClassLoader.createWithoutProgram(UnattachedThreadCalls.class.getClassLoader());
+            return obj.callMethod(name);
         });
     }
 
     //! QoreClosure.call() with no Program in the class loader context of the thread; see callMethodNoProgram()
     public static String callClosureNoProgram(QoreClosure closure) throws InterruptedException {
         return inThread(() -> {
-            long ptr = QoreURLClassLoader.getProgramPtr();
-            QoreURLClassLoader.setProgramPtr(0);
-            try {
-                return closure.call();
-            } finally {
-                QoreURLClassLoader.setProgramPtr(ptr);
-            }
+            // a class loader with no Program becomes the context of this thread of its own
+            QoreURLClassLoader.createWithoutProgram(UnattachedThreadCalls.class.getClassLoader());
+            return closure.call();
         });
     }
 

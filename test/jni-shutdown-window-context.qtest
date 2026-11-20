@@ -9,7 +9,8 @@
 # QoreJavaApi.callFunction() or QoreJavaApi.newObjectSave() in a thread whose class loader's Program is gone) fell
 # back to Globals::getJavaContextProgram(), which created the global context Program again; that Program was never
 # deleted (valgrind: a definite leak from Globals::createJavaContextProgram()).  Such a call now raises a Java
-# exception instead (qore#6827).
+# exception instead (qore#6827): the class loader's Program has been deleted (qore#6845), or, for a call that reaches
+# the native method, the module is being shut down.
 #
 # Each case runs test/jni-shutdown-window-context-child.q in a new process, as the module is shut down when the
 # process exits.  A debug build of the module runs the java.lang.Runnable set with
@@ -26,10 +27,14 @@
 
 class JniShutdownWindowContextTest inherits QUnit::Test {
     public {
-        #! the Java exception that a call from Java raises during the module's shutdown (the native method's handler
-        #! raises a java.lang.Error, as no Qore exception can be raised in Java once the module's shutdown has started)
-        const ShutdownError = "^probe: java\\.lang\\.Error: cannot raise the Qore exception of a JNI native method in "
-            "Java; the Qore library or the jni module has been shut down$";
+        #! the Java exception that a call from Java raises during the module's shutdown: the class loader of the thread
+        #! names the Program whose data the shutdown destroyed, so the call fails in Java before it reaches the native
+        #! method, rather than being made in another Program (qoretechnologies/qore#6845); a call that reaches the
+        #! native method gets a java.lang.Error, as no Qore exception can be raised in Java once the module's shutdown
+        #! has started
+        const ShutdownError = "^probe: (org\\.qore\\.jni\\.QoreURLClassLoader\\$ProgramDeletedException: the Qore "
+            "Program of the Java class loader has been deleted|java\\.lang\\.Error: cannot raise the Qore exception "
+            "of a JNI native method in Java; the Qore library or the jni module has been shut down)$";
     }
 
     constructor() : QUnit::Test("JNI module shutdown window context Program", "1.0") {

@@ -718,6 +718,14 @@ public:
     */
     DLLLOCAL static bool hasProgramData(const QoreProgram* pgm);
 
+    //! Clears the compilation cache of the jni data of the Program, if it has jni data; returns false if not
+    /** For a thread that is not in the Program: the data is kept alive by the lock of the registry of the Programs
+        with jni data, which the data's destructor takes to unregister it before it is destroyed; as
+        clearCompilationCache(), the cache is cleared without the code generation lock, so a concurrent code
+        generation for the Program is not serialized with it
+    */
+    DLLLOCAL static bool clearCompilationCache(const QoreProgram* pgm);
+
     // get / create JNI program data in the given Qore program
     DLLLOCAL static JniExternalProgramData* getCreateJniProgramData(QoreProgram* pgm);
 
@@ -1022,6 +1030,95 @@ DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelp
 */
 DLLLOCAL void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch,
         QoreProgram* pgm, ExceptionSink& xsink);
+
+//! A Program named by a Program pointer that Java passed to a native method, validated and held for the native call
+/** Java caches the pointers of Programs: each org.qore.jni.QoreURLClassLoader has the pointer of the Program whose
+    class loader it is, and the class loaders derived from it (ex: the class loader of a QoreJavaCompiler) share it;
+    Java passes it to the native methods that call into the Program or read its definitions (ex:
+    QoreJavaApi.callFunction(), or the generation of the byte code of a Java class for a Qore class).  The Program can
+    be deleted at any time while Java has the pointer: the pointer of a class loader is cleared when the Program's jni
+    data is destroyed, but a native method can have received it just before, and the Program's memory can have been
+    freed by the time the method uses it.
+
+    The pointer is therefore not used as it is: the Program is looked up in the registry of the Programs with jni data
+    and dependency-referenced under the registry's lock, which keeps its memory for the lifetime of this object; the
+    pointer must still be the pointer of the class loader that Java read it from (\a loader), as a Program created at
+    the address of a deleted one is registered under the same pointer, while the class loader of the deleted one was
+    cleared before its memory was freed; the Program is then entered as jni_enter_program_for_class_add() enters it,
+    which fails if the Program is being torn down, and keeps it from being torn down while it is entered.
+
+    A pointer of 0 names no Program: get() then returns nullptr, and the caller uses the Program context of the thread
+    or the global Java context Program, as it did before.
+
+    A native that only reads the module's own data for the Program, or that is called while the Program can be parsed
+    by another thread (ex: by the class loading of a Java compiler that runs on its own threads while the Program is
+    parsed), which no runtime entry is allowed into, validates and holds the Program without entering it (the
+    constructor without a sink): the Program's memory is kept, not its data, which the native then reads only in a way
+    that is safe while the Program is torn down (ex: JniExternalProgramData::clearCompilationCache(const
+    QoreProgram*)) or as the code before it did.
+
+    This relies on the Program's teardown destroying its jni data before the Program is freed, as clearing a Program
+    does (QoreProgram::waitForTerminationAndDeref() or QoreProgram::deref(ExceptionSink*)); a Program released with
+    QoreProgram::deref() without being cleared first keeps its external data, which libqore does not support for a
+    Program with code.
+
+    @note the dependency reference is released when the object is destroyed; it is the last one only if the Program
+    was deleted meanwhile by another thread, which cleared it (its data, and its code), so that only the Program
+    object itself is destroyed on this thread (which detaches the debugger from it, if any, taking only the locks of
+    the Program registry with no other lock held), as when a generated binding releases its reference.  An exception
+    raised when the entry is left (ex: by a thread exit handler of the Program) is left in the sink given, which
+    reports it when it is destroyed, as for any other exception left in a sink
+*/
+class JniJavaProgramRef {
+public:
+    //! Validates the Program pointer \a ptr received from Java, and holds and enters the Program if it is valid
+    /** @param env the JNI environment of the thread
+        @param xsink the sink of the entry, which the entry uses also when it is left: it must outlive this object
+        @param ptr the Program pointer, or 0
+        @param loader the class loader that Java read the pointer from, or nullptr for the thread's class loader
+        context (QoreURLClassLoader.getCurrent()), which QoreURLClassLoader.getProgramPtr() reads
+
+        @throw BasicException the pointer names no Program with jni data, as its Program has been deleted
+        @throw JavaException the class loader's pointer could not be read
+        @throw XsinkException the Program cannot be entered (ex: it is being torn down)
+    */
+    DLLLOCAL JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader = nullptr);
+
+    //! Validates the Program pointer \a ptr received from Java, and holds the Program, without entering it
+    /** @param env the JNI environment of the thread
+        @param ptr the Program pointer, or 0
+        @param loader the class loader that Java read the pointer from, or nullptr for the thread's class loader
+        context
+
+        @throw BasicException the pointer names no Program with jni data, as its Program has been deleted
+        @throw JavaException the class loader's pointer could not be read
+    */
+    DLLLOCAL JniJavaProgramRef(Env& env, jlong ptr, jobject loader = nullptr);
+
+    DLLLOCAL ~JniJavaProgramRef() {
+        release();
+    }
+
+    JniJavaProgramRef(const JniJavaProgramRef&) = delete;
+    JniJavaProgramRef& operator=(const JniJavaProgramRef&) = delete;
+
+    //! Returns the Program, or nullptr if the pointer was 0
+    DLLLOCAL QoreProgram* get() const {
+        return pgm;
+    }
+
+private:
+    //! the Program, dependency-referenced, or nullptr
+    QoreProgram* pgm = nullptr;
+    //! the entry into the Program; empty if the Program is current (see jni_enter_program_for_class_add())
+    std::optional<QoreExternalProgramContextHelper> epch;
+
+    //! Validates the pointer and dependency-references its Program (see the constructors)
+    DLLLOCAL void acquire(Env& env, jlong ptr, jobject loader);
+
+    //! Leaves the Program, then releases its dependency reference
+    DLLLOCAL void release() noexcept;
+};
 }
 
 #endif
