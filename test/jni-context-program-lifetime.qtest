@@ -17,7 +17,9 @@
 # build of the module holds the thread there once it has obtained the Program and its jni data
 # (Jni::dbg_jni_set_context_program_hook()); the module's shutdown releases it once it has seen that the thread holds
 # the Program, before it waits for it (Jni::dbg_jni_set_context_program_wait_hook()), so the thread uses the Program
-# while the shutdown waits; without the hold, the thread would be released only after the deletion.  The
+# while the shutdown waits; without the hold, the thread would be released only after the deletion.  A shutdown that
+# does not see the holder fails every time (the thread is then released after the deletion); one that sees it and does
+# not wait for it races with the thread, and fails only when the deletion wins, or under valgrind.  The
 # thread calls the function again between the deletion of the Program and the destruction of the JVM
 # (Jni::dbg_jni_set_shutdown_window_hook()), which fails, as no global context Program exists then (qore#6827).  With
 # QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT set, the module prints the number of global context Programs created and
