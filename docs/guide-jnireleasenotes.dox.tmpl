@@ -6,6 +6,12 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - \c OpcUaServerRuntime::stop() in @ref opcuadataproviderintro "OpcUaDataProvider" could return while the
+      process still held an OS-assigned port (a \c port option of 0): the listener's Netty channel releases its
+      socket only when its event loop next selects, after the close has completed, which stop() waited for; the
+      listener and its connections are now served by a dedicated event loop, whose termination, which releases the
+      port, stop() waits for, failing with \c java.lang.IllegalStateException if the port is not released within
+      30 seconds
     - <b>Security</b>: under a sandbox with a filesystem policy, the jars and directories that the manifest
       \c Class-Path attributes of a classpath's jars name, which the class loader opens as well, were not checked
       against the policy; they are now resolved as the class loader resolves them, recursively and each once, and

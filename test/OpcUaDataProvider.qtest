@@ -96,6 +96,10 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             \genericServerRuntimeAssignedPortTest());
         addTestCase("generic OPC UA server runtime stop releases an OS-assigned port",
             \genericServerRuntimeStopReleasesPortTest());
+        addTestCase("generic OPC UA server runtime stop fails if an OS-assigned port is not released in time",
+            \genericServerRuntimeStopReleaseTimeoutTest());
+        addTestCase("generic OPC UA server runtime stop releases an OS-assigned port when never started",
+            \genericServerRuntimeStopUnstartedReleasesPortTest());
         addTestCase("generic OPC UA server runtime", \genericServerRuntimeTest());
         addTestCase("generic OPC UA server runtime materializes nested browse paths",
             \genericServerRuntimeNestedPathTest());
@@ -1851,7 +1855,7 @@ sub sandboxProbe() {
             "the runtime serves on the assigned port");
         assertTrue(processHoldsPort(port), "this process holds the port while the runtime runs");
 
-        GenericServer::holdPortReleaseForTest();
+        GenericServer::holdPortReleaseForTest(True);
         runtime.stop();
         # checked before the hold is released, which would let a release that stop() did not wait for happen
         bool held = GenericServer::isPortReleaseHeldForTest();
@@ -1860,6 +1864,69 @@ sub sandboxProbe() {
 
         assertTrue(held, "the port release was held after the listener's channel was closed");
         assertFalse(holds, "the port is released when stop() returns");
+    }
+
+    #! stop() fails with a clear exception if the OS-assigned port is not released in time, and can be called again
+    /** The release is held with the test hook until it is released explicitly, so the bound of the wait always
+        expires
+    */
+    genericServerRuntimeStopReleaseTimeoutTest() {
+        assertThrows("JNI-ERROR", "IllegalArgumentException: the port release timeout must not be negative",
+            \GenericServer::setPortReleaseTimeoutForTest(), -1);
+
+        OpcUaServerRuntime runtime({
+            "port": 0,
+            "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-stop-timeout-test"),
+        }, NOTHING);
+        on_exit {
+            GenericServer::setPortReleaseTimeoutForTest(0);
+            GenericServer::releasePortReleaseHoldForTest();
+            runtime.stop();
+        }
+
+        int port = runtime.getPort();
+        *bool holds = processHoldsPort(port);
+        if (!exists holds) {
+            testSkip("no /proc: the port release cannot be checked without binding the port");
+        }
+        runtime.start();
+        assertTrue(processHoldsPort(port), "this process holds the port while the runtime runs");
+
+        GenericServer::holdPortReleaseForTest(False);
+        GenericServer::setPortReleaseTimeoutForTest(1);
+        assertThrows("JNI-ERROR", "IllegalStateException: the OS-assigned port " + port + " was not released within " +
+            "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
+        assertTrue(GenericServer::isPortReleaseHeldForTest(),
+            "the port release was held after the listener's channel was closed");
+        assertTrue(processHoldsPort(port), "the port is still held while its release is held");
+
+        GenericServer::setPortReleaseTimeoutForTest(0);
+        GenericServer::releasePortReleaseHoldForTest();
+        runtime.stop();
+        assertFalse(processHoldsPort(port), "a stop() made again waits for the release");
+        # stopping a stopped runtime again does nothing
+        runtime.stop();
+        assertFalse(processHoldsPort(port), "the port stays released");
+    }
+
+    #! A runtime that is never started holds an OS-assigned port until stop(), which releases it
+    genericServerRuntimeStopUnstartedReleasesPortTest() {
+        OpcUaServerRuntime runtime({
+            "port": 0,
+            "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-stop-unstarted-test"),
+        }, NOTHING);
+        on_exit runtime.stop();
+
+        int port = runtime.getPort();
+        *bool holds = processHoldsPort(port);
+        if (!exists holds) {
+            testSkip("no /proc: the port release cannot be checked without binding the port");
+        }
+        assertTrue(holds, "this process holds the port before the runtime is started");
+        runtime.stop();
+        assertFalse(processHoldsPort(port), "the port is released when the runtime is stopped");
+        # a released port cannot be served again: Milo reports the failed bind as no endpoint bound
+        assertThrows("JNI-ERROR", "No endpoints bound", \runtime.start());
     }
 
     #! Returns True if a socket of this process has the given local TCP port, or NOTHING if it cannot be checked

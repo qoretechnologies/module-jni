@@ -32,10 +32,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.EventLoopGroup;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.util.concurrent.DefaultThreadFactory;
 import io.netty.util.concurrent.GlobalEventExecutor;
 
 import org.qore.jni.Hash;
@@ -117,6 +120,9 @@ public class GenericServer {
     private final int port;
     // the listener holding an OS-assigned port (a port option of 0), or null for a configured port
     private volatile ServerSocketChannel listener;
+    // the event loop serving the listener of an OS-assigned port and its connections, from the server's start until
+    // the port is released, or null
+    private volatile EventLoopGroup listenerEventLoop;
     private final String path;
     private final String namespaceUri;
     private final int maxHistoryValues;
@@ -126,12 +132,18 @@ public class GenericServer {
     private volatile boolean started;
 
     // test hook (see holdPortReleaseForTest()): the hold armed for the next listener channel closed, the hold last
-    // armed, and whether a closed listener channel took the armed hold
+    // armed, whether the hold ends once stop() waits for the release, and whether a closed listener channel took the
+    // armed hold
     private static final AtomicReference<CountDownLatch> portReleaseHoldArmed = new AtomicReference<>();
     private static volatile CountDownLatch portReleaseHold;
+    private static volatile boolean portReleaseHoldUntilWaited;
     private static volatile boolean portReleaseHeld;
     // the bound of a test hold, which a test that fails before releasing it does not hold forever
     private static final long PORT_RELEASE_HOLD_TIMEOUT_SECONDS = 60;
+    // the default bound of the wait for the release of an OS-assigned port when the server is stopped
+    private static final long DEFAULT_PORT_RELEASE_TIMEOUT_MILLIS = 30000;
+    // the bound of the wait for the release of an OS-assigned port (see setPortReleaseTimeoutForTest())
+    private static volatile long portReleaseTimeoutMillis = DEFAULT_PORT_RELEASE_TIMEOUT_MILLIS;
 
     /** Creates a server without a runtime callback dispatcher. */
     public GenericServer(Map<String, Object> options) throws Exception {
@@ -212,11 +224,52 @@ public class GenericServer {
     }
 
     private void releasePort() throws Exception {
+        Exception failure = null;
         ServerSocketChannel l = listener;
         if (l != null) {
             listener = null;
-            l.close();
+            try {
+                l.close();
+            } catch (Exception e) {
+                failure = e;
+            }
         }
+        // the event loop is terminated even if the listener could not be closed, which a failure to terminate it
+        // does not replace
+        try {
+            awaitListenerEventLoopTermination();
+        } catch (Exception e) {
+            if (failure == null) {
+                failure = e;
+            } else {
+                failure.addSuppressed(e);
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    // A closed channel that is registered with a selector keeps its socket, and so the port, until the selector
+    // deregisters it, which the event loop does in its next select, after the channel's close has completed: the
+    // port is released for certain only once the event loop, which closes its selector when it terminates, has
+    // terminated.  If it does not terminate in time, it is kept, so stop() can be called again to wait for it.
+    private void awaitListenerEventLoopTermination() throws Exception {
+        EventLoopGroup group = listenerEventLoop;
+        if (group == null) {
+            return;
+        }
+        group.shutdownGracefully(0, 0, TimeUnit.SECONDS);
+        if (portReleaseHoldUntilWaited) {
+            // a test hold of the release that ends once the release is waited for
+            releasePortReleaseHoldForTest();
+        }
+        long timeout = portReleaseTimeoutMillis;
+        if (!group.terminationFuture().await(timeout, TimeUnit.MILLISECONDS)) {
+            throw new IllegalStateException("the OS-assigned port " + port + " was not released within " + timeout
+                + " ms after the server was stopped; stop() can be called again to wait for the release");
+        }
+        listenerEventLoop = null;
     }
 
     // releases the port while the given failure is raised, which a failure to release it does not replace
@@ -231,13 +284,14 @@ public class GenericServer {
     /** Test hook: holds the release of the next OS-assigned port whose listener channel is closed
 
         The event loop that serves the listener is held right after the listener's channel is closed, before the
-        channel releases the port, until releasePortReleaseHoldForTest() is called (or for at most 60 seconds); this
-        lets a test check deterministically that stop() returns only once the port is released.  Not for production
-        use.
+        channel releases the port, until releasePortReleaseHoldForTest() is called (or for at most 60 seconds), or,
+        if \a untilWaited is true, until stop() waits for the release as well; this lets a test check
+        deterministically that stop() returns only once the port is released.  Not for production use.
     */
-    public static void holdPortReleaseForTest() {
+    public static void holdPortReleaseForTest(boolean untilWaited) {
         CountDownLatch hold = new CountDownLatch(1);
         portReleaseHeld = false;
+        portReleaseHoldUntilWaited = untilWaited;
         portReleaseHold = hold;
         portReleaseHoldArmed.set(hold);
     }
@@ -254,6 +308,19 @@ public class GenericServer {
         if (hold != null) {
             hold.countDown();
         }
+    }
+
+    /** Test hook: sets the bound of the wait for the release of an OS-assigned port when the server is stopped
+
+        @param millis the bound in milliseconds; 0 restores the default of 30 seconds
+
+        Not for production use.
+    */
+    public static void setPortReleaseTimeoutForTest(long millis) {
+        if (millis < 0) {
+            throw new IllegalArgumentException("the port release timeout must not be negative");
+        }
+        portReleaseTimeoutMillis = millis == 0 ? DEFAULT_PORT_RELEASE_TIMEOUT_MILLIS : millis;
     }
 
     // holds the event loop of the given closed listener channel if a test armed a hold
@@ -312,9 +379,16 @@ public class GenericServer {
                     throw new IllegalStateException("the reserved port " + port + " was released");
                 }
                 OpcTcpServerTransportConfig transportConfig = OpcTcpServerTransportConfig.newBuilder().build();
+                // a dedicated event loop, not Milo's shared one, which is never terminated: stop() waits for its
+                // termination, as only that releases the port for certain (see awaitListenerEventLoopTermination())
+                EventLoopGroup group = listenerEventLoop;
+                if (group == null) {
+                    group = new NioEventLoopGroup(1, new DefaultThreadFactory("qore-opcua-server-" + port, true));
+                    listenerEventLoop = group;
+                }
                 io.netty.channel.Channel listenerChannel = new ServerBootstrap()
                     .channelFactory(() -> new NioServerSocketChannel(l))
-                    .group(transportConfig.getEventLoop())
+                    .group(group)
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel channel) {
@@ -343,7 +417,11 @@ public class GenericServer {
         }
     }
 
-    /** Stops the server and blocks until shutdown is complete; releases an OS-assigned port. */
+    /** Stops the server and blocks until shutdown is complete; releases an OS-assigned port
+
+        @throws IllegalStateException if an OS-assigned port is not released within 30 seconds; stop() can then be
+        called again to wait for the release
+    */
     public synchronized void stop() throws Exception {
         try {
             if (started) {
@@ -354,7 +432,8 @@ public class GenericServer {
             releasePort(e);
             throw e;
         }
-        // the server's channel closed the listener; a server that was never started still holds it
+        // the server's channel closed the listener, which a server that was never started still holds; the port is
+        // released once the listener's event loop has terminated
         releasePort();
     }
 

@@ -71,6 +71,12 @@ public class OpcUaServerRuntime {
     }
 
     #! Stops the server endpoint
+    /** Returns once the server has shut down; an OS-assigned port (a \c port option of 0) is released by then, so
+        this process no longer holds a socket with it
+
+        @throw JNI-ERROR (\c java.lang.IllegalStateException) if an OS-assigned port is not released within 30
+            seconds; stop() can then be called again to wait for the release
+    */
     stop() {
         if (server) {
             server.stop();
