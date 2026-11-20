@@ -173,6 +173,7 @@ public:
     DLLLOCAL static GlobalReference<jclass> classQoreJavaApi;                     // org.qore.jni.QoreJavaApi
     DLLLOCAL static GlobalReference<jclass> classQoreSandbox;                     // org.qore.jni.QoreSandbox
     DLLLOCAL static jmethodID methodQoreSandboxResolveClasspath;                  // static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String)
+    DLLLOCAL static jmethodID methodQoreSandboxExpandClasspath;                   // static void expandClasspath(ResolvedClasspath, int)
     DLLLOCAL static jmethodID methodQoreJavaApiGetStackTrace;                     // StackTraceElement[] getStackTrace()
     DLLLOCAL static GlobalReference<jclass> classJavaCollectionTypes;             // org.qore.jni.JavaCollectionTypes
     DLLLOCAL static jmethodID methodJavaCollectionTypesIsStringKeyMap;            // boolean isStringKeyMap(Object)
@@ -222,6 +223,8 @@ public:
     DLLLOCAL static jmethodID methodResolvedClasspathSize;                        // int ResolvedClasspath.size()
     DLLLOCAL static jmethodID methodResolvedClasspathEncodedPath;                 // byte[] ResolvedClasspath.encodedPath(int)
     DLLLOCAL static jmethodID methodResolvedClasspathIsWildcardMatch;             // boolean ResolvedClasspath.isWildcardMatch(int)
+    DLLLOCAL static jmethodID methodResolvedClasspathManifestReferrer;            // String ResolvedClasspath.manifestReferrer(int)
+    DLLLOCAL static jmethodID methodResolvedClasspathRefusal;                     // String ResolvedClasspath.refusal(int)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderAddParentPath;              // void QoreURLClassLoader.addParentPath(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderLoadClass;                  // Class QoreURLClassLoader.loadClass(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderLoadClassWithPtr;           // Class QoreURLClassLoader.loadClassWithPtr(String, long)

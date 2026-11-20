@@ -387,22 +387,36 @@ public final class QoreSandbox {
 
     //! Resolves a classpath once for its sandbox check and its use (qore#6818)
     /** Called by the module for a classpath that a filesystem policy governs: the module checks each element of the
-        result against the policy, and then gives the same object to QoreURLClassLoader.addResolvedPath(), which adds
-        only files that were checked, so that the classpath is not resolved again between the check and the use.  The
-        elements are those of QoreURLClassLoader.resolveClasspath(): each entry as the JVM resolves it (against its
-        \c user.dir, not the current directory of the process, also for a wildcard with no directory part, such as
-        \c "*.jar"), with symbolic links resolved, and for a wildcard entry, its directory and each file that it
-        selects.  Each checked path is encoded as encode() does, which raises JNI-SANDBOX-ERROR for a path that the
-        file name encoding cannot represent exactly.
+        result against the policy, calling expandClasspath() after each element is checked, and then gives the same
+        object to QoreURLClassLoader.addResolvedPath(), which adds only files that were checked, so that the
+        classpath is not resolved again between the check and the use.  The elements are those of
+        QoreURLClassLoader.resolveClasspath(): each entry as the JVM resolves it (against its \c user.dir, not the
+        current directory of the process, also for a wildcard with no directory part, such as \c "*.jar"), with
+        symbolic links resolved, and for a wildcard entry, its directory and each file that it selects.  Each checked
+        path is encoded as encode() does, which raises JNI-SANDBOX-ERROR for a path that the file name encoding cannot
+        represent exactly.
     */
     static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath) {
         QoreURLClassLoader.ResolvedClasspath rc = QoreURLClassLoader.resolveClasspath(classpath);
-        byte[][] encoded = new byte[rc.size()][];
-        for (int i = 0; i < encoded.length; ++i) {
-            encoded[i] = encode(rc.path(i).getPath(), "classpath entry");
-        }
-        rc.setEncoded(encoded);
+        encodeNew(rc);
         return rc;
+    }
+
+    //! Called by the module after element \a i of a resolved classpath has been checked (qore#6822)
+    /** Adds the jars and directories that the manifest Class-Path attribute of the element names, if it is a jar, as
+        further elements to check (see QoreURLClassLoader.ResolvedClasspath.expand()), and encodes their paths as
+        resolveClasspath() does.
+    */
+    static void expandClasspath(QoreURLClassLoader.ResolvedClasspath rc, int i) {
+        rc.expand(i);
+        encodeNew(rc);
+    }
+
+    //! Encodes the paths of the elements of a resolved classpath that have not been encoded yet
+    private static void encodeNew(QoreURLClassLoader.ResolvedClasspath rc) {
+        for (int i = rc.encodedSize(); i < rc.size(); ++i) {
+            rc.addEncoded(encode(rc.path(i).getPath(), "classpath entry"));
+        }
     }
 
     //! Returns the encoding that the JVM uses for file names and other strings passed to the operating system

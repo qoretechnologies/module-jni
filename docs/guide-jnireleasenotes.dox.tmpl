@@ -6,6 +6,15 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: under a sandbox with a filesystem policy, the jars and directories that the manifest
+      \c Class-Path attributes of a classpath's jars name, which the class loader opens as well, were not checked
+      against the policy; they are now resolved as the class loader resolves them, recursively and each once, and
+      checked as their real paths (with symbolic links resolved) together with the classpath's own entries; if the
+      policy denies any of them, or one cannot be checked, the whole classpath is refused with
+      \c JNI-CLASSPATH-ERROR, naming the file, and nothing is added.  The class loader still follows the manifests,
+      so the classpath that is used is unchanged.  The \c add-classpath and \c add-relative-classpath module
+      commands and the \c classpath option of the \c jdbc driver are affected; with no filesystem policy, classpaths
+      are added as before (qore#6822, see @ref jni_sandbox)
     - <b>Security</b>: under a sandbox with a filesystem policy, a wildcard classpath entry was checked as its pattern
       path as a whole, not file by file, so the policy was not applied to each file that the wildcard selected; a
       wildcard entry is now expanded once, each file that it selects is checked as its real path (with symbolic links

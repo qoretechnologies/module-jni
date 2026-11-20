@@ -32,9 +32,14 @@ import java.io.IOException;
 import java.io.FilenameFilter;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 
 import java.nio.file.Files;
 import java.nio.file.FileSystems;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 
 import java.util.Hashtable;
 import java.util.StringTokenizer;
@@ -45,6 +50,11 @@ import java.util.Enumeration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Locale;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
+import java.util.zip.ZipFile;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -1342,13 +1352,30 @@ public class QoreURLClassLoader extends URLClassLoader {
         //infoLog("Class loader is using classpath: \"" + classPath + "\".");
     }
 
-    //! A classpath resolved once, for both its sandbox check and its use (qore#6818)
+    //! The most jars and directories that the manifest Class-Path attributes of a sandboxed classpath can name
+    /** Each entry that the manifests name is resolved and checked, and each jar's manifest read, before the classpath is
+        added; a classpath whose manifests name more entries is refused (qore#6822).  The limit bounds that work for a
+        set of manifests whose entries keep naming new paths (ex: through a directory link to its own directory).
+    */
+    static final int MAX_MANIFEST_ENTRIES = 4096;
+
+    //! A classpath resolved once, for both its sandbox check and its use (qore#6818, qore#6822)
     /** Made by resolveClasspath(); each element is a path that the sandbox check of the classpath checks, and the
         file that addResolvedPath() adds for it, if any.  The check and the use take their paths from this one object,
         so every file that is added is one that was checked, with no second resolution in between.
 
-        The sandbox check (see QoreSandbox.resolveClasspath()) reads each element with size(), encodedPath() and
-        isWildcardMatch(); a denial refuses the whole classpath, so the classpath is then not added at all.
+        The sandbox check (see jni_check_classpath_policy() in the module) reads each element with size(),
+        encodedPath(), isWildcardMatch(), manifestReferrer() and refusal(), and after an element has been checked, it
+        calls expand() for it (with QoreSandbox.expandClasspath()), which adds the jars and directories that the
+        manifest Class-Path attribute of a jar names as further elements, to be checked in turn: a file is checked
+        before it is opened.  A denial refuses the whole classpath, so the classpath is then not added at all.
+
+        The elements that a manifest names are only checked; they are not added to the class loader, which follows
+        the manifest Class-Path attributes of the jars that it opens itself.  Each is the path that the class loader
+        opens for the entry: the entry is resolved as a URL against the URL that the class loader has for the jar
+        that names it (not against the real path of that jar), and the file that the URL names is the element, with
+        symbolic links resolved.  So every file that the class loader reaches through a manifest is one that was
+        checked, and the classpath that is used is the one that was given.
     */
     static final class ResolvedClasspath {
         //! the path that is checked for each element
@@ -1359,17 +1386,42 @@ public class QoreURLClassLoader extends URLClassLoader {
         private final ArrayList<Boolean> matches = new ArrayList<Boolean>();
         //! for each element: a message logged when the element is used, or null
         private final ArrayList<String> notes = new ArrayList<String>();
+        //! for each element: the URL of the jar as the class loader opens it, whose manifest is read, or null
+        private final ArrayList<URL> jarUrls = new ArrayList<URL>();
+        //! for each element that a manifest names: the path of the jar whose manifest names it, or null
+        private final ArrayList<String> referrers = new ArrayList<String>();
+        //! for each element: the reason that the classpath is refused, or null
+        private final ArrayList<String> refusals = new ArrayList<String>();
         //! the checked paths as the bytes that the JVM uses for them, set by the sandbox check
-        private byte[][] encoded;
+        private final ArrayList<byte[]> encoded = new ArrayList<byte[]>();
+        //! the URLs of the jars and directories, as the class loader identifies them, that are elements already
+        private final HashSet<String> seen = new HashSet<String>();
+        //! the number of elements that have been checked and expanded
+        private int expanded;
+        //! the number of elements that manifests named
+        private int manifestEntries;
 
         private ResolvedClasspath() {
         }
 
         private void add(File path, File file, boolean match, String note) {
+            add(path, file, match, note, null, null, null);
+        }
+
+        private void add(File path, File file, boolean match, String note, URL jarUrl, String referrer,
+                String refusal) {
             paths.add(path);
             files.add(file);
             matches.add(match);
             notes.add(note);
+            jarUrls.add(jarUrl);
+            referrers.add(referrer);
+            refusals.add(refusal);
+        }
+
+        //! Adds an element that refuses the classpath
+        private void refuse(File path, String referrer, String refusal) {
+            add(path, null, false, null, null, referrer, refusal);
         }
 
         //! Returns the number of elements
@@ -1382,23 +1434,249 @@ public class QoreURLClassLoader extends URLClassLoader {
             return paths.get(i);
         }
 
-        //! Sets the checked paths as the bytes that the JVM uses for them (see QoreSandbox.resolveClasspath())
-        void setEncoded(byte[][] encoded) {
-            if (encoded.length != paths.size()) {
+        //! Returns the number of elements whose paths have been encoded
+        int encodedSize() {
+            return encoded.size();
+        }
+
+        //! Adds the encoding of the next element's path (see QoreSandbox.resolveClasspath())
+        void addEncoded(byte[] bytes) {
+            if (encoded.size() >= paths.size()) {
                 throw new IllegalArgumentException("the encoded paths do not match the classpath");
             }
-            this.encoded = encoded;
+            encoded.add(bytes);
         }
 
         //! Returns the path that is checked for an element as the bytes that the JVM uses for it
         byte[] encodedPath(int i) {
-            return encoded[i];
+            return encoded.get(i);
         }
 
         //! Returns true if a wildcard selected the element, so that its denial is reported as such
         boolean isWildcardMatch(int i) {
             return matches.get(i);
         }
+
+        //! Returns the path of the jar whose manifest names the element, or null if the classpath gives it
+        String manifestReferrer(int i) {
+            return referrers.get(i);
+        }
+
+        //! Returns the reason that the element refuses the classpath, or null
+        String refusal(int i) {
+            return refusals.get(i);
+        }
+
+        //! Returns true if every element has been checked and expanded
+        boolean isChecked() {
+            return expanded == paths.size() && encoded.size() == paths.size();
+        }
+
+        //! Adds a jar of the classpath that the class loader opens, so that its manifest is read when it is expanded
+        private void addJar(File real, boolean match) {
+            URL url = loaderUrl(real);
+            if (url != null) {
+                seen.add(urlKey(url));
+            }
+            add(real, real, match, null, url, null, null);
+        }
+
+        //! Called after element \a i has been checked: adds the entries of its manifest Class-Path, if any (qore#6822)
+        /** The elements are expanded in order, each once, and only after it has been checked, so that no file is
+            opened before the policy has allowed it.  The jar is read at its checked (real) path.  A manifest that
+            cannot be read refuses the classpath, as its Class-Path cannot be checked.
+        */
+        void expand(int i) {
+            if (i != expanded || i >= paths.size()) {
+                throw new IllegalStateException("classpath elements must be expanded in order after they are checked");
+            }
+            ++expanded;
+            URL base = jarUrls.get(i);
+            if (base == null) {
+                return;
+            }
+            File jar = paths.get(i);
+            String classpath;
+            try (JarFile jf = new JarFile(jar, true, ZipFile.OPEN_READ, JarFile.runtimeVersion())) {
+                Manifest man = jf.getManifest();
+                Attributes attrs = man == null ? null : man.getMainAttributes();
+                classpath = attrs == null ? null : attrs.getValue(Attributes.Name.CLASS_PATH);
+            } catch (IOException | RuntimeException e) {
+                refuse(jar, null, "cannot read the manifest of the classpath jar '" + jar + "' to check the jars that "
+                    + "its Class-Path attribute names against the sandbox filesystem policy: " + e);
+                return;
+            }
+            if (classpath == null) {
+                return;
+            }
+            // the entries are separated by white space, as the class loader splits them
+            for (StringTokenizer st = new StringTokenizer(classpath); st.hasMoreTokens();) {
+                String entry = st.nextToken();
+                if (++manifestEntries > MAX_MANIFEST_ENTRIES) {
+                    refuse(jar, jar.getPath(), "the manifest Class-Path attributes of the classpath name more than "
+                        + MAX_MANIFEST_ENTRIES + " entries, which cannot be checked against the sandbox filesystem "
+                        + "policy");
+                    return;
+                }
+                addManifestEntry(base, jar, entry);
+            }
+        }
+
+        //! Adds an entry of the manifest Class-Path of a jar, as the path that the class loader opens for it
+        @SuppressWarnings("deprecation")
+        private void addManifestEntry(URL base, File jar, String entry) {
+            String referrer = jar.getPath();
+            URL url;
+            try {
+                // as the class loader resolves the entry: against the URL of the jar as the class loader opens it
+                url = new URL(base, entry);
+            } catch (MalformedURLException e) {
+                refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' has an "
+                    + "invalid entry '" + entry + "': " + e.getMessage());
+                return;
+            }
+            // only a file can be checked against the filesystem policy
+            if (!"file".equals(url.getProtocol())) {
+                refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names '"
+                    + url + "', which is not a file, so it cannot be checked against the sandbox filesystem policy");
+                return;
+            }
+            String key = urlKey(url);
+            if (seen.contains(key)) {
+                return;
+            }
+            seen.add(key);
+            String file = url.getFile();
+            boolean dir = file.endsWith("/");
+            if (!dir) {
+                // the class loader opens a jar URL with a host only if the host is the local one
+                String host = url.getHost();
+                if (host != null && !host.isEmpty() && !host.equalsIgnoreCase("localhost")) {
+                    return;
+                }
+            }
+            String path = decodeUrlPath(file);
+            if (path == null || path.indexOf('\0') != -1 || !new File(path).isAbsolute()) {
+                refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names '"
+                    + url + "', which cannot be resolved to a file to check against the sandbox filesystem policy");
+                return;
+            }
+            File f = new File(path);
+            File real = realFile(f);
+            if (real == null) {
+                // as for an entry of the classpath, a file that does not exist is checked as it is named
+                add(f, null, false, null, null, referrer, null);
+                return;
+            }
+            // a directory is read as files below it and has no manifest; a jar's manifest is read when it is expanded
+            URL jarUrl = dir || !Files.isRegularFile(real.toPath()) ? null : url;
+            add(real, null, false, null, jarUrl, referrer, null);
+        }
+    }
+
+    //! Returns the URL that the class loader uses for a jar that addResolvedPath() adds, as the base of its manifest
+    //! Class-Path, or null
+    /** addResolvedPath() adds the URL of createUrl(): for a file ending in ".jar", a "jar:" URL, from which the class
+        loader takes the URL of the file within it; otherwise the URL of the file.
+    */
+    @SuppressWarnings("deprecation")
+    private static URL loaderUrl(File file) {
+        try {
+            URI uri = file.toURI();
+            URL url = uri.toURL();
+            if (url.getPath().endsWith(".jar")) {
+                URL jarurl = URI.create("jar:" + uri + "!/").toURL();
+                String spec = jarurl.getFile();
+                return new URL(spec.substring(0, spec.length() - 2));
+            }
+            return url;
+        } catch (MalformedURLException | IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    //! Returns the key of a URL by which the class loader identifies the loader for it (its URL with no fragment)
+    private static String urlKey(URL url) {
+        StringBuilder sb = new StringBuilder();
+        String protocol = url.getProtocol();
+        if (protocol != null) {
+            sb.append(protocol.toLowerCase(Locale.ROOT)).append("://");
+        }
+        String host = url.getHost();
+        if (host != null) {
+            sb.append(host.toLowerCase(Locale.ROOT));
+            int port = url.getPort();
+            if (port == -1) {
+                port = url.getDefaultPort();
+            }
+            if (port != -1) {
+                sb.append(':').append(port);
+            }
+        }
+        String file = url.getFile();
+        if (file != null) {
+            sb.append(file);
+        }
+        return sb.toString();
+    }
+
+    //! Returns the path of a file URL as the class loader decodes it, or null if it cannot be decoded exactly
+    /** Each run of percent-encoded bytes is decoded as UTF-8; every other character is kept.  A malformed escape or
+        byte sequence gives null, so that the entry is refused rather than resolved in another way than the class
+        loader resolves it.
+    */
+    static String decodeUrlPath(String s) {
+        if (s.indexOf('%') == -1) {
+            return s;
+        }
+        int n = s.length();
+        StringBuilder sb = new StringBuilder(n);
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        int i = 0;
+        while (i < n) {
+            char c = s.charAt(i);
+            if (c != '%') {
+                sb.append(c);
+                ++i;
+                continue;
+            }
+            bytes.reset();
+            while (i < n && s.charAt(i) == '%') {
+                if (i + 2 >= n) {
+                    return null;
+                }
+                int hi = hexValue(s.charAt(i + 1));
+                int lo = hexValue(s.charAt(i + 2));
+                if (hi < 0 || lo < 0) {
+                    return null;
+                }
+                bytes.write((hi << 4) | lo);
+                i += 3;
+            }
+            try {
+                sb.append(StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes.toByteArray())));
+            } catch (CharacterCodingException e) {
+                return null;
+            }
+        }
+        return sb.toString();
+    }
+
+    //! Returns the value of an ASCII hexadecimal digit, or -1
+    private static int hexValue(char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
     }
 
     //! Returns the real path of a file (symbolic links resolved), or null if it cannot be resolved
@@ -1417,6 +1695,9 @@ public class QoreURLClassLoader extends URLClassLoader {
         that is only checked, as its listing is read, and each matching file is an element of its own, with its real
         path, so that the policy judges each file that the wildcard selects, wherever a symbolic link points.  An
         entry that cannot be resolved (ex: it does not exist) is checked as given, and nothing is added for it.
+
+        The jars that the manifest Class-Path attributes of these jars name are added as further elements by
+        ResolvedClasspath.expand(), as each jar is checked (qore#6822).
     */
     static ResolvedClasspath resolveClasspath(String classpath) {
         if (classpath == null) {
@@ -1430,6 +1711,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                 if (real == null) {
                     // as addPath() does, an entry that does not exist is left out with no message
                     rc.add(fileentry, null, false, null);
+                } else if (Files.isRegularFile(real.toPath()) && isLoadable(real.getName())) {
+                    rc.addJar(real, false);
                 } else {
                     rc.add(real, real, false, null);
                 }
@@ -1464,7 +1747,12 @@ public class QoreURLClassLoader extends URLClassLoader {
                 }
                 // a match that cannot be resolved (ex: a dangling symbolic link) cannot be read, and is not added
                 File real = realFile(f);
-                if (real != null) {
+                if (real == null) {
+                    continue;
+                }
+                if (Files.isRegularFile(real.toPath())) {
+                    rc.addJar(real, true);
+                } else {
                     rc.add(real, real, true, null);
                 }
             }
@@ -1473,14 +1761,15 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Adds a classpath that the sandbox check has resolved and checked (qore#6818)
-    /** Adds the files of the resolved classpath, each of which was checked; nothing is resolved again.  An error while
-        an element is added is thrown to the caller (qore#6779).
+    /** Adds the files of the resolved classpath, each of which was checked; nothing is resolved again.  The elements
+        that manifest Class-Path attributes name are only checked: the class loader follows the manifests of the jars
+        that are added itself (qore#6822).  An error while an element is added is thrown to the caller (qore#6779).
     */
     void addResolvedPath(ResolvedClasspath rc) {
         if (rc == null) {
             throw new IllegalArgumentException("the classpath must not be null");
         }
-        if (rc.encoded == null) {
+        if (!rc.isChecked()) {
             throw new IllegalArgumentException("the classpath has not been checked");
         }
         for (int i = 0; i < rc.size(); ++i) {
