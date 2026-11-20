@@ -6,6 +6,12 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: Java code could give the class loader a native Qore class pointer, with the public
+      \c QoreURLClassLoader methods \c loadClassWithPtr() and \c generateByteCode(String, long), and the byte code
+      generator used it as a class: a class of another Program, or freed or forged memory.  The methods are no longer
+      public, and the generator accepts a class pointer only if the module's own code gave it for the innermost call
+      on the same thread and for the same Program; another one is refused with \c java.lang.RuntimeException
+      (qore#6854)
     - \c OpcUaServerRuntime::stop() in @ref opcuadataproviderintro "OpcUaDataProvider" could return while the
       process still held an OS-assigned port (a \c port option of 0), as the listener's Netty channel releases its
       socket only in its event loop's next select, after the close that stop() waited for has completed.  The

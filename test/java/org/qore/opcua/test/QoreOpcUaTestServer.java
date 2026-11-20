@@ -144,7 +144,15 @@ public class QoreOpcUaTestServer {
 
             @Override
             public void unbind() {
-                channels.close().awaitUninterruptibly();
+                // each channel's close future is waited for, not the ChannelGroupFuture, which learns of a close
+                // completed before it listens only from a task of the event loop, which can be busy (qore#6891)
+                List<io.netty.channel.Channel> closing = new ArrayList<>(channels);
+                for (io.netty.channel.Channel channel : closing) {
+                    channel.close();
+                }
+                for (io.netty.channel.Channel channel : closing) {
+                    channel.closeFuture().awaitUninterruptibly();
+                }
             }
         });
     }
