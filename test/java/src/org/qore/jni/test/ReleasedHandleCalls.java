@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 package org.qore.jni.test;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
@@ -188,6 +189,68 @@ public final class ReleasedHandleCalls {
         t.setDaemon(true);
         t.start();
         inCall.await();
+    }
+
+    //! returns the state of the NativeCleanup.Ref of the closure kept (with reflection): whether its pointer has been
+    //! cleared, whether it has been claimed for release, and the number of uses in progress
+    private static String closureRefState() throws ReflectiveOperationException {
+        Field refField = QoreClosure.class.getDeclaredField("ref");
+        refField.setAccessible(true);
+        Object ref = refField.get(kept);
+        Class<?> refClass = ref.getClass();
+        Field ptr = refClass.getDeclaredField("ptr");
+        Field claimed = refClass.getDeclaredField("claimed");
+        Field users = refClass.getDeclaredField("users");
+        claimed.setAccessible(true);
+        users.setAccessible(true);
+        synchronized (ref) {
+            return "cleared: " + (ptr.getLong(ref) == 0) + "; claimed: " + claimed.getBoolean(ref) + "; uses: "
+                + users.getInt(ref);
+        }
+    }
+
+    //! Prints <tt>shutdown: </tt> and the state of the handle of the closure kept on stderr when the JVM is destroyed,
+    //! after the module's shutdown has claimed the handles of the wrappers
+    /** The module's shutdown releases a handle that it claims only if no use of it is in progress
+        (NativeCleanup.Ref.acquireForCleanup() returns 0 otherwise, and the release of 0 frees nothing): a handle that
+        is claimed and cleared, with a use still in progress, has been left unreleased.
+    */
+    public static void reportClosureAtShutdown() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            String state;
+            try {
+                state = closureRefState();
+            } catch (Throwable t) {
+                state = t.getClass().getName() + ": " + t.getMessage();
+            }
+            System.err.println("shutdown: " + state);
+            System.err.flush();
+        }));
+    }
+
+    //! Ends a use of the handle of the object kept that was never begun, before and after the object is released;
+    //! each must raise an IllegalStateException and change nothing, so that a call on the object still works before
+    //! the release
+    public static String exitUnmatched() {
+        QoreObject obj = (QoreObject)kept;
+        String before = exitResult(obj);
+        String call = call("classname");
+        // a valid use still begins and ends
+        long p = obj.qoreJniEnterHandle();
+        obj.qoreJniExitHandle();
+        String valid = p != 0 ? "ok" : "no handle";
+        obj.release();
+        return "before: " + before + "; call: " + call + "; valid: " + valid + "; released: " + exitResult(obj)
+            + "; after: " + call("classname");
+    }
+
+    private static String exitResult(QoreObject obj) {
+        try {
+            obj.qoreJniExitHandle();
+            return "no exception";
+        } catch (Throwable t) {
+            return t.getClass().getName() + ": " + t.getMessage();
+        }
     }
 
     //! releases the object kept; called by its Qore method in callReleaseSelf(), while the call uses the object

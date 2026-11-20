@@ -19,7 +19,10 @@
 # - "generated-released": a method of a generated class is called through its generated method before and after the
 #   object is released (ReleasedHandleCalls.generatedReleased())
 # - "shutdown-in-use": a Java thread's call of a closure of a user module (JniReleasedHandlesBlock) is in progress,
-#   blocked until the process ends, when the jni module is shut down; the process must exit
+#   blocked until the process ends, when the jni module is shut down; the process must exit, and a JVM shutdown hook
+#   prints "shutdown: <state>", the state of the closure's handle after the module's shutdown has claimed it
+# - "exit-unmatched": the end of a use of the object's handle that was never begun, before and after the object is
+#   released (ReleasedHandleCalls.exitUnmatched())
 # the operation "policy" keeps a QoreSandbox.Policy captured for the script and calls isSandboxed()
 
 %modern
@@ -95,6 +98,8 @@ if (op == "release-in-use") {
     load_module("JniReleasedHandlesBlock");
     call_function("JniReleasedHandlesBlock::start");
     printf("live: in call\n");
+} else if (op == "exit-unmatched") {
+    printf("live: %s\n", ReleasedHandleCalls::exitUnmatched());
 } else if (op == "generated-released") {
     printf("live: %s\n", ReleasedHandleCalls::generatedReleased());
 } else if (mode == "live") {

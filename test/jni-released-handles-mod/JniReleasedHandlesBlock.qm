@@ -25,5 +25,7 @@ public namespace JniReleasedHandlesBlock {
     public sub start() {
         ReleasedHandleCalls::keep(sub () { ReleasedHandleCalls::blockForever(); });
         ReleasedHandleCalls::startBlockedCall();
+        # reports the state of the closure's handle once the module's shutdown has claimed it
+        ReleasedHandleCalls::reportClosureAtShutdown();
     }
 }

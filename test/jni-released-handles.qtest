@@ -31,6 +31,7 @@ class JniReleasedHandlesTest inherits QUnit::Test {
         const ClosureReleased = "java.lang.IllegalStateException: the Qore closure has been released";
         const HandlerReleased = "java.lang.IllegalStateException: Invocation handler has already been destroyed";
         const PolicyAfterShutdown = "java.lang.IllegalStateException: Native cleanup has shut down";
+        const NoUse = "java.lang.IllegalStateException: no use of the Qore handle is in progress on this thread";
 
         #! the guard against a hang of the child, in seconds; never an expected time
         const HangGuard = 600;
@@ -56,6 +57,7 @@ class JniReleasedHandlesTest inherits QUnit::Test {
         addTestCase("negative: a generated class after its release", \generatedReleasedCase());
         addTestCase("regression: a QoreSandbox.Policy after the module's shutdown", \policyCase());
         addTestCase("regression: a call in progress at the module's shutdown", \shutdownInUseCase());
+        addTestCase("negative: the end of a handle use that was never begun", \exitUnmatchedCase());
         set_return_value(main());
     }
 
@@ -115,6 +117,17 @@ class JniReleasedHandlesTest inherits QUnit::Test {
         # hang, which is never an expected time)
         string out = runChild("shutdown-in-use", "live", HangGuard);
         assertEq("live: in call", getLine(out, "live: "), out);
+        # the shutdown claimed the handle and cleared it, so that no new use begins, but left it unreleased, as a use
+        # was in progress: NativeCleanup.Ref.acquireForCleanup() returns 0 then, and the release of 0 frees nothing
+        assertEq("shutdown: cleared: true; claimed: true; uses: 1", getLine(out, "shutdown: "), out);
+    }
+
+    exitUnmatchedCase() {
+        string out = runChild("exit-unmatched", "live");
+        # each unmatched end of a use is refused and changes nothing: the object is still usable, a valid use still
+        # begins and ends, and the release that follows does not wait for a use that was never begun
+        assertEq("live: before: " + NoUse + "; call: ok: ReleasedHandleObject; valid: ok; released: " + NoUse
+            + "; after: " + ObjectReleased, getLine(out, "live: "), out);
     }
 
     #! runs the child and returns its output (stdout and stderr), checking that it ran to the end and exited with
