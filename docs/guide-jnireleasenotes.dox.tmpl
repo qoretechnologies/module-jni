@@ -10,8 +10,9 @@
       \c Class-Path attributes of a classpath's jars name, which the class loader opens as well, were not checked
       against the policy; they are now resolved as the class loader resolves them, recursively and each once, and
       checked as their real paths (with symbolic links resolved) together with the classpath's own entries; if the
-      policy denies any of them, or one cannot be checked, the whole classpath is refused with
-      \c JNI-CLASSPATH-ERROR, naming the file, and nothing is added.  The class loader still follows the manifests,
+      policy denies any of them, or one cannot be checked (ex: a jar that is not a regular file, or, before Java 22,
+      a jar with a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and
+      nothing is added.  The class loader still follows the manifests,
       so the classpath that is used is unchanged.  The \c add-classpath and \c add-relative-classpath module
       commands and the \c classpath option of the \c jdbc driver are affected; with no filesystem policy, classpaths
       are added as before (qore#6822, see @ref jni_sandbox)

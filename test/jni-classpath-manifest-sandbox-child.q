@@ -201,6 +201,17 @@ sub deny_case(string root) {
     result("deny: a named file that is not a regular file is refused", "JNI-CLASSPATH-ERROR", h.err);
     result("deny: its error says so", True, h.desc =~ /not a regular file/);
     result("deny: the jar that names the special file is not added", (), jar_paths(p, root));
+
+    # a classpath entry or a wildcard match that is not a regular file is refused in the same way, and not opened
+    p = new_program(smv);
+    h = add_classpath(p, root + "/v/fifo.jar");
+    result("deny: an entry that is not a regular file is refused", "JNI-CLASSPATH-ERROR", h.err);
+    result("deny: its error says that it is not a regular file", True, h.desc =~ /not a regular file/);
+    p = new_program(smv);
+    h = add_classpath(p, root + "/v/lib/*.jar");
+    result("deny: a wildcard that selects a file that is not a regular file is refused", "JNI-CLASSPATH-ERROR",
+        h.err);
+    result("deny: the wildcard adds nothing either", (), jar_paths(p, root));
 }
 
 #! a manifest Class-Path through a symbolic link out of the allowed directory refuses the classpath

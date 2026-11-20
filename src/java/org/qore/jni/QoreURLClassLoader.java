@@ -1487,9 +1487,13 @@ public class QoreURLClassLoader extends URLClassLoader {
         //! Adds a jar of the classpath that the class loader opens, so that its manifest is read when it is expanded
         private void addJar(File real, boolean match) {
             URL url = loaderUrl(real);
-            if (url != null) {
-                seen.add(urlKey(url));
+            if (url == null) {
+                // its manifest could not be resolved as the class loader resolves it
+                refuse(real, null, "the classpath jar '" + real + "' cannot be represented as a URL to check the "
+                    + "jars that its manifest Class-Path attribute names against the sandbox filesystem policy");
+                return;
             }
+            seen.add(urlKey(url));
             add(real, real, match, null, url, null, null);
         }
 
@@ -1539,6 +1543,9 @@ public class QoreURLClassLoader extends URLClassLoader {
                     return;
                 }
                 addManifestEntry(base, jar, entry);
+                if (refused) {
+                    return;
+                }
             }
         }
 
