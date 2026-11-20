@@ -44,6 +44,16 @@
       messages are now printed only if the \c qore.QoreURLClassLoader.debug Java system property is \c "true" (ex:
       <tt>QORE_JNI_JVM_ARGS=-Dqore.QoreURLClassLoader.debug=true</tt>, or the \c set-property module command)
       (qore#6819)
+    - fixed Java calls made on a Java thread that Java started, which is not attached to %Qore, that crashed the
+      process with \c SIGSEGV, as the native method used the %Qore thread state of the thread before attaching it:
+      \c org.qore.jni.QoreObject.instanceOf() always; \c QoreObject.callMethod() and \c QoreClosure.call() (and
+      their \c *Save() and \c *Args() forms) when the class loader context of the thread had no Program;
+      \c QoreExceptionWrapper.getMessage() when the exception's description could not be converted to UTF-8; and
+      loading a \c qoremod.* or \c qore.* class; these native methods now attach the thread first, and raise a Java
+      \c RuntimeException if it cannot be attached; \c QoreObjectBase.release() now attaches the thread as well, as
+      the release of the last reference to an object frees it.  On a thread with no Program context,
+      \c QoreObject.instanceOf() now looks up the class in the object's Program before the global Java context
+      Program, so that it finds the object's own class (qore#6828)
     - fixed \c Jni::org::qore::jni::invoke() and \c invoke_nonvirtual(), which were declared to return
       \c Jni::java::lang::Object, but return the value of the method converted to %Qore, as a direct call of the
       method does, which is often not an object: for example, an \c int, a \c float or a \c bool for a primitive
