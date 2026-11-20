@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# The native methods of the jni module that Java can call on a Java thread that Java started, which is not attached
+# to Qore, must attach the thread before they use its Qore thread state (qore#6828): QoreObject.instanceOf() looked
+# up the Program context of the thread with getProgram() before attaching it, and crashed the process with SIGSEGV in
+# libqore; the same happened in QoreObject.callMethod() and QoreClosure.call() with no Program in the class loader
+# context of the thread, in QoreExceptionWrapper.getMessage() with a description that cannot be converted to UTF-8,
+# when a qoremod.* or qore.* class was loaded (QoreURLClassLoader.getCanonicalLoader0()), and when the lookup of a
+# module's class loader raised an error (QoreURLClassLoader.getModuleLoader0(), which only reflection reaches).  On a
+# thread with no Program context, QoreObject.instanceOf() now looks up the class in the object's Program, so that it
+# finds the object's own class.
+#
+# Each case runs test/jni-unattached-thread-child.q in a new process, as the failure crashed the process.  Each test
+# case is marked:
+# - regression: the child crashes without the fix
+# - coverage: it passes with and without the fix
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniUnattachedThreadTest
+
+class JniUnattachedThreadTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JNI natives called on a Java thread not attached to Qore", "1.0") {
+        addTestCase("regression: QoreObject.instanceOf()", \instanceOfCase());
+        addTestCase("regression: QoreObject.instanceOf() of an object of a child Program",
+            \instanceOfProgramCase());
+        addTestCase("regression: QoreObject.callMethod()", \methodCase());
+        addTestCase("regression: QoreClosure.call()", \closureCase());
+        addTestCase("regression: QoreExceptionWrapper.getMessage()", \messageCase());
+        addTestCase("regression: class loading", \loadClassCase());
+        addTestCase("regression: QoreURLClassLoader.getModuleLoader0()", \moduleLoaderCase());
+        addTestCase("coverage: QoreObject.className()", \classNameCase());
+        addTestCase("coverage: QoreObject.release()", \releaseCase());
+        addTestCase("coverage: QoreJavaApi.openJdbcConnection()", \jdbcCase());
+        set_return_value(main());
+    }
+
+    instanceOfCase() {
+        string out = runChild("instanceof");
+        # positive: the object's class and its parent class
+        assertEq("ok: true", getResult(out, "child"), out);
+        assertEq("ok: true", getResult(out, "parent"), out);
+        # negative: an unrelated class, a class that does not exist, and a name with a NUL character
+        assertEq("ok: false", getResult(out, "other"), out);
+        assertEq("ok: false", getResult(out, "missing"), out);
+        assertEq("ok: false", getResult(out, "nul"), out);
+        # a builtin class
+        assertEq("ok: true", getResult(out, "builtin"), out);
+        assertEq("ok: false", getResult(out, "builtin-other"), out);
+    }
+
+    instanceOfProgramCase() {
+        string out = runChild("instanceof-program");
+        assertEq("ok: true", getResult(out, "program-child"), out);
+        assertEq("ok: true", getResult(out, "program-parent"), out);
+        assertEq("ok: false", getResult(out, "program-builtin"), out);
+        assertEq("ok: false", getResult(out, "program-missing"), out);
+    }
+
+    methodCase() {
+        string out = runChild("method");
+        assertEq("ok: value", getResult(out, "method"), out);
+        assertEq("org.qore.jni.QoreExceptionWrapper: UNATTACHED-TEST-ERROR: method error",
+            getResult(out, "method-error"), out);
+        # the regression: no Program in the class loader context of the thread
+        assertEq("ok: value", getResult(out, "method-no-program"), out);
+    }
+
+    closureCase() {
+        string out = runChild("closure");
+        assertEq("ok: closure value", getResult(out, "closure"), out);
+        # the regression: no Program in the class loader context of the thread
+        assertEq("ok: no program", getResult(out, "closure-no-program"), out);
+    }
+
+    messageCase() {
+        string out = runChild("message");
+        assertEq("ok: UNATTACHED-TEST-ERROR: string description", getResult(out, "message-string"), out);
+        # a description that is not a string is not part of the message
+        assertEq("ok: UNATTACHED-TEST-ERROR", getResult(out, "message-hash"), out);
+        # the regression: the description cannot be converted to UTF-8, and its bytes are appended as they are; Java
+        # decodes the invalid byte (0xff) as U+FFFD
+        assertEq("ok: UNATTACHED-TEST-ERROR: " + binary_to_string(<1b2428efbfbd>), getResult(out, "message-encoding"),
+            out);
+    }
+
+    loadClassCase() {
+        string out = runChild("loadclass");
+        assertEq("ok: qoremod.Util.TerminalColor", getResult(out, "loadclass-module"), out);
+        assertEq("ok: qore.Qore.Thread.Condition", getResult(out, "loadclass-qore"), out);
+        # negative: the class of a module that does not exist
+        assertEq("java.lang.ClassNotFoundException: qoremod.UnattachedNoSuchModule.X",
+            getResult(out, "loadclass-missing"), out);
+    }
+
+    moduleLoaderCase() {
+        string out = runChild("moduleloader");
+        assertEq("ok: null", getResult(out, "module-loader-missing"), out);
+        string err = getResult(out, "module-loader-error");
+        if (getResult(out, "debug-build") == "no") {
+            # a release build has no test hook: the module is not known
+            assertEq("ok: null", err, out);
+            testSkip("the jni module is not a debug build, which has the test hook that raises the error");
+        }
+        assertEq("yes", getResult(out, "debug-build"), out);
+        assertEq("java.lang.RuntimeException: getModuleLoader() failed: JNI-TEST-ERROR: injected module loader failure "
+            "for module 'UnattachedLoaderFail'", err, out);
+    }
+
+    classNameCase() {
+        string out = runChild("classname");
+        assertEq("ok: UnattachedChild", getResult(out, "classname"), out);
+    }
+
+    releaseCase() {
+        string out = runChild("release");
+        assertEq("ok: released", getResult(out, "release"), out);
+    }
+
+    jdbcCase() {
+        string out = runChild("jdbc");
+        assertEq("ok: connection", getResult(out, "jdbc"), out);
+    }
+
+    #! returns the result of a call printed by the child as "<name>: <result>", or an empty string
+    private static string getResult(string out, string name) {
+        string prefix = name + ": ";
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line.substr(prefix.size());
+            }
+        }
+        return "";
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr), checking that it exited with status 0
+    #! and that it completed the case
+    private string runChild(string case_name) {
+        string child = normalize_dir(get_script_dir() + "/jni-unattached-thread-child.q");
+        # no core file is written for a crash; the variables that make the JVM print a notice on startup are removed,
+        # as the output of the child is checked
+        string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b "
+            "--enable-debug %s %s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child), case_name);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        assertRegex("\nafter: " + case_name + "\n", "\n" + out, out);
+        assertFalse(out =~ /A fatal error has been detected/, out);
+        return out;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}
