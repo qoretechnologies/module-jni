@@ -154,7 +154,8 @@ class JniStrictUtf8Test inherits QUnit::Test {
         encoding of this process if \a env does not set it; backquote() tags the output with the default encoding of
         this process without checking it, so a regular expression match on the output of a child with another default
         encoding raised \c INVALID-ENCODING (qore#6819): the output is read as bytes in the encoding of the child and
-        converted to UTF-8
+        converted to UTF-8; output printed by Java follows the locale of the child instead, and is expected to be ASCII
+        where it can differ (ex: with \c QORE_CHARSET=UTF-8 and an ISO-8859-1 locale)
 
         @param env variable assignments for the child (ex: \c "QORE_CHARSET=ISO-8859-1")
         @param args the child's arguments

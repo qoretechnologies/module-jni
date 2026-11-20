@@ -120,7 +120,7 @@ class JniClasspathWildcardTest inherits QUnit::Test {
     }
 
     #! runs a case of the child and checks its results, and that it printed no Java exception, and returns its output
-    /** A debug message of the class loader is printed only by the \c debug case, which checks it
+    /** No debug message of the class loader is expected, except in the \c debug cases, whose callers check it
     */
     private string checkCase(string name, list<string> expected, string env = "") {
         string out = runInTempDir(name, env);
