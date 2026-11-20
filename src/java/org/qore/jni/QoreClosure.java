@@ -3,6 +3,8 @@
  */
 package org.qore.jni;
 
+import java.lang.ref.Reference;
+
 //! Java QoreClosure class
 /**
     @since jni 1.2
@@ -70,6 +72,8 @@ public class QoreClosure implements QoreClosureMarkerImpl {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -92,6 +96,8 @@ public class QoreClosure implements QoreClosureMarkerImpl {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -117,6 +123,8 @@ public class QoreClosure implements QoreClosureMarkerImpl {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -143,6 +151,8 @@ public class QoreClosure implements QoreClosureMarkerImpl {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 

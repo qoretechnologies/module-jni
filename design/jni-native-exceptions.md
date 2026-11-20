@@ -78,6 +78,11 @@ wrapper that still exists; Java can keep a wrapper after any of them (qore#6864)
   (test/jni-released-handles.qtest, the "shutdown-in-use" case).  The cleanup thread sees no use: every call keeps
   its wrapper reachable until its use has ended (it calls the wrapper's `qoreJniExitHandle()`, or
   `Reference.reachabilityFence()`), so a wrapper is phantom reachable only once no call on it is in progress.
+  A call left running is valid only as far as its handle goes: if it returns while the module is torn down, it
+  returns into the module's state as it is then, as the Qore code that the Qore library leaves running does.
+- The module's shutdown still waits in two places, by design: for the callers that hold the global context Program
+  (qore#6829, `Globals::clearGlobalContext()`), and in an explicit release made during the teardown (ex: a Qore
+  `QoreInvocationHandler` object destroyed while one of its proxy calls is in progress on another thread).
 - `QoreExceptionWrapper.getMessage()` holds the monitor of the `Ref` instead, as its native method runs no Qore code
   that could release the wrapper.
 - `NativeCleanup.setReleaseWaitHook()` lets a test make a release wait deterministically.

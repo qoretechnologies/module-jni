@@ -3,6 +3,8 @@
 
 package org.qore.jni;
 
+import java.lang.ref.Reference;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
@@ -541,6 +543,8 @@ public class JavaClassBuilder {
             return doNormalCallTyped(methodName, qobjptr, mptr, vptr, rtype, args);
         } finally {
             self.qoreJniExitHandle();
+            // the object stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(self);
         }
     }
 
@@ -643,6 +647,8 @@ public class JavaClassBuilder {
             return doNormalCall(methodName, qobjptr, mptr, vptr, args);
         } finally {
             self.qoreJniExitHandle();
+            // the object stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(self);
         }
     }
 

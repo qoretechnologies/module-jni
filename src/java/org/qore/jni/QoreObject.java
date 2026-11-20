@@ -1,5 +1,7 @@
 package org.qore.jni;
 
+import java.lang.ref.Reference;
+
 import org.qore.jni.QoreObjectBase;
 import org.qore.jni.QoreURLClassLoader;
 
@@ -29,6 +31,8 @@ public class QoreObject extends QoreObjectBase {
             return className0(p);
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -43,6 +47,8 @@ public class QoreObject extends QoreObjectBase {
             return instanceOf0(p, class_name);
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -66,6 +72,8 @@ public class QoreObject extends QoreObjectBase {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -89,6 +97,8 @@ public class QoreObject extends QoreObjectBase {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -115,6 +125,8 @@ public class QoreObject extends QoreObjectBase {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -141,6 +153,8 @@ public class QoreObject extends QoreObjectBase {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -156,6 +170,8 @@ public class QoreObject extends QoreObjectBase {
             }
         } finally {
             qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 

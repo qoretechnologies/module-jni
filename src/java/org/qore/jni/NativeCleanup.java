@@ -53,7 +53,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class NativeCleanup {
     /** PhantomReference subclass carrying the native pointer and a kind
         discriminator the C++ dispatcher uses to pick the right release path.
-        Every release path must claim the pointer with acquireAndClear(). */
+        Every release path must claim the pointer with acquireAndClear() (explicit releases) or
+        acquireForCleanup() (module-jni's cleanup thread and shutdown). */
     public static final class Ref extends PhantomReference<Object> {
         /** The native pointer; volatile for wrapper accessors. Release paths
             must use {@link #acquireAndClear}, never a separate read and clear.
