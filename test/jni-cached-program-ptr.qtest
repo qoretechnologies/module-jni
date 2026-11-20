@@ -31,6 +31,9 @@
 
 class JniCachedProgramPtrTest inherits QUnit::Test {
     public {
+        #! the exception of a call into Qore through a class loader whose Program has been deleted (qore#6845)
+        const ProgramDeleted = "^org\\.qore\\.jni\\.QoreURLClassLoader\\$ProgramDeletedException: ";
+
         #! the error of a native that received the pointer of a deleted Program
         const DeletedError = "the Qore Program of the Java class loader has been deleted";
 
@@ -69,17 +72,17 @@ class JniCachedProgramPtrTest inherits QUnit::Test {
         };
 
         #! the result of a call made once the child Program has been deleted and the class loader's pointer cleared:
-        #! the call is made in the global Java context Program, which has no such function or class, and the object
-        #! and the closure of the child Program cannot be used any more
+        #! a call into Qore fails, rather than being made in the global Java context Program, which no sandbox governs
+        #! (qoretechnologies/qore#6845); a class load and a compilation find no class
         const ClearedResults = {
-            "function": "^org\\.qore\\.jni\\.QoreExceptionWrapper: NO-FUNCTION: ",
-            "static": "^org\\.qore\\.jni\\.QoreExceptionWrapper: UNKNOWN-CLASS: ",
-            "new": "^org\\.qore\\.jni\\.QoreExceptionWrapper: CREATE-OBJECT-ERROR: ",
+            "function": ProgramDeleted,
+            "static": ProgramDeleted,
+            "new": ProgramDeleted,
             "class": "^java\\.lang\\.ClassNotFoundException: qore\\.PgmPtrProbeClass$",
             "nsclass": NsClassNotFound,
             "compile": "^org\\.qore\\.jni\\.compiler\\.QoreJavaCompilerException: Compilation failed",
-            "method": "^org\\.qore\\.jni\\.QoreExceptionWrapper: OBJECT-ALREADY-DELETED: ",
-            "closure": "^org\\.qore\\.jni\\.QoreExceptionWrapper: PROGRAM-ERROR: ",
+            "method": ProgramDeleted,
+            "closure": ProgramDeleted,
         };
 
         #! the class loader contexts of the thread

@@ -450,7 +450,7 @@ public class QoreJavaApiTest {
 
     // Test getValidPtr() throws when ptr is invalid
     public static boolean testGetValidPtrThrows() {
-        QoreURLClassLoader cl = new QoreURLClassLoader(0);
+        QoreURLClassLoader cl = QoreURLClassLoader.createWithoutProgram(QoreJavaApiTest.class.getClassLoader());
         try {
             cl.getValidPtr();  // Should throw IllegalStateException
             return false;  // Should not reach here
@@ -467,7 +467,7 @@ public class QoreJavaApiTest {
 
     // Test getPtr() returns 0 when ptr is not set
     public static boolean testGetPtrReturnsZero() {
-        QoreURLClassLoader cl = new QoreURLClassLoader(0);
+        QoreURLClassLoader cl = QoreURLClassLoader.createWithoutProgram(QoreJavaApiTest.class.getClassLoader());
         try {
             return cl.getPtr() == 0;
         } finally {
@@ -479,25 +479,28 @@ public class QoreJavaApiTest {
         }
     }
 
-    // Test clearProgramPtr() makes getValidPtr() throw
+    // Test clearProgramPtr() makes getValidPtr() throw, and a call through the class loader fail
     // NOTE: This test uses a fresh classloader to avoid corrupting the shared
     // current classloader state which would break subsequent tests
     public static boolean testClearProgramPtrMakesGetValidPtrThrow() {
-        // Create a new classloader with a non-zero ptr for testing
-        QoreURLClassLoader cl = new QoreURLClassLoader(12345L);
+        // other Java code cannot create a class loader with a Program pointer of its choice (qoretechnologies/qore#6845):
+        // the class loader has no Program; clearing it marks its Program as deleted
+        QoreURLClassLoader cl = QoreURLClassLoader.createWithoutProgram(QoreJavaApiTest.class.getClassLoader());
         try {
-            // Verify ptr is set
-            if (cl.getPtr() != 12345L) {
-                return false;
-            }
-            // Clear the ptr
             cl.clearProgramPtr();
-            // Now getValidPtr() should throw
             try {
                 cl.getValidPtr();
                 return false;  // Should have thrown
             } catch (IllegalStateException e) {
-                return true;  // Expected
+                // expected
+            }
+            // the class loader is the current thread's context: a call into Qore through it is not made in the global
+            // Java context Program
+            try {
+                QoreURLClassLoader.getProgramPtr();
+                return false;
+            } catch (QoreURLClassLoader.ProgramDeletedException e) {
+                return true;
             }
         } finally {
             try {

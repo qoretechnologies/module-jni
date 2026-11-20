@@ -3114,6 +3114,7 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassQoreURLClassLoader_1.inc"
 #include "JavaClassQoreURLClassLoader_2.inc"
 #include "JavaClassQoreURLClassLoader_ResolvedClasspath.inc"
+#include "JavaClassQoreURLClassLoader_ProgramDeletedException.inc"
 #include "JavaClassQoreJavaFileObject.inc"
 #include "JavaClassQoreJavaObjectPtr.inc"
 #include "JavaClassJavaClassBuilder.inc"
@@ -3215,6 +3216,9 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreURLClassLoader$2", {java_org_qore_jni_QoreURLClassLoader_2_class_len, java_org_qore_jni_QoreURLClassLoader_2_class}},
     {"org.qore.jni.QoreURLClassLoader$ResolvedClasspath", {java_org_qore_jni_QoreURLClassLoader_ResolvedClasspath_class_len,
         java_org_qore_jni_QoreURLClassLoader_ResolvedClasspath_class}},
+    {"org.qore.jni.QoreURLClassLoader$ProgramDeletedException",
+        {java_org_qore_jni_QoreURLClassLoader_ProgramDeletedException_class_len,
+        java_org_qore_jni_QoreURLClassLoader_ProgramDeletedException_class}},
     {"org.qore.jni.compiler.CompilerOutput", {java_org_qore_jni_CompilerOutput_class_len, java_org_qore_jni_CompilerOutput_class}},
     {"org.qore.jni.compiler.CustomJavaFileObject", {java_org_qore_jni_CustomJavaFileObject_class_len, java_org_qore_jni_CustomJavaFileObject_class}},
     {"org.qore.jni.compiler.PackageInternalsFinder", {java_org_qore_jni_PackageInternalsFinder_class_len, java_org_qore_jni_PackageInternalsFinder_class}},
@@ -4026,6 +4030,10 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         java_org_qore_jni_QoreURLClassLoader_1_class_len);
     findDefineClass(env, "org.qore.jni.QoreURLClassLoader$2", nullptr, java_org_qore_jni_QoreURLClassLoader_2_class,
         java_org_qore_jni_QoreURLClassLoader_2_class_len);
+    // a call into Qore through a class loader whose Program has been deleted (qore#6845)
+    findDefineClass(env, "org.qore.jni.QoreURLClassLoader$ProgramDeletedException", nullptr,
+        java_org_qore_jni_QoreURLClassLoader_ProgramDeletedException_class,
+        java_org_qore_jni_QoreURLClassLoader_ProgramDeletedException_class_len);
     // a classpath resolved once for its sandbox check and its use (qore#6818)
     classQoreURLClassLoaderResolvedClasspath = findDefineClass(env, "org.qore.jni.QoreURLClassLoader$ResolvedClasspath",
         nullptr, java_org_qore_jni_QoreURLClassLoader_ResolvedClasspath_class,

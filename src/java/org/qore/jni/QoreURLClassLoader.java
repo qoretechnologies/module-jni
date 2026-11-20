@@ -56,6 +56,7 @@ import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.zip.ZipFile;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 //! Main ClassLoader for Java <-> %Qore and Java <-> Python integration
@@ -104,6 +105,12 @@ public class QoreURLClassLoader extends URLClassLoader {
         setPtrIntern()).
     */
     private volatile AtomicLong pgm_ptr = new AtomicLong(0);
+
+    //! true once the Program of pgm_ptr has been deleted (clearProgramPtr()); shared and replaced with pgm_ptr
+    /** A class loader whose Program has been deleted does not fall back to the global Java context Program, which no
+        sandbox governs: getProgramPtr() throws ProgramDeletedException for it (qoretechnologies/qore#6845)
+    */
+    private volatile AtomicBoolean pgm_cleared = new AtomicBoolean(false);
 
     //! true while pgm_ptr is the holder of the parent class loader; guarded by ptr_lock
     private boolean shared_ptr = false;
@@ -207,8 +214,33 @@ public class QoreURLClassLoader extends URLClassLoader {
         //System.out.printf("QoreURLClassLoader() this: %x (pgm: %x)\n", hashCode(), pgm_ptr);
     }
 
+    //! Thrown when Java code calls into Qore through a class loader whose Qore Program has been deleted
+    /** The call is not made in another Program, such as the global Java context Program
+        (qoretechnologies/qore#6845)
+    */
+    public static class ProgramDeletedException extends RuntimeException {
+        public ProgramDeletedException() {
+            super("the Qore Program of the Java class loader has been deleted");
+        }
+    }
+
+    //! Creates a class loader with no Qore Program, which becomes the current thread's context
+    /** Calls into Qore through it are made in the Program context of the thread, or in the global Java context
+        Program; a class loader for a Qore Program is created only by the jni module
+
+        @param parent the parent class loader
+
+        @return the new class loader
+    */
+    public static QoreURLClassLoader createWithoutProgram(ClassLoader parent) {
+        return new QoreURLClassLoader(0, parent);
+    }
+
     //! constructor for using this class as the boot classloader for the module
-    public QoreURLClassLoader(long p_ptr) {
+    /** Only for the jni module: other Java code cannot create a class loader with a Program pointer of its choice
+        (qoretechnologies/qore#6845)
+    */
+    QoreURLClassLoader(long p_ptr) {
         //super("QoreURLClassLoader", new URL[]{}, ClassLoader.getSystemClassLoader());
         super("QoreURLClassLoader", new URL[]{}, ClassLoader.getPlatformClassLoader());
         setContext();
@@ -220,7 +252,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     /** The class loader has a copy of the pointer, which is not cleared when the Program is deleted; a class loader
         for the Program of its parent class loader is created with createDerived() instead
     */
-    public QoreURLClassLoader(long p_ptr, ClassLoader parent) {
+    QoreURLClassLoader(long p_ptr, ClassLoader parent) {
         super("QoreURLClassLoader", new URL[]{}, parent);
         pgm_ptr.set(p_ptr);
         // set the current classloader as the thread context classloader
@@ -238,6 +270,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         synchronized (ptr_lock) {
             synchronized (parent.ptr_lock) {
                 pgm_ptr = parent.pgm_ptr;
+                pgm_cleared = parent.pgm_cleared;
             }
             shared_ptr = true;
         }
@@ -1190,7 +1223,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         that require a valid Qore Program.
     */
     public void clearProgramPtr() {
-        setPtrIntern(0);
+        setPtrIntern(0, true);
         sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
     }
 
@@ -1203,6 +1236,9 @@ public class QoreURLClassLoader extends URLClassLoader {
         if (cl == null) {
             throw new IllegalStateException("No classloader context set for current thread");
         }
+        if (cl.pgm_cleared.get()) {
+            throw new ProgramDeletedException();
+        }
         return cl.pgm_ptr.get();
     }
 
@@ -1210,12 +1246,12 @@ public class QoreURLClassLoader extends URLClassLoader {
     /** @param ptr the program pointer value to set
         @throws IllegalStateException if no classloader context is set for this thread
     */
-    public static void setProgramPtr(long ptr) {
+    static void setProgramPtr(long ptr) {
         QoreURLClassLoader cl = current.get();
         if (cl == null) {
             throw new IllegalStateException("No classloader context set for current thread");
         }
-        cl.setPtrIntern(ptr);
+        cl.setPtrIntern(ptr, false);
     }
 
     //! Sets the Program pointer of this class loader only
@@ -1223,13 +1259,15 @@ public class QoreURLClassLoader extends URLClassLoader {
         pointer of a class loader whose holder is shared by the class loaders created with its pointer is set for them
         too (it is set to 0 when its Program's jni data is destroyed, which is what they must see)
     */
-    private void setPtrIntern(long ptr) {
+    private void setPtrIntern(long ptr, boolean cleared) {
         synchronized (ptr_lock) {
             if (shared_ptr) {
                 pgm_ptr = new AtomicLong(ptr);
+                pgm_cleared = new AtomicBoolean(cleared);
                 shared_ptr = false;
             } else {
                 pgm_ptr.set(ptr);
+                pgm_cleared.set(cleared);
             }
         }
     }
