@@ -150,6 +150,38 @@
       from a Java thread (ex: through \c QoreJavaApi.callFunction()) to return before it deletes the global Java
       context Program; before, such a callback could run against the deleted Program; a callback that never returns
       now delays the exit of the process (qore#6829)
+    - fixed a crash (\c SIGSEGV) when Java used an \c org.qore.jni.QoreExceptionWrapper (the Java exception of a
+      %Qore exception) after its %Qore exception had been released: when Java got its message, or threw it to %Qore
+      again, after it had been thrown back to %Qore, which takes its exception, or after the module's shutdown, which
+      releases the exception of every wrapper that still exists (ex: a wrapper that a Java thread kept, or one that the
+      constructor of a generated class raised during the shutdown, read in a JVM shutdown hook); the message of a
+      released exception is now a fixed message, and the exception is no longer released while its message is read
+      (qore#6864)
+    - fixed crashes and the use of freed memory when Java used a \c QoreObject (or an object of a generated class),
+      a \c QoreClosure, a proxy of a \c QoreInvocationHandler or a \c QoreSandbox.Policy after its native handle had
+      been released (by the module's shutdown, which releases the handle of every wrapper that still exists, or by
+      \c release() / \c destroy() / \c close() on another thread while a call used it): each call now holds the
+      handle for its duration, an explicit release waits until the calls on other threads that use the handle have
+      returned, the module's shutdown leaves the handle of a call in progress unreleased (it is released with the
+      process; the shutdown does not wait for the call, which can block until the process ends), and a call made
+      after the release raises \c java.lang.IllegalStateException; \c QoreObjectBase.get() and
+      \c QoreClosure.get() return 0 for a released handle (qore#6864)
+    - <b>Behaviour change</b>: \c QoreObjectBase.release() and \c destroy() and the destruction of a
+      \c QoreInvocationHandler now wait for the calls on other threads that use the object to return, and raise
+      \c java.lang.IllegalStateException when called from a call that uses the object on the same thread (before,
+      the handle was freed under the call, or, for an invocation handler, the call waited for itself); a release
+      therefore must not be made while a call that uses the object waits for the releasing thread (qore#6864)
+    - fixed a crash when a native method raised a %Qore exception in Java after the module's cleanup, while the JVM
+      was being destroyed (ex: \c QoreSandbox.Policy.isSandboxed() of a released policy in a JVM shutdown hook): the
+      class of \c QoreExceptionWrapper had been deleted; it is kept now, and the wrapper's constructor raises
+      \c java.lang.IllegalStateException then (qore#6864)
+    - <b>Behaviour change</b>: the module describes a pending \c QoreExceptionWrapper (ex: in the error of a
+      classpath that cannot be added) with its message, the code and the description of its %Qore exception, without
+      the exception's argument (qore#6864)
+    - fixed the description of a pending \c QoreExceptionWrapper by the module (ex: in the error of a classpath that
+      cannot be added), which took the wrapper's %Qore exception, so that it was lost when the wrapper reached
+      %Qore, and leaked its exception sink; the wrapper is now described with its message and keeps its exception
+      (qore#6864)
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a

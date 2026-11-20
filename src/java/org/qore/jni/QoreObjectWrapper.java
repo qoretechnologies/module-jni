@@ -1,8 +1,8 @@
 package org.qore.jni;
 
 //! This is meant to the be the wrapper class for Java classes wrapping Qore object classes
-/** @note API usage errors such as with releasing / deleting the wrapped object and then calling methods
-    on the object will cause a crash
+/** @note a method of the wrapped object called after it has been released or destroyed raises an
+    \c IllegalStateException (qore#6864)
  */
 public class QoreObjectWrapper {
     //! the wrapper Qore object

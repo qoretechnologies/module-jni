@@ -642,6 +642,31 @@ static void run_supplier_hook(BooleanSupplierHook& h) noexcept {
     fflush(stderr);
 }
 
+//! Describes a java.lang.Throwable as the module describes a pending Java exception (JavaException::toString())
+/** So that a test can check that describing a QoreExceptionWrapper neither takes nor leaks its Qore exception
+    (qore#6864) - see test/jni-exception-wrapper-released.qtest.  DEBUG builds only.
+*/
+static QoreValue f_dbg_jni_describe_throwable(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    try {
+        jni::Env env;
+        jni::LocalReference<jobject> obj(jni::QoreToJava::toAnyObject(env, get_param_value(args, 0)));
+        if (!obj || !env.isInstanceOf(obj, jni::Globals::classThrowable)) {
+            xsink->raiseException("DBG-JNI-ERROR", "the argument must be a java.lang.Throwable");
+            return QoreValue();
+        }
+        if ((*env)->Throw(obj.cast<jthrowable>()) != JNI_OK) {
+            xsink->raiseException("DBG-JNI-ERROR", "the Throwable cannot be thrown");
+            return QoreValue();
+        }
+        jni::JavaException e;
+        return e.toString(true);
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+    }
+    return QoreValue();
+}
+
 // the hook run where a caller has obtained the global context Program; see dbg_jni_run_context_program_hook()
 std::atomic<bool> dbg_jni_context_program_hook_set{false};
 static BooleanSupplierHook context_program_hook("context Program", dbg_jni_context_program_hook_set);
@@ -675,6 +700,8 @@ void dbg_jni_run_java_program_ptr_hook() noexcept {
 }
 
 void init_jni_debug_functions(QoreNamespace& ns) {
+    ns.addBuiltinVariant("dbg_jni_describe_throwable", f_dbg_jni_describe_throwable, QCF_NO_FLAGS, QDOM_DEFAULT,
+        stringTypeInfo, 1, objectTypeInfo, QoreValue(), "throwable");
     ns.addBuiltinVariant("dbg_jni_set_classpath_jdk_feature", f_dbg_jni_set_classpath_jdk_feature, QCF_NO_FLAGS,
         QDOM_DEFAULT, nothingTypeInfo, 1, bigIntOrNothingTypeInfo, QoreValue(), "feature");
     ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
