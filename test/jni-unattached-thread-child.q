@@ -23,7 +23,7 @@
 #   exist are loaded
 # - "moduleloader": QoreURLClassLoader.getModuleLoader0() (with reflection) of a module that does not exist, and of a
 #   module whose lookup raises a Qore exception (a test hook of debug builds; "debug-build: yes" or "no" is printed
-#   first)
+#   before the error case)
 # - "jdbc": QoreJavaApi.openJdbcConnection()
 
 %modern
@@ -172,8 +172,8 @@ switch (case_name) {
 
     case "moduleloader": {
         out("module-loader-missing", UnattachedThreadCalls::moduleLoader("UnattachedNoSuchModule"));
-        # a test hook of debug builds raises a Qore exception in the lookup of the named module
         out("debug-build", is_debug_build() ? "yes" : "no");
+        # a test hook of debug builds raises a Qore exception in the lookup of the named module
         setenv("QORE_JNI_TEST_MODULE_LOADER_FAIL", "UnattachedLoaderFail");
         out("module-loader-error", UnattachedThreadCalls::moduleLoader("UnattachedLoaderFail"));
         unsetenv("QORE_JNI_TEST_MODULE_LOADER_FAIL");

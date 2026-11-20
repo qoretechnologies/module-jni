@@ -47,14 +47,14 @@
     - fixed Java calls made on a Java thread that Java started, which is not attached to %Qore, that crashed the
       process with \c SIGSEGV, as the native method used the %Qore thread state of the thread before attaching it:
       \c org.qore.jni.QoreObject.instanceOf() always; \c QoreObject.callMethod() and \c QoreClosure.call() (and
-      their other forms, such as \c callMethodSave() and \c callArgs()) when the class loader context of the thread had no Program;
-      \c QoreExceptionWrapper.getMessage() when the exception's description could not be converted to UTF-8; and
-      loading a \c qoremod.* or \c qore.* class; these native methods now attach the thread first, and raise a Java
-      \c RuntimeException if it cannot be attached (\c QoreExceptionWrapper.getMessage() returns a fixed message
-      instead, and a class load falls back to generating the class locally); \c QoreObjectBase.release() and
-      \c QoreJavaApi.openJdbcConnection() now attach the thread as well, and the calls of the generated Java classes
-      of %Qore classes no longer raise a failure to attach the thread as a %Qore exception, which needs the %Qore
-      thread state.  On a thread with no Program context,
+      their other forms, such as \c callMethodSave() and \c callArgs()) when the class loader context of the thread
+      had no Program; \c QoreExceptionWrapper.getMessage() when the exception's description could not be converted to
+      UTF-8; and loading a \c qoremod.* or \c qore.* class; these native methods now attach the thread first, and
+      raise a Java \c RuntimeException if it cannot be attached (\c QoreExceptionWrapper.getMessage() returns a fixed
+      message instead, and the lookup of the canonical class loader of a class reports no owner, as for its other
+      errors); \c QoreObjectBase.release() and \c QoreJavaApi.openJdbcConnection() now attach the thread as well,
+      and the calls of the generated Java classes of %Qore classes no longer raise a failure to attach the thread as
+      a %Qore exception, which needs the %Qore thread state.  On a thread with no Program context,
       \c QoreObject.instanceOf() now looks up the class in the object's Program before the global Java context
       Program, so that it finds the object's own class (qore#6828)
     - fixed \c Jni::org::qore::jni::invoke() and \c invoke_nonvirtual(), which were declared to return
