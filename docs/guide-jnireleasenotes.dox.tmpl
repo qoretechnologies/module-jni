@@ -39,6 +39,20 @@
       raise \c JNI-ERROR, and the \c classpath option of the \c jdbc driver raises \c JDBC-OPTION-ERROR (a %Qore
       library that refuses a NUL character in every DBI option value raises \c DBI-OPTION-ERROR first);
       \c QORE_JNI_CLASSPATH, an environment variable, cannot have a NUL character (qore#6771)
+    - the class loader no longer prints a debug message on standard output for a wildcard classpath entry that
+      matches no file (<tt>QoreURLClassLoader DEBUG: no matching files for classpath element ...</tt>); its debug
+      messages are now printed only if the \c qore.QoreURLClassLoader.debug Java system property is \c "true" (ex:
+      <tt>QORE_JNI_JVM_ARGS=-Dqore.QoreURLClassLoader.debug=true</tt>, or the \c set-property module command)
+      (qore#6819)
+    - fixed \c Jni::org::qore::jni::invoke() and \c invoke_nonvirtual(), which were declared to return
+      \c Jni::java::lang::Object, but return the value of the method converted to %Qore, as a direct call of the
+      method does, which is often not an object: for example, an \c int, a \c float or a \c bool for a primitive
+      type or a boxed value, a \c string for a \c java.lang.String, and \c NOTHING for \c null or a \c void method
+      (see @ref jni_java_to_qore); a method call
+      made directly on the result (ex: <tt>jni::invoke(m, o).toString()</tt>) crashed the process when the result
+      was not an object, and assigning the result to a variable of its type (ex:
+      <tt>int len = jni::invoke(m, o);</tt>) was a parse-time type error; they are now declared to return \c auto;
+      the values that they return are unchanged (qore#6808)
     - fixed the jni APIs in a Program that has no jni data, a child Program created with
       \c PO_NO_INHERIT_PROGRAM_DATA, or one whose copy of its parent's jni data failed, which has the namespaces of the
       jni module but not its data: \c get_class_loader() crashed the process with a null pointer dereference, as did
@@ -62,6 +76,12 @@
       reference to it, so replacing it could free it during the call; it now runs through a reference that is
       released when it returns, and an exception raised by that release (ex: in the destructor of an object that only
       the replaced callback held) is raised to the Java code that created the object (qore#6790)
+    - fixed a crash or heap corruption of the \c jdbc driver when an \c SQLStatement prepared in %Qore code that Java
+      called back was closed, deleted, or reset after a lost connection that could not be re-established, in a later
+      call: the statement kept the exception sink of the call that created it, which was gone then, and released its
+      bind arguments into it, so an exception raised by the release (ex: in the destructor of an object that only the
+      bind arguments held) was written to freed memory; the statement now keeps no exception sink, and releases its
+      bind arguments into the sink of the call that releases them, which raises the exception (qore#6807)
     - fixed a memory leak at the module's shutdown when the main thread was never attached to the JVM (all jni work
       ran in other threads): deleting the module's global Java context Program attached the main thread to the JVM,
       and setting the Java context of that new attachment created the global context Program again, which was never

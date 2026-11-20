@@ -406,19 +406,25 @@ static QoreValue jdbc_lob_value(Env& env, LocalReference<jobject>& val, QoreProg
 }
 
 QoreJdbcStatement::~QoreJdbcStatement() {
-    if (stmt) {
+    // nothing can be released here: there is no sink of a calling code to release it into (qore#6807)
+    assert(!stmt && !rs && !params);
+}
+
+void QoreJdbcStatement::release(ExceptionSink* xsink) {
+    if (stmt || rs) {
         // the statement is closed on a cancelled thread too: Env's constructor raises a pending cancellation as a C++
-        // exception, which must not leave a destructor (it terminated the process when a large object read was
-        // cancelled)
+        // exception, which must not leave a scope guard's destructor (it terminated the process when a large object
+        // read was cancelled)
         QoreCancelDeferralHelper cancel_deferral;
         try {
             Env env;
-            close(env, cleanup_xsink);
+            close(env, xsink);
         } catch (jni::Exception& e) {
-            e.convert(cleanup_xsink);
+            e.convert(xsink);
         } catch (...) {
         }
     }
+    setParams(nullptr, xsink);
 }
 
 bool QoreJdbcStatement::exec(Env& env, ExceptionSink* xsink, const QoreString& qstr, const QoreListNode* args) {
@@ -451,7 +457,7 @@ bool QoreJdbcStatement::execRaw(Env& env, ExceptionSink* xsink, const QoreString
         return false;
     }
     // the SQL is executed as given: it has no placeholders to parse and no arguments to bind
-    params = nullptr;
+    setParams(nullptr, xsink);
     bind_size = 0;
     raw = true;
     raw_sql.assign(str->c_str(), str->size());
@@ -495,10 +501,10 @@ int QoreJdbcStatement::bindQueryArguments(Env& env, ExceptionSink* xsink) {
         return -1;
     }
     if (array_bind) {
-        if (bindInternArray(env, *params, xsink)) {
+        if (bindInternArray(env, params, xsink)) {
             return -1;
         }
-    } else if (bindIntern(env, *params, xsink)) {
+    } else if (bindIntern(env, params, xsink)) {
         return -1;
     }
     return 0;
@@ -629,7 +635,7 @@ void QoreJdbcStatement::reset(Env& env, ExceptionSink* xsink) {
     batch_rows_affected = -1;
     update_count_total = -1;
     results_done = false;
-    params = nullptr;
+    setParams(nullptr, xsink);
     raw = false;
     raw_sql.clear();
     cvec.clear();
@@ -667,18 +673,24 @@ int QoreJdbcStatement::reconnectLostConnection(Env& env, ExceptionSink* xsink) {
     int reconnect_rc = conn->reconnect(env, &reconnect_xsink);
     xsink->assimilate(reconnect_xsink);
     if (reconnect_rc) {
-        // Free state completely.
+        // Free state completely, into the sink of this call (qore#6807)
         reset(env, xsink);
 
         // Reconnect failed; marking connection as closed
-        // The following call will close any open statements and then the datasource
-        conn->getDatasource()->connectionAborted();
+        // The following call will close any open statements and then the datasource; the errors of closing the
+        // statements go to this call's sink: the deprecated variant without a sink discarded them, also the
+        // exception of the destructor of a bind argument that the Qore library holds for the statement and releases
+        // when it closes it (qore#6807)
+        // NOTE: the statements closed include a prepared statement executing this call, which is deleted then:
+        // "this" must not be used after this call
+        conn->getDatasource()->connectionAborted(xsink);
         return -1;
     }
 
     // Don't execute again if any exceptions have occured
     if (*xsink) {
         // Close all statements and remove private data but leave datasource open
+        // NOTE: as above, this can delete this statement: "this" must not be used after this call
         conn->getDatasource()->connectionRecovered(xsink);
         return -1;
     }
@@ -2707,7 +2719,7 @@ int QoreJdbcStatement::parse(QoreString* str, const QoreListNode* args, Exceptio
     QoreString tmp;
     int index = 0;
     SQLCommentType comment = ESCT_NONE;
-    params = nullptr;
+    setParams(nullptr, xsink);
     bind_size = 0;
 
     while (*p) {

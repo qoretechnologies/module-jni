@@ -64,6 +64,13 @@ import java.util.concurrent.atomic.AtomicLong;
 public class QoreURLClassLoader extends URLClassLoader {
     public static String INIT_PROP_NAME = "qore.QoreURLClassLoader.init";
 
+    //! The Java system property that enables the debug messages of the class loader when set to \c "true"
+    /** The messages are printed on \c System.out; the property can be set with the \c set-property module command
+        or as a JVM option (ex: <tt>QORE_JNI_JVM_ARGS=-Dqore.QoreURLClassLoader.debug=true</tt>), and it is checked
+        when a message is logged (qore#6819)
+    */
+    public static final String DEBUG_PROP_NAME = "qore.QoreURLClassLoader.debug";
+
     //! Thread-local storage for the current classloader context
     /** Using InheritableThreadLocal so that child threads inherit the parent's classloader context.
         This is required for Java threads to work properly with Qore's context.
@@ -1573,8 +1580,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         System.out.println("QoreURLClassLoader INFO: " + msg);
     }
 
+    //! Prints a debug message on System.out if debugging is enabled with the DEBUG_PROP_NAME system property
     static private void debugLog(String msg) {
-        System.out.println("QoreURLClassLoader DEBUG: " + msg);
+        if (Boolean.getBoolean(DEBUG_PROP_NAME)) {
+            System.out.println("QoreURLClassLoader DEBUG: " + msg);
+        }
     }
 
     static private void errorLog(String msg) {

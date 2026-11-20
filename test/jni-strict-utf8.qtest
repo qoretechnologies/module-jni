@@ -144,9 +144,32 @@ class JniStrictUtf8Test inherits QUnit::Test {
     #! ClassNotFoundException, and also printed as an unhandled Qore exception, as its exception sink was not cleared
     moduleLoadErrorNotUnhandled() {
         int rc;
-        string out = backquote(childCmd("", "load-error"), \rc);
+        string out = runChild("", "load-error", \rc);
         assertEq("result: load error: OK\n", out);
         assertEq(0, rc, "exit code");
+    }
+
+    #! runs test/jni-strict-utf8-child.q and returns its output and errors in UTF-8
+    /** The child prints in its default encoding: the encoding given with \c QORE_CHARSET in \a env, or the default
+        encoding of this process if \a env does not set it; backquote() tags the output with the default encoding of
+        this process without checking it, so a regular expression match on the output of a child with another default
+        encoding raised \c INVALID-ENCODING (qore#6819): the output is read as bytes in the encoding of the child and
+        converted to UTF-8; output printed by Java follows the locale of the child instead, and is expected to be ASCII
+        where it can differ (ex: with \c QORE_CHARSET=UTF-8 and an ISO-8859-1 locale)
+
+        @param env variable assignments for the child (ex: \c "QORE_CHARSET=ISO-8859-1")
+        @param args the child's arguments
+        @param rc the exit code of the child
+        @param dir the directory to run the child in; if missing, the child runs in the current directory
+    */
+    private static string runChild(string env, string args, reference<int> rc, *string dir) {
+        string cmd = childCmd(env, args);
+        if (dir) {
+            cmd = "cd " + shellQuote(dir) + " && " + cmd;
+        }
+        *string enc = (env =~ x/(?:^|\s)QORE_CHARSET=(\S+)/)[0];
+        string out = binary_to_string(binary(backquote(cmd, \rc)), enc ?? get_default_encoding());
+        return convert_encoding(out, "UTF-8");
     }
 
     #! returns the shell command that runs test/jni-strict-utf8-child.q with its output and errors
@@ -426,7 +449,7 @@ public class %s {
     #! test/jni-strict-utf8-child.q
     nonUtf8DefaultEncoding() {
         int rc;
-        string out = backquote(childCmd("QORE_CHARSET=ISO-8859-1"), \rc);
+        string out = runChild("QORE_CHARSET=ISO-8859-1", "", \rc);
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
         assertEq((
             "result: Qore hash key to Java: OK",
@@ -479,7 +502,7 @@ public class %s {
         }
         on_exit rmdir(dir);
         int rc;
-        string out = backquote("cd " + shellQuote(dir) + " && " + childCmd(env, args), \rc);
+        string out = runChild(env, args, \rc, dir);
         if (out =~ /^result: classpath: skipped/m) {
             testSkip(trim(out));
         }
