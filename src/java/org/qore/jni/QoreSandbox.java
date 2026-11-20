@@ -395,9 +395,14 @@ public final class QoreSandbox {
         symbolic links resolved, and for a wildcard entry, its directory and each file that it selects.  Each checked
         path is encoded as encode() does, which raises JNI-SANDBOX-ERROR for a path that the file name encoding cannot
         represent exactly.
+
+        @param classpath the classpath
+        @param jdkFeature the JDK feature version whose class loader the check of manifest Class-Path attributes
+        must match, or 0 for the running JDK's (only a debug build of the module passes another, for its tests; see
+        QoreURLClassLoader.isVerifiedClassPathJdk())
     */
-    static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath) {
-        QoreURLClassLoader.ResolvedClasspath rc = QoreURLClassLoader.resolveClasspath(classpath);
+    static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
+        QoreURLClassLoader.ResolvedClasspath rc = QoreURLClassLoader.resolveClasspath(classpath, jdkFeature);
         encodeNew(rc);
         return rc;
     }

@@ -325,6 +325,53 @@ sub unsandboxed_case(string root) {
     result("unsandboxed: the class of the second jar of the cycle is loaded", True, loads(p, "CycB"));
 }
 
+#! makes the check of manifest Class-Path attributes assume a JDK feature version, or the running JDK's with none
+/** with Jni::org::qore::jni::dbg_jni_set_classpath_jdk_feature(), which only a debug build of the module has
+*/
+sub set_jdk_feature(*int feature) {
+    Program p(PO_NEW_STYLE);
+    p.parse("%requires jni
+sub set(*int f) { Jni::org::qore::jni::dbg_jni_set_classpath_jdk_feature(f); }", "dbg");
+    p.callFunction("set", feature);
+}
+
+#! on a JDK version whose class loader has not been verified, a manifest Class-Path attribute refuses the classpath
+sub jdkgate_case(string root) {
+    # a verified version: the Class-Path is checked and followed
+    set_jdk_feature(25);
+    Program p = new_program(get_sandbox(root, ("a",)));
+    hash<auto> h = add_classpath(p, root + "/a/cp-ref.jar");
+    result("jdkgate: a verified JDK version is accepted", "ok", h.err);
+    result("jdkgate: the class of the named jar is loaded on it", True, loads(p, "CpTarget"));
+
+    # an unknown version: a jar with a manifest Class-Path refuses the classpath
+    set_jdk_feature(9999);
+    p = new_program(get_sandbox(root, ("a",)));
+    h = add_classpath(p, root + "/a/cp-ref.jar");
+    result("jdkgate: an unknown JDK version is refused", "JNI-CLASSPATH-ERROR", h.err);
+    result("jdkgate: the error names the reason", True, h.desc =~ /unverified JDK version 9999/);
+    result("jdkgate: the error names the jar", True, h.desc.find(root + "/a/cp-ref.jar") >= 0);
+    result("jdkgate: nothing is added on it", (), jar_paths(p, root));
+    result("jdkgate: the class of the named jar is not loaded on it", False, loads(p, "CpTarget"));
+
+    # an unknown version: a jar with no manifest Class-Path is accepted
+    p = new_program(get_sandbox(root, ("a",)));
+    h = add_classpath(p, root + "/a/lib/cp-target.jar");
+    result("jdkgate: a jar with no Class-Path is accepted on an unknown JDK version", "ok", h.err);
+    result("jdkgate: its class is loaded", True, loads(p, "CpTarget"));
+
+    # an unknown version: no sandbox, no check
+    p = new_program();
+    h = add_classpath(p, root + "/a/cp-ref.jar");
+    result("jdkgate: an unsandboxed classpath is unaffected", "ok", h.err);
+    result("jdkgate: the class of the named jar is loaded with no sandbox", True, loads(p, "CpTarget"));
+
+    # the running JDK's version again
+    set_jdk_feature();
+    p = new_program(get_sandbox(root, ("a",)));
+    result("jdkgate: the running JDK version is used again", "ok", add_classpath(p, root + "/a/cp-ref.jar").err);
+}
+
 sub main() {
     string root = ARGV[1];
     switch (ARGV[0]) {
@@ -335,6 +382,7 @@ sub main() {
         case "nested": nested_case(root); break;
         case "allowed": allowed_case(root); break;
         case "unsandboxed": unsandboxed_case(root); break;
+        case "jdkgate": jdkgate_case(root); break;
         default:
             printf("unknown case %y\n", ARGV[0]);
             exit(1);

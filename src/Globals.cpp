@@ -4117,7 +4117,7 @@ bool Globals::init() {
         java_org_qore_jni_QoreSandbox_Policy_class_len);
     jni_register_qore_sandbox_natives(env, classQoreSandbox);
     methodQoreSandboxResolveClasspath = env.getStaticMethod(classQoreSandbox, "resolveClasspath",
-        "(Ljava/lang/String;)Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;");
+        "(Ljava/lang/String;I)Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;");
     methodQoreSandboxExpandClasspath = env.getStaticMethod(classQoreSandbox, "expandClasspath",
         "(Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;I)V");
 

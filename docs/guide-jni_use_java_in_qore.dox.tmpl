@@ -433,9 +433,12 @@ public class Fetcher {
       \c Class-Path entry cannot be checked (ex: it is not a file, a jar is not a regular file, a manifest cannot be
       read, or, before Java 22, a jar has a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR,
       naming the file.  The class loader still follows the manifests itself, so the classpath that is used is the one
-      that was given, and every file of it is one that was checked.  A denial refuses the whole classpath: nothing of
-      it is added.  The files that the class loader reads under a directory entry are not checked one by one, and the
-      files are checked when the classpath is added, not again when the class loader opens them
+      that was given, and every file of it is one that was checked.  That resolution follows the JDK's class loader,
+      and it has been verified for JDK feature version 25; on any other JDK version, a classpath with a jar that has a
+      manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason, while a classpath
+      whose jars have no \c Class-Path attribute is checked and added as usual.  A denial refuses the whole classpath:
+      nothing of it is added.  The files that the class loader reads under a directory entry are not checked one by
+      one, and the files are checked when the classpath is added, not again when the class loader opens them
     - the commands that change state of the JVM that every Program shares (\c global-add-classpath,
       \c global-add-relative-classpath, \c set-property, \c register-shared-class) or that run Java code
       (\c kotlin-eval) raise \c JNI-SANDBOX-ERROR under a sandbox that does not allow uncontrolled APIs, also through

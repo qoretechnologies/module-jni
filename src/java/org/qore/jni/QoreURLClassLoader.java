@@ -1353,11 +1353,31 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! The most jars and directories that the manifest Class-Path attributes of a sandboxed classpath can name
-    /** Each entry that the manifests name is resolved and checked, and each jar's manifest read, before the classpath is
-        added; a classpath whose manifests name more entries is refused (qore#6822).  The limit bounds that work for a
-        set of manifests whose entries keep naming new paths (ex: through a directory link to its own directory).
+    /** Each entry that the manifests name is resolved and checked, and each jar's manifest read, before the classpath
+        is added; a classpath whose manifests name more entries is refused (qore#6822).  The limit bounds that work for
+        a set of manifests whose entries keep naming new paths (ex: through a directory link to its own directory).
     */
     static final int MAX_MANIFEST_ENTRIES = 4096;
+
+    //! The JDK feature versions whose class loader resolves manifest Class-Path attributes as ResolvedClasspath does
+    /** The sandbox check of a classpath resolves the manifest Class-Path attributes of its jars as the JDK's class
+        loader resolves them (jdk.internal.loader.URLClassPath), so that every file that the class loader reaches is
+        one that was checked; that resolution is internal to the JDK and may change in another version.  It has been
+        verified for these feature versions; on any other, a governed classpath with a jar that has a manifest
+        Class-Path attribute is refused (qore#6822).
+    */
+    static final int[] VERIFIED_CLASS_PATH_JDK_FEATURES = {25};
+
+    //! Returns true if the class loader of the given JDK feature version has been verified for the sandbox check of
+    //! manifest Class-Path attributes
+    static boolean isVerifiedClassPathJdk(int feature) {
+        for (int f : VERIFIED_CLASS_PATH_JDK_FEATURES) {
+            if (f == feature) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     //! A classpath resolved once, for both its sandbox check and its use (qore#6818, qore#6822)
     /** Made by resolveClasspath(); each element is a path that the sandbox check of the classpath checks, and the
@@ -1402,8 +1422,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         private int manifestEntries;
         //! true once an element refuses the classpath
         private boolean refused;
+        //! the JDK feature version whose class loader the check of manifest Class-Path attributes must match
+        private final int jdkFeature;
 
-        private ResolvedClasspath() {
+        private ResolvedClasspath(int jdkFeature) {
+            this.jdkFeature = jdkFeature;
         }
 
         private void add(File path, File file, boolean match, String note) {
@@ -1530,7 +1553,16 @@ public class QoreURLClassLoader extends URLClassLoader {
                     + "its Class-Path attribute names against the sandbox filesystem policy: " + e);
                 return;
             }
-            if (classpath == null) {
+            if (classpath == null || classpath.trim().isEmpty()) {
+                return;
+            }
+            // the entries can only be resolved as the class loader resolves them on a JDK whose class loader has been
+            // verified
+            if (!isVerifiedClassPathJdk(jdkFeature)) {
+                refuse(jar, null, "the classpath jar '" + jar + "' has a manifest Class-Path attribute, which cannot "
+                    + "be checked against the sandbox filesystem policy on an unverified JDK version " + jdkFeature
+                    + " for manifest Class-Path checking (verified: "
+                    + Arrays.toString(VERIFIED_CLASS_PATH_JDK_FEATURES) + ")");
                 return;
             }
             // the entries are separated by white space, as the class loader splits them
@@ -1734,12 +1766,16 @@ public class QoreURLClassLoader extends URLClassLoader {
 
         The jars that the manifest Class-Path attributes of these jars name are added as further elements by
         ResolvedClasspath.expand(), as each jar is checked (qore#6822).
+
+        @param classpath the classpath
+        @param jdkFeature the JDK feature version whose class loader the check of manifest Class-Path attributes must
+        match, or 0 (or less) for the running JDK's
     */
-    static ResolvedClasspath resolveClasspath(String classpath) {
+    static ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
         if (classpath == null) {
             throw new IllegalArgumentException("the classpath must not be null");
         }
-        ResolvedClasspath rc = new ResolvedClasspath();
+        ResolvedClasspath rc = new ResolvedClasspath(jdkFeature > 0 ? jdkFeature : Runtime.version().feature());
         for (String pathentry : classpathEntries(classpath)) {
             File fileentry = resolveClasspathEntry(pathentry);
             if (fileentry.getName().indexOf('*') == -1) {

@@ -172,7 +172,7 @@ public:
 
     DLLLOCAL static GlobalReference<jclass> classQoreJavaApi;                     // org.qore.jni.QoreJavaApi
     DLLLOCAL static GlobalReference<jclass> classQoreSandbox;                     // org.qore.jni.QoreSandbox
-    DLLLOCAL static jmethodID methodQoreSandboxResolveClasspath;                  // static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String)
+    DLLLOCAL static jmethodID methodQoreSandboxResolveClasspath;                  // static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String, int)
     DLLLOCAL static jmethodID methodQoreSandboxExpandClasspath;                   // static void expandClasspath(ResolvedClasspath, int)
     DLLLOCAL static jmethodID methodQoreJavaApiGetStackTrace;                     // StackTraceElement[] getStackTrace()
     DLLLOCAL static GlobalReference<jclass> classJavaCollectionTypes;             // org.qore.jni.JavaCollectionTypes

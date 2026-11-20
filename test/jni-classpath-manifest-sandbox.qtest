@@ -7,6 +7,9 @@
 # name are resolved and checked against the policy with the classpath's own entries, recursively (qore#6822).  If
 # the policy denies any of them, or one cannot be checked, the whole classpath is refused with JNI-CLASSPATH-ERROR,
 # naming the file, and nothing is added.  With no sandbox, manifest Class-Path attributes are followed as before.
+# On a JDK feature version whose class loader has not been verified for this check, a jar with a manifest Class-Path
+# attribute refuses a sandboxed classpath; the jdkgate case assumes such a version with
+# Jni::org::qore::jni::dbg_jni_set_classpath_jdk_feature(), so it needs a debug build of the module.
 #
 # Each case runs test/jni-classpath-manifest-sandbox-child.q in a new process, with a test tree made here from the
 # jars in test/jni-classpath-manifest-jars (made by the build; each has one class, org.qore.jni.test.cpman.*):
@@ -37,6 +40,8 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
     private {
         #! the root of the test tree, as a real path
         string root;
+        #! the reason that the JDK version case is skipped, if the module is not a debug build
+        *string skip_reason;
         #! the files and links of the test tree, removed at the end
         list<string> files = ();
         #! the directories of the test tree, removed at the end, deepest first
@@ -44,6 +49,16 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JNI manifest Class-Path attributes under a sandbox", "1.0") {
+        try {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse("%requires jni\nnothing sub t() { Jni::org::qore::jni::dbg_jni_set_classpath_jdk_feature(); }",
+                "dbg");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
+                rethrow;
+            }
+            skip_reason = ex.desc;
+        }
         addTestCase("regression: a Class-Path that names a denied jar is refused", \denyTest());
         addTestCase("regression: a Class-Path through a link out of the allowed directory is refused", \escapeTest());
         addTestCase("regression: a relative Class-Path is checked where the class loader resolves it",
@@ -52,6 +67,7 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         addTestCase("coverage: a chain of Class-Path attributes is followed", \nestedTest());
         addTestCase("coverage: a Class-Path that names an allowed jar is followed", \allowedTest());
         addTestCase("coverage: Class-Path attributes with no sandbox are unchanged", \unsandboxedTest());
+        addTestCase("regression: a Class-Path is refused on an unverified JDK version", \jdkGateTest());
         set_return_value(main());
     }
 
@@ -215,6 +231,26 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
             "result: unsandboxed: the class of the jar with the entry is loaded: OK",
             "result: unsandboxed: a cycle is added: OK",
             "result: unsandboxed: the class of the second jar of the cycle is loaded: OK",
+        ));
+    }
+
+    jdkGateTest() {
+        if (skip_reason) {
+            testSkip("the module is not a debug build: " + skip_reason);
+        }
+        checkCase("jdkgate", (
+            "result: jdkgate: a verified JDK version is accepted: OK",
+            "result: jdkgate: the class of the named jar is loaded on it: OK",
+            "result: jdkgate: an unknown JDK version is refused: OK",
+            "result: jdkgate: the error names the reason: OK",
+            "result: jdkgate: the error names the jar: OK",
+            "result: jdkgate: nothing is added on it: OK",
+            "result: jdkgate: the class of the named jar is not loaded on it: OK",
+            "result: jdkgate: a jar with no Class-Path is accepted on an unknown JDK version: OK",
+            "result: jdkgate: its class is loaded: OK",
+            "result: jdkgate: an unsandboxed classpath is unaffected: OK",
+            "result: jdkgate: the class of the named jar is loaded with no sandbox: OK",
+            "result: jdkgate: the running JDK version is used again: OK",
         ));
     }
 
