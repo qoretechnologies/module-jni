@@ -430,8 +430,9 @@ public class Fetcher {
       are checked in the same way, recursively and each once: each is checked as the file that the class loader opens
       for it (a relative entry resolved against the location of the jar that names it, as the class loader resolves
       it), with symbolic links resolved, before its own manifest is read.  If the policy denies any of them, or a
-      \c Class-Path entry cannot be checked (ex: it is not a file, or a manifest cannot be read), the whole classpath
-      is refused with \c JNI-CLASSPATH-ERROR, naming the file.  The class loader still follows the manifests itself,
+      \c Class-Path entry cannot be checked (ex: it is not a file, a jar is not a regular file, or a manifest cannot
+      be read), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file.  The class loader still
+      follows the manifests itself,
       so the classpath that is used is the one that was given, and every file of it is one that was checked.  A
       denial refuses the whole classpath: nothing of it is added.  The files that the class loader reads under a
       directory entry are not checked one by one, and the files are checked when the classpath is added, not again

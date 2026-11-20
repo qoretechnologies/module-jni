@@ -178,6 +178,29 @@ sub deny_case(string root) {
     result("deny: the error names the jar whose manifest names it", True, h.desc.find(root + "/h/cp-http.jar") >= 0);
     result("deny: the jar with the entry is not added", (), jar_paths(p, root));
     result("deny: the class of the jar with the entry is not loaded", False, loads(p, "CpHttp"));
+
+    # a .zip file, which the class loader opens with a file URL rather than a jar URL, is expanded in the same way
+    p = new_program(sm);
+    h = add_classpath(p, root + "/d/cp-ref.zip");
+    result("deny: a zip file whose manifest names the denied jar is refused", "JNI-CLASSPATH-ERROR", h.err);
+    result("deny: its error names the denied jar", True, h.desc.find(root + "/d/lib/cp-target.jar") >= 0);
+    result("deny: the zip file is not added", (), jar_paths(p, root));
+
+    # a named jar whose manifest cannot be read cannot be checked, and refuses the classpath
+    p = new_program(get_sandbox(root, ("j",)));
+    h = add_classpath(p, root + "/j/cp-ref.jar");
+    result("deny: a named file that is not a jar is refused", "JNI-CLASSPATH-ERROR", h.err);
+    result("deny: its error names the file", True, h.desc.find(root + "/j/lib/cp-target.jar") >= 0);
+    result("deny: the jar that names it is not added", (), jar_paths(p, root));
+
+    # a named file that is not a regular file is not opened, and refuses the classpath, even if the policy allows it
+    SandboxManager smv = get_sandbox(root, ("v",));
+    smv.addFilesystemAllowedPath("/dev/null", QSEC_READ);
+    p = new_program(smv);
+    h = add_classpath(p, root + "/v/cp-ref.jar");
+    result("deny: a named file that is not a regular file is refused", "JNI-CLASSPATH-ERROR", h.err);
+    result("deny: its error says so", True, h.desc =~ /not a regular file/);
+    result("deny: the jar that names the special file is not added", (), jar_paths(p, root));
 }
 
 #! a manifest Class-Path through a symbolic link out of the allowed directory refuses the classpath
@@ -263,6 +286,10 @@ sub unsandboxed_case(string root) {
     result("unsandboxed: the given jar is added", ("d/cp-ref.jar",), jar_paths(p, root));
     result("unsandboxed: the class of the named jar is loaded", True, loads(p, "CpTarget"));
     result("unsandboxed: the class is loaded from the named jar", "d/lib/cp-target.jar", location(p, root, "CpTarget"));
+
+    p = new_program();
+    result("unsandboxed: a zip file is added", "ok", add_classpath(p, root + "/d/cp-ref.zip").err);
+    result("unsandboxed: the class of the jar that the zip file names is loaded", True, loads(p, "CpTarget"));
 
     p = new_program();
     result("unsandboxed: a Class-Path through a link is added", "ok", add_classpath(p, root + "/s/cp-ref.jar").err);

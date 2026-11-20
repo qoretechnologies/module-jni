@@ -1400,6 +1400,8 @@ public class QoreURLClassLoader extends URLClassLoader {
         private int expanded;
         //! the number of elements that manifests named
         private int manifestEntries;
+        //! true once an element refuses the classpath
+        private boolean refused;
 
         private ResolvedClasspath() {
         }
@@ -1419,9 +1421,19 @@ public class QoreURLClassLoader extends URLClassLoader {
             refusals.add(refusal);
         }
 
-        //! Adds an element that refuses the classpath
+        //! Adds an element that refuses the classpath; no further element is expanded
         private void refuse(File path, String referrer, String refusal) {
             add(path, null, false, null, null, referrer, refusal);
+            refused = true;
+        }
+
+        //! Refuses the classpath for a file that is neither a regular file nor a directory, which is not opened
+        /** The class loader would open such a file (ex: a device) as a jar, so its manifest would have to be read
+            to check it, but reading it is not safe (ex: a FIFO blocks).
+        */
+        private void refuseSpecial(File real, String referrer) {
+            refuse(real, referrer, "the classpath jar '" + real + "' is not a regular file, so the jars that its "
+                + "manifest Class-Path attribute could name cannot be checked against the sandbox filesystem policy");
         }
 
         //! Returns the number of elements
@@ -1492,12 +1504,20 @@ public class QoreURLClassLoader extends URLClassLoader {
             }
             ++expanded;
             URL base = jarUrls.get(i);
-            if (base == null) {
+            // once the classpath is refused, nothing more is read: the check raises the refusal when it reaches it
+            if (base == null || refused) {
                 return;
             }
             File jar = paths.get(i);
             String classpath;
             try (JarFile jf = new JarFile(jar, true, ZipFile.OPEN_READ, JarFile.runtimeVersion())) {
+                // before Java 22, the class loader can open the jars that a jar index lists (if jar indexes are
+                // enabled), which this check does not resolve
+                if (Runtime.version().feature() < 22 && jf.getEntry("META-INF/INDEX.LIST") != null) {
+                    refuse(jar, null, "the classpath jar '" + jar + "' has a jar index, whose jars cannot be checked "
+                        + "against the sandbox filesystem policy");
+                    return;
+                }
                 Manifest man = jf.getManifest();
                 Attributes attrs = man == null ? null : man.getMainAttributes();
                 classpath = attrs == null ? null : attrs.getValue(Attributes.Name.CLASS_PATH);
@@ -1569,6 +1589,10 @@ public class QoreURLClassLoader extends URLClassLoader {
                 return;
             }
             // a directory is read as files below it and has no manifest; a jar's manifest is read when it is expanded
+            if (!dir && isSpecialFile(real)) {
+                refuseSpecial(real, referrer);
+                return;
+            }
             URL jarUrl = dir || !Files.isRegularFile(real.toPath()) ? null : url;
             add(real, null, false, null, jarUrl, referrer, null);
         }
@@ -1679,6 +1703,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         return -1;
     }
 
+    //! Returns true if an existing file is neither a regular file nor a directory (ex: a device or a FIFO)
+    private static boolean isSpecialFile(File real) {
+        return !Files.isRegularFile(real.toPath()) && !Files.isDirectory(real.toPath());
+    }
+
     //! Returns the real path of a file (symbolic links resolved), or null if it cannot be resolved
     private static File realFile(File f) {
         try {
@@ -1713,6 +1742,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                     rc.add(fileentry, null, false, null);
                 } else if (Files.isRegularFile(real.toPath()) && isLoadable(real.getName())) {
                     rc.addJar(real, false);
+                } else if (isLoadable(real.getName()) && isSpecialFile(real)) {
+                    rc.refuseSpecial(real, null);
                 } else {
                     rc.add(real, real, false, null);
                 }
@@ -1752,6 +1783,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                 }
                 if (Files.isRegularFile(real.toPath())) {
                     rc.addJar(real, true);
+                } else if (isSpecialFile(real)) {
+                    rc.refuseSpecial(real, null);
                 } else {
                     rc.add(real, real, true, null);
                 }

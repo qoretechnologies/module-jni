@@ -11,7 +11,9 @@
 # Each case runs test/jni-classpath-manifest-sandbox-child.q in a new process, with a test tree made here from the
 # jars in test/jni-classpath-manifest-jars (made by the build; each has one class, org.qore.jni.test.cpman.*):
 #   a/cp-ref.jar        its manifest names lib/cp-target.jar; a/lib/cp-target.jar: that jar
-#   d/cp-ref.jar        as a/; d/lib/cp-target.jar is denied by the policy of the deny case
+#   d/cp-ref.jar        as a/; d/lib/cp-target.jar is denied by the policy of the deny case; d/cp-ref.zip: a copy
+#   j/cp-ref.jar        as a/; j/lib/cp-target.jar is a text file
+#   v/cp-ref.jar        as a/; v/lib/cp-target.jar is a link to /dev/null
 #   s/cp-ref.jar        as a/; s/lib: a link to outside, which has cp-target.jar
 #   m/cp-ref.jar        as a/, with no lib directory
 #   cy/cp-cyca.jar      its manifest names cp-cycb.jar, whose manifest names cp-cyca.jar
@@ -59,13 +61,18 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         makeDir(base);
         root = realpath(base);
         foreach string d in (("a", "a/lib", "d", "d/lib", "s", "outside", "m", "cy", "n", "n/b", "n/b/c", "h", "w",
-                "w/lib", "o", "o/deep", "o/lib")) {
+                "w/lib", "o", "o/deep", "o/lib", "j", "j/lib", "v", "v/lib")) {
             makeDir(root + DirSep + d);
         }
         copyJar("cp-ref.jar", "a/cp-ref.jar");
         copyJar("cp-target.jar", "a/lib/cp-target.jar");
         copyJar("cp-ref.jar", "d/cp-ref.jar");
         copyJar("cp-target.jar", "d/lib/cp-target.jar");
+        copyJar("cp-ref.jar", "d/cp-ref.zip");
+        copyJar("cp-ref.jar", "j/cp-ref.jar");
+        writeFile("j/lib/cp-target.jar", binary("not a jar\n"));
+        copyJar("cp-ref.jar", "v/cp-ref.jar");
+        makeLink("/dev/null", "v/lib/cp-target.jar");
         copyJar("cp-ref.jar", "s/cp-ref.jar");
         copyJar("cp-target.jar", "outside/cp-target.jar");
         makeLink(root + "/outside", "s/lib");
@@ -115,6 +122,15 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
             "result: deny: the error names the jar whose manifest names it: OK",
             "result: deny: the jar with the entry is not added: OK",
             "result: deny: the class of the jar with the entry is not loaded: OK",
+            "result: deny: a zip file whose manifest names the denied jar is refused: OK",
+            "result: deny: its error names the denied jar: OK",
+            "result: deny: the zip file is not added: OK",
+            "result: deny: a named file that is not a jar is refused: OK",
+            "result: deny: its error names the file: OK",
+            "result: deny: the jar that names it is not added: OK",
+            "result: deny: a named file that is not a regular file is refused: OK",
+            "result: deny: its error says so: OK",
+            "result: deny: the jar that names the special file is not added: OK",
         ));
     }
 
@@ -181,6 +197,8 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
             "result: unsandboxed: the given jar is added: OK",
             "result: unsandboxed: the class of the named jar is loaded: OK",
             "result: unsandboxed: the class is loaded from the named jar: OK",
+            "result: unsandboxed: a zip file is added: OK",
+            "result: unsandboxed: the class of the jar that the zip file names is loaded: OK",
             "result: unsandboxed: a Class-Path through a link is added: OK",
             "result: unsandboxed: the class of the linked jar is loaded: OK",
             "result: unsandboxed: a Class-Path entry that is not a file is ignored: OK",
@@ -219,7 +237,11 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         if (!is_file(src)) {
             throw "TEST-ERROR", sprintf("the test jar %y is missing: build the module first", src);
         }
-        binary data = ReadOnlyFile::readBinaryFile(src);
+        writeFile(path, ReadOnlyFile::readBinaryFile(src));
+    }
+
+    #! writes a file of the test tree
+    private writeFile(string path, binary data) {
         string file = root + DirSep + path;
         File f();
         f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
