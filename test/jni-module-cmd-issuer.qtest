@@ -268,11 +268,22 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
             assertRegex("^loaded$", trim(out), kind + ": a library module: its replayed command is judged as library "
                 "code: " + out);
             out = run(sprintf("%s %s %s/JniReplayFixture.qmod %s", qore, load, qmod_dir, kind), \rc);
-            # refused by the jni module for the add-classpath command and the loader, not by another error
-            assertRegex("^MODULE-LOAD-ERROR: AOT module-command replay error .*%module-cmd\\(jni\\) add-classpath "
-                "/nonexistent-qore-test-dir: cannot use the \"add-classpath\" module command, which adds to the "
-                "Program's classpath: " + i.value, trim(out), kind + ": a module chosen by path: its replayed command "
-                "is refused: " + out);
+            # a compiled module is native code: since qore#6776, the core refuses to load one from a path outside the
+            # module path into a sandboxed Program (whose sandbox does not allow uncontrolled APIs), before its
+            # recorded commands are replayed; with an earlier core, and for the Program that is only restricted with
+            # parse options, the module is loaded and its replayed command is refused by the jni module for the
+            # add-classpath command and the loader, not by another error
+            if (kind == "sandboxed" && trim(out) =~ /^LOAD-MODULE-ERROR: /) {
+                assertRegex("^LOAD-MODULE-ERROR: cannot load binary module '[^']*/JniReplayFixture\\.qmod': code that "
+                    "a sandbox governs or whose functional domains are restricted can load native code only from the "
+                    "module path", trim(out), kind + ": a module chosen by path: the core refuses its native code: "
+                    + out);
+            } else {
+                assertRegex("^MODULE-LOAD-ERROR: AOT module-command replay error .*%module-cmd\\(jni\\) add-classpath "
+                    "/nonexistent-qore-test-dir: cannot use the \"add-classpath\" module command, which adds to the "
+                    "Program's classpath: " + i.value, trim(out), kind + ": a module chosen by path: its replayed "
+                    "command is refused: " + out);
+            }
             assertFalse(trim(out) =~ /^loaded$/, kind + ": a module chosen by path is not loaded");
         }
     }
