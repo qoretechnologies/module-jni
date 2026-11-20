@@ -13,7 +13,9 @@
 # the module's shutdown between the deletion of the global context Program and the destruction of the JVM (ex: the
 # constructor of a generated class, which raises the exception that no Program context is available then).  The
 # message of a released exception is now a fixed message, and it is read under the lock that each release takes, so
-# that the exception is not released while it is read.
+# that the exception is not released while it is read.  The module's description of a pending wrapper
+# (JavaException::toString()) took its exception, which was then lost, and leaked the exception sink; the wrapper is
+# now described with its message and keeps its exception (qore#6864).
 #
 # Each case runs test/jni-exception-wrapper-released-child.q in a new process: a crash would end the child, and the
 # module's shutdown runs when the process exits.  The "window" case needs a debug build of the module, and is skipped
@@ -39,6 +41,7 @@ class JniExceptionWrapperReleasedTest inherits QUnit::Test {
         addTestCase("control: the message of a wrapper with its exception", \liveCase());
         addTestCase("regression: the message of a wrapper whose exception Qore took", \takenCase());
         addTestCase("regression: a wrapper whose exception Qore took thrown to Qore again", \takenRethrowCase());
+        addTestCase("regression: describing a wrapper keeps its exception", \describeCase());
         addTestCase("regression: the message of a wrapper after the module's shutdown", \shutdownCase());
         addTestCase("regression: a wrapper raised in the module's shutdown window", \windowCase());
         set_return_value(main());
@@ -66,6 +69,19 @@ class JniExceptionWrapperReleasedTest inherits QUnit::Test {
         string line = getLine(out, "rethrow-again: ");
         assertRegex("^rethrow-again: JNI-ERROR: ", line, out);
         assertTrue(line.find(ReleasedWrapper) > 0, out);
+    }
+
+    describeCase() {
+        string out = runChild("describe");
+        if (getLine(out, "debug: ") != "debug: True") {
+            assertEq("debug: False", getLine(out, "debug: "), out);
+            testSkip("Jni::dbg_jni_describe_throwable() requires a debug build");
+        }
+        # describing the wrapper took its exception (and leaked the exception sink): the second description and the
+        # conversion got a wrapper with no exception (qore#6864)
+        assertEq("describe: RELEASED-TEST-ERROR: the description", getLine(out, "describe: "), out);
+        assertEq("describe-again: RELEASED-TEST-ERROR: the description", getLine(out, "describe-again: "), out);
+        assertEq("rethrow: RELEASED-TEST-ERROR: the description", getLine(out, "rethrow: "), out);
     }
 
     shutdownCase() {

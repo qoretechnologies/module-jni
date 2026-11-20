@@ -9,6 +9,8 @@
 # - "live": the message of a wrapper whose exception has not been released
 # - "taken": the message of a wrapper that has been thrown back to Qore, which took its exception
 # - "taken-rethrow": a wrapper that has been thrown back to Qore is thrown to Qore again
+# - "describe": the module describes the wrapper as a pending Java exception (JavaException::toString()), which must
+#   neither take nor leak its exception (debug builds only: Jni::dbg_jni_describe_throwable())
 # - "shutdown": the message of a wrapper made before the module's shutdown, read in a JVM shutdown hook, after the
 #   module's shutdown has released the exception
 # - "window": as "shutdown", with a wrapper that the constructor of a generated class raises in the window of the
@@ -69,6 +71,19 @@ switch (case_name) {
         out("call", ExceptionWrapperRelease::callAndKeep("released_test_raise"));
         out("rethrow", throw_kept());
         out("rethrow-again", throw_kept());
+        break;
+
+    case "describe":
+        # the module describes the wrapper as a pending Java exception twice; it keeps its exception, which Qore then
+        # takes (debug builds only)
+        if (debug) {
+            out("call", ExceptionWrapperRelease::callAndKeep("released_test_raise"));
+            out("describe", call_function("Jni::org::qore::jni::dbg_jni_describe_throwable",
+                ExceptionWrapperRelease::getKept()));
+            out("describe-again", call_function("Jni::org::qore::jni::dbg_jni_describe_throwable",
+                ExceptionWrapperRelease::getKept()));
+            out("rethrow", throw_kept());
+        }
         break;
 
     case "shutdown":

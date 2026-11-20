@@ -33,6 +33,11 @@ public final class ExceptionWrapperRelease {
         }
     }
 
+    //! returns the Throwable kept
+    public static Throwable getKept() {
+        return kept;
+    }
+
     //! throws the Throwable kept
     public static void throwKept() throws Throwable {
         throw kept;
