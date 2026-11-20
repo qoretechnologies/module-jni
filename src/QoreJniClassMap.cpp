@@ -5121,6 +5121,20 @@ JniExternalProgramData* JniExternalProgramData::setContext(Env& env) {
     return setContext(env, pgm);
 }
 
+void JniExternalProgramData::setAttachContext(Env& env) {
+    // qore#6799: the global Java context Program is deleted when the module is shut down
+    // (Globals::clearGlobalContext()), and the deletion of its jni data attaches the thread to the JVM to release the
+    // class loader; on a thread that was never attached (ex: the main thread, when all jni work ran in other
+    // threads), the context of the new attachment was the global context Program, which no longer existed and was
+    // created again, and never deleted; during the shutdown, a thread in no Program with jni data gets no Java context
+    QoreProgram* pgm = nullptr;
+    // the Program found here, if any, is passed on, so that setContext() takes it directly
+    if (Globals::isShuttingDown() && !jni_get_context(pgm)) {
+        return;
+    }
+    setContext(env, pgm);
+}
+
 JniExternalProgramData* JniExternalProgramData::setContext(Env& env, QoreProgram*& pgm) {
     // issue #3199: no program is available when initializing the jni module from the command line
     // issue #3153: no context is available when called from a static method
