@@ -26,6 +26,9 @@
 #                       w/lib/cp-target.jar and o/lib/cp-target.jar: copies of that jar
 
 %modern
+# the debug build check of the constructor loads the jni module of this tree, also where the tree's build directory is
+# not in QORE_MODULE_DIR
+%prepend-module-path "${SCRIPT_DIR}/../build"
 
 %requires QUnit
 %requires Util
