@@ -6,6 +6,18 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: under a sandbox with a filesystem policy, the jars and directories that the manifest
+      \c Class-Path attributes of a classpath's jars name, which the class loader opens as well, were not checked
+      against the policy; they are now resolved as the class loader resolves them, recursively and each once, and
+      checked as their real paths (with symbolic links resolved) together with the classpath's own entries; if the
+      policy denies any of them, or one cannot be checked (ex: a jar that is not a regular file, or, before Java 22, a
+      jar with a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
+      is added.  The class loader still follows the manifests, so the classpath that is used is unchanged.  The
+      resolution has been verified for JDK feature version 25; on any other JDK version, a governed classpath with a
+      jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a
+      classpath whose jars have no \c Class-Path attribute is not affected).  The \c add-classpath and
+      \c add-relative-classpath module commands and the \c classpath option of the \c jdbc driver are affected; with
+      no filesystem policy, classpaths are added as before (qore#6822, see @ref jni_sandbox)
     - <b>Security</b>: under a sandbox with a filesystem policy, a wildcard classpath entry was checked as its pattern
       path as a whole, not file by file, so the policy was not applied to each file that the wildcard selected; a
       wildcard entry is now expanded once, each file that it selects is checked as its real path (with symbolic links
@@ -100,6 +112,11 @@
       and setting the Java context of that new attachment created the global context Program again, which was never
       deleted; a thread that is newly attached to the JVM once the module's shutdown has started, outside a Program
       with the module's data, now gets no Java context (qore#6799)
+    - fixed a memory leak at the module's shutdown when a Java thread called into %Qore with no %Qore Program context
+      (ex: \c QoreJavaApi.callFunction() or \c QoreJavaApi.newObjectSave() in a Java listener thread) after the
+      module had deleted its global Java context Program and before it destroyed the JVM: the call created the global
+      context Program again, which was never deleted; such a call now raises a Java exception, and no global context
+      Program is created once the module's shutdown has started (qore#6827)
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a

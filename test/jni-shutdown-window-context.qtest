@@ -1,0 +1,100 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# A Java thread that calls into Qore during the module's shutdown must not create the global Java context Program
+# again.  The module's delete function deletes the global context Program (Globals::clearGlobalContext()) before it
+# destroys the JVM, so Java threads still run in that window; a call from Java with no Program context (ex:
+# QoreJavaApi.callFunction() or QoreJavaApi.newObjectSave() in a thread whose class loader's Program is gone) fell
+# back to Globals::getJavaContextProgram(), which created the global context Program again; that Program was never
+# deleted (valgrind: a definite leak from Globals::createJavaContextProgram()).  Such a call now raises a Java
+# exception instead (qore#6827).
+#
+# Each case runs test/jni-shutdown-window-context-child.q in a new process, as the module is shut down when the
+# process exits.  A debug build of the module runs the java.lang.Runnable set with
+# Jni::dbg_jni_set_shutdown_window_hook() exactly in that window: org.qore.jni.test.ShutdownWindowProbe releases a
+# Java thread that was waiting since before the shutdown, waits until its call into Qore has returned, and prints the
+# result; with QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT set, the module then prints the number of global context Programs
+# created and deleted, and each one created must have been deleted.  The test is skipped with a release build.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniShutdownWindowContextTest
+
+class JniShutdownWindowContextTest inherits QUnit::Test {
+    public {
+        #! the Java exception that a call from Java raises during the module's shutdown (the native method's handler
+        #! raises a java.lang.Error, as no Qore exception can be raised in Java once the module's shutdown has started)
+        const ShutdownError = "^probe: java\\.lang\\.Error: cannot raise the Qore exception of a JNI native method in "
+            "Java; the Qore library or the jni module has been shut down$";
+    }
+
+    constructor() : QUnit::Test("JNI module shutdown window context Program", "1.0") {
+        addTestCase("regression: QoreJavaApi.callFunction() in the shutdown window", \functionCase());
+        addTestCase("regression: QoreJavaApi.newObjectSave() in the shutdown window", \newObjectCase());
+        addTestCase("negative: no call in the shutdown window", \noneCase());
+        set_return_value(main());
+    }
+
+    functionCase() {
+        string out = checkCase("function");
+        assertRegex(ShutdownError, getLine(out, "probe: "), out);
+    }
+
+    newObjectCase() {
+        string out = checkCase("newobject");
+        assertRegex(ShutdownError, getLine(out, "probe: "), out);
+    }
+
+    noneCase() {
+        string out = checkCase("none");
+        assertEq("", getLine(out, "probe: "), out);
+    }
+
+    #! runs the child with the case and checks that the module's shutdown deleted the one global context Program
+    #! created in the process, and created no other; returns the output of the child
+    private string checkCase(string case_name) {
+        string out = runChild(case_name);
+        assertEq("armed: " + case_name, getLine(out, "armed: "), out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertFalse(out =~ /jni-dbg: the shutdown window hook/, out);
+        if (getLine(out, "debug: ") != "debug: True") {
+            assertEq("debug: False", getLine(out, "debug: "), out);
+            testSkip("the jni module's debug diagnostics require a debug build");
+        }
+        # each global context Program created must have been deleted: the one created when the module was
+        # initialized, and no other
+        assertEq("jni-dbg: global context Programs created: 1 deleted: 1", getLine(out, "jni-dbg: "), out);
+        return out;
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr), checking that it exited with status 0
+    private string runChild(string case_name) {
+        string child = normalize_dir(get_script_dir() + "/jni-shutdown-window-context-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is checked
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT=1 %s -b --enable-debug %s %s 2>&1", shellQuote(QORE_ARGV[0]),
+            shellQuote(child), case_name);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+        return "";
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

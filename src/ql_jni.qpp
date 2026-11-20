@@ -509,7 +509,7 @@ set_save_object_callback(*code save_object_callback) [dom=PROCESS;flags=NAMED_AR
     // qore#6789: creating the Program's jni context can fail with a C++ exception, which must not leave the builtin
     try {
         JniExternalProgramData* jpc = pgm ? JniExternalProgramData::getCreateJniProgramData(pgm)
-            : jni_get_context_unconditional(pgm);
+            : jni_get_context_or_global(pgm);
         if (!jpc) {
             xsink->raiseException("JNI-ERROR", "cannot set the save object callback without a valid Program "
                 "context");

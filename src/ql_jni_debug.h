@@ -87,6 +87,13 @@ DLLLOCAL void dbg_jni_native_throw_point();
 */
 DLLLOCAL void dbg_jni_report_context_programs() noexcept;
 
+//! Runs the java.lang.Runnable set with Jni::dbg_jni_set_shutdown_window_hook(), if any, once
+/** Called by the module's delete function between Globals::clearGlobalContext() and Jvm::destroyVM(), so that a
+    test can make a Java thread call into %Qore exactly in that window (the JVM still runs, and the global context
+    Program is gone); an error running it is reported on \c stderr, as no exception can be raised there
+*/
+DLLLOCAL void dbg_jni_run_shutdown_window_hook() noexcept;
+
 //! The points at which Jni::dbg_jni_fail_point() can make the module fail with a C++ exception
 enum class DbgJniFailPoint {
     //! jni::Env's constructor fails to attach the thread to the JVM (jni::UnableToAttachException)
@@ -100,6 +107,14 @@ enum class DbgJniFailPoint {
     //! JniExternalProgramData::addClasspath() or addParentClasspath(): the class loader raises a Java exception
     Classpath,
 };
+
+//! A JDK feature version that the sandbox check of manifest Class-Path attributes assumes as well as the running
+//! JDK's, or 0 for none (qore#6822)
+/** Set with Jni::dbg_jni_set_classpath_jdk_feature(), so that a test can check the refusal of manifest Class-Path
+    attributes on a JDK version whose class loader has not been verified; it can only make the check stricter, and it
+    does not exist in release builds
+*/
+DLLLOCAL extern std::atomic<int> dbg_jni_classpath_jdk_feature;
 
 //! Sets the fail point named \a name for the calling thread, as Jni::dbg_jni_fail_point() does
 /** @return 0 if set, -1 if \a name is not the name of a fail point

@@ -613,8 +613,10 @@ DLLLOCAL jni::LocalReference<jobject> jni_check_classpath_sandbox(const char* cm
     that are added, so that every file added is one that was checked (qore#6818): each entry is checked as the
     absolute path that the JVM resolves it to (against its \c user.dir), with symbolic links resolved, in the bytes
     that the JVM passes to the operating system for it; a wildcard entry is checked as its directory and as each file
-    that it selects.  Any denial refuses the whole classpath, and nothing is added; the denial of a file that a
-    wildcard selects is raised as \c JNI-CLASSPATH-ERROR, naming the file.
+    that it selects.  The jars and directories that the manifest \c Class-Path attributes of the classpath's jars
+    name are checked too, recursively, each as the path that the class loader opens for it, before it is opened
+    (qore#6822).  Any denial refuses the whole classpath, and nothing is added; the denial of a file that a wildcard
+    selects or that a manifest names is raised as \c JNI-CLASSPATH-ERROR, naming the file.
 
     @param policy the policy to check the classpath against; nullptr: no policy, every entry is allowed
     @param env the JNI environment
@@ -624,7 +626,8 @@ DLLLOCAL jni::LocalReference<jobject> jni_check_classpath_sandbox(const char* cm
     is no policy
 
     @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a classpath entry
-    @throw JNI-CLASSPATH-ERROR the policy denies reading a file that a wildcard entry selects
+    @throw JNI-CLASSPATH-ERROR the policy denies reading a file that a wildcard entry selects or that a manifest
+    \c Class-Path attribute names, or a manifest \c Class-Path entry cannot be checked
     @throw JNI-SANDBOX-ERROR a path cannot be represented in the file name encoding of the JVM
 */
 DLLLOCAL jni::LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, jni::Env& env,
