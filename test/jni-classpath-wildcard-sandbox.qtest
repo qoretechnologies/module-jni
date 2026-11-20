@@ -121,7 +121,7 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
             "result: inside: the wildcard is added: OK",
             "result: inside: the file that the link points to is added: OK",
             "result: inside: its class is loaded: OK",
-            "result: inside: the linked file is added once: OK",
+            "result: inside: the linked file appears once in the class loader's URLs: OK",
             "result: inside: a wildcard in a linked directory inside: OK",
             "result: inside: its file is added as its real path: OK",
             "result: inside: a link as an entry: OK",
