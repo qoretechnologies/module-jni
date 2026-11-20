@@ -25,13 +25,12 @@
 
 namespace jni {
 
-QoreJdbcPreparedStatement::QoreJdbcPreparedStatement(ExceptionSink* xsink, QoreJdbcConnection* c) :
-        QoreJdbcStatement(xsink, c) {
+QoreJdbcPreparedStatement::QoreJdbcPreparedStatement(QoreJdbcConnection* c) : QoreJdbcStatement(c) {
 }
 
 QoreJdbcPreparedStatement::~QoreJdbcPreparedStatement() {
-    // jdbc_stmt_close() supplies the current call's sink before destroying persistent state.
-    assert(!stmt && !rs);
+    // jdbc_stmt_close() releases the statement into the sink of the call that closes it first (qore#6807)
+    assert(!stmt && !rs && !params);
 }
 
 int QoreJdbcPreparedStatement::prepare(const QoreString& qstr, const QoreListNode* args, ExceptionSink* xsink) {

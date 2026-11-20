@@ -174,12 +174,8 @@ static int jdbc_stmt_prepare(SQLStatement* stmt, const QoreString& str, const Qo
         ExceptionSink* xsink) {
     assert(!stmt->getPrivateData());
 
-    QoreJdbcPreparedStatement* ps = new QoreJdbcPreparedStatement(xsink,
+    QoreJdbcPreparedStatement* ps = new QoreJdbcPreparedStatement(
         stmt->getDatasource()->getPrivateData<QoreJdbcConnection>());
-    if (*xsink) {
-        delete ps;
-        return -1;
-    }
     stmt->setPrivateData(ps);
 
     return ps->prepare(str, args, xsink);
@@ -188,12 +184,8 @@ static int jdbc_stmt_prepare(SQLStatement* stmt, const QoreString& str, const Qo
 static int jdbc_stmt_prepare_raw(SQLStatement* stmt, const QoreString& str, ExceptionSink* xsink) {
     assert(!stmt->getPrivateData());
 
-    QoreJdbcPreparedStatement* ps = new QoreJdbcPreparedStatement(xsink,
+    QoreJdbcPreparedStatement* ps = new QoreJdbcPreparedStatement(
         stmt->getDatasource()->getPrivateData<QoreJdbcConnection>());
-    if (*xsink) {
-        delete ps;
-        return -1;
-    }
     stmt->setPrivateData(ps);
 
     return ps->prepare(str, nullptr, xsink);
@@ -315,16 +307,13 @@ static int jdbc_stmt_close(SQLStatement* stmt, ExceptionSink* xsink) {
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
-    // the statement is closed on a cancelled thread too
-    QoreCancelDeferralHelper cancel_deferral;
-    try {
-        Env env;
-        ps->close(env, xsink);
-    } catch (jni::Exception& e) {
-        e.convert(xsink);
-    }
-    delete ps;
+    // the handles are closed and the bind arguments are released into the sink of this call, not of the call that
+    // prepared the statement, which can be gone (qore#6807); the statement is closed on a cancelled thread too; the
+    // private data is cleared first, so a destructor run by the release that closes the statement again finds it
+    // closed
     stmt->setPrivateData(nullptr);
+    ps->release(xsink);
+    delete ps;
     return *xsink ? -1 : 0;
 }
 
