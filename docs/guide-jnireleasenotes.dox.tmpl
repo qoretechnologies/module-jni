@@ -92,6 +92,12 @@
       module had deleted its global Java context Program and before it destroyed the JVM: the call created the global
       context Program again, which was never deleted; such a call now raises a Java exception, and no global context
       Program is created once the module's shutdown has started (qore#6827)
+    - fixed a race at the module's shutdown, in which a thread could use the module's global Java context Program
+      after the shutdown had deleted it: a Java thread with no %Qore Program context (ex: a Java listener thread
+      calling \c QoreJavaApi.callFunction()) that had obtained the Program just before the shutdown started used it,
+      and its jni data, while or after they were deleted (\c PROGRAM-ERROR, or the use of freed data); a caller now
+      holds the global context Program for as long as it uses it, and the shutdown deletes it once no other thread
+      holds it (qore#6829)
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a

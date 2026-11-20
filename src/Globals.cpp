@@ -70,6 +70,9 @@ ExceptionSink& Globals::getGlobalXsink() {
 bool Globals::already_initialized = false;
 std::atomic<bool> Globals::jni_shutting_down{false};
 std::atomic<QoreProgram*> Globals::context_pgm{nullptr};
+std::atomic<int> Globals::context_holders{0};
+// the number of JniContextProgramHolder objects that hold the global context Program in this thread
+static thread_local int context_holders_in_thread = 0;
 #ifdef DEBUG
 std::atomic<int> Globals::dbg_context_programs_created{0};
 std::atomic<int> Globals::dbg_context_programs_deleted{0};
@@ -877,7 +880,10 @@ static jlong JNICALL java_api_init_qore(JNIEnv* jenv, jobject obj) try {
         assert(Globals::bootstrap);
         // set current classloader
         env.callVoidMethod(Globals::syscl, Globals::methodQoreURLClassLoaderSetContext, nullptr);
-        QoreProgram* pgm = Globals::getJavaContextProgram();
+        // the Program is held while this call uses it; the pointer returned is kept by the Java context
+        // (QoreURLClassLoader), as the pointer of each Program with jni data is
+        JniContextProgramHolder ctx_holder;
+        QoreProgram* pgm = Globals::getJavaContextProgram(ctx_holder);
         if (!pgm) {
             // no global context Program exists during the module's shutdown
             jni_throw_runtime_exception(*env, "the jni module is being shut down; no Program context is "
@@ -962,7 +968,10 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
         return nullptr;
     }
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    // holds the global context Program, if the call is made in it; declared before the entry, so that the entry is
+    // left first (qore#6829)
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
 
     ExceptionSink xsink;
     QoreExternalProgramContextHelper pch(&xsink, pgm);
@@ -1003,7 +1012,7 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
                 xsink.clear();
                 rv = fallback_rv.release();
                 pgm = call_pgm;
-                jpc = jni_get_context_unconditional(pgm);
+                jpc = jni_get_context_unconditional(pgm, ctx_holder);
             } else {
                 fallback_xsink.clear();
             }
@@ -1050,7 +1059,10 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
     }
 
     QoreProgram* pgm = reinterpret_cast<QoreProgram*>(ptr);
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    // holds the global context Program, if the call is made in it; declared before the entry, so that the entry is
+    // left first (qore#6829)
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
 
     QoreJniStackLocationHelper slh;
 
@@ -1101,7 +1113,7 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
                         // re-anchor pgm + jpc so subsequent calls (method dispatch, arg
                         // marshalling) see the program that actually owns the class
                         pgm = call_pgm;
-                        jpc = jni_get_context_unconditional(pgm);
+                        jpc = jni_get_context_unconditional(pgm, ctx_holder);
                     }
                 }
             }
@@ -1180,7 +1192,10 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
         }
     }
 
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    // holds the global context Program, if the object is created in it; declared before the entry, so that the
+    // entry is left first (qore#6829)
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
 
     printd(5, "java_api_new_object_save() pgm: %p\n", pgm);
 
@@ -1388,8 +1403,10 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     if (!pgm) {
         pgm = ::getProgram();
     }
+    // holds the global context Program while the class is looked up in it (qore#6829)
+    JniContextProgramHolder ctx_holder;
     if (!pgm) {
-        pgm = Globals::getJavaContextProgram();
+        pgm = Globals::getJavaContextProgram(ctx_holder);
         if (!pgm) {
             // the module is being shut down
             return false;
@@ -1410,7 +1427,9 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         jstring mname, jobjectArray args, const QoreMethod* m = nullptr,
         const QoreExternalMethodVariant* v = nullptr, bool flatten = false) {
     assert(obj_ptr);
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    // holds the global context Program, if the call is made in it (qore#6829)
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
     // must ensure that the thread is attached before executing Qore code
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
@@ -1579,7 +1598,9 @@ static jobject JNICALL qore_object_get_member_value(JNIEnv* jenv, jobject jobj, 
         return nullptr;
     }
 
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    // holds the global context Program, if the value is converted in it (qore#6829)
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
 
     if (save_object(env, *rv, pgm, xsink)) {
         return nullptr;
@@ -2811,9 +2832,11 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
         // Capture the caller before entering the generating Program's context: the
         // caller's loader is needed when constructing Java subclasses of Qore classes.
         QoreProgram* pgm = jni_get_program_context();
+        // holds the global context Program, if the object is created in it (qore#6829)
+        JniContextProgramHolder ctx_holder;
         if (!pgm) {
             // raises an exception during the module's shutdown, when no global context Program exists
-            jni_get_context_unconditional(pgm);
+            jni_get_context_unconditional(pgm, ctx_holder);
         }
         GeneratedBindingContext binding(class_handle, GeneratedBindingKind::Class, &xsink);
         if (reserved_method || reserved_variant) {
@@ -5242,39 +5265,110 @@ QoreProgram* Globals::createJavaContextProgram() {
     return **qph;
 }
 
-QoreProgram* Globals::getJavaContextProgram() {
-    // the shutdown flag is set before the Program is cleared, so no Program is returned once it is set
-    if (isShuttingDown()) {
+QoreProgram* Globals::getJavaContextProgram(JniContextProgramHolder& holder) {
+    return holder.acquire();
+}
+
+std::mutex& Globals::getContextHolderLock() {
+    static std::mutex* lock = new std::mutex;
+    return *lock;
+}
+
+std::condition_variable& Globals::getContextHolderCond() {
+    static std::condition_variable* cond = new std::condition_variable;
+    return *cond;
+}
+
+void Globals::holdContextProgram() noexcept {
+    ++context_holders_in_thread;
+    context_holders.fetch_add(1, std::memory_order_seq_cst);
+}
+
+void Globals::releaseContextProgram() noexcept {
+    assert(context_holders_in_thread > 0);
+    --context_holders_in_thread;
+    context_holders.fetch_sub(1, std::memory_order_seq_cst);
+    // clearGlobalContext() reads the count after it has set the flag: if the flag is not set here, it sees this
+    // release; if it is, it is woken, the lock making sure that it either has not checked the count yet or waits
+    if (jni_shutting_down.load(std::memory_order_seq_cst)) {
+        std::lock_guard<std::mutex> guard(getContextHolderLock());
+        getContextHolderCond().notify_all();
+    }
+}
+
+int Globals::waitForContextHolders() {
+    int own = context_holders_in_thread;
+    std::unique_lock<std::mutex> lock(getContextHolderLock());
+    while (context_holders.load(std::memory_order_seq_cst) != own) {
+        getContextHolderCond().wait(lock);
+    }
+    return own;
+}
+
+QoreProgram* JniContextProgramHolder::acquire() {
+    if (pgm) {
+        return pgm;
+    }
+    // counted before the shutdown flag is checked: clearGlobalContext() sets the flag before it reads the count, so
+    // either the flag is seen here, and nothing is held, or the shutdown waits for this holder (see
+    // Globals::context_holders)
+    Globals::holdContextProgram();
+    QoreProgram* rv = nullptr;
+    try {
+        if (!Globals::jni_shutting_down.load(std::memory_order_seq_cst)) {
+            rv = Globals::context_pgm.load(std::memory_order_seq_cst);
+            if (!rv) {
+                // created under the lock, which serializes the creation with the start of the shutdown
+                rv = Globals::createJavaContextProgram();
+            }
+        }
+    } catch (...) {
+        Globals::releaseContextProgram();
+        throw;
+    }
+    if (!rv) {
+        // the module's shutdown has started
+        Globals::releaseContextProgram();
         return nullptr;
     }
-    QoreProgram* rv = context_pgm.load(std::memory_order_acquire);
-    if (rv) {
-        return rv;
-    }
-    // created under the lock, which serializes the creation with the start of the shutdown
-    return createJavaContextProgram();
+    pgm = rv;
+    return rv;
 }
 
 void Globals::clearGlobalContext() {
     std::unique_ptr<QoreProgramHelper> old;
     {
         std::lock_guard<std::recursive_mutex> guard(getContextLock());
-        jni_shutting_down.store(true, std::memory_order_release);
-        context_pgm.store(nullptr, std::memory_order_release);
+        // sequentially consistent, as the holders of the Program check it (see context_holders)
+        jni_shutting_down.store(true, std::memory_order_seq_cst);
+        context_pgm.store(nullptr, std::memory_order_seq_cst);
         old = std::move(qph);
     }
     if (old) {
-        old.reset();
 #ifdef DEBUG
-        dbg_context_programs_deleted.fetch_add(1, std::memory_order_relaxed);
+        // a test can release a thread that holds the Program here, before the shutdown waits for it (qore#6829)
+        dbg_jni_run_context_program_wait_hook();
 #endif
+        // a thread that obtained the Program before the shutdown started can still be using it (qore#6829)
+        if (waitForContextHolders()) {
+            // this thread holds the Program, and cannot wait for itself: it is left allocated, as
+            // abandonGlobalContext() leaves it, as deleting it would free it under the caller
+            printd(5, "Globals::clearGlobalContext(): the thread holds the global context Program; it is not "
+                "deleted\n");
+            old.release();
+        } else {
+            old.reset();
+#ifdef DEBUG
+            dbg_context_programs_deleted.fetch_add(1, std::memory_order_relaxed);
+#endif
+        }
     }
     getGlobalXsink().handleExceptions();
 }
 
 void Globals::abandonGlobalContext() {
     std::lock_guard<std::recursive_mutex> guard(getContextLock());
-    jni_shutting_down.store(true, std::memory_order_release);
+    jni_shutting_down.store(true, std::memory_order_seq_cst);
     context_pgm.store(nullptr, std::memory_order_release);
     qph.release();
 }

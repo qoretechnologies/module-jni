@@ -107,6 +107,13 @@ DLLLOCAL extern std::atomic<bool> dbg_jni_context_program_hook_set;
 */
 DLLLOCAL void dbg_jni_run_context_program_hook() noexcept;
 
+//! Runs the java.lang.Runnable set with Jni::dbg_jni_set_context_program_wait_hook(), if any, once
+/** Called by Globals::clearGlobalContext() once the module's shutdown has started, before it waits for the threads
+    that hold the global context Program, so that a test can release a thread that holds it there (qore#6829); an
+    error running it is reported on \c stderr, as no exception can be raised there
+*/
+DLLLOCAL void dbg_jni_run_context_program_wait_hook() noexcept;
+
 //! The points at which Jni::dbg_jni_fail_point() can make the module fail with a C++ exception
 enum class DbgJniFailPoint {
     //! jni::Env's constructor fails to attach the thread to the JVM (jni::UnableToAttachException)

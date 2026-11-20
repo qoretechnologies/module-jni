@@ -80,6 +80,7 @@ extern qore_classid_t CID_INVOCATIONHANDLER;
 class Class;
 class JniExternalProgramData;
 class GeneratedBindingLease;
+class JniContextProgramHolder;
 
 class QoreJniClassMapBase {
 protected:
@@ -684,14 +685,20 @@ public:
 
     DLLLOCAL bool isInjectedModule(const char* mod) const;
 
-    DLLLOCAL static JniExternalProgramData* setContext(QoreProgram*& pgm) {
+    //! Sets the thread's Java context to the class loader of the Program context, and returns its jni data
+    /** As jni_get_context_unconditional(), \a pgm is set to the Program, which can be the global Java context
+        Program, held by \a holder then, which the caller keeps for as long as it uses the Program or its jni data
+        (qore#6829)
+    */
+    DLLLOCAL static JniExternalProgramData* setContext(QoreProgram*& pgm, JniContextProgramHolder& holder) {
         Env env;
-        return setContext(env, pgm);
+        return setContext(env, pgm, holder);
     }
 
-    DLLLOCAL static JniExternalProgramData* setContext(Env& env);
+    //! Sets the thread's Java context to the class loader of the Program context
+    DLLLOCAL static void setContext(Env& env);
 
-    DLLLOCAL static JniExternalProgramData* setContext(Env& env, QoreProgram*& pgm);
+    DLLLOCAL static JniExternalProgramData* setContext(Env& env, QoreProgram*& pgm, JniContextProgramHolder& holder);
 
     //! Sets the Java context of a thread that has just been attached to the JVM (see jni::Env's constructor)
     /** As setContext(), but once the module's shutdown has started (see Globals::isShuttingDown()), a thread with no
@@ -920,15 +927,19 @@ DLLLOCAL JniExternalProgramData* jni_get_context(QoreProgram*& pgm);
 //! Returns the jni data of the Program context as jni_get_context(), or of the global Java context Program
 /** Returns nullptr once the module's shutdown has started, as no global context Program exists then
     (Globals::getJavaContextProgram()); \a pgm is set to the Program, or to nullptr
+
+    The global context Program is held by \a holder, which the caller keeps for as long as it uses the Program or its
+    jni data, as the module's shutdown deletes it once no other thread holds it (qore#6829)
 */
-DLLLOCAL JniExternalProgramData* jni_get_context_or_global(QoreProgram*& pgm);
+DLLLOCAL JniExternalProgramData* jni_get_context_or_global(QoreProgram*& pgm, JniContextProgramHolder& holder);
 
 //! Returns the jni data of the Program context as jni_get_context(), or of the global Java context Program
 /** Throws jni::BasicException once the module's shutdown has started, as no global context Program exists then
-    (ex: for a Java thread that calls into Qore while the module is shut down); see jni_get_context_or_global()
+    (ex: for a Java thread that calls into Qore while the module is shut down); see jni_get_context_or_global(),
+    also for \a holder
 */
-DLLLOCAL JniExternalProgramData* jni_get_context_unconditional();
-DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm);
+DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(JniContextProgramHolder& holder);
+DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm, JniContextProgramHolder& holder);
 
 //! Returns the jni data of the Program context of a call of a jni API from Qore code, creating it if necessary
 /** The Program is found as by jni_get_context(); when no Program in the context has jni data, the jni data of the
@@ -939,6 +950,8 @@ DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm
 
     @param pgm set to the Program of the returned jni data: the global Java context Program when there is no Program
     context; never nullptr
+    @param holder holds the global Java context Program, if it is the Program returned (see
+    jni_get_context_or_global())
 
     @return the jni data; never nullptr
 
@@ -947,7 +960,7 @@ DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm
 
     @note to be called only from code that Qore code calls, as it can take the parse lock of the Program
 */
-DLLLOCAL JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm);
+DLLLOCAL JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm, JniContextProgramHolder& holder);
 
 //! Returns the jni data of the Program of the calling Qore code, creating it if necessary
 /** For the APIs that must use the caller's Program in all cases (qore_get_call_program_context()); the jni data is
@@ -963,7 +976,7 @@ DLLLOCAL JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm);
 
     @note to be called only from code that Qore code calls, as it can take the parse lock of the Program
 */
-DLLLOCAL JniExternalProgramData* jni_get_create_call_context(QoreProgram*& pgm);
+DLLLOCAL JniExternalProgramData* jni_get_create_call_context(QoreProgram*& pgm, JniContextProgramHolder& holder);
 
 //! Enters the Program of a Java call made in another Program, before its jni data is looked up
 /** A call of a Java method of an object that the given Program owns, or of a Java closure that it created, runs in

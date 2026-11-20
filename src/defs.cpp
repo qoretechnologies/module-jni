@@ -333,7 +333,9 @@ void JavaException::convert(ExceptionSink* xsink) {
     // during the module's shutdown, no global context Program exists, and the exception is then raised without the
     // Java exception object
     QoreProgram* pgm = nullptr;
-    jni_get_context_or_global(pgm);
+    // holds the global context Program, if the exception is raised in it (qore#6829)
+    JniContextProgramHolder ctx_holder;
+    jni_get_context_or_global(pgm, ctx_holder);
 
     // add Java call stack to Qore call stack
     QoreExternalProgramLocationWrapper loc;

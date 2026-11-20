@@ -8,7 +8,7 @@
 # the argument names the case (see org.qore.jni.test.ContextProgramLifetimeProbe):
 # - "held": the thread's first call is held by the hook set with Jni::dbg_jni_set_context_program_hook() once the
 #   module has obtained the global context Program for it, the main thread exits, and the module's shutdown releases
-#   the thread
+#   the thread before it waits for the threads that hold the Program (Jni::dbg_jni_set_context_program_wait_hook())
 # - "unheld": the thread's first call returns before the main thread exits
 # - "none": no Java thread calls into Qore
 # in the first two cases, the thread makes its second call in the module's shutdown, between the deletion of the global
@@ -43,6 +43,8 @@ if (debug && case_name != "none") {
     ContextProgramLifetimeProbe probe(Function, hold);
     if (hold) {
         call_function("Jni::org::qore::jni::dbg_jni_set_context_program_hook", probe);
+        # the module's shutdown releases the thread before it waits for the threads that hold the Program
+        call_function("Jni::org::qore::jni::dbg_jni_set_context_program_wait_hook", probe.releaseHook());
     }
     call_function("Jni::org::qore::jni::dbg_jni_set_shutdown_window_hook", probe.windowHook());
     # returns once the thread's first call is held, or has returned

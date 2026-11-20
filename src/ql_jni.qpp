@@ -256,7 +256,9 @@ Jni::java::lang::Class load_class(string class_name) [dom=UNCONTROLLED_API;flags
         // the class is loaded with the class loader of the Program, whose jni data is created if it has none
         // (qore#6801)
         QoreProgram* pgm;
-        jni::jni_get_create_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        jni::JniContextProgramHolder ctx_holder;
+        jni::jni_get_create_context(pgm, ctx_holder);
         //printd(5, "load_class() pgm: %p\n", pgm);
         return new QoreObject(QC_CLASS, pgm, new QoreJniPrivateData(qjcm.findLoadClass(*class_name, pgm)));
     } catch (jni::Exception& e) {
@@ -289,8 +291,10 @@ auto invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::j
         // method's class, which runs its static initializers; the Program's jni data is created first if it has none
         // (qore#6801), so that its class loader is the context class loader of the call
         QoreProgram* pgm;
-        jni_get_create_context(pgm);
-        JniExternalProgramData::setContext(env, pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        jni_get_create_context(pgm, ctx_holder);
+        JniExternalProgramData::setContext(env, pgm, ctx_holder);
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
             Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
         BaseMethod m(method->getObject(), *cls);
@@ -329,8 +333,10 @@ auto invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] meth
         // method's class, which runs its static initializers; the Program's jni data is created first if it has none
         // (qore#6801), so that its class loader is the context class loader of the call
         QoreProgram* pgm;
-        jni_get_create_context(pgm);
-        JniExternalProgramData::setContext(env, pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        jni_get_create_context(pgm, ctx_holder);
+        JniExternalProgramData::setContext(env, pgm, ctx_holder);
         SimpleRefHolder<Class> cls(new Class(env.callObjectMethod(method->getObject(),
             Globals::methodMethodGetDeclaringClass, nullptr).as<jclass>()));
         BaseMethod m(method->getObject(), *cls);
@@ -366,7 +372,9 @@ Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationH
         LocalReference<jclass> jc = interface_class->makeLocal().as<jclass>();
         // the Program's jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
-        jni_get_create_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        jni_get_create_context(pgm, ctx_holder);
         QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
         return new QoreObject(qc, pgm, new QoreJniPrivateData(
             jni::Functions::implementInterface(nullptr, *invocation_handler, jc)));
@@ -401,7 +409,9 @@ Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJni
         LocalReference<jclass> jc = interface_class->makeLocal().as<jclass>();
         // the Program's jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
-        jni_get_create_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        jni_get_create_context(pgm, ctx_holder);
         QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
         return new QoreObject(qc, pgm, new QoreJniPrivateData(
             jni::Functions::implementInterface(class_loader->getObject(), *invocation_handler, jc)));
@@ -424,7 +434,9 @@ Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateDa
         jni::Env env;
         // the Program's jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
-        jni::jni_get_create_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        jni::JniContextProgramHolder ctx_holder;
+        jni::jni_get_create_context(pgm, ctx_holder);
         return new QoreObject(QC_JAVAARRAY, pgm, new Array(component_class->makeLocal().as<jclass>(), size));
     } catch (jni::Exception& e) {
         e.convert(xsink);
@@ -455,7 +467,9 @@ Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [dom
         // as the caller's program context must be used in all cases; its jni data is created if it has none
         // (qore#6801)
         QoreProgram* pgm;
-        JniExternalProgramData* jpc = jni_get_create_call_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        JniExternalProgramData* jpc = jni_get_create_call_context(pgm, ctx_holder);
         // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
         LocalReference<jclass> jcls = env.defineClass(utf8_name.name("class name", "class names"),
             jpc->getClassLoader(),
@@ -508,8 +522,10 @@ set_save_object_callback(*code save_object_callback) [dom=PROCESS;flags=NAMED_AR
     QoreProgram* pgm = qore_get_call_program_context();
     // qore#6789: creating the Program's jni context can fail with a C++ exception, which must not leave the builtin
     try {
+        // holds the global context Program, if the callback is set in it (qore#6829)
+        JniContextProgramHolder ctx_holder;
         JniExternalProgramData* jpc = pgm ? JniExternalProgramData::getCreateJniProgramData(pgm)
-            : jni_get_context_or_global(pgm);
+            : jni_get_context_or_global(pgm, ctx_holder);
         if (!jpc) {
             xsink->raiseException("JNI-ERROR", "cannot set the save object callback without a valid Program "
                 "context");
@@ -541,7 +557,9 @@ Jni::java::lang::Object get_class_loader() [dom=UNCONTROLLED_API] {
 
         // the Program's jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
-        JniExternalProgramData* jpc = jni_get_create_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        JniExternalProgramData* jpc = jni_get_create_context(pgm, ctx_holder);
 
         LocalReference<jclass> jc = Globals::classQoreURLClassLoader.toLocal();
         QoreClass* qc = qjcm.findCreateQoreClass(env, jc, pgm);
@@ -581,7 +599,9 @@ binary get_byte_code(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] 
 
         // the Program's jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
-        JniExternalProgramData* jpc = jni_get_create_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        JniExternalProgramData* jpc = jni_get_create_context(pgm, ctx_holder);
         assert(pgm);
 
         // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
@@ -636,7 +656,9 @@ string get_java_name(string class_name) [flags=NAMED_ARGS] {
 
         // the Program's jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
-        JniExternalProgramData* jpc = jni_get_create_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        JniExternalProgramData* jpc = jni_get_create_context(pgm, ctx_holder);
         assert(pgm);
 
         // the name is a NUL-terminated string from here on, so a name with a NUL character is refused (qore#6738)
@@ -733,7 +755,9 @@ auto kotlin_eval(string script) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
 
         // Convert Java result to Qore value in the Program, whose jni data is created if it has none (qore#6801)
         QoreProgram* pgm;
-        jni_get_create_context(pgm);
+        // holds the global context Program, if it is the Program returned (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        jni_get_create_context(pgm, ctx_holder);
         return JavaToQore::convertToQore(std::move(result), pgm);
     } catch (jni::Exception& e) {
         e.convert(xsink);

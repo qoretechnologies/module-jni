@@ -103,8 +103,10 @@ QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, Except
             call_ctx.emplace(pgm);
         }
         // sets the thread's Java context for the call, as Java methods do (qore#6485); a Program that has been deleted
-        // or has no jni data: the call is made in the context of the calling code (jni_get_context_unconditional())
-        JniExternalProgramData::setContext(env, pgm);
+        // or has no jni data: the call is made in the context of the calling code (jni_get_context_unconditional()),
+        // or in the global context Program, which is held for the call (qore#6829)
+        JniContextProgramHolder ctx_holder;
+        JniExternalProgramData::setContext(env, pgm, ctx_holder);
 
         // make sure that the Qore exception stack is populated correctly in case a Qore exception is thrown
         // from the Java code about to be called below

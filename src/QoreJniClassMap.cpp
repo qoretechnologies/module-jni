@@ -200,12 +200,6 @@ QoreProgram* jni_get_program_context() {
     return pgm;
 }
 
-QoreProgram* jni_get_program_context_unconditional() {
-    QoreProgram* pgm = nullptr;;
-    jni_get_context_unconditional(pgm);
-    return pgm;
-}
-
 JniExternalProgramData* jni_get_context() {
     QoreProgram* pgm = nullptr;
     return jni_get_context(pgm);
@@ -245,15 +239,16 @@ JniExternalProgramData* jni_get_context(QoreProgram*& pgm) {
     return nullptr;
 }
 
-JniExternalProgramData* jni_get_context_unconditional() {
+JniExternalProgramData* jni_get_context_unconditional(JniContextProgramHolder& holder) {
     QoreProgram* pgm = nullptr;
-    return jni_get_context_unconditional(pgm);
+    return jni_get_context_unconditional(pgm, holder);
 }
 
-JniExternalProgramData* jni_get_context_or_global(QoreProgram*& pgm) {
+JniExternalProgramData* jni_get_context_or_global(QoreProgram*& pgm, JniContextProgramHolder& holder) {
     JniExternalProgramData* jpc = jni_get_context(pgm);
     if (!jpc) {
-        pgm = Globals::getJavaContextProgram();
+        // held, so that the module's shutdown does not delete the Program while the caller uses it (qore#6829)
+        pgm = Globals::getJavaContextProgram(holder);
         if (!pgm) {
             // a Java thread can call into Qore during the module's shutdown (ex: an ActiveMQ/JMS listener thread),
             // after the global context Program has been deleted by Globals::clearGlobalContext(), which is not
@@ -273,8 +268,8 @@ JniExternalProgramData* jni_get_context_or_global(QoreProgram*& pgm) {
     return jpc;
 }
 
-JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm) {
-    JniExternalProgramData* jpc = jni_get_context_or_global(pgm);
+JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm, JniContextProgramHolder& holder) {
+    JniExternalProgramData* jpc = jni_get_context_or_global(pgm, holder);
     if (!jpc) {
         throw BasicException("the jni module is being shut down; no Program context is available");
     }
@@ -283,16 +278,16 @@ JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm) {
 
 // returns the jni data of the given Program, creating it if necessary, or, with no Program, the jni data of the
 // global Java context Program
-static JniExternalProgramData* jni_get_create_program_data(QoreProgram*& pgm) {
+static JniExternalProgramData* jni_get_create_program_data(QoreProgram*& pgm, JniContextProgramHolder& holder) {
     if (pgm) {
         JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
         assert(jpc);
         return jpc;
     }
-    return jni_get_context_unconditional(pgm);
+    return jni_get_context_unconditional(pgm, holder);
 }
 
-JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm) {
+JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm, JniContextProgramHolder& holder) {
     pgm = nullptr;
     JniExternalProgramData* jpc = jni_get_context(pgm);
     if (jpc) {
@@ -300,12 +295,12 @@ JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm) {
     }
     // no Program in the context has jni data: it is created in the Program of the calling code (qore#6801)
     pgm = qore_get_call_program_context();
-    return jni_get_create_program_data(pgm);
+    return jni_get_create_program_data(pgm, holder);
 }
 
-JniExternalProgramData* jni_get_create_call_context(QoreProgram*& pgm) {
+JniExternalProgramData* jni_get_create_call_context(QoreProgram*& pgm, JniContextProgramHolder& holder) {
     pgm = qore_get_call_program_context();
-    return jni_get_create_program_data(pgm);
+    return jni_get_create_program_data(pgm, holder);
 }
 
 static QoreNamespace* jni_find_create_namespace(QoreNamespace& jns, const char* name, const char*& sn) {
@@ -665,8 +660,11 @@ public:
             return;
         }
         QoreProgram* pgm = nullptr;
-        // no context is set during the module's shutdown, when no global context Program exists
-        JniExternalProgramData* ctx = jpc ? jpc : jni_get_context_or_global(pgm);
+        // no context is set during the module's shutdown, when no global context Program exists; the global context
+        // Program is held only while its class loader is made the context: the context keeps a reference to the
+        // class loader, not to the Program
+        JniContextProgramHolder ctx_holder;
+        JniExternalProgramData* ctx = jpc ? jpc : jni_get_context_or_global(pgm, ctx_holder);
         if (!ctx || !ctx->getClassLoader()) {
             return;
         }
@@ -1436,7 +1434,8 @@ JniQoreClass* QoreJniClassMap::createClassInNamespace(QoreNamespace* ns, QoreNam
         {
             Env env;
             QoreProgram* ctx_pgm = pgm;
-            JniExternalProgramData::setContext(env, ctx_pgm);
+            JniContextProgramHolder ctx_holder;
+            JniExternalProgramData::setContext(env, ctx_pgm, ctx_holder);
         }
         populateQoreClass(*qc, jc, pgm);
     }
@@ -4618,7 +4617,8 @@ static void exec_java_constructor(const QoreMethod& qmeth, BaseMethod* m, QoreOb
         // issue #3585: set context for external java threads
         //QoreProgram* pgm = qmeth.getClass()->getProgram();
         QoreProgram* pgm = self->getProgram(); //qmeth.getClass()->getProgram();
-        JniExternalProgramData* jpc = JniExternalProgramData::setContext(pgm);
+        JniContextProgramHolder ctx_holder;
+        JniExternalProgramData* jpc = JniExternalProgramData::setContext(pgm, ctx_holder);
 
         /*
         // issue #xxxx: check if class is abstract, if so we need to create a new class and instantiate it
@@ -4640,10 +4640,12 @@ static QoreValue exec_java_static_method(const QoreMethod& meth, BaseMethod* m, 
     // be destroyed during the call; the Program of the class's namespace is not necessarily one that the thread is in
     // (ex: a call reference to a static method of a class imported into another Program) (qore#6485)
     QoreProgram* pgm = nullptr;
+    // holds the global context Program, if it is the Program of the call (qore#6829)
+    JniContextProgramHolder ctx_holder;
     try {
         // issue #3585: set context for external java threads; this attaches the thread to the JVM, which raises an
         // exception when the thread is cancelled or cannot be attached
-        JniExternalProgramData::setContext(pgm);
+        JniExternalProgramData::setContext(pgm, ctx_holder);
         return m->invokeStatic(args, pgm);
     } catch (jni::Exception& e) {
         e.convert(xsink);
@@ -4656,6 +4658,8 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     // NOTE: Java base classes will have no Qore program context
     // always use the current object's Program, otherwise the wrong ClassLoader will be used
     QoreProgram* pgm = self->getProgram();
+    // holds the global context Program, if it is the Program of the call (qore#6829)
+    JniContextProgramHolder ctx_holder;
     try {
         // issue #3585: set context for external java threads; this attaches the thread to the JVM, which raises an
         // exception when the thread is cancelled or cannot be attached; attached before the entry below, so that a
@@ -4669,7 +4673,7 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
         if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, xsink)) {
             return QoreValue();
         }
-        JniExternalProgramData::setContext(env, pgm);
+        JniExternalProgramData::setContext(env, pgm, ctx_holder);
         return m->invoke(jd->getObject(), args, pgm);
     } catch (jni::Exception& e) {
         e.convert(xsink);
@@ -5192,9 +5196,11 @@ void JniExternalProgramData::addParentClasspath(Env& env, jstring path, const ch
 
 thread_local bool JniPendingContextHelper::pending = false;
 
-JniExternalProgramData* JniExternalProgramData::setContext(Env& env) {
+void JniExternalProgramData::setContext(Env& env) {
     QoreProgram* pgm = nullptr;
-    return setContext(env, pgm);
+    // the context keeps a reference to the class loader, not to the Program, which is held only while it is set
+    JniContextProgramHolder ctx_holder;
+    setContext(env, pgm, ctx_holder);
 }
 
 void JniExternalProgramData::setAttachContext(Env& env) {
@@ -5206,17 +5212,20 @@ void JniExternalProgramData::setAttachContext(Env& env) {
     // jni_get_context_or_global() creates no global context Program once the shutdown has started, and returns
     // nullptr instead, also if the shutdown starts while the context is looked up
     QoreProgram* pgm = nullptr;
-    if (!jni_get_context_or_global(pgm)) {
+    // holds the global context Program until its class loader is set as the context (qore#6829)
+    JniContextProgramHolder ctx_holder;
+    if (!jni_get_context_or_global(pgm, ctx_holder)) {
         return;
     }
     // the Program found here is passed on, so that setContext() takes it directly
-    setContext(env, pgm);
+    setContext(env, pgm, ctx_holder);
 }
 
-JniExternalProgramData* JniExternalProgramData::setContext(Env& env, QoreProgram*& pgm) {
+JniExternalProgramData* JniExternalProgramData::setContext(Env& env, QoreProgram*& pgm,
+        JniContextProgramHolder& holder) {
     // issue #3199: no program is available when initializing the jni module from the command line
     // issue #3153: no context is available when called from a static method
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm);
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, holder);
 #ifdef DEBUG
     // a test gate that runs code between the lookup of the context and its use
     if (dbg_jni_context_gate_set.load(std::memory_order_acquire)) {
@@ -5231,7 +5240,8 @@ JniExternalProgramData* JniExternalProgramData::setContext(Env& env, QoreProgram
 bool JniExternalProgramData::compatTypes() {
     // issue #3199: no program is available when initializing the jni module from the command line
     // issue #3153: no context is available when called from a static method
-    JniExternalProgramData* jpc = jni_get_context_unconditional();
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(ctx_holder);
     return jpc->getCompatTypes();
 }
 
