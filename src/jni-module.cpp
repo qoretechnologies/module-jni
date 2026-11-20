@@ -58,6 +58,7 @@
 #include "QoreToJava.h"
 #include "Globals.h"
 #include "QoreJdbcDriver.h"
+#include "ql_jni_debug.h"
 
 using namespace jni;
 
@@ -780,6 +781,10 @@ static void jni_module_delete() noexcept {
     tclist.pop(false);
     jni::Jvm::destroyVM();
     jni::Jvm::unregisterForkHandler();
+#ifdef DEBUG
+    // each global context Program created must have been deleted (qore#6799)
+    dbg_jni_report_context_programs();
+#endif
     // the signals reserved for the JVM stay reserved: the module is deleted as the library is torn down, or the JVM
     // belongs to the Java host (the jvm-ptr option) and keeps running, and its handlers stay installed in either case
 }
