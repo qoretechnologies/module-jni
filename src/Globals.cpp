@@ -2693,11 +2693,20 @@ static jobject JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv
     }
     // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
     // validated and held; it is not entered, as a Java compiler can run on another thread than the one parsing the
-    // Program, and its jni data is cleared under the lock that its destructor takes (see JniJavaProgramRef)
-    JniJavaProgramRef java_pgm(env, ptr, class_loader);
-    if (!java_pgm.get() || !JniExternalProgramData::clearCompilationCache(java_pgm.get())) {
-        jni_throw_runtime_exception(*env, "No JNI context for Qore Program");
+    // Program, and its jni data is kept alive by the lock that its destructor takes (see JniJavaProgramRef).  A
+    // Program deleted meanwhile has no cache left to clear: as for a class loader whose pointer has been cleared,
+    // nothing is done, and no exception is raised, as the caller clears the cache in a finally block, where an
+    // exception would replace the result of the compilation
+    std::optional<JniJavaProgramRef> java_pgm;
+    try {
+        java_pgm.emplace(env, ptr, class_loader);
+    } catch (BasicException& e) {
+        // the Program has been deleted
+        static_cast<Exception&>(e).ignore();
         return nullptr;
+    }
+    if (java_pgm->get()) {
+        JniExternalProgramData::clearCompilationCache(java_pgm->get());
     }
     return nullptr;
 } JNI_NATIVE_CATCH(jenv, nullptr)
@@ -2851,6 +2860,16 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
 // Globals::getCanonicalLoader() for the dispatch rules.
 static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, jobject jthis, jstring jname) try {
     if (!jname) {
+        return nullptr;
+    }
+    // the thread is attached, as the Program that the class loader's pointer names can be held by the lookup (see
+    // getClassLoaderProgram()), and its release destroys it on this thread if it has been deleted meanwhile
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        e.ignore();
+        // null tells the Java caller to fall back to local generation
         return nullptr;
     }
     Env::JniUtfChars utf(jenv, jname);

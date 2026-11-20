@@ -212,22 +212,25 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     public QoreURLClassLoader(long p_ptr, ClassLoader parent) {
         super("QoreURLClassLoader", new URL[]{}, parent);
-        // set the current classloader as the thread context classloader
         pgm_ptr.set(p_ptr);
+        // set the current classloader as the thread context classloader
         setContext();
         //System.out.printf("QoreURLClassLoader(long p_ptr: %x, ClassLoader parent: %s: %x) this: %x\n",
         //    p_ptr, (parent == null ? "null" : parent.getClass().getCanonicalName()),
         //    parent == null ? 0 : parent.hashCode(), hashCode());
     }
 
-    //! constructor for createDerived()
+    //! constructor for createDerived(); \a derived only makes the signature distinct from the public constructors
     private QoreURLClassLoader(QoreURLClassLoader parent, boolean derived) {
         super("QoreURLClassLoader", new URL[]{}, parent);
-        // the parent's holder is taken under its lock, so that it is not taken while the parent replaces it
-        synchronized (parent.ptr_lock) {
-            pgm_ptr = parent.pgm_ptr;
+        // the parent's holder is taken under its lock, so that it is not taken while the parent replaces it; this
+        // class loader's lock is taken as well, as setPtrIntern() reads the flag under it
+        synchronized (ptr_lock) {
+            synchronized (parent.ptr_lock) {
+                pgm_ptr = parent.pgm_ptr;
+            }
+            shared_ptr = true;
         }
-        shared_ptr = true;
         // set the current classloader as the thread context classloader
         setContext();
     }

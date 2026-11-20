@@ -4850,13 +4850,15 @@ static void jni_pgm_data_unregister(const QoreProgram* pgm, JniExternalProgramDa
 
 bool JniExternalProgramData::clearCompilationCache(const QoreProgram* pgm) {
     JniProgramDataRegistry& reg = jni_pgm_data();
-    // the data is cleared under the lock, as its destructor, which can run at the same time, unregisters it first
+    // the data is kept alive by the lock, as its destructor, which can run at the same time, unregisters it first
     std::lock_guard<std::mutex> guard(reg.lock);
-    auto i = reg.pgms.find(pgm);
-    if (i == reg.pgms.end()) {
+    auto range = reg.pgms.equal_range(pgm);
+    if (range.first == range.second) {
         return false;
     }
-    i->second->clearCompilationCache();
+    for (auto i = range.first; i != range.second; ++i) {
+        i->second->clearCompilationCache();
+    }
     return true;
 }
 

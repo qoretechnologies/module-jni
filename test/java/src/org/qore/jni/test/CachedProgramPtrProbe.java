@@ -96,7 +96,9 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
         calls the static method \a name, as <tt>class::method</tt> (QoreJavaApi.callStaticMethod()), \c "new" creates
         an object of the Qore class \a name (QoreJavaApi.newObjectSave()), and \c "class" loads the Java class
         generated for the Qore class \a name with the class loader (QoreURLClassLoader.loadClass(), whose class
-        loader lists the classes of the package and generates the byte code of the class), \c "method" calls the
+        loader lists the classes of the package and generates the byte code of the class), \c "nsclass" as \c "class"
+        for a class in a namespace (for which the canonical class loader is looked up), \c "compile" compiles a
+        Java class that uses the Java class \a name with a QoreJavaCompiler for the class loader, \c "method" calls the
         method \a name of the Qore object \a target (QoreObject.callMethod()), and \c "closure" calls the Qore
         closure \a target (QoreClosure.call())
         @param name the name used by the call
@@ -115,7 +117,20 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
                 return obj == null ? null : obj.getClass().getName();
             }
             case "class":
+            case "nsclass":
                 return context.loadClass(name).getName();
+            case "compile": {
+                // compiles a class that uses the Qore class \a name with a compiler for the thread's class loader
+                // context, which clears its Program's compilation cache once it is done
+                QoreJavaCompiler<Object> compiler = new QoreJavaCompiler<Object>(context, null);
+                try {
+                    String src = "package pgmptr; public class Compiled { public static String get() { return "
+                        + name + ".class.getName(); } }";
+                    return compiler.compile("pgmptr.Compiled", src).cls.getName();
+                } finally {
+                    compiler.close();
+                }
+            }
             case "method":
                 return ((QoreObject) target).callMethod(name);
             case "closure":

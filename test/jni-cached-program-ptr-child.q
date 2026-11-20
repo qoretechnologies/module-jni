@@ -42,6 +42,11 @@ string sub pgmptr_probe_fn() {
     return \"child\";
 }
 
+namespace PgmPtrNs {
+    class PgmPtrNsClass {
+    }
+}
+
 class PgmPtrProbeClass {
     static string get() {
         return \"child\";
@@ -77,6 +82,8 @@ const Names = {
     "static": "PgmPtrProbeClass::get",
     "new": "PgmPtrProbeClass",
     "class": "qore.PgmPtrProbeClass",
+    "nsclass": "qore.PgmPtrNs.PgmPtrNsClass",
+    "compile": "qore.PgmPtrProbeClass",
     "method": "name",
     "closure": "",
 };

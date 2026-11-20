@@ -719,8 +719,10 @@ public:
     DLLLOCAL static bool hasProgramData(const QoreProgram* pgm);
 
     //! Clears the compilation cache of the jni data of the Program, if it has jni data; returns false if not
-    /** For a thread that is not in the Program: the data is cleared under the lock of the registry of the Programs
-        with jni data, which the data's destructor takes to unregister it before it is destroyed
+    /** For a thread that is not in the Program: the data is kept alive by the lock of the registry of the Programs
+        with jni data, which the data's destructor takes to unregister it before it is destroyed; as
+        clearCompilationCache(), the cache is cleared without the code generation lock, so a concurrent code
+        generation for the Program is not serialized with it
     */
     DLLLOCAL static bool clearCompilationCache(const QoreProgram* pgm);
 
@@ -1077,6 +1079,7 @@ public:
         context (QoreURLClassLoader.getCurrent()), which QoreURLClassLoader.getProgramPtr() reads
 
         @throw BasicException the pointer names no Program with jni data, as its Program has been deleted
+        @throw JavaException the class loader's pointer could not be read
         @throw XsinkException the Program cannot be entered (ex: it is being torn down)
     */
     DLLLOCAL JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader = nullptr);
@@ -1088,6 +1091,7 @@ public:
         context
 
         @throw BasicException the pointer names no Program with jni data, as its Program has been deleted
+        @throw JavaException the class loader's pointer could not be read
     */
     DLLLOCAL JniJavaProgramRef(Env& env, jlong ptr, jobject loader = nullptr);
 
