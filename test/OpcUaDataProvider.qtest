@@ -98,6 +98,8 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             \genericServerRuntimeStopReleasesPortTest());
         addTestCase("generic OPC UA server runtime stop fails if an OS-assigned port is not released in time",
             \genericServerRuntimeStopReleaseTimeoutTest());
+        addTestCase("generic OPC UA server runtime stop releases a configured port",
+            \genericServerRuntimeConfiguredPortStopTest());
         addTestCase("generic OPC UA server runtime stop does not need the event loop to learn that the listener closed",
             \genericServerRuntimeStopListenerCloseCompletesFirstTest());
         addTestCase("generic OPC UA server runtime stop releases an OS-assigned port when never started",
@@ -1912,6 +1914,58 @@ sub sandboxProbe() {
         # stopping a stopped runtime again does nothing
         runtime.stop();
         assertFalse(processHoldsPort(port), "the port stays released");
+    }
+
+    #! stop() releases a configured port too: a release held by the test hook is waited for, and the port can be bound
+    #! again at once (qore#6870)
+    /** A configured port was served by Milo's own transport on Milo's shared event loop, which is never terminated,
+        so stop() returned while the process could still hold the listening socket
+    */
+    genericServerRuntimeConfiguredPortStopTest() {
+        # a port that the OS reports free now; another process can take it before the runtime binds it, which only
+        # makes the runtime's start fail
+        int port;
+        {
+            Socket s();
+            s.bind("127.0.0.1:0");
+            port = s.getSocketInfo().port;
+            s.close();
+        }
+        *bool holds = processHoldsPort(port);
+        if (!exists holds) {
+            testSkip("no /proc: the port release cannot be checked without binding the port");
+        }
+        OpcUaServerRuntime runtime({
+            "port": port,
+            "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-configured-port-test"),
+        }, NOTHING);
+        on_exit {
+            GenericServer::setPortReleaseTimeoutForTest(0);
+            GenericServer::releasePortReleaseHoldForTest();
+            runtime.stop();
+        }
+        assertFalse(processHoldsPort(port), "a configured port is bound when the runtime starts");
+        runtime.start();
+        assertTrue(processHoldsPort(port), "this process holds the port while the runtime runs");
+
+        GenericServer::holdPortReleaseForTest(False);
+        GenericServer::setPortReleaseTimeoutForTest(1);
+        assertThrows("JNI-ERROR", "IllegalStateException: the configured port " + port + " was not released within " +
+            "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
+        assertTrue(GenericServer::isPortReleaseHeldForTest(),
+            "the port release was held after the listener's channel was closed");
+        assertTrue(processHoldsPort(port), "the port is still held while its release is held");
+
+        GenericServer::setPortReleaseTimeoutForTest(0);
+        GenericServer::releasePortReleaseHoldForTest();
+        runtime.stop();
+        assertFalse(processHoldsPort(port), "a stop() made again waits for the release");
+        # the port can be bound again at once
+        {
+            Socket s();
+            s.bind("127.0.0.1:" + port);
+            s.close();
+        }
     }
 
     #! stop() learns that the listener closed without the event loop, which may be busy (qore#6891)
