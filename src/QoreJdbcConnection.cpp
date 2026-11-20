@@ -487,7 +487,7 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
             if (classpath == arg.c_str()) {
                 return 0;
             }
-            jpc->addClasspath(env, jcp);
+            jpc->addClasspath(env, jcp, "jdbc classpath option");
             classpath = arg.c_str();
 
             // try to load new drivers
@@ -862,7 +862,7 @@ QoreValue QoreJdbcConnection::select(const QoreString* qstr, const QoreListNode*
     try {
         // Env's constructor raises a pending cancellation as an exception
         Env env;
-        QoreJdbcStatement stmt(xsink, this);
+        QoreJdbcTempStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
         if (*xsink) {
@@ -884,7 +884,7 @@ QoreColumnarResult* QoreJdbcConnection::selectColumnar(const QoreString* qstr, c
     try {
         // Env's constructor raises a pending cancellation as an exception
         Env env;
-        QoreJdbcStatement stmt(xsink, this);
+        QoreJdbcTempStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
         if (*xsink) {
@@ -912,7 +912,7 @@ QoreListNode* QoreJdbcConnection::selectRows(const QoreString* qstr, const QoreL
     try {
         // Env's constructor raises a pending cancellation as an exception
         Env env;
-        QoreJdbcStatement stmt(xsink, this);
+        QoreJdbcTempStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
         if (*xsink) {
@@ -939,7 +939,7 @@ QoreHashNode* QoreJdbcConnection::selectRow(const QoreString* qstr, const QoreLi
     try {
         // Env's constructor raises a pending cancellation as an exception
         Env env;
-        QoreJdbcStatement stmt(xsink, this);
+        QoreJdbcTempStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
         if (*xsink) {
@@ -965,7 +965,7 @@ QoreValue QoreJdbcConnection::exec(const QoreString* qstr, const QoreListNode* a
     try {
         // Env's constructor raises a pending cancellation as an exception
         Env env;
-        QoreJdbcStatement stmt(xsink, this);
+        QoreJdbcTempStatement stmt(xsink, this);
 
         bool result_set = stmt.exec(env, xsink, qstr, args);
         if (*xsink) {
@@ -985,7 +985,7 @@ QoreValue QoreJdbcConnection::execRaw(const QoreString* qstr, ExceptionSink* xsi
     try {
         // Env's constructor raises a pending cancellation as an exception
         Env env;
-        QoreJdbcStatement stmt(xsink, this);
+        QoreJdbcTempStatement stmt(xsink, this);
 
         // a plain java.sql.Statement executes the SQL as given (no placeholders are parsed), and its effects last for
         // the session: SQL Server runs a prepared statement with sp_prepexec, which drops the #temp tables it creates

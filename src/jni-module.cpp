@@ -407,6 +407,29 @@ static void jni_atexit_destroy_vm() noexcept {
     jni::Jvm::destroyVM();
 }
 
+//! Returns the description of an exception that failed the module's initialization, as the text of the error
+/** A Java exception is described as text, as the global context Program, which converts a Java exception to a %Qore
+    exception with its Java object, could not be created; another exception is converted, and its error code and
+    description are returned.  No exception is left pending in the JVM or reported as unhandled.
+*/
+static QoreStringNode* jni_init_error_desc(jni::Exception& e) {
+    JavaException* je = dynamic_cast<JavaException*>(&e);
+    if (je) {
+        return je->toString();
+    }
+    ExceptionSink xsink;
+    e.convert(&xsink);
+    if (!xsink) {
+        return new QoreStringNode("unknown error");
+    }
+    QoreStringNodeValueHelper err(xsink.getExceptionErr());
+    QoreStringNodeValueHelper desc(xsink.getExceptionDesc());
+    // the module's errors are in the default encoding
+    SimpleRefHolder<QoreStringNode> rv(new QoreStringNodeMaker("%s: %s", err->c_str(), desc->c_str()));
+    xsink.clear();
+    return rv.release();
+}
+
 QoreStringNode* jni_module_init_finalize(bool system) {
     tclist.push(jni_thread_cleanup, nullptr);
 
@@ -418,18 +441,19 @@ QoreStringNode* jni_module_init_finalize(bool system) {
 
         qjcm.init(pgm, already_initialized);
     } catch (jni::Exception& e) {
+        // the error is described while the JVM still runs; it is the error of the module's initialization (ex: a
+        // classpath error in the QORE_JNI_CLASSPATH environment variable: qore#6778, qore#6779)
+        SimpleRefHolder<QoreStringNode> err;
+        if (!system) {
+            err = jni_init_error_desc(e);
+        }
         tclist.pop(false);
         jni_release_signals();
         jni::Jvm::destroyVM();
-        // display exception info on the console as an unhandled exception
         if (system) {
             throw;
-            return nullptr;
-        } else {
-            ExceptionSink xsink;
-            e.convert(&xsink);
-            return new QoreStringNode("JNI-FINALIZATION-ERR");
         }
+        return err.release();
     }
 
     ExceptionSink xsink;
@@ -497,6 +521,16 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         return;
     }
     printd(5, "jni_module_init()\n");
+#ifdef DEBUG
+    // a test fail point that is reached before Jni::dbg_jni_fail_point() can be called
+    {
+        QoreStringNode* err = dbg_jni_set_env_fail_point();
+        if (err) {
+            xsink.raiseException("MODULE-INIT-ERROR", err);
+            return;
+        }
+    }
+#endif
 #ifdef QORE_JNI_HAS_COMMAND_CONTEXT
     // the issuer rules and the commands are kept in two tables: every command must have a rule and every rule a
     // command, or a command would fall back to the rule for unlisted commands
@@ -669,7 +703,11 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         xsink.raiseException("MODULE-INIT-ERROR", e.toString());
         return;
     } catch (Exception &e) {
-        xsink.raiseException("MODULE-INIT-ERROR", "JVM initialization failed due to an unknown error");
+        // ex: a classpath error in the QORE_JNI_CLASSPATH environment variable, which is added when the global
+        // context Program is created here (qore#6778, qore#6779)
+        SimpleRefHolder<QoreStringNode> err(jni_init_error_desc(e));
+        err->prepend("JVM initialization failed: ");
+        xsink.raiseException("MODULE-INIT-ERROR", err.release());
         return;
     }
 
@@ -1195,7 +1233,7 @@ static void qore_jni_mc_global_add_classpath(const QoreString& cmd_arg, QoreProg
     LocalReference<jstring> jcp = env.newPathString(arg);
     jni_check_classpath_sandbox("global-add-classpath", pgm, env, jcp, true);
     printd(LogLevel, "qore_jni_mc_global_add_classpath() jpc: %p arg: '%s'\n", jpc, arg.c_str());
-    jpc->addParentClasspath(env, jcp);
+    jpc->addParentClasspath(env, jcp, "global-add-classpath");
 }
 
 static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, QoreProgram* pgm,
@@ -1232,7 +1270,7 @@ static void qore_jni_mc_global_add_relative_classpath(const QoreString& arg, Qor
     LocalReference<jstring> jcp = env.newPathString(QoreString(cwd_str->c_str(), QCS_DEFAULT));
     jni_check_classpath_sandbox("global-add-relative-classpath", pgm, env, jcp, true);
 
-    jpc->addParentClasspath(env, jcp);
+    jpc->addParentClasspath(env, jcp, "global-add-relative-classpath");
 }
 
 static void qore_jni_mc_add_classpath(const QoreString& cmd_arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
@@ -1245,7 +1283,7 @@ static void qore_jni_mc_add_classpath(const QoreString& cmd_arg, QoreProgram* pg
     Env env;
     LocalReference<jstring> jcp = env.newPathString(arg);
     jni_check_classpath_sandbox("add-classpath", pgm, env, jcp, false);
-    jpc->addClasspath(env, jcp);
+    jpc->addClasspath(env, jcp, "add-classpath");
 }
 
 static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
@@ -1280,7 +1318,7 @@ static void qore_jni_mc_add_relative_classpath(const QoreString& arg, QoreProgra
     LocalReference<jstring> jcp = env.newPathString(QoreString(cwd_str->c_str(), QCS_DEFAULT));
     jni_check_classpath_sandbox("add-relative-classpath", pgm, env, jcp, false);
 
-    jpc->addClasspath(env, jcp);
+    jpc->addClasspath(env, jcp, "add-relative-classpath");
 }
 
 static void qore_jni_mc_define_pending_class(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {

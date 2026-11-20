@@ -112,11 +112,28 @@ struct QoreJdbcColumn {
 typedef std::vector<QoreJdbcColumn> cvec_t;
 
 class QoreJdbcStatement {
-public:
-    DLLLOCAL QoreJdbcStatement(ExceptionSink* xsink, QoreJdbcConnection* conn) : conn(conn), params(xsink), cleanup_xsink(xsink) {
+protected:
+    //! Constructor
+    /** The statement keeps no ExceptionSink: a persistent prepared statement is used by later calls, and the sink of
+        the call that created it can be gone then (qore#6807); what the statement holds is released by release(),
+        into the sink of the call that releases it; a statement is a QoreJdbcTempStatement, released when it goes out
+        of scope, or a QoreJdbcPreparedStatement, released when it is closed
+    */
+    DLLLOCAL QoreJdbcStatement(QoreJdbcConnection* conn) : conn(conn) {
     }
 
+public:
+    //! Destructor; release() must have been called
     DLLLOCAL virtual ~QoreJdbcStatement();
+
+    //! Closes the JDBC handles and releases the bind arguments
+    /** @param xsink the sink of the calling code: closing a handle can raise an exception, and so can the destructor
+        of an object in the bind arguments
+
+        Raises no C++ exception, so a scope guard can call it while an exception is propagating; a pending
+        cancellation of the thread is deferred while the handles are closed
+    */
+    DLLLOCAL void release(ExceptionSink* xsink);
 
     DLLLOCAL bool exec(Env& env, ExceptionSink* xsink, const QoreString& qstr, const QoreListNode* args);
 
@@ -261,18 +278,17 @@ protected:
     //! The size of any array bind
     size_t array_bind_size = 0;
 
-    //! Parameters to be used in the statement
-    ReferenceHolder<QoreListNode> params;
+    //! Parameters to be used in the statement; set with setParams()
+    /** Not a ReferenceHolder: that would release the list into a sink stored when the statement was created, which
+        can be gone when the statement is reset or closed (qore#6807)
+    */
+    QoreListNode* params = nullptr;
 
     //! Column metadata from result sets
     cvec_t cvec;
 
     //! Result sets can survive separate Java-to-Qore native calls; local JNI references cannot.
     GlobalReference<jobject> rs;
-
-    //! Temporary statements use their caller's sink during destruction. Persistent prepared
-    //! statements must close their handles explicitly with the current call's sink first.
-    ExceptionSink* cleanup_xsink;
 
     //! Batch execute flag
     bool do_batch_execute = false;
@@ -347,6 +363,22 @@ protected:
     */
     DLLLOCAL void reset(Env& env, ExceptionSink* xsink);
 
+    //! Replaces the bind arguments; the earlier list is released into the sink of the calling code
+    /** @param new_params the new bind arguments, whose reference is taken over; may be nullptr
+        @param xsink the sink of the calling code, for an exception raised by the destructor of an object in the
+        earlier list
+
+        The new list is set before the earlier one is released, so a destructor run by the release sees the new
+        state
+    */
+    DLLLOCAL void setParams(QoreListNode* new_params, ExceptionSink* xsink) {
+        QoreListNode* old = params;
+        params = new_params;
+        if (old) {
+            old->deref(xsink);
+        }
+    }
+
     //! Releases the JDBC statement and result set but keeps the SQL and bind arguments
     /** Used when the connection is lost: the statement is prepared again before it is next executed.
     */
@@ -386,7 +418,7 @@ protected:
     //! Return whether the passed arguments have arrays
     DLLLOCAL bool hasArrayBind(ExceptionSink* xsink) {
         if (params) {
-            ConstListIterator i(*params);
+            ConstListIterator i(params);
             size_t count = 0;
             while (i.next()) {
                 if (++count % 100 == 0 && qore_check_cancel(xsink, "JDBC array bind detection")) {
@@ -483,6 +515,33 @@ protected:
         @return one result-set row
     */
     DLLLOCAL QoreHashNode* getSingleRowIntern(Env& env, ExceptionSink* xsink);
+};
+
+//! A statement for the duration of one driver call, released into that call's sink when it goes out of scope
+/** The sink is the call's own, and the statement is a local variable of the call, so the sink outlives the statement;
+    it cannot be allocated on the heap
+*/
+class QoreJdbcTempStatement : public QoreJdbcStatement {
+public:
+    //! Constructor
+    /** @param xsink the sink of the enclosing driver call
+        @param conn the connection
+    */
+    DLLLOCAL QoreJdbcTempStatement(ExceptionSink* xsink, QoreJdbcConnection* conn) : QoreJdbcStatement(conn),
+            xsink(xsink) {
+    }
+
+    //! Releases the statement into the sink of the enclosing call
+    DLLLOCAL ~QoreJdbcTempStatement() {
+        release(xsink);
+    }
+
+    static void* operator new(size_t) = delete;
+    static void* operator new[](size_t) = delete;
+
+private:
+    //! The sink of the enclosing driver call
+    ExceptionSink* xsink;
 };
 
 class JavaExceptionRethrowHelper {

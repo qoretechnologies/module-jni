@@ -97,7 +97,23 @@ enum class DbgJniFailPoint {
     ProgramCopy,
     //! Globals::stopNativeCleanupThread() fails to attach the thread to the JVM (jni::UnableToAttachException)
     NativeCleanupStop,
+    //! JniExternalProgramData::addClasspath() or addParentClasspath(): the class loader raises a Java exception
+    Classpath,
 };
+
+//! Sets the fail point named \a name for the calling thread, as Jni::dbg_jni_fail_point() does
+/** @return 0 if set, -1 if \a name is not the name of a fail point
+*/
+DLLLOCAL int dbg_jni_set_fail_point(const char* name);
+
+//! Sets the fail point named in the \c QORE_JNI_DBG_FAIL_POINT environment variable, if any, for the calling thread
+/** Called at the start of the module's initialization, so that a test can make the initialization fail at a point
+    that is reached before Jni::dbg_jni_fail_point() can be called (ex: \c "classpath" for the classpath of the
+    \c QORE_JNI_CLASSPATH environment variable, qore#6778)
+
+    @return nullptr, or the error if the variable does not name a fail point, which the caller owns
+*/
+DLLLOCAL QoreStringNode* dbg_jni_set_env_fail_point();
 
 //! True while a fail point is set with Jni::dbg_jni_fail_point(); checked inline in dbg_jni_fail_at()
 DLLLOCAL extern std::atomic<bool> dbg_jni_fail_point_set;
