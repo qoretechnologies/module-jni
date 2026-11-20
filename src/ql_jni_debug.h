@@ -79,6 +79,14 @@ DLLLOCAL bool dbg_jni_find_class_fails(JNIEnv* jenv, const char* name);
 */
 DLLLOCAL void dbg_jni_native_throw_point();
 
+//! Prints the number of global context Programs created and deleted in the process on \c stderr, if the environment
+//! variable \c QORE_JNI_DBG_CONTEXT_PROGRAM_REPORT is set
+/** Called at the end of the module's delete function, so that a test can check that the module's shutdown leaves no
+    global context Program behind: each one created must have been deleted (qore#6799); the line printed is
+    <tt>jni-dbg: global context Programs created: <created> deleted: <deleted></tt>
+*/
+DLLLOCAL void dbg_jni_report_context_programs() noexcept;
+
 //! The points at which Jni::dbg_jni_fail_point() can make the module fail with a C++ exception
 enum class DbgJniFailPoint {
     //! jni::Env's constructor fails to attach the thread to the JVM (jni::UnableToAttachException)
