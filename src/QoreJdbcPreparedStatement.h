@@ -40,9 +40,12 @@ namespace jni {
 class QoreJdbcPreparedStatement : public QoreJdbcStatement {
 public:
     //! Constructor
-    DLLLOCAL QoreJdbcPreparedStatement(ExceptionSink* xsink, QoreJdbcConnection* c);
+    /** The statement keeps no ExceptionSink: it is used by later calls, in which the sink of the call that created it
+        can be gone (qore#6807)
+    */
+    DLLLOCAL QoreJdbcPreparedStatement(QoreJdbcConnection* c);
 
-    //! Destructor
+    //! Destructor; release() must have been called with the sink of the call that closes the statement
     DLLLOCAL virtual ~QoreJdbcPreparedStatement();
 
     //! Prepare an JDBC SQL statement
@@ -128,7 +131,7 @@ private:
 
     //! Assign bind args
     DLLLOCAL void assignBindArgs(ExceptionSink* xsink, QoreListNode* args) {
-        ReferenceHolder<QoreListNode> tmp(params.swap(args), xsink);
+        setParams(args, xsink);
     }
 
     //! Disabled copy constructor.

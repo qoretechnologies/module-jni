@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# A JDBC prepared statement kept the ExceptionSink of the call that created it, and released its bind arguments into
+# that sink when it was closed, deleted or reset by a later call (qore#6807); when the statement was prepared in Qore
+# code called back from Java, whose sink is local to the module's native frame, the sink was gone then, and an
+# exception raised by the release (by the destructor of an object that only the bind arguments referenced) was written
+# to freed memory: the process crashed.  The bind arguments are now released into the sink of the call that releases
+# them, which raises the exception.
+#
+# Each case runs test/jni-jdbc-stale-sink-child.q in a new process, as the failure terminated the process.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniJdbcStaleSinkTest
+
+class JniJdbcStaleSinkTest inherits QUnit::Test {
+    constructor() : QUnit::Test("JDBC statement releases into the current call's sink", "1.0") {
+        addTestCase("regression: close() after the statement was prepared in a Java callback", \closeCase());
+        addTestCase("regression: a reset after the statement was prepared in a Java callback", \resetCase());
+        addTestCase("regression: delete after the statement was prepared in a Java callback", \deleteCase());
+        addTestCase("coverage: bind() after the statement was prepared in a Java callback", \rebindCase());
+        addTestCase("coverage: a statement prepared, executed and closed by the same code", \normalCase());
+        addTestCase("coverage: a statement of one Datasource call in a Java callback", \tempCase());
+        addTestCase("negative: an unknown case is refused by the child", \unknownCase());
+        set_return_value(main());
+    }
+
+    closeCase() {
+        string out = runChild("close");
+        assertEq(BoomLine("close"), getLine(out, "close: "), out);
+        checkAfter(out, "close");
+    }
+
+    resetCase() {
+        # the connection is lost when the statement is executed, and cannot be re-established: the statement is
+        # reset, and its bind arguments are released into exec()'s sink, with the errors of the connection; a Qore
+        # library that keeps the values given to bind() for the statement (qore#6690) holds the last reference, which
+        # it releases when the aborted connection closes the statement: the driver gives exec()'s sink to that close
+        # too, so the exception is raised in the same place with either library
+        string out = runChild("reset");
+        list<string> exec_lines = getLines(out, "exec: ");
+        assertEq(("exec: JNI-ERROR: java.sql.SQLException: injected connect", BoomLine("exec"),
+            "exec: JNI-ERROR: java.sql.SQLException: injected connection loss"), exec_lines, out);
+        assertEq("executions: 1", getLine(out, "executions: "), out);
+        # the bind arguments were released by the reset
+        assertEq("close: no exception", getLine(out, "close: "), out);
+        checkAfter(out, "reset");
+    }
+
+    deleteCase() {
+        # the destructor of SQLStatement closes the statement with the sink of the code that deletes it
+        string out = runChild("delete");
+        assertEq(BoomLine("delete"), getLine(out, "delete: "), out);
+        checkAfter(out, "delete");
+    }
+
+    rebindCase() {
+        # the earlier bind arguments are released into bind()'s sink; the statement stays usable
+        string out = runChild("rebind");
+        assertEq(BoomLine("bind"), getLine(out, "bind: "), out);
+        assertEq("exec: no exception", getLine(out, "exec: "), out);
+        assertEq("affected: 1", getLine(out, "affected: "), out);
+        assertEq("commit: no exception", getLine(out, "commit: "), out);
+        assertEq("durable: 1", getLine(out, "durable: "), out);
+        assertEq("close: no exception", getLine(out, "close: "), out);
+        checkAfter(out, "rebind");
+    }
+
+    normalCase() {
+        # the commit closes the statement, and releases its bind arguments into commit()'s sink
+        string out = runChild("normal");
+        assertEq("exec: no exception", getLine(out, "exec: "), out);
+        assertEq("affected: 1", getLine(out, "affected: "), out);
+        assertEq(BoomLine("commit"), getLine(out, "commit: "), out);
+        assertEq("durable: 1", getLine(out, "durable: "), out);
+        assertEq("close: no exception", getLine(out, "close: "), out);
+        checkAfter(out, "normal");
+    }
+
+    tempCase() {
+        # the object cannot be bound: the call raises the bind error, and the exception of the object's destructor
+        # when its argument list is released; the next call on the Datasource works
+        string out = runChild("temp");
+        assertEq(("exec: JDBC-BIND-ERROR: do not know how to bind arguments of type 'object<Boom>'",
+            BoomLine("exec")), getLines(out, "exec: "), out);
+        assertEq("durable: 0", getLine(out, "durable: "), out);
+        assertEq("select: no exception", getLine(out, "select: "), out);
+        assertEq("result: 1", getLine(out, "result: "), out);
+        checkAfter(out, "temp");
+    }
+
+    unknownCase() {
+        int rc;
+        string out = runChildRc("no-such-case", \rc);
+        assertEq(2, rc, out);
+        assertRegex("unknown case", out);
+        assertEq("", getLine(out, "after: "), out);
+    }
+
+    #! the line of the exception raised by the destructor of the bind argument, for the step
+    private static string BoomLine(string step) {
+        return step + ": STALE-SINK-TEST: raised in the destructor of the bind argument";
+    }
+
+    private checkAfter(string out, string case_name) {
+        assertEq(1, getLines(out, "Boom destructor").size(), out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        *list<string> l = getLines(out, prefix);
+        return l ? l[0] : "";
+    }
+
+    #! returns the lines of the output that start with the prefix
+    private static list<string> getLines(string out, string prefix) {
+        list<string> rv = ();
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                rv += line;
+            }
+        }
+        return rv;
+    }
+
+    #! runs the child with the case and returns its output, checking that it exited with status 0
+    private string runChild(string case_name) {
+        int rc;
+        string out = runChildRc(case_name, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr) and its exit code
+    private string runChildRc(string case_name, reference<int> rc) {
+        string child = normalize_dir(get_script_dir() + "/jni-jdbc-stale-sink-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is
+        # checked; no core file is written for a crash
+        string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b "
+            "--enable-debug %s %s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child), shellQuote(case_name));
+        return backquote(cmd, \rc);
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}
