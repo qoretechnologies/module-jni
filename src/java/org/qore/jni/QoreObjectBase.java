@@ -6,8 +6,9 @@ package org.qore.jni;
     <a href="https://github.com/qorelanguage/qore/wiki/Prompt-Collection">deterministic</a> and Java's not),
     strong references to %Qore objects must be managed outside of Java.
 
-    @note API usage errors such as with releasing / deleting the object and then calling methods
-    on the object will cause a crash
+    The native handle is held for the duration of each call that uses it, and a release (release(), destroy(), or
+    the shutdown of the jni module) waits until the calls on other threads that use it have returned; a call made
+    after the handle has been released raises an \c IllegalStateException (qore#6864)
 
     @since 1.2
  */
@@ -49,14 +50,39 @@ public class QoreObjectBase {
         this.ref = NativeCleanup.register(this, obj, NativeCleanup.KIND_OBJECT_BASE_WEAK);
     }
 
-    //! returns the pointer to the object
+    //! returns the pointer to the object, or 0 if it has been released
+    /** @note the pointer can be released as soon as this method returns; native code holds it with
+        qoreJniEnterHandle()
+        and qoreJniExitHandle() instead
+    */
     public long get() {
-        return obj;
+        return ref.ptr;
+    }
+
+    //! Holds the native handle for a call that uses it, until qoreJniExitHandle(); for module-jni and the
+    //! generated classes; see NativeCleanup.Ref.enter()
+    /** @throws IllegalStateException if the handle has been released
+    */
+    public final long qoreJniEnterHandle() {
+        long p = ref.enter();
+        if (p == 0) {
+            throw new IllegalStateException("the Qore object has been released");
+        }
+        return p;
+    }
+
+    //! Ends a use of the native handle that qoreJniEnterHandle() began
+    public final void qoreJniExitHandle() {
+        ref.exit();
     }
 
     //! releases the Qore object without destroying it
-    /** @note if the object is returned to Qore, do not release it; allow the weak reference
+    /** Waits until the calls on other threads that use the object have returned.
+
+        @note if the object is returned to Qore, do not release it; allow the weak reference
         to be released when finalized
+
+        @throws IllegalStateException if a call on the current thread uses the object
      */
     public void release() {
         long x = ref.acquireAndClear();
@@ -68,6 +94,10 @@ public class QoreObjectBase {
     }
 
     //! runs the destructor
+    /** Waits until the calls on other threads that use the object have returned.
+
+        @throws IllegalStateException if a call on the current thread uses the object
+    */
     public void destroy() {
         long x = ref.acquireAndClear();
         obj = 0;

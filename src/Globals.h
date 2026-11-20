@@ -195,6 +195,8 @@ public:
 
     DLLLOCAL static GlobalReference<jclass> classQoreObjectBase;                  // org.qore.jni.QoreObjectBase
     DLLLOCAL static jmethodID methodQoreObjectBaseGet;                            // long get()
+    DLLLOCAL static jmethodID methodQoreObjectBaseEnterHandle;                    // long qoreJniEnterHandle()
+    DLLLOCAL static jmethodID methodQoreObjectBaseExitHandle;                     // void qoreJniExitHandle()
 
     DLLLOCAL static GlobalReference<jclass> classQoreJavaClassBase;               // org.qore.jni.QoreJavaClassBase
 
@@ -207,6 +209,8 @@ public:
     DLLLOCAL static GlobalReference<jclass> classQoreClosure;                     // org.qore.jni.QoreClosure
     DLLLOCAL static jmethodID ctorQoreClosure;                                    // QoreClosure(long)
     DLLLOCAL static jmethodID methodQoreClosureGet;                               // long QoreClosure.get()
+    DLLLOCAL static jmethodID methodQoreClosureEnterHandle;                       // long qoreJniEnterHandle()
+    DLLLOCAL static jmethodID methodQoreClosureExitHandle;                        // void qoreJniExitHandle()
 
     DLLLOCAL static GlobalReference<jclass> classQoreObjectWrapper;               // org.qore.jni.QoreObjectWrapper
 

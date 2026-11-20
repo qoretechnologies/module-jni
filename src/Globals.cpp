@@ -195,6 +195,8 @@ GlobalReference<jclass> Globals::classQoreObjectBase;
 
 GlobalReference<jclass> Globals::classQoreJavaClassBase;
 jmethodID Globals::methodQoreObjectBaseGet;
+jmethodID Globals::methodQoreObjectBaseEnterHandle;
+jmethodID Globals::methodQoreObjectBaseExitHandle;
 
 GlobalReference<jclass> Globals::classQoreObject;
 jmethodID Globals::ctorQoreObject;
@@ -202,6 +204,8 @@ jmethodID Globals::ctorQoreObject;
 GlobalReference<jclass> Globals::classQoreClosure;
 jmethodID Globals::ctorQoreClosure;
 jmethodID Globals::methodQoreClosureGet;
+jmethodID Globals::methodQoreClosureEnterHandle;
+jmethodID Globals::methodQoreClosureExitHandle;
 
 GlobalReference<jclass> Globals::classQoreObjectWrapper;
 
@@ -691,6 +695,15 @@ static void jni_native_leak_qore_exception(AbstractException& e) noexcept {
 /** The %Qore exception is raised as an \c org.qore.jni.QoreExceptionWrapper.  The locals of the native method,
     including the helper that attached the thread to %Qore, have been destroyed, so the thread is attached here for the
     conversion if it is not attached.
+
+    The catch blocks of native methods that convert a jni::Exception themselves while the thread is attached (ex:
+    generated_native_call(), qore_object_closure_call_internal(), the java_api_* natives) do not check for the
+    module's shutdown, and do not use this function, deliberately (qore#6864): in the window of the module's delete
+    function between Globals::clearGlobalContext() and Jvm::destroyVM(), q_libqore_shutdown() is already true while
+    the Qore library is still alive, so the check here cannot tell that window from a library that has been torn
+    down, and leaks the Qore exception of a jni::XsinkException; routing those catch blocks here would add that leak
+    in the window only to change the type of the Java exception (a QoreExceptionWrapper there, whose Qore exception
+    the module's shutdown releases, instead of a java.lang.Error).
 */
 static void jni_native_raise_qore_exception(JNIEnv* jenv, AbstractException& e) noexcept {
     // the C++ exception replaces a pending Java exception
@@ -4141,6 +4154,8 @@ bool Globals::init() {
     classQoreJavaClassBase = findDefineClass(env, "org.qore.jni.QoreJavaClassBase", nullptr,
         java_org_qore_jni_QoreJavaClassBase_class, java_org_qore_jni_QoreJavaClassBase_class_len).makeGlobal();
     methodQoreObjectBaseGet = env.getMethod(classQoreObjectBase, "get", "()J");
+    methodQoreObjectBaseEnterHandle = env.getMethod(classQoreObjectBase, "qoreJniEnterHandle", "()J");
+    methodQoreObjectBaseExitHandle = env.getMethod(classQoreObjectBase, "qoreJniExitHandle", "()V");
 
     classQoreClosureMarker = findDefineClass(env, "org.qore.jni.QoreClosureMarker", nullptr,
         java_org_qore_jni_QoreClosureMarker_class, java_org_qore_jni_QoreClosureMarker_class_len).makeGlobal();
@@ -4156,6 +4171,8 @@ bool Globals::init() {
     // runs in the NativeCleanup C++ thread; see Jvm.cpp.
     ctorQoreClosure = env.getMethod(classQoreClosure, "<init>", "(J)V");
     methodQoreClosureGet = env.getMethod(classQoreClosure, "get", "()J");
+    methodQoreClosureEnterHandle = env.getMethod(classQoreClosure, "qoreJniEnterHandle", "()J");
+    methodQoreClosureExitHandle = env.getMethod(classQoreClosure, "qoreJniExitHandle", "()V");
 
     classQoreObjectWrapper = findDefineClass(env, "org.qore.jni.QoreObjectWrapper", nullptr,
         java_org_qore_jni_QoreObjectWrapper_class, java_org_qore_jni_QoreObjectWrapper_class_len).makeGlobal();
@@ -5083,7 +5100,7 @@ void Globals::startNativeCleanupThread() {
     nativeCleanupClass = env.findClass("org/qore/jni/NativeCleanup").makeGlobal();
     nativeCleanupRefClass = env.findClass("org/qore/jni/NativeCleanup$Ref").makeGlobal();
 
-    methodNativeCleanupAcquire = env.getMethod(nativeCleanupRefClass, "acquireAndClear", "()J");
+    methodNativeCleanupAcquire = env.getMethod(nativeCleanupRefClass, "acquireForCleanup", "()J");
     fieldNativeCleanupRefKind = env.getField(nativeCleanupRefClass, "kind", "I");
 
     jfieldID fieldQueue = env.getStaticField(nativeCleanupClass, "queue", "Ljava/lang/ref/ReferenceQueue;");

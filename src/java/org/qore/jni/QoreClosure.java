@@ -19,9 +19,33 @@ public class QoreClosure implements QoreClosureMarkerImpl {
         this.ref = NativeCleanup.register(this, obj, NativeCleanup.KIND_CLOSURE);
     }
 
-    //! returns the pointer to the object
+    //! returns the pointer to the object, or 0 if it has been released
+    /** @note the pointer can be released as soon as this method returns; native code holds it with
+        qoreJniEnterHandle()
+        and qoreJniExitHandle() instead
+    */
     public long get() {
         return ref.ptr;
+    }
+
+    //! Holds the native handle for a call that uses it, until qoreJniExitHandle(); for module-jni and the
+    //! generated classes; see NativeCleanup.Ref.enter()
+    /** The shutdown of the jni module, which releases the handle, waits until the calls that use it have returned
+        (qore#6864).
+
+        @throws IllegalStateException if the handle has been released
+    */
+    public final long qoreJniEnterHandle() {
+        long p = ref.enter();
+        if (p == 0) {
+            throw new IllegalStateException("the Qore closure has been released");
+        }
+        return p;
+    }
+
+    //! Ends a use of the native handle that qoreJniEnterHandle() began
+    public final void qoreJniExitHandle() {
+        ref.exit();
     }
 
     //! calls the closure / call reference with the given arguments and returns the result
@@ -33,11 +57,16 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see callSave()
     */
     public Object call(Object... args) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return call0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return call0(QoreURLClassLoader.getProgramPtr(), p, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
         }
     }
 
@@ -50,11 +79,16 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see callMethodArgsSave()
     */
     public Object callArgs(Object[] args) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return call0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return call0(QoreURLClassLoader.getProgramPtr(), p, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
         }
     }
 
@@ -70,11 +104,16 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callSave(Object... args) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return callSave0(QoreURLClassLoader.getProgramPtr(), p, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
         }
     }
 
@@ -91,11 +130,16 @@ public class QoreClosure implements QoreClosureMarkerImpl {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callArgsSave(String name, Object[] args) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return callSave0(QoreURLClassLoader.getProgramPtr(), ref.ptr, args);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return callSave0(QoreURLClassLoader.getProgramPtr(), p, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
         }
     }
 

@@ -116,7 +116,12 @@ public final class QoreSandbox {
         public boolean isSandboxed() {
             lock.readLock().lock();
             try {
-                return isSandboxed0(ptr());
+                long p = enterPtr();
+                try {
+                    return isSandboxed0(p);
+                } finally {
+                    ref.exit();
+                }
             } finally {
                 lock.readLock().unlock();
                 Reference.reachabilityFence(this);
@@ -134,7 +139,12 @@ public final class QoreSandbox {
             byte[] hostBytes = encode(name, "host");
             lock.readLock().lock();
             try {
-                return makeAddresses(name, checkNetworkAccess0(ptr(), hostBytes, port, proto));
+                long p = enterPtr();
+                try {
+                    return makeAddresses(name, checkNetworkAccess0(p, hostBytes, port, proto));
+                } finally {
+                    ref.exit();
+                }
             } finally {
                 lock.readLock().unlock();
                 Reference.reachabilityFence(this);
@@ -151,7 +161,12 @@ public final class QoreSandbox {
             byte[] pathBytes = encode(path, "path");
             lock.readLock().lock();
             try {
-                checkFileAccess0(ptr(), pathBytes, mode);
+                long p = enterPtr();
+                try {
+                    checkFileAccess0(p, pathBytes, mode);
+                } finally {
+                    ref.exit();
+                }
             } finally {
                 lock.readLock().unlock();
                 Reference.reachabilityFence(this);
@@ -224,9 +239,13 @@ public final class QoreSandbox {
             }
         }
 
-        //! Returns the native capture; raises JNI-SANDBOX-ERROR if the policy has been closed
-        private long ptr() {
-            long ptr = ref.ptr;
+        //! Holds the native capture for a check, until ref.exit(); raises JNI-SANDBOX-ERROR if the policy has been
+        //! closed
+        /** The shutdown of the jni module, which releases the capture without the lock, waits until the checks that
+            hold it have returned (qore#6864)
+        */
+        private long enterPtr() {
+            long ptr = ref.enter();
             if (ptr == 0) {
                 // a native call with no policy and an unknown thread raises the error
                 throw closedError0();
@@ -250,7 +269,12 @@ public final class QoreSandbox {
         if (p != null) {
             p.lock.readLock().lock();
             try {
-                ptr = capture0(p.ptr());
+                long pp = p.enterPtr();
+                try {
+                    ptr = capture0(pp);
+                } finally {
+                    p.ref.exit();
+                }
             } finally {
                 p.lock.readLock().unlock();
                 Reference.reachabilityFence(p);

@@ -3,6 +3,7 @@ package org.qore.jni;
 
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -55,10 +56,16 @@ public final class NativeCleanup {
         Every release path must claim the pointer with acquireAndClear(). */
     public static final class Ref extends PhantomReference<Object> {
         /** The native pointer; volatile for wrapper accessors. Release paths
-            must use {@link #acquireAndClear}, never a separate read and clear. */
+            must use {@link #acquireAndClear}, never a separate read and clear.
+            A native call that uses the pointer must hold it with
+            {@link #enter} and {@link #exit} instead of reading this field. */
         public volatile long ptr;
         public final int kind;
         private boolean claimed;
+        /** The number of uses of the pointer in progress, on all threads (see {@link #enter}) */
+        private int users;
+        /** The number of uses of the pointer in progress on each thread that has one */
+        private HashMap<Thread, Integer> userThreads;
 
         Ref(Object outer, long ptr, int kind, ReferenceQueue<? super Object> q) {
             super(outer, q);
@@ -66,17 +73,110 @@ public final class NativeCleanup {
             this.kind = kind;
         }
 
+        /** Holds the native pointer for a use (a native call with it), until {@link #exit}
+
+            Every release waits until no other thread uses the pointer (qore#6864), so the pointer
+            stays valid until the matching {@link #exit}; no lock is held during the use, which can
+            run any %Qore and Java code.  A call to exit() must follow every call that returns a
+            pointer, in a finally block.
+            @return the pointer, or zero if it has been released (exit() must not be called then)
+        */
+        public synchronized long enter() {
+            if (ptr == 0) {
+                return 0;
+            }
+            if (userThreads == null) {
+                userThreads = new HashMap<>();
+            }
+            userThreads.merge(Thread.currentThread(), 1, Integer::sum);
+            ++users;
+            return ptr;
+        }
+
+        /** Ends a use of the pointer that {@link #enter} began on this thread */
+        public synchronized void exit() {
+            Thread t = Thread.currentThread();
+            int n = userThreads.get(t);
+            if (n == 1) {
+                userThreads.remove(t);
+            } else {
+                userThreads.put(t, n - 1);
+            }
+            if (--users == 0) {
+                notifyAll();
+            }
+        }
+
+        /** returns the number of uses of the pointer in progress on the current thread */
+        private int ownUses() {
+            if (userThreads == null) {
+                return 0;
+            }
+            Integer n = userThreads.get(Thread.currentThread());
+            return n == null ? 0 : n;
+        }
+
+        /** waits until no thread uses the pointer; the caller has none */
+        private void waitForUsers() {
+            if (users > 0) {
+                // a test can let a use end here, once a release has seen it and before it waits for it; the hook
+                // runs with the monitor held, so the use ends only once wait() releases it
+                Runnable hook = releaseWaitHook;
+                if (hook != null) {
+                    releaseWaitHook = null;
+                    hook.run();
+                }
+            }
+            boolean interrupted = false;
+            while (users > 0) {
+                try {
+                    wait();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
         /** Atomically take ownership of the native pointer.  Returns the
             previous value and resets {@link #ptr} to 0; subsequent phantom
             dispatch will see 0 and skip the native release.  Used by
             explicit teardown methods (release / destroy / get) that take
-            ownership of the pointer themselves.
+            ownership of the pointer themselves.  Waits until no other thread
+            uses the pointer ({@link #enter}).
             @return the pointer owned by this caller, or zero if already claimed
+            @throws IllegalStateException if the current thread uses the pointer:
+                it cannot be released under the call that uses it, and nothing
+                is changed
         */
         public synchronized long acquireAndClear() {
+            if (ownUses() > 0) {
+                throw new IllegalStateException("the Qore handle cannot be released while a call on the same "
+                    + "thread uses it");
+            }
             claimed = true;
             long p = ptr;
             ptr = 0;
+            waitForUsers();
+            return p;
+        }
+
+        /** Takes ownership of the native pointer for module-jni's cleanup (the C++ cleanup thread
+            and the module's shutdown); as {@link #acquireAndClear}, but a pointer that the current
+            thread uses is not returned (it is left unreleased, as it cannot be released under the
+            call that uses it), and no exception is raised
+            @return the pointer to release, or zero
+        */
+        synchronized long acquireForCleanup() {
+            claimed = true;
+            long p = ptr;
+            ptr = 0;
+            if (ownUses() > 0) {
+                return 0;
+            }
+            waitForUsers();
             return p;
         }
 
@@ -92,6 +192,18 @@ public final class NativeCleanup {
             ptr = value;
             return true;
         }
+    }
+
+    /** A one-shot test hook; see {@link #setReleaseWaitHook} */
+    private static volatile Runnable releaseWaitHook;
+
+    /** Sets a one-shot hook that the next release of a pointer in use on another thread runs, once it has
+        seen the use and before it waits for it to end, with the monitor of the Ref held (for tests: a
+        hook that lets the use end makes the release wait deterministically; qore#6864)
+        @param hook the hook, or null to clear it
+    */
+    public static void setReleaseWaitHook(Runnable hook) {
+        releaseWaitHook = hook;
     }
 
     /** Sentinel kind used at shutdown to wake the C++ thread blocked on
