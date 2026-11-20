@@ -35,6 +35,7 @@ class JniShutdownWindowContextTest inherits QUnit::Test {
     constructor() : QUnit::Test("JNI module shutdown window context Program", "1.0") {
         addTestCase("regression: QoreJavaApi.callFunction() in the shutdown window", \functionCase());
         addTestCase("regression: QoreJavaApi.newObjectSave() in the shutdown window", \newObjectCase());
+        addTestCase("regression: QoreObject.instanceOf() in the shutdown window (qore#6828)", \instanceOfCase());
         addTestCase("negative: no call in the shutdown window", \noneCase());
         set_return_value(main());
     }
@@ -47,6 +48,16 @@ class JniShutdownWindowContextTest inherits QUnit::Test {
     newObjectCase() {
         string out = checkCase("newobject");
         assertRegex(ShutdownError, getLine(out, "probe: "), out);
+    }
+
+    instanceOfCase() {
+        # the Java thread is not attached to Qore: instanceOf() crashed the process in getProgram() before it attached
+        # the thread (qore#6828); in the shutdown window no Program can look up the class: the object's Program, the
+        # script's, has been deleted before the module's shutdown, and the global context Program has been deleted and
+        # is not created again (the report below checks that), so the class is not found, which gives false, as for
+        # any class that is not found
+        string out = checkCase("instanceof");
+        assertEq("probe: ok: false", getLine(out, "probe: "), out);
     }
 
     noneCase() {
