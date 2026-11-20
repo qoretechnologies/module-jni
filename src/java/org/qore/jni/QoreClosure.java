@@ -30,9 +30,9 @@ public class QoreClosure implements QoreClosureMarkerImpl {
 
     //! Holds the native handle for a call that uses it, until qoreJniExitHandle(); for module-jni and the
     //! generated classes; see NativeCleanup.Ref.enter()
-    /** The shutdown of the jni module, which releases the handle, waits until the calls that use it have returned
-        (qore#6864).  A call to qoreJniExitHandle() must follow every call that returns, on the same thread: a use
-        that is never ended keeps the shutdown of the jni module waiting.
+    /** The shutdown of the jni module, which releases the handle, leaves the handle of a call in progress
+        unreleased (qore#6864).  A call to qoreJniExitHandle() must follow every call that returns, on the same
+        thread.
 
         @throws IllegalStateException if the handle has been released
     */

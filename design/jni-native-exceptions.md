@@ -66,12 +66,18 @@ wrapper that still exists; Java can keep a wrapper after any of them (qore#6864)
   way, with `qoreJniEnterHandle()` and `qoreJniExitHandle()`.  The generated classes pass the object itself to
   `JavaClassBuilder.doNormalCall()`, which holds its handle; the overloads that take the pointer remain for classes
   generated before.
-- A release claims the pointer (`Ref.acquireAndClear()`: 0 afterwards, so no new use begins) and then waits until
-  the uses on other threads have ended.  A release on a thread that uses the pointer cannot wait for itself:
-  `acquireAndClear()`, which the explicit releases use, refuses it with `IllegalStateException` and changes nothing;
-  `acquireForCleanup()`, which the cleanup thread and the module's shutdown use, leaves the pointer unreleased.
-- So the module's shutdown waits for the calls in progress on other threads that use a wrapper, as it waits for the
-  holders of the global context Program; a call that never returns delays the exit of the process.
+- An explicit release (`release()`, `destroy()`, `close()`) claims the pointer (`Ref.acquireAndClear()`: 0
+  afterwards, so no new use begins) and then waits until the uses on other threads have ended; a release on a
+  thread that uses the pointer cannot wait for itself, and is refused with `IllegalStateException`, changing
+  nothing.  So a release must not be made while a call that uses the object waits for the releasing thread.
+- The cleanup thread and the module's shutdown never wait (`Ref.acquireForCleanup()`): a pointer with a use in
+  progress on any thread is cleared, so that no new use begins, and left unreleased, valid for the call; it is
+  released with the process.  The module's shutdown must not wait: a call in progress can block until the process
+  ends (ex: a Java listener thread blocked in the Qore code of a module, which the Qore library leaves running at
+  its shutdown, see `qore_program_private::leaveForeignThreads()`), and waiting for it kept the process from exiting
+  (test/jni-released-handles.qtest, the "shutdown-in-use" case).  The cleanup thread sees no use: every call keeps
+  its wrapper reachable until its use has ended (it calls the wrapper's `qoreJniExitHandle()`, or
+  `Reference.reachabilityFence()`), so a wrapper is phantom reachable only once no call on it is in progress.
 - `QoreExceptionWrapper.getMessage()` holds the monitor of the `Ref` instead, as its native method runs no Qore code
   that could release the wrapper.
 - `NativeCleanup.setReleaseWaitHook()` lets a test make a release wait deterministically.

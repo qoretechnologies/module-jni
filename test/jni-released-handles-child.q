@@ -18,10 +18,13 @@
 # - "convert-released": Java returns a QoreObject whose handle it has released, which Qore converts
 # - "generated-released": a method of a generated class is called through its generated method before and after the
 #   object is released (ReleasedHandleCalls.generatedReleased())
+# - "shutdown-in-use": a Java thread's call of a closure of a user module (JniReleasedHandlesBlock) is in progress,
+#   blocked until the process ends, when the jni module is shut down; the process must exit
 # the operation "policy" keeps a QoreSandbox.Policy captured for the script and calls isSandboxed()
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../build"
+%append-module-path "${SCRIPT_DIR}/jni-released-handles-mod"
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.ReleasedHandleCalls
@@ -87,6 +90,11 @@ if (op == "release-in-use") {
     } catch (hash<ExceptionInfo> ex) {
         printf("live: %s: %s\n", ex.err, ex.desc);
     }
+} else if (op == "shutdown-in-use") {
+    # a Java thread's call of a module's closure is in progress, blocked, until the process ends
+    load_module("JniReleasedHandlesBlock");
+    call_function("JniReleasedHandlesBlock::start");
+    printf("live: in call\n");
 } else if (op == "generated-released") {
     printf("live: %s\n", ReleasedHandleCalls::generatedReleased());
 } else if (mode == "live") {

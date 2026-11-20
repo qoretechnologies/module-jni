@@ -75,9 +75,10 @@ public final class NativeCleanup {
 
         /** Holds the native pointer for a use (a native call with it), until {@link #exit}
 
-            Every release waits until no other thread uses the pointer (qore#6864), so the pointer
-            stays valid until the matching {@link #exit}; no lock is held during the use, which can
-            run any %Qore and Java code.  A call to exit() must follow every call that returns a
+            An explicit release waits until no other thread uses the pointer, and module-jni's
+            cleanup leaves a pointer in use unreleased (qore#6864), so the pointer stays valid until
+            the matching {@link #exit}; no lock is held during the use, which can run any %Qore and
+            Java code.  A call to exit() must follow every call that returns a
             pointer, in a finally block.
             @return the pointer, or zero if it has been released (exit() must not be called then)
         */
@@ -170,20 +171,24 @@ public final class NativeCleanup {
         }
 
         /** Takes ownership of the native pointer for module-jni's cleanup (the C++ cleanup thread
-            and the module's shutdown); as {@link #acquireAndClear}, but a pointer that the current
-            thread uses is not returned (it is left unreleased, as it cannot be released under the
-            call that uses it), and no exception is raised
+            and the module's shutdown): the pointer is cleared, so that no new use begins, and returned
+            to be released, unless a use of it is in progress on any thread; such a pointer is left
+            unreleased, and zero is returned, with no wait and no exception (qore#6864)
+
+            The module's shutdown must not wait for a use: a call in progress can block until the
+            process ends (ex: a Java listener thread blocked in the %Qore code of a module, which the
+            %Qore library also leaves running at its shutdown), and waiting for it kept the process
+            from exiting.  Leaving the pointer unreleased keeps it valid for the call; it is released
+            with the process.  The C++ cleanup thread sees no use: a wrapper is phantom reachable only
+            once no call on it is in progress, as every call keeps the wrapper reachable until its use
+            has ended.
             @return the pointer to release, or zero
         */
         synchronized long acquireForCleanup() {
             claimed = true;
             long p = ptr;
             ptr = 0;
-            if (ownUses() > 0) {
-                return 0;
-            }
-            waitForUsers();
-            return p;
+            return users > 0 ? 0 : p;
         }
 
         /** Publish a pointer created after registration with a zero pointer.

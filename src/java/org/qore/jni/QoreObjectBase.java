@@ -6,9 +6,10 @@ package org.qore.jni;
     <a href="https://github.com/qorelanguage/qore/wiki/Prompt-Collection">deterministic</a> and Java's not),
     strong references to %Qore objects must be managed outside of Java.
 
-    The native handle is held for the duration of each call that uses it, and a release (release(), destroy(), or
-    the shutdown of the jni module) waits until the calls on other threads that use it have returned; a call made
-    after the handle has been released raises an \c IllegalStateException (qore#6864)
+    The native handle is held for the duration of each call that uses it: release() and destroy() wait until the
+    calls on other threads that use it have returned, and the shutdown of the jni module leaves the handle of a call
+    in progress unreleased; a call made after the handle has been released raises an \c IllegalStateException
+    (qore#6864)
 
     @since 1.2
  */
@@ -62,8 +63,8 @@ public class QoreObjectBase {
     //! Holds the native handle for a call that uses it, until qoreJniExitHandle(); for module-jni and the
     //! generated classes; see NativeCleanup.Ref.enter()
     /** A call to qoreJniExitHandle() must follow every call that returns, on the same thread: a use that is never
-        ended keeps every release of the object, including the shutdown of the jni module, waiting.  The names of this
-        method and of qoreJniExitHandle() are reserved: a %Qore class cannot have a method of either name that
+        ended keeps release() and destroy() waiting.  The names of this method and of qoreJniExitHandle() are
+        reserved: a %Qore class cannot have a method of either name that
         overrides them.
 
         @throws IllegalStateException if the handle has been released

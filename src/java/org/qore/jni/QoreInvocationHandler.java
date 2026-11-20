@@ -1,15 +1,16 @@
 // Copyright (C) 2026 Qore Technologies, s.r.o.
 package org.qore.jni;
 
+import java.lang.ref.Reference;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
 public class QoreInvocationHandler implements InvocationHandler {
     /** Native cleanup handle for phantom-driven release.  See
         {@link NativeCleanup}.  A call holds the handle for its duration
-        (NativeCleanup.Ref.enter()), and every release, including destroy()
-        and the shutdown of the jni module, waits until the calls on other
-        threads have returned (qore#6864). */
+        (NativeCleanup.Ref.enter()): destroy() waits until the calls on other
+        threads have returned, and the shutdown of the jni module leaves the
+        handle of a call in progress unreleased (qore#6864). */
     private final NativeCleanup.Ref ref;
 
     QoreInvocationHandler(long ptr) {
@@ -32,6 +33,9 @@ public class QoreInvocationHandler implements InvocationHandler {
             }
         } finally {
             ref.exit();
+            // the handler stays reachable until the use has ended, so that the C++ cleanup thread never sees a use
+            // (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 

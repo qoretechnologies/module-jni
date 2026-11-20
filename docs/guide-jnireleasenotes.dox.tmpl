@@ -155,16 +155,16 @@
       a \c QoreClosure, a proxy of a \c QoreInvocationHandler or a \c QoreSandbox.Policy after its native handle had
       been released (by the module's shutdown, which releases the handle of every wrapper that still exists, or by
       \c release() / \c destroy() / \c close() on another thread while a call used it): each call now holds the
-      handle for its duration, a release waits until the calls on other threads that use the handle have returned,
-      and a call made after the release raises \c java.lang.IllegalStateException; \c QoreObjectBase.get() and
+      handle for its duration, an explicit release waits until the calls on other threads that use the handle have
+      returned, the module's shutdown leaves the handle of a call in progress unreleased (it is released with the
+      process; the shutdown does not wait for the call, which can block until the process ends), and a call made
+      after the release raises \c java.lang.IllegalStateException; \c QoreObjectBase.get() and
       \c QoreClosure.get() return 0 for a released handle (qore#6864)
     - <b>Behaviour change</b>: \c QoreObjectBase.release() and \c destroy() and the destruction of a
       \c QoreInvocationHandler now wait for the calls on other threads that use the object to return, and raise
       \c java.lang.IllegalStateException when called from a call that uses the object on the same thread (before,
       the handle was freed under the call, or, for an invocation handler, the call waited for itself); a release
-      therefore must not be made while a call that uses the object waits for the releasing thread; the module's
-      shutdown likewise waits for such calls in progress on other threads before it releases the handles, so a call
-      that never returns delays the exit of the process (qore#6864)
+      therefore must not be made while a call that uses the object waits for the releasing thread (qore#6864)
     - fixed a crash when a native method raised a %Qore exception in Java after the module's cleanup, while the JVM
       was being destroyed (ex: \c QoreSandbox.Policy.isSandboxed() of a released policy in a JVM shutdown hook): the
       class of \c QoreExceptionWrapper had been deleted; it is kept now, and the wrapper's constructor raises

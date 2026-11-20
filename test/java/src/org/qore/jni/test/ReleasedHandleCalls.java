@@ -164,6 +164,32 @@ public final class ReleasedHandleCalls {
         }
     }
 
+    private static final CountDownLatch neverOpened = new CountDownLatch(1);
+
+    //! called by the Qore code of the closure that startBlockedCall() calls: signals that the call is in progress,
+    //! and waits for a latch that is never opened
+    public static void blockForever() throws InterruptedException {
+        inCall.countDown();
+        neverOpened.await();
+    }
+
+    //! Starts a daemon thread that calls the closure kept, whose Qore code calls blockForever(), and returns once the
+    //! call is in progress; the call holds a use of the closure's handle until the process ends
+    public static void startBlockedCall() throws InterruptedException {
+        QoreClosure closure = (QoreClosure)kept;
+        inCall = new CountDownLatch(1);
+        Thread t = new Thread(() -> {
+            try {
+                closure.call();
+            } catch (Throwable e) {
+                System.err.println("blocked call: " + e.getClass().getName() + ": " + e.getMessage());
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        inCall.await();
+    }
+
     //! releases the object kept; called by its Qore method in callReleaseSelf(), while the call uses the object
     public static String releaseKept() {
         try {

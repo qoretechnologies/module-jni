@@ -241,8 +241,8 @@ public final class QoreSandbox {
 
         //! Holds the native capture for a check, until ref.exit(); raises JNI-SANDBOX-ERROR if the policy has been
         //! closed
-        /** The shutdown of the jni module, which releases the capture without the lock, waits until the checks that
-            hold it have returned (qore#6864)
+        /** The shutdown of the jni module, which releases the capture without the lock, leaves a capture that a check
+            holds unreleased (qore#6864)
         */
         private long enterPtr() {
             long ptr = ref.enter();
