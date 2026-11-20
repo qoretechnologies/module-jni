@@ -1457,8 +1457,6 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     if (!pgm) {
         pgm = ::getProgram();
     }
-    // holds the global context Program while the class is looked up in it (qore#6829)
-    JniContextProgramHolder ctx_holder;
     // a Java thread that Java started has no Program context: the class is looked up in the Program of the object,
     // where the object's own class is defined, before the global Java context Program, where a class of the object's
     // Program cannot be found (qore#6828); the object holds a dependency reference to its Program, which keeps it
@@ -1467,6 +1465,8 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     if (!pgm) {
         pgm = obj->getProgram();
     }
+    // holds the global context Program while the class is looked up in it (qore#6829)
+    JniContextProgramHolder ctx_holder;
     if (!pgm) {
         pgm = Globals::getJavaContextProgram(ctx_holder);
         if (!pgm) {
@@ -1500,7 +1500,8 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
-    // holds the global context Program, if the call is made in it (qore#6829)
+    // holds the global context Program, if the call is made in it (qore#6829); declared after the attachment, so that
+    // it is released before the thread is detached, and before the entry below, so that the entry is left first
     JniContextProgramHolder ctx_holder;
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
 
