@@ -912,9 +912,11 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Returns the Java class from the given Qore class with a Qore class ptr
-    /**
+    /** Called only by the jni module's native code (through JNI, which ignores access): Java code can never supply a
+        native class pointer, and the byte code generator refuses one that the module's own code did not give for the
+        call that runs (qore#6854)
      */
-    public Class<?> loadClassWithPtr(String bin_name, long class_ptr) throws ClassNotFoundException {
+    private Class<?> loadClassWithPtr(String bin_name, long class_ptr) throws ClassNotFoundException {
         //debugLog(String.format("loadClassWithPtr() %s: %x", bin_name, class_ptr));
         QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(bin_name);
         if (shared_loader != null && shared_loader != this) {
@@ -941,7 +943,9 @@ public class QoreURLClassLoader extends URLClassLoader {
                     return shared;
                 }
                 try {
-                    byte[] bytes = target.generateByteCode(bin_name, class_ptr);
+                    // the class pointer was given for this loader's Program: the canonical loader generates the
+                    // class from its own Program's view of it, found by its name (qore#6854)
+                    byte[] bytes = target.generateByteCode(bin_name, 0);
                     // Also store in our own pendingClasses for Kotlin stub generation
                     pendingClasses.put(bin_name, bytes);
                     synchronized (target.getClassLoadingLock(bin_name)) {
@@ -2064,7 +2068,10 @@ public class QoreURLClassLoader extends URLClassLoader {
         return generateByteCode(bin_name, 0);
     }
 
-    public byte[] generateByteCode(String bin_name, long class_ptr) throws ClassNotFoundException {
+    //! generates the byte code of a Java class for a Qore class, given by the class pointer that the module's native
+    //! code passed to loadClassWithPtr(), or by its name (\a class_ptr = 0); not public: Java code can never supply
+    //! a native class pointer (qore#6854)
+    private byte[] generateByteCode(String bin_name, long class_ptr) throws ClassNotFoundException {
         byte[] rv = pendingClasses.get(bin_name);
         //System.out.printf("QoreURLClassLoader.generateByteCode() this: %x class: '%s' ptr: %x (pend: %s)\n",
         //    hashCode(), bin_name, class_ptr, rv == null ? "false" : "true");

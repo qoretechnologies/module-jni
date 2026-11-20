@@ -1,0 +1,223 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# Java code cannot give the jni module's class loader a native Qore class pointer (qore#6854):
+# QoreURLClassLoader.loadClassWithPtr() and generateByteCode(String, long) are not public, and a class pointer that
+# Java code supplies anyway, through reflection, is refused: a pointer to another Program's class, and a forged
+# pointer, which the byte code generator used as a class (a child process, as it crashed before the fix).  The
+# module's own use of class pointers, for the Java class of a Qore object given to Java, still works.
+
+%modern
+%requires QUnit
+%requires Util
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.ClassPtrProbe
+
+%exec-class JniClassPtrTest
+
+class JniClassPtrTest inherits QUnit::Test {
+    public {
+        #! what a refused call raises
+        const Refused = "java.lang.RuntimeException: a Qore class pointer can only be given by the jni module's own "
+            "code";
+    }
+
+    constructor() : Test("JniClassPtrTest", "1.0", \ARGV) {
+        addTestCase("the entry points that take a class pointer are not public", \notPublicTest());
+        addTestCase("a class pointer of another Program is refused", \foreignPointerTest());
+        addTestCase("a class pointer of a deleted Program is refused", \stalePointerTest());
+        addTestCase("a class pointer issued on another thread is refused", \otherThreadTest());
+        addTestCase("the class pointer of an outer call is refused in an inner call", \outerPointerTest());
+        addTestCase("a class pointer issued for one Program is refused for another", \otherProgramTest());
+        addTestCase("a forged class pointer is refused", \forgedPointerTest());
+        addTestCase("the module still generates a Java class for a Qore class", \ownUseTest());
+        set_return_value(main());
+    }
+
+    notPublicTest() {
+        assertFalse(ClassPtrProbe::isPublic("loadClassWithPtr"), "loadClassWithPtr() is not public");
+        assertFalse(ClassPtrProbe::isPublic("generateByteCode"), "generateByteCode(String, long) is not public");
+    }
+
+    foreignPointerTest() {
+        int ptr;
+        try {
+            ptr = call_function("Jni::org::qore::jni::dbg_jni_get_class_ptr", getOtherProgram(), "Secret");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the jni module's debug functions require a debug build");
+        }
+        foreach string method in (("loadClassWithPtr", "generateByteCode")) {
+            assertEq(Refused, ClassPtrProbe::call(get_class_loader(), method, "qore.Secret", ptr), method);
+        }
+    }
+
+    #! the class pointer of a Program that has been deleted: freed memory, which must never be used as a class
+    stalePointerTest() {
+        int ptr;
+        {
+            Program o = getOtherProgram();
+            try {
+                ptr = call_function("Jni::org::qore::jni::dbg_jni_get_class_ptr", o, "Secret");
+            } catch (hash<ExceptionInfo> ex) {
+                testSkip("the jni module's debug functions require a debug build");
+            }
+            delete o;
+        }
+        foreach string method in (("loadClassWithPtr", "generateByteCode")) {
+            assertEq(Refused, ClassPtrProbe::call(get_class_loader(), method, "qore.Secret", ptr), method);
+        }
+    }
+
+    #! while the module's own code gives a class pointer for a call on one thread, Java code on another thread cannot
+    #! use it: the pointers that the module gives are not shared between threads
+    otherThreadTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%requires jni
+%module-cmd(jni) import java.util.ArrayList
+class IssuedClass {
+}
+string sub run() {
+    IssuedClass o();
+    ArrayList l();
+    l.add(o);
+    return l.toString();
+}
+object sub loader() {
+    return get_class_loader();
+}
+", "issued");
+        int ptr;
+        try {
+            ptr = call_function("Jni::org::qore::jni::dbg_jni_get_class_ptr", p, "IssuedClass");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the jni module's debug functions require a debug build");
+        }
+        # the Program's own class loader: only the thread differs from the call that the module made
+        object loader = p.callFunction("loader");
+        Queue results();
+        # runs on the thread that generates the Java class of IssuedClass, while its pointer is issued there
+        code gate = sub () {
+            Counter done(1);
+            background sub () {
+                on_exit done.dec();
+                foreach string method in (("loadClassWithPtr", "generateByteCode")) {
+                    results.push(method + ": " + ClassPtrProbe::call(loader, method, "qore.IssuedClass", ptr));
+                }
+            }();
+            done.waitForZero();
+        };
+        call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", gate, "issued-class");
+        on_exit call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", NOTHING, "issued-class");
+        assertRegex("IssuedClass", p.callFunction("run"), "the module's own call generated the class");
+        assertEq(2, results.size(), "the gate ran while the class pointer was issued");
+        assertEq("loadClassWithPtr: " + Refused, results.get(0));
+        assertEq("generateByteCode: " + Refused, results.get(0));
+    }
+
+    #! while the module generates a class for an inner call on the same thread, the class pointer that it gave for
+    #! the outer call cannot be used: only the innermost issued class pointer is accepted
+    outerPointerTest() {
+        Program p = getIssuingProgram();
+        int outer_ptr;
+        try {
+            outer_ptr = call_function("Jni::org::qore::jni::dbg_jni_get_class_ptr", p, "OuterClass");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the jni module's debug functions require a debug build");
+        }
+        object loader = p.callFunction("loader");
+        *string result;
+        # the gate of the inner class: runs while the inner class pointer is the innermost one issued
+        # another name, as the outer class is being created: the native check decides by the class pointer
+        code inner_gate = sub () {
+            result = ClassPtrProbe::call(loader, "loadClassWithPtr", "qore.ReusedOuterClass", outer_ptr);
+        };
+        # the gate of the outer class: makes the module generate the inner class, a nested call on the same thread
+        code outer_gate = sub () {
+            call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", inner_gate, "issued-class");
+            p.callFunction("give", "InnerClass");
+        };
+        call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", outer_gate, "issued-class");
+        on_exit call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", NOTHING, "issued-class");
+        assertRegex("OuterClass", p.callFunction("give", "OuterClass"), "the module's own call generated the class");
+        assertEq(Refused, result, "the outer class pointer in the inner call");
+    }
+
+    #! a class pointer that the module gave for one Program cannot be used to generate a class for another one
+    otherProgramTest() {
+        Program p = getIssuingProgram();
+        Program q = getIssuingProgram();
+        int ptr;
+        try {
+            ptr = call_function("Jni::org::qore::jni::dbg_jni_get_class_ptr", p, "OuterClass");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the jni module's debug functions require a debug build");
+        }
+        object q_loader = q.callFunction("loader");
+        *string result;
+        code gate = sub () {
+            result = ClassPtrProbe::call(q_loader, "loadClassWithPtr", "qore.OuterClass", ptr);
+        };
+        call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", gate, "issued-class");
+        on_exit call_function("Jni::org::qore::jni::dbg_jni_set_context_gate", NOTHING, "issued-class");
+        assertRegex("OuterClass", p.callFunction("give", "OuterClass"), "the module's own call generated the class");
+        assertEq(Refused, result, "the class pointer of one Program through the class loader of another");
+    }
+
+    #! returns a Program whose objects are given to Java, so that the module generates the Java classes of their
+    #! classes from their class pointers
+    private Program getIssuingProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%requires jni
+%module-cmd(jni) import java.util.ArrayList
+class OuterClass {
+}
+class InnerClass {
+}
+string sub give(string cls) {
+    object o = create_object(cls);
+    ArrayList l();
+    l.add(o);
+    return l.toString();
+}
+object sub loader() {
+    return get_class_loader();
+}
+", "issuing");
+        return p;
+    }
+
+    forgedPointerTest() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        int rc;
+        # stderr has the JVM's notices only; a crash shows in the exit status
+        string out = backquote(sprintf("%s -b %s/jni-class-ptr-child.q 2>/dev/null", qore_bin, get_script_dir()), \rc);
+        assertEq(0, rc, "the child ends normally: " + out);
+        assertEq(sprintf("loadClassWithPtr: %s\ngenerateByteCode: %s\n", Refused, Refused), out);
+    }
+
+    #! a Qore object given to Java: the module generates the Java class of its Qore class from the class pointer
+    ownUseTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%requires jni
+%module-cmd(jni) import java.util.ArrayList
+class OwnClass {
+}
+string sub run() {
+    OwnClass o();
+    ArrayList l();
+    l.add(o);
+    # the Java list's string names the Java class that the module generated for OwnClass
+    return l.toString();
+}
+", "own-use");
+        assertRegex("OwnClass", p.callFunction("run"));
+    }
+
+    private Program getOtherProgram() {
+        Program o(PO_NEW_STYLE);
+        o.parse("class Secret { public { int x = 1; } }", "other");
+        return o;
+    }
+}

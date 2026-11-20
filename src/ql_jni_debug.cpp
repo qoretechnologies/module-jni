@@ -95,7 +95,9 @@ std::atomic<bool> dbg_jni_context_gate_set{false};
     Program has no jni data and taking its parse lock to create it (see
     JniExternalProgramData::getCreateJniProgramData()); so that a test can delete the Program exactly in that window -
     see test/jni-cross-program-call.qtest - or create the jni data in another thread first - see
-    test/jni-no-program-data.qtest; with no code, a gate that has not run is cleared
+    test/jni-no-program-data.qtest; \c "issued-class": in the byte code generator, once it has accepted a class
+    pointer that the module's own code gave, while it is issued on the thread - see test/jni-class-ptr.qtest; with no
+    code, a gate that has not run is cleared
 */
 static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
@@ -111,9 +113,11 @@ static QoreValue f_dbg_jni_set_context_gate(const QoreListNode* args, RuntimeCon
             point = DbgJniGatePoint::Entry;
         } else if (!strcmp(p, "create")) {
             point = DbgJniGatePoint::Create;
+        } else if (!strcmp(p, "issued-class")) {
+            point = DbgJniGatePoint::IssuedClass;
         } else if (strcmp(p, "lookup")) {
             xsink->raiseException("DBG-JNI-GATE-ERROR", "unknown gate point '%s'; expecting \"lookup\", "
-                "\"entry\" or \"create\"", p);
+                "\"entry\", \"create\" or \"issued-class\"", p);
             return QoreValue();
         }
     }
@@ -176,6 +180,32 @@ static QoreValue f_dbg_jni_import_into_program(const QoreListNode* args, Runtime
     }
     jni_module_import(xsink, *pgm, str->c_str());
     return QoreValue();
+}
+
+//! Returns the pointer of a class of the given Program, as an integer (qore#6854)
+/** A real class pointer of another Program, which Java code is given in test/jni-class-ptr.qtest to show that the
+    class loader does not accept a class pointer from Java code.  DEBUG builds only.
+*/
+static QoreValue f_dbg_jni_get_class_ptr(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(args, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const QoreStringNode* path = get_param_value(args, 1).get<const QoreStringNode>();
+    TempEncodingHelper str(path, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    const QoreClass* cls = pgm->findClass(str->c_str(), xsink);
+    if (!cls) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-JNI-ERROR", "class '%s' not found", str->c_str());
+        }
+        return QoreValue();
+    }
+    return static_cast<int64>(reinterpret_cast<intptr_t>(cls));
 }
 
 // the class name for which jni::Env::findClass() fails (see f_dbg_jni_fail_find_class()); set and read under the lock
@@ -606,6 +636,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         QDOM_DEFAULT, nothingTypeInfo, 1, bigIntOrNothingTypeInfo, QoreValue(), "feature");
     ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
+    ns.addBuiltinVariant("dbg_jni_get_class_ptr", f_dbg_jni_get_class_ptr, QCF_NO_FLAGS, QDOM_DEFAULT,
+        bigIntTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "path");
     ns.addBuiltinVariant("dbg_jni_set_context_gate", f_dbg_jni_set_context_gate, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, codeOrNothingTypeInfo, QoreValue(), "code", stringOrNothingTypeInfo, QoreValue(),
         "point");

@@ -1031,6 +1031,29 @@ static inline void jni_throw_class_not_found(JNIEnv* jenv, const T& msg) noexcep
 */
 DLLLOCAL void jni_native_exception(JNIEnv* jenv) noexcept;
 
+//! Records a Qore class that the module's own code gives to QoreURLClassLoader.loadClassWithPtr() (qore#6854)
+/** Java code must never supply a native class pointer: the byte code generator accepts a class pointer only if the
+    module's own code gave it, on the current thread, during a call that is still running.  Create one around each call
+    of loadClassWithPtr() that passes a class pointer.
+*/
+class JniIssuedClassHelper {
+public:
+    //! Issues the class pointer for the call that the module's code makes for the given Program
+    DLLLOCAL JniIssuedClassHelper(const QoreClass* cls, const QoreProgram* pgm);
+    DLLLOCAL ~JniIssuedClassHelper();
+
+    //! Returns true if the module's own code gave the class pointer for the given Program for the innermost call that
+    //! runs on the current thread
+    /** Only the innermost issued class is accepted: a Java call made while the class is generated cannot use the
+        class pointer of an outer call; and only for its Program: a class pointer that the module gave cannot be used
+        to generate a class for another Program
+    */
+    DLLLOCAL static bool isIssued(const void* cls, const QoreProgram* pgm);
+
+    DLLLOCAL JniIssuedClassHelper(const JniIssuedClassHelper&) = delete;
+    DLLLOCAL JniIssuedClassHelper& operator=(const JniIssuedClassHelper&) = delete;
+};
+
 } // namespace jni
 
 //! The top-level catch handler of a JNI native method: no C++ exception may leave a native method (qore#6739)
