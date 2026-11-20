@@ -54,6 +54,9 @@ enum class DbgJniGatePoint {
     //! in the byte code generator, once it has accepted a class pointer that the module's own code gave for the call,
     //! while it is issued on the thread (qore#6854)
     IssuedClass,
+    //! in JniExternalProgramData::getJavaClassForQoreClass(), while codeGenLock is held, before the generated class
+    //! is stored in the compilation cache (qore#6855)
+    CodeGenSave,
 };
 
 //! Runs the one-shot gate set with Jni::dbg_jni_set_context_gate() if it was set by the current thread for the point
