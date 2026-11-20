@@ -19,8 +19,9 @@
 # With the regular expression fixed, no classpath entry raises a Java exception where it is added: the errors of
 # qore#6778 and qore#6779 are made with the "classpath" fail point of Jni::org::qore::jni::dbg_jni_fail_point() (and
 # the QORE_JNI_DBG_FAIL_POINT environment variable for the module's initialization), which a debug build of the module
-# has; those cases are skipped otherwise.  The cases for QORE_JNI_CLASSPATH run test/jni-classpath-error-child.q in a
-# child process, as the process ended before the fix.
+# has; those cases are skipped otherwise.  The function is called in a Program that this test parses, so that the test
+# parses with a release build of the module too.  The cases for QORE_JNI_CLASSPATH run test/jni-classpath-error-child.q
+# in a child process, as the process ended before the fix.
 
 %modern
 %no-child-restrictions
@@ -142,12 +143,20 @@ list<string> sub loader_urls() {
 
         #! the reason the fail point cases are skipped, if the module is not a debug build
         *string skip_reason;
+
+        #! the Program that calls the debug functions of the module, if the module is a debug build
+        /** Only a debug build has the debug functions; they are called in this Program, so that this script parses
+            with a release build of the module too
+        */
+        *Program dbg;
     }
 
     constructor() : QUnit::Test("JNI classpath errors", "1.0") {
         try {
             Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
-            p.parse("%requires jni\nnothing sub t() { Jni::org::qore::jni::dbg_jni_fail_point(); }", "dbg");
+            p.parse("%requires jni\nnothing sub fail_point(*string point) { "
+                "Jni::org::qore::jni::dbg_jni_fail_point(point); }", "dbg");
+            dbg = p;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
                 rethrow;
@@ -494,8 +503,9 @@ list<string> sub loader_urls() {
     }
 
     #! sets the fail point that makes the class loader raise a Java exception when the next classpath is added
-    private static failClasspath() {
-        Jni::org::qore::jni::dbg_jni_fail_point("classpath");
+    #! (only in the cases that checkDebug() did not skip)
+    private failClasspath() {
+        dbg.callFunction("fail_point", "classpath");
     }
 
     #! runs the child with the classpath in QORE_JNI_CLASSPATH and returns its exit status and its output

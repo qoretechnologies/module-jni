@@ -27,6 +27,11 @@ list<string> sub chain_urls() {
     }
     return rv;
 }
+";
+
+#! the source of a Program that sets the "classpath" fail point with a debug function of the module; only a debug
+#! build has it, so it is kept out of LoaderSource, which the cases for a release build parse too
+const DbgSource = "%requires jni
 nothing sub fail_classpath() {
     Jni::org::qore::jni::dbg_jni_fail_point(\"classpath\");
 }
@@ -94,7 +99,11 @@ sub ns_init_error_case(string dir) {
     if (!p) {
         return;
     }
-    p.callFunction("fail_classpath");
+    *Program dbg = parse_program(DbgSource, "dbg");
+    if (!dbg) {
+        return;
+    }
+    dbg.callFunction("fail_classpath");
     *Program p2 = parse_program("%requires jni\n", "ns-init");
     printf("result: ns-init-error: the module is initialized in the Program: %y\n", exists p2);
     # without the fail point, the module is initialized in a Program, with the classpath of the variable

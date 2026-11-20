@@ -62,7 +62,9 @@ class NativeCatchTest(unittest.TestCase):
             for name in natives(text):
                 found += 1
                 with self.subTest(native=name, file=path.name):
-                    m = re.search(r'\nstatic (\w+) (?:JNICALL )?' + name + r'\(JNIEnv\* jenv,[^{;]*?\) try \{', text)
+                    # "try {" can follow the parameter list on the same line or, when the signature is long, on the
+                    # next one
+                    m = re.search(r'\nstatic (\w+) (?:JNICALL )?' + name + r'\(JNIEnv\* jenv,[^{;]*?\)\s+try \{', text)
                     self.assertIsNotNone(m, '%s is not a function-try-block with a JNIEnv* jenv parameter' % name)
                     end = body_end(text, m.end() - 1)
                     tail = text[end:end + 40]

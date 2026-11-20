@@ -29,7 +29,7 @@ const Function = "get_script_path";
 
 string case_name = ARGV[0] ?? "held";
 
-bool debug;
+bool debug = False;
 try {
     call_function("Jni::org::qore::jni::dbg_jni_context_program_counts");
     debug = True;
