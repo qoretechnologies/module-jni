@@ -98,6 +98,10 @@
       and its jni data, while or after they were deleted (\c PROGRAM-ERROR, or the use of freed data); a caller now
       holds the global context Program for as long as it uses it, and the shutdown deletes it once no other thread
       holds it (qore#6829)
+    - <b>Behaviour change</b>: at the module's shutdown, the module now waits for %Qore code that runs in a callback
+      from a Java thread (ex: through \c QoreJavaApi.callFunction()) to return before it deletes the global Java
+      context Program; before, such a callback could run against the deleted Program; a callback that never returns
+      now delays the exit of the process (qore#6829)
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a
