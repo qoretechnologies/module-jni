@@ -31,6 +31,8 @@
 
 #include "Globals.h"
 #include "defs.h"
+#include "Env.h"
+#include "QoreToJava.h"
 
 #include <atomic>
 #include <map>
@@ -383,6 +385,68 @@ void dbg_jni_report_context_programs() noexcept {
     fflush(stderr);
 }
 
+// the java.lang.Runnable run in the module's shutdown window, as a global reference; see
+// dbg_jni_run_shutdown_window_hook()
+static std::mutex shutdown_window_hook_lock;
+static jobject shutdown_window_hook = nullptr;
+
+//! Sets or clears the java.lang.Runnable run once by the module's delete function between the deletion of the global
+//! context Program and the destruction of the JVM (see dbg_jni_run_shutdown_window_hook())
+static QoreValue f_dbg_jni_set_shutdown_window_hook(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    QoreValue arg = get_param_value(args, 0);
+    try {
+        jni::Env env;
+        jobject ref = nullptr;
+        if (arg.getType() != NT_NOTHING) {
+            jni::LocalReference<jobject> obj(jni::QoreToJava::toAnyObject(env, arg));
+            jni::LocalReference<jclass> runnable = env.findClass("java/lang/Runnable");
+            if (!obj || !env.isInstanceOf(obj, runnable)) {
+                xsink->raiseException("DBG-JNI-HOOK-ERROR", "the hook must be a java.lang.Runnable");
+                return QoreValue();
+            }
+            ref = jni::GlobalReference<jobject>::fromLocal(obj).release();
+        }
+        jobject old;
+        {
+            std::lock_guard<std::mutex> guard(shutdown_window_hook_lock);
+            old = shutdown_window_hook;
+            shutdown_window_hook = ref;
+        }
+        if (old) {
+            (*env)->DeleteGlobalRef(old);
+        }
+    } catch (jni::Exception& e) {
+        e.convert(xsink);
+    }
+    return QoreValue();
+}
+
+void dbg_jni_run_shutdown_window_hook() noexcept {
+    jobject hook;
+    {
+        std::lock_guard<std::mutex> guard(shutdown_window_hook_lock);
+        hook = shutdown_window_hook;
+        shutdown_window_hook = nullptr;
+    }
+    if (!hook) {
+        return;
+    }
+    try {
+        jni::GlobalReference<jobject> holder(hook);
+        jni::Env env(false);
+        jni::LocalReference<jclass> runnable = env.findClass("java/lang/Runnable");
+        jmethodID run = env.getMethod(runnable, "run", "()V");
+        env.callVoidMethod(holder, run, nullptr);
+    } catch (jni::JavaException& e) {
+        fprintf(stderr, "jni-dbg: the shutdown window hook raised a Java exception\n");
+        e.ignore();
+    } catch (...) {
+        fprintf(stderr, "jni-dbg: the shutdown window hook failed\n");
+    }
+    fflush(stderr);
+}
+
 void init_jni_debug_functions(QoreNamespace& ns) {
     ns.addBuiltinVariant("dbg_jni_import_into_program", f_dbg_jni_import_into_program, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 2, QC_PROGRAM->getTypeInfo(), QoreValue(), "pgm", stringTypeInfo, QoreValue(), "import");
@@ -405,6 +469,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         stringOrNothingTypeInfo, QoreValue(), "point");
     ns.addBuiltinVariant("dbg_jni_context_program_counts", f_dbg_jni_context_program_counts, QCF_NO_FLAGS,
         QDOM_DEFAULT, hashTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_set_shutdown_window_hook", f_dbg_jni_set_shutdown_window_hook, QCF_NO_FLAGS,
+        QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
 }
 
 #endif // DEBUG
