@@ -5137,6 +5137,46 @@ JniExternalProgramData::JniExternalProgramData(const JniExternalProgramData& par
     }
 }
 
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+AbstractQoreProgramExternalData* JniExternalProgramData::copy(QoreProgram* pgm, ExceptionSink* xsink) const
+        noexcept {
+    // qore#6917: an error fails the creation of the child Program with the module's exception
+    try {
+#ifdef DEBUG
+        // a test fail point: the thread cannot be attached to the JVM
+        if (dbg_jni_fail_at(DbgJniFailPoint::ProgramCopy)) {
+            throw UnableToAttachException(JNI_ERR);
+        }
+#endif
+        // issue #3862: ensure that the thread is registered for this call
+        Env env;
+        JniExternalProgramData* rv = new JniExternalProgramData(*this, env, pgm);
+#ifdef DEBUG
+        // a test fail point: the copy is made, and an exception is raised with it, so libqore releases the copy
+        // without calling its init(), as when the copy of another module's data fails after this one
+        if (dbg_jni_fail_at(DbgJniFailPoint::ProgramCopyResult)) {
+            xsink->raiseException("JNI-ERROR", "dbg_jni_fail_point(): an error is raised with the copy of the jni "
+                "data of the Program");
+        }
+#endif
+        return rv;
+    } catch (AbstractException& e) {
+        try {
+            e.convert(xsink);
+        } catch (...) {
+            xsink->raiseException("JNI-ERROR", "the jni data of a Program cannot be copied for a child Program, and "
+                "the error cannot be described");
+        }
+    } catch (std::exception& e) {
+        xsink->raiseException("JNI-ERROR", "the jni data of a Program cannot be copied for a child Program: %s",
+            e.what());
+    } catch (...) {
+        xsink->raiseException("JNI-ERROR", "the jni data of a Program cannot be copied for a child Program: unknown "
+            "error");
+    }
+    return nullptr;
+}
+#else
 AbstractQoreProgramExternalData* JniExternalProgramData::copy(QoreProgram* pgm) const noexcept {
     // qore#6787: libqore offers no way to report an error here, and the constructor of the child Program, from which
     // this is called, does not catch C++ exceptions; until it does (qoretechnologies/qore#6786), a failure is
@@ -5156,6 +5196,7 @@ AbstractQoreProgramExternalData* JniExternalProgramData::copy(QoreProgram* pgm) 
     }
     return nullptr;
 }
+#endif
 
 JniExternalProgramData::~JniExternalProgramData() {
     jni_pgm_data_unregister(pgm, this);
@@ -5180,14 +5221,28 @@ JniExternalProgramData::~JniExternalProgramData() {
     // exit; they would only be reachable from new consumer Programs, which would
     // re-resolve through getCanonicalLoader and create fresh entries.
 
-    // NOTE: any exception thrown here will be printed out to stderr
-    ExceptionSink xsink;
+    // NOTE: an exception raised here is printed out to stderr, unless doDeref(ExceptionSink*) gave the sink of the
+    // code that deletes the Program (qore#6917)
+    ExceptionSink local_xsink;
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+    ExceptionSink& xsink = deref_xsink ? *deref_xsink : local_xsink;
+#else
+    ExceptionSink& xsink = local_xsink;
+#endif
     // the class loader's pointer to the Program is cleared on a cancelled thread too: Env's constructor raised the
     // pending cancellation, so the loader kept a pointer to the destroyed Program
     QoreCancelDeferralHelper cancel_deferral;
     try {
         Env env;
         env.callVoidMethod(classLoader, Globals::methodQoreURLClassLoaderClearProgramPtr, nullptr);
+#ifdef DEBUG
+        // a test fail point: the release of the class loader raises an error (once the class loader's pointer to the
+        // Program has been cleared, so that it does not stay set to the deleted Program)
+        if (dbg_jni_fail_at(DbgJniFailPoint::ProgramRelease)) {
+            throw BasicException("dbg_jni_fail_point(): an error is raised when the class loader of the Program is "
+                "released");
+        }
+#endif
     } catch (UnableToAttachException& e) {
         // ignore error - raised when destructions is run after the JVM has shut down
     } catch (AbstractException& e) {
@@ -5521,6 +5576,15 @@ bool JniExternalProgramData::isInjectedModule(const char* mod) const {
 // count of JniExternalProgramData destructions since last GC hint
 static std::atomic<int> jni_pgm_deref_count{0};
 
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+void JniExternalProgramData::doDeref(ExceptionSink* deref_sink) noexcept {
+    // no C++ exception may leave this function: every exception raised here is caught and converted to a Qore
+    // exception in the sink of the code that deletes the Program (qore#6917); libqore always gives one, but should it
+    // not, the exceptions are reported as unhandled when the function returns
+    assert(deref_sink);
+    ExceptionSink local_xsink;
+    ExceptionSink& xsink = deref_sink ? *deref_sink : local_xsink;
+#else
 void JniExternalProgramData::doDeref() {
     // no C++ exception may leave this function (qore#6773): AbstractQoreProgramExternalData::doDeref() has no
     // exception sink and does not document that it may throw; the teardown of the Program catches an
@@ -5529,6 +5593,7 @@ void JniExternalProgramData::doDeref() {
     // every exception raised here is caught and converted to a Qore exception in this local sink, whose destructor
     // reports it as an unhandled exception on stderr when the function returns
     ExceptionSink xsink;
+#endif
     // the callback is released before the object is deleted, as it is a member; releasing it can run Qore code, for
     // example the destructor of an object that only the callback holds, which can raise a Qore exception; should that
     // code set a new callback for this Program, which can still find its jni data, that one is released in turn
@@ -5557,6 +5622,10 @@ void JniExternalProgramData::doDeref() {
     }
     // the destructor is implicitly noexcept and catches and reports every exception itself; nothing after this
     // statement may use a member of the object
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+    // the destructor raises its errors in the same sink
+    deref_xsink = &xsink;
+#endif
     delete this;
     // hint the JVM to collect orphaned classloaders periodically; the destructor above
     // released GlobalReferences, making Java objects eligible for GC.  Without this,

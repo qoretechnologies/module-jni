@@ -39,6 +39,12 @@
 #include <stdarg.h>
 #include <memory>
 
+// _QORE_HAS_PROGRAM_EXTERNAL_DATA_EX: Qore with AbstractQoreProgramExternalDataEx (qore#6786), whose callbacks report
+// errors in an ExceptionSink; the jni data of a Program derives from it then (qore#6917, see JniExternalProgramData)
+#ifdef _QORE_HAS_PROGRAM_EXTERNAL_DATA_EX
+#define QORE_JNI_PROGRAM_DATA_SINK 1
+#endif
+
 //! Returns true if a sandbox that does not trust the calling code governs it
 /** With a %Qore that has the uncontrolled-API policy of sandboxes (\c SandboxManager::setUncontrolledApiPolicy()),
     code counts as restricted only if a governing sandbox refuses uncontrolled APIs (the default), so that code that a

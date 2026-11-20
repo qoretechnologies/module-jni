@@ -1,0 +1,309 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# The jni data of a Program reports its errors in an exception sink (qore#6917): with a Qore library that has
+# AbstractQoreProgramExternalDataEx (qore#6786), the jni data derives from it, so that:
+# - a failure to copy the data for a child Program fails the creation of the child Program with the module's
+#   exception; before, the error was reported on stderr, and the child Program was created without the jni data of
+#   its parent (qore#6787)
+# - a copy that libqore releases without calling its init(), as when the copy of the data of another module fails
+#   after the jni data was copied, is released cleanly
+# - an exception raised while the data of a deleted Program is released (ex: in the destructor of an object that
+#   only the save object callback of the Program holds, or in the release of its class loader) is raised to the code
+#   that deletes the Program; before, it was reported as an unhandled exception on stderr (qore#6773)
+#
+# The failures are made with Jni::org::qore::jni::dbg_jni_fail_point(), which a debug build of the module has (it is
+# called in a Program that this test parses, so that the test parses with a release build of the module too); the
+# test is skipped if the module is not a debug build, or if it was built with a Qore library without
+# AbstractQoreProgramExternalDataEx (Jni::org::qore::jni::dbg_jni_program_data_sink() returns False); see
+# test/jni-cpp-exception-escape.qtest and test/jni-doderef-no-throw.qtest for the behaviour with such a library.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires jni
+%requires QUnit
+
+%exec-class JniProgramDataSinkTest
+
+#! an object whose destructor raises an exception
+class Boom {
+    private {
+        string name;
+        *Boom inner;
+    }
+
+    constructor(string name, *Boom inner) {
+        self.name = name;
+        self.inner = inner;
+    }
+
+    destructor() {
+        throw "DOREF-SINK-TEST-ERROR", sprintf("destructor of %s", name);
+    }
+}
+
+#! an object whose destructor raises nothing; counts its destructions
+class Quiet {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class JniProgramDataSinkTest inherits QUnit::Test {
+    private:internal {
+        #! the code of a Program that sets a save object callback that holds the only reference to an object
+        const CallbackSrc = "%requires jni
+sub set_callback(object obj) {
+    # the closure holds the only reference to the object once this function returns
+    code callback = sub (object o) { remove o; if (!obj) { throw \"DOREF-SINK-TEST-ERROR\", \"no object\"; } };
+    jni::set_save_object_callback(callback);
+}
+";
+
+        #! the code of a child Program that uses Java
+        const JavaSrc = "%requires jni
+int sub len() { return Jni::org::qore::jni::JavaArray::get(<010203>).length(); }
+";
+
+        #! the description of the Qore exception that a failed attach converts to
+        const AttachError = "Unable to attach thread to the JVM, error -1";
+
+        #! a regular expression for the exact description of a failed attach
+        const AttachErrorRegex = "^Unable to attach thread to the JVM, error -1$";
+
+        #! a regular expression for the exact description of the exception raised with a copy by the
+        #! "program-copy-result" fail point
+        const CopyResultErrorRegex = "^dbg_jni_fail_point\\(\\): an error is raised with the copy of the jni data "
+            "of the Program$";
+    }
+
+    private {
+        #! the reason the test is skipped, if any
+        *string skip_reason;
+
+        #! the Program with the debug functions of the module, which only a debug build has, so that this script
+        #! parses with a release build as well
+        Program dbg = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_INHERIT_PROGRAM_DATA);
+    }
+
+    constructor() : Test("JniProgramDataSink", "1.0") {
+        try {
+            dbg.parse("%requires jni
+bool sub sink() { return Jni::org::qore::jni::dbg_jni_program_data_sink(); }
+nothing sub fail_point(*string point) { Jni::org::qore::jni::dbg_jni_fail_point(point); }
+", "dbg");
+            if (!dbg.callFunction("sink")) {
+                skip_reason = "the jni module was built with a Qore library without "
+                    "AbstractQoreProgramExternalDataEx (_QORE_HAS_PROGRAM_EXTERNAL_DATA_EX is not defined)";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
+                rethrow;
+            }
+            skip_reason = "the jni module is not a debug build: " + ex.desc;
+        }
+
+        addTestCase("negative: the copy fails: the child Program is not created", \copyFailTest());
+        addTestCase("negative: the copy fails in a nested child Program", \nestedCopyFailTest());
+        addTestCase("negative: a copy released without init()", \copyResultTest());
+        addTestCase("positive: a child Program inherits the jni data", \inheritTest());
+        addTestCase("positive: no copy with PO_NO_INHERIT_PROGRAM_DATA", \noInheritTest());
+        addTestCase("negative: the release raises when the Program is deleted", \derefDeleteTest());
+        addTestCase("negative: the release raises at the end of the scope", \derefScopeTest());
+        addTestCase("negative: the release raises several exceptions", \derefNestedTest());
+        addTestCase("negative: the release raises for each deleted Program", \derefManyTest());
+        addTestCase("positive: a release that raises nothing", \derefQuietTest());
+        addTestCase("negative: the release of the class loader raises an error", \releaseFailTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        # no fail point may stay set for the code that follows
+        if (!skip_reason) {
+            failPoint();
+        }
+    }
+
+    #! a failed copy of the jni data fails the creation of the child Program with the module's exception
+    copyFailTest() {
+        checkSink();
+        failPoint("program-copy");
+        assertThrows("JNI-ERROR", AttachErrorRegex, sub () { Program p(PO_NEW_STYLE); });
+        # the fail point was reached and cleared: the next child Program is created and can use Java
+        Program p(PO_NEW_STYLE);
+        p.parse(JavaSrc, "child");
+        assertEq(3, p.callFunction("len"));
+    }
+
+    #! the copy for a grandchild Program fails: the creation of the grandchild fails in the child Program, which can
+    #! catch the exception, and still works
+    nestedCopyFailTest() {
+        checkSink();
+        Program child(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        child.parse(JavaSrc + "string sub make() {
+    Jni::org::qore::jni::dbg_jni_fail_point(\"program-copy\");
+    try {
+        Program p(PO_NEW_STYLE);
+        return \"created\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+", "child");
+        assertEq("JNI-ERROR: " + AttachError, child.callFunction("make"));
+        assertEq(3, child.callFunction("len"));
+    }
+
+    #! libqore releases a copy that is returned with an exception without calling its init(), as when the copy of
+    #! the data of another module fails after the jni data was copied; the creation of the child Program fails with
+    #! the exception
+    copyResultTest() {
+        checkSink();
+        failPoint("program-copy-result");
+        assertThrows("JNI-ERROR", CopyResultErrorRegex, sub () { Program p(PO_NEW_STYLE); });
+        # repeated, so that the released copies are not an accident of the first one
+        for (int i = 0; i < 3; ++i) {
+            failPoint("program-copy-result");
+            assertThrows("JNI-ERROR", CopyResultErrorRegex, sub () { Program p(PO_NEW_STYLE); });
+        }
+        Program p(PO_NEW_STYLE);
+        p.parse(JavaSrc, "child");
+        assertEq(3, p.callFunction("len"));
+    }
+
+    #! a child Program inherits the jni data, also in a nested child, and an unused fail point changes nothing
+    inheritTest() {
+        checkSink();
+        # a fail point set and cleared is not reached
+        failPoint("program-copy");
+        failPoint();
+        Program child(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        child.parse(JavaSrc + "int sub nested() {
+    Program p(PO_NEW_STYLE);
+    p.parse(\"%requires jni\\nint sub len() { return Jni::org::qore::jni::JavaArray::get(<01020304>).length(); }\",
+        \"nested\");
+    return p.callFunction(\"len\");
+}
+", "child");
+        assertEq(3, child.callFunction("len"));
+        assertEq(4, child.callFunction("nested"));
+    }
+
+    #! a child Program created with PO_NO_INHERIT_PROGRAM_DATA does not copy the jni data, so the copy cannot fail
+    noInheritTest() {
+        checkSink();
+        failPoint("program-copy");
+        on_exit failPoint();
+        Program p(PO_NEW_STYLE | PO_NO_INHERIT_PROGRAM_DATA);
+        # the child creates its own jni data
+        p.parse(JavaSrc, "child");
+        assertEq(3, p.callFunction("len"));
+    }
+
+    #! the exception raised by the release of the save object callback is raised by the delete operator
+    derefDeleteTest() {
+        checkSink();
+        Program p = getCallbackProgram(new Boom("delete"));
+        assertThrows("DOREF-SINK-TEST-ERROR", "^destructor of delete$", sub () { delete p; });
+        assertNothing(p);
+    }
+
+    #! the exception raised by the release is raised at the end of the scope of the Program object
+    derefScopeTest() {
+        checkSink();
+        assertThrows("DOREF-SINK-TEST-ERROR", "^destructor of scope$", sub () {
+            Program p(PO_NEW_STYLE | PO_NO_INHERIT_PROGRAM_DATA);
+            p.parse(CallbackSrc, "callback");
+            p.callFunction("set_callback", new Boom("scope"));
+        });
+    }
+
+    #! every exception raised by the release reaches the code that deletes the Program
+    derefNestedTest() {
+        checkSink();
+        Program p = getCallbackProgram(new Boom("outer", new Boom("inner")));
+        try {
+            delete p;
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            list<string> descs = ();
+            for (*hash<ExceptionInfo> e = ex; e; e = e.next) {
+                descs += sprintf("%s: %s", e.err, e.desc);
+            }
+            assertEq(("DOREF-SINK-TEST-ERROR: destructor of outer", "DOREF-SINK-TEST-ERROR: destructor of inner"),
+                descs);
+        }
+    }
+
+    #! each deleted Program raises its exception; more than 20 Programs are deleted, so that one of the releases runs
+    #! the JVM garbage collection hint, which runs in every 20th release in the process
+    derefManyTest() {
+        checkSink();
+        for (int i = 1; i <= 25; ++i) {
+            string name = sprintf("many-%d", i);
+            Program p = getCallbackProgram(new Boom(name));
+            assertThrows("DOREF-SINK-TEST-ERROR", "^destructor of " + name + "$", sub () { delete p; }, NOTHING, name);
+        }
+    }
+
+    #! a release that raises nothing raises nothing in the code that deletes the Program
+    derefQuietTest() {
+        checkSink();
+        int destroyed = Quiet::destroyed;
+        Program p = getCallbackProgram(new Quiet());
+        delete p;
+        assertEq(destroyed + 1, Quiet::destroyed);
+    }
+
+    #! the error of the release of the class loader of the Program, which the destructor of the jni data raises, is
+    #! raised to the code that deletes the Program, after the exception of the release of the save object callback
+    releaseFailTest() {
+        checkSink();
+        Program p = getCallbackProgram(new Boom("release"));
+        failPoint("program-release");
+        try {
+            delete p;
+            fail("no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            list<string> descs = ();
+            for (*hash<ExceptionInfo> e = ex; e; e = e.next) {
+                descs += sprintf("%s: %s", e.err, e.desc);
+            }
+            assertEq(("DOREF-SINK-TEST-ERROR: destructor of release", "JNI-ERROR: dbg_jni_fail_point(): an error is "
+                "raised when the class loader of the Program is released"), descs);
+        }
+        # the fail point was reached and cleared: the next release raises nothing
+        int destroyed = Quiet::destroyed;
+        p = getCallbackProgram(new Quiet());
+        delete p;
+        assertEq(destroyed + 1, Quiet::destroyed);
+    }
+
+    #! sets the fail point of the module (see dbg_jni_fail_point()) for this thread, or clears it with no argument
+    private:internal failPoint(*string point) {
+        dbg.callFunction("fail_point", point);
+    }
+
+    #! returns a Program with jni data whose save object callback holds the only reference to the object
+    private:internal Program getCallbackProgram(object obj) {
+        Program p(PO_NEW_STYLE | PO_NO_INHERIT_PROGRAM_DATA);
+        p.parse(CallbackSrc, "callback");
+        p.callFunction("set_callback", obj);
+        return p;
+    }
+
+    #! skips the test case if the module does not report the errors of its Program data in a sink
+    private:internal checkSink() {
+        if (skip_reason) {
+            testSkip("%s", skip_reason);
+        }
+    }
+}

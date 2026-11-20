@@ -330,6 +330,10 @@ static const std::map<std::string, DbgJniFailPoint> fail_points = {
     {"program-copy", DbgJniFailPoint::ProgramCopy},
     {"native-cleanup-stop", DbgJniFailPoint::NativeCleanupStop},
     {"classpath", DbgJniFailPoint::Classpath},
+    {"program-release", DbgJniFailPoint::ProgramRelease},
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+    {"program-copy-result", DbgJniFailPoint::ProgramCopyResult},
+#endif
 };
 
 int dbg_jni_set_fail_point(const char* name) {
@@ -362,7 +366,13 @@ QoreStringNode* dbg_jni_set_env_fail_point() {
     deleted), \c "program-copy" (the copy of the jni data of a Program for a child Program fails to attach the thread
     to the JVM), \c "native-cleanup-stop" (stopping the NativeCleanup thread in the module's teardown fails to attach
     the thread to the JVM), \c "classpath" (the class loader raises a Java exception while the next classpath is
-    added on the calling thread, as for an entry that cannot be added: qore#6779, see test/jni-classpath-error.qtest).
+    added on the calling thread, as for an entry that cannot be added: qore#6779, see test/jni-classpath-error.qtest),
+    \c "program-release" (the release of the jni data of a Program raises an error once it has cleared the class
+    loader's pointer to the Program: qore#6917; the error is raised to the code that deletes the Program if
+    dbg_jni_program_data_sink() returns \c True, and reported as an unhandled exception otherwise),
+    \c "program-copy-result" (the copy of the jni data of a Program for a child Program is made, and an exception is
+    raised with it, so that libqore releases the copy without calling its init(): qore#6917, see
+    test/jni-program-data-sink.qtest; only if dbg_jni_program_data_sink() returns \c True).
     The point fails only on the thread that set it (the module is torn down on the thread that ends the process), so
     that a test can prove that the C++ exception thrown there does not escape into libqore (qore#6787, qore#6788,
     qore#6789) - see test/jni-cpp-exception-escape.qtest.  DEBUG builds only.
@@ -376,7 +386,13 @@ static QoreValue f_dbg_jni_fail_point(const QoreListNode* args, RuntimeConfig& r
     }
     if (dbg_jni_set_fail_point(point->c_str())) {
         xsink->raiseException("DBG-JNI-FAIL-POINT-ERROR", "unknown point '%s'; expecting \"attach\", "
-            "\"program-data\", \"program-copy\", \"native-cleanup-stop\" or \"classpath\"", point->c_str());
+            "\"program-data\", \"program-copy\", \"native-cleanup-stop\", \"classpath\""
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+            ", \"program-release\" or \"program-copy-result\""
+#else
+            " or \"program-release\""
+#endif
+            , point->c_str());
     }
     return QoreValue();
 }
@@ -389,6 +405,20 @@ bool dbg_jni_fail_point_hit(DbgJniFailPoint point) {
     }
     dbg_jni_fail_point_set.store(false, std::memory_order_release);
     return true;
+}
+
+//! Returns True if the jni data of a Program reports its errors in an ExceptionSink (qore#6917)
+/** True if the module was built with a %Qore that has AbstractQoreProgramExternalDataEx (qore#6786,
+    \c _QORE_HAS_PROGRAM_EXTERNAL_DATA_EX): a failed copy of the data fails the creation of the child Program with the
+    module's exception, and the errors of its release are raised to the code that deletes the Program; False if the
+    errors are reported on \c stderr (qore#6787, qore#6773)
+*/
+static QoreValue f_dbg_jni_program_data_sink(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+#ifdef QORE_JNI_PROGRAM_DATA_SINK
+    return true;
+#else
+    return false;
+#endif
 }
 
 //! Returns the number of global context Programs created and deleted in the process (qore#6799)
@@ -698,6 +728,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         nothingTypeInfo, 1, stringOrNothingTypeInfo, QoreValue(), "kind");
     ns.addBuiltinVariant("dbg_jni_fail_point", f_dbg_jni_fail_point, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
         stringOrNothingTypeInfo, QoreValue(), "point");
+    ns.addBuiltinVariant("dbg_jni_program_data_sink", f_dbg_jni_program_data_sink, QCF_NO_FLAGS, QDOM_DEFAULT,
+        boolTypeInfo);
     ns.addBuiltinVariant("dbg_jni_context_program_counts", f_dbg_jni_context_program_counts, QCF_NO_FLAGS,
         QDOM_DEFAULT, hashTypeInfo);
     ns.addBuiltinVariant("dbg_jni_set_shutdown_window_hook", f_dbg_jni_set_shutdown_window_hook, QCF_NO_FLAGS,

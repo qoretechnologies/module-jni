@@ -5,7 +5,8 @@
 # run by test/jni-doderef-no-throw.qtest (qore#6773): a Program loads the jni module and sets a save-object callback,
 # a closure that holds the only reference to an object; the Program is then released, which releases its jni data,
 # and the release of the callback releases the object in the jni data's dereference; an exception raised there must be
-# reported, and the process must continue
+# reported, and the process must continue; with a Qore library that has AbstractQoreProgramExternalDataEx
+# (qore#6786), it is raised to the code that deletes the Program instead, and printed on a "caught: " line (qore#6917)
 #
 # the argument names the case:
 # - "delete": the object's destructor raises an exception; the Program is deleted with the delete operator
@@ -23,6 +24,11 @@
 #   the thread prints "pending after: True"
 # - "child-class": the object's class belongs to the released Program, whose code cannot run any more when its jni
 #   data is released: the exception that the destructor call raises is reported
+# - "sink": prints whether the module raises the exceptions of the release to the code that deletes the Program (see
+#   sink_case())
+# - "release-fail": the release of the class loader of a Program raises an error (fail point "program-release" of a
+#   debug build of the module); the Program is deleted with the delete operator; prints "release: unsupported: <reason>"
+#   if the module is not a debug build
 # then prints "after: <case>" and exits with status 0
 #
 # the classes of the objects, but the last case's, belong to this Program, whose code still runs when the other
@@ -148,18 +154,70 @@ sub cancel_case() {
     done.waitForZero();
 }
 
+#! deletes a Program whose release of its class loader raises an error (fail point "program-release"), or prints
+#! "release: unsupported: <reason>" if the module is not a debug build
+sub release_fail_case() {
+    Program p(PO_NEW_STYLE);
+    p.loadModule("jni");
+    p.parse(Src, "jni-doderef-no-throw");
+    p.callFunction("set_callback", new Quiet());
+    # the fail point is set in another Program, as the function exists only in a debug build of the module
+    Program dbg(PO_NEW_STYLE | PO_NO_INHERIT_PROGRAM_DATA);
+    try {
+        dbg.parse("%requires jni\nsub fail() { Jni::org::qore::jni::dbg_jni_fail_point(\"program-release\"); }",
+            "dbg");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("release: unsupported: %s: %s\n", ex.err, ex.desc);
+        return;
+    }
+    # the fail point is reached by the next release of the jni data of a Program on this thread
+    dbg.callFunction("fail");
+    delete p;
+}
+
+#! prints "sink: True" if the module raises the exceptions of the release to the code that deletes the Program
+#! (qore#6917), "sink: False" if it reports them as unhandled, or "sink: unknown: <reason>" if the module is not a
+#! debug build, which cannot tell
+sub sink_case() {
+    Program p(PO_NEW_STYLE);
+    try {
+        p.parse("%requires jni\nbool sub t() { return Jni::org::qore::jni::dbg_jni_program_data_sink(); }", "sink");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("sink: unknown: %s: %s\n", ex.err, ex.desc);
+        return;
+    }
+    printf("sink: %y\n", p.callFunction("t"));
+}
+
+#! prints each exception of the chain on a "caught: " line
+sub report(hash<ExceptionInfo> ex) {
+    for (*hash<ExceptionInfo> e = ex; e; e = e.next) {
+        printf("caught: %s: %s\n", e.err, e.desc);
+    }
+}
+
 string case_name = ARGV[0] ?? "delete";
 try {
     if (case_name == "many") {
+        # each release is caught on its own, so that all Programs are released when the module raises the exceptions
+        # of the release to the code that deletes the Program (qore#6917)
         for (int i = 1; i <= ManyCount; ++i) {
-            run_case(sprintf("many-%d", i));
+            try {
+                run_case(sprintf("many-%d", i));
+            } catch (hash<ExceptionInfo> ex) {
+                report(ex);
+            }
         }
     } else if (case_name == "cancel") {
         cancel_case();
+    } else if (case_name == "sink") {
+        sink_case();
+    } else if (case_name == "release-fail") {
+        release_fail_case();
     } else {
         run_case(case_name);
     }
 } catch (hash<ExceptionInfo> ex) {
-    printf("caught: %s: %s\n", ex.err, ex.desc);
+    report(ex);
 }
 printf("after: %s\n", case_name);

@@ -506,7 +506,9 @@ set_save_object_callback(save_object_callback: callback);
     then (ex: by the destructor of an object that only the callback held) is raised by this call, and the new callback
     is set nevertheless; the
     callback set last is released with the jni data of the Program, when the Program is deleted, and an exception
-    raised then is reported as an unhandled exception on \c stderr, as there is no caller to raise it to; the code of
+    raised then is raised to the code that deletes the Program (ex: by \c delete, or at the end of the scope of the
+    Program object) with a %Qore library that reports the errors of the external data of a Program in an exception
+    sink (qore#6786, qore#6917), and reported as an unhandled exception on \c stderr otherwise; the code of
     the Program cannot run any more at that point, so the destructor of an object of a class of the Program that only
     the callback holds then raises a \c PROGRAM-ERROR exception
 

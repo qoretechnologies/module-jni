@@ -143,6 +143,12 @@ enum class DbgJniFailPoint {
     NativeCleanupStop,
     //! JniExternalProgramData::addClasspath() or addParentClasspath(): the class loader raises a Java exception
     Classpath,
+    //! JniExternalProgramData::copy(QoreProgram*, ExceptionSink*) makes the copy and raises an exception with it, so
+    //! libqore releases the copy without calling its init() (qore#6917); only with QORE_JNI_PROGRAM_DATA_SINK
+    ProgramCopyResult,
+    //! the destructor of JniExternalProgramData raises an error (jni::BasicException) once it has cleared the class
+    //! loader's pointer to the Program (qore#6917)
+    ProgramRelease,
 };
 
 //! A JDK feature version that the sandbox check of manifest Class-Path attributes assumes as well as the running
