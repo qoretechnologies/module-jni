@@ -141,12 +141,16 @@
       handle for its duration, a release waits until the calls on other threads that use the handle have returned,
       and a call made after the release raises \c java.lang.IllegalStateException; \c QoreObjectBase.get() and
       \c QoreClosure.get() return 0 for a released handle (qore#6864)
-    - <b>Behaviour change</b>: \c QoreObjectBase.release() and \c destroy(), \c QoreInvocationHandler destruction and
-      \c QoreSandbox.Policy.close() now wait for the calls on other threads that use the object to return, and raise
+    - <b>Behaviour change</b>: \c QoreObjectBase.release() and \c destroy() and the destruction of a
+      \c QoreInvocationHandler now wait for the calls on other threads that use the object to return, and raise
       \c java.lang.IllegalStateException when called from a call that uses the object on the same thread (before,
-      the handle was freed under the call, or, for an invocation handler, the call waited for itself); the module's
-      shutdown likewise waits for such calls in progress on other threads before it releases the handles
-      (qore#6864)
+      the handle was freed under the call, or, for an invocation handler, the call waited for itself); a release
+      therefore must not be made while a call that uses the object waits for the releasing thread; the module's
+      shutdown likewise waits for such calls in progress on other threads before it releases the handles, so a call
+      that never returns delays the exit of the process (qore#6864)
+    - <b>Behaviour change</b>: the module describes a pending \c QoreExceptionWrapper (ex: in the error of a
+      classpath that cannot be added) with its message, the code and the description of its %Qore exception, without
+      the exception's argument (qore#6864)
     - fixed the description of a pending \c QoreExceptionWrapper by the module (ex: in the error of a classpath that
       cannot be added), which took the wrapper's %Qore exception, so that it was lost when the wrapper reached
       %Qore, and leaked its exception sink; the wrapper is now described with its message and keeps its exception

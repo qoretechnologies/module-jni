@@ -61,7 +61,12 @@ public class QoreObjectBase {
 
     //! Holds the native handle for a call that uses it, until qoreJniExitHandle(); for module-jni and the
     //! generated classes; see NativeCleanup.Ref.enter()
-    /** @throws IllegalStateException if the handle has been released
+    /** A call to qoreJniExitHandle() must follow every call that returns, on the same thread: a use that is never
+        ended keeps every release of the object, including the shutdown of the jni module, waiting.  The names of this
+        method and of qoreJniExitHandle() are reserved: a %Qore class cannot have a method of either name that
+        overrides them.
+
+        @throws IllegalStateException if the handle has been released
     */
     public final long qoreJniEnterHandle() {
         long p = ref.enter();
@@ -71,7 +76,9 @@ public class QoreObjectBase {
         return p;
     }
 
-    //! Ends a use of the native handle that qoreJniEnterHandle() began
+    //! Ends a use of the native handle that qoreJniEnterHandle() began on this thread
+    /** @throws IllegalStateException if no use is in progress on this thread
+    */
     public final void qoreJniExitHandle() {
         ref.exit();
     }

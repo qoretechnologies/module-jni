@@ -93,10 +93,16 @@ public final class NativeCleanup {
             return ptr;
         }
 
-        /** Ends a use of the pointer that {@link #enter} began on this thread */
+        /** Ends a use of the pointer that {@link #enter} began on this thread
+            @throws IllegalStateException if this thread has no use of the pointer in progress; nothing is
+                changed, so that the uses of other threads stay counted
+        */
         public synchronized void exit() {
             Thread t = Thread.currentThread();
-            int n = userThreads.get(t);
+            Integer n = userThreads == null ? null : userThreads.get(t);
+            if (n == null) {
+                throw new IllegalStateException("no use of the Qore handle is in progress on this thread");
+            }
             if (n == 1) {
                 userThreads.remove(t);
             } else {

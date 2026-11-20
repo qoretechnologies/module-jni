@@ -15,6 +15,10 @@
 #   (ReleasedHandleCalls.releaseWhileInUse())
 # - "release-self": the object's method releases the object, on the thread of the call that uses it
 #   (ReleasedHandleCalls.callReleaseSelf())
+# - "convert-released": Java returns a QoreObject whose handle it has released, which Qore converts
+# - "generated-released": a method of a generated class is called through its generated method before and after the
+#   object is released (ReleasedHandleCalls.generatedReleased())
+# the operation "policy" keeps a QoreSandbox.Policy captured for the script and calls isSandboxed()
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../build"
@@ -63,6 +67,9 @@ switch (op) {
         ReleasedHandleCalls::keep(implement_interface(handler, load_class("java.util.function.Supplier")));
         break;
     }
+    case "policy":
+        ReleasedHandleCalls::keepPolicy();
+        break;
     default:
         ReleasedHandleCalls::keep(obj);
         break;
@@ -72,6 +79,16 @@ if (op == "release-in-use") {
     printf("live: %s\n", ReleasedHandleCalls::releaseWhileInUse());
 } else if (op == "release-self") {
     printf("live: %s\n", ReleasedHandleCalls::callReleaseSelf());
+} else if (op == "convert-released") {
+    # Java returns a QoreObject whose handle has been released, which Qore converts
+    try {
+        auto v = ReleasedHandleCalls::releaseAndReturn();
+        printf("live: converted: %y\n", v);
+    } catch (hash<ExceptionInfo> ex) {
+        printf("live: %s: %s\n", ex.err, ex.desc);
+    }
+} else if (op == "generated-released") {
+    printf("live: %s\n", ReleasedHandleCalls::generatedReleased());
 } else if (mode == "live") {
     printf("live: %s\n", ReleasedHandleCalls::call(op));
 } else {

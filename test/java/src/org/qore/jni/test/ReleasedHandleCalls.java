@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: MIT
 package org.qore.jni.test;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Supplier;
 
 import org.qore.jni.QoreClosure;
 import org.qore.jni.QoreObject;
+import org.qore.jni.QoreSandbox;
 
 /** Uses Qore objects, closures and proxies that Java keeps after the jni module's shutdown has released their native
     handles (see test/jni-released-handles.qtest)
@@ -55,6 +57,8 @@ public final class ReleasedHandleCalls {
                 return ((QoreObject)kept).getMemberValue("m");
             case "proxy":
                 return ((Supplier<Object>)kept).get();
+            case "policy":
+                return ((QoreSandbox.Policy)kept).isSandboxed();
             default:
                 throw new IllegalArgumentException("unknown operation: " + op);
         }
@@ -123,6 +127,41 @@ public final class ReleasedHandleCalls {
             setReleaseWaitHook(null);
         }
         return "hook: " + ran[0] + "; call: " + result[0] + "; release: " + release + "; after: " + call("classname");
+    }
+
+    //! releases the object kept and returns it, so that Qore converts a QoreObject whose handle has been released
+    public static Object releaseAndReturn() {
+        ((QoreObject)kept).release();
+        return kept;
+    }
+
+    //! keeps a policy captured for the Qore code that calls this method
+    public static void keepPolicy() {
+        kept = QoreSandbox.capture();
+    }
+
+    //! Creates an object of the generated class of a Qore class (qore.Qore.Thread.Counter), and calls its method
+    //! getCount() through the generated method, before and after the object is released
+    /** @return the results of the calls
+    */
+    public static String generatedReleased() throws ReflectiveOperationException {
+        Class<?> cls = Class.forName("qore.Qore.Thread.Counter", true, ReleasedHandleCalls.class.getClassLoader());
+        Object counter = cls.getDeclaredConstructor().newInstance();
+        Method getCount = cls.getMethod("getCount");
+        String before = callMethod(getCount, counter);
+        ((QoreObject)counter).release();
+        return "before: " + before + "; after: " + callMethod(getCount, counter);
+    }
+
+    private static String callMethod(Method m, Object obj) {
+        try {
+            return "ok: " + m.invoke(obj);
+        } catch (InvocationTargetException e) {
+            Throwable t = e.getCause();
+            return t.getClass().getName() + ": " + t.getMessage();
+        } catch (Throwable t) {
+            return t.getClass().getName() + ": " + t.getMessage();
+        }
     }
 
     //! releases the object kept; called by its Qore method in callReleaseSelf(), while the call uses the object
