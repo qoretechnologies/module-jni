@@ -1307,6 +1307,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/GlobalContextTeardownFixture.java
     test/java/src/org/qore/jni/test/JvmSignals.java
     test/java/src/org/qore/jni/test/NativeExceptionProbe.java
+    test/java/src/org/qore/jni/test/ShutdownWindowProbe.java
     test/java/src/org/qore/jni/test/Utf8Boundary.java
     test/java/src/org/qore/jni/test/Utf8Driver.java
     test/java/src/org/qore/lang/test/QoreJavaLangApiTest.java
