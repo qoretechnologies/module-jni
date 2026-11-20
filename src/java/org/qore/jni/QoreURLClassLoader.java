@@ -87,11 +87,11 @@ public class QoreURLClassLoader extends URLClassLoader {
     /** Using AtomicLong for thread-safe access to the program pointer.
         A value of 0 indicates no program or that the program has been released.
 
-        A class loader created with the pointer of its parent class loader (ex: the class loader of a QoreJavaCompiler,
-        see QoreURLClassLoader(long, ClassLoader)) shares the parent's holder, so that the pointer that it passes to
-        native methods is cleared with the parent's when the Program's jni data is destroyed: a copy of the pointer
-        would name the Program after it has been deleted.  It stops sharing it when its own pointer is set or cleared
-        (see setPtrIntern()).
+        A class loader created for the Program of its parent class loader (ex: the class loader of a QoreJavaCompiler,
+        see createDerived()) shares the parent's holder, so that the pointer that it passes to native methods is
+        cleared with the parent's when the Program's jni data is destroyed: a copy of the pointer would name the
+        Program after it has been deleted.  It stops sharing it when its own pointer is set or cleared (see
+        setPtrIntern()).
     */
     private volatile AtomicLong pgm_ptr = new AtomicLong(0);
 
@@ -207,28 +207,44 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! constructor with a QoreProgram pointer and a parent
-    /** If \a parent is a QoreURLClassLoader with the same Program pointer, the pointer is shared with it, and is cleared
-        when the parent's is cleared, as when the Program's jni data is destroyed
+    /** The class loader has a copy of the pointer, which is not cleared when the Program is deleted; a class loader
+        for the Program of its parent class loader is created with createDerived() instead
     */
     public QoreURLClassLoader(long p_ptr, ClassLoader parent) {
         super("QoreURLClassLoader", new URL[]{}, parent);
-        if (p_ptr != 0 && parent instanceof QoreURLClassLoader) {
-            // if the parent's pointer has been cleared since it was read, the holder shared is cleared as well
-            AtomicLong parent_ptr = ((QoreURLClassLoader) parent).pgm_ptr;
-            if (parent_ptr.get() == p_ptr) {
-                pgm_ptr = parent_ptr;
-                shared_ptr = true;
-            } else {
-                pgm_ptr.set(p_ptr);
-            }
-        } else {
-            pgm_ptr.set(p_ptr);
-        }
         // set the current classloader as the thread context classloader
+        pgm_ptr.set(p_ptr);
         setContext();
         //System.out.printf("QoreURLClassLoader(long p_ptr: %x, ClassLoader parent: %s: %x) this: %x\n",
         //    p_ptr, (parent == null ? "null" : parent.getClass().getCanonicalName()),
         //    parent == null ? 0 : parent.hashCode(), hashCode());
+    }
+
+    //! constructor for createDerived()
+    private QoreURLClassLoader(QoreURLClassLoader parent, boolean derived) {
+        super("QoreURLClassLoader", new URL[]{}, parent);
+        // the parent's holder is taken under its lock, so that it is not taken while the parent replaces it
+        synchronized (parent.ptr_lock) {
+            pgm_ptr = parent.pgm_ptr;
+        }
+        shared_ptr = true;
+        // set the current classloader as the thread context classloader
+        setContext();
+    }
+
+    //! Creates a class loader for the Program of \a parent, whose child it is (ex: the class loader of a compiler)
+    /** The new class loader shares the Program pointer of \a parent, so that the pointer that it passes to native
+        methods is cleared with the parent's when the Program's jni data is destroyed: a copy of the pointer (as
+        <tt>new QoreURLClassLoader(parent.getPtr(), parent)</tt> makes) would still name the Program after it has been
+        deleted.  Setting or clearing the pointer of the new class loader changes its own only.  Like the other
+        constructors, the new class loader becomes the current thread's context.
+
+        @param parent the parent class loader, whose Program the new class loader uses
+
+        @return the new class loader
+    */
+    public static QoreURLClassLoader createDerived(QoreURLClassLoader parent) {
+        return new QoreURLClassLoader(parent, true);
     }
 
     //! constructor with a name and a parent
@@ -1190,7 +1206,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Sets the Program pointer of this class loader only
-    /** A holder shared with the parent class loader is replaced, so that the parent's pointer is not changed
+    /** A holder shared with the parent class loader is replaced, so that the parent's pointer is not changed; the
+        pointer of a class loader whose holder is shared by the class loaders created with its pointer is set for them
+        too (it is set to 0 when its Program's jni data is destroyed, which is what they must see)
     */
     private void setPtrIntern(long ptr) {
         synchronized (ptr_lock) {

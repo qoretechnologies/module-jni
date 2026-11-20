@@ -1050,8 +1050,8 @@ static jobject JNICALL java_api_call_function_save(JNIEnv* jenv, jobject obj, jl
     return java_api_call_function_internal(jenv, obj, ptr, true, name, args);
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
-// \a java_ptr: \a ptr is a Program pointer that Java passed, which is validated (see JniJavaProgramRef); otherwise it is
-// the Program of a generated binding, which the caller holds
+// \a java_ptr: \a ptr is a Program pointer that Java passed, which is validated (see JniJavaProgramRef); otherwise it
+// is the Program of a generated binding, which the caller holds
 static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, jlong ptr, bool java_ptr,
         jboolean save, jstring class_name, jstring method_name, jobjectArray args, const QoreClass* cls = nullptr,
         const QoreMethod* m = nullptr, const QoreExternalMethodVariant* v = nullptr) {
@@ -1554,9 +1554,9 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
     return nullptr;
 }
 
-// calls a method of a Qore object or a closure in the Program of the pointer that Java passed (QoreObject.callMethod0(),
-// QoreClosure.call0() and their variants, which pass QoreURLClassLoader.getProgramPtr()), which is validated and held,
-// as it can have been deleted (see JniJavaProgramRef)
+// calls a method of a Qore object or a closure in the Program of the pointer that Java passed
+// (QoreObject.callMethod0(), QoreClosure.call0() and their variants, which pass QoreURLClassLoader.getProgramPtr()),
+// which is validated and held, as it can have been deleted (see JniJavaProgramRef)
 static jobject qore_object_closure_call_java_ptr(JNIEnv* jenv, jclass jcls, jlong ptr, jlong obj_ptr, jboolean save,
         jstring mname, jobjectArray args) {
     Env env(jenv);
@@ -2692,17 +2692,13 @@ static jobject JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv
         return nullptr;
     }
     // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
-    // validated, held and entered (see JniJavaProgramRef)
-    ExceptionSink java_pgm_xsink;
-    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr, class_loader);
-    QoreProgram* pgm = java_pgm.get();
-    JniExternalProgramData* jpc = pgm ? static_cast<JniExternalProgramData*>(pgm->getExternalData("jni")) : nullptr;
-    if (!jpc) {
+    // validated and held; it is not entered, as a Java compiler can run on another thread than the one parsing the
+    // Program, and its jni data is cleared under the lock that its destructor takes (see JniJavaProgramRef)
+    JniJavaProgramRef java_pgm(env, ptr, class_loader);
+    if (!java_pgm.get() || !JniExternalProgramData::clearCompilationCache(java_pgm.get())) {
         jni_throw_runtime_exception(*env, "No JNI context for Qore Program");
         return nullptr;
     }
-
-    jpc->clearCompilationCache();
     return nullptr;
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
@@ -3172,16 +3168,10 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
 
     assert(ptr);
     // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
-    // validated, held and entered (see JniJavaProgramRef)
-    ExceptionSink java_pgm_xsink;
-    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr, class_loader);
-    QoreProgram* pgm = java_pgm.get();
-
-    JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
-    if (!jpc) {
-        jni_throw_runtime_exception(*env, "No JNI context for Qore Program");
-        return nullptr;
-    }
+    // validated, which also checks that it has jni data; the Program is not entered, as the classes listed are the
+    // module's own, and a Java compiler can list them on its own threads while the Program is parsed (see
+    // JniJavaProgramRef)
+    JniJavaProgramRef java_pgm(env, ptr, class_loader);
 
     try {
         Env::GetStringUtfChars pname(env, pkg);
@@ -3559,14 +3549,17 @@ static jobject lookupCanonicalLoaderCache(Env& env, const char* bin_name) {
     return cached;
 }
 
-// Returns the QoreProgram owning the given QoreURLClassLoader, or nullptr.
-static QoreProgram* getClassLoaderProgram(Env& env, jobject loader) {
+// Returns the QoreProgram owning the given QoreURLClassLoader, held by \a holder, or nullptr, also if it has been
+// deleted: the class loader's Program pointer is validated (see JniJavaProgramRef); the Program is not entered, as
+// the lookups are made by class loads, which a Java compiler can make on its own threads while the Program is parsed
+static QoreProgram* getClassLoaderProgram(Env& env, jobject loader, std::optional<JniJavaProgramRef>& holder) {
     if (!loader) {
         return nullptr;
     }
     try {
-        return reinterpret_cast<QoreProgram*>(env.callLongMethod(loader,
-            Globals::methodQoreURLClassLoaderGetPtr, nullptr));
+        jlong ptr = env.callLongMethod(loader, Globals::methodQoreURLClassLoaderGetPtr, nullptr);
+        holder.emplace(env, ptr, loader);
+        return holder->get();
     } catch (jni::Exception& e) {
         e.ignore();
     }
@@ -3606,7 +3599,8 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
             return user_loader;
         }
         // binary module: build qpath = <module-root-ns>::<rest-with-dots-as-::>
-        QoreProgram* probe_pgm = getClassLoaderProgram(env, this_loader);
+        std::optional<JniJavaProgramRef> probe_holder;
+        QoreProgram* probe_pgm = getClassLoaderProgram(env, this_loader, probe_holder);
         if (probe_pgm) {
             const QoreNamespace* ns = get_module_root_ns(mod.c_str(), probe_pgm);
             if (ns) {
@@ -3694,7 +3688,8 @@ jobject Globals::getCanonicalLoader(Env& env, jobject this_loader, const char* b
         // name states its owning module outright, so the module is always the canonical
         // owner; resolving those from the caller instead hands every consumer Program its own
         // Java Class and the JVM then rejects cross-loader use with a LinkageError.
-        QoreProgram* caller_pgm = getClassLoaderProgram(env, this_loader);
+        std::optional<JniJavaProgramRef> caller_holder;
+        QoreProgram* caller_pgm = getClassLoaderProgram(env, this_loader, caller_holder);
         const QoreClass* caller_qc = nullptr;
         if (caller_pgm) {
             ExceptionSink xsink;

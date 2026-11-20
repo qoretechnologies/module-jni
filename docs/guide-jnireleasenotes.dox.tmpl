@@ -102,12 +102,13 @@
       Java calls with the Program pointer of a class loader (\c QoreJavaApi.callFunction(), \c callStaticMethod()
       and \c newObjectSave(), \c QoreObject.callMethod(), \c QoreClosure.call(), and the generation and listing of
       the Java classes of %Qore classes) used the pointer as it was, so that a call made while or after the Program
-      was deleted used the deleted Program's memory; and a class loader created with the pointer of its parent (ex:
-      the class loader of a \c QoreJavaCompiler) kept a copy of it that was never cleared.  The pointer is now
-      validated against the Programs that use the module, the Program is held and entered for the call, and a call
-      for a deleted Program raises a Java exception (\c JNI-ERROR) instead (fail closed); a class loader created with
-      its parent's pointer now shares it with the parent, so that it is cleared when the Program is deleted
-      (qore#TBD)
+      was deleted used the deleted Program's memory; and the class loader of a \c QoreJavaCompiler or
+      \c QoreKotlinCompiler kept a copy of the pointer of its parent that was never cleared.  The pointer is now
+      validated against the Programs that use the module and the Program is held for the call (and entered, for the
+      calls that run its code), and a call for a deleted Program raises a Java exception (\c JNI-ERROR) instead
+      (fail closed); the compilers' class loaders now share the pointer of their parent, so that it is cleared when the
+      Program is deleted, with the new \c QoreURLClassLoader.createDerived(), which is to be used instead of
+      <tt>new QoreURLClassLoader(parent.getPtr(), parent)</tt> (qore#TBD)
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a

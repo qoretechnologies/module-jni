@@ -15,8 +15,8 @@
 # - case "hook-live": as "hook", but the child Program is deleted only once the call has returned
 # - case "hook-clear": as "hook-live", and the hook clears the pointer of the thread's class loader context before the
 #   native method uses the pointer that it has received
-# - case "share": no call is made; a class loader is created with the pointer of the child Program's class loader,
-#   which it must share with it (CachedProgramPtrProbe.checkSharedPtr())
+# - case "share": no call is made; class loaders are created for the Program of the child Program's class loader, whose
+#   pointer they must share (CachedProgramPtrProbe.checkSharedPtr())
 # - setup: how the thread sets its class loader context up: "context" (the child Program's class loader) or
 #   "compiler" (the class loader of a QoreJavaCompiler created for the child Program's class loader)
 # - api: the API of the call (see CachedProgramPtrProbe.call())
@@ -46,11 +46,23 @@ class PgmPtrProbeClass {
     static string get() {
         return \"child\";
     }
+
+    string name() {
+        return \"child\";
+    }
 }
+
+# the object of the \"method\" API, which exists as long as the Program
+PgmPtrProbeClass probe_obj;
 
 int sub make_probe(string setup, string api, string name, string mode) {
     object loader = get_class_loader();
-    CachedProgramPtrProbe::create(loader, setup, api, name, mode);
+    auto target;
+    switch (api) {
+        case \"method\": target = probe_obj = new PgmPtrProbeClass(); break;
+        case \"closure\": target = string sub () { return \"child\"; }; break;
+    }
+    CachedProgramPtrProbe::create(loader, setup, api, name, target, mode);
     return loader.getPtr();
 }
 
@@ -65,6 +77,8 @@ const Names = {
     "static": "PgmPtrProbeClass::get",
     "new": "PgmPtrProbeClass",
     "class": "qore.PgmPtrProbeClass",
+    "method": "name",
+    "closure": "",
 };
 
 # the probe's mode for each case

@@ -6,18 +6,19 @@
 # Java caches the pointers of Qore Programs: each org.qore.jni.QoreURLClassLoader has the pointer of the Program whose
 # class loader it is, and Java passes it to the native methods that call into the Program or read its definitions
 # (QoreJavaApi.callFunction(), callStaticMethod() and newObjectSave(), QoreObject.callMethod(), QoreClosure.call(), and
-# the generation of the byte code of a Java class for a Qore class).  The natives used the pointer as it was, while the
-# Program can be deleted at any time: a native that received the pointer just before the Program was deleted used the
-# freed Program, and a class loader created with the pointer of its parent (the class loader of a QoreJavaCompiler)
-# kept a copy of it that was never cleared, so that every later call through it used the freed Program.  The natives
-# now validate the pointer against the registry of the Programs with jni data, hold the Program and enter it
-# (jni::JniJavaProgramRef), and fail with an exception if it has been deleted; a class loader created with the pointer
-# of its parent shares it with the parent, so that it is cleared with the parent's.
+# the listing of the classes of a package and the generation of the byte code of a Java class for a Qore class).  The
+# natives used the pointer as it was, while the Program can be deleted at any time: a native that received the pointer
+# just before the Program was deleted used the freed Program, and the class loader of a QoreJavaCompiler, created with
+# a copy of its parent's pointer, kept it after the Program was deleted, so that every later call through it used the
+# freed Program.  The natives now validate the pointer against the registry of the Programs with jni data and hold the
+# Program (jni::JniJavaProgramRef), and fail with an exception if it has been deleted; a compiler's class loader shares
+# the pointer of its parent (QoreURLClassLoader.createDerived()), so that it is cleared with the parent's.
 #
 # Each case runs test/jni-cached-program-ptr-child.q in a new process: a Java thread whose class loader context has the
 # pointer of a child Program calls into it (org.qore.jni.test.CachedProgramPtrProbe); in the "hook" cases, a debug build
-# of the module holds the thread where the native has received the pointer (Jni::dbg_jni_set_java_program_ptr_hook())
-# while the child Program is deleted.  Without the fix, the "hook" cases and the "wait" case with a QoreJavaCompiler
+# of the module holds the thread in the first native that receives the pointer (Jni::dbg_jni_set_java_program_ptr_hook();
+# for the "class" API, the listing of the classes of the package, before the generation of the byte code) while the
+# child Program is deleted.  Without the fix, the "hook" cases and the "wait" case with a QoreJavaCompiler
 # class loader use the freed Program (valgrind reports invalid reads in QoreProgram::getExternalData(); without
 # valgrind, the process can crash), and the "share" case reports that the copied pointer does not follow the parent's.
 # The test is skipped with a release build.
@@ -39,15 +40,20 @@ class JniCachedProgramPtrTest inherits QUnit::Test {
             "static": "ok: child",
             "new": "ok: qore.PgmPtrProbeClass",
             "class": "ok: qore.PgmPtrProbeClass",
+            "method": "ok: child",
+            "closure": "ok: child",
         };
 
         #! the result of a call made once the child Program has been deleted and the class loader's pointer cleared:
-        #! the call is made in the global Java context Program, which has no such function or class
+        #! the call is made in the global Java context Program, which has no such function or class, and the object
+        #! and the closure of the child Program cannot be used any more
         const ClearedResults = {
             "function": "^org\\.qore\\.jni\\.QoreExceptionWrapper: NO-FUNCTION: ",
             "static": "^org\\.qore\\.jni\\.QoreExceptionWrapper: UNKNOWN-CLASS: ",
             "new": "^org\\.qore\\.jni\\.QoreExceptionWrapper: CREATE-OBJECT-ERROR: ",
             "class": "^java\\.lang\\.ClassNotFoundException: qore\\.PgmPtrProbeClass",
+            "method": "^org\\.qore\\.jni\\.QoreExceptionWrapper: OBJECT-ALREADY-DELETED: ",
+            "closure": "^org\\.qore\\.jni\\.QoreExceptionWrapper: PROGRAM-ERROR: ",
         };
 
         #! the class loader contexts of the thread
@@ -58,7 +64,7 @@ class JniCachedProgramPtrTest inherits QUnit::Test {
         addTestCase("regression: a native receives the pointer of a Program being deleted", \hookCase());
         addTestCase("regression: a compiler's class loader is used after its Program has been deleted",
             \waitCompilerCase());
-        addTestCase("regression: a class loader created with its parent's pointer shares it", \shareCase());
+        addTestCase("regression: a compiler's class loader shares its parent's pointer", \shareCase());
         addTestCase("positive: calls while the Program exists", \liveCase());
         addTestCase("positive: a native held while the Program exists", \hookLiveCase());
         addTestCase("negative: the pointer is no longer the class loader's", \hookClearCase());

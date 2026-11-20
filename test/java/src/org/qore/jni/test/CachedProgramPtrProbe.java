@@ -8,7 +8,9 @@ package org.qore.jni.test;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.BooleanSupplier;
 
+import org.qore.jni.QoreClosure;
 import org.qore.jni.QoreJavaApi;
+import org.qore.jni.QoreObject;
 import org.qore.jni.QoreURLClassLoader;
 import org.qore.jni.compiler.QoreJavaCompiler;
 
@@ -42,13 +44,15 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
         becomes the context
         @param api the API of the call; see call()
         @param name the name used by the call; see call()
+        @param target the Qore object or closure of the call, for the APIs \c "method" and \c "closure", or null
         @param mode \c "call": the call is made immediately; \c "wait": the thread waits until proceed() is called
         before it makes the call; \c "hook": the call is held by the hook where the native method has received the
         Program pointer (the probe must then be set as the hook); \c "hook-clear": as \c "hook", and the hook clears
         the pointer of the thread's class loader context once it is released, before the native method uses the
         pointer that it has received
     */
-    private CachedProgramPtrProbe(QoreURLClassLoader loader, String setup, String api, String name, String mode) {
+    private CachedProgramPtrProbe(QoreURLClassLoader loader, String setup, String api, String name, Object target,
+            String mode) {
         this.mode = mode;
         thread = new Thread(() -> {
             try {
@@ -58,7 +62,7 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
                     held.countDown();
                     awaitUninterruptibly(proceed);
                 }
-                result = "ok: " + call(context, api, name);
+                result = "ok: " + call(context, api, name, target);
             } catch (Throwable t) {
                 result = t.getClass().getName() + ": " + t.getMessage();
             } finally {
@@ -78,7 +82,7 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
                 break;
             case "compiler":
                 // the compiler's class loader makes itself the thread's context when it is created
-                new QoreJavaCompiler(loader, null);
+                new QoreJavaCompiler<Object>(loader, null);
                 break;
             default:
                 throw new IllegalArgumentException("unknown setup: " + setup);
@@ -91,11 +95,14 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
         @param api the API: \c "function" calls the Qore function \a name (QoreJavaApi.callFunction()), \c "static"
         calls the static method \a name, as <tt>class::method</tt> (QoreJavaApi.callStaticMethod()), \c "new" creates
         an object of the Qore class \a name (QoreJavaApi.newObjectSave()), and \c "class" loads the Java class
-        generated for the Qore class \a name with the class loader (QoreURLClassLoader.loadClass(), which generates
-        its byte code)
+        generated for the Qore class \a name with the class loader (QoreURLClassLoader.loadClass(), whose class
+        loader lists the classes of the package and generates the byte code of the class), \c "method" calls the
+        method \a name of the Qore object \a target (QoreObject.callMethod()), and \c "closure" calls the Qore
+        closure \a target (QoreClosure.call())
         @param name the name used by the call
+        @param target the Qore object or closure of the call
     */
-    private static Object call(QoreURLClassLoader context, String api, String name) throws Throwable {
+    private static Object call(QoreURLClassLoader context, String api, String name, Object target) throws Throwable {
         switch (api) {
             case "function":
                 return QoreJavaApi.callFunction(name);
@@ -109,6 +116,10 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
             }
             case "class":
                 return context.loadClass(name).getName();
+            case "method":
+                return ((QoreObject) target).callMethod(name);
+            case "closure":
+                return ((QoreClosure) target).call();
             default:
                 throw new IllegalArgumentException("unknown API: " + api);
         }
@@ -116,8 +127,8 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
 
     //! creates a probe; see the constructor
     public static CachedProgramPtrProbe create(QoreURLClassLoader loader, String setup, String api, String name,
-            String mode) {
-        CachedProgramPtrProbe rv = new CachedProgramPtrProbe(loader, setup, api, name, mode);
+            Object target, String mode) {
+        CachedProgramPtrProbe rv = new CachedProgramPtrProbe(loader, setup, api, name, target, mode);
         last = rv;
         return rv;
     }
@@ -161,8 +172,8 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
         return true;
     }
 
-    //! Checks that class loaders created with the Program pointer of their parent share it with the parent
-    /** Two class loaders are created with the pointer of \a loader, as QoreJavaCompiler creates its class loader; the
+    //! Checks that class loaders created for the Program of their parent share its pointer with the parent
+    /** Two class loaders are created for the Program of \a loader, as QoreJavaCompiler creates its class loader; the
         pointer of the second is cleared, then the pointer of \a loader, as when its Program's jni data is destroyed
         (\a loader must not be used for a Program any more then)
 
@@ -172,8 +183,8 @@ public final class CachedProgramPtrProbe implements BooleanSupplier {
     */
     public static String checkSharedPtr(QoreURLClassLoader loader) {
         long ptr = loader.getPtr();
-        QoreURLClassLoader first = new QoreURLClassLoader(ptr, loader);
-        QoreURLClassLoader second = new QoreURLClassLoader(ptr, loader);
+        QoreURLClassLoader first = QoreURLClassLoader.createDerived(loader);
+        QoreURLClassLoader second = QoreURLClassLoader.createDerived(loader);
         // the constructor makes the new class loader the thread's context
         loader.setContext();
         boolean shared = ptr != 0 && first.getPtr() == ptr && second.getPtr() == ptr;

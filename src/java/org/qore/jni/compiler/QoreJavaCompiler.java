@@ -142,7 +142,8 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
             throw new IllegalStateException("Cannot find the system Java compiler. "
                     + "Check that your class path includes tools.jar");
         }
-        classLoader = new QoreURLClassLoader(loader.getPtr(), loader);
+        // the class loader shares the Program pointer of loader, so that it is cleared when the Program is deleted
+        classLoader = QoreURLClassLoader.createDerived(loader);
         //System.out.printf("compiler classLoader: %s (loader: %s pgm: %x)\n", classLoader, loader, loader.getPtr());
         diagnostics = null;
         final QoreJavaFileManager fileManager = new QoreJavaFileManager(classLoader,
