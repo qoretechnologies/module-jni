@@ -122,7 +122,8 @@ public class GenericServer {
     private final QoreClosure callback;
     private final String bindAddress;
     private final String hostname;
-    private final int port;
+    // the port; an OS-assigned port is assigned again when a stopped server is started again
+    private volatile int port;
     // whether the port is assigned by the OS (a port option of 0)
     private final boolean osAssignedPort;
     // the listener holding the port: an OS-assigned port from the server's creation, a configured port from its start,
@@ -134,10 +135,14 @@ public class GenericServer {
     private final String path;
     private final String namespaceUri;
     private final int maxHistoryValues;
-    private final OpcUaServer server;
-    private final RuntimeNamespace namespace;
+    // the Milo server and its namespace; a Milo server cannot be started again once it has been shut down, so both
+    // are made again when a stopped server is started again (qore#6915)
+    private volatile OpcUaServer server;
+    private volatile RuntimeNamespace namespace;
     private final Hash schemaSnapshot = new Hash();
     private volatile boolean started;
+    // true once the Milo server has been shut down, until it has been made again
+    private boolean shutDown;
 
     // test hook (see holdPortReleaseForTest()): the hold armed for the next listener channel closed, the hold last
     // armed, whether the hold ends once stop() waits for the release, and whether a closed listener channel took the
@@ -486,11 +491,40 @@ public class GenericServer {
         }
     }
 
-    /** Starts the server and blocks until the endpoint is listening. */
+    /** Starts the server and blocks until the endpoint is listening
+
+        A server that was stopped is started again with the same options; the values and history of its endpoints are
+        kept.  An OS-assigned port is assigned again, so getPort() can return another port then.
+    */
     public synchronized void start() throws Exception {
         if (!started) {
+            if (shutDown) {
+                recreateServer();
+            }
             server.startup().get();
             started = true;
+        }
+    }
+
+    // makes the Milo server and its namespace again for a start after a stop, with the values and history of the
+    // endpoints of the previous namespace (qore#6915)
+    private void recreateServer() throws Exception {
+        if (osAssignedPort) {
+            listener = reservePort(bindAddress, 0);
+            port = ((InetSocketAddress) listener.getLocalAddress()).getPort();
+        }
+        RuntimeNamespace previous = namespace;
+        try {
+            OpcUaServer newServer = createServer();
+            RuntimeNamespace newNamespace = new RuntimeNamespace(newServer);
+            newNamespace.startup();
+            newNamespace.takeValuesFrom(previous);
+            server = newServer;
+            namespace = newNamespace;
+            shutDown = false;
+        } catch (Exception | Error e) {
+            releasePort(e);
+            throw e;
         }
     }
 
@@ -504,6 +538,7 @@ public class GenericServer {
             if (started) {
                 server.shutdown().get();
                 started = false;
+                shutDown = true;
             }
         } catch (Exception | Error e) {
             releasePort(e);
@@ -985,6 +1020,26 @@ public class GenericServer {
         @Override public void onMonitoringModeChanged(List<MonitoredItem> monitoredItems) {
             subscriptionModel.onMonitoringModeChanged(monitoredItems);
             callbackOnly("subscription", null, "event", "mode-changed", "count", monitoredItems.size());
+        }
+
+        // takes the values and the history of the endpoints of the given namespace, of the same schema, for the
+        // endpoints with the same IDs (a server started again; qore#6915)
+        void takeValuesFrom(RuntimeNamespace previous) {
+            for (Endpoint old : previous.orderedEndpoints) {
+                Endpoint endpoint = byEndpointId.get(old.endpointId);
+                if (endpoint == null) {
+                    continue;
+                }
+                if (endpoint.node != null && old.node != null) {
+                    endpoint.node.setValue(old.node.getValue());
+                }
+                Deque<DataValue> values = previous.history.get(old.nodeId);
+                if (values != null) {
+                    synchronized (values) {
+                        history.put(endpoint.nodeId, new ArrayDeque<>(values));
+                    }
+                }
+            }
         }
 
         void setEndpointValue(String endpointId, Object value, boolean invokeEventCallback)
