@@ -33,6 +33,44 @@
 
 namespace jni {
 
+namespace {
+//! Ends the use of the native handle of a Qore object or closure that its qoreJniEnterHandle() began (qore#6864)
+/** The exit method is called when the helper is destroyed, also while a C++ exception unwinds with a Java exception
+    pending, which is kept.
+*/
+class JniHandleUseHelper {
+public:
+    DLLLOCAL JniHandleUseHelper(Env& env, jobject obj, jmethodID exit) : jenv(*env), obj(obj), exit(exit) {
+    }
+
+    DLLLOCAL ~JniHandleUseHelper() {
+        // no JNI call may be made with a Java exception pending
+        jthrowable pending = jenv->ExceptionOccurred();
+        if (pending) {
+            jenv->ExceptionClear();
+        }
+        jenv->CallVoidMethod(obj, exit);
+        if (jenv->ExceptionCheck()) {
+            // the exit method raises no exception but an error of the JVM (ex: an OutOfMemoryError), which is
+            // dropped: the destructor cannot raise it
+            jenv->ExceptionClear();
+        }
+        if (pending) {
+            jenv->Throw(pending);
+            jenv->DeleteLocalRef(pending);
+        }
+    }
+
+private:
+    JNIEnv* jenv;
+    jobject obj;
+    jmethodID exit;
+
+    JniHandleUseHelper(const JniHandleUseHelper&) = delete;
+    JniHandleUseHelper& operator=(const JniHandleUseHelper&) = delete;
+};
+} // namespace
+
 //! Discards the values converted for a Java Map or List that the conversion still holds when it is left with an exception
 /** A QoreValue does not own its value, so the values converted so far would leak if the conversion of a nested value
     (ex: a Map with a key that has a NUL character, qore#6738) or a Java call threw an exception.  The explicit error
@@ -218,18 +256,21 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
         }
     }
 
+    // the native handle of a Qore object or closure is held while it is used (qore#6864): a release waits until it is
+    // no longer used; qoreJniEnterHandle() raises an IllegalStateException if the handle has been released
     if (env.isInstanceOf(v, Globals::classQoreObjectBase)) {
         JniPendingContextHelper::set(env);
-        QoreObject* obj = JniObjectHandle::fromJava(env.callLongMethod(v,
-            Globals::methodQoreObjectBaseGet, nullptr))->getObject();
+        jlong ptr = env.callLongMethod(v, Globals::methodQoreObjectBaseEnterHandle, nullptr);
+        JniHandleUseHelper use(env, v, Globals::methodQoreObjectBaseExitHandle);
+        QoreObject* obj = JniObjectHandle::fromJava(ptr)->getObject();
         return obj->refSelf();
     }
 
     if (env.isInstanceOf(v, Globals::classQoreClosure)) {
-        // QoreClosure.get() is not final (qore#6551, see JniPendingContextHelper)
         JniPendingContextHelper::set(env);
-        const JniClosureHandle* handle = reinterpret_cast<const JniClosureHandle*>(env.callLongMethod(v,
-            Globals::methodQoreClosureGet, nullptr));
+        jlong ptr = env.callLongMethod(v, Globals::methodQoreClosureEnterHandle, nullptr);
+        JniHandleUseHelper use(env, v, Globals::methodQoreClosureExitHandle);
+        const JniClosureHandle* handle = reinterpret_cast<const JniClosureHandle*>(ptr);
         return handle->getCall()->refRefSelf();
     }
 

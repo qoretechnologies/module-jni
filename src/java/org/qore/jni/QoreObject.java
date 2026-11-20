@@ -1,5 +1,7 @@
 package org.qore.jni;
 
+import java.lang.ref.Reference;
+
 import org.qore.jni.QoreObjectBase;
 import org.qore.jni.QoreURLClassLoader;
 
@@ -24,7 +26,14 @@ public class QoreObject extends QoreObjectBase {
 
     //! returns the class name for the object
     public String className() {
-        return className0(obj);
+        long p = qoreJniEnterHandle();
+        try {
+            return className0(p);
+        } finally {
+            qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
+        }
     }
 
     //! returns true if the object is an instance of the given class
@@ -33,7 +42,14 @@ public class QoreObject extends QoreObjectBase {
         can be called on any thread.
     */
     public boolean instanceOf(String class_name) {
-        return instanceOf0(obj, class_name);
+        long p = qoreJniEnterHandle();
+        try {
+            return instanceOf0(p, class_name);
+        } finally {
+            qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
+        }
     }
 
     //! calls the given method with the given arguments and returns the result
@@ -46,11 +62,18 @@ public class QoreObject extends QoreObjectBase {
      * @see callMethodSave()
     */
     public Object callMethod(String name, Object... args) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return callMethod0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return callMethod0(QoreURLClassLoader.getProgramPtr(), p, name, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -64,11 +87,18 @@ public class QoreObject extends QoreObjectBase {
      * @see callMethodArgsSave()
     */
     public Object callMethodArgs(String name, Object[] args) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return callMethod0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return callMethod0(QoreURLClassLoader.getProgramPtr(), p, name, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -85,11 +115,18 @@ public class QoreObject extends QoreObjectBase {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callMethodSave(String name, Object... args) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return callMethodSave0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return callMethodSave0(QoreURLClassLoader.getProgramPtr(), p, name, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -106,21 +143,35 @@ public class QoreObject extends QoreObjectBase {
      * @see @ref jni_qore_object_lifecycle_managementguide
      */
     public Object callMethodArgsSave(String name, Object[] args) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return callMethodSave0(QoreURLClassLoader.getProgramPtr(), obj, name, args);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return callMethodSave0(QoreURLClassLoader.getProgramPtr(), p, name, args);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 
     //! returns the value of the given member
     public Object getMemberValue(String name) throws Throwable {
-        Object[] ctx = QoreURLClassLoader.saveContext();
+        long p = qoreJniEnterHandle();
         try {
-            return getMemberValue0(obj, name);
+            Object[] ctx = QoreURLClassLoader.saveContext();
+            try {
+                return getMemberValue0(p, name);
+            } finally {
+                QoreURLClassLoader.restoreContext(ctx);
+            }
         } finally {
-            QoreURLClassLoader.restoreContext(ctx);
+            qoreJniExitHandle();
+            // the wrapper stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
+            Reference.reachabilityFence(this);
         }
     }
 

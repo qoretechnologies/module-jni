@@ -1,0 +1,86 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# Whether sandboxed code (a tenant) can crash the process with a QoreExceptionWrapper whose Qore exception has been
+# released (qore#6864): QoreExceptionWrapper.getMessage() dereferenced the released pointer (SIGSEGV), after Qore had
+# taken the exception when the wrapper was thrown back to Qore.
+#
+# - A default sandbox refuses uncontrolled APIs: the tenant can neither import a Java class nor load one, so it cannot
+#   reach a Java exception object of its own, and cannot make the crash happen.
+# - A sandbox that trusts the code with uncontrolled APIs (SandboxManager::setUncontrolledApiPolicy(), as
+#   test/jni-sandbox.qtest models sandboxed code) lets the tenant use JDK classes: with only its own closures and
+#   java.util.concurrent.CompletableFuture and java.util.Optional, it keeps the wrapper of a Qore exception that its
+#   closure raises, makes Java throw the wrapper back to Qore, and gets its message again, which crashed the process;
+#   it now gets the fixed message of a released exception.
+#
+# Each case runs test/jni-tenant-released-wrapper-child.q in a new process, as a crash would end it.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniTenantReleasedWrapperTest
+
+class JniTenantReleasedWrapperTest inherits QUnit::Test {
+    public {
+        const ReleasedMessage = "Qore exception (the message is unavailable: the exception has been taken by Qore, "
+            "or released by the shutdown of the jni module)";
+    }
+
+    constructor() : QUnit::Test("JNI tenant and a released QoreExceptionWrapper", "1.0") {
+        addTestCase("negative: a default sandbox cannot reach Java classes", \defaultCase());
+        addTestCase("regression: a tenant trusted with uncontrolled APIs gets the message of a taken wrapper",
+            \uncontrolledCase());
+        set_return_value(main());
+    }
+
+    defaultCase() {
+        string out = runChild("default");
+        assertEq("import: JNI-SANDBOX-ERROR: cannot use the \"import\" module command, which imports Java classes: "
+            "the command was issued by sandboxed code", getLine(out, "import: "), out);
+        string load = getLine(out, "load: ");
+        if (load =~ /^load: PARSE-EXCEPTION/) {
+            # a Qore library that refuses uncontrolled APIs at parse time
+            assertRegex("load_class", load, out);
+        } else {
+            assertRegex("^load: INVALID-FUNCTION-ACCESS: .*uncontrolled API function 'load_class", load, out);
+        }
+    }
+
+    uncontrolledCase() {
+        string out = runChild("uncontrolled");
+        assertEq("tenant: \"class: org.qore.jni.QoreExceptionWrapper; message: TENANT-ERROR: tenant; taken: "
+            "TENANT-ERROR: tenant; after: " + ReleasedMessage + "\"", getLine(out, "tenant: "), out);
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr), checking that it ran to the end and
+    #! exited with status 0
+    private string runChild(string case_name) {
+        string child = normalize_dir(get_script_dir() + "/jni-tenant-released-wrapper-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is checked
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b --enable-debug %s "
+            "%s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child), case_name);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        return out;
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+        return "";
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

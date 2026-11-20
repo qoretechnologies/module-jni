@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# The Java wrappers of Qore objects (QoreObject, the generated classes), closures (QoreClosure) and invocation handlers
+# (QoreInvocationHandler) hold a native handle, which the jni module's shutdown releases for every wrapper that still
+# exists (Globals::stopNativeCleanupThread()), and which release() and destroy() release.  Java can keep the wrapper
+# and use it afterwards, and a release could run while another thread's call used the handle: QoreObject passed its
+# cached handle to the native methods (className(), instanceOf() and getMemberValue() crashed the process in
+# QoreClass::getName(), QoreProgram::findClass() and QoreSandboxBudgetStack::attach() in a JVM shutdown hook),
+# QoreClosure.call() passed 0 (an assertion in debug builds), and a proxy of a QoreInvocationHandler jumped through the
+# freed dispatcher.  Each call now holds the handle for its duration (NativeCleanup.Ref.enter()), an explicit release
+# waits until the calls on other threads that use it have returned, the module's shutdown leaves the handle of a call
+# in progress unreleased (it does not wait for the call, which can block until the process ends), a call made after
+# the release raises an IllegalStateException, and a release on the thread of a call that uses the handle is refused
+# with an IllegalStateException (qore#6864).
+#
+# Each case runs test/jni-released-handles-child.q in a new process: a crash would end the child, and the module's
+# shutdown runs when the process exits.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniReleasedHandlesTest
+
+class JniReleasedHandlesTest inherits QUnit::Test {
+    public {
+        const ObjectReleased = "java.lang.IllegalStateException: the Qore object has been released";
+        const ClosureReleased = "java.lang.IllegalStateException: the Qore closure has been released";
+        const HandlerReleased = "java.lang.IllegalStateException: Invocation handler has already been destroyed";
+        const PolicyAfterShutdown = "java.lang.IllegalStateException: Native cleanup has shut down";
+        const NoUse = "java.lang.IllegalStateException: no use of the Qore handle is in progress on this thread";
+
+        #! the guard against a hang of the child, in seconds; never an expected time
+        const HangGuard = 600;
+
+        #! op -> [the result of a live call, the result of a call after the module's shutdown]
+        const Cases = {
+            "closure": ("ok: closure", ClosureReleased),
+            "closure-save": ("ok: closure", ClosureReleased),
+            "classname": ("ok: ReleasedHandleObject", ObjectReleased),
+            "instanceof": ("ok: true", ObjectReleased),
+            "method": ("ok: method", ObjectReleased),
+            "member": ("ok: member", ObjectReleased),
+            "proxy": ("ok: proxy", HandlerReleased),
+        };
+    }
+
+    constructor() : QUnit::Test("JNI wrappers with a released native handle", "1.0") {
+        addTestCase("control: calls with the native handle alive", \liveCase());
+        addTestCase("regression: calls after the module's shutdown released the native handle", \shutdownCase());
+        addTestCase("regression: a release waits for a call on another thread", \releaseInUseCase());
+        addTestCase("negative: a release on the thread of a call that uses the handle", \releaseSelfCase());
+        addTestCase("negative: Qore converts a QoreObject whose handle has been released", \convertReleasedCase());
+        addTestCase("negative: a generated class after its release", \generatedReleasedCase());
+        addTestCase("regression: a QoreSandbox.Policy after the module's shutdown", \policyCase());
+        addTestCase("regression: a call in progress at the module's shutdown", \shutdownInUseCase());
+        addTestCase("negative: the end of a handle use that was never begun", \exitUnmatchedCase());
+        set_return_value(main());
+    }
+
+    liveCase() {
+        foreach hash<auto> i in (Cases.pairIterator()) {
+            string out = runChild(i.key, "live");
+            assertEq("live: " + i.value[0], getLine(out, "live: "), i.key + ": " + out);
+        }
+    }
+
+    shutdownCase() {
+        foreach hash<auto> i in (Cases.pairIterator()) {
+            string out = runChild(i.key, "shutdown");
+            assertEq("shutdown: " + i.value[1], getLine(out, "shutdown: "), i.key + ": " + out);
+        }
+    }
+
+    releaseInUseCase() {
+        string out = runChild("release-in-use", "live");
+        # the release ran the hook, so it waited for the call, which returned its result; the object is released
+        assertEq("live: hook: true; call: ok: blocked; release: released; after: " + ObjectReleased,
+            getLine(out, "live: "), out);
+    }
+
+    releaseSelfCase() {
+        string out = runChild("release-self", "live");
+        # the release is refused, and the object is not released
+        assertEq("live: ok: java.lang.IllegalStateException: the Qore handle cannot be released while a call on the "
+            "same thread uses it; after: ok: ReleasedHandleObject", getLine(out, "live: "), out);
+    }
+
+    convertReleasedCase() {
+        string out = runChild("convert-released", "live");
+        # the conversion holds the handle (qoreJniEnterHandle()), which raises the error of a released object
+        assertEq("live: JNI-ERROR: " + ObjectReleased, getLine(out, "live: "), out);
+    }
+
+    generatedReleasedCase() {
+        string out = runChild("generated-released", "live");
+        # the generated method passes the object, whose handle JavaClassBuilder.doNormalCall() holds
+        assertEq("live: before: ok: 0; after: " + ObjectReleased, getLine(out, "live: "), out);
+    }
+
+    policyCase() {
+        string out = runChild("policy", "live");
+        assertEq("live: ok: false", getLine(out, "live: "), out);
+        out = runChild("policy", "shutdown");
+        # the closed-policy error is a QoreExceptionWrapper, which can no longer be registered with NativeCleanup;
+        # the class of the wrapper had been deleted by the module's cleanup, and the process crashed in NewObject()
+        assertEq("shutdown: " + PolicyAfterShutdown, getLine(out, "shutdown: "), out);
+    }
+
+    shutdownInUseCase() {
+        # a Java thread's call of a closure of a user module is blocked until the process ends; the Qore library leaves
+        # the module's Program for it, and the jni module's shutdown must not wait for the call either: it waited for
+        # the use of the closure's handle, and the process never exited (the child is run with a guard against a
+        # hang, which is never an expected time)
+        string out = runChild("shutdown-in-use", "live", HangGuard);
+        assertEq("live: in call", getLine(out, "live: "), out);
+        # the shutdown claimed the handle and cleared it, so that no new use begins, but left it unreleased, as a use
+        # was in progress: NativeCleanup.Ref.acquireForCleanup() returns 0 then, and the release of 0 frees nothing
+        assertEq("shutdown: cleared: true; claimed: true; uses: 1", getLine(out, "shutdown: "), out);
+    }
+
+    exitUnmatchedCase() {
+        string out = runChild("exit-unmatched", "live");
+        # each unmatched end of a use is refused and changes nothing: the object is still usable, a valid use still
+        # begins and ends, and the release that follows does not wait for a use that was never begun
+        # (the number of uses in progress after each refused end is still 0)
+        assertEq("live: before: " + NoUse + " (uses: 0); call: ok: ReleasedHandleObject; valid: ok; released: "
+            + NoUse + " (uses: 0); after: " + ObjectReleased, getLine(out, "live: "), out);
+    }
+
+    #! runs the child and returns its output (stdout and stderr), checking that it ran to the end and exited with
+    #! status 0
+    #! with \a guard, the child is killed after that many seconds, a guard against a hang that is never an expected
+    #! time (timeout(1) exits with status 124 then)
+    private string runChild(string op, string mode, *int guard) {
+        string child = normalize_dir(get_script_dir() + "/jni-released-handles-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is checked
+        string cmd = sprintf("%senv -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b --enable-debug %s "
+            "%s %s 2>&1", guard ? sprintf("timeout %d ", guard) : "", shellQuote(QORE_ARGV[0]), shellQuote(child), op,
+            mode);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, op + " " + mode + ": exit code: " + out);
+        assertEq("after: " + op, getLine(out, "after: "), out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        return out;
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+        return "";
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

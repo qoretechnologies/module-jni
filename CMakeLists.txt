@@ -1054,7 +1054,7 @@ generate_java(org/qore/jni/QoreJavaClassBase.java)
 generate_java(org/qore/jni/QoreObject.java)
 generate_java(org/qore/jni/QoreClosure.java)
 generate_java(org/qore/jni/QoreObjectWrapper.java)
-generate_java(org/qore/jni/QoreInvocationHandler.java $State)
+generate_java(org/qore/jni/QoreInvocationHandler.java)
 generate_java(org/qore/jni/NativeCleanup.java $Ref)
 generate_java(org/qore/jni/BooleanWrapper.java)
 generate_java(org/qore/jni/ClassModInfo.java)
@@ -1247,6 +1247,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JdbcTransactionDriver.java
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
+    test/java/src/org/qore/jni/test/ClassPtrProbe.java
     test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/SandboxIo.java
     test/java/src/org/qore/jni/test/CrossProgramCalls.java
@@ -1307,9 +1308,11 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/GeneratedBindings.java
     test/java/src/org/qore/jni/test/CachedProgramPtrProbe.java
     test/java/src/org/qore/jni/test/ContextProgramLifetimeProbe.java
+    test/java/src/org/qore/jni/test/ExceptionWrapperRelease.java
     test/java/src/org/qore/jni/test/GlobalContextTeardownFixture.java
     test/java/src/org/qore/jni/test/JvmSignals.java
     test/java/src/org/qore/jni/test/NativeExceptionProbe.java
+    test/java/src/org/qore/jni/test/ReleasedHandleCalls.java
     test/java/src/org/qore/jni/test/ShutdownWindowProbe.java
     test/java/src/org/qore/jni/test/Utf8Boundary.java
     test/java/src/org/qore/jni/test/Utf8Driver.java

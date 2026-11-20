@@ -1,0 +1,31 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# a user module for test/jni-released-handles.qtest ("shutdown-in-use"): a Java thread calls a closure of the module,
+# whose Qore code blocks until the process ends; the Qore library leaves the Program of a module that a foreign thread
+# runs code in at its shutdown, so the call is still in progress when the jni module is shut down
+
+%modern
+%requires jni
+%module-cmd(jni) add-relative-classpath ../qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.ReleasedHandleCalls
+
+module JniReleasedHandlesBlock {
+    version = "1.0";
+    desc = "test module: a closure call that is in progress when the jni module is shut down";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace JniReleasedHandlesBlock {
+    #! starts a Java thread that calls a closure of the module, which blocks until the process ends; returns once the
+    #! call is in progress
+    public sub start() {
+        ReleasedHandleCalls::keep(sub () { ReleasedHandleCalls::blockForever(); });
+        ReleasedHandleCalls::startBlockedCall();
+        # reports the state of the closure's handle once the module's shutdown has claimed it
+        ReleasedHandleCalls::reportClosureAtShutdown();
+    }
+}

@@ -125,40 +125,46 @@ QoreStringNode* JavaException::toString(bool clear) const {
         return new QoreStringNode("Java exception occurred during JNI module initialization (before Globals fully initialized)");
     }
 
-    if (clear) {
-        env->ExceptionClear();
+    // no JNI call may be made with a Java exception pending: the exception is cleared while it is described, and
+    // raised again afterwards unless it is to be cleared
+    env->ExceptionClear();
+    QoreStringNode* rv = describe(env, throwable);
+    if (!clear) {
+        env->Throw(throwable);
     }
+    return rv;
+}
 
-    if (env->IsInstanceOf(throwable, Globals::classQoreExceptionWrapper)) {
-        jlong l = env->CallLongMethod(throwable, Globals::methodQoreExceptionWrapperGet);
-        if (l != 0) {
-            ExceptionSink *src = reinterpret_cast<ExceptionSink*>(l);
-            QoreValue err = src->getExceptionErr();
-            QoreValue desc = src->getExceptionDesc();
-            QoreValue arg = src->getExceptionArg();
-
-            QoreStringNodeValueHelper terr(err);
-            QoreStringNodeValueHelper tdesc(desc);
-
-            SimpleRefHolder<QoreStringNode> rv(new QoreStringNodeMaker("%s: %s", terr->c_str(), tdesc->c_str()));
-            if (arg) {
-                QoreStringNodeValueHelper targ(arg);
-                rv->sprintf(" arg: %s", targ->c_str());
-            }
-
-            src->clear();
-            return rv.release();
-        }
-        //if l is zero, it means that the xsink wrapped in QoreExceptionWrapper has already been consumed. This should
-        //not happen, but if it does, we simply report the QoreExceptionWrapper as if it were a normal Java exception
-    }
-
+QoreStringNode* JavaException::describe(JNIEnv* env, jthrowable original) {
+    LocalReference<jthrowable> throwable(static_cast<jthrowable>(env->NewLocalRef(original)));
     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode(QCS_UTF8));
 
     while (true) {
+        // a QoreExceptionWrapper is described with its message, the code and the description of its Qore
+        // exception, which it keeps: Qore takes the exception only when the wrapper is converted (qore#6864)
+        if (env->IsInstanceOf(throwable, Globals::classQoreExceptionWrapper)) {
+            LocalReference<jstring> msg = static_cast<jstring>(env->CallObjectMethod(throwable,
+                Globals::methodThrowableGetMessage));
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+            } else if (msg != nullptr) {
+                if (!desc->empty()) {
+                    desc->concat(": ");
+                }
+                Env::JniUtfChars chars(env, msg);
+                if (!chars.get()) {
+                    env->ExceptionClear();
+                } else {
+                    Env::ModifiedUtf8 m(chars.get());
+                    desc->concat(m.c_str(), m.size());
+                }
+            }
+            break;
+        }
+
         LocalReference<jstring> excName = static_cast<jstring>(env->CallObjectMethod(env->GetObjectClass(throwable),
             Globals::methodClassGetName));
-        if (clear && env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) {
             env->ExceptionClear();
             return new QoreStringNode("Unable to get exception class name: another exception thrown");
         }
@@ -178,7 +184,7 @@ QoreStringNode* JavaException::toString(bool clear) const {
 
         LocalReference<jstring> msg = static_cast<jstring>(env->CallObjectMethod(throwable, Globals::methodThrowableGetMessage));
         //printd(5, "msg: %p\n", (jstring)msg);
-        if (clear && env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) {
             env->ExceptionClear();
         } else if (msg != nullptr) {
             desc->concat(": ");
