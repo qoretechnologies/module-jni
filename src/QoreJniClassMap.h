@@ -917,6 +917,16 @@ DLLLOCAL QoreProgram* jni_get_program_context();
 DLLLOCAL JniExternalProgramData* jni_get_context();
 DLLLOCAL JniExternalProgramData* jni_get_context(QoreProgram*& pgm);
 
+//! Returns the jni data of the Program context as jni_get_context(), or of the global Java context Program
+/** Returns nullptr once the module's shutdown has started, as no global context Program exists then
+    (Globals::getJavaContextProgram()); \a pgm is set to the Program, or to nullptr
+*/
+DLLLOCAL JniExternalProgramData* jni_get_context_or_global(QoreProgram*& pgm);
+
+//! Returns the jni data of the Program context as jni_get_context(), or of the global Java context Program
+/** Throws jni::BasicException once the module's shutdown has started, as no global context Program exists then
+    (ex: for a Java thread that calls into Qore while the module is shut down); see jni_get_context_or_global()
+*/
 DLLLOCAL JniExternalProgramData* jni_get_context_unconditional();
 DLLLOCAL JniExternalProgramData* jni_get_context_unconditional(QoreProgram*& pgm);
 

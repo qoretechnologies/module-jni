@@ -35,6 +35,7 @@
 #include "Env.h"
 
 #include <atomic>
+#include <mutex>
 
 DLLLOCAL QoreStringNode* jni_module_init_intern();
 
@@ -608,8 +609,22 @@ public:
         abandoned: a reference that wakes it afterwards is dropped instead of dispatched (qore#6788). */
     DLLLOCAL static void stopNativeCleanupThread();
 
+    //! Returns the global context Program, creating it if necessary, as a \c jlong, or 0 once the module's shutdown
+    //! has started (see createJavaContextProgram())
     DLLLOCAL static jlong getContextProgram(jobject new_syscl, bool& created);
+
+    //! Creates the global context Program if it does not exist, and returns it
+    /** Returns nullptr once the module's shutdown has started (isShuttingDown()): the global context Program is
+        deleted then (clearGlobalContext()), but Java threads still run until the JVM is destroyed, and a call from
+        one of them with no Program context must not create it again, as it would never be deleted; throws a C++
+        exception if the Program cannot be created
+    */
     DLLLOCAL static QoreProgram* createJavaContextProgram();
+
+    //! Returns the global context Program, creating it if necessary; nullptr once the module's shutdown has started
+    /** see createJavaContextProgram(); a caller that needs a Program uses jni_get_context_unconditional(), which
+        raises an exception instead; an existing Program is returned with no lock taken
+    */
     DLLLOCAL static QoreProgram* getJavaContextProgram();
 
     //! Deletes the global context Program and reports the exceptions raised by its creation and deletion
@@ -617,17 +632,13 @@ public:
         the Program run when it is deleted, and they can raise exceptions (ex: \c PROGRAM-ERROR if the Program of
         their class is gone).  An exception left in the sink would otherwise be reported only when the process exits,
         after qore_cleanup() has destroyed the thread data that reporting it uses.
+
+        The module's shutdown starts here (see isShuttingDown()): the flag is set under the lock that the creation of
+        the global context Program takes, so no Program is created after it, also by a Java thread that calls into
+        Qore while the JVM still runs (createJavaContextProgram()); the Program is deleted outside the lock, as its
+        deletion can call back into the module
     */
-    DLLLOCAL static void clearGlobalContext() {
-        jni_shutting_down.store(true, std::memory_order_release);
-        if (qph) {
-            qph.reset();
-#ifdef DEBUG
-            dbg_context_programs_deleted.fetch_add(1, std::memory_order_relaxed);
-#endif
-        }
-        getGlobalXsink().handleExceptions();
-    }
+    DLLLOCAL static void clearGlobalContext();
 
 #ifdef DEBUG
     //! The number of global context Programs created by createJavaContextProgram() in the process (debug builds
@@ -644,12 +655,10 @@ public:
     //! Abandons the global context during process exit without running Qore destructors
     /** C atexit ordering cannot guarantee that function-local libqore synchronization
         objects are still alive.  The operating system reclaims this process-owned
-        Program immediately after JVM teardown.
+        Program immediately after JVM teardown.  As clearGlobalContext(), it starts the module's shutdown, after
+        which no global context Program is created.
     */
-    DLLLOCAL static void abandonGlobalContext() {
-        jni_shutting_down.store(true, std::memory_order_release);
-        qph.release();
-    }
+    DLLLOCAL static void abandonGlobalContext();
 
     //! Returns true if the JNI module is shutting down
     /** Java background threads (e.g. ActiveMQ/JMS listeners) must check
@@ -729,6 +738,16 @@ private:
     DLLLOCAL static ExceptionSink& getGlobalXsink();
 
     DLLLOCAL static std::unique_ptr<QoreProgramHelper> qph;
+    //! The global context Program in qph, or nullptr, for the lookup with no lock in getJavaContextProgram(); set and
+    //! cleared under getContextLock()
+    DLLLOCAL static std::atomic<QoreProgram*> context_pgm;
+    //! Returns the lock that serializes the creation of the global context Program (qph) with the start of the
+    //! module's shutdown
+    /** Recursive, as the creation of the Program can look it up again on the same thread; never destroyed, as
+        abandonGlobalContext() takes it in an \c atexit() handler, which can run after the objects with static storage
+        duration are destroyed
+    */
+    DLLLOCAL static std::recursive_mutex& getContextLock();
 
     DLLLOCAL static bool already_initialized;
     DLLLOCAL static std::atomic<bool> jni_shutting_down;

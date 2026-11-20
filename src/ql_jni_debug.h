@@ -87,6 +87,13 @@ DLLLOCAL void dbg_jni_native_throw_point();
 */
 DLLLOCAL void dbg_jni_report_context_programs() noexcept;
 
+//! Runs the java.lang.Runnable set with Jni::dbg_jni_set_shutdown_window_hook(), if any, once
+/** Called by the module's delete function between Globals::clearGlobalContext() and Jvm::destroyVM(), so that a
+    test can make a Java thread call into %Qore exactly in that window (the JVM still runs, and the global context
+    Program is gone); an error running it is reported on \c stderr, as no exception can be raised there
+*/
+DLLLOCAL void dbg_jni_run_shutdown_window_hook() noexcept;
+
 //! The points at which Jni::dbg_jni_fail_point() can make the module fail with a C++ exception
 enum class DbgJniFailPoint {
     //! jni::Env's constructor fails to attach the thread to the JVM (jni::UnableToAttachException)

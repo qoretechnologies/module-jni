@@ -330,14 +330,18 @@ void JavaException::convert(ExceptionSink* xsink) {
         }
     }
 
+    // during the module's shutdown, no global context Program exists, and the exception is then raised without the
+    // Java exception object
     QoreProgram* pgm = nullptr;
-    jni_get_context_unconditional(pgm);
+    jni_get_context_or_global(pgm);
 
     // add Java call stack to Qore call stack
     QoreExternalProgramLocationWrapper loc;
     JniCallStack stack(throwable, loc);
 
-    {
+    if (!pgm) {
+        xsink->raiseExceptionArg(loc.get(), "JNI-ERROR", QoreValue(), desc.release(), stack);
+    } else {
         Env jenv(env);
         QoreClass* qc;
         try {

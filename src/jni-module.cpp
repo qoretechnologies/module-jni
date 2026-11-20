@@ -435,6 +435,10 @@ QoreStringNode* jni_module_init_finalize(bool system) {
 
     try {
         QoreProgram* pgm = Globals::createJavaContextProgram();
+        if (!pgm) {
+            // no global context Program is created once the module's shutdown has started
+            throw jni::BasicException("the jni module is being shut down; it cannot be initialized");
+        }
         printd(5, "jni_module_init_finalize() pgm: %p\n", pgm);
         // issue #4006: ensure there is a program context for initialization
         QoreProgramContextHelper pgm_ctx(pgm);
@@ -774,6 +778,11 @@ static void jni_module_delete() noexcept {
 
     // clear all objects from stored classes before destroying the JVM (releases all global references)
     jni::jni_teardown_step("clearing the global context", [] () { Globals::clearGlobalContext(); });
+#ifdef DEBUG
+    // a test can make a Java thread call into Qore here, after the global context Program is gone, while the JVM still
+    // runs (see Jni::dbg_jni_set_shutdown_window_hook())
+    dbg_jni_run_shutdown_window_hook();
+#endif
     jni::jni_teardown_step("destroying the class map", [] () {
         ExceptionSink xsink;
         qjcm.destroy(xsink);

@@ -99,6 +99,11 @@
       and setting the Java context of that new attachment created the global context Program again, which was never
       deleted; a thread that is newly attached to the JVM once the module's shutdown has started, outside a Program
       with the module's data, now gets no Java context (qore#6799)
+    - fixed a memory leak at the module's shutdown when a Java thread called into %Qore with no %Qore Program context
+      (ex: \c QoreJavaApi.callFunction() or \c QoreJavaApi.newObjectSave() in a Java listener thread) after the
+      module had deleted its global Java context Program and before it destroyed the JVM: the call created the global
+      context Program again, which was never deleted; such a call now raises a Java exception, and no global context
+      Program is created once the module's shutdown has started (qore#6827)
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a
