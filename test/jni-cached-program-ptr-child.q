@@ -101,7 +101,7 @@ string case_name = ARGV[0] ?? "hook";
 string setup = ARGV[1] ?? "context";
 string api = ARGV[2] ?? "function";
 
-bool debug;
+bool debug = False;
 try {
     call_function("Jni::org::qore::jni::dbg_jni_context_program_counts");
     debug = True;
