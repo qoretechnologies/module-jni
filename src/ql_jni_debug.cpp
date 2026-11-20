@@ -291,15 +291,49 @@ static DbgJniFailPoint fail_point = DbgJniFailPoint::Attach;
 static std::thread::id fail_point_thread;
 std::atomic<bool> dbg_jni_fail_point_set{false};
 
+// the names of the fail points
+static const std::map<std::string, DbgJniFailPoint> fail_points = {
+    {"attach", DbgJniFailPoint::Attach},
+    {"program-data", DbgJniFailPoint::ProgramData},
+    {"program-copy", DbgJniFailPoint::ProgramCopy},
+    {"native-cleanup-stop", DbgJniFailPoint::NativeCleanupStop},
+    {"classpath", DbgJniFailPoint::Classpath},
+};
+
+int dbg_jni_set_fail_point(const char* name) {
+    auto i = fail_points.find(name);
+    if (i == fail_points.end()) {
+        return -1;
+    }
+    std::lock_guard<std::mutex> guard(fail_point_lock);
+    fail_point = i->second;
+    fail_point_thread = std::this_thread::get_id();
+    dbg_jni_fail_point_set.store(true, std::memory_order_release);
+    return 0;
+}
+
+QoreStringNode* dbg_jni_set_env_fail_point() {
+    TempString name(SystemEnvironment::get("QORE_JNI_DBG_FAIL_POINT"));
+    if (!name || name->empty()) {
+        return nullptr;
+    }
+    if (dbg_jni_set_fail_point(name->c_str())) {
+        return new QoreStringNodeMaker("QORE_JNI_DBG_FAIL_POINT: unknown fail point '%s'", name->c_str());
+    }
+    return nullptr;
+}
+
 //! Makes the code at the given point fail once with the C++ exception that it throws when it fails, or with no point,
 //! clears a fail point that has not been reached
 /** \a point: \c "attach" (the next jni::Env on the calling thread fails to attach the thread to the JVM),
     \c "program-data" (JniExternalProgramData::getCreateJniProgramData() fails, as for a Program that is being
     deleted), \c "program-copy" (the copy of the jni data of a Program for a child Program fails to attach the thread
     to the JVM), \c "native-cleanup-stop" (stopping the NativeCleanup thread in the module's teardown fails to attach
-    the thread to the JVM).  The point fails only on the thread that set it (the module is torn down on the thread
-    that ends the process), so that a test can prove that the C++ exception thrown there does not escape into libqore
-    (qore#6787, qore#6788, qore#6789) - see test/jni-cpp-exception-escape.qtest.  DEBUG builds only.
+    the thread to the JVM), \c "classpath" (the class loader raises a Java exception while the next classpath is
+    added on the calling thread, as for an entry that cannot be added: qore#6779, see test/jni-classpath-error.qtest).
+    The point fails only on the thread that set it (the module is torn down on the thread that ends the process), so
+    that a test can prove that the C++ exception thrown there does not escape into libqore (qore#6787, qore#6788,
+    qore#6789) - see test/jni-cpp-exception-escape.qtest.  DEBUG builds only.
 */
 static QoreValue f_dbg_jni_fail_point(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
     const QoreStringNode* point = get_param_value(args, 0).get<const QoreStringNode>();
@@ -308,22 +342,10 @@ static QoreValue f_dbg_jni_fail_point(const QoreListNode* args, RuntimeConfig& r
         dbg_jni_fail_point_set.store(false, std::memory_order_release);
         return QoreValue();
     }
-    static const std::map<std::string, DbgJniFailPoint> points = {
-        {"attach", DbgJniFailPoint::Attach},
-        {"program-data", DbgJniFailPoint::ProgramData},
-        {"program-copy", DbgJniFailPoint::ProgramCopy},
-        {"native-cleanup-stop", DbgJniFailPoint::NativeCleanupStop},
-    };
-    auto i = points.find(point->c_str());
-    if (i == points.end()) {
+    if (dbg_jni_set_fail_point(point->c_str())) {
         xsink->raiseException("DBG-JNI-FAIL-POINT-ERROR", "unknown point '%s'; expecting \"attach\", "
-            "\"program-data\", \"program-copy\" or \"native-cleanup-stop\"", point->c_str());
-        return QoreValue();
+            "\"program-data\", \"program-copy\", \"native-cleanup-stop\" or \"classpath\"", point->c_str());
     }
-    std::lock_guard<std::mutex> guard(fail_point_lock);
-    fail_point = i->second;
-    fail_point_thread = std::this_thread::get_id();
-    dbg_jni_fail_point_set.store(true, std::memory_order_release);
     return QoreValue();
 }
 

@@ -1228,17 +1228,18 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
     }
 
-    //! Adds a path to the classpath
+    //! Adds a path to the classpath of the parent class loader, the classpath that every Program shares
+    /** With no parent class loader that is a QoreURLClassLoader (ex: the class loader of the bootstrap Program, whose
+        parent is the platform class loader), the path is added to this class loader.  An error while the path is
+        added is thrown to the caller (qore#6779).
+    */
     public void addParentPath(String classpath) {
         ClassLoader parent = getParent();
-        if (parent == null) {
-            throw new RuntimeException("No parent ClassLoader present");
+        if (parent instanceof QoreURLClassLoader) {
+            ((QoreURLClassLoader)parent).addPath(classpath);
+        } else {
+            addPath(classpath);
         }
-        if (!(parent instanceof QoreURLClassLoader)) {
-            throw new RuntimeException(String.format("Parent ClassLoader is not a QoreURLClassLoader (%s)",
-                parent.getClass().getCanonicalName()));
-        }
-        ((QoreURLClassLoader)parent).addPath(classpath);
     }
 
     //! Returns the entries of a classpath as addPath() uses them
@@ -1273,8 +1274,14 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Adds a path to the classpath
+    /** An entry that does not exist or cannot be used is logged and left out; an error while an entry is added is
+        thrown to the caller (qore#6779).
+    */
     public void addPath(String classpath) {
         //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
+        if (classpath == null) {
+            throw new IllegalArgumentException("the classpath must not be null");
+        }
 
         for (String pathentry : classpathEntries(classpath)) {
             //debugLog("addPath(): " + pathentry);
@@ -1303,8 +1310,6 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (classPathElements.contains(fileentry.getPath())) {
                 //errorLog("Skipping duplicate classpath element '" + fileentry + "'.");
                 continue;
-            } else {
-                classPathElements.add(fileentry.getPath());
             }
 
             if (basename != null && !basename.isEmpty()) {
@@ -1322,6 +1327,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                 errorLog("ClassPath element '" + fileentry + "' is not an existing directory and is not a file " +
                     "ending with '.zip' or '.jar'");
             }
+            // recorded once it has been added: an entry whose addition raised an error is added again the next time
+            classPathElements.add(fileentry.getPath());
         }
         //infoLog("Class loader is using classpath: \"" + classPath + "\".");
     }
@@ -1411,9 +1418,43 @@ public class QoreURLClassLoader extends URLClassLoader {
         System.out.println("QoreURLClassLoader ERROR: " + msg);
     }
 
+    //! Returns true if a file name matches the pattern of a wildcard classpath entry
+    /** Only \c '*' is a wildcard, which matches any sequence of characters, also an empty one; every other character
+        of the pattern matches itself, also a character that is special in a regular expression, such as \c '.',
+        \c '[', \c '(', \c '+' or \c '?' (qore#6777).  The pattern matches the whole file name.  The match takes
+        time proportional to the product of the lengths of the pattern and the name at most, whatever the pattern,
+        unlike a regular expression with several wildcards, which can backtrack exponentially.
+    */
+    static boolean wildcardMatches(String pattern, String name) {
+        int p = 0;
+        int n = 0;
+        // the position of the last '*' in the pattern, and the position in the name that it was tried at
+        int star = -1;
+        int mark = 0;
+        while (n < name.length()) {
+            if (p < pattern.length() && pattern.charAt(p) == '*') {
+                star = p++;
+                mark = n;
+            } else if (p < pattern.length() && pattern.charAt(p) == name.charAt(n)) {
+                ++p;
+                ++n;
+            } else if (star != -1) {
+                // the last '*' matches one more character
+                p = star + 1;
+                n = ++mark;
+            } else {
+                return false;
+            }
+        }
+        while (p < pattern.length() && pattern.charAt(p) == '*') {
+            ++p;
+        }
+        return p == pattern.length();
+    }
+
     /**
      * Adds a set of files using a generic base name to this loader's classpath.  See @ref addPath() for
-     * details of the generic base name.
+     * details of the generic base name; only \c '*' is a wildcard (see wildcardMatches()).
      */
     public void addWildcard(File dir, String nam) {
         if (!dir.exists()) {
@@ -1426,15 +1467,12 @@ public class QoreURLClassLoader extends URLClassLoader {
             return;
         }
 
-        // make a regex pattern from the glob pattern
-        final String pattern = nam.replace(new StringBuffer("*"), new StringBuffer(".*"));
-
-        //debugLog("dir: " + dir + " pattern: " + pattern);
+        //debugLog("dir: " + dir + " pattern: " + nam);
 
         File[] files = dir.listFiles(new FilenameFilter() {
             @Override
             public boolean accept(File dir, String name) {
-                return name.matches("^" + pattern + "$");
+                return wildcardMatches(nam, name);
             }
         });
 

@@ -119,6 +119,16 @@ public:
      */
     DLLLOCAL T toLocal() const;
 
+    /**
+     * \brief Gives up the reference without deleting it, for a reference that another owner deletes
+     * \return the reference
+     */
+    T release() {
+        T rv = ref;
+        ref = nullptr;
+        return rv;
+    }
+
 private:
     GlobalReference(const GlobalReference &) = delete;
     GlobalReference &operator=(const GlobalReference &) = delete;

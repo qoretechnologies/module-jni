@@ -28,7 +28,10 @@
     The entries of a classpath are separated by the system path separator (\c ":" on UNIX) or by \c ";"; each entry
     is a directory, a \c .jar or \c .zip file, or a pattern with \c "*" in its last path element, which is the
     \c .jar and \c .zip files in its directory that match the pattern (ex: <tt>lib/</tt><tt>*.jar</tt>); a wildcard
-    in a directory element is not supported.  A relative entry of the
+    in a directory element is not supported.  Only \c "*" is a wildcard, which matches any sequence of characters;
+    every other character of the pattern matches itself, also one that is special in a regular expression, so that
+    <tt>a[</tt><tt>*.jar</tt> matches \c a[1.jar, and <tt>a.</tt><tt>*.jar</tt> matches \c a.1.jar but not
+    \c aX1.jar.  A relative entry of the
     \c add-classpath and \c global-add-classpath module commands, of the \c classpath option of the \c jdbc driver
     and of the \c QORE_JNI_CLASSPATH environment variable is resolved against the JVM's \c user.dir, which is
     normally the current directory of the process when the JVM is started, not the current directory of the process
@@ -38,6 +41,15 @@
     no script directory), so that \c *.jar is the jar files there.
     When a sandbox applies a filesystem policy to \c add-classpath or the JDBC \c classpath option, it checks
     a bare wildcard against the JVM's \c user.dir.
+
+    An entry that does not exist is left out, as are other entries that cannot be used (ex: a wildcard whose
+    directory does not exist or cannot be read, or a file that is not a \c .jar or \c .zip file), which are
+    reported on the console.  An error while a classpath is added (a Java
+    exception raised by the class loader) is raised to the caller as \c JNI-CLASSPATH-ERROR, whose description names
+    the input that the classpath comes from and the classpath: the classpath commands above raise it, as does the
+    \c classpath option of the \c jdbc driver when a connection is opened, and the module's initialization fails
+    with it for the \c QORE_JNI_CLASSPATH environment variable (\c MODULE-INIT-ERROR when the module is loaded, or
+    the error itself when a %Program requires the loaded module or uses a jni API that creates its jni data).
 
     All classes in \c java.lang.* are imported implicitly.  Referencing an imported class in %Qore code
     causes a %Qore class to be generated dynamically that presents the Java class.   Instantiating a %Qore class
