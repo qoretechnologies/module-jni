@@ -48,7 +48,33 @@ shutdown (`Globals::stopNativeCleanupThread()` releases the exception of every w
 release claims the pointer with `Ref.acquireAndClear()`, which sets it to 0 under the monitor of the `Ref`.  Java can
 keep the wrapper after its exception has been released, so `QoreExceptionWrapper.getMessage()` reads the pointer, and
 calls the native method with it, under that monitor, and gives a fixed message for a released exception (0) instead
-of calling the native method; the native method also refuses 0.
+of calling the native method; the native method also refuses 0 (qore#6864).  `JavaException::toString()`, which
+describes a pending Java exception, describes a wrapper with its message and never takes its exception.
+
+## The native handles of the Java wrappers
+
+Every Java wrapper with a native pointer holds it in a `NativeCleanup.Ref`: `QoreObjectBase` (and `QoreObject`, and
+the generated classes), `QoreClosure`, `QoreInvocationHandler`, `QoreExceptionWrapper` and `QoreSandbox.Policy`.  The
+pointer is released by an explicit release (`release()`, `destroy()`, `close()`, `get()` of a wrapper), by the C++
+cleanup thread when the wrapper is collected, and by the module's shutdown, which releases the pointer of every
+wrapper that still exists; Java can keep a wrapper after any of them (qore#6864).
+
+- A call that uses the pointer holds it for its duration: `Ref.enter()` returns the pointer (0 once it has been
+  released, which the wrapper raises as `IllegalStateException`, or `JNI-SANDBOX-ERROR` for a closed policy) and
+  counts the use per thread, and `Ref.exit()` ends it, in a `finally` block; no lock is held during the call, which
+  can run any Qore and Java code.  Native code that reads the pointer of a wrapper (`JavaToQore`) holds it the same
+  way, with `qoreJniEnterHandle()` and `qoreJniExitHandle()`.  The generated classes pass the object itself to
+  `JavaClassBuilder.doNormalCall()`, which holds its handle; the overloads that take the pointer remain for classes
+  generated before.
+- A release claims the pointer (`Ref.acquireAndClear()`: 0 afterwards, so no new use begins) and then waits until
+  the uses on other threads have ended.  A release on a thread that uses the pointer cannot wait for itself:
+  `acquireAndClear()`, which the explicit releases use, refuses it with `IllegalStateException` and changes nothing;
+  `acquireForCleanup()`, which the cleanup thread and the module's shutdown use, leaves the pointer unreleased.
+- So the module's shutdown waits for the calls in progress on other threads that use a wrapper, as it waits for the
+  holders of the global context Program; a call that never returns delays the exit of the process.
+- `QoreExceptionWrapper.getMessage()` holds the monitor of the `Ref` instead, as its native method runs no Qore code
+  that could release the wrapper.
+- `NativeCleanup.setReleaseWaitHook()` lets a test make a release wait deterministically.
 
 ## Raising Java exceptions without throwing
 
