@@ -22,7 +22,8 @@
 # - "loadclass": a qoremod.* class of a user module, a qore.* class, and a qoremod.* class of a module that does not
 #   exist are loaded
 # - "moduleloader": QoreURLClassLoader.getModuleLoader0() (with reflection) of a module that does not exist, and of a
-#   module whose lookup raises a Qore exception (a test hook of debug builds)
+#   module whose lookup raises a Qore exception (a test hook of debug builds; "debug-build: yes" or "no" is printed
+#   first)
 # - "jdbc": QoreJavaApi.openJdbcConnection()
 
 %modern
@@ -78,6 +79,20 @@ sub unattached_raise_hash() {
 #! raises an exception with a description that cannot be converted to UTF-8
 sub unattached_raise_encoding() {
     throw "UNATTACHED-TEST-ERROR", force_encoding(binary_to_string(<1b2428ff>), "ISO-2022-JP");
+}
+
+#! returns True if the jni module is a debug build, which has the dbg_jni_*() functions and the test hooks
+bool sub is_debug_build() {
+    try {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%requires jni\nnothing sub t() { Jni::org::qore::jni::dbg_jni_fail_point(); }", "dbg");
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
+            rethrow;
+        }
+        return False;
+    }
+    return True;
 }
 
 #! prints the result of a call
@@ -158,6 +173,7 @@ switch (case_name) {
     case "moduleloader": {
         out("module-loader-missing", UnattachedThreadCalls::moduleLoader("UnattachedNoSuchModule"));
         # a test hook of debug builds raises a Qore exception in the lookup of the named module
+        out("debug-build", is_debug_build() ? "yes" : "no");
         setenv("QORE_JNI_TEST_MODULE_LOADER_FAIL", "UnattachedLoaderFail");
         out("module-loader-error", UnattachedThreadCalls::moduleLoader("UnattachedLoaderFail"));
         unsetenv("QORE_JNI_TEST_MODULE_LOADER_FAIL");

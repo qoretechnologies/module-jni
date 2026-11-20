@@ -1286,6 +1286,17 @@ static void JNICALL java_api_complete_connection_waiter(JNIEnv* jenv, jclass, jl
 
 static void JNICALL java_api_await_connection_waiter(JNIEnv* jenv, jclass, jlong ptr) try {
     auto* waiter = reinterpret_cast<JdbcConnectionWaiter*>(ptr);
+    // QoreJavaApi.openJdbcConnection() is public, and can be called on a Java thread that Java started, which is not
+    // attached to Qore: the cancellable wait registers the thread's wait under its Qore thread ID, which is 0 on such
+    // a thread, and a cancellation raises a Qore exception, so the thread is attached first; the exception sink is
+    // destroyed while the thread is attached (qore#6828)
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
+        return;
+    }
     ExceptionSink xsink;
     {
         AutoLocker lock(waiter->lock);
@@ -1325,8 +1336,10 @@ static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, 
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
-        return nullptr;
+        // Throwable.getMessage() is called by uncaught exception handlers and loggers, also after the Qore library
+        // has been shut down: a fixed message is returned instead of raising an exception
+        return jenv->NewStringUTF("Qore exception (the message is unavailable: the thread cannot be attached to "
+            "Qore)");
     }
 
     // no C++ exception may leave a JNI native method
@@ -1403,7 +1416,8 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     }
     // a Java thread that Java started has no Program context: the class is looked up in the Program of the object,
     // where the object's own class is defined, before the global Java context Program, where a class of the object's
-    // Program cannot be found (qore#6828); the object holds a reference to its Program, and the lookup refuses a
+    // Program cannot be found (qore#6828); the object holds a dependency reference to its Program, which keeps it
+    // valid as long as the weak reference of the handle keeps the object, and the lookup refuses a
     // Program that is being deleted
     if (!pgm) {
         pgm = obj->getProgram();
@@ -1664,10 +1678,18 @@ static jbyteArray JNICALL qore_url_classloader_get_cached_class(JNIEnv* jenv, jc
 template <typename Result, typename Callback>
 static Result generated_native_call(JNIEnv* jenv, Callback&& callback) {
     Env env(jenv);
-    ExceptionSink xsink;
+    // the thread is attached before the exception sink is created, so that the sink is destroyed while the thread is
+    // attached, and a failure to attach it is raised without a Qore exception, which needs the Qore thread state of
+    // the thread (qore#6828)
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
+        return Result{};
+    }
+    ExceptionSink xsink;
+    try {
         return callback(env, xsink);
     } catch (jni::Exception& e) {
         e.convert(&xsink);
@@ -2818,12 +2840,12 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
         return nullptr;
     }
     // a class is loaded on any thread, also one that Java started, which is not attached to Qore: the thread is
-    // attached before the module manager and the Programs are used (qore#6828)
+    // attached before the module manager and the Programs are used (qore#6828); if it cannot be attached, null is
+    // returned, which tells the Java caller to fall back to local generation, as for any other error here
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
     } catch (Exception& e) {
-        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
         return nullptr;
     }
     jobject loader = nullptr;

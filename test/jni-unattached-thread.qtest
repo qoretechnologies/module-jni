@@ -84,10 +84,9 @@ class JniUnattachedThreadTest inherits QUnit::Test {
         # a description that is not a string is not part of the message
         assertEq("ok: UNATTACHED-TEST-ERROR", getResult(out, "message-hash"), out);
         # the regression: the description cannot be converted to UTF-8, and its bytes are appended as they are; Java
-        # decodes the invalid sequence as U+FFFD
-        string msg = getResult(out, "message-encoding");
-        assertRegex("^ok: UNATTACHED-TEST-ERROR: ", msg, out);
-        assertNeq("ok: UNATTACHED-TEST-ERROR: ", msg, out);
+        # decodes the invalid byte (0xff) as U+FFFD
+        assertEq("ok: UNATTACHED-TEST-ERROR: " + binary_to_string(<1b2428efbfbd>), getResult(out, "message-encoding"),
+            out);
     }
 
     loadClassCase() {
@@ -103,10 +102,12 @@ class JniUnattachedThreadTest inherits QUnit::Test {
         string out = runChild("moduleloader");
         assertEq("ok: null", getResult(out, "module-loader-missing"), out);
         string err = getResult(out, "module-loader-error");
-        if (err == "ok: null") {
-            # a release build has no test hook
-            return;
+        if (getResult(out, "debug-build") == "no") {
+            # a release build has no test hook: the module is not known
+            assertEq("ok: null", err, out);
+            testSkip("the jni module is not a debug build, which has the test hook that raises the error");
         }
+        assertEq("yes", getResult(out, "debug-build"), out);
         assertEq("java.lang.RuntimeException: getModuleLoader() failed: JNI-TEST-ERROR: injected module loader failure "
             "for module 'UnattachedLoaderFail'", err, out);
     }
