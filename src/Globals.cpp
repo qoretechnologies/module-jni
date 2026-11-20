@@ -1354,6 +1354,12 @@ static void JNICALL java_api_delete_connection_waiter(JNIEnv* jenv, jclass, jlon
 
 static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, jlong ptr) try {
     ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
+    if (!xsink) {
+        // the exception has been released; QoreExceptionWrapper.getMessage() does not call the method then, and
+        // returns this message itself
+        return jenv->NewStringUTF("Qore exception (the message is unavailable: the exception has been taken by Qore, "
+            "or released by the shutdown of the jni module)");
+    }
 
     // Java can get the message on any thread, also one that Java started, which is not attached to Qore: the thread
     // is attached for the conversion of the code and the description, as a description that cannot be converted to

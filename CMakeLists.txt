@@ -1305,6 +1305,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JvmPrimaryReaperExit.java
     test/java/src/org/qore/jni/test/GeneratedBindings.java
     test/java/src/org/qore/jni/test/ContextProgramLifetimeProbe.java
+    test/java/src/org/qore/jni/test/ExceptionWrapperRelease.java
     test/java/src/org/qore/jni/test/GlobalContextTeardownFixture.java
     test/java/src/org/qore/jni/test/JvmSignals.java
     test/java/src/org/qore/jni/test/NativeExceptionProbe.java

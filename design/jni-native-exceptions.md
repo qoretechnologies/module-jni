@@ -39,6 +39,17 @@ The handler is the last resort: native methods still handle the errors that they
 exception raised while the thread is attached and the Program is current), and the handler covers everything that
 escapes them, including C++ exceptions thrown from their catch handlers.
 
+## The lifetime of the Qore exception of a `QoreExceptionWrapper`
+
+A `QoreExceptionWrapper` holds its Qore exception (a heap `ExceptionSink`, `QoreToJava::newExceptionWrapper()`)
+through a `NativeCleanup.Ref`.  The exception is released when Qore takes it (`QoreExceptionWrapper.get()`, when the
+wrapper is thrown back to Qore: `JavaException::convert()`), when the wrapper is collected, and at the module's
+shutdown (`Globals::stopNativeCleanupThread()` releases the exception of every wrapper that still exists).  Each
+release claims the pointer with `Ref.acquireAndClear()`, which sets it to 0 under the monitor of the `Ref`.  Java can
+keep the wrapper after its exception has been released, so `QoreExceptionWrapper.getMessage()` reads the pointer, and
+calls the native method with it, under that monitor, and gives a fixed message for a released exception (0) instead
+of calling the native method; the native method also refuses 0.
+
 ## Raising Java exceptions without throwing
 
 The error paths of native methods raise Java exceptions with `jni_throw_new()` and its wrappers

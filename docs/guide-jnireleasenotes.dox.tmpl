@@ -127,6 +127,12 @@
       from a Java thread (ex: through \c QoreJavaApi.callFunction()) to return before it deletes the global Java
       context Program; before, such a callback could run against the deleted Program; a callback that never returns
       now delays the exit of the process (qore#6829)
+    - fixed a crash (\c SIGSEGV) when Java used an \c org.qore.jni.QoreExceptionWrapper (the Java exception of a
+      %Qore exception) after its %Qore exception had been released: when Java got its message, or threw it to %Qore
+      again, after it had been thrown back to %Qore, which takes its exception, or after the module's shutdown, which
+      releases the exception of every wrapper that still exists (ex: a wrapper that a Java thread kept, or one that the
+      constructor of a generated class raised during the shutdown, read in a JVM shutdown hook); the message of a
+      released exception is now a fixed message, and the exception is no longer released while its message is read
     - fixed the module's teardown and cleanup paths, which ended the process in \c std::terminate() (exit code 134)
       when a step of them failed with a JNI error (ex: stopping the module's native cleanup thread at process exit):
       the module's delete function, its \c atexit() handler, its Program cleanup callback and the rollback of a

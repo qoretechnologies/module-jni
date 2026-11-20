@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# A Qore exception that a call from Java raises is thrown in Java as an org.qore.jni.QoreExceptionWrapper, which holds
+# the Qore exception until Qore takes it (when the wrapper is thrown back to Qore) or the jni module's shutdown
+# releases it (Globals::stopNativeCleanupThread() releases the exception of every wrapper that still exists).  Java
+# can keep the wrapper after either, and QoreExceptionWrapper.getMessage() passed the released pointer, 0, to its
+# native method, which dereferenced it: the process crashed (SIGSEGV in ExceptionSink::getExceptionErr()) when Java
+# got the message of the wrapper, or threw it to Qore again (Qore describes a wrapper whose exception it has taken as
+# a Java exception, with its message).  This also happened to a wrapper that a native method raises in the window of
+# the module's shutdown between the deletion of the global context Program and the destruction of the JVM (ex: the
+# constructor of a generated class, which raises the exception that no Program context is available then).  The
+# message of a released exception is now a fixed message, and it is read under the lock that each release takes, so
+# that the exception is not released while it is read.
+#
+# Each case runs test/jni-exception-wrapper-released-child.q in a new process: a crash would end the child, and the
+# module's shutdown runs when the process exits.  The "window" case needs a debug build of the module, and is skipped
+# with a release build.
+
+%modern
+
+%requires QUnit
+%requires Util
+%exec-class JniExceptionWrapperReleasedTest
+
+class JniExceptionWrapperReleasedTest inherits QUnit::Test {
+    public {
+        #! the message of a wrapper whose exception has been released
+        const ReleasedMessage = "Qore exception (the message is unavailable: the exception has been taken by Qore, "
+            "or released by the shutdown of the jni module)";
+
+        #! the description of a wrapper whose exception has been released
+        const ReleasedWrapper = "org.qore.jni.QoreExceptionWrapper: " + ReleasedMessage;
+    }
+
+    constructor() : QUnit::Test("JNI QoreExceptionWrapper with a released exception", "1.0") {
+        addTestCase("negative: the message of a wrapper with its exception", \liveCase());
+        addTestCase("regression: the message of a wrapper whose exception Qore took", \takenCase());
+        addTestCase("regression: a wrapper whose exception Qore took thrown to Qore again", \takenRethrowCase());
+        addTestCase("regression: the message of a wrapper after the module's shutdown", \shutdownCase());
+        addTestCase("regression: a wrapper raised in the module's shutdown window", \windowCase());
+        set_return_value(main());
+    }
+
+    liveCase() {
+        string out = runChild("live");
+        assertEq("call: org.qore.jni.QoreExceptionWrapper", getLine(out, "call: "), out);
+        assertEq("message: org.qore.jni.QoreExceptionWrapper: RELEASED-TEST-ERROR: the description",
+            getLine(out, "message: "), out);
+    }
+
+    takenCase() {
+        string out = runChild("taken");
+        assertEq("call: org.qore.jni.QoreExceptionWrapper", getLine(out, "call: "), out);
+        # Qore takes the exception of the wrapper
+        assertEq("rethrow: RELEASED-TEST-ERROR: the description", getLine(out, "rethrow: "), out);
+        assertEq("message: " + ReleasedWrapper, getLine(out, "message: "), out);
+    }
+
+    takenRethrowCase() {
+        string out = runChild("taken-rethrow");
+        assertEq("rethrow: RELEASED-TEST-ERROR: the description", getLine(out, "rethrow: "), out);
+        # the wrapper is described as a Java exception, with the message of a released exception
+        string line = getLine(out, "rethrow-again: ");
+        assertRegex("^rethrow-again: JNI-ERROR: ", line, out);
+        assertTrue(line.find(ReleasedWrapper) > 0, out);
+    }
+
+    shutdownCase() {
+        string out = runChild("shutdown");
+        assertEq("call: org.qore.jni.QoreExceptionWrapper", getLine(out, "call: "), out);
+        assertEq("shutdown: " + ReleasedWrapper, getLine(out, "shutdown: "), out);
+    }
+
+    windowCase() {
+        string out = runChild("window");
+        if (getLine(out, "debug: ") != "debug: True") {
+            assertEq("debug: False", getLine(out, "debug: "), out);
+            testSkip("the jni module's shutdown window hook requires a debug build");
+        }
+        # the constructor raises the exception that no Program context is available in the window as a wrapper
+        assertEq("probe: org.qore.jni.QoreExceptionWrapper (kept)", getLine(out, "probe: "), out);
+        assertEq("shutdown: " + ReleasedWrapper, getLine(out, "shutdown: "), out);
+        assertFalse(out =~ /jni-dbg: the shutdown window hook/, out);
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr), checking that it ran to the end and
+    #! exited with status 0
+    private string runChild(string case_name) {
+        string child = normalize_dir(get_script_dir() + "/jni-exception-wrapper-released-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is checked
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b --enable-debug %s "
+            "%s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child), case_name);
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+        assertFalse(out =~ /unhandled QORE/, out);
+        return out;
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+        return "";
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}
