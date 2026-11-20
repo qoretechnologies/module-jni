@@ -4522,7 +4522,13 @@ LocalReference<jobject> JniExternalProgramData::getJavaTypeDefinition(Env& env, 
             return get_type_def_from_class(env, Globals::classObject);
         }
 
+#ifdef QORE_JNI_TYPE_ARGS_BY_REF
+        // the form introduced by qore#6419 copies the type arguments to a caller-owned vector
+        type_vec_t type_args_vec;
+        const type_vec_t* type_args = qore_type_get_type_arguments(ti, type_args_vec) ? &type_args_vec : nullptr;
+#else
         const type_vec_t* type_args = qore_type_get_type_arguments(ti);
+#endif
         LocalReference<jobject> jtype_args;
         if (type_args && !type_args->empty()) {
             jtype_args = env.newObject(Globals::classArrayList, Globals::ctorArrayList, nullptr);
