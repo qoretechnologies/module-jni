@@ -1422,11 +1422,21 @@ public class QoreURLClassLoader extends URLClassLoader {
         private int manifestEntries;
         //! true once an element refuses the classpath
         private boolean refused;
-        //! the JDK feature version whose class loader the check of manifest Class-Path attributes must match
+        //! the JDK feature version that the check of manifest Class-Path attributes assumes, as reported
         private final int jdkFeature;
+        //! true if manifest Class-Path attributes can be checked: the running JDK and any version assumed instead
+        //! have been verified
+        private final boolean classPathVerified;
 
-        private ResolvedClasspath(int jdkFeature) {
-            this.jdkFeature = jdkFeature;
+        //! Makes a resolved classpath for the running JDK, or also assuming another JDK feature version (> 0)
+        /** A version assumed instead (only a debug build of the module passes one, for its tests) can only make the
+            check stricter: manifest Class-Path attributes are checked only if the running JDK's version has been
+            verified as well.
+        */
+        private ResolvedClasspath(int assumedFeature) {
+            int running = Runtime.version().feature();
+            jdkFeature = assumedFeature > 0 ? assumedFeature : running;
+            classPathVerified = isVerifiedClassPathJdk(running) && isVerifiedClassPathJdk(jdkFeature);
         }
 
         private void add(File path, File file, boolean match, String note) {
@@ -1553,12 +1563,13 @@ public class QoreURLClassLoader extends URLClassLoader {
                     + "its Class-Path attribute names against the sandbox filesystem policy: " + e);
                 return;
             }
-            if (classpath == null || classpath.trim().isEmpty()) {
+            // an attribute with no entries (as the class loader splits it) names nothing
+            if (classpath == null || !new StringTokenizer(classpath).hasMoreTokens()) {
                 return;
             }
             // the entries can only be resolved as the class loader resolves them on a JDK whose class loader has been
             // verified
-            if (!isVerifiedClassPathJdk(jdkFeature)) {
+            if (!classPathVerified) {
                 refuse(jar, null, "the classpath jar '" + jar + "' has a manifest Class-Path attribute, which cannot "
                     + "be checked against the sandbox filesystem policy on an unverified JDK version " + jdkFeature
                     + " for manifest Class-Path checking (verified: "
@@ -1768,14 +1779,14 @@ public class QoreURLClassLoader extends URLClassLoader {
         ResolvedClasspath.expand(), as each jar is checked (qore#6822).
 
         @param classpath the classpath
-        @param jdkFeature the JDK feature version whose class loader the check of manifest Class-Path attributes must
-        match, or 0 (or less) for the running JDK's
+        @param jdkFeature a JDK feature version for the check of manifest Class-Path attributes to assume as well as
+        the running JDK's, which can only make the check stricter, or 0 for none
     */
     static ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
         if (classpath == null) {
             throw new IllegalArgumentException("the classpath must not be null");
         }
-        ResolvedClasspath rc = new ResolvedClasspath(jdkFeature > 0 ? jdkFeature : Runtime.version().feature());
+        ResolvedClasspath rc = new ResolvedClasspath(jdkFeature);
         for (String pathentry : classpathEntries(classpath)) {
             File fileentry = resolveClasspathEntry(pathentry);
             if (fileentry.getName().indexOf('*') == -1) {

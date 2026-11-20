@@ -397,9 +397,9 @@ public final class QoreSandbox {
         represent exactly.
 
         @param classpath the classpath
-        @param jdkFeature the JDK feature version whose class loader the check of manifest Class-Path attributes
-        must match, or 0 for the running JDK's (only a debug build of the module passes another, for its tests; see
-        QoreURLClassLoader.isVerifiedClassPathJdk())
+        @param jdkFeature a JDK feature version for the check of manifest Class-Path attributes to assume as well as
+        the running JDK's, which can only make the check stricter, or 0 for none (only a debug build of the module
+        passes one, for its tests; see QoreURLClassLoader.isVerifiedClassPathJdk())
     */
     static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
         QoreURLClassLoader.ResolvedClasspath rc = QoreURLClassLoader.resolveClasspath(classpath, jdkFeature);

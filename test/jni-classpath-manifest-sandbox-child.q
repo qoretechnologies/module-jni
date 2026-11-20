@@ -353,6 +353,14 @@ sub jdkgate_case(string root) {
     result("jdkgate: the error names the jar", True, h.desc.find(root + "/a/cp-ref.jar") >= 0);
     result("jdkgate: nothing is added on it", (), jar_paths(p, root));
     result("jdkgate: the class of the named jar is not loaded on it", False, loads(p, "CpTarget"));
+    p = new_program(get_sandbox(root, ("a",)));
+    h = add_classpath(p, root + "/a/*.jar");
+    result("jdkgate: a wildcard that selects the jar is refused on it", "JNI-CLASSPATH-ERROR", h.err);
+    result("jdkgate: the wildcard error names the reason", True, h.desc =~ /unverified JDK version 9999/);
+    p = new_program(get_sandbox(root, ("d",), ("d/lib",)));
+    h = add_classpath(p, root + "/d/cp-ref.zip");
+    result("jdkgate: a zip file with a Class-Path is refused on it", "JNI-CLASSPATH-ERROR", h.err);
+    result("jdkgate: the zip file error names the reason", True, h.desc =~ /unverified JDK version 9999/);
 
     # an unknown version: a jar with no manifest Class-Path is accepted
     p = new_program(get_sandbox(root, ("a",)));

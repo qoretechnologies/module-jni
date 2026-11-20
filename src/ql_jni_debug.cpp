@@ -385,10 +385,11 @@ void dbg_jni_report_context_programs() noexcept {
 
 std::atomic<int> dbg_jni_classpath_jdk_feature{0};
 
-//! Makes the sandbox check of manifest Class-Path attributes assume the given JDK feature version, or with no
-//! argument, the running JDK's
+//! Makes the sandbox check of manifest Class-Path attributes assume the given JDK feature version as well as the
+//! running JDK's, or with no argument, only the running JDK's
 /** So that a test can check the refusal of manifest Class-Path attributes on a JDK version whose class loader has
-    not been verified (qore#6822) - see test/jni-classpath-manifest-sandbox.qtest.  DEBUG builds only.
+    not been verified (qore#6822) - see test/jni-classpath-manifest-sandbox.qtest; it can only make the check
+    stricter.  DEBUG builds only.
 */
 static QoreValue f_dbg_jni_set_classpath_jdk_feature(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {

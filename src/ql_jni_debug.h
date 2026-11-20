@@ -101,10 +101,11 @@ enum class DbgJniFailPoint {
     Classpath,
 };
 
-//! The JDK feature version that the sandbox check of manifest Class-Path attributes assumes, or 0 for the running
-//! JDK's (qore#6822)
+//! A JDK feature version that the sandbox check of manifest Class-Path attributes assumes as well as the running
+//! JDK's, or 0 for none (qore#6822)
 /** Set with Jni::dbg_jni_set_classpath_jdk_feature(), so that a test can check the refusal of manifest Class-Path
-    attributes on a JDK version whose class loader has not been verified; it does not exist in release builds
+    attributes on a JDK version whose class loader has not been verified; it can only make the check stricter, and it
+    does not exist in release builds
 */
 DLLLOCAL extern std::atomic<int> dbg_jni_classpath_jdk_feature;
 
