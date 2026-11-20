@@ -1422,11 +1422,9 @@ public class QoreURLClassLoader extends URLClassLoader {
         private int manifestEntries;
         //! true once an element refuses the classpath
         private boolean refused;
-        //! the JDK feature version that the check of manifest Class-Path attributes assumes, as reported
-        private final int jdkFeature;
-        //! true if manifest Class-Path attributes can be checked: the running JDK and any version assumed instead
-        //! have been verified
-        private final boolean classPathVerified;
+        //! the JDK feature version whose class loader has not been verified for manifest Class-Path checking: the
+        //! running JDK's, or else a version assumed as well; 0 if both have been verified
+        private final int unverifiedFeature;
 
         //! Makes a resolved classpath for the running JDK, or also assuming another JDK feature version (> 0)
         /** A version assumed instead (only a debug build of the module passes one, for its tests) can only make the
@@ -1435,8 +1433,13 @@ public class QoreURLClassLoader extends URLClassLoader {
         */
         private ResolvedClasspath(int assumedFeature) {
             int running = Runtime.version().feature();
-            jdkFeature = assumedFeature > 0 ? assumedFeature : running;
-            classPathVerified = isVerifiedClassPathJdk(running) && isVerifiedClassPathJdk(jdkFeature);
+            if (!isVerifiedClassPathJdk(running)) {
+                unverifiedFeature = running;
+            } else if (assumedFeature > 0 && !isVerifiedClassPathJdk(assumedFeature)) {
+                unverifiedFeature = assumedFeature;
+            } else {
+                unverifiedFeature = 0;
+            }
         }
 
         private void add(File path, File file, boolean match, String note) {
@@ -1569,10 +1572,10 @@ public class QoreURLClassLoader extends URLClassLoader {
             }
             // the entries can only be resolved as the class loader resolves them on a JDK whose class loader has been
             // verified
-            if (!classPathVerified) {
+            if (unverifiedFeature != 0) {
                 refuse(jar, null, "the classpath jar '" + jar + "' has a manifest Class-Path attribute, which cannot "
-                    + "be checked against the sandbox filesystem policy on an unverified JDK version " + jdkFeature
-                    + " for manifest Class-Path checking (verified: "
+                    + "be checked against the sandbox filesystem policy on an unverified JDK version "
+                    + unverifiedFeature + " for manifest Class-Path checking (verified: "
                     + Arrays.toString(VERIFIED_CLASS_PATH_JDK_FEATURES) + ")");
                 return;
             }
