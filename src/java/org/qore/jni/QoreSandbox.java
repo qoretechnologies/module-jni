@@ -388,12 +388,12 @@ public final class QoreSandbox {
     //! Resolves a classpath once for its sandbox check and its use (qore#6818)
     /** Called by the module for a classpath that a filesystem policy governs: the module checks each element of the
         result against the policy, and then gives the same object to QoreURLClassLoader.addResolvedPath(), which adds
-        exactly the files that were checked, so that the classpath is not resolved again between the check and the
-        use.  The elements are those of QoreURLClassLoader.resolveClasspath(): each entry as the JVM resolves it
-        (against its \c user.dir, not the current directory of the process, also for a wildcard with no directory
-        part, such as \c "*.jar"), with symbolic links resolved, and for a wildcard entry, its directory and each file
-        that it selects.  Each checked path is encoded as encode() does, which raises JNI-SANDBOX-ERROR for a path that
-        the file name encoding cannot represent exactly.
+        only files that were checked, so that the classpath is not resolved again between the check and the use.  The
+        elements are those of QoreURLClassLoader.resolveClasspath(): each entry as the JVM resolves it (against its
+        \c user.dir, not the current directory of the process, also for a wildcard with no directory part, such as
+        \c "*.jar"), with symbolic links resolved, and for a wildcard entry, its directory and each file that it
+        selects.  Each checked path is encoded as encode() does, which raises JNI-SANDBOX-ERROR for a path that the
+        file name encoding cannot represent exactly.
     */
     static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath) {
         QoreURLClassLoader.ResolvedClasspath rc = QoreURLClassLoader.resolveClasspath(classpath);

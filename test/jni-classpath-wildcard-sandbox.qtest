@@ -4,17 +4,17 @@
 # SPDX-License-Identifier: MIT
 
 # Under a sandbox with a filesystem policy, a wildcard classpath entry is expanded once, and each file that it
-# selects is checked against the policy as its real path, with symbolic links resolved; the entries that are given
-# to the class loader are exactly the paths that were checked (qore#6818).  If the policy denies any file that the wildcard selects, the
-# whole entry is refused with JNI-CLASSPATH-ERROR, naming the file, and nothing is added.  With no sandbox, wildcards
-# are expanded as before.
+# selects is checked against the policy as its real path, with symbolic links resolved; every entry that is given
+# to the class loader is one of the paths that were checked (qore#6818).  If the policy denies any file that the
+# wildcard selects, the whole entry is refused with JNI-CLASSPATH-ERROR, naming the file, and nothing is added.  With
+# no sandbox, wildcards are expanded as before.
 #
 # Each case runs test/jni-classpath-wildcard-sandbox-child.q in a new process, with a test tree made here:
 #   mix/a.jar           the jni test jar; mix/d.jar: the Kotlin test jar, which the policy of the case denies
 #   esc/a.jar           the jni test jar; esc/out.jar: a link to outside/k.jar; esc/outdir: a link to outside
 #   outside/k.jar       the Kotlin test jar, outside every allowed directory
 #   in/link.jar         a link to in/sub/k.jar, the Kotlin test jar; in/link2.jar: another link to it;
-#                       in/dangling.jar: a link to a file that does not exist; in/subdir: a link to in/sub
+#                       in/dangling.jar: a link to a file outside that does not exist; in/subdir: a link to in/sub
 #   plain/a.jar         the jni test jar
 
 %modern
@@ -69,7 +69,7 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
         makeLink(root + "/outside", "esc/outdir");
         makeLink("sub/k.jar", "in/link.jar");
         makeLink("sub/k.jar", "in/link2.jar");
-        makeLink("none.jar", "in/dangling.jar");
+        makeLink(root + "/outside/none.jar", "in/dangling.jar");
         makeLink("sub", "in/subdir");
     }
 
@@ -121,6 +121,7 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
             "result: inside: the wildcard is added: OK",
             "result: inside: the file that the link points to is added: OK",
             "result: inside: its class is loaded: OK",
+            "result: inside: the linked file is added once: OK",
             "result: inside: a wildcard in a linked directory inside: OK",
             "result: inside: its file is added as its real path: OK",
             "result: inside: a link as an entry: OK",

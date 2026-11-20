@@ -610,7 +610,7 @@ DLLLOCAL jni::LocalReference<jobject> jni_check_classpath_sandbox(const char* cm
 
 //! Checks a classpath against a filesystem policy, file by file, as the JVM uses them (see jni-module.cpp)
 /** The classpath is resolved once (QoreSandbox.resolveClasspath()) into the paths that are checked and the files
-    that are added, so that the files added are exactly the files checked (qore#6818): each entry is checked as the
+    that are added, so that every file added is one that was checked (qore#6818): each entry is checked as the
     absolute path that the JVM resolves it to (against its \c user.dir), with symbolic links resolved, in the bytes
     that the JVM passes to the operating system for it; a wildcard entry is checked as its directory and as each file
     that it selects.  Any denial refuses the whole classpath, and nothing is added; the denial of a file that a

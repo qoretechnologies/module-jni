@@ -188,6 +188,9 @@ sub inside_case(string root) {
     result("inside: the wildcard is added", "ok", h.err);
     result("inside: the file that the link points to is added", ("in/sub/k.jar",), jar_paths(p, root));
     result("inside: its class is loaded", True, p.callFunction("can_load", KotlinClass));
+    # two links to the same file add it once
+    result("inside: the linked file is added once", 1,
+        (select p.callFunction("chain_urls"), $1 =~ /\/in\/sub\/k\.jar/).size());
 
     # a linked directory inside the allowed directory: its wildcard is added as the files it points to
     Program p2 = new_program(get_sandbox(root, ("in",)));

@@ -1276,7 +1276,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! Adds a path to the classpath
     /** An entry that does not exist or cannot be used is logged and left out; an error while an entry is added is
         thrown to the caller (qore#6779).  A classpath that a sandbox filesystem policy governs is not added here, but
-        with resolveClasspath() and addResolvedPath(), so that the files that are added are the files that the policy
+        with resolveClasspath() and addResolvedPath(), so that every file that is added is one that the policy
         checked (qore#6818).
     */
     public void addPath(String classpath) {
@@ -1338,7 +1338,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! A classpath resolved once, for both its sandbox check and its use (qore#6818)
     /** Made by resolveClasspath(); each element is a path that the sandbox check of the classpath checks, and the
         file that addResolvedPath() adds for it, if any.  The check and the use take their paths from this one object,
-        so the files that are added are exactly the files that were checked, with no second resolution in between.
+        so every file that is added is one that was checked, with no second resolution in between.
 
         The sandbox check (see QoreSandbox.resolveClasspath()) reads each element with size(), encodedPath() and
         isWildcardMatch(); a denial refuses the whole classpath, so the classpath is then not added at all.
@@ -1466,8 +1466,8 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Adds a classpath that the sandbox check has resolved and checked (qore#6818)
-    /** Adds exactly the files of the resolved classpath, which are the files that were checked; nothing is resolved
-        again.  An error while an element is added is thrown to the caller (qore#6779).
+    /** Adds the files of the resolved classpath, each of which was checked; nothing is resolved again.  An error while
+        an element is added is thrown to the caller (qore#6779).
     */
     void addResolvedPath(ResolvedClasspath rc) {
         if (rc == null) {

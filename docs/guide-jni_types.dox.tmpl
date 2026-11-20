@@ -203,9 +203,9 @@
     absolute path resolved against the JVM's \c user.dir (a relative entry, including a wildcard with no directory
     part such as \c *.jar, is not resolved against the current directory of the process), in the bytes of the JVM's
     file name encoding (\c sun.jnu.encoding).  Each entry is checked as its real path, with symbolic links resolved,
-    and a wildcard entry is expanded once and checked as its directory and as each file that it selects; the entries
-    that are given to the class loader are exactly the paths that were checked (see @ref jni_sandbox).  The files that the class loader
-    reads under a directory entry are not checked one by one.
+    and a wildcard entry is expanded once and checked as its directory and as each file that it selects; every entry
+    that is given to the class loader is one of the paths that were checked (see @ref jni_sandbox).  The files that
+    the class loader reads under a directory entry are not checked one by one.
 
     The names of Java and %Qore classes, methods, fields and functions are passed as they are (in UTF-8), apart from
     the class names below, and a name with a NUL character is refused (see above).

@@ -1194,8 +1194,8 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
     if (!policy) {
         return nullptr;
     }
-    // the classpath is resolved once, in Java, and the same object is then added, so that the files that are added
-    // are exactly the files that are checked here (qore#6818); each path is as the JVM uses it (made absolute
+    // the classpath is resolved once, in Java, and the same object is then added, so that every file that is added
+    // is one that is checked here (qore#6818); each path is as the JVM uses it (made absolute
     // against its user.dir, with symbolic links resolved), in the bytes that the JVM passes to the operating system
     // for it, so that the policy judges the representation that is used, and a wildcard entry is its directory and
     // each file that it selects
