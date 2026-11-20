@@ -1912,6 +1912,14 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
         jstring nspath, jstring jname, jstring module, jboolean python, jboolean kotlin, jlong class_ptr) try {
     assert(ptr);
     Env env(jenv);
+    // a class pointer is accepted only if the module's own code gave it for the innermost call that runs on this
+    // thread: Java code must never supply a native class pointer, which would be used as a class of any Program, or
+    // freed memory (qore#6854); this only compares pointers, it dereferences none; the Program that it was given for
+    // is checked once the Program is validated, below
+    if (class_ptr && !JniIssuedClassHelper::isIssued(reinterpret_cast<const void*>(class_ptr))) {
+        jni_throw_runtime_exception(*env, "a Qore class pointer can only be given by the jni module's own code");
+        return nullptr;
+    }
     QoreString qpath;
     if (nspath) {
         Env::GetStringUtfChars jqpath(env, nspath);
@@ -1930,6 +1938,12 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
 
     ExceptionSink xsink;
     try {
+#ifdef DEBUG
+        // a test runs code here while the class pointer is issued on this thread (qore#6854)
+        if (class_ptr && dbg_jni_context_gate_set.load(std::memory_order_acquire)) {
+            dbg_jni_run_context_gate(DbgJniGatePoint::IssuedClass);
+        }
+#endif
         // the namespace path, the Java name and the module name are NUL-terminated strings in Qore, at whose first NUL
         // character they would be cut: a name with one is refused (qore#6738)
         jni_check_name(qpath.c_str(), qpath.size(), "Qore namespace path", "Qore namespace paths");
@@ -1947,6 +1961,11 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
         // validated and held, and entered as above (see JniJavaProgramRef)
         JniJavaProgramRef java_pgm(env, xsink, ptr, class_loader);
         QoreProgram* pgm = java_pgm.get();
+        // the class pointer was given for this Program: one given for another Program is refused (qore#6854)
+        if (class_ptr && !JniIssuedClassHelper::isIssued(reinterpret_cast<const void*>(class_ptr), pgm)) {
+            jni_throw_runtime_exception(*env, "a Qore class pointer can only be given by the jni module's own code");
+            return nullptr;
+        }
         // the parse lock is taken immediately after: when the Program is current and not entered, it is what keeps
         // the Program from being torn down while its definitions are read; it is re-entrant, and the byte code
         // generation below takes it again
@@ -5666,6 +5685,33 @@ void QoreJniStackLocationHelper::checkInit() const {
     for (size_t i = 1; i < size(); ++i) {
         frames.push_back(std::make_unique<QoreJniJavaFrameLocation>(*this, i));
     }
+}
+
+namespace {
+//! a class pointer that the module's own code gave to loadClassWithPtr(), with the Program it was given for
+struct JniIssuedClass {
+    const QoreClass* cls;
+    const QoreProgram* pgm;
+};
+}
+
+//! the class pointers that the module's own code gave to loadClassWithPtr() on this thread, innermost last
+static thread_local std::vector<JniIssuedClass> jni_issued_classes;
+
+JniIssuedClassHelper::JniIssuedClassHelper(const QoreClass* cls, const QoreProgram* pgm) {
+    jni_issued_classes.push_back({cls, pgm});
+}
+
+JniIssuedClassHelper::~JniIssuedClassHelper() {
+    jni_issued_classes.pop_back();
+}
+
+bool JniIssuedClassHelper::isIssued(const void* cls) {
+    return !jni_issued_classes.empty() && jni_issued_classes.back().cls == cls;
+}
+
+bool JniIssuedClassHelper::isIssued(const void* cls, const QoreProgram* pgm) {
+    return isIssued(cls) && jni_issued_classes.back().pgm == pgm;
 }
 
 } // namespace jni
