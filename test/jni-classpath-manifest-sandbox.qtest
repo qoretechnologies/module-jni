@@ -1,0 +1,327 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# Under a sandbox with a filesystem policy, the jars that the manifest Class-Path attributes of the classpath's jars
+# name are resolved and checked against the policy with the classpath's own entries, recursively (qore#6822).  If
+# the policy denies any of them, or one cannot be checked, the whole classpath is refused with JNI-CLASSPATH-ERROR,
+# naming the file, and nothing is added.  With no sandbox, manifest Class-Path attributes are followed as before.
+# On a JDK feature version whose class loader has not been verified for this check, a jar with a manifest Class-Path
+# attribute refuses a sandboxed classpath; the jdkgate case assumes such a version with
+# Jni::org::qore::jni::dbg_jni_set_classpath_jdk_feature(), so it needs a debug build of the module.
+#
+# Each case runs test/jni-classpath-manifest-sandbox-child.q in a new process, with a test tree made here from the
+# jars in test/jni-classpath-manifest-jars (made by the build; each has one class, org.qore.jni.test.cpman.*):
+#   a/cp-ref.jar        its manifest names lib/cp-target.jar; a/lib/cp-target.jar: that jar
+#   d/cp-ref.jar        as a/; d/lib/cp-target.jar is denied by the policy of the deny case; d/cp-ref.zip: a copy
+#   j/cp-ref.jar        as a/; j/lib/cp-target.jar is a text file
+#   v/cp-ref.jar        as a/; v/lib/cp-target.jar is a link to /dev/null; v/fifo.jar: a FIFO
+#   s/cp-ref.jar        as a/; s/lib: a link to outside, which has cp-target.jar
+#   m/cp-ref.jar        as a/, with no lib directory
+#   cy/cp-cyca.jar      its manifest names cp-cycb.jar, whose manifest names cp-cyca.jar
+#   n/cp-nesta.jar      names b/cp-nestb.jar; n/b/cp-nestb.jar: names c/cp-nestc.jar; n/b/c/cp-nestc.jar
+#   h/cp-http.jar       its manifest names an http URL
+#   w/cp-upref.jar      names up/cp-up.jar; w/up: a link to o/deep; o/deep/cp-up.jar: names ../lib/cp-target.jar;
+#                       w/lib/cp-target.jar and o/lib/cp-target.jar: copies of that jar
+
+%modern
+# the debug build check of the constructor loads the jni module of this tree, also where the tree's build directory is
+# not in QORE_MODULE_DIR
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires QUnit
+%requires Util
+%exec-class JniClasspathManifestSandboxTest
+
+class JniClasspathManifestSandboxTest inherits QUnit::Test {
+    public {
+        #! the directory of the test jars, in the directory of this script
+        const JarDirName = "jni-classpath-manifest-jars";
+    }
+
+    private {
+        #! the root of the test tree, as a real path
+        string root;
+        #! the reason that the JDK version case is skipped, if the module is not a debug build
+        *string skip_reason;
+        #! the files and links of the test tree, removed at the end
+        list<string> files = ();
+        #! the directories of the test tree, removed at the end, deepest first
+        list<string> dirs = ();
+    }
+
+    constructor() : QUnit::Test("JNI manifest Class-Path attributes under a sandbox", "1.0") {
+        try {
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse("%requires jni\nnothing sub t() { Jni::org::qore::jni::dbg_jni_set_classpath_jdk_feature(); }",
+                "dbg");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "PARSE-EXCEPTION" || ex.desc !~ /dbg_jni_/) {
+                rethrow;
+            }
+            skip_reason = ex.desc;
+        }
+        addTestCase("regression: a Class-Path that names a denied jar is refused", \denyTest());
+        addTestCase("regression: a Class-Path through a link out of the allowed directory is refused", \escapeTest());
+        addTestCase("regression: a relative Class-Path is checked where the class loader resolves it",
+            \relativeTest());
+        addTestCase("coverage: a Class-Path cycle is followed once", \cycleTest());
+        addTestCase("coverage: a chain of Class-Path attributes is followed", \nestedTest());
+        addTestCase("coverage: a Class-Path that names an allowed jar is followed", \allowedTest());
+        addTestCase("coverage: Class-Path attributes with no sandbox are unchanged", \unsandboxedTest());
+        addTestCase("regression: a Class-Path is refused on an unverified JDK version", \jdkGateTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string base = sprintf("%s%sjni-classpath-manifest-sandbox-%d-%d", tmp_location(), DirSep, getpid(),
+            now_us().durationMicroseconds());
+        makeDir(base);
+        root = realpath(base);
+        foreach string d in (("a", "a/lib", "d", "d/lib", "s", "outside", "m", "cy", "n", "n/b", "n/b/c", "h", "w",
+                "w/lib", "o", "o/deep", "o/lib", "j", "j/lib", "v", "v/lib")) {
+            makeDir(root + DirSep + d);
+        }
+        copyJar("cp-ref.jar", "a/cp-ref.jar");
+        copyJar("cp-target.jar", "a/lib/cp-target.jar");
+        copyJar("cp-ref.jar", "d/cp-ref.jar");
+        copyJar("cp-target.jar", "d/lib/cp-target.jar");
+        copyJar("cp-ref.jar", "d/cp-ref.zip");
+        copyJar("cp-ref.jar", "j/cp-ref.jar");
+        writeFile("j/lib/cp-target.jar", binary("not a jar\n"));
+        copyJar("cp-ref.jar", "v/cp-ref.jar");
+        makeLink("/dev/null", "v/lib/cp-target.jar");
+        makeFifo("v/fifo.jar");
+        copyJar("cp-ref.jar", "s/cp-ref.jar");
+        copyJar("cp-target.jar", "outside/cp-target.jar");
+        makeLink(root + "/outside", "s/lib");
+        copyJar("cp-ref.jar", "m/cp-ref.jar");
+        copyJar("cp-cyca.jar", "cy/cp-cyca.jar");
+        copyJar("cp-cycb.jar", "cy/cp-cycb.jar");
+        copyJar("cp-nesta.jar", "n/cp-nesta.jar");
+        copyJar("cp-nestb.jar", "n/b/cp-nestb.jar");
+        copyJar("cp-nestc.jar", "n/b/c/cp-nestc.jar");
+        copyJar("cp-http.jar", "h/cp-http.jar");
+        copyJar("cp-upref.jar", "w/cp-upref.jar");
+        makeLink(root + "/o/deep", "w/up");
+        copyJar("cp-up.jar", "o/deep/cp-up.jar");
+        copyJar("cp-target.jar", "w/lib/cp-target.jar");
+        copyJar("cp-target.jar", "o/lib/cp-target.jar");
+    }
+
+    globalTearDown() {
+        foreach string file in (files) {
+            unlink(file);
+        }
+        foreach string d in (dirs) {
+            rmdir(d);
+        }
+    }
+
+    denyTest() {
+        checkCase("deny", (
+            "result: deny: the classpath is refused: OK",
+            "result: deny: the error names the denied file: OK",
+            "result: deny: the error names the jar whose manifest names it: OK",
+            "result: deny: nothing is added: OK",
+            "result: deny: the class of the referring jar is not loaded: OK",
+            "result: deny: the class of the denied jar is not loaded: OK",
+            "result: deny: a wildcard that selects the referring jar is refused: OK",
+            "result: deny: its error names the denied file: OK",
+            "result: deny: the wildcard adds nothing: OK",
+            "result: deny: a classpath with a refused entry is refused: OK",
+            "result: deny: no entry of it is added: OK",
+            "result: deny: the class of its allowed entry is not loaded: OK",
+            "result: deny: a denied jar at the end of a chain is refused: OK",
+            "result: deny: the error names the denied jar of the chain: OK",
+            "result: deny: the error names the jar whose manifest names it: OK",
+            "result: deny: no jar of the chain is added: OK",
+            "result: deny: the class of the first jar of the chain is not loaded: OK",
+            "result: deny: a Class-Path entry that is not a file is refused: OK",
+            "result: deny: the error names the jar whose manifest names it: OK",
+            "result: deny: the jar with the entry is not added: OK",
+            "result: deny: the class of the jar with the entry is not loaded: OK",
+            "result: deny: a zip file whose manifest names the denied jar is refused: OK",
+            "result: deny: its error names the denied jar: OK",
+            "result: deny: the zip file is not added: OK",
+            "result: deny: a named file that is not a jar is refused: OK",
+            "result: deny: its error names the file: OK",
+            "result: deny: the jar that names it is not added: OK",
+            "result: deny: a named file that is not a regular file is refused: OK",
+            "result: deny: its error says so: OK",
+            "result: deny: the jar that names the special file is not added: OK",
+            "result: deny: an entry that is not a regular file is refused: OK",
+            "result: deny: its error says that it is not a regular file: OK",
+            "result: deny: the entry is not added: OK",
+            "result: deny: a wildcard that selects a file that is not a regular file is refused: OK",
+            "result: deny: its error says that the match is not a regular file: OK",
+            "result: deny: the regular jar of the wildcard is not added either: OK",
+            "result: deny: the class of the regular jar of the wildcard is not loaded: OK",
+            "result: deny: a wildcard that selects a link to a device is refused: OK",
+            "result: deny: its error says that the device is not a regular file: OK",
+        ));
+    }
+
+    escapeTest() {
+        checkCase("escape", (
+            "result: escape: the classpath is refused: OK",
+            "result: escape: the error names the file that the link points to: OK",
+            "result: escape: nothing is added: OK",
+            "result: escape: the class of the referring jar is not loaded: OK",
+            "result: escape: the class of the jar outside is not loaded: OK",
+        ));
+    }
+
+    relativeTest() {
+        checkCase("relative", (
+            "result: relative: the jar that the class loader would open is checked: OK",
+            "result: relative: the error names it: OK",
+            "result: relative: nothing is added: OK",
+            "result: relative: the class of the jar is not loaded: OK",
+            "result: relative: the allowed chain is added: OK",
+            "result: relative: the class of the jar in the linked directory is loaded: OK",
+            "result: relative: the class is loaded from the checked jar: OK",
+        ));
+    }
+
+    cycleTest() {
+        checkCase("cycle", (
+            "result: cycle: the classpath is added: OK",
+            "result: cycle: the given jar is added: OK",
+            "result: cycle: the class of the first jar is loaded: OK",
+            "result: cycle: the class of the second jar is loaded: OK",
+            "result: cycle: a wildcard of the cycle is added: OK",
+            "result: cycle: both jars are added: OK",
+            "result: cycle: the class of the second jar is loaded with the wildcard: OK",
+        ));
+    }
+
+    nestedTest() {
+        checkCase("nested", (
+            "result: nested: the classpath is added: OK",
+            "result: nested: the class of the first jar is loaded: OK",
+            "result: nested: the class of the second jar is loaded: OK",
+            "result: nested: the class of the third jar is loaded: OK",
+            "result: nested: the third jar is resolved against the second: OK",
+        ));
+    }
+
+    allowedTest() {
+        checkCase("allowed", (
+            "result: allowed: the classpath is added: OK",
+            "result: allowed: the given jar is added: OK",
+            "result: allowed: the class of the referring jar is loaded: OK",
+            "result: allowed: the class of the named jar is loaded: OK",
+            "result: allowed: the class is loaded from the named jar: OK",
+            "result: allowed: a missing named jar is not an error: OK",
+            "result: allowed: the class of the jar that names it is loaded: OK",
+            "result: allowed: no class of the missing jar is loaded: OK",
+        ));
+    }
+
+    unsandboxedTest() {
+        checkCase("unsandboxed", (
+            "result: unsandboxed: the classpath is added: OK",
+            "result: unsandboxed: the given jar is added: OK",
+            "result: unsandboxed: the class of the named jar is loaded: OK",
+            "result: unsandboxed: the class is loaded from the named jar: OK",
+            "result: unsandboxed: a zip file is added: OK",
+            "result: unsandboxed: the class of the jar that the zip file names is loaded: OK",
+            "result: unsandboxed: a Class-Path through a link is added: OK",
+            "result: unsandboxed: the class of the linked jar is loaded: OK",
+            "result: unsandboxed: a Class-Path entry that is not a file is ignored: OK",
+            "result: unsandboxed: the class of the jar with the entry is loaded: OK",
+            "result: unsandboxed: a cycle is added: OK",
+            "result: unsandboxed: the class of the second jar of the cycle is loaded: OK",
+        ));
+    }
+
+    jdkGateTest() {
+        if (skip_reason) {
+            testSkip("the module is not a debug build: " + skip_reason);
+        }
+        checkCase("jdkgate", (
+            "result: jdkgate: a verified JDK version is accepted: OK",
+            "result: jdkgate: the class of the named jar is loaded on it: OK",
+            "result: jdkgate: an unknown JDK version is refused: OK",
+            "result: jdkgate: the error names the reason: OK",
+            "result: jdkgate: the error names the jar: OK",
+            "result: jdkgate: nothing is added on it: OK",
+            "result: jdkgate: the class of the named jar is not loaded on it: OK",
+            "result: jdkgate: a wildcard that selects the jar is refused on it: OK",
+            "result: jdkgate: the wildcard error names the reason: OK",
+            "result: jdkgate: a zip file with a Class-Path is refused on it: OK",
+            "result: jdkgate: the zip file error names the reason: OK",
+            "result: jdkgate: a jar with no Class-Path is accepted on an unknown JDK version: OK",
+            "result: jdkgate: its class is loaded: OK",
+            "result: jdkgate: an unsandboxed classpath is unaffected: OK",
+            "result: jdkgate: the class of the named jar is loaded with no sandbox: OK",
+            "result: jdkgate: the running JDK version is used again: OK",
+        ));
+    }
+
+    #! runs a case of the child and checks its results, and that it reached its end
+    private checkCase(string name, list<string> expected) {
+        # the variables that could add to the child's classpath or make the JVM print a notice are removed
+        string child = normalize_dir(get_script_dir() + "/jni-classpath-manifest-sandbox-child.q");
+        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS -u QORE_JNI_CLASSPATH "
+            "-u QORE_JNI_JVM_ARGS %s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child),
+            name, shellQuote(root));
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, "exit code: " + out);
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq(expected, lines, out);
+        assertTrue(out =~ /^end$/m, "the child did not reach its end: " + out);
+        assertFalse(out =~ /unhandled QORE System exception/, "an unhandled exception was printed: " + out);
+    }
+
+    private makeDir(string dir) {
+        if (mkdir(dir, 0700)) {
+            throw "TEST-ERROR", sprintf("cannot create directory %y: %s", dir, strerror());
+        }
+        unshift dirs, dir;
+    }
+
+    #! copies a test jar, made by the build, into the test tree
+    private copyJar(string jar, string path) {
+        string src = get_script_dir() + DirSep + JarDirName + DirSep + jar;
+        if (!is_file(src)) {
+            throw "TEST-ERROR", sprintf("the test jar %y is missing: build the module first", src);
+        }
+        writeFile(path, ReadOnlyFile::readBinaryFile(src));
+    }
+
+    #! writes a file of the test tree
+    private writeFile(string path, binary data) {
+        string file = root + DirSep + path;
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        push files, file;
+        f.write(data);
+    }
+
+    #! makes a FIFO in the test tree
+    private makeFifo(string path) {
+        string fifo = root + DirSep + path;
+        int rc;
+        string out = backquote("mkfifo " + shellQuote(fifo) + " 2>&1", \rc);
+        if (rc) {
+            throw "TEST-ERROR", sprintf("cannot create FIFO %y: %s", fifo, out);
+        }
+        push files, fifo;
+    }
+
+    private makeLink(string target, string path) {
+        string link = root + DirSep + path;
+        if (symlink(target, link)) {
+            throw "TEST-ERROR", sprintf("cannot create link %y: %s", link, strerror());
+        }
+        push files, link;
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

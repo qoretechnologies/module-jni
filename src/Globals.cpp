@@ -175,6 +175,7 @@ jmethodID Globals::methodQoreInvocationHandlerDestroy;
 GlobalReference<jclass> Globals::classQoreJavaApi;
 GlobalReference<jclass> Globals::classQoreSandbox;
 jmethodID Globals::methodQoreSandboxResolveClasspath;
+jmethodID Globals::methodQoreSandboxExpandClasspath;
 jmethodID Globals::methodQoreJavaApiGetStackTrace;
 GlobalReference<jclass> Globals::classJavaCollectionTypes;
 jmethodID Globals::methodJavaCollectionTypesIsStringKeyMap;
@@ -224,6 +225,8 @@ GlobalReference<jclass> Globals::classQoreURLClassLoaderResolvedClasspath;
 jmethodID Globals::methodResolvedClasspathSize;
 jmethodID Globals::methodResolvedClasspathEncodedPath;
 jmethodID Globals::methodResolvedClasspathIsWildcardMatch;
+jmethodID Globals::methodResolvedClasspathManifestReferrer;
+jmethodID Globals::methodResolvedClasspathRefusal;
 jmethodID Globals::methodQoreURLClassLoaderAddParentPath;
 jmethodID Globals::methodQoreURLClassLoaderLoadClass;
 jmethodID Globals::methodQoreURLClassLoaderLoadClassWithPtr;
@@ -1309,6 +1312,17 @@ static void JNICALL java_api_complete_connection_waiter(JNIEnv* jenv, jclass, jl
 
 static void JNICALL java_api_await_connection_waiter(JNIEnv* jenv, jclass, jlong ptr) try {
     auto* waiter = reinterpret_cast<JdbcConnectionWaiter*>(ptr);
+    // QoreJavaApi.openJdbcConnection() is public, and can be called on a Java thread that Java started, which is not
+    // attached to Qore: the cancellable wait registers the thread's wait under its Qore thread ID, which is 0 on such
+    // a thread, and a cancellation raises a Qore exception, so the thread is attached first; the exception sink is
+    // destroyed while the thread is attached (qore#6828)
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
+        return;
+    }
     ExceptionSink xsink;
     {
         AutoLocker lock(waiter->lock);
@@ -1340,6 +1354,19 @@ static void JNICALL java_api_delete_connection_waiter(JNIEnv* jenv, jclass, jlon
 
 static jstring JNICALL qore_exception_wrapper_get_message(JNIEnv* jenv, jclass, jlong ptr) try {
     ExceptionSink* xsink = reinterpret_cast<ExceptionSink*>(ptr);
+
+    // Java can get the message on any thread, also one that Java started, which is not attached to Qore: the thread
+    // is attached for the conversion of the code and the description, as a description that cannot be converted to
+    // UTF-8 raises a Qore exception, which uses the Qore thread state of the thread (qore#6828)
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        // Throwable.getMessage() is called by uncaught exception handlers and loggers, also after the Qore library
+        // has been shut down: a fixed message is returned instead of raising an exception
+        return jenv->NewStringUTF("Qore exception (the message is unavailable: the thread cannot be attached to "
+            "Qore)");
+    }
 
     // no C++ exception may leave a JNI native method
     try {
@@ -1385,6 +1412,16 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     QoreObject* obj = JniObjectHandle::fromJava(ptr)->getObject();
 
     Env env(jenv);
+    // a Java thread that Java started is not attached to Qore, and has no Qore thread state: it is attached before
+    // the Program context of the thread is looked up (qore#6828)
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
+        return false;
+    }
+
     Env::GetStringUtfChars class_name(env);
     if (class_name.set(cname)) {
         // the Java exception of the failure is pending
@@ -1402,6 +1439,14 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     QoreProgram* pgm = jni_get_program_context();
     if (!pgm) {
         pgm = ::getProgram();
+    }
+    // a Java thread that Java started has no Program context: the class is looked up in the Program of the object,
+    // where the object's own class is defined, before the global Java context Program, where a class of the object's
+    // Program cannot be found (qore#6828); the object holds a dependency reference to its Program, which keeps it
+    // valid as long as the weak reference of the handle keeps the object, and the lookup refuses a
+    // Program that is being deleted
+    if (!pgm) {
+        pgm = obj->getProgram();
     }
     // holds the global context Program while the class is looked up in it (qore#6829)
     JniContextProgramHolder ctx_holder;
@@ -1427,10 +1472,9 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         jstring mname, jobjectArray args, const QoreMethod* m = nullptr,
         const QoreExternalMethodVariant* v = nullptr, bool flatten = false) {
     assert(obj_ptr);
-    // holds the global context Program, if the call is made in it (qore#6829)
-    JniContextProgramHolder ctx_holder;
-    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
-    // must ensure that the thread is attached before executing Qore code
+    // must ensure that the thread is attached before executing Qore code, and before the Program context of the
+    // thread is looked up: with no Program, or a Program with no jni data, the lookup uses the Qore thread state of
+    // the thread, which a Java thread that Java started does not have until it is attached (qore#6828)
     Env env(jenv);
     QoreThreadAttachHelper attach_helper;
     try {
@@ -1439,6 +1483,10 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
         return nullptr;
     }
+    // holds the global context Program, if the call is made in it (qore#6829); declared after the attachment, so that
+    // it is released before the thread is detached, and before the entry below, so that the entry is left first
+    JniContextProgramHolder ctx_holder;
+    JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
 
     QoreJniStackLocationHelper slh;
 
@@ -1663,10 +1711,18 @@ static jbyteArray JNICALL qore_url_classloader_get_cached_class(JNIEnv* jenv, jc
 template <typename Result, typename Callback>
 static Result generated_native_call(JNIEnv* jenv, Callback&& callback) {
     Env env(jenv);
-    ExceptionSink xsink;
+    // the thread is attached before the exception sink is created, so that the sink is destroyed while the thread is
+    // attached, and a failure to attach it is raised without a Qore exception, which needs the Qore thread state of
+    // the thread (qore#6828)
     QoreThreadAttachHelper attach_helper;
     try {
         attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
+        return Result{};
+    }
+    ExceptionSink xsink;
+    try {
         return callback(env, xsink);
     } catch (jni::Exception& e) {
         e.convert(&xsink);
@@ -2772,6 +2828,15 @@ static jobject JNICALL qore_url_classloader_get_module_loader(JNIEnv* jenv, jcla
     if (!jname) {
         return nullptr;
     }
+    // a class is loaded on any thread, also one that Java started, which is not attached to Qore: the thread is
+    // attached before the module manager is used, and is attached while an error is raised (qore#6828)
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
+        return nullptr;
+    }
     // no C++ exception may leave a JNI native method: a failure is raised as a Java exception
     try {
         Env::JniUtfChars utf(jenv, jname);
@@ -2805,6 +2870,15 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
     }
     Env::JniUtfChars utf(jenv, jname);
     if (!utf.get()) {
+        return nullptr;
+    }
+    // a class is loaded on any thread, also one that Java started, which is not attached to Qore: the thread is
+    // attached before the module manager and the Programs are used (qore#6828); if it cannot be attached, null is
+    // returned, which tells the Java caller to fall back to local generation, as for any other error here
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
         return nullptr;
     }
     jobject loader = nullptr;
@@ -2899,6 +2973,18 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
 } JNI_NATIVE_CATCH(jenv, 0)
 
 static void JNICALL qore_object_release(JNIEnv* jenv, jclass, jlong ptr) try {
+    // Java can release the object on any thread, also one that Java started, which is not attached to Qore: the
+    // release of the last weak reference frees the object, which releases its references to its class and its
+    // Program, and the release of the captured sandbox can free it too, so the thread is attached, as for the release
+    // by the NativeCleanup thread (see native_cleanup_dispatch()) (qore#6828)
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        // the handle is not released: a release without a Qore thread state could crash the process
+        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
+        return;
+    }
     // releases the weak reference
     delete JniObjectHandle::fromJava(ptr);
 } JNI_NATIVE_CATCH(jenv)
@@ -3886,6 +3972,10 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         "(I)[B");
     methodResolvedClasspathIsWildcardMatch = env.getMethod(classQoreURLClassLoaderResolvedClasspath,
         "isWildcardMatch", "(I)Z");
+    methodResolvedClasspathManifestReferrer = env.getMethod(classQoreURLClassLoaderResolvedClasspath,
+        "manifestReferrer", "(I)Ljava/lang/String;");
+    methodResolvedClasspathRefusal = env.getMethod(classQoreURLClassLoaderResolvedClasspath, "refusal",
+        "(I)Ljava/lang/String;");
 
     // create our class loader to load module classes
     classQoreURLClassLoader = findDefineClass(env, "org.qore.jni.QoreURLClassLoader", nullptr,
@@ -4142,7 +4232,9 @@ bool Globals::init() {
         java_org_qore_jni_QoreSandbox_Policy_class_len);
     jni_register_qore_sandbox_natives(env, classQoreSandbox);
     methodQoreSandboxResolveClasspath = env.getStaticMethod(classQoreSandbox, "resolveClasspath",
-        "(Ljava/lang/String;)Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;");
+        "(Ljava/lang/String;I)Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;");
+    methodQoreSandboxExpandClasspath = env.getStaticMethod(classQoreSandbox, "expandClasspath",
+        "(Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;I)V");
 
     classJavaCollectionTypes = findDefineClass(env, "org.qore.jni.JavaCollectionTypes", nullptr,
         java_org_qore_jni_JavaCollectionTypes_class, java_org_qore_jni_JavaCollectionTypes_class_len).makeGlobal();
