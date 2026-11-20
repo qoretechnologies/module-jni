@@ -4212,6 +4212,8 @@ LocalReference<jbyteArray> JniExternalProgramData::generateByteCodeIntern(Env& e
                 jvalue jargs[2];
                 jargs[0].l = jname;
                 jargs[1].j = (jlong)&ci.getParentClass();
+                // the byte code generator accepts the class pointer for this call only (qore#6854)
+                JniIssuedClassHelper issued(&ci.getParentClass(), pgm);
                 parent_class = env.callObjectMethod(class_loader, Globals::methodQoreURLClassLoaderLoadClassWithPtr,
                     &jargs[0]).as<jclass>();
             }
@@ -4435,6 +4437,8 @@ LocalReference<jobject> JniExternalProgramData::getJavaRawClassTypeDefinition(En
             jvalue jargs[2];
             jargs[0].l = jname;
             jargs[1].j = (jlong)cls;
+            // the byte code generator accepts the class pointer for this call only (qore#6854)
+            JniIssuedClassHelper issued(cls, pgm);
             LocalReference<jclass> jcls = env.callObjectMethod(class_loader,
                 Globals::methodQoreURLClassLoaderLoadClassWithPtr, &jargs[0]).as<jclass>();
             assert(jcls);
@@ -5446,6 +5450,8 @@ LocalReference<jclass> JniExternalProgramData::getJavaClassForQoreClass(Env& env
     jvalue jargs[2];
     jargs[0].l = jname;
     jargs[1].j = (long)qc;
+    // the byte code generator accepts the class pointer for this call only (qore#6854)
+    JniIssuedClassHelper issued(qc, pgm);
     LocalReference<jclass> jcls = env.callObjectMethod(classLoader,
         Globals::methodQoreURLClassLoaderLoadClassWithPtr, &jargs[0]).as<jclass>();
     assert(jcls);
