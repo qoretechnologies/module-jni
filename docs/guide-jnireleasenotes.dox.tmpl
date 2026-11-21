@@ -783,6 +783,9 @@
     - Java callers can use @ref org.qore.lang.AbstractDatasource.selectColumnar(),
       @ref org.qore.lang.AbstractDatasource.vselectColumnar(), and
       @ref org.qore.lang.AbstractSQLStatement.fetchColumnar().
+    - The \c url option of the @ref jnijdbc_driverguide "jdbc DBI driver", whose JDBC URL can hold credentials
+      (also for Firebird through Jaybird), is declared sensitive (with %Qore 3.0 or later), so that %Qore masks its
+      value where it shows the options of a datasource (qore#7070).
 
     @subsubsection jni_3_0_0_java_api Java API Generation and Interoperability
 

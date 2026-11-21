@@ -439,6 +439,11 @@ foreach hash<auto> column in (result.schemaV2()) {
     @note the initial \c jdbc: in the url option is optional; if missing, then it is added automatically by the %Qore
     jdbc driver when the internal URL string is passed to the internal Java JDBC call.
 
+    <b>A sensitive option:</b> a JDBC URL can hold credentials (ex: \c user and \c password properties, keystore
+    and truststore passwords or tokens, as with the Jaybird driver for Firebird), so the driver declares the \c url
+    option sensitive (with %Qore 3.0 or later): its value is masked where %Qore shows the options of a datasource,
+    for example in the safe URL and the information of a \c db:// connection.
+
     <b>The code that chose the URL:</b> the \c url option and the database name choose the destination of a
     connection and can carry driver properties that make a JDBC driver instantiate classes (ex: a socket factory
     class).  Like the \c classpath option (see @ref jdbc_option_classpath), they are judged by the code that set them,

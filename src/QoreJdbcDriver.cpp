@@ -381,7 +381,16 @@ void setup_jdbc_driver() {
         "arbitrary-precision number values; the argument is ignored; setting this option turns it on and turns off "
         "'string-numbers' and 'optimal-numbers'");
     methods.registerOption(JDBC_OPT_CLASSPATH, "set the classpath before loading the driver", stringTypeInfo);
-    methods.registerOption(JDBC_OPT_URL, "override the database string with the jdbc driver URL", stringTypeInfo);
+    // a JDBC URL can hold credentials (ex: user and password properties, keystore and truststore passwords, or
+    // tokens, as for Firebird's Jaybird driver), so its value is masked where Qore shows the options of a datasource
+    // (qore#7070)
+#ifdef QORE_HAVE_DBI_SENSITIVE_OPTIONS
+    methods.registerOption(JDBC_OPT_URL, "override the database string with the jdbc driver URL; it can hold "
+        "credentials and is sensitive", stringTypeInfo, QDBI_OPT_SENSITIVE);
+#else
+    methods.registerOption(JDBC_OPT_URL, "override the database string with the jdbc driver URL; it can hold "
+        "credentials and is sensitive", stringTypeInfo);
+#endif
     methods.registerOption(JDBC_OPT_LOB_MAX_SIZE, "the most bytes or characters read from a large object whose "
         "length the driver does not give (default: 2 GiB); a larger one raises JDBC-LOB-SIZE-ERROR", bigIntTypeInfo);
 

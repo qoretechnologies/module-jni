@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+
+%exec-class JdbcSensitiveOptionsTest
+
+#! The jdbc driver declares its url option, whose JDBC URL can hold credentials, sensitive (qore#7070)
+/** No database is needed: the option information of the driver and the masking of a datasource's options are
+    checked; the URL is that of the Jaybird driver for Firebird, which takes the password as a URL property.
+*/
+class JdbcSensitiveOptionsTest inherits QUnit::Test {
+    public {
+        const Secret = "PASSWORD_SECRET_7070";
+    }
+
+    constructor() : QUnit::Test("jdbc sensitive options", "1.0", \ARGV) {
+        addTestCase("option information", \optionInfo());
+        addTestCase("masked options", \maskedOptions());
+        set_return_value(main());
+    }
+
+    optionInfo() {
+%ifdef QoreHasDbiSensitiveOptions
+        hash<auto> h = dbi_get_driver_options("jdbc");
+        assertTrue(h.url.sensitive, "the JDBC URL is sensitive");
+        foreach hash<auto> i in (h.pairIterator()) {
+            if (i.key != "url") {
+                assertFalse(i.value.sensitive, i.key);
+            }
+        }
+%else
+        testSkip("the Qore library has no sensitive DBI options");
+%endif
+    }
+
+    maskedOptions() {
+%ifdef QoreHasDbiSensitiveOptions
+        # the driver must be loaded for the options that are not sensitive to be shown
+        dbi_get_driver_options("jdbc");
+        assertEq({"url": "****", "lob-max-size": 1024}, mask_datasource_options("jdbc", {
+            "url": "firebird://localhost:3050/db?user=sysdba&password=" + Secret,
+            "lob-max-size": 1024,
+        }));
+%else
+        testSkip("the Qore library has no sensitive DBI options");
+%endif
+    }
+}
