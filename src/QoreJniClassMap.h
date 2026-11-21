@@ -25,7 +25,6 @@
 
 #define _QORE_JNI_QOREJAVACLASSMAP_H
 
-#include "defs.h"
 #include "QoreJniPrivateData.h"
 #include "Env.h"
 #include "Class.h"
@@ -1079,68 +1078,51 @@ DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelp
 DLLLOCAL void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch,
         QoreProgram* pgm, ExceptionSink& xsink);
 
-//! Returns true if Java code that the calling code called can call into \a pgm (qore#6845)
+//! Returns true if Java code that the calling code called can call into \a pgm (qore#6845, qore#7023)
 /** Java code is not governed by a sandbox: for code that a sandbox governs, Java's calls into Qore are made only in
-    the Program of the calling code (the Program context of the call, or the current Program without one), which the
-    sandbox governs.  Code that no sandbox governs reaches any Program.
+    the Program of the calling code, which the sandbox governs.  Code that no sandbox governs reaches any Program.
+
+    The Program of the calling code is the Program of the %Qore code that made the innermost call from %Qore into Java
+    on the thread, as recorded by JniJavaCallerScope (qore#7023): the Program that a call of a Java method of an object
+    of another Program enters, and that libqore makes the Program context of such a call, is the object's, not the
+    caller's.  Without a recorded call (ex: a thread that Java started), it is the Program context of the call, or the
+    current Program without one, as before.
 
     The Program is only compared with the Program of the calling code: it is not used otherwise, and can be one that
     has been deleted
 
     @param pgm the Program that Java names
 
-    Within a module command that trusted code issued (see JniTrustedCommandScope), the Program of the calling code is
-    the command's target Program.
-
     @return true if the calling code is not governed by a sandbox or \a pgm is the Program of the calling code
 */
 DLLLOCAL bool jni_governed_caller_reaches(const QoreProgram* pgm);
 
-#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
-//! Marks the module command that the thread's handler handles as acting for its target Program (qore#7041)
-/** A module command runs with its target Program current, but the Program context of the call stays the one of the
-    issuing code (ex: the Program in which the Program object that Program::issueModuleCmd() was called on was
-    created), so for jni_governed_caller_reaches(), the Java code that the command runs (ex: the class loader of the
-    target Program generating the byte code of a \c qore.* superclass) called into another Program than the one of
-    the calling code.
+//! The rules of jni_governed_caller_reaches() without the attribution of the Java code on the stack
+DLLLOCAL bool jni_governed_caller_reaches_intern(const QoreProgram* pgm);
 
-    A command that trusted code issued acts for its target Program: while the handler runs, the Program of the calling
-    code for jni_governed_caller_reaches() is the target Program, and only that Program; neither the Program of the
-    issuing code nor any other Program is reached.  The issuing code is trusted if the core says that no sandbox
-    restricts it (QoreModuleCommandRestrictions::isSandboxed(): no governing sandbox, or only one that trusts it with
-    uncontrolled APIs) and its parse options allow uncontrolled APIs.  A command whose issuer is not trusted, or is
-    unknown (no QoreModuleCommandContext), is judged by the calling code as before, also within an outer trusted
-    command, which it hides.
-
-    The target is the Program of the calling code only while the command's own code runs: while the command is the
-    thread's current command, and the call context and the current Program are the ones that the handler started
-    with; other code that runs during the command (ex: a method or a closure of another Program that Java calls) is
-    judged by its own Program.  Java threads have no such command.
+//! Returns true if a restricting sandbox governs the calling code (QoreSandboxManagerHelper(All))
+/** A sandbox that restricts nothing, as one that a host attaches to trusted code only for its interrupts or resource
+    limits and that allows uncontrolled APIs, does not make its code sandboxed (jni_sandbox_restricts_io(), qore#7041)
 */
-class JniTrustedCommandScope {
-public:
-    DLLLOCAL JniTrustedCommandScope();
-    DLLLOCAL ~JniTrustedCommandScope();
+DLLLOCAL bool jni_restricting_sandbox_governs();
 
-    //! Returns the target Program of the trusted command whose own code calls Java on this thread, or nullptr
-    /** @param call_pgm the Program context of the call (qore_get_call_program_context())
-    */
-    DLLLOCAL static const QoreProgram* getTarget(const QoreProgram* call_pgm);
+//! Returns true if \a sm restricts its code: filesystem or network access, or uncontrolled APIs
+/** Resource limits and interrupts are not isolation; a sandbox that refuses uncontrolled APIs restricts its code
+*/
+DLLLOCAL bool jni_sandbox_restricts_io(const QoreSandboxManager* sm);
 
-    JniTrustedCommandScope(const JniTrustedCommandScope&) = delete;
-    JniTrustedCommandScope& operator=(const JniTrustedCommandScope&) = delete;
+//! Returns the Program context of the call as the fallback Program of a QoreJavaApi function call or class lookup
+/** QoreJavaApi falls back to the Program context of the call when the function or class is not found in the Program
+    of the class loader (a Qorus Java workflow step, whose class loader is the Program that parsed it).  For code that a
+    sandbox governs, the fallback is made only into the Program of the calling code (qore#7023): the Program context of
+    a call of a Java method of an object of another Program is the object's.  Must be called before the caller of the
+    call into Java is cleared (QoreJniStackLocationHelper).
 
-private:
-    //! the scope that this one hides
-    const JniTrustedCommandScope* prev;
-    //! the command, only for identity
-    const QoreModuleCommandContext* ctx = nullptr;
-    //! the target Program, only for identity
-    const QoreProgram* target = nullptr;
-    //! the Program context of the call when the handler started, only for identity
-    const QoreProgram* call_pgm = nullptr;
-};
-#endif
+    @param pgm the Program of the class loader
+
+    @return the fallback Program, or nullptr for no fallback
+*/
+DLLLOCAL QoreProgram* jni_java_api_fallback_program(const QoreProgram* pgm);
 
 //! A Program named by a Program pointer that Java passed to a native method, validated and held for the native call
 /** Java caches the pointers of Programs: each org.qore.jni.QoreURLClassLoader has the pointer of the Program whose
@@ -1195,6 +1177,13 @@ public:
     */
     DLLLOCAL JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader = nullptr);
 
+    //! Validates and holds and enters the Program \a ptr for a call of a method of an existing Qore object or closure
+    /** As the constructor above, for a callback (QoreObject.callMethod(), QoreClosure.call()), which runs in its own
+        Program: on a thread that Java started, whose Qore caller is not known, the Program is only the context of
+        the call (see jni_governed_caller_reaches(), qore#7023)
+    */
+    DLLLOCAL JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, bool callback);
+
     //! Validates the Program pointer \a ptr received from Java, and holds the Program, without entering it
     /** @param env the JNI environment of the thread
         @param ptr the Program pointer, or 0
@@ -1225,7 +1214,7 @@ private:
     std::optional<QoreExternalProgramContextHelper> epch;
 
     //! Validates the pointer and dependency-references its Program (see the constructors)
-    DLLLOCAL void acquire(Env& env, jlong ptr, jobject loader);
+    DLLLOCAL void acquire(Env& env, jlong ptr, jobject loader, bool callback = false);
 
     //! Leaves the Program, then releases its dependency reference
     DLLLOCAL void release() noexcept;

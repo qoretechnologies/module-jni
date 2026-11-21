@@ -32,9 +32,14 @@
 #include <optional>
 
 namespace jni {
-QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj) : obj(GlobalReference<jobject>::fromLocal(obj)),
-        src_pgm(qore_get_call_program_context()) {
+QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj)
+        : obj(GlobalReference<jobject>::fromLocal(obj)), src_pgm(qore_get_call_program_context()) {
     assert(src_pgm);
+    // the callable is a callback of the code that obtained it from Java: the code that called Java, also when it
+    // obtained it from a Java object of another Program, whose Program is the Program context of the call; in a call
+    // from Java into Qore, the code that called that Java code, and otherwise none: the callable then reaches no
+    // Program (qore#7023)
+    owner = jni_java_caller_owner();
     Env env;
 
     cls = new Class(env.callObjectMethod(obj, Globals::methodObjectGetClass, nullptr).as<jclass>());
@@ -67,9 +72,17 @@ QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj) : obj(Global
     if (src_pgm) {
         src_pgm->depRef();
     }
+    // the owner is only compared with Program pointers: its memory is kept, so that no Program created later at its
+    // address is taken for it
+    if (owner.pgm) {
+        owner.pgm->depRef();
+    }
 }
 
 QoreJniFunctionalInterface::~QoreJniFunctionalInterface() {
+    if (owner.pgm) {
+        owner.pgm->depDeref();
+    }
     if (src_pgm) {
         src_pgm->depDeref();
     }
@@ -111,6 +124,10 @@ QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, Except
         // make sure that the Qore exception stack is populated correctly in case a Qore exception is thrown
         // from the Java code about to be called below
         QoreJniStackLocationHelper slh;
+        // Java's calls into Qore during the call are governed by the code that obtained the callable, as for a Qore
+        // closure, which runs in its own Program; recorded after the location helper, which clears the record for
+        // Qore code that Java calls: this is a call from Qore into Java (qore#7023)
+        JniJavaCallerScope caller(owner);
         // make the call
         return method->isStatic()
             ? method->invokeStatic(*evaluated_args, pgm)

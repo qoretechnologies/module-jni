@@ -1,0 +1,69 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+
+%exec-class JniJavaThreadStrictTest
+
+#! The strict policy of Java threads, set before any sandboxed code runs (qoretechnologies/qore#7023)
+/** The \c set-java-thread-policy \c strict command makes Java threads whose Qore caller is not known reach no Program
+    by a Program pointer, as once code that a sandbox governs has called Java in the process; trusted code issues it
+    before any tenant runs, so that the policy does not depend on when a tenant first calls Java.  Code that a sandbox
+    governs that is not trusted with uncontrolled APIs, and code with restricting parse options, cannot issue it.  The
+    test cases depend on their order: the policy cannot be undone.
+*/
+class JniJavaThreadStrictTest inherits QUnit::Test {
+    public {
+        const NotGoverned = "cannot call into a Qore Program other than the one of the calling code";
+        const Cmd = "set-java-thread-policy strict";
+    }
+
+    constructor() : QUnit::Test("jni strict policy of Java threads", "1.0") {
+        addTestCase("restricted issuers are refused", \refusedTest());
+        addTestCase("the policy set before any sandboxed call", \strictTest());
+        set_return_value(main());
+    }
+
+    refusedTest() {
+        # code that a sandbox governs that does not trust it with uncontrolled APIs (code that a sandbox trusts with
+        # them may use Java, which enables the policy anyway)
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        SandboxManager sm();
+        p.setSandboxManager(sm);
+        assertThrows("JNI-SANDBOX-ERROR", \p.parse(), ("%module-cmd(jni) " + Cmd, "sandboxed"));
+        # code with a restricting parse option
+        Program r(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL | PO_NO_CHILD_PO_RESTRICTIONS);
+        r.loadModule("jni");
+        assertThrows("JNI-SANDBOX-ERROR", \r.parse(), ("%module-cmd(jni) " + Cmd, "restricted"));
+        # an invalid argument
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.loadModule("jni");
+        assertThrows("JNI-ERROR", \t.issueModuleCmd(), ("jni", "set-java-thread-policy loose"));
+        # the policy is unchanged: Java threads of trusted code reach the Program
+        assertEq("ok: host", HostObjectProbe::threadCallIn("thread", get_class_loader(), "host_fn"));
+    }
+
+    strictTest() {
+        Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        t.loadModule("jni");
+        t.issueModuleCmd("jni", Cmd);
+        # no code that a sandbox governs has run Java: the policy applies
+        auto loader = get_class_loader();
+        map assertRegex(NotGoverned, HostObjectProbe::threadCallIn($1, loader, "host_fn"), $1),
+            ("thread", "virtual", "noinherit");
+        # a Qore closure that Java calls on a Java thread is a callback, which runs in its own Program
+        assertEq("ok: host", HostObjectProbe::threadCallClosure(string sub () { return host_fn(); }));
+    }
+}
+
+string sub host_fn() {
+    return "host";
+}

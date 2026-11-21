@@ -116,6 +116,8 @@ sub store(string own, string host) {
         #! sandbox configurations
         const SbNone = "no sandbox";
         const SbTrusting = "a sandbox that allows uncontrolled APIs";
+        #! a sandbox that restricts I/O but allows uncontrolled APIs: its code is governed (qore#7023)
+        const SbRestricting = "a sandbox that restricts I/O and allows uncontrolled APIs";
         const SbRefusing = "a sandbox that refuses uncontrolled APIs";
     }
 
@@ -176,15 +178,19 @@ sub store(string own, string host) {
     tenantOtherTest() {
         string src = sprintf("%%module-cmd(jni) define-class %s.HostChild %s\n", Package, byte_code.HostChild);
         # the superclass is not found: the parent class loader, whose Program is the host's, is not asked
-        Program p = getTarget(SbTrusting, False, False);
+        Program p = getTarget(SbRestricting, False, False);
         string rv = parse(p, src);
-        assertRegex("NoClassDefFoundError: qore/HostOnlyBase", rv, SbTrusting + ": " + rv);
+        assertRegex("NoClassDefFoundError: qore/HostOnlyBase", rv, SbRestricting + ": " + rv);
         # a command that trusted code issues acts for the target Program only: the host's class is not found either
-        foreach string sb in (SbTrusting, SbRefusing) {
+        foreach string sb in (SbRestricting, SbRefusing) {
             p = getTarget(sb, False);
             rv = issue(p, sprintf("define-class %s.HostChild %s", Package, byte_code.HostChild));
             assertRegex("NoClassDefFoundError: qore/HostOnlyBase", rv, "trusted issuer, " + sb + ": " + rv);
         }
+        # with a sandbox that restricts nothing, the Program's code is trusted (qore#7023): the superclass is found
+        p = getTarget(SbTrusting, False);
+        rv = issue(p, sprintf("define-class %s.HostChild %s", Package, byte_code.HostChild));
+        assertEq("OK", rv, "trusted issuer, " + SbTrusting + ": " + rv);
         # without a sandbox, the superclass is found in the parent class loader (last: the class is then defined)
         p = getTarget(SbNone, False, False);
         rv = parse(p, src);
@@ -202,7 +208,7 @@ sub store(string own, string host) {
     #! Java code of the target Program that a trusted module command runs (a static initializer) reaches the
     #! target Program, but not the Program of the issuing code
     initProbeTest() {
-        foreach string sb in (SbTrusting, SbRefusing) {
+        foreach string sb in (SbRestricting, SbRefusing) {
             Program p = getTarget(sb, False);
             string rv = issue(p, sprintf("define-pending-class %s.InitProbe %s", Package, byte_code.InitProbe));
             assertEq("OK", rv, sb + ": define-pending-class: " + rv);
@@ -215,13 +221,15 @@ sub store(string own, string host) {
             assertNRegex("^no host class loader", fields.HOST, sb + ": host: " + fields.HOST);
             assertRegex(NotGoverned, fields.HOST, sb + ": host: " + fields.HOST);
         }
-        # without a sandbox, the Java code is not governed
-        Program p = getTarget(SbNone, False);
-        assertEq("OK", issue(p, sprintf("define-pending-class %s.InitProbe %s", Package, byte_code.InitProbe)));
-        assertEq("OK", issue(p, sprintf("import %s.InitProbe", Package)));
-        hash<string, string> fields = getProbeFields(p);
-        assertEq("ok: host", fields.HOST);
-        assertEq("ok: tenant", fields.OWN);
+        # without a sandbox, or with one that restricts nothing (trusted code, qore#7023), the Java code is not governed
+        foreach string sb in (SbNone, SbTrusting) {
+            Program p = getTarget(sb, False);
+            assertEq("OK", issue(p, sprintf("define-pending-class %s.InitProbe %s", Package, byte_code.InitProbe)), sb);
+            assertEq("OK", issue(p, sprintf("import %s.InitProbe", Package)), sb);
+            hash<string, string> fields = getProbeFields(p);
+            assertEq("ok: host", fields.HOST, sb);
+            assertEq("ok: tenant", fields.OWN, sb);
+        }
     }
 
     #! issues define-class into the Program and checks the class
@@ -271,9 +279,10 @@ sub store(string own, string host) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         if (sb != SbNone) {
             SandboxManager sm();
-            sm.setFilesystemDefaultPolicy(True);
+            # a sandbox that restricts nothing does not make its code sandboxed (qore#7023)
+            sm.setFilesystemDefaultPolicy(sb != SbRestricting);
             sm.setNetworkDefaultPolicy(True);
-            sm.setUncontrolledApiPolicy(sb == SbTrusting);
+            sm.setUncontrolledApiPolicy(sb == SbTrusting || sb == SbRestricting);
             p.setSandboxManager(sm);
         }
         p.loadModule("jni");

@@ -219,7 +219,8 @@ and parse options (`src/jni-module.cpp`); before module API 2.3 they are the onl
   (`QoreSandboxManagerHelper(Policy)`; for a jdbc option with a recorded setter, the setter's policy, see above)
 - `jni_check_uncontrolled_cmd()`: `global-add-classpath`, `global-add-relative-classpath` (the parent classpath that
   every Program shares), `set-property` (JVM system properties), `register-shared-class` (the owning loader of a
-  shared dynamic class) and `kotlin-eval` (runs code) are refused (`JNI-SANDBOX-ERROR`) in a Program with
+  shared dynamic class), `set-java-thread-policy` (the policy of the Java threads of the process, qore#7023) and
+  `kotlin-eval` (runs code) are refused (`JNI-SANDBOX-ERROR`) in a Program with
   `PO_NO_UNCONTROLLED_APIS` and to any governing sandbox that does not allow uncontrolled APIs
   (`jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)`, so a policy barrier or a system-policy capability
   cannot use them either)
@@ -231,32 +232,245 @@ and parse options (`src/jni-module.cpp`); before module API 2.3 they are the onl
 
 `test/jni-module-cmd-sandbox.qtest`.
 
-## Java's calls into Qore from code that a sandbox governs (qore#6845, qore#7015)
+## Java's calls into Qore from code that a sandbox governs (qore#6845, qore#7015, qore#7023)
 
 Java code is not governed by a sandbox, and the Program pointers that it passes to the native methods are not trusted.
 `JniJavaProgramRef::acquire()` (`src/QoreJniClassMap.cpp`) validates a pointer that Java passes (the Program must
 still have jni data, and the pointer must still be its class loader's) and, for code that a sandbox governs, accepts
-only the Program of the calling code (`jni_governed_caller_reaches()`: the Program context of the call, or the
-current Program without one).  Any other Program, such as the host's, another tenant's or the global Java context
-Program, is refused with `JNI-ERROR` ("Java code called by code that a sandbox governs cannot call into a Qore Program
-other than the one of the calling code").  This applies to calls (`QoreJavaApi.callFunction()` etc.) and to the
-generation and listing of the Java classes of Qore classes (`generateByteCode0()`, `getClassesInNamespace0()`), so an
-explicit class load through the class loader of another Program is refused loudly, not reported as a missing class.
+only the Program of the calling code (`jni_governed_caller_reaches()`, below).  Any other Program, such as the host's,
+another tenant's or the global Java context Program, is refused with `JNI-ERROR` ("Java code called by code that a
+sandbox governs cannot call into a Qore Program other than the one of the calling code").  This applies to calls
+(`QoreJavaApi.callFunction()` etc.) and to the generation and listing of the Java classes of Qore classes
+(`generateByteCode0()`, `getClassesInNamespace0()`), so an explicit class load through the class loader of another
+Program is refused loudly, not reported as a missing class.
+
+### The Program of the calling code (qore#7023)
+
+A call of a Java method of an object runs in the Program that owns the object (`exec_java_method()` enters it, and
+sets the thread's Java context to its class loader), and libqore makes the object's Program the Program context of
+every method frame (`CodeContextHelperBase`), so neither the current Program nor the Program context of the call
+names the caller while the Java method runs.  The module therefore records the caller itself, in a thread-local record
+(`JniJavaCallerScope`, `src/defs.h`), at every call from Qore into Java, before it enters any other Program:
+
+| Call from Qore into Java | Recorded caller |
+|--------------------------|-----------------|
+| builtin calls: a Java method of an object, a static Java method, a constructor (`exec_java_method()`, `exec_java_static_method()`, `exec_java_constructor()`), a member read of a Java object (`JniQoreClass::memberGate()`), the module's functions and `JavaArray` methods that run Java code (`load_class()`, `invoke()`, `invoke_nonvirtual()`, `implement_interface()`, `new_array()`, `define_class()`, `get_byte_code()`, `kotlin_eval()`, `JavaArray::get()`/`set()`/`toString()`/`deepToString()`/`getClass()`) | `callSite()`: the Program that libqore records in the frame of the builtin call, which it pushes before it calls the module (read by pushing a stack location for a moment, `JniCallSiteProbe`); libqore enters the Program of a Java class of another Program for a call of its methods, and makes the object's Program the Program context of the call, so neither names the caller then |
+| member accessors of Java fields (`jni_field_get()`/`jni_field_set()`, `jni_static_field_get()`/`jni_static_field_set()`), a Java object called as a Qore callable (`QoreJniFunctionalInterface::execValue()`, before the Program that created the callable is entered) | `current()`: the current Program, which these calls do not change |
+
+`callSite()` has one limit (qore#7028): for code that another Program called directly (ex: a host calling a tenant's
+closure), libqore records in the frame of a call that enters another Program the Program context of the call, which is
+then the Program that called that code, not the Program of the code.  So a call of a method or static method of a Java
+class of the host, made by a tenant closure that the host calls directly, is judged with the host's Program.  With a
+Qore library that reports the Program of the call site of the innermost builtin call
+(`_QORE_HAS_BUILTIN_CALL_SITE_PROGRAM`, `qore_get_builtin_call_site_program()`), `callSite()` uses it, and the module
+hash reports `get_module_hash().jni.info.builtin_call_site_program`; `test/jni-sandbox-host-object.qtest` skips its
+qore#7028 case without it.
+
+A module command records the Program that it is issued in (`jni_module_parse_cmd()`, after the issuer checks): it
+acts for that Program, also when trusted code issues it into a Program that a sandbox governs (qore#7041).
+
+A record can also reach no Program (`JniJavaCallerRecord::deny`): it is made for the Java code of a call of a Java
+method of an object of another Program that has a restricting sandbox of its own (`exec_java_method()`: a tenant's object that
+a host calls, or another tenant's object), which is neither the caller's code nor code that the object's sandbox
+governs as its caller, and for a Java object used as a Qore closure whose owner is not known (below).
+
+`jni_governed_caller_reaches(pgm)` decides as follows:
+
+1. A record that reaches no Program: no Program.
+2. A restricting sandbox governs the thread (`jni_restricting_sandbox_governs()`: the governing sandbox,
+   `QoreSandboxManagerHelper(All)`, checked with `jni_sandbox_restricts_io()`): one that restricts filesystem or network
+   access, or refuses uncontrolled APIs.  A sandbox that restricts nothing, such as the one that Qorus attaches to
+   trusted interfaces only for interrupts, or one that sets only resource limits, does not make its code sandboxed
+   (qore#7041):
+   with a record, only the recorded Program
+   (a record with no Program, when the call has no frame, reaches none); without one, the Program context of the call,
+   or the current Program without one, as before.
+3. No sandbox governs the thread, and it has a record, or it is a thread of Qore (not attached by the module): any
+   Program, as before.
+4. A thread that Java started (attached to Qore by the module, `QoreThreadAttacher`, or registered with
+   `QoreJavaApi.registerJavaThread()`), which no Qore code calls: its Qore caller is not known.  It reaches any
+   Program until code that a sandbox governs has called Java in the process (`jni_governed_java_used`, set by
+   `JniJavaCallerScope` on such a call, or by the `set-java-thread-policy strict` module command), and from then on
+   no Program.
+
+The fourth rule is process-wide on purpose.  The work that such a thread runs can come from any code: a pool reuses
+its threads for the work of every caller, and a thread created during the call of one Program runs the work of others
+later, so the thread cannot carry its caller (an `InheritableThreadLocal` that gave the threads created by code that a
+sandbox governs the token of its Program let the work of another tenant on such a pool thread reach that Program).
+Code that a sandbox governs can reach every Program's class loader from the JVM's state without calling that Program
+(the parent of its own class loader, the context class loaders of all threads, `Class.getClassLoader()` of shared
+classes), so restricting only Programs that such code "touched" is not sound either.  The latch is set only by a call
+into Java from code whose sandbox allows uncontrolled APIs, as Java calls are refused to any other sandboxed code, so
+only an embedder that gives Java to sandboxed code enables it; such an embedder enables it up front with the module
+command, so that its trusted code runs under the same rule before and after the first tenant call
+(`test/jni-java-thread-strict.qtest`).  A process with trusted code only is unchanged
+(`test/jni-java-thread-trusted.qtest`).
+
+The work that Qore code hands to Java carries its caller: the callbacks capture the sandbox of the code that created
+them and run in their own Program (`Dispatcher`, `JniObjectHandle`, `JniClosureHandle`).  The methods of an existing
+Qore object and Qore closures that Java calls with a Program pointer (`QoreObject.callMethod()`,
+`QoreClosure.call()`) are not refused when the calling code cannot reach that Program: the Program is not used, and
+the call is made in the context of the callback's own Program (`qore_object_closure_call_java_ptr()`, which enters it
+first with `jni_enter_call_program()`, so that its jni data cannot be destroyed during the call), so a Program pointer
+that Java chooses never becomes the context in which Qore values are converted.
+
+A Java object used as a Qore closure (`QoreJniFunctionalInterface`) is a callback of the code that obtained it from
+Java (`jni_java_caller_owner()`): the code that called Java; in a call from Java into Qore, which clears the record,
+the code that called that Java code (the record that the clearing scope saved, `jni_java_supplier`); and otherwise
+none, which reaches no Program.  So a Java closure that a tenant hands to a host listener, or passes through a Java
+object of the host, stays the tenant's.
+
+### The Java code on the stack
+
+The record names the Qore code that called Java, not the Java code that runs: a host can run Java code that a
+sandboxed Program defined (a method of a tenant's object, also through a wrapper of the host for it; a tenant's listener
+that Java code of the host calls; `toString()` of a tenant's object; a static method or the static initializer of a
+tenant's class), and that code then runs with the host's record.  So every check of `jni_governed_caller_reaches()`
+also walks the Java stack (`jni_stack_allows()`, `QoreJavaApi.getStackProgramPtrs()`, a `StackWalker` with class
+references), and refuses the call if a frame's class is attributed to a sandboxed Program other than the target
+(`jni_program_ptr_sandboxed()`: a Program whose own sandbox restricts; with a Qore library that has
+`qore_program_get_creator_sandbox()` (`_QORE_HAS_PROGRAM_CREATOR_SANDBOX`), also a Program one of whose creator's
+managers restricts, by the same rule: the governing one, which walks out to a sandboxed caller through a policy barrier
+(a Program that trusted code created for a sandboxed caller), or the policy one, so a sandbox of its own that restricts nothing does not hide it, and a creator's sandbox
+that restricts nothing does not make it sandboxed; a pointer that names no Program with jni data, as of a Program
+that has been deleted).  The
+class loader that defined a frame's class is attributed by `QoreJavaApi.getLoaderProgramPtr()`:
+
+- the class loaders of the JDK and of the JVM's classpath (the bootstrap, platform and system class loaders): trusted,
+  ignored;
+- otherwise, the nearest object of this module's `QoreURLClassLoader` class (by identity: a class of another class
+  loader with the same name does not count) among the class loader and its parents that has a Program: its Program,
+  or, if its pointer has been cleared (its Program has been deleted, or `clearProgramPtr()`), the first Program that it
+  had (`getOriginPtr()`; a derived class loader keeps the origin of its parent), so the classes of a deleted tenant
+  stay a deleted, sandboxed Program's;
+- any other class loader (one that Java code created, with no class loader of a Program among its parents): unknown,
+  sandboxed.  Trusted libraries that define classes in class loaders of their own are therefore refused calls into
+  Qore by a Program pointer from those classes once the latch is set.
+
+The jars of the classpath that every Program shares are defined by the class loader of the first Program, which is
+trusted.  The stack is walked only once the latch of the fourth rule is set, as no sandboxed Program has Java code of
+its own before; a process with trusted code only pays nothing.  Without `qore_program_get_creator_sandbox()`, the Java
+code of a Program that a tenant created, which has no restricting sandbox of its own, is not attributed (qore#7028).
+
+### The class loaders cannot be changed for another Program
+
+The attribution relies on the Program pointers of the class loaders, which the public Java API of `QoreURLClassLoader`
+could set: Java code of a tenant could create a class loader for the global Java context Program
+(`new QoreURLClassLoader(name, parent)`, which takes the pointer of `getContextProgram0()`), one with no Program
+(`createWithoutProgram()`), clear the pointer of its own class loader, or add classes and classpath entries to
+another Program's class loader.  Each such operation is now checked with `jni_governed_caller_reaches()` for the
+Program of the class loader (`QoreURLClassLoader.checkAccess()`, native `checkProgramAccess0()`):
+`getContextProgram0()` (the public constructors), `createWithoutProgram()` (Program 0), `createDerived()`, `add()`,
+`addPath()`, `addParentPath()`, `addPathOrig()`, `addWildcard()`, `addPendingClass()`, `removePendingByteCode()`,
+`clearCache()`, `clearPendingClassesCache()`, `clearAllCaches()`, `defineClassUnconditional()`,
+`defineResolveClass()` and `clearProgramPtr()`.  The module's own code uses package-private variants (`*Intern()`),
+also from C++ (module commands, the teardown of a Program, class definition), which are not checked.  So a tenant
+changes only its own class loaders, and cannot clear the pointer of the host's class loader either, which would break
+the host's calls into Qore.
+
+### A recorded caller that is a sandboxed Program
+
+The record of a Java closure's call is its owner (`QoreJniFunctionalInterface`), which can be a sandboxed Program while
+no sandbox governs the thread: a tenant's Java closure that it obtained through a Java object of the host runs in the
+host's Program.  Once the latch is set, a recorded Program that is sandboxed reaches only itself, also on a thread that
+no sandbox governs.
+
+### What the module cannot attribute: Java objects that sandboxed code supplies
+
+A Java object has no Program: when host code runs a Java object or closure that sandboxed code supplied or could have
+built (a listener or `Runnable` in a host data structure, `toString()`, a closure that host Java code forwards), its
+calls into Qore are governed by the host.  If it is made of classes of a sandboxed Program, the attribution of the
+stack refuses them; if it is made only of classes of the JDK or of trusted class loaders (ex: a `MethodHandleProxies`
+or `Proxy` instance over `QoreJavaApi.callFunction()`), nothing on the stack names the tenant.  So a host must not run
+Java objects or closures that sandboxed code supplied or could have built; it wraps them in a Qore closure that it
+controls, or does not accept them.  A generic Java closure that host Java code passes on to a callback of the
+sandboxed Program gets the host as its owner, as the code that called that Java code; the same rule applies.
+
+What changes for trusted code: in a process in which code that a sandbox governs has called Java, or after
+`set-java-thread-policy strict`, a Java thread that no Qore code calls (a pool thread, a listener thread) cannot call
+into Qore by a Program pointer (`QoreJavaApi`, the class loader of a Program, the generated classes); it uses
+callbacks, which are not affected.
+
+Every call from Java into Qore code clears the record for the Qore code that it runs (`QoreJniStackLocationHelper`,
+which every such native constructs, holds a clearing `JniJavaCallerScope`; `qore_object_create()`,
+`qore_object_destroy()` and `qore_object_release()`, which run constructors and destructors, clear it explicitly;
+`QoreJniFunctionalInterface::execValue()`, a call from Qore into Java that also constructs the helper, records its
+caller after it): that code records its own Program when it calls Java in turn, and a call into Java that records nothing is
+judged by the rule without a record, never with the caller of an enclosing call.  The checks of a native are made
+before it clears the record.  The scopes restore the previous record when they end, also when an exception
+propagates, so nested and re-entrant calls (host code, Java, a callback into the host, a call of the tenant, the tenant
+calling Java) each have their own caller.
+
+Objects that the calls return are created in the object's Program, as before, so an object reached from an object of
+the host is also the host's; that gives no reach, as each call of its methods records the tenant's Program again.
+
+### Which calls from Java into Qore are checked
+
+Directed at a Program, and checked with `jni_governed_caller_reaches()` (`jni_check_governed_caller_reaches()` throws
+the refusal as `JNI-ERROR`):
+
+- a Program pointer that Java passes (`JniJavaProgramRef`): `QoreJavaApi` calls, class generation and listing;
+- the fallbacks of `QoreJavaApi.callFunction*()` and `callStaticMethod*()` to the Program context of the call, for a
+  function or class that the class loader's Program does not have (Qorus Java workflow steps): only into the Program
+  of the calling code (`jni_java_api_fallback_program()`, decided before the record is cleared);
+- `QoreJavaApi.newObjectSave()`, which creates the object in the Program context of the call;
+- the Java classes generated for the Qore definitions of a Program (`JavaClassBuilder`): constructors
+  (`qore_object_create()`: the Program of the class, and the Program that the object is created in), static methods
+  (`doStaticCall0()`), functions (`doFunctionCall0()`, the `$Functions` classes) and constants
+  (`getConstantValue0()`) of the binding's Program, checked by `GeneratedBindingContext` before it enters the
+  Program, so a refused call runs none of its code (an entry handler, thread initialization code).  A generated class can be reached without any object of the other
+  Program: the parent of a Program's class loader is the class loader of another Program, which defined the classes
+  that its Program generated.
+
+Not checked, by design: Qore code that a Program hands to other code as a callback runs in its own Program, as a
+closure or an object method does in Qore.  This covers the methods of an existing Qore object called from Java
+(`doNormalCall0()`, `QoreObject.callMethod()`, member reads), Qore closures (`QoreClosure`), and interfaces that a
+Program implements with a `QoreInvocationHandler` (`invocation_handler_invoke()`, `Dispatcher`).  The Program has
+handed the object or closure to the code that uses it; code that a sandbox governs cannot create one of another
+Program, as the constructors and static methods of that Program's generated classes are refused to it.  A Java object
+of another Program whose own Java code calls into Qore by a Program pointer (ex: `QoreJavaApi.callFunction()`) is not
+such a callback: its call is governed by the calling code.  A host that wants to give sandboxed code a callback into
+its own Program hands it a Qore closure or object.
+
+The values that a Program has already published in Java (ex: an initialized constant of a generated class, a Qore object
+stored in a static Java field) remain readable to Java code, as any Java state is: the module does not hide Java
+state, it governs only Java's calls into Qore.  A Qore object or closure that Java code can find (in a static field,
+or in any field read by reflection) is also **callable**: all of its methods run in its own Program, under the
+sandbox captured when it was handed to Java, as for any callback.  A host must not leave Qore objects or closures in
+Java state that a tenant's Java code can reach.
+
+### The limit of these checks: Java code itself
+
+A sandbox that allows uncontrolled APIs, and so Java, is not an isolation boundary against a malicious tenant.  The
+Java code that such a tenant runs has the JVM's rights (by default the module starts the JVM with native access
+allowed for unnamed modules and, from Java 23, `sun.misc.Unsafe` memory access allowed), and can read or change any
+state of the process.  The checks described
+here govern Java's calls into Qore through this module's APIs; they are defense in depth for code that a sandbox
+trusts with Java, and do not contain Java code written to escape.  Code that must be isolated is not given
+uncontrolled APIs.
+
+`test/jni-sandbox-host-object.qtest` covers each entry point (a class loader of another Program, any Java object of
+another Program, chains of returned objects, fields, static members, constructors, exceptions, the generated classes of
+another Program), the callbacks that stay allowed, re-entrant calls, and the same code without a sandbox.
 
 A module command acts for its target Program when trusted code issued it (qore#7041): the command runs with the
 target Program current, but the Program context of the call stays the one of the issuing code (ex: the Program in
 which the `Program` object that `Program::issueModuleCmd()` was called on was created), so the class loader of the
 target Program generating the byte code of a `qore.*` superclass for `define-class` was "another Program".
-`jni_module_parse_cmd()` (`src/jni-module.cpp`) holds a `JniTrustedCommandScope` (`src/QoreJniClassMap.cpp`) while the
-handler runs.  It is active only if the command's `QoreModuleCommandContext` exists and says that the issuing code is
-trusted: not sandboxed (`isSandboxed()`: no governing sandbox, or only one that trusts it with uncontrolled APIs) and
-without `PO_NO_UNCONTROLLED_APIS`; otherwise it hides any outer trusted command (fail closed).  While it is active and
-the command's own code calls Java (the command is still the thread's current command, and the call context and the
-current Program are the ones that the handler started with), `jni_governed_caller_reaches()` takes the target Program
-as the Program of the calling code, and only it: neither the issuing code's Program (or the parent class loader's
-Program) nor any other is reached, also by Java code of the target Program that the command runs, such as a static
-initializer of a class that `import` loads.  Other code that runs during the command (a method or closure of another
-Program that Java calls), and Java threads, are judged as before (`test/jni-sandbox-trusted-define-class.qtest`).
+`jni_module_parse_cmd()` (`src/jni-module.cpp`) records the target Program as the caller of the Java code that the
+command runs (`JniJavaCallerScope`), after the checks of the issuer (`jni_check_command_issuer()`).  When a
+restricting sandbox governs the command (the target's own, or the issuing code's), the record reaches only the target
+Program, never the issuing code's Program (or the parent class loader's Program), also from Java code of the target
+Program that the command runs, such as a static initializer of a class that `import` loads.  When no restricting
+sandbox governs it (no sandbox, or one that restricts nothing), the command's Java code is trusted code and is not
+restricted (rule 3).  The record grants nothing new to governed code: the core refuses a command from a sandboxed
+Program into another Program, and when governed code runs a command into another Program through code of a trusted
+Program (ex: a closure of the host that it calls), the record reaches only that Program, and
+`jni_check_command_issuer()` refuses commands to code whose sandbox refuses uncontrolled APIs.  Other code that runs
+during the command (a method or closure of another Program that Java calls) clears the record at its Java→Qore
+boundary and is judged by its own Program; Java threads have no record
+(`test/jni-sandbox-trusted-define-class.qtest`).  A command into a Program whose sandbox restricts sets the latch of
+the fourth rule, like any call into Java from governed code.
 
 Two class lookups are not directed at another Program by the calling code, and make no native call with that
 Program's pointer; `QoreURLClassLoader` asks first with `programReachable0()`, which only compares the pointer with

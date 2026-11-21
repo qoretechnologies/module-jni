@@ -1,0 +1,267 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# QORE_JNI_RESTRICTED_JVM starts the JVM with no native access for code of unnamed modules and no memory access
+# through sun.misc.Unsafe, for hosts that run Java code of sandboxed Programs (qore#7023); the default start is
+# unchanged.
+#
+# The JVM starts once per process, so each case runs a child process; the parent reads the child's output until it
+# has exited.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+
+%requires jni
+%requires QUnit
+%requires FsUtil
+
+%exec-class JniRestrictedJvmTest
+
+class JniRestrictedJvmTest inherits QUnit::Test {
+    private:internal {
+        #! the Java class that the child compiles: it tries native access and Unsafe memory access
+        const ProbeSource = "public class RestrictProbe {
+    public static String unsafeAccess() {
+        try {
+            java.lang.reflect.Field f = sun.misc.Unsafe.class.getDeclaredField(\"theUnsafe\");
+            f.setAccessible(true);
+            sun.misc.Unsafe u = (sun.misc.Unsafe)f.get(null);
+            long addr = u.allocateMemory(8);
+            u.freeMemory(addr);
+            return \"allowed\";
+        } catch (UnsupportedOperationException e) {
+            return \"denied\";
+        } catch (Throwable e) {
+            return \"error: \" + e;
+        }
+    }
+
+    public static String attachDisabled() {
+        try {
+            // by reflection, as an image may not have the jdk.management module
+            Class<?> c = Class.forName(\"com.sun.management.HotSpotDiagnosticMXBean\");
+            Object b = Class.forName(\"java.lang.management.ManagementFactory\")
+                .getMethod(\"getPlatformMXBean\", Class.class).invoke(null, c);
+            java.lang.reflect.Method get = c.getMethod(\"getVMOption\", String.class);
+            java.lang.reflect.Method value = Class.forName(\"com.sun.management.VMOption\").getMethod(\"getValue\");
+            return value.invoke(get.invoke(b, \"DisableAttachMechanism\")) + \"/\"
+                + value.invoke(get.invoke(b, \"EnableDynamicAgentLoading\"));
+        } catch (ClassNotFoundException e) {
+            return \"unavailable\";
+        } catch (Throwable e) {
+            return \"error: \" + e;
+        }
+    }
+
+    public static String nativeAccess() {
+        try {
+            System.loadLibrary(\"qore_jni_restricted_jvm_no_such_library\");
+            return \"loaded\";
+        } catch (IllegalCallerException e) {
+            return \"denied\";
+        } catch (UnsatisfiedLinkError e) {
+            // the call was allowed, and the library was not found
+            return \"allowed\";
+        } catch (Throwable e) {
+            return \"error: \" + e;
+        }
+    }
+}
+";
+
+        #! the code of the child process after its parse directives
+        const ChildSource = "
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import java.lang.System
+
+QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+object out = compiler.compile(\"RestrictProbe\", ProbeSource);
+object cls = out.cls;
+printf(\"java: %s\\n\", System::getProperty(\"java.specification.version\"));
+printf(\"unsafe: %s\\n\", cls.getMethod(\"unsafeAccess\").invoke(NOTHING));
+printf(\"native: %s\\n\", cls.getMethod(\"nativeAccess\").invoke(NOTHING));
+printf(\"attach: %s\\n\", cls.getMethod(\"attachDisabled\").invoke(NOTHING));
+compiler.close();
+";
+    }
+
+    private {
+        #! the temporary directory with the child's script
+        TmpDir tmp("jni-restricted-jvm-");
+
+        #! the child's script
+        string script;
+    }
+
+    constructor() : Test("JniRestrictedJvm", "1.0") {
+        addTestCase("default start", \defaultTest());
+        addTestCase("restricted start", \restrictedTest());
+        addTestCase("the options that a restricted JVM takes", \allowedTest());
+        addTestCase("options that could undo the restrictions are refused", \weakenedTest());
+        addTestCase("a JVM that the host started is refused", \hostJvmTest());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        script = tmp.path + DirSep + "child.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n%%prepend-module-path \"%s\"\n%%requires jni\n"
+            "%%module-cmd(jni) add-classpath %s\nconst ProbeSource = %s;\n",
+            dirname(get_module_hash().jni.filename),
+            get_script_dir() + "../build/qore-jni-compiler.jar", qoreString(ProbeSource)) + ChildSource);
+        f.close();
+    }
+
+    defaultTest() {
+        hash<auto> res = run({});
+        assertEq(0, res.rc, res.out);
+        int java = res.java;
+        # by default, code of unnamed modules has native access, and Unsafe memory access is allowed
+        if (java >= 23) {
+            assertEq("allowed", res.unsafe, res.out);
+        }
+        assertEq("allowed", res.native, res.out);
+    }
+
+    restrictedTest() {
+        hash<auto> res = run({"QORE_JNI_RESTRICTED_JVM": "1"});
+        # the refusal depends on the Java version that the module was built for
+        if (builtBelow24(res)) {
+            # fail closed: no JVM without the restrictions
+            assertNeq(0, res.rc, res.out);
+            return;
+        }
+        assertEq(0, res.rc, res.out);
+        assertEq("denied", res.unsafe, res.out);
+        assertEq("denied", res.native, res.out);
+        # no agent can be loaded into the running JVM, also by a helper process
+        if (res.attach != "unavailable") {
+            assertEq("true/false", res.attach, res.out);
+        }
+    }
+
+    #! anything that could undo the restrictions is refused, before any Java code runs
+    weakenedTest() {
+        if (builtBelow24(run({"QORE_JNI_RESTRICTED_JVM": "1"}))) {
+            testSkip("this module was built for a Java version before 24");
+        }
+        string file = tmp.path + DirSep + "jvm-options";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("--enable-native-access=ALL-UNNAMED\n");
+        f.close();
+        foreach hash<string, string> h in (
+                # the JVM reads these variables itself: any value is refused, also a quoted spelling or a harmless one
+                {"JAVA_TOOL_OPTIONS": "--enable-native-access=ALL-UNNAMED"},
+                {"JAVA_TOOL_OPTIONS": "--enable-native-acc\"ess=ALL-UNNAMED\""},
+                {"JAVA_TOOL_OPTIONS": "--add-opens=java.base/java.lang=ALL-UNNAMED"},
+                {"JAVA_TOOL_OPTIONS": "-Dqore.test=1"},
+                {"_JAVA_OPTIONS": "--illegal-native-access=allow"},
+                {"_JAVA_OPTIONS": "-XX:VMOptions\"File=" + file + "\""},
+                # only the options of the allowlist are taken from QORE_JNI_JVM_ARGS
+                {"QORE_JNI_JVM_ARGS": "--enable-native-access=ALL-UNNAMED"},
+                {"QORE_JNI_JVM_ARGS": "--illegal-native-access=allow"},
+                {"QORE_JNI_JVM_ARGS": "--sun-misc-unsafe-memory-access=allow"},
+                {"QORE_JNI_JVM_ARGS": "--add-opens=java.base/java.lang=ALL-UNNAMED"},
+                {"QORE_JNI_JVM_ARGS": "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED"},
+                {"QORE_JNI_JVM_ARGS": "--patch-module=java.base=" + file},
+                {"QORE_JNI_JVM_ARGS": "-XX:VMOptionsFile=" + file},
+                {"QORE_JNI_JVM_ARGS": "-XX:Flags=" + file},
+                {"QORE_JNI_JVM_ARGS": "-agentpath:" + file},
+                {"QORE_JNI_JVM_ARGS": "-javaagent:" + file},
+                {"QORE_JNI_JVM_ARGS": "-Xmx256m --add-opens=java.base/java.lang=ALL-UNNAMED"},
+                # system properties that the JVM reads as options
+                {"QORE_JNI_JVM_ARGS": "-Dsun.misc.unsafe.memory.access=allow"},
+                {"QORE_JNI_JVM_ARGS": "-Djdk.attach.allowAttachSelf=true"},
+                {"QORE_JNI_JVM_ARGS": "-Dqore.test=1"},
+                {"QORE_JNI_JVM_ARGS": "-XX:+EnableDynamicAgentLoading"},
+                {"QORE_JNI_JVM_ARGS": "-XX:-DisableAttachMechanism"},
+                # a debugger agent
+                {"QORE_JNI_DEBUG": "18999"},
+            ) {
+            hash<auto> res = run(h + {"QORE_JNI_RESTRICTED_JVM": "1"});
+            assertNeq(0, res.rc, sprintf("%y: %s", h, res.out));
+            # refused for this input, not for another reason
+            assertRegex("QORE_JNI_RESTRICTED_JVM is set, but (so is )?" + h.firstKey(), res.out, sprintf("%y", h));
+            assertNothing(res.native, sprintf("%y: no Java code ran", h));
+        }
+    }
+
+    #! the options of a JVM that the module did not start cannot be restricted
+    hostJvmTest() {
+        string child = tmp.path + DirSep + "host-jvm.q";
+        File f();
+        f.open2(child, O_CREAT | O_WRONLY | O_TRUNC);
+        # the refusal is made before the value of the option is used
+        f.write(sprintf("%%modern\n%%prepend-module-path \"%s\"\nset_module_option(\"jni\", \"jvm-ptr\", 1);\n"
+            "load_module(\"jni\");\nprint(\"loaded\\n\");\n", dirname(get_module_hash().jni.filename)));
+        f.close();
+        hash<auto> res = run({"QORE_JNI_RESTRICTED_JVM": "1"}, child);
+        assertNeq(0, res.rc, res.out);
+        assertRegex("QORE_JNI_RESTRICTED_JVM is set, but the module was given a JVM", res.out);
+        assertNRegex("loaded", res.out);
+    }
+
+    #! the options of the allowlist start a JVM that stays restricted
+    allowedTest() {
+        hash<auto> res = run({"QORE_JNI_RESTRICTED_JVM": "1",
+            "QORE_JNI_JVM_ARGS": "-Xms64m -Xmx512m -Xss2m"});
+        if (builtBelow24(res)) {
+            testSkip("this module was built for a Java version before 24");
+        }
+        assertEq(0, res.rc, res.out);
+        assertEq("denied", res.unsafe, res.out);
+        assertEq("denied", res.native, res.out);
+
+        # empty values of the variables that the JVM reads add no options
+        res = run({"QORE_JNI_RESTRICTED_JVM": "1", "JAVA_TOOL_OPTIONS": "", "_JAVA_OPTIONS": " "});
+        assertEq(0, res.rc, res.out);
+        assertEq("denied", res.unsafe, res.out);
+        assertEq("denied", res.native, res.out);
+    }
+
+    #! returns True if the child reported that the module was built for a Java version before 24
+    private:internal static bool builtBelow24(hash<auto> res) {
+        return res.out =~ /a restricted JVM needs Java 24/;
+    }
+
+    #! runs the child with the given environment variables and returns its exit status and results
+    /** JVM settings inherited from the environment are removed
+    */
+    private:internal hash<auto> run(hash<string, string> env, *string child) {
+        string vars;
+        foreach hash<auto> i in (env.pairIterator()) {
+            vars += sprintf("%s=%s ", i.key, shellQuote(i.value));
+        }
+        int rc;
+        string out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            "-u QORE_JNI_DISABLE_JIT -u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG -u QORE_JNI_MIN_HEAP_SIZE "
+            "-u QORE_JNI_MAX_HEAP_SIZE -u QORE_JNI_DISABLE_NATIVE_ACCESS -u QORE_JNI_RESTRICTED_JVM "
+            "-u QORE_JNI_DISABLE_UNSAFE_WARNING_SUPPRESSION -u QORE_JNI_CLASSPATH -u QORE_CLASSPATH "
+            "%s%s --enable-debug %s 2>&1", vars, shellQuote(QORE_ARGV[0]), shellQuote(child ?? script)), \rc);
+        if (m_options.verbose > 2) {
+            printf("env %y: rc %d\n%s\n", env, rc, out);
+        }
+        *string java = (out =~ x/(?:^|\n)java: ([0-9]+)/)[0];
+        return {
+            "rc": rc,
+            "out": out,
+            "java": java ? java.toInt() : 0,
+            "unsafe": (out =~ x/(?:^|\n)unsafe: ([^\n]*)/)[0],
+            "native": (out =~ x/(?:^|\n)native: ([^\n]*)/)[0],
+            "attach": (out =~ x/(?:^|\n)attach: ([^\n]*)/)[0],
+        };
+    }
+
+    private:internal static string qoreString(string str) {
+        return "\"" + replace(replace(str, "\\", "\\\\"), "\"", "\\\"") + "\"";
+    }
+
+    private:internal static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

@@ -58,6 +58,8 @@ qclass QoreInvocationHandler [arg=jni::InvocationHandler* handler; ns=Jni::org::
     @endcode
  */
 QoreInvocationHandler::constructor(code dispatcher) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         self->setPrivate(CID_QOREINVOCATIONHANDLER, new jni::InvocationHandler(dispatcher));
     } catch (jni::Exception &e) {
