@@ -72,7 +72,9 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
     platform (Linux with glibc or musl, macOS).
 
     So that \c SIGUSR2 stays free for %Qore programs (ex: Qorus uses it to shut down), the \c jni module gives the JVM
-    that it creates a real-time signal in \c _JAVA_SR_SIGNUM, unless the variable is set (qore#6707):
+    that it creates a free signal in \c _JAVA_SR_SIGNUM, unless the variable is set: a real-time signal (qore#6707),
+    or, on platforms without real-time signals that the JVM accepts (macOS; FreeBSD, where they are above \c NSIG), a
+    classic signal (qore#7129):
     - the candidates are the real-time signals from \c SIGRTMAX down to \c SIGRTMIN + 2, determined when the module is
       loaded (the C library reserves the real-time signals below \c SIGRTMIN for itself), except \c SIGRTMAX - 2,
       which the JDK uses on Linux to interrupt threads blocked in I/O; \c SIGRTMIN + 1 is %Qore's internal signal on
@@ -80,6 +82,12 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
     - the module takes the first candidate with no handler installed in the process (default disposition) that
       %Qore can reserve for the module (no %Qore handler is set for it, and neither %Qore nor another module manages
       it); this is normally \c SIGRTMAX (\c SIGRTMAX - 1 under valgrind, which reserves \c SIGRTMAX for itself)
+    - without real-time signals that the JVM accepts, the candidates are \c SIGVTALRM and then \c SIGPROF, which only
+      the virtual and profiling interval timers raise (\c setitimer()); the other signals that the JVM accepts are used
+      by the JVM (\c SIGPIPE, \c SIGXFSZ, \c SIGIO, \c SIGTERM), by %Qore (\c SIGSYS, \c SIGALRM, \c SIGCHLD) or
+      by programs (\c SIGUSR1, \c SIGUSR2), are job control signals, or are sent by the terminal or the kernel
+      (\c SIGURG, \c SIGWINCH, \c SIGINFO, \c SIGXCPU); the module takes the first one that is free as above,
+      normally \c SIGVTALRM
     - the variable is set through %Qore's environment API only while the JVM is created, and is unset afterwards, so
       child processes that the process starts later do not inherit it (a child process that another thread starts
       while the JVM is being created can inherit it)
@@ -87,8 +95,7 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
       to choose the signal
 
     The module reserves the signal that the JVM uses: the signal that it chose; or the signal in \c _JAVA_SR_SIGNUM,
-    if the variable is set (\c SIGUSR2 if the JVM does not accept its value); or \c SIGUSR2 on platforms without
-    real-time signals that the JVM accepts (macOS; FreeBSD, where they are above \c NSIG) and when a Java process has
+    if the variable is set (\c SIGUSR2 if the JVM does not accept its value); or \c SIGUSR2 when a Java process has
     loaded %Qore and so has created the JVM itself.  In those cases a %Qore handler for \c SIGUSR2 cannot be set while
     the module is loaded.  If \c _JAVA_SR_SIGNUM names a signal that %Qore uses itself (ex: \c SIGALRM), the module
     cannot be loaded.
