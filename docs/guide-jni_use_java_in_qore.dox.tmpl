@@ -206,6 +206,13 @@ class Outer {
     evaluated it.  A class loader that is not a \c QoreURLClassLoader belongs to no Program, whatever its parent: once
     sandboxed code has used Java, the calls into %Qore of Java code of its classes are refused.
 
+    The Java thread rule also applies to class loaders and compilers.  In a JVM started with %Qore as a library, the
+    JVM's main thread can create a \c QoreURLClassLoader; once sandboxed code has used Java, a new thread that Java
+    started, with no %Qore caller, cannot.  Closing a class loader or a compiler is refused in the same way, as the
+    Java stack does not identify the code that supplied a \c Runnable: a compiler that is refused stays open, and code
+    that can reach its Program closes it.  Once the module's shutdown has started, class loaders and compilers are no
+    longer closed, and the process releases their resources when it exits.
+
     @note Java objects have no Program of their own: when host code runs a Java object or closure that sandboxed code
     supplied or could have built (a listener, a \c Runnable, \c toString(), a closure that it passes on), its calls into
     %Qore are made with the host's authority if it is made only of classes of the JDK or of trusted class loaders.  A

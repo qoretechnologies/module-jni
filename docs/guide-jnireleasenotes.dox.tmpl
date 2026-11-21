@@ -18,8 +18,9 @@
       only is unchanged, unless it issues \c set-java-thread-policy \c strict, which applies this rule from the start
     - A refused \c QoreURLClassLoader constructor no longer leaves an object or changes the thread's context, and a
       class loader with no Program takes the Program of its parent only if it was made with \c createWithoutProgram().
-      A compiler that its caller cannot close stays open for its owner, and an error of a compilation is no longer
-      replaced by a refusal of its cleanup (qore#7131)
+      A compiler that its caller cannot close stays open for code that can reach its Program, and an error of a
+      compilation is no longer replaced by a refusal of its cleanup.  Once the module's shutdown has started, class
+      loaders and compilers are no longer closed, and the process releases their resources (qore#7131)
     - In a JVM started with Qore as a library (JVM-primary mode), creating a \c QoreURLClassLoader after the JVM's start
       initialized the module again and replaced the system class loader, which could abort the process; only the class
       loader that the JVM creates at its start now does so, and any other is checked like one in an embedded JVM

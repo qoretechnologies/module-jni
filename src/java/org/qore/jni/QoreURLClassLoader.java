@@ -1386,8 +1386,14 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! Refuses a new class loader to code that cannot reach the global Java context Program (qore#7131)
     private static native void checkNewLoader0(boolean bootstrap);
 
-    //! Returns true once the Qore library or the module has been shut down; uses no Qore API
-    private static native boolean moduleShutDown0();
+    //! Checks that the calling code can reach the Program \a ptr, unless the module's shutdown has started
+    /** The check is serialized with the start of the module's shutdown, so that it uses no Qore API afterwards.
+
+        @return true if the calling code can reach the Program; false if the module's shutdown has started
+
+        @throws RuntimeException the calling code cannot reach the Program
+    */
+    private static native boolean checkAccessUnlessShutDown0(long ptr);
 
     public void add(final String qualifiedClassName, final QoreJavaFileObject javaFile) {
         checkAccess();
@@ -1428,31 +1434,32 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Closes the class loader, for code that can reach its Program (qore#7131)
+    /** Once the module's shutdown has started, the access of the calling code can no longer be checked: the class
+        loader is then left open, for any caller, and its resources are released when the process exits
+    */
     @Override
     public void close() throws IOException {
-        checkCloseAccess();
-        super.close();
-    }
-
-    //! Refuses to close this class loader to code that cannot reach its Program
-    /** Once the module has been shut down, no Program is left to protect and Qore cannot be used for the check: the
-        class loader can then be closed, as the process is exiting
-    */
-    public void checkCloseAccess() {
-        if (!moduleShutDown0()) {
-            checkAccess();
+        if (checkAccessUnlessShutDown0(getOriginPtr())) {
+            super.close();
         }
     }
 
     //! Closes the class loader and clears its caches and Program pointer, for the compiler that owns it
     /** After the access check, the caches and the pointer are always cleared, also if closing the JAR files fails.
+
+        @return true if the class loader was closed; false if the module's shutdown has started, in which case nothing
+        is changed (see close())
+
+        @throws RuntimeException the calling code cannot reach the class loader's Program; nothing is changed
     */
-    public void closeAndClear() {
-        checkCloseAccess();
+    public boolean closeAndClear() {
+        if (!checkAccessUnlessShutDown0(getOriginPtr())) {
+            return false;
+        }
         try {
             super.close();
         } catch (IOException e) {
-            // the class loader is being discarded, and there is no recovery action to take
+            // every JAR file has been tried; the class loader is being discarded, and there is no recovery action
         } finally {
             pendingClasses.clear();
             classCache.clear();
@@ -1460,6 +1467,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             classInProgress.get().clear();
             clearProgramPtrIntern();
         }
+        return true;
     }
 
     //! Sets the default assertion status, for code that can reach the class loader's Program (qore#7131)
@@ -2460,13 +2468,10 @@ public class QoreURLClassLoader extends URLClassLoader {
         @note This method requires a valid program pointer.
     */
     public void clearCompilationCache() {
-        if (moduleShutDown0()) {
-            // the native caches are gone with the module, and Qore cannot be used for the check
-            classCache.clear();
-            classes.clear();
+        // the native caches are gone with the module, and the access can no longer be checked
+        if (!checkAccessUnlessShutDown0(getOriginPtr())) {
             return;
         }
-        checkAccess();
         classCache.clear();
         classes.clear();
         long ptr = pgm_ptr.get();

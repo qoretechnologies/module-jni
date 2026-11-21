@@ -9,6 +9,7 @@
 %requires jni
 %module-cmd(jni) add-relative-classpath ../build/qore-jni.jar
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
 %module-cmd(jni) import org.qore.jni.QoreURLClassLoader
 %module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
 %module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
@@ -31,6 +32,10 @@ class JniSandboxKotlinScriptAccessTest inherits QUnit::Test {
 
         const TenantSource = "%modern
 %requires jni
+%module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+string sub close_object(object compiler) {
+    return ClassLoaderAccessProbe::closeObject(compiler);
+}
 string sub who() {
     return \"NAME\";
 }
@@ -55,6 +60,7 @@ auto sub ev(string script) {
         addTestCase("concurrent evaluations", \concurrentTest());
         addTestCase("bindings and script errors", \behaviorTest());
         addTestCase("a compiled script of another form", \otherCompiledScriptTest());
+        addTestCase("a Kotlin compiler's close", \kotlinCompilerCloseTest());
         set_return_value(main());
     }
 
@@ -212,6 +218,19 @@ auto sub ev(string script) {
         object loader = ClassLoaderAccessProbe::newDerived(get_class_loader());
         string rv = ClassLoaderAccessProbe::addOtherCompiledScript(loader);
         assertEq("ok: no classes", rv, rv);
+    }
+
+    #! a refused close leaves a Kotlin compiler open for its owner
+    kotlinCompilerCloseTest() {
+        setupTenants();
+        object compiler = ClassLoaderAccessProbe::newKotlinCompiler(get_class_loader());
+        on_exit ClassLoaderAccessProbe::closeObject(compiler);
+        string rv = tenant1.callFunction("close_object", compiler);
+        assertRegex("^refused: .*" + NotGoverned, rv, rv);
+        assertFalse(ClassLoaderAccessProbe::isClosedObject(compiler));
+        rv = ClassLoaderAccessProbe::closeObject(compiler);
+        assertEq("ok: closed", rv, rv);
+        assertTrue(ClassLoaderAccessProbe::isClosedObject(compiler));
     }
 
     behaviorTest() {

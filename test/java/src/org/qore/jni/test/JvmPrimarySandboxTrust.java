@@ -60,6 +60,9 @@ public class JvmPrimarySandboxTrust {
         string sub new_loader(object parent) {
             return ClassLoaderAccessProbe::newLoader(parent);
         }
+        string sub try_constructor(int ctor, object parent) {
+            return ClassLoaderAccessProbe::tryRecordingLoader(ctor, parent);
+        }
         string sub benign() {
             return JvmPrimarySandboxTrust::benign();
         }
@@ -122,6 +125,7 @@ public class JvmPrimarySandboxTrust {
             t.setSandboxManager(sm);
             h.tenant = t.callFunction("benign");
             h.new_loader = t.callFunction("new_loader", host_loader);
+            h.constructors = map t.callFunction("try_constructor", $1, host_loader), (0, 1, 2);
             h.trusted_after = JvmPrimarySandboxTrust::callCurrent();
             return h;
         }
@@ -224,9 +228,12 @@ public class JvmPrimarySandboxTrust {
         java.lang.reflect.Method shutdown = QoreURLClassLoader.class.getDeclaredMethod("shutdownContext0");
         shutdown.setAccessible(true);
         shutdown.invoke(null);
+        // nothing is closed or changed once the access of the caller can no longer be checked
+        long ptr = loader.getPtr();
         loader.close();
         loader.clearCompilationCache();
-        System.out.println("closed after shutdown");
+        check(!loader.closeAndClear(), "a class loader closed after the module's shutdown", loader);
+        check(loader.getPtr() == ptr, "the Program pointer of the class loader after the shutdown", loader.getPtr());
     }
 
     //! the classes of a Kotlin script are attributed to the Program that evaluated it
@@ -249,6 +256,12 @@ public class JvmPrimarySandboxTrust {
         check("ok: true".equals(h.get("trusted_new_loader")), "trusted class loader creation",
             h.get("trusted_new_loader"));
         checkRefused("new_loader", (String)h.get("new_loader"));
+        Object[] constructors = (Object[])h.get("constructors");
+        check(constructors.length == 3, "public constructors", constructors.length);
+        for (Object rv : constructors) {
+            checkRefused("public constructor", (String)rv);
+            check(((String)rv).endsWith("recorded=false context-unchanged=true"), "refused constructor", rv);
+        }
         String after = (String)h.get("trusted_after");
         check(after.startsWith("ok: "), "trusted call after class loaders were created", after);
         check(ClassLoader.getSystemClassLoader() == system, "system class loader", ClassLoader.getSystemClassLoader());

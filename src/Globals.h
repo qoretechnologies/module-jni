@@ -37,6 +37,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <shared_mutex>
 
 DLLLOCAL QoreStringNode* jni_module_init_intern();
 
@@ -679,6 +680,12 @@ public:
     DLLLOCAL static const QoreProgram* peekContextProgram() {
         return context_pgm.load(std::memory_order_acquire);
     }
+
+    //! Returns the lock that serializes the access checks of class loader cleanup with the start of the shutdown
+    /** Held shared by a check, which uses Qore APIs, and exclusively while clearGlobalContext() sets the shutdown flag,
+        so that a check either ends first or sees the flag; never destroyed
+    */
+    DLLLOCAL static std::shared_mutex& getShutdownGate();
 
     //! Returns true if the JNI module is shutting down
     /** Java background threads (e.g. ActiveMQ/JMS listeners) must check

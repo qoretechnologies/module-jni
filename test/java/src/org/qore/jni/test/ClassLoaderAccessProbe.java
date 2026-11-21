@@ -147,6 +147,14 @@ public class ClassLoaderAccessProbe {
     public static class RecordingLoader extends QoreURLClassLoader {
         static volatile RecordingLoader recorded;
 
+        public RecordingLoader() {
+            super();
+        }
+
+        public RecordingLoader(ClassLoader parent) {
+            super(parent);
+        }
+
         public RecordingLoader(String name, ClassLoader parent) {
             super(name, parent);
         }
@@ -162,12 +170,24 @@ public class ClassLoaderAccessProbe {
         }
     }
 
+    //! creates a RecordingLoader with the public constructor \a ctor of the base class (0, 1 or 2)
+    private static RecordingLoader newRecordingLoader(int ctor, ClassLoader parent) {
+        switch (ctor) {
+            case 0:
+                return new RecordingLoader();
+            case 1:
+                return new RecordingLoader(parent);
+            default:
+                return new RecordingLoader("access-probe", parent);
+        }
+    }
+
     //! tries to create a RecordingLoader; reports the result, whether an object escaped and the context afterwards
-    public static String tryRecordingLoader(ClassLoader parent) {
+    public static String tryRecordingLoader(int ctor, ClassLoader parent) {
         RecordingLoader.recorded = null;
         QoreURLClassLoader prev = QoreURLClassLoader.getCurrent();
         ClassLoader prev_tccl = Thread.currentThread().getContextClassLoader();
-        String rv = run(() -> new RecordingLoader("access-probe", parent) != null);
+        String rv = run(() -> newRecordingLoader(ctor, parent) != null);
         boolean same = QoreURLClassLoader.getCurrent() == prev
             && Thread.currentThread().getContextClassLoader() == prev_tccl;
         if (prev != null) {
@@ -185,6 +205,53 @@ public class ClassLoaderAccessProbe {
         }
         String name = ForeignCall.class.getName();
         return loader.define(name, classBytes(name)).getDeclaredConstructor().newInstance();
+    }
+
+    //! runs close() of \a object on a pool thread through a proxy made only of JDK classes
+    public static String closeWithJdkProxy(Object object) {
+        return run(() -> {
+            java.lang.invoke.MethodHandle close = java.lang.invoke.MethodHandles.publicLookup().findVirtual(
+                object.getClass(), "close", java.lang.invoke.MethodType.methodType(void.class)).bindTo(object);
+            Runnable proxy = java.lang.invoke.MethodHandleProxies.asInterfaceInstance(Runnable.class, close);
+            try {
+                java.util.concurrent.ForkJoinPool.commonPool().submit(proxy).get();
+            } catch (java.util.concurrent.ExecutionException e) {
+                throw (Exception)e.getCause();
+            }
+            return "closed";
+        });
+    }
+
+    //! creates a Kotlin compiler for the Program of \a loader; the thread's context is kept
+    public static Object newKotlinCompiler(QoreURLClassLoader loader) throws Exception {
+        QoreURLClassLoader prev = QoreURLClassLoader.getCurrent();
+        ClassLoader prev_tccl = Thread.currentThread().getContextClassLoader();
+        try {
+            return Class.forName("org.qore.jni.compiler.QoreKotlinCompiler", true, loader)
+                .getConstructor(QoreURLClassLoader.class, java.util.List.class).newInstance(loader, null);
+        } finally {
+            if (prev != null) {
+                prev.setContext();
+            }
+            Thread.currentThread().setContextClassLoader(prev_tccl);
+        }
+    }
+
+    //! calls close() of \a object
+    public static String closeObject(Object object) {
+        return run(() -> {
+            try {
+                object.getClass().getMethod("close").invoke(object);
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                throw (Exception)e.getCause();
+            }
+            return "closed";
+        });
+    }
+
+    //! returns the result of isClosed() of \a object
+    public static boolean isClosedObject(Object object) throws Exception {
+        return (Boolean)object.getClass().getMethod("isClosed").invoke(object);
     }
 
     //! a compiled script whose module is not one that the Kotlin compiler makes

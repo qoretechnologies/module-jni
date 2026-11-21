@@ -509,7 +509,8 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
      * disposed and the class loader is not expected to be used again.
      * <p>
      * Code that cannot reach the class loader's Program is refused, and the
-     * compiler then stays open for its owner.
+     * compiler then stays open for its owner. Once the module's shutdown has
+     * started, nothing is closed, and the process releases the resources.
      * <p>
      * This method is idempotent: calling it multiple times is safe. After
      * calling this method, the compiler must not be used.
@@ -519,17 +520,11 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
         if (closed) {
             return;
         }
-        if (classLoader != null) {
-            // a refusal leaves the compiler open, with all of its resources
-            classLoader.checkCloseAccess();
+        // a refusal, or the module's shutdown, leaves the compiler open, with all of its resources
+        if (classLoader != null && !classLoader.closeAndClear()) {
+            return;
         }
-        try {
-            if (classLoader != null) {
-                classLoader.closeAndClear();
-            }
-        } finally {
-            closed = true;
-        }
+        closed = true;
     }
 
     /**

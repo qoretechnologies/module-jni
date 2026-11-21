@@ -2793,9 +2793,27 @@ static void JNICALL qore_url_classloader_check_new_loader(JNIEnv* jenv, jclass j
     jni_check_governed_caller_reaches(pgm);
 } JNI_NATIVE_CATCH(jenv)
 
-//! Returns true once the Qore library or the module has been shut down; uses no Qore API that needs the library
-static jboolean JNICALL qore_url_classloader_module_shut_down(JNIEnv* jenv, jclass jcls) try {
-    return q_libqore_shutdown() || Globals::isShuttingDown() ? JNI_TRUE : JNI_FALSE;
+//! Checks that the calling code can reach the Program \a ptr, unless the module's shutdown has started
+/** Holds the shutdown gate while it uses Qore APIs, also to raise a refusal, so that the module's teardown does not
+    start under it (qore#7131)
+
+    @return JNI_TRUE if the code can reach the Program; JNI_FALSE, with no Qore API used, if the shutdown has started,
+    or with a pending Java exception if it is refused
+*/
+static jboolean JNICALL qore_url_classloader_check_unless_shut_down(JNIEnv* jenv, jclass jcls, jlong ptr) try {
+    std::shared_lock<std::shared_mutex> gate(Globals::getShutdownGate());
+    if (q_libqore_shutdown() || Globals::isShuttingDown()) {
+        return JNI_FALSE;
+    }
+    try {
+        QoreThreadAttachHelper attach_helper;
+        attach_helper.attach();
+        jni_check_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(ptr));
+    } catch (...) {
+        jni_native_exception(jenv);
+        return JNI_FALSE;
+    }
+    return JNI_TRUE;
 } JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
 static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jclass jcls, jobject new_syscl,
@@ -3672,9 +3690,9 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
         reinterpret_cast<void*>(qore_url_classloader_check_new_loader),
     },
     {
-        const_cast<char*>("moduleShutDown0"),
-        const_cast<char*>("()Z"),
-        reinterpret_cast<void*>(qore_url_classloader_module_shut_down),
+        const_cast<char*>("checkAccessUnlessShutDown0"),
+        const_cast<char*>("(J)Z"),
+        reinterpret_cast<void*>(qore_url_classloader_check_unless_shut_down),
     },
     {
         const_cast<char*>("programReachable0"),
@@ -5686,9 +5704,17 @@ QoreProgram* JniContextProgramHolder::acquire() {
     return rv;
 }
 
+std::shared_mutex& Globals::getShutdownGate() {
+    static std::shared_mutex* gate = new std::shared_mutex;
+    return *gate;
+}
+
 void Globals::clearGlobalContext() {
     std::unique_ptr<QoreProgramHelper> old;
     {
+        // taken first and released before the Program is deleted: an access check that runs ends before the flag is
+        // set, and takes neither of the other locks while this thread waits for it
+        std::unique_lock<std::shared_mutex> gate(getShutdownGate());
         std::lock_guard<std::recursive_mutex> guard(getContextLock());
         // sequentially consistent, as the holders of the Program check it (see context_holders)
         jni_shutting_down.store(true, std::memory_order_seq_cst);

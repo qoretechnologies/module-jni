@@ -53,8 +53,11 @@ string sub clear_loader(object loader) {
 string sub assert_loader(object loader) {
     return ClassLoaderAccessProbe::setAssertionStatus(loader);
 }
-string sub try_recording(object parent) {
-    return ClassLoaderAccessProbe::tryRecordingLoader(parent);
+string sub try_recording(int ctor, object parent) {
+    return ClassLoaderAccessProbe::tryRecordingLoader(ctor, parent);
+}
+string sub close_with_proxy(object compiler) {
+    return ClassLoaderAccessProbe::closeWithJdkProxy(compiler);
 }
 auto sub recorded_call() {
     return ClassLoaderAccessProbe::recordedCall();
@@ -164,12 +167,19 @@ string sub compile_error(object compiler) {
     }
 
     refusedConstructorTest() {
-        string rv = getTenant().callFunction("try_recording", host_loader);
-        # no object of the refused constructor can define classes that count as the host's
-        auto call = getTenant().callFunction("recorded_call");
-        *string host_rv = call ? ClassLoaderAccessProbe::runCall(call) : NOTHING;
-        assertEq(NOTHING, host_rv);
-        assertRegex("^refused: .*" + NotGoverned + ".* \\| recorded=false context-unchanged=true$", rv, rv);
+        # each public constructor
+        for (int ctor = 0; ctor < 3; ++ctor) {
+            string rv = getTenant().callFunction("try_recording", ctor, host_loader);
+            # no object of the refused constructor can define classes that count as the host's
+            auto call = getTenant().callFunction("recorded_call");
+            *string host_rv = call ? ClassLoaderAccessProbe::runCall(call) : NOTHING;
+            assertEq(NOTHING, host_rv);
+            assertRegex("^refused: .*" + NotGoverned + ".* \\| recorded=false context-unchanged=true$", rv, rv);
+
+            # trusted code can use it
+            rv = ClassLoaderAccessProbe::tryRecordingLoader(ctor, host_loader);
+            assertRegex("^ok: true ", rv, rv);
+        }
     }
 
     compilerResourcesTest() {
@@ -182,6 +192,11 @@ string sub compile_error(object compiler) {
 
         # a refused close leaves the compiler open for its owner
         rv = getTenant().callFunction("close_compiler", compiler);
+        assertRegex("^refused: .*" + NotGoverned, rv, rv);
+        assertFalse(compiler.isClosed());
+
+        # also on a pool thread, with no class of the sandboxed Program on the stack
+        rv = getTenant().callFunction("close_with_proxy", compiler);
         assertRegex("^refused: .*" + NotGoverned, rv, rv);
         assertFalse(compiler.isClosed());
 
