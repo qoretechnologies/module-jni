@@ -28,6 +28,7 @@
 #include "defs.h"
 #include "Env.h"
 #include "QoreToJava.h"
+#include "JniHandleRegistry.h"
 #include "QoreJniClassMap.h"
 
 #include <qore/QoreNet.h>
@@ -36,6 +37,7 @@
 #include <cstring>
 #include <new>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 #include <unordered_set>
@@ -50,6 +52,11 @@
 #endif
 
 namespace jni {
+
+template <>
+struct JniHandleTraits<QoreSandboxCapture> {
+    static constexpr JniHandleKind kind = JniHandleKind::SandboxPolicy;
+};
 
 namespace {
 
@@ -83,11 +90,15 @@ public:
 
     //! Uses the captured policy \a ptr, or the policy of the thread's Qore caller if \a ptr is 0
     /** @return 0 if the policy is known, -1 if not (JNI-SANDBOX-ERROR is raised)
+
+        @throw JniInvalidHandle \a ptr is not a live policy handle
     */
     DLLLOCAL int enter(jlong ptr, ExceptionSink* xsink) {
         assert(!sch && !captured_policy && !thread_policy);
         if (ptr) {
-            const QoreSandboxCapture* capture = reinterpret_cast<const QoreSandboxCapture*>(ptr);
+            // held for the scope, so that a release on another thread cannot free the policy during the check
+            capture_ref = jni_handle_get<QoreSandboxCapture>(ptr);
+            const QoreSandboxCapture* capture = capture_ref.get();
             // the policy of the code that runs on the thread applies as well: a captured policy never lowers it.  It
             // is resolved before the capture is applied, which replaces the context that the thread inherited from
             // the code that started it (or clears it, for an unsandboxed capture): resolved afterwards, the policy
@@ -133,6 +144,8 @@ public:
 private:
     //! attaches a Java thread to Qore for the call; destroyed last
     QoreThreadAttacher attacher;
+    //! the captured policy, held for the scope
+    std::shared_ptr<QoreSandboxCapture> capture_ref;
     //! applies a captured policy for its call budgets and interrupts; released after the policies below
     std::optional<QoreSandboxCaptureHelper> sch;
     //! the policy manager of a captured policy (referenced), or nullptr
@@ -209,7 +222,10 @@ static T sandbox_native(JNIEnv* jenv, T error_rv, F&& f) {
 
 //! Returns the bytes of a Java byte array
 static std::string get_bytes(Env& env, jbyteArray array) {
-    assert(array);
+    // the public methods never pass null, but the native methods can be reached by reflection
+    if (!array) {
+        throw std::invalid_argument("a required sandbox check argument is null");
+    }
     jsize len = env.getArrayLength(array);
     std::string rv(static_cast<size_t>(len), '\0');
     if (len) {
@@ -244,19 +260,22 @@ static jlong JNICALL qore_sandbox_capture(JNIEnv* jenv, jclass, jlong ptr) try {
     return sandbox_native<jlong>(jenv, 0, [ptr](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jlong {
         // a capture made inside Policy.run() is the run's policy, whatever the thread runs (qore#5644)
         if (ptr) {
-            return reinterpret_cast<jlong>(new QoreSandboxCapture(*reinterpret_cast<const QoreSandboxCapture*>(ptr)));
+            std::shared_ptr<QoreSandboxCapture> src = jni_handle_get<QoreSandboxCapture>(ptr);
+            return jni_handle_add(jni_make_native_state(new QoreSandboxCapture(*src)));
         }
         if (scope.enter(ptr, xsink)) {
             return 0;
         }
-        return reinterpret_cast<jlong>(new QoreSandboxCapture);
+        return jni_handle_add(jni_make_native_state(new QoreSandboxCapture));
     });
 } JNI_NATIVE_CATCH(jenv, 0)
 
 //! QoreSandbox.release0(): releases a captured policy
 static void JNICALL qore_sandbox_release(JNIEnv* jenv, jclass, jlong ptr) try {
     sandbox_native<jboolean>(jenv, JNI_FALSE, [ptr](Env&, SandboxCallScope&, ExceptionSink*) -> jboolean {
-        delete reinterpret_cast<QoreSandboxCapture*>(ptr);
+        if (!jni_handle_consume<QoreSandboxCapture>(ptr)) {
+            throw JniInvalidHandle();
+        }
         return JNI_TRUE;
     });
 } JNI_NATIVE_CATCH(jenv)
@@ -596,7 +615,7 @@ void jni_register_qore_sandbox_natives(Env& env, jclass cls) {
 }
 
 void jni_release_sandbox_policy(jlong ptr) {
-    delete reinterpret_cast<QoreSandboxCapture*>(ptr);
+    jni_handle_consume<QoreSandboxCapture>(ptr);
 }
 
 void jni_release_classpath_policy(jlong ptr) {

@@ -32,6 +32,7 @@
 #define QORE_JNI_DISPATCHER_H_
 
 #include "Env.h"
+#include "JniHandleRegistry.h"
 
 namespace jni {
 
@@ -54,6 +55,11 @@ private:
     Dispatcher(Dispatcher&&) = delete;
     Dispatcher& operator=(const Dispatcher&) = delete;
     Dispatcher& operator=(Dispatcher&&) = delete;
+};
+
+template <>
+struct JniHandleTraits<Dispatcher> {
+    static constexpr JniHandleKind kind = JniHandleKind::InvocationHandler;
 };
 
 /**

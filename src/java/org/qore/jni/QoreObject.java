@@ -10,12 +10,16 @@ import org.qore.jni.QoreURLClassLoader;
     <a href="https://github.com/qorelanguage/qore/wiki/Prompt-Collection">deterministic</a> and Java's not),
     strong references to %Qore objects must be managed outside of Java.
 
-    @note API usage errors such as with releasing / deleting the object and then calling methods
-    on the object will cause a crash
+    @note a call on an object that has been released or deleted raises a Java exception
  */
 public class QoreObject extends QoreObjectBase {
-    //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
-    public QoreObject(long obj) {
+    //! creates the wrapper for an opaque handle that the module issued; for the module only
+    QoreObject(long obj) {
+        super(obj);
+    }
+
+    //! creates the wrapper for a handle that the module issued, for the classes generated for Qore classes
+    protected QoreObject(QoreJavaObjectPtr obj) {
         super(obj);
     }
 

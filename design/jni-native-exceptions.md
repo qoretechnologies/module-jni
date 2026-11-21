@@ -53,7 +53,29 @@ describes a pending Java exception, describes a wrapper with its message and nev
 
 ## The native handles of the Java wrappers
 
-Every Java wrapper with a native pointer holds it in a `NativeCleanup.Ref`: `QoreObjectBase` (and `QoreObject`, and
+The value that a Java wrapper holds is an opaque handle of the registry in `src/JniHandleRegistry.h`, never a native
+address (qore#7068):
+
+- A handle is a keyed permutation of a counter, so it is never issued twice in a process and cannot be derived from
+  another handle.  An entry has a kind (object, closure, invocation handler, exception, sandbox policy, connection
+  waiter); a lookup of another kind finds nothing.
+- A lookup returns a `std::shared_ptr` that the native method holds for the call, so a release on another thread
+  cannot free the state during its use.  A release removes the entry, and only one caller gets it; the state is
+  destroyed with its last reference, outside of the registry's locks, on a thread attached to Qore and with any
+  pending Java exception kept (`jni_release_native_state()`).
+- A value that is not a live handle of the expected kind raises a Java exception.  The cleanup thread ignores it.
+- The constructors that take a handle are not public.  `JavaClassBuilder` can be defined by another class loader than
+  the wrapper classes, so it cannot use their package-private methods: the native method of a generated call holds
+  the handle of the wrapper itself.
+- A generated method runs only on an object whose class hierarchy has the method's class ID; an object of a compatible
+  class (ex: an injected class) gets its own method of that name.  An object is constructed only with the constructor
+  of the Java class's own binding, or for a Java subclass, of its nearest generated superclass, as the private data of
+  an object is typed by class.  Each Qore class of a Java class records its superclass when it is made, and these links
+  are followed to the generated class when an object is constructed.
+- The handles do not make Java code an isolation boundary: code that a host allows to use Java can use reflection.
+  The registry ensures that such code cannot make the module dereference an invalid reference.
+
+Every Java wrapper with a native handle holds it in a `NativeCleanup.Ref`: `QoreObjectBase` (and `QoreObject`, and
 the generated classes), `QoreClosure`, `QoreInvocationHandler`, `QoreExceptionWrapper` and `QoreSandbox.Policy`.  The
 pointer is released by an explicit release (`release()`, `destroy()`, `close()`, `get()` of a wrapper), by the C++
 cleanup thread when the wrapper is collected, and by the module's shutdown, which releases the pointer of every
@@ -64,8 +86,8 @@ wrapper that still exists; Java can keep a wrapper after any of them (qore#6864)
   counts the use per thread, and `Ref.exit()` ends it, in a `finally` block; no lock is held during the call, which
   can run any Qore and Java code.  Native code that reads the pointer of a wrapper (`JavaToQore`) holds it the same
   way, with `qoreJniEnterHandle()` and `qoreJniExitHandle()`.  The generated classes pass the object itself to
-  `JavaClassBuilder.doNormalCall()`, which holds its handle; the overloads that take the pointer remain for classes
-  generated before.
+  `JavaClassBuilder.doNormalCall()`, whose native method holds its handle; the overloads that take the handle remain
+  for classes generated before, and validate it.
 - An explicit release (`release()`, `destroy()`, `close()`) claims the pointer (`Ref.acquireAndClear()`: 0
   afterwards, so no new use begins) and then waits until the uses on other threads have ended; a release on a
   thread that uses the pointer cannot wait for itself, and is refused with `IllegalStateException`, changing

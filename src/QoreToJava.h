@@ -130,20 +130,16 @@ public:
         \a src left unchanged.
     */
     static LocalReference<jobject> newExceptionWrapper(Env& env, ExceptionSink& src) {
-        auto discard_sink = [](ExceptionSink* sink) {
-            sink->clear();
-            delete sink;
-        };
-        std::unique_ptr<ExceptionSink, decltype(discard_sink)> xsink(new ExceptionSink(), discard_sink);
-        xsink->assimilate(src);
-        xsink->markExternallyManaged();
+        std::shared_ptr<JniExceptionHandle> state = jni_make_native_state(new JniExceptionHandle);
+        JniHandleGuard<JniExceptionHandle> handle(state);
+        state->sink.assimilate(src);
 
         jvalue arg;
-        arg.j = reinterpret_cast<jlong>(xsink.get());
+        arg.j = handle.get();
         LocalReference<jobject> obj = env.newObject(Globals::classQoreExceptionWrapper,
             Globals::ctorQoreExceptionWrapper, &arg);
-        // from now on, the Java instance of QoreExceptionWrapper is responsible for the exception sink
-        xsink.release();
+        // from now on, the Java instance of QoreExceptionWrapper is responsible for the exception
+        handle.release();
         return obj;
     }
 

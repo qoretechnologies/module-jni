@@ -202,6 +202,7 @@ public final class ReleasedHandleCalls {
         Field ptr = refClass.getDeclaredField("ptr");
         Field claimed = refClass.getDeclaredField("claimed");
         Field users = refClass.getDeclaredField("users");
+        ptr.setAccessible(true);
         claimed.setAccessible(true);
         users.setAccessible(true);
         synchronized (ref) {
@@ -235,17 +236,28 @@ public final class ReleasedHandleCalls {
     //! Ends a use of the handle of the object kept that was never begun, before and after the object is released;
     //! each must raise an IllegalStateException and change nothing, so that a call on the object still works before
     //! the release
-    public static String exitUnmatched() {
+    public static String exitUnmatched() throws Throwable {
         QoreObject obj = (QoreObject)kept;
         String before = exitResult(obj);
         String call = call("classname");
         // a valid use still begins and ends
-        long p = obj.qoreJniEnterHandle();
-        obj.qoreJniExitHandle();
+        long p = (Long)handleUse(obj, "qoreJniEnterHandle");
+        handleUse(obj, "qoreJniExitHandle");
         String valid = p != 0 ? "ok" : "no handle";
         obj.release();
         return "before: " + before + "; call: " + call + "; valid: " + valid + "; released: " + exitResult(obj)
             + "; after: " + call("classname");
+    }
+
+    //! calls a method of the object that is internal to the module, and raises the exception that it raises
+    private static Object handleUse(QoreObject obj, String name) throws Throwable {
+        Method m = QoreObjectBase.class.getDeclaredMethod(name);
+        m.setAccessible(true);
+        try {
+            return m.invoke(obj);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
     }
 
     //! ends a use of the object's handle that was never begun; returns the exception and the number of uses in
@@ -253,7 +265,7 @@ public final class ReleasedHandleCalls {
     private static String exitResult(QoreObject obj) {
         String rv;
         try {
-            obj.qoreJniExitHandle();
+            handleUse(obj, "qoreJniExitHandle");
             rv = "no exception";
         } catch (Throwable t) {
             rv = t.getClass().getName() + ": " + t.getMessage();

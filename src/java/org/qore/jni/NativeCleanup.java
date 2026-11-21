@@ -55,14 +55,14 @@ public final class NativeCleanup {
         discriminator the C++ dispatcher uses to pick the right release path.
         Every release path must claim the pointer with acquireAndClear() (explicit releases) or
         acquireForCleanup() (module-jni's cleanup thread and shutdown). */
-    public static final class Ref extends PhantomReference<Object> {
+    static final class Ref extends PhantomReference<Object> {
         /** The native pointer; volatile for wrapper accessors. Release paths
             must claim it with {@link #acquireAndClear} or {@link #acquireForCleanup},
             never with a separate read and clear.
             A native call that uses the pointer must hold it with
             {@link #enter} and {@link #exit} instead of reading this field. */
-        public volatile long ptr;
-        public final int kind;
+        volatile long ptr;
+        final int kind;
         private boolean claimed;
         /** The number of uses of the pointer in progress, on all threads (see {@link #enter}) */
         private int users;
@@ -84,7 +84,7 @@ public final class NativeCleanup {
             pointer, in a finally block.
             @return the pointer, or zero if it has been released (exit() must not be called then)
         */
-        public synchronized long enter() {
+        synchronized long enter() {
             if (ptr == 0) {
                 return 0;
             }
@@ -100,7 +100,7 @@ public final class NativeCleanup {
             @throws IllegalStateException if this thread has no use of the pointer in progress; nothing is
                 changed, so that the uses of other threads stay counted
         */
-        public synchronized void exit() {
+        synchronized void exit() {
             Thread t = Thread.currentThread();
             Integer n = userThreads == null ? null : userThreads.get(t);
             if (n == null) {
@@ -160,7 +160,7 @@ public final class NativeCleanup {
                 it cannot be released under the call that uses it, and nothing
                 is changed
         */
-        public synchronized long acquireAndClear() {
+        synchronized long acquireAndClear() {
             if (ownUses() > 0) {
                 throw new IllegalStateException("the Qore handle cannot be released while a call on the same "
                     + "thread uses it");
@@ -243,7 +243,7 @@ public final class NativeCleanup {
 
     /** Shared ReferenceQueue.  The C++ cleanup thread blocks on
         {@code queue.remove()} and dispatches by Ref.kind. */
-    public static final ReferenceQueue<Object> queue = new ReferenceQueue<>();
+    static final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
     /** Strong refs to live {@link Ref} instances.  PhantomReference itself
         must remain strongly reachable until GC enqueues it; a Ref whose only
@@ -263,7 +263,7 @@ public final class NativeCleanup {
             handoff via {@link #unregister}
         @throws IllegalStateException if native cleanup has shut down
     */
-    public static synchronized Ref register(Object outer, long ptr, int kind) {
+    static synchronized Ref register(Object outer, long ptr, int kind) {
         if (closed) {
             throw new IllegalStateException("Native cleanup has shut down");
         }
@@ -276,7 +276,7 @@ public final class NativeCleanup {
         been released by an explicit teardown path.  Clears the Ref's
         pointer (so any concurrent phantom dispatch becomes a no-op),
         deregisters the Ref from the queue, and drops the strong ref. */
-    public static void unregister(Ref r) {
+    static void unregister(Ref r) {
         if (r == null) {
             return;
         }
@@ -287,7 +287,7 @@ public final class NativeCleanup {
 
     /** Called by the C++ cleanup thread after dispatching native release
         for {@code r}.  Drops the strong ref so the Ref itself is GC-eligible. */
-    public static void markProcessed(Ref r) {
+    static void markProcessed(Ref r) {
         live.remove(r);
     }
 
@@ -302,7 +302,7 @@ public final class NativeCleanup {
         @return outstanding handles, including wrappers not yet garbage collected
     */
     @SuppressWarnings("deprecation")  // Reference.enqueue() is documented and stable
-    public static synchronized Ref[] shutdown() {
+    static synchronized Ref[] shutdown() {
         Ref[] pending = live.toArray(new Ref[0]);
         closed = true;
         SENTINEL.enqueue();

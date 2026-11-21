@@ -6,6 +6,13 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: the native object, closure and related references that Java holds are now opaque, validated
+      handles.  An unknown or released reference raises a Java exception, a reference can be released only once, and
+      a method of a generated class is called only on an object of its class; an object is constructed only with the
+      constructor of its own class or, for a Java subclass, of its nearest generated superclass (qore#7068)
+    - <b>Behavior change</b> (qore#7068): the constructors of \c QoreObject, \c QoreObjectBase, \c QoreClosure and
+      \c QoreJavaObjectPtr that take a \c long, and \c get() of \c QoreObjectBase and \c QoreClosure, are no longer
+      part of the public Java API; objects and closures are obtained from %Qore
     - <b>Behavior change</b> (qore#7340): when the %Qore program ends while a Java thread is still inside a call of
       %Qore code, the process now ends without running any exit handler, so Java's shutdown hooks do not run and the
       JVM is not destroyed (the process does not wait for the call); see @ref jni_process_exit_in_call

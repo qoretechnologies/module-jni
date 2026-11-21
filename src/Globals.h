@@ -1159,6 +1159,44 @@ static jobject JNICALL my_native(JNIEnv* jenv, jclass cls) try {
         return __VA_ARGS__; \
     }
 
+namespace jni {
+//! Ends the use of the native handle of a Qore object or closure that its qoreJniEnterHandle() began (qore#6864)
+/** The exit method is called when the helper is destroyed, also while a C++ exception unwinds with a Java exception
+    pending, which is kept.
+*/
+class JniHandleUseHelper {
+public:
+    DLLLOCAL JniHandleUseHelper(Env& env, jobject obj, jmethodID exit) : jenv(*env), obj(obj), exit(exit) {
+    }
+
+    DLLLOCAL ~JniHandleUseHelper() {
+        // no JNI call may be made with a Java exception pending
+        jthrowable pending = jenv->ExceptionOccurred();
+        if (pending) {
+            jenv->ExceptionClear();
+        }
+        jenv->CallVoidMethod(obj, exit);
+        if (jenv->ExceptionCheck()) {
+            // the exit method raises no exception but an error of the JVM (ex: an OutOfMemoryError), which is
+            // dropped: the destructor cannot raise it
+            jenv->ExceptionClear();
+        }
+        if (pending) {
+            jenv->Throw(pending);
+            jenv->DeleteLocalRef(pending);
+        }
+    }
+
+private:
+    JNIEnv* jenv;
+    jobject obj;
+    jmethodID exit;
+
+    JniHandleUseHelper(const JniHandleUseHelper&) = delete;
+    JniHandleUseHelper& operator=(const JniHandleUseHelper&) = delete;
+};
+}
+
 // callled from the QoireURLClassLoader's constructor when used as the system classloader
 DLLLOCAL QoreStringNode* jni_module_init_finalize(bool system = false);
 

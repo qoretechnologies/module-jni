@@ -383,9 +383,13 @@ void JavaException::convert(ExceptionSink* xsink) {
             // Preserve the original exception if extracting the wrapped sink fails.
             env->ExceptionClear();
         } else if (l != 0) {
-            ExceptionSink* src = reinterpret_cast<ExceptionSink *>(l);
-            xsink->assimilate(src);
-            return;
+            // only one taker gets the exception; a value that is not a live handle is reported as a Java exception
+            std::shared_ptr<JniExceptionHandle> src = jni_handle_consume<JniExceptionHandle>(l);
+            if (src) {
+                std::lock_guard<std::mutex> guard(src->lock);
+                xsink->assimilate(src->sink);
+                return;
+            }
         }
         //if l is zero, it means that the xsink wrapped in QoreExceptionWrapper has already been consumed. This should
         //not happen, but if it does, we simply report the QoreExceptionWrapper as if it was a normal Java exception
@@ -555,9 +559,13 @@ void JavaException::ignoreOrRethrowNoClass() {
         if (env->ExceptionCheck()) {
             env->ExceptionClear();
         } else if (l != 0) {
-            ExceptionSink *src = reinterpret_cast<ExceptionSink *>(l);
-            xsink.assimilate(src);
-            return;
+            // only one taker gets the exception; a value that is not a live handle is reported as a Java exception
+            std::shared_ptr<JniExceptionHandle> src = jni_handle_consume<JniExceptionHandle>(l);
+            if (src) {
+                std::lock_guard<std::mutex> guard(src->lock);
+                xsink.assimilate(src->sink);
+                return;
+            }
         }
         //if l is zero, it means that the xsink wrapped in QoreExceptionWrapper has already been consumed. This should
         //not happen, but if it does, we simply report the QoreExceptionWrapper as if it was normal Java exception

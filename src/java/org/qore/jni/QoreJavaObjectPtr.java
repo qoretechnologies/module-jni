@@ -6,10 +6,11 @@ package org.qore.jni;
     @since 2.0
  */
 public class QoreJavaObjectPtr {
-    public long ptr;
+    //! the opaque handle that the module issued
+    final long ptr;
 
-    //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
-    public QoreJavaObjectPtr(long ptr) {
+    //! created by the module only
+    QoreJavaObjectPtr(long ptr) {
         this.ptr = ptr;
     }
 }

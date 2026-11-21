@@ -1,0 +1,400 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.NativeHandleProbe
+
+%exec-class JniNativeHandlesTest
+
+#! a class whose methods the probe calls
+class HandleTarget {
+    public {
+        int m = 1;
+    }
+
+    int m() {
+        return 1;
+    }
+
+    string block() {
+        NativeHandleProbe::blockInCall();
+        return "done";
+    }
+}
+
+#! counts its destruction, so that a test can wait for a closure that captures it to be released
+class ReleaseSignal {
+    private {
+        Counter counter;
+    }
+
+    constructor(Counter counter) {
+        self.counter = counter;
+    }
+
+    destructor() {
+        counter.dec();
+    }
+}
+
+#! Values that Java passes back to the module as native handles are validated (qoretechnologies/qore#7068)
+class JniNativeHandlesTest inherits QUnit::Test {
+    public {
+        #! values that the module never issued
+        const Forged = (1, 12345, 0x4141414141, -1, 0x7fffffffffffffff);
+
+        #! the object and closure cases that use a handle of the wrong kind
+        const ObjectCases = ("object.className0", "object.instanceOf0", "object.callMethod0",
+            "object.getMemberValue0", "object.release0", "object.destroy0");
+
+        const BindingSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+public namespace NativeHandleTest {
+    public class Calls {
+        int value(int arg) { return arg + 3; }
+    }
+    public class Unrelated {
+        int value(int arg) { return arg + 100; }
+    }
+    public namespace A {
+        public class Same {
+            int value(int arg) { return arg + 3; }
+        }
+    }
+    public namespace B {
+        public class Same {
+            int value(int arg) { return arg + 100; }
+        }
+    }
+}
+binary sub bytes(string name) {
+    return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.NativeHandleTest.\" + name);
+}
+binary sub rawbytes(string name) {
+    return QoreURLClassLoader::getCurrent().generateByteCode(name);
+}
+object sub loadcls(string name) {
+    return QoreURLClassLoader::getCurrent().loadClass(name);
+}
+object sub make(string name) {
+    switch (name) {
+        case \"Calls\": return new NativeHandleTest::Calls();
+        case \"A.Same\": return new NativeHandleTest::A::Same();
+        case \"B.Same\": return new NativeHandleTest::B::Same();
+    }
+    return new NativeHandleTest::Unrelated();
+}
+";
+    }
+
+    constructor() : QUnit::Test("jni native handles", "1.0") {
+        addTestCase("positive: objects, closures, callbacks and policies", \positiveTest());
+        addTestCase("positive: generated classes", \generatedPositiveTest());
+        addTestCase("the public API has no raw handle", \publicApiTest());
+        addTestCase("forged handles", \forgedTest());
+        addTestCase("forged Program pointers", \programTest());
+        addTestCase("forged values converted to Qore", \convertTest());
+        addTestCase("released handles", \releasedTest());
+        addTestCase("double release and destroy", \doubleReleaseTest());
+        addTestCase("double-wrapped objects", \doubleWrapObjectTest());
+        addTestCase("double-wrapped closures", \doubleWrapClosureTest());
+        addTestCase("double-wrapped handlers and exceptions", \doubleWrapOtherTest());
+        addTestCase("a release during a call", \releaseDuringCallTest());
+        addTestCase("handles of the wrong kind", \wrongKindTest());
+        addTestCase("policies and connection waiters", \policyWaiterTest());
+        addTestCase("a method call on an object of another class", \mismatchedClassTest());
+        addTestCase("a null method name", \nullNameTest());
+        addTestCase("a Java class that claims a Qore class", \claimedClassTest());
+        addTestCase("a Java subclass with an ancestor's constructor", \ancestorConstructorTest());
+        addTestCase("null arguments of the sandbox checks", \nullSandboxArgsTest());
+        addTestCase("null arguments of public calls", \nullCallArgsTest());
+        set_return_value(main());
+    }
+
+    private bool raisesInvalid(code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return (ex.err + ": " + ex.desc) =~ /invalid or released/;
+        }
+        return False;
+    }
+
+    private assertInvalidBinding(string result, string label) {
+        assertTrue(result =~ /^exception: .*Invalid class binding/, sprintf("%s: %s", label, result));
+    }
+
+    private assertInvalidHandle(string result, string label) {
+        assertTrue(result =~ /^exception: .*invalid or released/, sprintf("%s: %s", label, result));
+    }
+
+    private assertRaises(string result, string label) {
+        assertTrue(result =~ /^exception: /, sprintf("%s: %s", label, result));
+    }
+
+    positiveTest() {
+        HandleTarget t();
+        code c = int sub () { return 7; };
+        assertEq("HandleTarget true 1 1 7", NativeHandleProbe::normalUse(t, c));
+        # an exception that Java holds keeps its message
+        code thrower = sub () { throw "HANDLE-TEST", "the description"; };
+        assertEq("HANDLE-TEST: the description", NativeHandleProbe::exceptionMessage(thrower));
+        # a callback through an invocation handler
+        QoreInvocationHandler handler(auto sub (object method, *list<auto> args) { return "called"; });
+        object proxy = implement_interface(handler, load_class("java.util.function.Supplier"));
+        assertEq("called", NativeHandleProbe::callProxy(proxy));
+        assertFalse(NativeHandleProbe::policyUse());
+    }
+
+    private hash<auto> bindingFixture(Program p) {
+        p.parse(BindingSource, "native-handle-fixture");
+        binary bytes = p.callFunction("bytes", "Calls");
+        return {
+            "binding": NativeHandleProbe::methodBinding(bytes, "value"),
+            "calls": p.callFunction("make", "Calls"),
+            "other": p.callFunction("make", "Unrelated"),
+            "same_a_binding": NativeHandleProbe::methodBinding(p.callFunction("bytes", "A.Same"), "value"),
+            "same_a": p.callFunction("make", "A.Same"),
+            "same_b": p.callFunction("make", "B.Same"),
+        };
+    }
+
+    generatedPositiveTest() {
+        Program p(PO_NEW_STYLE);
+        hash<auto> f = bindingFixture(p);
+        assertEq("ok: 10", NativeHandleProbe::callBinding("value", f.calls, f.binding, 7));
+    }
+
+    publicApiTest() {
+        assertEq((), NativeHandleProbe::publicHandleMembers());
+    }
+
+    forgedTest() {
+        HandleTarget receiver();
+        foreach string name in (NativeHandleProbe::handleCaseNames()) {
+            foreach int value in (Forged) {
+                string result = NativeHandleProbe::forged(name, receiver, value);
+                assertTrue(result =~ /^exception: .*invalid or released/, sprintf("%s %x: %s", name, value, result));
+            }
+        }
+        # the object is still usable
+        assertEq("HandleTarget true 1 1 1", NativeHandleProbe::normalUse(receiver, int sub () { return 1; }));
+    }
+
+    programTest() {
+        HandleTarget receiver();
+        foreach string name in (NativeHandleProbe::programCaseNames()) {
+            foreach int value in (Forged) {
+                string result = NativeHandleProbe::forged(name, receiver, value);
+                if (name == "program.checkProgramAccess0") {
+                    # ungoverned code passes the access check, which only compares the value
+                    assertEq("ok: null", result, sprintf("%s %x", name, value));
+                } else if (name == "program.programReachable0") {
+                    # the value is only compared
+                    assertEq("ok: true", result, sprintf("%s %x", name, value));
+                } else {
+                    assertRaises(result, sprintf("%s %x", name, value));
+                }
+            }
+        }
+    }
+
+    convertTest() {
+        foreach int value in (Forged) {
+            assertEq(True, raisesInvalid(sub () { NativeHandleProbe::forgedObject(value); }), "object");
+            assertEq(True, raisesInvalid(sub () { NativeHandleProbe::forgedClosure(value); }), "closure");
+            # a forged exception is reported as a Java exception, without using the value
+            bool raised = False;
+            try {
+                NativeHandleProbe::throwForgedException(value);
+            } catch (hash<ExceptionInfo> ex) {
+                raised = True;
+            }
+            assertTrue(raised, "exception");
+        }
+    }
+
+    releasedTest() {
+        HandleTarget receiver();
+        foreach string name in (ObjectCases) {
+            HandleTarget t();
+            assertInvalidHandle(NativeHandleProbe::afterRelease(name, t, receiver), name);
+        }
+    }
+
+    doubleReleaseTest() {
+        HandleTarget receiver();
+        {
+            HandleTarget t();
+            assertInvalidHandle(NativeHandleProbe::doubleRelease(t, receiver), "double release");
+            # the object was not freed by the second release
+            assertEq(1, t.m());
+        }
+        {
+            HandleTarget t();
+            assertInvalidHandle(NativeHandleProbe::doubleDestroy(t, receiver), "double destroy");
+        }
+    }
+
+    doubleWrapObjectTest() {
+        HandleTarget t();
+        string result = NativeHandleProbe::doubleWrapObject(t);
+        # the first wrapper's use and its release both fail cleanly; the object itself is still valid
+        assertTrue(result =~ /^exception: .*invalid or released.*; exception: .*invalid or released/, result);
+        assertEq(1, t.m());
+    }
+
+    doubleWrapClosureTest() {
+        Counter released(1);
+        {
+            ReleaseSignal signal(released);
+            # the closure holds the only reference to the object after this block, so the object's destructor runs
+            # only once the closure's native state has been released
+            code c = int sub () { return signal ? 1 : 0; };
+            NativeHandleProbe::aliasClosure(c);
+        }
+        # the cleanup thread released the closure through the second wrapper
+        # the timeout only turns a release that never happens into a failure
+        assertEq(0, released.waitForZero(10m), "the closure was released");
+        assertInvalidHandle(NativeHandleProbe::afterAliasRelease(), "closure after alias release");
+    }
+
+    doubleWrapOtherTest() {
+        QoreInvocationHandler handler(auto sub (object method, *list<auto> args) { return "called"; });
+        object proxy = implement_interface(handler, load_class("java.util.function.Supplier"));
+        assertRaises(NativeHandleProbe::doubleWrapHandler(proxy), "proxy after alias destroy");
+
+        code thrower = sub () { throw "HANDLE-TEST", "the description"; };
+        # Qore takes the exception through the second wrapper
+        assertThrows("HANDLE-TEST", \NativeHandleProbe::throwAliasException(), thrower);
+        # the first wrapper reports that the exception is gone; it does not read released state
+        assertRaises(NativeHandleProbe::messageOfKept(), "exception after it was taken");
+    }
+
+    releaseDuringCallTest() {
+        HandleTarget t();
+        string result = NativeHandleProbe::releaseAliasDuringCall(t);
+        assertTrue(result =~ /^ok: done; exception: /, result);
+        assertEq(1, t.m());
+    }
+
+    wrongKindTest() {
+        HandleTarget receiver();
+        code c = int sub () { return 1; };
+        foreach string name in (ObjectCases) {
+            assertInvalidHandle(NativeHandleProbe::wrongKind(name, receiver, c), name + " with a closure handle");
+        }
+        foreach string name in ("closure.call0", "closure.callSave0", "handler.invoke0", "exception.getMessage0",
+            "sandbox.isSandboxed0", "waiter.complete") {
+            HandleTarget t();
+            assertInvalidHandle(NativeHandleProbe::wrongKind(name, receiver, t), name + " with an object handle");
+        }
+        # the handles used were not consumed
+        assertEq(1, NativeHandleProbe::normalUse(receiver, c) =~ /^HandleTarget/ ? 1 : 0);
+    }
+
+    policyWaiterTest() {
+        assertInvalidHandle(NativeHandleProbe::doublePolicyRelease(), "double policy release");
+        assertInvalidHandle(NativeHandleProbe::policyAfterRelease(), "policy after release");
+        string waiter = NativeHandleProbe::waiterAfterDelete();
+        assertTrue(waiter =~ /^exception: .*; exception: /, waiter);
+    }
+
+    mismatchedClassTest() {
+        Program p(PO_NEW_STYLE);
+        hash<auto> f = bindingFixture(p);
+        string mismatch = NativeHandleProbe::callBinding("value", f.other, f.binding, 7);
+        assertTrue(mismatch =~ /^exception: .*not an instance of the class/, mismatch);
+        foreach int value in (Forged) {
+            assertInvalidHandle(NativeHandleProbe::callBindingHandle("value", value, f.binding, 7),
+                sprintf("forged object %x", value));
+        }
+        # the right class still works
+        assertEq("ok: 10", NativeHandleProbe::callBinding("value", f.calls, f.binding, 7));
+        # a class of the same name and shape in another namespace never runs the body of the method's class
+        assertEq("ok: 10", NativeHandleProbe::callBinding("value", f.same_a, f.same_a_binding, 7));
+        assertEq("ok: 107", NativeHandleProbe::callBinding("value", f.same_b, f.same_a_binding, 7));
+    }
+
+    claimedClassTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(BindingSource, "native-handle-fixture");
+        int calls = NativeHandleProbe::classBinding(p.callFunction("bytes", "Calls"));
+        int other = NativeHandleProbe::classBinding(p.callFunction("bytes", "Unrelated"));
+        # a static final field that names the class of the constructor is that class
+        assertEq("ok: Calls 10", NativeHandleProbe::claimFinal("same", calls, calls, "value", 7));
+        # a class cannot claim another class than the one whose constructor runs
+        assertInvalidBinding(NativeHandleProbe::claimFinal("other", other, calls, "value", 7), "claimed class");
+        # a builtin class with private data of its own
+        binary mutex_bytes = p.callFunction("rawbytes", "qore.Qore.Thread.Mutex");
+        int mutex = NativeHandleProbe::classBinding(mutex_bytes);
+        assertInvalidBinding(NativeHandleProbe::claimFinal("builtin", mutex, calls, "lock"), "claimed builtin class");
+        # a field that is not final is no binding: the class has only the constructors of its superclasses
+        assertInvalidBinding(NativeHandleProbe::claimClass(calls, calls, "value", 7), "a field that is not final");
+        # a class with no binding of its own runs only the constructor of a class that it derives from
+        assertInvalidBinding(NativeHandleProbe::unrelatedConstructor(calls), "constructor of an unrelated class");
+    }
+
+    ancestorConstructorTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(BindingSource, "native-handle-fixture");
+        foreach hash<auto> c in (
+            {"child": "qore.Qore.ListReverseIterator", "parent": "qore.Qore.ListIterator", "args": (1,)},
+            {"child": "qore.Qore.File", "parent": "qore.Qore.ReadOnlyFile", "args": ()},
+        ) {
+            object generated = p.callFunction("loadcls", c.child);
+            int own = NativeHandleProbe::classBinding(p.callFunction("rawbytes", c.child));
+            int ancestor = NativeHandleProbe::classBinding(p.callFunction("rawbytes", c.parent));
+            assertEq("ok: constructed", NativeHandleProbe::constructSubclass(generated, 1, own, c.args),
+                c.child + " with its own constructor");
+            assertInvalidBinding(NativeHandleProbe::constructSubclass(generated, 1, ancestor, c.args),
+                c.child + " with an ancestor's constructor");
+        }
+
+        # a binding field set after the Qore class of a Java subclass was made from its superclass
+        foreach hash<auto> c in (
+            {"child": "qore.Qore.ListReverseIterator", "parent": "qore.Qore.ListIterator", "cargs": (1,), "pargs": (1,)},
+            {"child": "qore.Qore.File", "parent": "qore.Qore.ReadOnlyFile", "cargs": (), "pargs": ("/dev/null",)},
+        ) {
+            string late = NativeHandleProbe::lateBindingField(c.child, c.parent, c.cargs, c.pargs);
+            assertTrue(late =~ /^ok: constructed; exception: .*Invalid class binding/, c.child + ": " + late);
+        }
+
+        # a Java subclass whose Qore class is made while the one of its superclass is in progress
+        assertEq("ok: constructed; ok: constructed", NativeHandleProbe::loadOrder("qore.Qore.ListIterator", 1));
+
+        # Java classes between the subclass and the class with the binding
+        int own = NativeHandleProbe::classBinding(p.callFunction("rawbytes", "qore.Qore.ListReverseIterator"));
+        int ancestor = NativeHandleProbe::classBinding(p.callFunction("rawbytes", "qore.Qore.ListIterator"));
+        assertEq("ok: constructed", NativeHandleProbe::constructChain(own, own, 1), "chain, own constructor");
+        assertInvalidBinding(NativeHandleProbe::constructChain(own, ancestor, 1), "chain, an ancestor's constructor");
+    }
+
+    nullCallArgsTest() {
+        QoreInvocationHandler handler(auto sub (object method, *list<auto> args) { return "called"; });
+        object proxy = implement_interface(handler, load_class("java.util.function.Supplier"));
+        assertRaises(NativeHandleProbe::nullHandlerMethod(proxy), "null method of an invocation handler");
+        assertEq("called", NativeHandleProbe::callProxy(proxy));
+        assertRaises(NativeHandleProbe::nullStaticMethodName(), "null static method name");
+    }
+
+    nullSandboxArgsTest() {
+        foreach string result in (NativeHandleProbe::nullSandboxArrays()) {
+            assertRaises(result, "null argument");
+        }
+    }
+
+    nullNameTest() {
+        HandleTarget t();
+        assertRaises(NativeHandleProbe::nullMethodName(t), "null method name");
+        assertEq(1, t.m());
+    }
+}

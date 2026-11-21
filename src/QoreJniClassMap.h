@@ -185,6 +185,17 @@ private:
     QoreModuleInnerLockHelper inner_marker;
 };
 
+//! Returns the Qore class whose constructor the Java subclass with the Qore class \a cid runs
+/** Each Qore class of a Java class records its superclass when it is made, and the links are followed to the generated
+    class, so that the result always describes the class's hierarchy; a field of a Java class is not read again.
+
+    @param cid the ID of the Qore class of the Java subclass
+    @param ctor_cid set to the ID of the Qore class of its nearest generated superclass
+
+    @return true if the class has one
+*/
+DLLLOCAL bool jni_get_java_subclass_ctor_class(qore_classid_t cid, qore_classid_t& ctor_cid);
+
 class QoreJniClassMap : public QoreJniClassMapBase {
 public:
     // the global class-map lock; see JniClassMapLocker for the lock hierarchy it participates in

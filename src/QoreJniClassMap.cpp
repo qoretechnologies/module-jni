@@ -1517,6 +1517,50 @@ void QoreJniClassMap::addSuperClasses(JniQoreClass* qc, Class* jc, const char* j
     }
 }
 
+namespace {
+// the superclass of the Qore class of each Java subclass: a generated class, or the Qore class of a Java superclass
+// with no binding of its own; never destroyed, as a Java thread can construct an object while the process exits
+struct JniSubclassLink {
+    qore_classid_t parent;
+    bool generated;
+};
+
+struct JniSubclassCtorMap {
+    std::mutex lock;
+    std::unordered_map<qore_classid_t, JniSubclassLink> links;
+};
+
+JniSubclassCtorMap& jni_subclass_ctors() {
+    static JniSubclassCtorMap* map = new JniSubclassCtorMap;
+    return *map;
+}
+
+void jni_set_java_subclass_link(qore_classid_t cid, qore_classid_t parent, bool generated) {
+    JniSubclassCtorMap& map = jni_subclass_ctors();
+    std::lock_guard<std::mutex> guard(map.lock);
+    map.links[cid] = JniSubclassLink{parent, generated};
+}
+}
+
+bool jni_get_java_subclass_ctor_class(qore_classid_t cid, qore_classid_t& ctor_cid) {
+    JniSubclassCtorMap& map = jni_subclass_ctors();
+    std::lock_guard<std::mutex> guard(map.lock);
+    // the links are followed when the object is constructed, as a superclass can still be in progress when the Qore
+    // class of its subclass is made; the number of links bounds the walk
+    for (size_t steps = 0, e = map.links.size(); steps < e; ++steps) {
+        auto i = map.links.find(cid);
+        if (i == map.links.end()) {
+            return false;
+        }
+        if (i->second.generated) {
+            ctor_cid = i->second.parent;
+            return true;
+        }
+        cid = i->second.parent;
+    }
+    return false;
+}
+
 void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* parent, bool interface, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
     QoreClassUserDataHolder udh(parent);
@@ -1539,6 +1583,7 @@ void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* pare
                 if (qore_parent->isFinal()) {
                     throw_exception = true;
                 } else {
+                    jni_set_java_subclass_link(qc.getID(), qore_parent->getID(), true);
                     qc.addBaseClass(qore_parent, true);
                     qc.addBuiltinVirtualBaseClass(QC_OBJECT);
                     return;
@@ -1584,6 +1629,9 @@ void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* pare
         bool priv;
         if (qc.getClass(*pc, priv))
             return;
+    } else {
+        // a Java superclass with no binding of its own, which can still be in progress
+        jni_set_java_subclass_link(qc.getID(), pc->getID(), false);
     }
 
     qc.addBuiltinVirtualBaseClass(pc);
@@ -2840,6 +2888,12 @@ std::unique_ptr<GeneratedBindingLease> JniExternalProgramData::tryGetQoreClass(E
         jvalue arg;
         arg.l = Globals::javaQoreClassField;
         LocalReference<jobject> field = env.callObjectMethod(jcls, Globals::methodClassGetDeclaredField, &arg);
+        // the field of a generated class is static and final: a value that can change after the Qore class of a
+        // Java subclass was made from it would no longer describe that class
+        constexpr jint StaticFinal = 0x0008 | 0x0010;  // java.lang.reflect.Modifier.STATIC | FINAL
+        if ((env.callIntMethod(field, Globals::methodFieldGetModifiers, nullptr) & StaticFinal) != StaticFinal) {
+            return nullptr;
+        }
         arg.l = nullptr;
         jlong handle = env.callLongMethod(field, Globals::methodFieldGetLong, &arg);
         return std::make_unique<GeneratedBindingLease>(handle, GeneratedBindingKind::Class);
@@ -4582,10 +4636,10 @@ jobject QoreJniClassMap::getJavaObject(const QoreObject* o) {
 
     // return a new Java QoreObject with a weak reference to the actual Qore object; the handle also captures the
     // sandbox of the code that hands the object to Java, which governs the calls that Java makes
-    std::unique_ptr<JniObjectHandle> handle(new JniObjectHandle(const_cast<QoreObject*>(o)));
-    jvalue arg;
-    arg.j = reinterpret_cast<jlong>(handle.get());
     Env env;
+    JniHandleGuard<JniObjectHandle> handle(jni_make_native_state(new JniObjectHandle(const_cast<QoreObject*>(o))));
+    jvalue arg;
+    arg.j = handle.get();
     jobject rv = env.newObject(Globals::classQoreObject, Globals::ctorQoreObject, &arg).release();
     // the Java object owns the handle now; if it could not be created, the handle releases the weak reference
     handle.release();
@@ -4603,10 +4657,10 @@ jobject QoreJniClassMap::getJavaClosure(const ResolvedCallReferenceNode* call) {
     // return a new Java QoreClosure; weak references are not needed, as ResolvedCallReferenceNode objects always
     // implement a weak reference to any captured QoreObject*s; the handle references the closure and captures the
     // sandbox of the code that hands it to Java, which governs every call that Java makes and the release
-    std::unique_ptr<JniClosureHandle> handle(new JniClosureHandle(call));
-    jvalue arg;
-    arg.j = reinterpret_cast<jlong>(handle.get());
     Env env;
+    JniHandleGuard<JniClosureHandle> handle(jni_make_native_state(new JniClosureHandle(call)));
+    jvalue arg;
+    arg.j = handle.get();
     jobject rv = env.newObject(Globals::classQoreClosure, Globals::ctorQoreClosure, &arg).release();
     // the Java object owns the handle now; if it could not be created, the handle releases the closure
     handle.release();
@@ -5872,9 +5926,9 @@ LocalReference<jobject> JniExternalProgramData::getJavaObject(const QoreObject* 
     jmethodID ctor = env.getMethod(jcls, "<init>", "(Lorg/qore/jni/QoreJavaObjectPtr;)V");
     // the handle makes the weak reference to the object and captures the sandbox of the code that hands the object to
     // Java, which governs the calls that Java makes
-    std::unique_ptr<JniObjectHandle> handle(new JniObjectHandle(const_cast<QoreObject*>(o)));
+    JniHandleGuard<JniObjectHandle> handle(jni_make_native_state(new JniObjectHandle(const_cast<QoreObject*>(o))));
     jvalue arg;
-    arg.j = reinterpret_cast<jlong>(handle.get());
+    arg.j = handle.get();
     LocalReference<jobject> jarg = env.newObject(Globals::classQoreJavaObjectPtr, Globals::ctorQoreJavaObjectPtr,
         &arg);
 
