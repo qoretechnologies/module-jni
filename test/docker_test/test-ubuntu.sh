@@ -142,8 +142,12 @@ for test in test/*.qtest; do
         continue
     fi
     date
-    gosu qore:qore qore --enable-debug ${FLYWAY_TEST_ARGS} $test -vv
-    RESULTS="$RESULTS $?"
+    rc=0
+    gosu qore:qore qore --enable-debug ${FLYWAY_TEST_ARGS} $test -vv || rc=$?
+    RESULTS="$RESULTS $rc"
+    if [ "$rc" != "0" ]; then
+        FAILED_TESTS="$FAILED_TESTS $test"
+    fi
     date
 done
 
@@ -154,8 +158,12 @@ ${MODULE_SRC_DIR}/test/docker_test/check-loaded-modules.sh ${MODULE_SRC_DIR}/bui
 echo && echo "-- running Jakarta JMS unit tests --"
 for test in test/JakartaJms/unit/*.qtest; do
     date
-    gosu qore:qore qore --enable-debug $test -vv
-    RESULTS="$RESULTS $?"
+    rc=0
+    gosu qore:qore qore --enable-debug $test -vv || rc=$?
+    RESULTS="$RESULTS $rc"
+    if [ "$rc" != "0" ]; then
+        FAILED_TESTS="$FAILED_TESTS $test"
+    fi
     date
 done
 
@@ -165,13 +173,20 @@ if [ -n "${JMS_CONNECTION}" ] && [ -f "${ARTEMIS_JAR_DIR}/artemis-jakarta-client
     export ARTEMIS_CLASSPATH=${ARTEMIS_JAR_DIR}/artemis-jakarta-client-all.jar
     for test in test/JakartaJms/integration/*.qtest; do
         date
-        gosu qore:qore qore --enable-debug $test -vv
-        RESULTS="$RESULTS $?"
+        rc=0
+        gosu qore:qore qore --enable-debug $test -vv || rc=$?
+        RESULTS="$RESULTS $rc"
+        if [ "$rc" != "0" ]; then
+            FAILED_TESTS="$FAILED_TESTS $test"
+        fi
         date
     done
 fi
 
-# check the results
+# check the results; a failed test does not stop the others (this script runs with "set -e")
+if [ -n "$FAILED_TESTS" ]; then
+    echo "-- failed tests:$FAILED_TESTS"
+fi
 for R in $RESULTS; do
     if [ "$R" != "0" ]; then
         exit 1 # fail
