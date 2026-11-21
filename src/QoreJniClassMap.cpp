@@ -4942,6 +4942,20 @@ static constexpr const char* JAVA_PROGRAM_DELETED = "the Qore Program of the Jav
 static constexpr const char* JAVA_PROGRAM_NOT_GOVERNED = "Java code called by code that a sandbox governs cannot call "
     "into a Qore Program other than the one of the calling code";
 
+bool jni_governed_caller_reaches(const QoreProgram* pgm) {
+    // the Program context of the call; the current Program can be the Program of the class of a Java method that the
+    // code called
+    QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
+    if (!governing) {
+        return true;
+    }
+    QoreProgram* code_pgm = qore_get_call_program_context();
+    if (!code_pgm) {
+        code_pgm = ::getProgram();
+    }
+    return pgm == code_pgm;
+}
+
 JniJavaProgramRef::JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader) {
     acquire(env, ptr, loader);
     if (!pgm) {
@@ -4994,18 +5008,11 @@ void JniJavaProgramRef::acquire(Env& env, jlong ptr, jobject loader) {
             throw BasicException(JAVA_PROGRAM_DELETED);
         }
         // Java code is not governed by a sandbox: for code that a sandbox governs, the Program must be the Program of
-        // the calling code (the Program context of the call; the current Program can be the Program of the class of a
-        // Java method that the code called), which the sandbox governs; Java code then cannot run Qore code in another
-        // Program, such as a Program of another tenant or the global Java context Program (qore#6845)
-        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
-        if (governing) {
-            QoreProgram* code_pgm = qore_get_call_program_context();
-            if (!code_pgm) {
-                code_pgm = ::getProgram();
-            }
-            if (p != code_pgm) {
-                throw BasicException(JAVA_PROGRAM_NOT_GOVERNED);
-            }
+        // the calling code, which the sandbox governs; Java code then cannot run Qore code in another Program, such as
+        // a Program of another tenant or the global Java context Program (qore#6845; see
+        // jni_governed_caller_reaches())
+        if (!jni_governed_caller_reaches(p)) {
+            throw BasicException(JAVA_PROGRAM_NOT_GOVERNED);
         }
     } catch (...) {
         release();

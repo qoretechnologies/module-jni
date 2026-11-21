@@ -1,0 +1,304 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+
+%exec-class JniSandboxCompilerFallbackTest
+
+#! The Java and Kotlin compilers work in a Program that a sandbox governs (qoretechnologies/qore#7015)
+/** A dynamic class (\c qore.*) that the Program of a class loader does not have is looked up in the parent class
+    loader, whose Program is the global Java context Program.  For code that a sandbox governs, that Program cannot be
+    reached (qoretechnologies/qore#6845): the parent's native calls were refused, and the refusal escaped the class
+    load as a \c RuntimeException instead of a \c ClassNotFoundException.  The Kotlin compiler, which loads optional
+    \c qore.* base classes for its stubs, failed so in every sandboxed Program, as did any optional class lookup of
+    Java code.  The parent is now not asked at all when the governed caller cannot reach its Program: the class is not
+    found.  The Kotlin compiler's classes, from the classpath that every Program shares (as in Qorus), are defined by
+    the parent class loader too, and the \c kotlin.* standard library classes that they link to were first generated in
+    its Program, which was refused as well: a \c kotlin.* class is now not generated in a Program that the governed
+    caller cannot reach, and is loaded from the classpath.  An explicit class load (\c qore.*) or call with the class
+    loader of another Program is still refused.
+*/
+class JniSandboxCompilerFallbackTest inherits QUnit::Test {
+    public {
+        #! the code of the sandboxed Program
+        const TenantSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import java.lang.Class
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+
+# Java code that this Program calls calls a function in the Program of the class loader given
+string sub java_call_in(object loader, string func) {
+    return GovernedProgramProbe::callIn(loader, func);
+}
+
+object sub tenant_loader() {
+    return get_class_loader();
+}
+
+string sub tenant_fn() {
+    return \"tenant\";
+}
+
+public class TenantBase {
+    string hello(string n) {
+        return \"hello \" + n;
+    }
+}
+
+# returns True if the optional class is found through the Program's class loader
+bool sub optional_class(string name) {
+    try {
+        get_class_loader().loadClass(name);
+        return True;
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.arg.typeCode() == NT_OBJECT && ex.arg.className() == \"ClassNotFoundException\") {
+            return False;
+        }
+        rethrow;
+    }
+}
+
+# compiles the Java class that extends the Qore class and returns an object of it
+object sub java_object(string src) {
+    QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+    on_exit compiler.close();
+    object out = compiler.compile(\"org.qore.jni.test.fallback.JChild\", src);
+    Class cls = out.cls;
+    return cls.getDeclaredConstructor().newInstance();
+}
+
+# compiles a Java class that extends the Qore class and looks up an optional class at runtime
+string sub java_compile(string src, string optional) {
+    object obj = java_object(src);
+    return sprintf(\"%s %y\", obj.greet(), obj.hasOptional(optional));
+}
+
+# Java code of this Program loads a class with the class loader of another Program: an explicit call
+string sub java_explicit_load(string src, object loader, string name) {
+    return java_object(src).explicitLoad(loader, name);
+}
+
+# compiles a Java class with an on-demand import of a package that the Program does not have
+string sub java_compile_error(string src) {
+    QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+    on_exit compiler.close();
+    try {
+        compiler.compile(\"org.qore.jni.test.fallback.JMissing\", src);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s: %s\", ex.err, ex.arg.typeCode() == NT_OBJECT ? ex.arg.className() : \"-\", ex.desc);
+    }
+    return \"compiled\";
+}
+
+# compiles a Kotlin class that extends the Qore class, with an optional base class for the stubs that the Program
+# does not have
+string sub kotlin_compile(object compiler, string src, string optional) {
+    on_exit compiler.close();
+    compiler.addBaseClass(optional);
+    hash<auto> out = compiler.compile({\"KChild\": src});
+    object loader = get_class_loader();
+    loader.addPendingClass(\"KChild\", out.KChild);
+    Class cls = loader.loadClass(\"KChild\");
+    object obj = cls.getDeclaredConstructor().newInstance();
+    return sprintf(\"%s %y\", obj.greet(), obj.hasOptional(optional));
+}
+";
+
+        #! the Java subclass of the sandboxed Program's Qore class
+        const JavaSource = "package org.qore.jni.test.fallback;
+import qore.TenantBase;
+public class JChild extends TenantBase {
+    public JChild() throws Throwable {
+        super();
+    }
+    public String greet() throws Throwable {
+        return hello(\"java\");
+    }
+    public boolean hasOptional(String name) {
+        try {
+            Class.forName(name, false, JChild.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+    public String explicitLoad(ClassLoader loader, String name) {
+        try {
+            loader.loadClass(name);
+            return \"loaded\";
+        } catch (Throwable e) {
+            return e.toString();
+        }
+    }
+}
+";
+
+        #! a Java class with an on-demand import of a package that the sandboxed Program does not have
+        const JavaMissingSource = "package org.qore.jni.test.fallback;
+import qore.TenantAbsentNs.*;
+public class JMissing {
+}
+";
+
+        #! the Kotlin subclass of the sandboxed Program's Qore class
+        const KotlinSource = "import qore.TenantBase
+
+class KChild : TenantBase() {
+    fun greet(): String = hello(\"kotlin\")
+
+    fun hasOptional(name: String): Boolean {
+        try {
+            Class.forName(name, false, KChild::class.java.classLoader)
+            return true
+        } catch (e: ClassNotFoundException) {
+            return false
+        }
+    }
+}
+";
+
+        #! an optional class that the sandboxed Program does not have, with a namespace path
+        const Optional = "qore.TenantAbsentNs.TenantAbsentClass";
+
+        #! the error of an explicit call into another Program
+        const NotGoverned = "cannot call into a Qore Program other than the one of the calling code";
+    }
+
+    constructor() : QUnit::Test("jni sandbox compiler fallback", "1.0") {
+        addTestCase("an optional class lookup in a sandboxed Program", \optionalClassTest());
+        addTestCase("Java compilation in a sandboxed Program", \javaTest());
+        addTestCase("Java compilation error in a sandboxed Program", \javaErrorTest());
+        addTestCase("Kotlin compilation in a sandboxed Program", \kotlinTest());
+        addTestCase("explicit calls into another Program are refused", \explicitTest());
+        addTestCase("the same code without a sandbox", \trustedTest());
+        set_return_value(main());
+    }
+
+    optionalClassTest() {
+        Program p = getTenant();
+        assertTrue(p.callFunction("optional_class", "qore.TenantBase"));
+        assertFalse(p.callFunction("optional_class", Optional));
+        assertFalse(p.callFunction("optional_class", "qore.TenantAbsentClass"));
+    }
+
+    javaTest() {
+        Program p = getTenant();
+        assertEq("hello java False", p.callFunction("java_compile", JavaSource, Optional));
+        # the class that the Program has is found at runtime; a Program of its own, as the Java class of the same
+        # name is compiled again
+        p = getTenant();
+        assertEq("hello java True", p.callFunction("java_compile", JavaSource, "qore.TenantBase"));
+    }
+
+    javaErrorTest() {
+        Program p = getTenant();
+        string rv = p.callFunction("java_compile_error", JavaMissingSource);
+        # the compiler reports the missing package as a compilation error; the package lookup is not refused
+        assertRegex("^JNI-ERROR: QoreJavaCompilerException: .*Compilation failed", rv, rv);
+        assertNRegex(NotGoverned, rv, rv);
+    }
+
+    kotlinTest() {
+        *list<string> jars = getKotlinJars();
+        if (!jars) {
+            testSkip("Kotlin compiler JAR not available");
+        }
+        Program p = getTenant(jars);
+        # the compiler is created as Qorus creates it: with the Program's class loader, from the calling code
+        object compiler = p.callFunction("make_kotlin_compiler");
+        assertEq("hello kotlin False", p.callFunction("kotlin_compile", compiler, KotlinSource, Optional));
+    }
+
+    explicitTest() {
+        Program p = getTenant();
+        object host_loader = get_class_loader();
+        # Java code that the tenant calls uses the host's class loader: the class load is refused, and is not
+        # reported as a class that does not exist
+        string rv = p.callFunction("java_explicit_load", JavaSource, host_loader, "qore.HostOnlyClass");
+        assertRegex(NotGoverned, rv, rv);
+        assertNRegex("ClassNotFoundException", rv, rv);
+        # the host's class is not reached by a lookup in the tenant's own class loader either
+        assertFalse(p.callFunction("optional_class", "qore.HostOnlyClass"));
+        # Java code that the tenant calls calls a function in the host's Program: refused
+        rv = p.callFunction("java_call_in", host_loader, "host_fn");
+        assertRegex(NotGoverned, rv, rv);
+        # the tenant's own Program is reachable
+        rv = p.callFunction("java_call_in", p.callFunction("tenant_loader"), "tenant_fn");
+        assertEq("ok: tenant", rv, rv);
+    }
+
+    trustedTest() {
+        Program p = getTenant(NOTHING, False);
+        assertFalse(p.callFunction("optional_class", Optional));
+        # without a sandbox, the parent class loader is asked as before
+        assertTrue(p.callFunction("optional_class", "qore.HostOnlyClass"));
+        assertEq("hello java False", p.callFunction("java_compile", JavaSource, Optional));
+        # a Program of its own, as the Java class of the same name is compiled again
+        p = getTenant(NOTHING, False);
+        string rv = p.callFunction("java_explicit_load", JavaSource, get_class_loader(), "qore.HostOnlyClass");
+        assertEq("loaded", rv, rv);
+        rv = p.callFunction("java_call_in", get_class_loader(), "host_fn");
+        assertEq("ok: host", rv, rv);
+    }
+
+    #! returns a Program that a sandbox governs, which trusts it with uncontrolled APIs, as Java needs
+    private Program getTenant(*list<string> kotlin_jars, bool sandboxed = True) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        string src = TenantSource;
+        if (kotlin_jars) {
+            # the Kotlin jars are on the classpath that every Program shares, as in Qorus
+            map p.issueModuleCmd("jni", "global-add-classpath " + $1), kotlin_jars;
+            src += "%module-cmd(jni) import org.qore.jni.compiler.QoreKotlinCompiler
+object sub make_kotlin_compiler() {
+    return new QoreKotlinCompiler(get_class_loader(), NOTHING);
+}
+";
+        }
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-test.jar");
+        p.parse(src, "tenant");
+        if (sandboxed) {
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(True);
+            p.setSandboxManager(sm);
+        }
+        return p;
+    }
+
+    #! returns the Kotlin compiler and standard library JARs, if available
+    private static *list<string> getKotlinJars() {
+        list<string> homes = ();
+        if (ENV.KOTLIN_HOME) {
+            push homes, ENV.KOTLIN_HOME;
+        }
+        # the locations that kotlin.qtest searches
+        homes += ("/usr/share/qore/java/kotlin", "/opt/kotlin", "/opt/kotlinc", "/snap/kotlin/current",
+            "/usr/share/kotlin", "/usr/lib/kotlin", "/usr/local/kotlin", "/opt/local/share/java/kotlin");
+        if (ENV.HOME) {
+            push homes, ENV.HOME + "/.sdkman/candidates/kotlin/current";
+        }
+        homes += map dirname(dirname($1)), glob("/snap/kotlin/*/lib/kotlin-compiler.jar") ?? ();
+        foreach string home in (homes) {
+            string compiler = home + "/lib/kotlin-compiler.jar";
+            string stdlib = home + "/lib/kotlin-stdlib.jar";
+            if (is_file(compiler) && is_file(stdlib)) {
+                return (compiler, stdlib);
+            }
+        }
+    }
+}
+
+class HostOnlyClass {
+}
+
+string sub host_fn() {
+    return "host";
+}

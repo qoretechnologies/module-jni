@@ -230,3 +230,39 @@ and parse options (`src/jni-module.cpp`); before module API 2.3 they are the onl
   cannot define the class that another Program loads under that name
 
 `test/jni-module-cmd-sandbox.qtest`.
+
+## Java's calls into Qore from code that a sandbox governs (qore#6845, qore#7015)
+
+Java code is not governed by a sandbox, and the Program pointers that it passes to the native methods are not trusted.
+`JniJavaProgramRef::acquire()` (`src/QoreJniClassMap.cpp`) validates a pointer that Java passes (the Program must
+still have jni data, and the pointer must still be its class loader's) and, for code that a sandbox governs, accepts
+only the Program of the calling code (`jni_governed_caller_reaches()`: the Program context of the call, or the
+current Program without one).  Any other Program, such as the host's, another tenant's or the global Java context
+Program, is refused with `JNI-ERROR` ("Java code called by code that a sandbox governs cannot call into a Qore Program
+other than the one of the calling code").  This applies to calls (`QoreJavaApi.callFunction()` etc.) and to the
+generation and listing of the Java classes of Qore classes (`generateByteCode0()`, `getClassesInNamespace0()`), so an
+explicit class load through the class loader of another Program is refused loudly, not reported as a missing class.
+
+Two class lookups are not directed at another Program by the calling code, and make no native call with that
+Program's pointer; `QoreURLClassLoader` asks first with `programReachable0()`, which only compares the pointer with
+the Program of the calling code (`test/jni-sandbox-compiler-fallback.qtest`):
+
+- the parent fallback: the parent of the class loader of a Program is the class loader of another Program (the
+  Program that the module was loaded in first, or the global Java context Program).  A dynamic class or namespace that
+  the class loader's own Program does not have is not looked up in the parent when the calling code cannot reach the
+  parent's Program (`parentProgramReachable()`): `loadClass()` searches only the class loader's own classpath and
+  then throws `ClassNotFoundException`, and `getClassesInNamespace()` returns no classes.  The class is not found
+  because the calling code cannot see the parent's Program (a class that only the parent's Program has is not found
+  either), so optional lookups fail as optional lookups do, not with the refusal: `QoreKotlinCompiler` loads
+  optional `qore.*` base classes for its stubs, `javac` lists the packages of on-demand imports, and Java code can
+  probe for a class with `Class.forName()`.
+- `kotlin.*` classes (`kotlinProgramReachable()`): the `kotlin` package holds the dynamic classes for the Kotlin
+  language and also the Kotlin standard library, so a `kotlin.*` class is generated from the class loader's Program
+  first and is otherwise loaded from the classpath.  The Kotlin compiler's jars are usually on the classpath that every
+  Program shares (`global-add-classpath`, as in Qorus), so its classes are defined by the class loader of another
+  Program, and the JVM loads the standard library classes that they link to with that class loader.  When the calling
+  code cannot reach that class loader's Program, the class is not generated there at all and is loaded from the
+  classpath.  Only `kotlin.*` names are treated so, as only they collide with ordinary JVM classes; `qore.*`,
+  `qoremod.*` and the other dynamic names are still generated with the Program's pointer, and refused for another
+  Program.  A `kotlin.*` class that a class loader shared by several Programs defines so from the classpath stays
+  defined there, as for any class that a class loader has loaded.
