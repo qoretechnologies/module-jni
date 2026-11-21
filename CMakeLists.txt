@@ -1335,6 +1335,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/QoreCallback.java
     test/java/src/org/qore/jni/test/OverloadedMethods.java
     test/java/src/org/qore/jni/test/JvmPrimaryReaperExit.java
+    test/java/src/org/qore/jni/test/JvmPrimarySandboxTrust.java
     test/java/src/org/qore/jni/test/GeneratedBindings.java
     test/java/src/org/qore/jni/test/CachedProgramPtrProbe.java
     test/java/src/org/qore/jni/test/ContextProgramLifetimeProbe.java
@@ -1735,6 +1736,15 @@ add_test(NAME jvm_primary_reaper_exit COMMAND ${CMAKE_COMMAND} -E env
     -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
     org.qore.jni.test.JvmPrimaryReaperExit)
 set_tests_properties(jvm_primary_reaper_exit PROPERTIES TIMEOUT 10)
+add_test(NAME jvm_primary_sandbox_trust COMMAND ${CMAKE_COMMAND} -E env
+    QORE_LIBRARY=${QORE_LIBRARY}
+    QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    ${Java_JAVA_EXECUTABLE}
+    --enable-native-access=ALL-UNNAMED
+    -Djava.system.class.loader=org.qore.jni.QoreURLClassLoader
+    -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+    org.qore.jni.test.JvmPrimarySandboxTrust)
+set_tests_properties(jvm_primary_sandbox_trust PROPERTIES TIMEOUT 30)
 add_test(NAME java_provider_profile_validator
     COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
         ${CMAKE_SOURCE_DIR}/test/test-java-provider-profiles.py

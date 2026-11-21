@@ -324,9 +324,9 @@ public class QoreJavaApi {
             .toArray());
     }
 
-    //! the class loaders of the JDK and of the JVM's classpath, whose classes are trusted
+    //! the class loader of the JDK, whose classes are trusted, like those of the system class loader, which is read
+    //! when it is needed: this class is initialized while the JVM creates it if it is a QoreURLClassLoader
     private static final ClassLoader PLATFORM_LOADER = ClassLoader.getPlatformClassLoader();
-    private static final ClassLoader SYSTEM_LOADER = ClassLoader.getSystemClassLoader();
 
     //! Returns the Program that the Java code of the classes of the class loader \a first is attributed to (qore#7023)
     /** @return 0 for a class loader of the JDK or of the JVM's classpath (trusted); the Program pointer of the nearest
@@ -338,10 +338,16 @@ public class QoreJavaApi {
         name (ex: one that Java code defined) is an unknown class loader
     */
     private static long getLoaderProgramPtr(ClassLoader first) {
-        if (first == null || first == PLATFORM_LOADER || first == SYSTEM_LOADER) {
+        ClassLoader system = ClassLoader.getSystemClassLoader();
+        if (first == null || first == PLATFORM_LOADER || isSystemLoaderOrParent(first, system)) {
             return 0L;
         }
         for (ClassLoader cl = first; cl != null; cl = cl.getParent()) {
+            // checked first: the system class loader can be a QoreURLClassLoader of a trusted Program, whose trust is
+            // not inherited by the class loaders below it
+            if (cl == PLATFORM_LOADER || cl == system) {
+                break;
+            }
             if (cl instanceof QoreURLClassLoader) {
                 long ptr = ((QoreURLClassLoader)cl).getOriginPtr();
                 // a class loader that never had a Program is attributed to its parent's
@@ -349,11 +355,20 @@ public class QoreJavaApi {
                     return ptr;
                 }
             }
-            if (cl == PLATFORM_LOADER || cl == SYSTEM_LOADER) {
-                break;
-            }
         }
         return -1L;
+    }
+
+    //! Returns true if \a loader is the system class loader or one of its parents
+    /** If the system class loader is a QoreURLClassLoader, the JVM's classpath is loaded by its parent
+    */
+    private static boolean isSystemLoaderOrParent(ClassLoader loader, ClassLoader system) {
+        for (ClassLoader cl = system; cl != null; cl = cl.getParent()) {
+            if (cl == loader) {
+                return true;
+            }
+        }
+        return false;
     }
 
     //! Returns the current stack trace, not including the call to this method
