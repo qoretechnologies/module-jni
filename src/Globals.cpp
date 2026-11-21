@@ -2995,6 +2995,29 @@ static jobject JNICALL qore_url_classloader_get_canonical_loader(JNIEnv* jenv, j
     return loader;
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
+// tells a class loader whether the code that calls it can reach the Program \a ptr, the Program of the class loader
+// or of its parent: for code that a sandbox governs, only if that is the Program of the calling code (qore#6845).  A
+// class load that the calling code did not direct at that Program then makes no native call with its pointer, which
+// would be refused (qore#7015; see QoreURLClassLoader.parentProgramReachable() and kotlinProgramReachable()).  The
+// pointer is only compared, never used.
+static jboolean JNICALL qore_url_classloader_program_reachable(JNIEnv* jenv, jclass jcls, jlong ptr) try {
+    // the sandbox of the calling code is read from the thread's Qore data
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        // a thread that cannot be attached runs no Qore code: the class loader proceeds as before, and the native
+        // methods that it calls report the error
+        return JNI_TRUE;
+    }
+    if (jni_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(ptr))) {
+        return JNI_TRUE;
+    }
+    printd(5, "qore_url_classloader_program_reachable() the Program %p cannot be reached by code that a sandbox "
+        "governs: a dynamic class is not looked up in it (qore#7015)\n", reinterpret_cast<const void*>(ptr));
+    return JNI_FALSE;
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
 static jobject JNICALL qore_url_classloader_debug(JNIEnv* jenv, jclass jcls, jlong ptr) try {
     return nullptr;
 } JNI_NATIVE_CATCH(jenv, nullptr)
@@ -3544,6 +3567,11 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
         const_cast<char*>("debug0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_url_classloader_debug),
+    },
+    {
+        const_cast<char*>("programReachable0"),
+        const_cast<char*>("(J)Z"),
+        reinterpret_cast<void*>(qore_url_classloader_program_reachable),
     },
     {
         const_cast<char*>("getSyscl0"),

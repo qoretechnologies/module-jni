@@ -924,7 +924,9 @@ public class QoreURLClassLoader extends URLClassLoader {
             return rv;
         }
 
-        if (isDynamic(bin_name)) {
+        // a kotlin.* class is not generated in a Program that the calling code cannot reach: it is looked up as an
+        // ordinary class instead (see kotlinProgramReachable(); qore#7015)
+        if (isDynamic(bin_name) && kotlinProgramReachable(bin_name)) {
             // only remove from set if successful
             try {
                 byte[] bytes = generateByteCode(bin_name);
@@ -951,6 +953,24 @@ public class QoreURLClassLoader extends URLClassLoader {
             } catch (Throwable e1) {
                 //e1.printStackTrace();
                 throw new RuntimeException(e1);
+            }
+        }
+
+        // a dynamic class that this class loader's Program does not have is not looked up in a parent class loader
+        // whose Program the calling code cannot reach (qore#7015): it is not found; a kotlin.* class is looked up in
+        // the parent, which does not generate it in a Program that the calling code cannot reach either (see
+        // kotlinProgramReachable()); this class loader's own classpath is still searched, as the parent delegation
+        // below would after the parent
+        if (isDynamic(bin_name) && !isKotlinName(bin_name) && !parentProgramReachable()) {
+            try {
+                // under the class loading lock, as super.loadClass() searches it
+                synchronized (getClassLoadingLock(bin_name)) {
+                    rv = findLoadedClass(bin_name);
+                    return rv != null ? rv : super.findClass(bin_name);
+                }
+            } catch (ClassNotFoundException e) {
+                throw new ClassNotFoundException(String.format("could not find a Qore source class to create Java "
+                    + "class '%s'", bin_name));
             }
         }
 
@@ -1141,6 +1161,68 @@ public class QoreURLClassLoader extends URLClassLoader {
      */
     private QoreURLClassLoader resolveSharedClassLoader(String bin_name) {
         return getCanonicalLoader0(bin_name);
+    }
+
+    //! Returns true if a dynamic class or namespace that this class loader's Program does not have can be looked up
+    //! in the parent class loader
+    /** The parent class loader of the class loader of a Program is the class loader of another Program (the global
+        Java context Program, or the Program that the jni module was loaded in first).  Java code is not governed by a
+        sandbox: for code that a sandbox governs, Java's calls into Qore are made only in the Program of the calling
+        code (qoretechnologies/qore#6845), so the native methods that the parent would call with its Program's pointer
+        to look up the class are refused.  The parent is then not asked at all: the class is not found, as the calling
+        code cannot see the parent's Program, and the refusal of the parent's native calls, which is not a
+        ClassNotFoundException, does not escape a lookup that the calling code did not direct at the parent's Program
+        (ex: the optional base classes that QoreKotlinCompiler loads for its stubs; qoretechnologies/qore#7015).  An
+        explicit call with the class loader of another Program is still refused.
+
+        A parent class loader with no Program, or with the Program of this class loader (ex: the parent of the class
+        loader of a compiler, see createDerived()), is asked as before; so is any parent for code that no sandbox
+        governs.
+    */
+    private boolean parentProgramReachable() {
+        ClassLoader parent = getParent();
+        if (!(parent instanceof QoreURLClassLoader)) {
+            return true;
+        }
+        long parent_ptr = ((QoreURLClassLoader) parent).pgm_ptr.get();
+        if (parent_ptr == 0 || parent_ptr == pgm_ptr.get()) {
+            return true;
+        }
+        return programReachable0(parent_ptr);
+    }
+
+    //! Returns true if \a bin_name is in the kotlin package, which ordinary classes share with dynamic classes
+    private static boolean isKotlinName(String bin_name) {
+        return bin_name.startsWith("kotlin.");
+    }
+
+    //! Returns false if \a bin_name is a kotlin.* class and the calling code cannot reach this class loader's Program
+    /** Dynamic classes for the Kotlin language are in the kotlin package (see isDynamic()), which they share with the
+        Kotlin standard library: a kotlin.* class is generated from the Program first, and is otherwise an ordinary
+        class, found in the classpath.  The Kotlin compiler's classes are usually defined by the class loader of
+        another Program than the one that compiles (ex: the Kotlin jars are on the classpath that every Program
+        shares, whose class loader has the Program that the jni module was loaded in or the global Java context
+        Program), and the JVM loads the standard library classes that they link to with that class loader.
+
+        For code that a sandbox governs, the native methods called with the pointer of a Program other than the one
+        of the calling code are refused (qoretechnologies/qore#6845): the generation of a kotlin.* class would be
+        refused instead of failing, and the standard library class would not be found
+        (qoretechnologies/qore#7015).  The class is then not generated in that Program at all, and is looked up as an
+        ordinary class: a dynamic class of that Program is not found, as the calling code cannot see that Program.
+
+        Only kotlin.* classes are looked up so; any other dynamic class (qore.*, qoremod.*, python.* etc), whose names
+        are not shared with ordinary classes, is still generated with the Program's pointer, so that an explicit load
+        through the class loader of another Program is refused.
+    */
+    private boolean kotlinProgramReachable(String bin_name) {
+        if (!isKotlinName(bin_name)) {
+            return true;
+        }
+        long ptr = pgm_ptr.get();
+        if (ptr == 0) {
+            return true;
+        }
+        return programReachable0(ptr);
     }
 
     //! Returns true if the given package name is dynamic
@@ -2008,7 +2090,9 @@ public class QoreURLClassLoader extends URLClassLoader {
         //System.out.printf("getClassesInNamespace(%s) pgm: %x cls: '%s' mod: '%s' rv: %s\n", packageName, ptr,
         //    info.cls, info.mod, rv);
 
-        if (rv.size() == 0) {
+        // the namespace is not looked up in a parent class loader whose Program the calling code cannot reach
+        // (qore#7015): it has no classes
+        if (rv.size() == 0 && parentProgramReachable()) {
             ClassLoader parent = getParent();
             //System.out.printf("getClassesInNamespace() %s; parent is %s\n", packageName,
             //    parent == null ? "null" : parent.getClass().getName());
@@ -2285,6 +2369,8 @@ public class QoreURLClassLoader extends URLClassLoader {
     private native void clearCompilationCache0(long ptr);
     static private native void dummy0();
     static private native void debug0(long ptr);
+    // the Program pointer is only compared with the Program of the calling code (qore#7015)
+    static private native boolean programReachable0(long ptr);
 
     //! Returns the canonical "system" <tt>QoreURLClassLoader</tt> (Globals::syscl in C++).
     /** Used as the fallback shared home for <tt>qore.Qore.*</tt> built-in classes and for

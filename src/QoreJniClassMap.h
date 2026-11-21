@@ -1078,6 +1078,20 @@ DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelp
 DLLLOCAL void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch,
         QoreProgram* pgm, ExceptionSink& xsink);
 
+//! Returns true if Java code that the calling code called can call into \a pgm (qore#6845)
+/** Java code is not governed by a sandbox: for code that a sandbox governs, Java's calls into Qore are made only in
+    the Program of the calling code (the Program context of the call, or the current Program without one), which the
+    sandbox governs.  Code that no sandbox governs reaches any Program.
+
+    The Program is only compared with the Program of the calling code: it is not used otherwise, and can be one that
+    has been deleted
+
+    @param pgm the Program that Java names
+
+    @return true if the calling code is not governed by a sandbox or \a pgm is the Program of the calling code
+*/
+DLLLOCAL bool jni_governed_caller_reaches(const QoreProgram* pgm);
+
 //! A Program named by a Program pointer that Java passed to a native method, validated and held for the native call
 /** Java caches the pointers of Programs: each org.qore.jni.QoreURLClassLoader has the pointer of the Program whose
     class loader it is, and the class loaders derived from it (ex: the class loader of a QoreJavaCompiler) share it;
