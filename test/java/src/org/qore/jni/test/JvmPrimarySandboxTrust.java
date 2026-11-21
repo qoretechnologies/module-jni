@@ -29,10 +29,37 @@ public class JvmPrimarySandboxTrust {
         %modern
         %requires jni
         %module-cmd(jni) import org.qore.jni.test.JvmPrimarySandboxTrust
+        %module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+        %module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+        %module-cmd(jni) import org.qore.jni.KotlinScriptEngine
 
         const TenantSource = "%modern
         %requires jni
         %module-cmd(jni) import org.qore.jni.test.JvmPrimarySandboxTrust
+        %module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+        %module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+        %module-cmd(jni) import org.qore.jni.KotlinScriptEngine
+        string sub who() {
+            return 'tenant';
+        }
+        auto sub ev(string script) {
+            return KotlinScriptEngine::eval(script);
+        }
+        string sub add_parent(string dir) {
+            return ClassLoaderAccessProbe::addParentPath(GovernedProgramProbe::currentLoader(), dir);
+        }
+        string sub register_loader(object loader) {
+            return ClassLoaderAccessProbe::registerShared(loader);
+        }
+        string sub define_own() {
+            return ClassLoaderAccessProbe::defineShared(GovernedProgramProbe::currentLoader());
+        }
+        object sub foreign_call(object parent) {
+            return ClassLoaderAccessProbe::newForeignCall(parent);
+        }
+        string sub new_loader(object parent) {
+            return ClassLoaderAccessProbe::newLoader(parent);
+        }
         string sub benign() {
             return JvmPrimarySandboxTrust::benign();
         }
@@ -43,7 +70,9 @@ public class JvmPrimarySandboxTrust {
 
         hash<auto> sub drive() {
             hash<auto> h;
+            object host_loader = GovernedProgramProbe::currentLoader();
             h.trusted_before = JvmPrimarySandboxTrust::callCurrent();
+            h.trusted_foreign = ClassLoaderAccessProbe::runCall(ClassLoaderAccessProbe::newForeignCall(host_loader));
             Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
             t.parse(TenantSource, "tenant");
             SandboxManager sm();
@@ -53,9 +82,59 @@ public class JvmPrimarySandboxTrust {
             h.trusted_after = JvmPrimarySandboxTrust::callCurrent();
             h.tenant_reach = t.callFunction("reach_host");
             h.unknown_loader = JvmPrimarySandboxTrust::callUnknownLoader();
+            h.parent_path = t.callFunction("add_parent", "/nonexistent/qore-7131");
+            h.register_host = t.callFunction("register_loader", host_loader);
+            h.trusted_register = ClassLoaderAccessProbe::registerShared(host_loader);
+            h.define_shared = t.callFunction("define_own");
+            h.foreign_host = ClassLoaderAccessProbe::runCall(t.callFunction("foreign_call", host_loader));
+            return h;
+        }
+
+        string sub who() {
+            return 'host';
+        }
+
+        # Kotlin scripts of trusted and of sandboxed code
+        hash<auto> sub drive_kotlin(string report, string reach) {
+            hash<auto> h;
+            h.trusted_before = KotlinScriptEngine::eval(report);
+            ClassLoaderAccessProbe::setHolder(GovernedProgramProbe::currentLoader());
+            Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            t.parse(TenantSource, "tenant");
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(True);
+            t.setSandboxManager(sm);
+            h.tenant = t.callFunction("ev", report);
+            h.trusted_after = KotlinScriptEngine::eval(report);
+            h.tenant_reach = t.callFunction("ev", reach);
+            return h;
+        }
+
+        # a class loader created after the JVM's start, by trusted and by sandboxed code
+        hash<auto> sub drive_new_loader() {
+            hash<auto> h;
+            object host_loader = GovernedProgramProbe::currentLoader();
+            h.trusted_new_loader = ClassLoaderAccessProbe::newLoader(host_loader);
+            Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            t.parse(TenantSource, "tenant");
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(True);
+            t.setSandboxManager(sm);
+            h.tenant = t.callFunction("benign");
+            h.new_loader = t.callFunction("new_loader", host_loader);
+            h.trusted_after = JvmPrimarySandboxTrust::callCurrent();
             return h;
         }
         """;
+
+    //! reports the class of the script's class loader and the Program that a call into Qore runs in
+    private static final String KOTLIN_REPORT = "val r = try { object {}.javaClass.classLoader.javaClass.simpleName + "
+        + "\":\" + org.qore.jni.QoreJavaApi.callFunction(\"who\") } catch (e: Throwable) { \"refused: \" + e }\nr";
+
+    //! calls into the Program of the class loader that the test published
+    private static final String KOTLIN_REACH = "val r = try { org.qore.jni.test.ClassLoaderAccessProbe.holder!!"
+        + ".setContext(); \"reached: \" + org.qore.jni.QoreJavaApi.callFunction(\"who\") } "
+        + "catch (e: Throwable) { \"refused: \" + e }\nr";
 
     //! a Java call that makes no call back into Qore
     public static String benign() {
@@ -129,10 +208,52 @@ public class JvmPrimarySandboxTrust {
         }
     }
 
+    private static boolean isRefused(String rv) {
+        return rv.startsWith("refused: ") && rv.contains("JNI-ERROR")
+            && rv.contains("cannot call into a Qore Program other than the one of the calling code");
+    }
+
+    private static void checkRefused(String what, String rv) {
+        check(isRefused(rv), "sandboxed class loader operation " + what, rv);
+    }
+
+    //! the classes of a Kotlin script are attributed to the Program that evaluated it
+    private static void checkKotlin(QoreObject pgm) throws Throwable {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> h = (Map<String, Object>)pgm.callMethod("callFunction", "drive_kotlin", KOTLIN_REPORT,
+            KOTLIN_REACH);
+        check("QoreURLClassLoader:host".equals(h.get("trusted_before")), "trusted script", h.get("trusted_before"));
+        check("QoreURLClassLoader:tenant".equals(h.get("tenant")), "sandboxed script", h.get("tenant"));
+        check("QoreURLClassLoader:host".equals(h.get("trusted_after")), "trusted script after sandboxed code used Java",
+            h.get("trusted_after"));
+        checkRefused("tenant_reach", (String)h.get("tenant_reach"));
+    }
+
+    //! a class loader created after the JVM's start leaves the module's state as it is
+    private static void checkNewLoader(QoreObject pgm) throws Throwable {
+        ClassLoader system = ClassLoader.getSystemClassLoader();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> h = (Map<String, Object>)pgm.callMethod("callFunction", "drive_new_loader");
+        check("ok: true".equals(h.get("trusted_new_loader")), "trusted class loader creation",
+            h.get("trusted_new_loader"));
+        checkRefused("new_loader", (String)h.get("new_loader"));
+        String after = (String)h.get("trusted_after");
+        check(after.startsWith("ok: "), "trusted call after class loaders were created", after);
+        check(ClassLoader.getSystemClassLoader() == system, "system class loader", ClassLoader.getSystemClassLoader());
+    }
+
     public static void main(String[] args) throws Throwable {
         ((QoreURLClassLoader)ClassLoader.getSystemClassLoader()).setContext();
         QoreObject pgm = QoreJavaApi.newObjectSave("Qore::Program", DRIVER_PARSE_OPTIONS);
         pgm.callMethod("parse", DRIVER, "driver");
+        if (args.length == 1 && "new-loader".equals(args[0])) {
+            checkNewLoader(pgm);
+            return;
+        }
+        if (args.length == 1 && "kotlin".equals(args[0])) {
+            checkKotlin(pgm);
+            return;
+        }
         @SuppressWarnings("unchecked")
         Map<String, Object> h = (Map<String, Object>)pgm.callMethod("callFunction", "drive");
 
@@ -147,5 +268,18 @@ public class JvmPrimarySandboxTrust {
         String unknown = (String)h.get("unknown_loader");
         check(unknown.startsWith("refused: ") && unknown.contains("JNI-ERROR"),
             "Java code of an unknown class loader reaching the host's Program", unknown);
+
+        String foreign = (String)h.get("trusted_foreign");
+        check(foreign.startsWith("ok: "), "trusted class loader before sandboxed code used Java", foreign);
+        check("ok: registered".equals(h.get("trusted_register")), "trusted shared class registration",
+            h.get("trusted_register"));
+        StringBuilder failed = new StringBuilder();
+        for (String key : new String[] {"parent_path", "register_host", "define_shared", "foreign_host"}) {
+            String rv = (String)h.get(key);
+            if (!isRefused(rv)) {
+                failed.append(key).append(": ").append(rv).append("; ");
+            }
+        }
+        check(failed.length() == 0, "sandboxed class loader operations that were not refused", failed);
     }
 }

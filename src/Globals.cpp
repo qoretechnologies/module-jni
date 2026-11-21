@@ -2783,7 +2783,12 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     }
 
     printd(5, "qore_url_classloader_get_context_program() new_syscl: %p finalize_init: %d\n", new_syscl, finalize_init);
-    if (finalize_init) {
+    // the Java flag stays set for the life of a JVM that uses this class as its system class loader: only the first
+    // class loader, which the JVM creates at its start, is the system class loader and initializes the module; a later
+    // one is an ordinary class loader, which changes neither and is checked below (qore#7131)
+    static std::atomic<bool> bootstrap_finalized{false};
+    const bool finalize = finalize_init && !bootstrap_finalized.exchange(true, std::memory_order_acq_rel);
+    if (finalize) {
         Globals::syscl = GlobalReference<jobject>::fromLocal(new_syscl);
         Globals::bootstrap = true;
         jni_module_init_finalize(true);
@@ -2792,11 +2797,11 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     // Globals::getContextProgram() reports whether it created the global context Program; that
     // is not what "created" means to the caller here - see below.
     bool ignored_created;
-    jlong rv = Globals::getContextProgram(finalize_init ? nullptr : new_syscl, ignored_created);
+    jlong rv = Globals::getContextProgram(finalize ? nullptr : new_syscl, ignored_created);
     // a class loader for the global Java context Program is not created for code that cannot reach it (code that a
     // sandbox governs, a thread that Java started once such code has called Java): its classes would be attributed
     // to that trusted Program (qore#7023)
-    if (!finalize_init) {
+    if (!finalize) {
         jni_check_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(rv));
     }
 
@@ -4218,7 +4223,7 @@ void Globals::defineQoreURLClassLoader(Env& env) {
     methodQoreURLClassLoaderClearProgramPtr = env.getMethod(classQoreURLClassLoader, "clearProgramPtrIntern", "()V");
     methodQoreURLClassLoaderClearContext = env.getMethod(classQoreURLClassLoader, "clearContext", "()V");
     methodQoreURLClassLoaderRegisterSharedDynamicClass = env.getMethod(classQoreURLClassLoader,
-        "registerSharedDynamicClass", "(Ljava/lang/String;)V");
+        "registerSharedDynamicClassIntern", "(Ljava/lang/String;)V");
 
     //printd(5, "defineQoreURLClassLoader() done\n");
 }

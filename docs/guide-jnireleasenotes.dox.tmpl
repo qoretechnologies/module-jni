@@ -6,6 +6,20 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: class loader operations are now checked against the class loader that they change, and the
+      process-wide registry of shared dynamic classes can no longer be changed by code that a sandbox governs, nor can
+      that code define a class in a registered owner that it cannot reach.  Operations that change the state of a class
+      loader (closing it, its assertion status, its compilation cache) are refused to code that cannot reach its
+      Program.  These checks are defense in depth (qore#7131)
+    - <b>Behavior change</b> (qore#7131): a class loader that is not a \c QoreURLClassLoader no longer takes the
+      Program of its parent class loaders: once code that a sandbox governs has used Java in the process, the calls into
+      %Qore of Java code of its classes are refused.  The classes of a Kotlin script now belong to the Program that
+      evaluated it, so trusted and sandboxed scripts keep calling into their own Program.  A process with trusted code
+      only is unchanged
+    - In a JVM started with Qore as a library (JVM-primary mode), creating a \c QoreURLClassLoader after the JVM's start
+      initialized the module again and replaced the system class loader, which could abort the process; only the class
+      loader that the JVM creates at its start now does so, and any other is checked like one in an embedded JVM
+      (qore#7131)
     - Trusted code could not define, with \c define-class, a Java class that extends a Qore class (\c qore.*) of a
       %Qore Program that has a sandbox manager, also one that allows uncontrolled APIs, as Qorus gives every
       interface: the command failed with \c JNI-ERROR ("cannot call into a Qore Program other than the one of the

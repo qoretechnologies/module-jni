@@ -250,7 +250,7 @@ public:
     DLLLOCAL static jmethodID methodQoreURLClassLoaderCheckInProgress;            // boolean checkInProgress(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderClearProgramPtr;            // void ClearProgramPtr()
     DLLLOCAL static jmethodID methodQoreURLClassLoaderClearContext;               // void clearContext()
-    DLLLOCAL static jmethodID methodQoreURLClassLoaderRegisterSharedDynamicClass; // void registerSharedDynamicClass(String)
+    DLLLOCAL static jmethodID methodQoreURLClassLoaderRegisterSharedDynamicClass; // void registerSharedDynamicClassIntern(String)
 
     DLLLOCAL static GlobalReference<jclass> classJavaClassBuilder;                // org.qore.jni.JavaClassBuilder
     DLLLOCAL static jmethodID methodJavaClassBuilderGetFunctionConstantClassBuilder; // static DynamicType.Builder<?> getFunctionConstantClassBuilder(String bin_name)

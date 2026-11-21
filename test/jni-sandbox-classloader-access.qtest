@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires Util
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+
+%exec-class JniSandboxClassLoaderAccessTest
+
+#! Class loader operations are checked against the class loader that they change (qoretechnologies/qore#7131)
+/** The first test case runs before any sandboxed code has used Java, as the attribution of the classes of other class
+    loaders depends on it.
+*/
+class JniSandboxClassLoaderAccessTest inherits QUnit::Test {
+    public {
+        const TenantSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+object sub own_loader() {
+    return get_class_loader();
+}
+string sub add_parent(string dir) {
+    return ClassLoaderAccessProbe::addParentPath(get_class_loader(), dir);
+}
+string sub register_loader(object loader) {
+    return ClassLoaderAccessProbe::registerShared(loader);
+}
+string sub register_own() {
+    return ClassLoaderAccessProbe::registerShared(get_class_loader());
+}
+string sub define_own() {
+    return ClassLoaderAccessProbe::defineShared(get_class_loader());
+}
+object sub foreign_call(object parent) {
+    return ClassLoaderAccessProbe::newForeignCall(parent);
+}
+string sub close_loader(object loader) {
+    return ClassLoaderAccessProbe::close(loader);
+}
+string sub clear_loader(object loader) {
+    return ClassLoaderAccessProbe::clearCompilationCache(loader);
+}
+string sub assert_loader(object loader) {
+    return ClassLoaderAccessProbe::setAssertionStatus(loader);
+}
+";
+        const NotGoverned = "JNI-ERROR.*cannot call into a Qore Program other than the one of the calling code";
+    }
+
+    private {
+        *Program tenant;
+        object host_loader;
+    }
+
+    constructor() : QUnit::Test("jni sandbox class loader access", "1.0") {
+        host_loader = get_class_loader();
+        addTestCase("trusted code only", \trustedOnlyTest());
+        addTestCase("parent classpath", \parentPathTest());
+        addTestCase("shared class registry", \sharedRegistryTest());
+        addTestCase("class loaders of no Program", \foreignLoaderTest());
+        addTestCase("other class loader state", \loaderStateTest());
+        set_return_value(main());
+    }
+
+    private Program getTenant() {
+        if (!tenant) {
+            tenant = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            tenant.parse(TenantSource, "tenant");
+            SandboxManager sm();
+            # only a tenant trusted with uncontrolled APIs can call Java code
+            sm.setUncontrolledApiPolicy(True);
+            tenant.setSandboxManager(sm);
+        }
+        return tenant;
+    }
+
+    private assertRefused(string rv) {
+        assertRegex("^refused: .*" + NotGoverned, rv, rv);
+    }
+
+    #! a process with trusted code only is not affected; runs before sandboxed code has used Java
+    trustedOnlyTest() {
+        assertNothing(tenant);
+        string rv = ClassLoaderAccessProbe::runCall(ClassLoaderAccessProbe::newForeignCall(host_loader));
+        assertRegex("^ok: [0-9]+$", rv, rv);
+        rv = ClassLoaderAccessProbe::newLoader(host_loader);
+        assertEq("ok: true", rv, rv);
+    }
+
+    parentPathTest() {
+        string denied = normalize_dir(get_script_dir() + "/java");
+        object own = getTenant().callFunction("own_loader");
+        assertFalse(ClassLoaderAccessProbe::parentHasPath(own, denied));
+        assertRefused(getTenant().callFunction("add_parent", denied));
+        assertFalse(ClassLoaderAccessProbe::parentHasPath(own, denied));
+
+        # trusted code changes the classpath of the parent of its own class loader
+        string allowed = normalize_dir(get_script_dir() + "/docker_test");
+        string rv = ClassLoaderAccessProbe::addParentPath(host_loader, allowed);
+        assertEq("ok: added", rv, rv);
+        assertTrue(ClassLoaderAccessProbe::parentHasPath(host_loader, allowed));
+    }
+
+    sharedRegistryTest() {
+        # sandboxed code cannot name a class loader as the owner, neither another Program's nor its own, as the
+        # registry is process-wide
+        assertRefused(getTenant().callFunction("register_loader", host_loader));
+        assertRefused(getTenant().callFunction("register_own"));
+
+        # a class that trusted code shares is not defined in its owner with the bytes of sandboxed code
+        string rv = ClassLoaderAccessProbe::registerShared(host_loader);
+        assertEq("ok: registered", rv, rv);
+        assertRefused(getTenant().callFunction("define_own"));
+
+        # the owner defines the class
+        rv = ClassLoaderAccessProbe::defineShared(host_loader);
+        assertEq("ok: this loader", rv, rv);
+    }
+
+    foreignLoaderTest() {
+        # the class of a class loader that sandboxed code created below the host's is not the host's code
+        auto call = getTenant().callFunction("foreign_call", host_loader);
+        assertRefused(ClassLoaderAccessProbe::runCall(call));
+
+        # nor is one that trusted code creates, once sandboxed code has used Java
+        assertRefused(ClassLoaderAccessProbe::runCall(ClassLoaderAccessProbe::newForeignCall(host_loader)));
+
+        # the host's own Java code still reaches its Program
+        assertEq("ok: host", GovernedProgramProbe::callIn(host_loader, "host_fn"));
+    }
+
+    loaderStateTest() {
+        object victim = ClassLoaderAccessProbe::newDerived(host_loader);
+        assertRefused(getTenant().callFunction("close_loader", victim));
+        assertRefused(getTenant().callFunction("clear_loader", victim));
+        assertRefused(getTenant().callFunction("assert_loader", victim));
+
+        # the Program's own code can do so
+        string rv = ClassLoaderAccessProbe::clearCompilationCache(victim);
+        assertEq("ok: cleared", rv, rv);
+        rv = ClassLoaderAccessProbe::setAssertionStatus(victim);
+        assertEq("ok: set", rv, rv);
+        rv = ClassLoaderAccessProbe::close(victim);
+        assertEq("ok: closed", rv, rv);
+    }
+}
+
+string sub host_fn() {
+    return "host";
+}

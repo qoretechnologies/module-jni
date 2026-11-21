@@ -201,7 +201,10 @@ class Outer {
     code that obtained it from Java, and the Java code of a call of a Java object of another sandboxed Program (ex: a
     tenant's object that a host calls) reaches no Program; Java code of the classes of a sandboxed Program's class
     loader reaches only that Program, whatever code runs it, and code that cannot reach a Program cannot change or
-    create its class loaders.
+    create its class loaders.  An operation on a class loader is checked against the class loader that it changes.
+    The classes of a Kotlin script evaluated with \c kotlin_eval() or \c kotlin-eval belong to the Program that
+    evaluated it.  A class loader that is not a \c QoreURLClassLoader belongs to no Program, whatever its parent: once
+    sandboxed code has used Java, the calls into %Qore of Java code of its classes are refused.
 
     @note Java objects have no Program of their own: when host code runs a Java object or closure that sandboxed code
     supplied or could have built (a listener, a \c Runnable, \c toString(), a closure that it passes on), its calls into
