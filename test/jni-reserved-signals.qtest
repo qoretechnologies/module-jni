@@ -9,6 +9,8 @@
 # was loaded: the signal was delivered to a JVM thread instead of to the Qore signal thread.  The module now gives the
 # JVM that it creates a free real-time signal in _JAVA_SR_SIGNUM (only while the JVM is created) unless the user has
 # set _JAVA_SR_SIGNUM, and reserves the signal that the JVM uses, as it does the other signals that the JVM needs.
+# On platforms without real-time signals that the JVM accepts (macOS), it gives the JVM SIGVTALRM, or SIGPROF if
+# SIGVTALRM is not free, instead of leaving it SIGUSR2, which Qore programs could then not handle (qore#7129).
 #
 # Each case runs a child process; the parent reads the child's output until the child has exited, so no case waits
 # for a time.  A signal whose handler is not called within 30 seconds is counted as not handled (a guard only: the
@@ -37,6 +39,12 @@ class JniReservedSignalsTest inherits QUnit::Test {
               reserved; reports whether it is blocked in the thread, and that a handler for it runs
             - \c nofree: Qore handlers are set for all real-time signals, then jni is loaded; reports the result
             - \c load: jni is loaded; reports the result
+            - \c portable: a Qore handler is set for the given signal first (unless 0), then jni is loaded; reports
+              the result, the signals reserved for jni, whether the JVM's suspend/resume variable is visible, that a
+              handler for SIGUSR2 runs 5 times, and the number of execution samples that a JFR recording took of the
+              thread while it ran Java code (the JVM suspends a thread with its suspend/resume signal to sample it);
+              needs no /proc file system
+            - \c nofree-classic: Qore handlers are set for SIGVTALRM and SIGPROF, then jni is loaded; reports the result
         */
         const ChildSource = "%modern
 string mode = ARGV[0];
@@ -160,6 +168,68 @@ sub loaded() {
     }
 }
 
+#! loads jni (with a Qore handler set for the given signal first unless 0) and reports what the parent checks
+sub portable(int pre) {
+    if (pre) {
+        set_signal_handler(pre, sub (int x) {});
+    }
+    if (!try_load()) {
+        return;
+    }
+    # the signals reserved for jni that HotSpot would accept as its suspend/resume signal
+    list<int> reserved = ();
+    for (int s = max(SIGSEGV, SIGBUS) + 1; s <= 64; ++s) {
+        # SIGCHLD is one of the signals that jni reserves in any case
+        if (s == SIGCHLD || s == pre) {
+            continue;
+        }
+        try {
+            set_signal_handler(s, sub (int x) {});
+            remove_signal_handler(s);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.desc =~ /module 'jni'/) {
+                reserved += s;
+            }
+        }
+    }
+    stdout.printf(\"reserved: %s\\n\", (foldl $1 + \",\" + $2, (map string($1), reserved)) ?? \"\");
+    stdout.printf(\"env: %y\\n\", getenv(\"_JAVA_SR_SIGNUM\"));
+    stdout.printf(\"child env: %s\\n\", trim(backquote(\"printenv _JAVA_SR_SIGNUM || echo none\")));
+    run_handler(SIGUSR2, 5);
+    if (pre) {
+        remove_signal_handler(pre);
+    }
+    # JFR samples a thread that runs Java code by suspending it with the JVM's suspend/resume signal; the main thread
+    # (which reserved the signal) computes a large power in Java for about a second while it is sampled every 10 ms
+    Program p(PO_NEW_STYLE);
+    p.parse(\"%requires jni
+%module-cmd(jni) import jdk.jfr.Recording
+%module-cmd(jni) import jdk.jfr.consumer.RecordingFile
+%module-cmd(jni) import java.time.Duration
+%module-cmd(jni) import java.math.BigInteger
+%module-cmd(jni) import java.nio.file.Paths
+int sub samples(string path) {
+    Recording r();
+    r.enable(\\\"jdk.ExecutionSample\\\").withPeriod(Duration::ofMillis(10));
+    r.start();
+    BigInteger b = BigInteger::valueOf(3);
+    b.pow(10000000).bitLength();
+    r.stop();
+    r.dump(Paths::get(path));
+    r.close();
+    int n = 0;
+    RecordingFile rf(Paths::get(path));
+    while (rf.hasMoreEvents()) {
+        if (rf.readEvent().getEventType().getName() == \\\"jdk.ExecutionSample\\\") {
+            ++n;
+        }
+    }
+    rf.close();
+    return n;
+}\", \"jfr\");
+    stdout.printf(\"samples: %d\\n\", p.callFunction(\"samples\", ARGV[2]));
+}
+
 stdout.printf(\"pid: %d\\n\", getpid());
 switch (mode) {
     case \"loaded\": loaded(); break;
@@ -218,11 +288,21 @@ switch (mode) {
         break;
     }
     case \"load\": try_load(); break;
+    case \"portable\": portable(sig); break;
+    case \"nofree-classic\": {
+        set_signal_handler(SIGVTALRM, sub (int x) {});
+        set_signal_handler(SIGPROF, sub (int x) {});
+        try_load();
+        break;
+    }
 }
 ";
 
         #! the error of a handler for a signal reserved for jni
         const Refused = "SIGNAL-HANDLER-ERROR";
+
+        #! true where the module gives the JVM a classic signal: no real-time signals that the JVM accepts
+        const ClassicSrSignals = PlatformOS == "Darwin" || PlatformOS == "FreeBSD";
     }
 
     private {
@@ -234,6 +314,9 @@ switch (mode) {
 
         #! the path of libjsig.so of the JVM that this process runs, if found
         *string libjsig;
+
+        #! the number of child processes started, for the names of their JFR recordings
+        int runs = 0;
     }
 
     constructor() : Test("JniReservedSignals", "1.0") {
@@ -243,6 +326,10 @@ switch (mode) {
         addTestCase("_JAVA_SR_SIGNUM set by the user", \srSignumTest());
         addTestCase("no free real-time signal", \noFreeTest());
         addTestCase("failed initialization", \failedInitTest());
+        addTestCase("SIGUSR2 handler and suspend/resume without /proc", \portableTest());
+        addTestCase("classic signal taken", \classicTakenTest());
+        addTestCase("no free classic signal", \classicNoFreeTest());
+        addTestCase("_JAVA_SR_SIGNUM set by the user without /proc", \portableSrSignumTest());
 
         set_return_value(main());
     }
@@ -329,6 +416,74 @@ switch (mode) {
         assertEq(0, res.rc, "exit status: " + res.out);
     }
 
+    portableTest() {
+        # the JVM uses a signal other than SIGUSR2, which is reserved for jni: a real-time signal, or SIGVTALRM where
+        # there are no real-time signals that the JVM accepts (qore#7129)
+        hash<auto> res = run("", "portable", 0);
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)load: ok\n", res.out, "jni is loaded");
+        int sr = getReserved(res);
+        if (ClassicSrSignals) {
+            assertEq(SIGVTALRM, sr, "SIGVTALRM is reserved for the JVM");
+        } else {
+            assertGt(32, sr, "the reserved signal is a real-time signal");
+        }
+        checkPortable(res, True);
+    }
+
+    classicTakenTest() {
+        if (!ClassicSrSignals) {
+            testSkip("the module chooses a real-time signal on this platform");
+        }
+        # SIGVTALRM has a Qore handler: the module takes SIGPROF
+        hash<auto> res = run("", "portable", SIGVTALRM);
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)load: ok\n", res.out, "jni is loaded while a SIGVTALRM handler is set");
+        assertEq(SIGPROF, getReserved(res), "SIGPROF is reserved for the JVM");
+        checkPortable(res, True);
+    }
+
+    classicNoFreeTest() {
+        if (!ClassicSrSignals) {
+            testSkip("the module chooses a real-time signal on this platform");
+        }
+        hash<auto> res = run("", "nofree-classic", 0);
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertRegex("(^|\n)load: MODULE-INIT-ERROR: .*neither SIGVTALRM nor SIGPROF is free", res.out,
+            "jni cannot be loaded when neither SIGVTALRM nor SIGPROF is free");
+    }
+
+    portableSrSignumTest() {
+        # a signal that the user sets in _JAVA_SR_SIGNUM is used by the JVM and reserved, also where the module would
+        # choose a classic signal itself
+        hash<auto> res = run("", "portable", 0, {"_JAVA_SR_SIGNUM": SIGPROF});
+        assertEq(0, res.rc, "exit status: " + res.out);
+        assertEq(SIGPROF, getReserved(res), "the signal set by the user is reserved");
+        checkPortable(res, False);
+        assertRegex("(^|\n)env: \"" + SIGPROF + "\"\n", res.out, "the user's _JAVA_SR_SIGNUM stays set");
+    }
+
+    #! returns the one signal reserved for jni from the child's report
+    private:internal int getReserved(hash<auto> res) {
+        *string reserved = (res.out =~ x/(?:^|\n)reserved: ([0-9,]*)\n/)[0];
+        list<string> sigs = reserved ? reserved.split(",") : ();
+        assertEq(1, sigs.size(), "one signal that the JVM accepts is reserved for jni: " + res.out);
+        return sigs ? sigs[0].toInt() : 0;
+    }
+
+    #! checks the SIGUSR2 handler, the JFR samples and (if chosen by the module) the variable in the report
+    private:internal checkPortable(hash<auto> res, bool chosen) {
+        # SIGUSR2 is free: a handler for it runs every time
+        assertRegex("(^|\n)handled " + SIGUSR2 + ": 5\n", res.out, "a SIGUSR2 handler runs");
+        # the JVM suspended and resumed the thread with its signal to sample it
+        *string samples = (res.out =~ x/(?:^|\n)samples: ([0-9]+)\n/)[0];
+        assertGt(0, samples.toInt(), "JFR sampled the thread running Java code: " + res.out);
+        if (chosen) {
+            assertRegex("(^|\n)env: null\n", res.out, "_JAVA_SR_SIGNUM is not visible to the process");
+            assertRegex("(^|\n)child env: none\n", res.out, "_JAVA_SR_SIGNUM is not visible to a child process");
+        }
+    }
+
     private:internal loadedCase(string preload, bool with_libjsig) {
         checkProc();
         hash<auto> res = run(preload, "loaded", 0);
@@ -391,9 +546,9 @@ switch (mode) {
         }
         int rc;
         string out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u _JAVA_SR_SIGNUM "
-            "-u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG %sQORE_MODULE_DIR=%s LD_PRELOAD=%s %s --enable-debug %s %s %d "
+            "-u QORE_JNI_JVM_ARGS -u QORE_JNI_DEBUG %sQORE_MODULE_DIR=%s LD_PRELOAD=%s %s --enable-debug %s %s %d %s "
             "2>&1", vars, shellQuote(getModuleDir()), shellQuote(preload), shellQuote(QORE_ARGV[0]),
-            shellQuote(script), mode, sig), \rc);
+            shellQuote(script), mode, sig, shellQuote(tmp.path + DirSep + "rec-" + (++runs) + ".jfr")), \rc);
         if (m_options.verbose > 2) {
             printf("mode %s sig %d preload %y env %y: rc %d\n%s\n", mode, sig, preload, env, rc, out);
         }
