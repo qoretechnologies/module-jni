@@ -6,6 +6,12 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - Trusted code could not define, with \c define-class, a Java class that extends a Qore class (\c qore.*) of a
+      %Qore Program that has a sandbox manager, also one that allows uncontrolled APIs, as Qorus gives every
+      interface: the command failed with \c JNI-ERROR ("cannot call into a Qore Program other than the one of the
+      calling code") since the change for qore#6845.  A module command that code which no sandbox restricts issues
+      now acts for its target Program: the Java code that the command runs reaches that Program, and no other one.
+      Java code of code that a sandbox governs still reaches only the Program of that code (qore#7041)
     - The module builds against %Qore cores with either form of the reflection API's
       \c qore_type_get_type_arguments() in module API 2.3: the earlier form that returns the type arguments, and the
       form introduced by qore#6419 that copies them to a caller's vector; both report the same Java generic type

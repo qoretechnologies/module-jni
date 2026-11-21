@@ -243,6 +243,21 @@ other than the one of the calling code").  This applies to calls (`QoreJavaApi.c
 generation and listing of the Java classes of Qore classes (`generateByteCode0()`, `getClassesInNamespace0()`), so an
 explicit class load through the class loader of another Program is refused loudly, not reported as a missing class.
 
+A module command acts for its target Program when trusted code issued it (qore#7041): the command runs with the
+target Program current, but the Program context of the call stays the one of the issuing code (ex: the Program in
+which the `Program` object that `Program::issueModuleCmd()` was called on was created), so the class loader of the
+target Program generating the byte code of a `qore.*` superclass for `define-class` was "another Program".
+`jni_module_parse_cmd()` (`src/jni-module.cpp`) holds a `JniTrustedCommandScope` (`src/QoreJniClassMap.cpp`) while the
+handler runs.  It is active only if the command's `QoreModuleCommandContext` exists and says that the issuing code is
+trusted: not sandboxed (`isSandboxed()`: no governing sandbox, or only one that trusts it with uncontrolled APIs) and
+without `PO_NO_UNCONTROLLED_APIS`; otherwise it hides any outer trusted command (fail closed).  While it is active and
+the command's own code calls Java (the command is still the thread's current command, and the call context and the
+current Program are the ones that the handler started with), `jni_governed_caller_reaches()` takes the target Program
+as the Program of the calling code, and only it: neither the issuing code's Program (or the parent class loader's
+Program) nor any other is reached, also by Java code of the target Program that the command runs, such as a static
+initializer of a class that `import` loads.  Other code that runs during the command (a method or closure of another
+Program that Java calls), and Java threads, are judged as before (`test/jni-sandbox-trusted-define-class.qtest`).
+
 Two class lookups are not directed at another Program by the calling code, and make no native call with that
 Program's pointer; `QoreURLClassLoader` asks first with `programReachable0()`, which only compares the pointer with
 the Program of the calling code (`test/jni-sandbox-compiler-fallback.qtest`):
