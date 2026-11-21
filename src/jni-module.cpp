@@ -152,15 +152,42 @@ static QoreStringNode* jni_reserve_sr_signal(int sig) {
 }
 #endif
 
-#if !defined(Q_WINDOWS) && defined(SIGRTMIN) && defined(SIGRTMAX)
-//! true if the module can choose a real-time signal for the JVM's suspend/resume signal on this platform
+#ifndef Q_WINDOWS
+//! true if the module chooses the JVM's suspend/resume signal on this platform
 #define QORE_JNI_CHOOSE_SR_SIGNAL 1
 
-//! Chooses and reserves the real-time signal that the JVM is told to use to suspend and resume its threads
-/** Without \c _JAVA_SR_SIGNUM, HotSpot uses \c SIGUSR2, which %Qore programs use (ex: Qorus for its shutdown); the
-    module therefore gives the JVM a free real-time signal in \c _JAVA_SR_SIGNUM (qore#6707).
+//! reserves the given signal for the JVM's suspend/resume signal if it is free
+/** The signal is free if HotSpot accepts it in \c _JAVA_SR_SIGNUM (a number greater than \c SIGSEGV and \c SIGBUS
+    and less than \c NSIG), its disposition is \c SIG_DFL (no handler installed in the process and not ignored), and
+    the library can reserve it for the module (no %Qore handler is set for it, and neither the library nor another
+    module manages it).
 
-    The candidates are the real-time signals from \c SIGRTMAX() down to \c SIGRTMIN() + 2, determined at run time
+    @return true if the signal was reserved
+*/
+static bool jni_reserve_free_sr_signal(int sig) {
+    if (sig <= std::max(SIGSEGV, SIGBUS) || sig >= NSIG) {
+        return false;
+    }
+    struct sigaction sa;
+    if (sigaction(sig, nullptr, &sa)) {
+        return false;
+    }
+    // only the handler decides: macOS keeps the flags of a handler that the parent process installed (ex: the
+    // SA_SIGINFO of the JVM's handler) across exec(), which resets the handler to the default
+    if ((sa.sa_flags & SA_SIGINFO) ? sa.sa_sigaction != nullptr : sa.sa_handler != SIG_DFL) {
+        return false;
+    }
+    QoreStringNode* err = jni_reserve_sr_signal(sig);
+    if (err) {
+        err->deref();
+        return false;
+    }
+    return true;
+}
+
+#if defined(SIGRTMIN) && defined(SIGRTMAX)
+//! Chooses and reserves the real-time signal that the JVM is told to use to suspend and resume its threads
+/** The candidates are the real-time signals from \c SIGRTMAX() down to \c SIGRTMIN() + 2, determined at run time
     (the C library reserves real-time signals below \c SIGRTMIN() for itself), except:
     - \c SIGRTMIN() and \c SIGRTMIN() + 1: libqore's internal signal is \c SIGRTMIN() + 1 on Linux, and the lowest
       real-time signals are the ones that other libraries take first
@@ -168,36 +195,94 @@ static QoreStringNode* jni_reserve_sr_signal(int sig) {
     - a signal that HotSpot does not accept in \c _JAVA_SR_SIGNUM (a number greater than \c SIGSEGV and \c SIGBUS and
       less than \c NSIG)
 
-    The first candidate whose disposition is \c SIG_DFL (no handler installed in the process and not ignored) and that
-    the library can reserve for the module (no %Qore handler is set for it, and neither the library nor another module
-    manages it) is reserved and returned.  This is normally \c SIGRTMAX(); under valgrind, which reserves
-    \c SIGRTMAX() for itself and reports it as ignored, it is \c SIGRTMAX() - 1.
+    The first free candidate (see jni_reserve_free_sr_signal()) is reserved and returned.  This is normally
+    \c SIGRTMAX(); under valgrind, which reserves \c SIGRTMAX() for itself and reports it as ignored, it is
+    \c SIGRTMAX() - 1.
 
-    @return the signal reserved, 0 if no candidate is free, or -1 if the platform has no candidate that HotSpot would
-    accept (ex: FreeBSD, where \c NSIG is 32 and the real-time signals start above it)
+    @return the signal reserved, 0 if no candidate is free, or -1 if the platform has no real-time signal that HotSpot
+    would accept (ex: FreeBSD, where \c NSIG is 32 and the real-time signals start above it)
 */
-static int jni_choose_sr_signal() {
+static int jni_choose_rt_sr_signal() {
     int rtmin = SIGRTMIN;
     int rtmax = SIGRTMAX;
     if (rtmin + 2 >= NSIG) {
         return -1;
     }
     for (int sig = rtmax; sig >= rtmin + 2; --sig) {
-        if (sig == rtmax - 2 || sig <= std::max(SIGSEGV, SIGBUS) || sig >= NSIG) {
+        if (sig == rtmax - 2) {
             continue;
         }
-        struct sigaction sa;
-        if (sigaction(sig, nullptr, &sa) || (sa.sa_flags & SA_SIGINFO) || sa.sa_handler != SIG_DFL) {
-            continue;
+        if (jni_reserve_free_sr_signal(sig)) {
+            return sig;
         }
-        QoreStringNode* err = jni_reserve_sr_signal(sig);
-        if (err) {
-            err->deref();
-            continue;
-        }
-        return sig;
     }
     return 0;
+}
+#endif
+
+//! the classic signals that the module can give the JVM to suspend and resume its threads, in order of preference
+/** Used on platforms without real-time signals that HotSpot accepts (macOS; FreeBSD) (qore#7129).  HotSpot accepts
+    signals from <tt>max(SIGSEGV, SIGBUS) + 1</tt> (12 on macOS) to <tt>NSIG - 1</tt> (31), of which the others are
+    used by the JVM, by %Qore, by the C library or the kernel, or by programs:
+    - \c SIGSYS: %Qore's internal signal (\c QORE_STATUS_SIGNAL) where there are no real-time signals
+    - \c SIGPIPE, \c SIGXFSZ: handled by the JVM; \c SIGIO: the JDK's network and NIO libraries interrupt threads
+      blocked in I/O with it on BSD and macOS; \c SIGTERM (and \c SIGHUP, \c SIGINT, \c SIGQUIT below 12): the JVM's
+      shutdown and thread dump signals, and handled by %Qore programs
+    - \c SIGALRM: managed by %Qore (sleep()); \c SIGUSR1, \c SIGUSR2: used by %Qore programs (ex: Qorus)
+    - \c SIGSTOP (cannot be caught), \c SIGTSTP, \c SIGCONT, \c SIGTTIN, \c SIGTTOU: job control; \c SIGCHLD: reserved
+      for the JVM already and used by %Qore
+    - \c SIGURG (out-of-band socket data; the Go runtime's preemption signal), \c SIGWINCH (terminal size changes)
+      and \c SIGINFO (status request, Ctrl-T): sent to the process by the terminal or the kernel, which the JVM would
+      see as stray suspend/resume signals
+    - \c SIGXCPU: the kernel's warning for the CPU time limit, whose default action ends the process
+
+    That leaves \c SIGVTALRM, which only \c setitimer(ITIMER_VIRTUAL) raises, and \c SIGPROF, which only
+    \c setitimer(ITIMER_PROF) raises (CPU profilers, also %Qore built with profiling, which then manages it).
+*/
+static const int jni_classic_sr_signals[] = {
+#ifdef SIGVTALRM
+    SIGVTALRM,
+#endif
+#ifdef SIGPROF
+    SIGPROF,
+#endif
+};
+
+//! Chooses and reserves a classic signal that the JVM is told to use to suspend and resume its threads (qore#7129)
+/** The first free candidate in jni_classic_sr_signals (see jni_reserve_free_sr_signal()) is reserved and returned:
+    normally \c SIGVTALRM.
+
+    @return the signal reserved, or 0 if no candidate is free
+*/
+static int jni_choose_classic_sr_signal() {
+    for (int sig : jni_classic_sr_signals) {
+        if (jni_reserve_free_sr_signal(sig)) {
+            return sig;
+        }
+    }
+    return 0;
+}
+
+//! Chooses and reserves the signal that the JVM is told to use to suspend and resume its threads
+/** Without \c _JAVA_SR_SIGNUM, HotSpot uses \c SIGUSR2, which %Qore programs use (ex: Qorus for its shutdown); the
+    module therefore gives the JVM a free signal in \c _JAVA_SR_SIGNUM: a real-time signal (qore#6707), or, on
+    platforms without real-time signals that HotSpot accepts (macOS; FreeBSD), a classic signal that programs hardly
+    use (qore#7129).
+
+    @param rt set to true if real-time signals were the candidates, false if classic signals were
+
+    @return the signal reserved, or 0 if no candidate is free
+*/
+static int jni_choose_sr_signal(bool& rt) {
+#if defined(SIGRTMIN) && defined(SIGRTMAX)
+    int sig = jni_choose_rt_sr_signal();
+    if (sig >= 0) {
+        rt = true;
+        return sig;
+    }
+#endif
+    rt = false;
+    return jni_choose_classic_sr_signal();
 }
 
 //! Sets \c _JAVA_SR_SIGNUM for the JVM that the module creates, and unsets it when destroyed
@@ -625,22 +710,31 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 #ifdef QORE_JNI_CHOOSE_SR_SIGNAL
         // the module chooses the signal for a JVM that it creates, unless the user has set _JAVA_SR_SIGNUM
         if (host_jvm->getType() != NT_INT && !SystemEnvironment::isSet("_JAVA_SR_SIGNUM")) {
-            sr_sig = jni_choose_sr_signal();
-            if (sr_sig > 0) {
-                sr_chosen = sr_sig;
-            } else if (!sr_sig) {
-                xsink.raiseException("MODULE-INIT-ERROR", "the jni module cannot start the JVM: no real-time "
-                    "signal from SIGRTMAX down to SIGRTMIN+2 (%d - %d) is free for the JVM to suspend and resume its "
-                    "threads with (each has a handler installed in the process or a Qore handler, or is managed "
-                    "by the Qore library or another module); set _JAVA_SR_SIGNUM to choose the signal", SIGRTMAX,
-                    SIGRTMIN + 2);
+            bool rt = false;
+            sr_sig = jni_choose_sr_signal(rt);
+            if (!sr_sig) {
+#if defined(SIGRTMIN) && defined(SIGRTMAX)
+                if (rt) {
+                    xsink.raiseException("MODULE-INIT-ERROR", "the jni module cannot start the JVM: no real-time "
+                        "signal from SIGRTMAX down to SIGRTMIN+2 (%d - %d) is free for the JVM to suspend and resume "
+                        "its threads with (each has a handler installed in the process or a Qore handler, or is "
+                        "managed by the Qore library or another module); set _JAVA_SR_SIGNUM to choose the signal",
+                        SIGRTMAX, SIGRTMIN + 2);
+                    return;
+                }
+#endif
+                xsink.raiseException("MODULE-INIT-ERROR", "the jni module cannot start the JVM: neither SIGVTALRM "
+                    "nor SIGPROF is free for the JVM to suspend and resume its threads with (each has a handler "
+                    "installed in the process or a Qore handler, or is managed by the Qore library or another "
+                    "module); set _JAVA_SR_SIGNUM to choose the signal");
                 return;
             }
+            sr_chosen = sr_sig;
         }
 #endif
         if (!sr_chosen) {
-            // the signal that the user set in _JAVA_SR_SIGNUM, or that the host process's JVM uses, or SIGUSR2 (also
-            // where the platform has no real-time signal that HotSpot accepts)
+            // the signal that the user set in _JAVA_SR_SIGNUM, or that the host process's JVM uses (SIGUSR2 by
+            // default)
             sr_sig = jvm_sr_signal();
         }
     }
