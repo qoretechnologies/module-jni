@@ -1,0 +1,24 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#! test module for jni-sandbox-trusted-compile.qtest: classes owned by a user module's Program, as the Qorus API is
+
+%modern
+
+module JniTrustedCompileModule {
+    version = "1.0";
+    desc = "classes of a user module for the trusted compile test";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace JniTrustedCompile {
+    public class Base {
+        string hello(string n) {
+            return "hello " + n;
+        }
+    }
+
+    public class Child inherits Base {
+    }
+}

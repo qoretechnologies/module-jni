@@ -1,0 +1,276 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+
+%exec-class JniSandboxTrustedCompileTest
+
+#! Trusted code compiles Java and Kotlin for another Program (qoretechnologies/qore#7023)
+/** A host such as Qorus attaches a sandbox manager to its trusted Programs only for interruptible I/O and
+    force-terminate: it allows the filesystem, the network and uncontrolled APIs.  Such a sandbox does not make its code
+    sandboxed, so a compile that it runs with the class loader of another Program is not refused.  The same compile
+    under a sandbox that restricts is still refused: the refusal protects tenants from each other.
+*/
+class JniSandboxTrustedCompileTest inherits QUnit::Test {
+    public {
+        #! the code of the Program that runs the compile
+        const CompilerSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import java.lang.Class
+
+string sub java_compile_for(object loader, string src) {
+    QoreJavaCompiler compiler(loader, NOTHING);
+    on_exit compiler.close();
+    object out = compiler.compile(\"org.qore.jni.test.trusted.JField\", src);
+    Class cls = out.cls;
+    return cls.getDeclaredConstructor().newInstance().greet();
+}
+";
+
+        #! added to the compiler Program's code when Kotlin is available
+        const KotlinCompilerSource = "%module-cmd(jni) import org.qore.jni.compiler.QoreKotlinCompiler
+
+string sub kotlin_compile_for(object loader, string src) {
+    QoreKotlinCompiler compiler(loader, NOTHING);
+    on_exit compiler.close();
+    hash<auto> out = compiler.compile({\"KField\": src});
+    loader.addPendingClass(\"KField\", out.KField);
+    Class cls = loader.loadClass(\"KField\");
+    return cls.getDeclaredConstructor().newInstance().greet();
+}
+";
+
+        #! a Kotlin compile with the classes of a user module as base classes, as Qorus compiles mapper field code
+        const KotlinModuleCompilerSource = "
+string sub kotlin_compile_module(string src) {
+    object loader = get_class_loader();
+    QoreKotlinCompiler compiler(loader, NOTHING);
+    on_exit compiler.close();
+    compiler.addBaseClass(\"qore.JniTrustedCompile.Child\");
+    hash<auto> out = compiler.compile({\"KModule\": src});
+    loader.addPendingClass(\"KModule\", out.KModule);
+    Class cls = loader.loadClass(\"KModule\");
+    return cls.getDeclaredConstructor().newInstance().greet();
+}
+";
+
+        #! Kotlin code that does not use the base class, as mapper field code does not use the Qorus API classes that
+        #! QorusProgram::kotlinCompile() registers for its stubs
+        const KotlinModuleSource = "class KModule {
+    fun greet(): String = \"hello kotlin\"
+}
+";
+
+        #! the code of the Program that the classes are compiled for
+        const TargetSource = "%modern
+%requires jni
+
+object sub target_loader() {
+    return get_class_loader();
+}
+
+public class TargetBase {
+    string hello(string n) {
+        return \"hello \" + n;
+    }
+}
+";
+
+        #! a Java class that needs a class of the target Program
+        const JavaSource = "package org.qore.jni.test.trusted;
+import qore.TargetBase;
+public class JField extends TargetBase {
+    public JField() throws Throwable {
+        super();
+    }
+    public String greet() throws Throwable {
+        return hello(\"java\");
+    }
+}
+";
+
+        #! a Kotlin class that needs a class of the target Program
+        const KotlinSource = "import qore.TargetBase
+
+class KField : TargetBase() {
+    fun greet(): String = hello(\"kotlin\")
+}
+";
+
+        #! the exact error of a refused call into another Program
+        const NotGoverned = "Java code called by code that a sandbox governs cannot call into a Qore Program other "
+            "than the one of the calling code";
+    }
+
+    constructor() : QUnit::Test("jni sandbox trusted compile", "1.0") {
+        addTestCase("Kotlin: a permissive sandbox compiles with a user module's classes", \kotlinModuleTest());
+        addTestCase("Kotlin: a restricting sandbox with a user module's classes", \kotlinModuleRestrictingTest());
+        addTestCase("Java: a permissive sandbox compiles for another Program", \javaPermissiveTest());
+        addTestCase("Kotlin: a permissive sandbox compiles for another Program", \kotlinPermissiveTest());
+        addTestCase("Java: a restricting sandbox is refused", \javaRestrictingTest());
+        addTestCase("Kotlin: a restricting sandbox is refused", \kotlinRestrictingTest());
+        addTestCase("Java: a restricting sandbox compiles for its own Program", \javaOwnProgramTest());
+        set_return_value(main());
+    }
+
+    kotlinModuleTest() {
+        list<string> jars = getRequiredKotlinJars();
+        Program compiler = getCompiler(True, jars, False, True);
+        assertEq("hello kotlin", compiler.callFunction("kotlin_compile_module", KotlinModuleSource));
+    }
+
+    kotlinModuleRestrictingTest() {
+        list<string> jars = getRequiredKotlinJars();
+        Program compiler = getCompiler(False, jars, False, True);
+        string rv;
+        try {
+            rv = compiler.callFunction("kotlin_compile_module", KotlinModuleSource);
+        } catch (hash<ExceptionInfo> ex) {
+            rv = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertTrue(rv.find(NotGoverned) >= 0, rv);
+    }
+
+    javaPermissiveTest() {
+        Program target = getTarget();
+        Program compiler = getCompiler(True);
+        assertEq("hello java", compiler.callFunction("java_compile_for", target.callFunction("target_loader"),
+            JavaSource));
+    }
+
+    kotlinPermissiveTest() {
+        list<string> jars = getRequiredKotlinJars();
+        Program target = getTarget();
+        Program compiler = getCompiler(True, jars);
+        assertEq("hello kotlin", compiler.callFunction("kotlin_compile_for", target.callFunction("target_loader"),
+            KotlinSource));
+    }
+
+    javaRestrictingTest() {
+        Program target = getTarget();
+        Program compiler = getCompiler(False);
+        assertRefused("java_compile_for", compiler, target, JavaSource);
+    }
+
+    kotlinRestrictingTest() {
+        list<string> jars = getRequiredKotlinJars();
+        Program target = getTarget();
+        Program compiler = getCompiler(False, jars);
+        assertRefused("kotlin_compile_for", compiler, target, KotlinSource);
+    }
+
+    javaOwnProgramTest() {
+        # the refusal above is of the other Program, not of compiling under a restricting sandbox
+        Program compiler = getCompiler(False, NOTHING, True);
+        assertEq("hello java", compiler.callFunction("java_compile_for", compiler.callFunction("target_loader"),
+            JavaSource));
+    }
+
+    private assertRefused(string func, Program compiler, Program target, string src) {
+        object loader = target.callFunction("target_loader");
+        string rv;
+        try {
+            rv = compiler.callFunction(func, loader, src);
+        } catch (hash<ExceptionInfo> ex) {
+            rv = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertTrue(rv.find(NotGoverned) >= 0, rv);
+    }
+
+    #! returns the Program that the classes are compiled for, with a Qorus-style trusted sandbox
+    private Program getTarget() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        p.parse(TargetSource, "target");
+        p.setSandboxManager(getSandbox(True));
+        return p;
+    }
+
+    #! returns the Program that runs the compile, under a permissive or a restricting sandbox
+    private Program getCompiler(bool permissive, *list<string> kotlin_jars, *bool own_target, *bool user_module) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        string src = CompilerSource;
+        if (own_target) {
+            src += "object sub target_loader() {
+    return get_class_loader();
+}
+
+public class TargetBase {
+    string hello(string n) {
+        return \"hello \" + n;
+    }
+}
+";
+        }
+        if (kotlin_jars) {
+            # the Kotlin jars are on the classpath that every Program shares, as in Qorus
+            map p.issueModuleCmd("jni", "global-add-classpath " + $1), kotlin_jars;
+            src += KotlinCompilerSource;
+        }
+        if (user_module) {
+            p.loadModule(get_script_dir() + "/JniTrustedCompileModule.qm");
+            src += KotlinModuleCompilerSource;
+        }
+        p.issueModuleCmd("jni", "add-classpath " + getBuildDir() + "/qore-jni-compiler.jar");
+        p.parse(src, "compiler");
+        # set after the setup, which reads the jars: only the rule under test can refuse the compile
+        p.setSandboxManager(getSandbox(permissive));
+        return p;
+    }
+
+    #! returns a sandbox manager as QorusProgram::setSandboxPolicy() configures it for a trusted interface, or one that
+    #! restricts the filesystem and still allows uncontrolled APIs
+    private static SandboxManager getSandbox(bool permissive) {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(permissive);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        return sm;
+    }
+
+    #! returns the directory of the module's build
+    private static string getBuildDir() {
+        return get_script_dir() + "/../build";
+    }
+
+    #! returns the Kotlin JARs; in CI a missing compiler is an error, so that this coverage cannot silently skip
+    private list<string> getRequiredKotlinJars() {
+        *list<string> jars = getKotlinJars();
+        if (!jars) {
+            if (ENV.CI) {
+                throw "KOTLIN-MISSING", "the Kotlin compiler JAR is required in CI for this test";
+            }
+            testSkip("Kotlin compiler JAR not available");
+        }
+        return jars;
+    }
+
+    #! returns the Kotlin compiler and standard library JARs, if available
+    private static *list<string> getKotlinJars() {
+        list<string> homes = ();
+        if (ENV.KOTLIN_HOME) {
+            push homes, ENV.KOTLIN_HOME;
+        }
+        # the locations that kotlin.qtest searches
+        homes += ("/usr/share/qore/java/kotlin", "/opt/kotlin", "/opt/kotlinc", "/snap/kotlin/current",
+            "/usr/share/kotlin", "/usr/lib/kotlin", "/usr/local/kotlin", "/opt/local/share/java/kotlin");
+        if (ENV.HOME) {
+            push homes, ENV.HOME + "/.sdkman/candidates/kotlin/current";
+        }
+        homes += map dirname(dirname($1)), glob("/snap/kotlin/*/lib/kotlin-compiler.jar") ?? ();
+        foreach string home in (homes) {
+            string compiler = home + "/lib/kotlin-compiler.jar";
+            string stdlib = home + "/lib/kotlin-stdlib.jar";
+            if (is_file(compiler) && is_file(stdlib)) {
+                return (compiler, stdlib);
+            }
+        }
+    }
+}
