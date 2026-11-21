@@ -1875,7 +1875,7 @@ sub sandboxProbe() {
         holds = processHoldsPort(port);
         GenericServer::releasePortReleaseHoldForTest();
 
-        assertTrue(held, "the port release was held after the listener's channel was closed");
+        assertTrue(held, "the listener's close took the port release hold");
         # a hold that ended at its bound would have released the port whether stop() waited for it or not
         assertFalse(timed_out, "the hold ended when stop() waited for the release, not at its bound");
         assertFalse(holds, "the port is released when stop() returns");
@@ -1911,15 +1911,15 @@ sub sandboxProbe() {
         holds = processHoldsPort(port);
         GenericServer::releasePortReleaseHoldForTest();
 
-        assertTrue(held, "the port release was held after the listener's channel was closed");
+        assertTrue(held, "the listener's close took the port release hold");
         assertFalse(timed_out, "the hold ended when stop() waited for the release, not at its bound");
         assertFalse(holds, "the port is released when stop() returns");
     }
 
     #! the port release hold blocks the task that closes the listener, so no select can release the port before it
     /** The event loop can run a select between two tasks, which deregisters a closed channel and releases its port, so
-        a hold that is a task of its own may begin after the port was released.  A task queued when the hold is taken
-        runs after the close's task: it has not run when a hold in the close's task begins, whatever the timing
+        a hold that is a task of its own may begin after the port was released.  The close handler marks its thread
+        around the close and the hold, so only a hold in the close's own task is reported, whatever the timing
     */
     genericServerRuntimeHoldInCloseTaskTest() {
         OpcUaServerRuntime runtime({
@@ -1947,7 +1947,7 @@ sub sandboxProbe() {
         holds = processHoldsPort(port);
         GenericServer::releasePortReleaseHoldForTest();
 
-        assertTrue(held, "the port release was held after the listener's channel was closed");
+        assertTrue(held, "the listener's close took the port release hold");
         assertTrue(in_close_task, "the hold began in the task that closed the listener");
         assertFalse(timed_out, "the hold ended when stop() waited for the release, not at its bound");
         assertFalse(holds, "the port is released when stop() returns");
@@ -1984,7 +1984,7 @@ sub sandboxProbe() {
         assertThrows("JNI-ERROR", "IllegalStateException: the OS-assigned port " + port + " was not released within " +
             "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
         assertTrue(GenericServer::isPortReleaseHeldForTest(),
-            "the port release was held after the listener's channel was closed");
+            "the listener's close took the port release hold");
         assertTrue(processHoldsPort(port), "the port is still held while its release is held");
 
         GenericServer::setPortReleaseTimeoutForTest(0);
@@ -2033,7 +2033,7 @@ sub sandboxProbe() {
         assertThrows("JNI-ERROR", "IllegalStateException: the configured port " + port + " was not released within " +
             "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
         assertTrue(GenericServer::isPortReleaseHeldForTest(),
-            "the port release was held after the listener's channel was closed");
+            "the listener's close took the port release hold");
         assertTrue(processHoldsPort(port), "the port is still held while its release is held");
 
         GenericServer::setPortReleaseTimeoutForTest(0);
@@ -2196,7 +2196,7 @@ sub sandboxProbe() {
         GenericServer::setPortReleaseTimeoutForTest(1);
         assertThrows("JNI-ERROR", "IllegalStateException: the OS-assigned port " + port + " was not released within " +
             "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
-        assertTrue(GenericServer::isPortReleaseHeldForTest(), "the event loop is held after the listener closed");
+        assertTrue(GenericServer::isPortReleaseHeldForTest(), "the listener's close took the port release hold");
         assertFalse(GenericServer::isPortReleaseHoldTimedOutForTest(),
             "stop() returned while the event loop was held");
 

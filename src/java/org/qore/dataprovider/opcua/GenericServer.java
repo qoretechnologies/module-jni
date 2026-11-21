@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -152,9 +151,9 @@ public class GenericServer {
     private static volatile CountDownLatch portReleaseHold;
     private static volatile boolean portReleaseHoldUntilWaited;
     private static volatile boolean portReleaseHeld;
-    // whether a task queued when the hold was taken has run, and whether the hold began before it did, which means
-    // that the hold blocks the task of the listener's close (see isPortReleaseHeldInCloseTaskForTest())
-    private static volatile boolean portReleaseHoldLaterTaskRan;
+    // the thread running the close handler of a listener whose close took the hold, while it runs it, and whether the
+    // hold began there, in the task of the listener's close (see isPortReleaseHeldInCloseTaskForTest())
+    private static volatile Thread portReleaseHoldCloseThread;
     private static volatile boolean portReleaseHeldInCloseTask;
     // whether a test hold ended because its bound expired, not because it was released
     private static volatile boolean portReleaseHoldTimedOut;
@@ -314,16 +313,16 @@ public class GenericServer {
     /** Test hook: holds the release of the next port, OS-assigned or configured, whose listener channel is closed
 
         The event loop that serves the listener is held in the task that closes the listener's channel, right after
-        the close, so it cannot run a select, which would release the port, until releasePortReleaseHoldForTest() is called (or for at most 60 seconds), or,
-        if \a untilWaited is true, until stop() waits for the release as well; this lets a test check
-        deterministically that stop() returns only once the port is released.  The hold is taken by a close made
-        through the channel's pipeline, as stop() makes it; a close that bypasses the pipeline (ex: when the event loop
-        shuts down) does not take it, and it stays armed until it is released.  Not for production use.
+        the close, so it cannot run a select, which would release the port, until releasePortReleaseHoldForTest() is
+        called (or for at most 60 seconds), or, if \a untilWaited is true, until stop() waits for the release as well;
+        this lets a test check deterministically that stop() returns only once the port is released.  The hold is
+        taken by a close made through the channel's pipeline, as stop() makes it; a close that bypasses the pipeline
+        (ex: when the event loop shuts down) does not take it, and it stays armed until it is released.  Not for
+        production use.
     */
     public static void holdPortReleaseForTest(boolean untilWaited) {
         CountDownLatch hold = new CountDownLatch(1);
         portReleaseHeld = false;
-        portReleaseHoldLaterTaskRan = false;
         portReleaseHeldInCloseTask = false;
         portReleaseHoldTimedOut = false;
         portReleaseHoldUntilWaited = untilWaited;
@@ -338,9 +337,9 @@ public class GenericServer {
 
     /** Test hook: returns true if the hold of holdPortReleaseForTest() began in the task of the listener's close
 
-        A task queued when the hold is taken runs after the close's task, so it has not run if the hold blocks that
-        task.  A hold that is a task of its own could follow a select, which the event loop can run between any two
-        tasks, and which releases the port of the closed channel.
+        The close handler marks its thread around the close and the hold, so a hold that is a task of its own, which
+        runs after the handler has returned, is not reported wherever it was queued.  Such a hold could follow a
+        select, which the event loop can run between any two tasks, and which releases the port of the closed channel.
     */
     public static boolean isPortReleaseHeldInCloseTaskForTest() {
         return portReleaseHeldInCloseTask;
@@ -427,24 +426,18 @@ public class GenericServer {
         portReleaseTimeoutMillis = millis == 0 ? DEFAULT_PORT_RELEASE_TIMEOUT_MILLIS : millis;
     }
 
-    // takes the hold that a test armed, if any, for the given listener channel, which is about to be closed
-    private static CountDownLatch takePortReleaseHold(io.netty.channel.Channel channel) {
+    // takes the hold that a test armed, if any, for a listener channel that is about to be closed
+    private static CountDownLatch takePortReleaseHold() {
         CountDownLatch hold = portReleaseHoldArmed.getAndSet(null);
-        if (hold == null) {
-            return null;
-        }
-        portReleaseHeld = true;
-        try {
-            channel.eventLoop().execute(() -> portReleaseHoldLaterTaskRan = true);
-        } catch (RejectedExecutionException e) {
-            // the event loop runs no later task, so none can run before the hold
+        if (hold != null) {
+            portReleaseHeld = true;
         }
         return hold;
     }
 
     // blocks the event loop until the given hold is released or its bound expires
     private static void awaitPortReleaseHold(CountDownLatch hold) {
-        portReleaseHeldInCloseTask = !portReleaseHoldLaterTaskRan;
+        portReleaseHeldInCloseTask = portReleaseHoldCloseThread == Thread.currentThread();
         try {
             if (!hold.await(PORT_RELEASE_HOLD_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 portReleaseHoldTimedOut = true;
@@ -542,12 +535,26 @@ public class GenericServer {
                 listenerChannel.pipeline().addFirst("qore-port-release-hold", new ChannelOutboundHandlerAdapter() {
                     @Override
                     public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
-                        CountDownLatch hold = ctx.channel().isOpen() ? takePortReleaseHold(ctx.channel()) : null;
+                        CountDownLatch hold = null;
                         try {
-                            super.close(ctx, promise);
+                            if (ctx.channel().isOpen()) {
+                                hold = takePortReleaseHold();
+                            }
                         } finally {
+                            // always closed, as stop() waits for the close without a bound
                             if (hold != null) {
-                                awaitPortReleaseHold(hold);
+                                portReleaseHoldCloseThread = Thread.currentThread();
+                            }
+                            try {
+                                super.close(ctx, promise);
+                            } finally {
+                                if (hold != null) {
+                                    try {
+                                        awaitPortReleaseHold(hold);
+                                    } finally {
+                                        portReleaseHoldCloseThread = null;
+                                    }
+                                }
                             }
                         }
                     }
