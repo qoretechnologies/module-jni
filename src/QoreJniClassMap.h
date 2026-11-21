@@ -25,6 +25,7 @@
 
 #define _QORE_JNI_QOREJAVACLASSMAP_H
 
+#include "defs.h"
 #include "QoreJniPrivateData.h"
 #include "Env.h"
 #include "Class.h"
@@ -1088,9 +1089,58 @@ DLLLOCAL void jni_enter_program_for_class_add(std::optional<QoreExternalProgramC
 
     @param pgm the Program that Java names
 
+    Within a module command that trusted code issued (see JniTrustedCommandScope), the Program of the calling code is
+    the command's target Program.
+
     @return true if the calling code is not governed by a sandbox or \a pgm is the Program of the calling code
 */
 DLLLOCAL bool jni_governed_caller_reaches(const QoreProgram* pgm);
+
+#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
+//! Marks the module command that the thread's handler handles as acting for its target Program (qore#7041)
+/** A module command runs with its target Program current, but the Program context of the call stays the one of the
+    issuing code (ex: the Program in which the Program object that Program::issueModuleCmd() was called on was
+    created), so for jni_governed_caller_reaches(), the Java code that the command runs (ex: the class loader of the
+    target Program generating the byte code of a \c qore.* superclass) called into another Program than the one of
+    the calling code.
+
+    A command that trusted code issued acts for its target Program: while the handler runs, the Program of the calling
+    code for jni_governed_caller_reaches() is the target Program, and only that Program; neither the Program of the
+    issuing code nor any other Program is reached.  The issuing code is trusted if the core says that no sandbox
+    restricts it (QoreModuleCommandRestrictions::isSandboxed(): no governing sandbox, or only one that trusts it with
+    uncontrolled APIs) and its parse options allow uncontrolled APIs.  A command whose issuer is not trusted, or is
+    unknown (no QoreModuleCommandContext), is judged by the calling code as before, also within an outer trusted
+    command, which it hides.
+
+    The target is the Program of the calling code only while the command's own code runs: while the command is the
+    thread's current command, and the call context and the current Program are the ones that the handler started
+    with; other code that runs during the command (ex: a method or a closure of another Program that Java calls) is
+    judged by its own Program.  Java threads have no such command.
+*/
+class JniTrustedCommandScope {
+public:
+    DLLLOCAL JniTrustedCommandScope();
+    DLLLOCAL ~JniTrustedCommandScope();
+
+    //! Returns the target Program of the trusted command whose own code calls Java on this thread, or nullptr
+    /** @param call_pgm the Program context of the call (qore_get_call_program_context())
+    */
+    DLLLOCAL static const QoreProgram* getTarget(const QoreProgram* call_pgm);
+
+    JniTrustedCommandScope(const JniTrustedCommandScope&) = delete;
+    JniTrustedCommandScope& operator=(const JniTrustedCommandScope&) = delete;
+
+private:
+    //! the scope that this one hides
+    const JniTrustedCommandScope* prev;
+    //! the command, only for identity
+    const QoreModuleCommandContext* ctx = nullptr;
+    //! the target Program, only for identity
+    const QoreProgram* target = nullptr;
+    //! the Program context of the call when the handler started, only for identity
+    const QoreProgram* call_pgm = nullptr;
+};
+#endif
 
 //! A Program named by a Program pointer that Java passed to a native method, validated and held for the native call
 /** Java caches the pointers of Programs: each org.qore.jni.QoreURLClassLoader has the pointer of the Program whose

@@ -1,0 +1,329 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+
+%exec-class JniSandboxTrustedDefineClassTest
+
+#! A module command that trusted code issues into a Program with a sandbox acts for that Program
+/** Trusted code defines, with \c define-class, a Java class that extends a Qore class of the Program, in a Program that
+    a sandbox governs, as Qorus does for the Java classes of its interfaces, which all have a sandbox: the class loader
+    of the Program generates the byte code of the Qore class (\c qore.*) in that Program (qoretechnologies/qore#7041).
+    The class was refused as Java code calling into another Program than the one of the calling code: the call context
+    of the module command was the Program of the issuing code (qoretechnologies/qore#6845).
+
+    Code that a sandbox governs still cannot reach another Program: through a class that it defines, nor through the
+    Java code that runs during a module command that trusted code issues to its Program.
+*/
+class JniSandboxTrustedDefineClassTest inherits QUnit::Test {
+    public {
+        #! the package of the test classes
+        const Package = "org.qore.jni.test.trusted";
+
+        #! the Java subclass of the Qore class of the target Program
+        const ChildSource = "package org.qore.jni.test.trusted;
+public class JavaChild extends qore.Base {
+    public JavaChild() throws Throwable {
+        super();
+    }
+    public String greet() throws Throwable {
+        return hello(\"java\");
+    }
+}
+";
+
+        #! a Java subclass of a Qore class that only the host Program has
+        const HostChildSource = "package org.qore.jni.test.trusted;
+public class HostChild extends qore.HostOnlyBase {
+    public HostChild() throws Throwable {
+        super();
+    }
+}
+";
+
+        #! a Java class whose static initializer calls into its own Program and into the host's Program, whose class
+        #! loader it gets from its own Program
+        const InitProbeSource = "package org.qore.jni.test.trusted;
+import org.qore.jni.QoreJavaApi;
+import org.qore.jni.QoreURLClassLoader;
+public class InitProbe {
+    public static final String OWN;
+    public static final String HOST;
+    static {
+        ClassLoader own = InitProbe.class.getClassLoader();
+        OWN = String.valueOf(callIn(own, \"tenant_fn\"));
+        Object host = callIn(own, \"host_loader\");
+        HOST = String.valueOf(host instanceof QoreURLClassLoader ? callIn(host, \"host_fn\")
+            : \"no host class loader: \" + host);
+        callIn(own, \"store\", OWN, HOST);
+    }
+    static Object callIn(Object loader, String function, Object... args) {
+        if (!(loader instanceof QoreURLClassLoader)) {
+            return \"no class loader: \" + loader;
+        }
+        QoreURLClassLoader prev = QoreURLClassLoader.getCurrent();
+        ((QoreURLClassLoader)loader).setContext();
+        try {
+            Object rv = QoreJavaApi.callFunction(function, args);
+            return rv instanceof String ? \"ok: \" + rv : rv;
+        } catch (Throwable e) {
+            return e.toString();
+        } finally {
+            if (prev != null) {
+                prev.setContext();
+            }
+        }
+    }
+}
+";
+
+        #! the code of the target Program
+        const TargetSource = "class Base {
+    constructor() {}
+    string hello(string n) {
+        return \"hello \" + n;
+    }
+}
+string sub tenant_fn() {
+    return \"tenant\";
+}
+object sub make(string cls) {
+    return create_object(cls);
+}
+object sub tenant_loader() {
+    return get_class_loader();
+}
+our object HostLoader;
+object sub host_loader() {
+    return HostLoader;
+}
+our hash<string, string> ProbeFields;
+sub store(string own, string host) {
+    ProbeFields = {\"OWN\": own, \"HOST\": host};
+}
+";
+
+        #! the error of a call into another Program
+        const NotGoverned = "cannot call into a Qore Program other than the one of the calling code";
+
+        #! sandbox configurations
+        const SbNone = "no sandbox";
+        const SbTrusting = "a sandbox that allows uncontrolled APIs";
+        const SbRefusing = "a sandbox that refuses uncontrolled APIs";
+    }
+
+    private {
+        #! base64-encoded byte code of the test classes
+        hash<string, string> byte_code;
+    }
+
+    constructor() : QUnit::Test("jni trusted define-class in a sandboxed Program", "1.0") {
+        addTestCase("trusted define-class into a committed Program", \committedTest());
+        addTestCase("trusted define-class into a Program with code pending", \pendingTest());
+        addTestCase("sandboxed code defines a class of its own Program", \tenantOwnTest());
+        addTestCase("negative: sandboxed code cannot define a class of another Program", \tenantOtherTest());
+        addTestCase("negative: sandboxed code cannot issue define-class", \tenantRefusedTest());
+        addTestCase("negative: Java code run by a trusted module command reaches only the target Program",
+            \initProbeTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        QoreJavaCompiler compiler();
+        on_exit compiler.close();
+        hash<auto> out = compiler.compile({
+            Package + ".JavaChild": ChildSource,
+            Package + ".HostChild": HostChildSource,
+            Package + ".InitProbe": InitProbeSource,
+        });
+        foreach string cls in ("JavaChild", "HostChild", "InitProbe") {
+            byte_code{cls} = make_base64_string(out{Package + "." + cls}.file.openInputStream().readAllBytes(), 0);
+        }
+    }
+
+    committedTest() {
+        foreach string sb in (SbNone, SbTrusting, SbRefusing) {
+            Program p = getTarget(sb, False);
+            checkDefineClass(p, "committed, " + sb, False, sb == SbRefusing);
+        }
+    }
+
+    pendingTest() {
+        foreach string sb in (SbNone, SbTrusting, SbRefusing) {
+            Program p = getTarget(sb, True);
+            checkDefineClass(p, "pending, " + sb, True, sb == SbRefusing);
+        }
+    }
+
+    #! sandboxed code with a sandbox that trusts it issues define-class in its own Program, as in a Qorus interface
+    tenantOwnTest() {
+        Program p = getTarget(SbTrusting, False, False);
+        string rv = parse(p, sprintf("%%module-cmd(jni) define-class %s.JavaChild %s\n", Package,
+            byte_code.JavaChild));
+        assertEq("OK", rv, rv);
+        checkChild(p, "tenant directive");
+    }
+
+    #! a class whose superclass is a class of another Program: refused for sandboxed code, and for a command that
+    #! trusted code issues into a Program with a sandbox
+    tenantOtherTest() {
+        string src = sprintf("%%module-cmd(jni) define-class %s.HostChild %s\n", Package, byte_code.HostChild);
+        # the superclass is not found: the parent class loader, whose Program is the host's, is not asked
+        Program p = getTarget(SbTrusting, False, False);
+        string rv = parse(p, src);
+        assertRegex("NoClassDefFoundError: qore/HostOnlyBase", rv, SbTrusting + ": " + rv);
+        # a command that trusted code issues acts for the target Program only: the host's class is not found either
+        foreach string sb in (SbTrusting, SbRefusing) {
+            p = getTarget(sb, False);
+            rv = issue(p, sprintf("define-class %s.HostChild %s", Package, byte_code.HostChild));
+            assertRegex("NoClassDefFoundError: qore/HostOnlyBase", rv, "trusted issuer, " + sb + ": " + rv);
+        }
+        # without a sandbox, the superclass is found in the parent class loader (last: the class is then defined)
+        p = getTarget(SbNone, False, False);
+        rv = parse(p, src);
+        assertEq("OK", rv, SbNone + ": " + rv);
+    }
+
+    #! code that a sandbox governs which does not trust it cannot issue define-class at all
+    tenantRefusedTest() {
+        Program p = getTarget(SbRefusing, False, False);
+        string rv = parse(p, sprintf("%%module-cmd(jni) define-class %s.JavaChild %s\n", Package,
+            byte_code.JavaChild));
+        assertRegex("JNI-SANDBOX-ERROR.*sandboxed code", rv, rv);
+    }
+
+    #! Java code of the target Program that a trusted module command runs (a static initializer) reaches the
+    #! target Program, but not the Program of the issuing code
+    initProbeTest() {
+        foreach string sb in (SbTrusting, SbRefusing) {
+            Program p = getTarget(sb, False);
+            string rv = issue(p, sprintf("define-pending-class %s.InitProbe %s", Package, byte_code.InitProbe));
+            assertEq("OK", rv, sb + ": define-pending-class: " + rv);
+            # the import reads the static fields of the class for its constants: its static initializer runs
+            rv = issue(p, sprintf("import %s.InitProbe", Package));
+            assertEq("OK", rv, sb + ": import: " + rv);
+            hash<string, string> fields = getProbeFields(p);
+            assertEq("ok: tenant", fields.OWN, sb + ": own: " + fields.OWN);
+            # the host's class loader is found in the target Program; the call into the host's Program is refused
+            assertNRegex("^no host class loader", fields.HOST, sb + ": host: " + fields.HOST);
+            assertRegex(NotGoverned, fields.HOST, sb + ": host: " + fields.HOST);
+        }
+        # without a sandbox, the Java code is not governed
+        Program p = getTarget(SbNone, False);
+        assertEq("OK", issue(p, sprintf("define-pending-class %s.InitProbe %s", Package, byte_code.InitProbe)));
+        assertEq("OK", issue(p, sprintf("import %s.InitProbe", Package)));
+        hash<string, string> fields = getProbeFields(p);
+        assertEq("ok: host", fields.HOST);
+        assertEq("ok: tenant", fields.OWN);
+    }
+
+    #! issues define-class into the Program and checks the class
+    private checkDefineClass(Program p, string label, bool pending, bool refusing) {
+        string rv = issue(p, sprintf("define-class %s.JavaChild %s", Package, byte_code.JavaChild));
+        assertEq("OK", rv, label + ": define-class: " + rv);
+        if (rv != "OK") {
+            return;
+        }
+        if (pending) {
+            p.parseCommit();
+            assertEq("tenant", p.callFunction("tenant_fn"), label);
+        }
+        checkChild(p, label, refusing);
+    }
+
+    #! checks that the Java subclass is a class of the Program that extends its Qore class
+    private checkChild(Program p, string label, bool refusing = False) {
+        string cls = "Jni::" + replace(Package, ".", "::") + "::JavaChild";
+        if (refusing) {
+            # the class is in the Program, but its code may not use it, as for any Java class
+            assertThrows("INVALID-FUNCTION-ACCESS", "uncontrolled API.*JavaChild", \p.callFunction(), ("make", cls),
+                label);
+            return;
+        }
+        try {
+            object o = p.callFunction("make", cls);
+            assertEq("JavaChild", o.className(), label);
+            assertEq("hello java", o.greet(), label);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("%s: %s: %s", label, ex.err, ex.desc));
+        }
+    }
+
+    #! returns the results of the static initializer of InitProbe, which it stored in its Program
+    private hash<string, string> getProbeFields(Program p) {
+        *hash<string, string> rv = p.getGlobalVariable("ProbeFields");
+        return rv ?? {"OWN": "not stored", "HOST": "not stored"};
+    }
+
+    #! returns a Program with the jni module and the target code
+    /** @param sb the sandbox of the Program
+        @param pending if the code is pending (Program::parsePending()) rather than committed
+        @param with_code if the target code is parsed; otherwise the caller parses it with parse()
+    */
+    private Program getTarget(string sb, bool pending, bool with_code = True) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        if (sb != SbNone) {
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setNetworkDefaultPolicy(True);
+            sm.setUncontrolledApiPolicy(sb == SbTrusting);
+            p.setSandboxManager(sm);
+        }
+        p.loadModule("jni");
+        if (!with_code) {
+            return p;
+        }
+        if (pending) {
+            p.parsePending(TargetSource, "target");
+        } else {
+            p.parse(TargetSource, "target");
+            # the host's class loader, for InitProbe
+            p.setGlobalVarValue("HostLoader", get_class_loader());
+        }
+        return p;
+    }
+
+    #! issues a jni module command into the Program; returns "OK" or the exception
+    private static string issue(Program p, string cmd) {
+        try {
+            p.issueModuleCmd("jni", cmd);
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! parses the target code with the given module command directive after it, as code of the Program itself;
+    #! returns "OK" or the exception
+    private static string parse(Program p, string directive) {
+        try {
+            p.parse(TargetSource + directive, "tenant");
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+}
+
+# the Qore classes that the host compiles the test classes against
+class Base {
+    constructor() {}
+    string hello(string n) {
+        return "host " + n;
+    }
+}
+
+class HostOnlyBase {
+    constructor() {}
+}
+
+string sub host_fn() {
+    return "host";
+}

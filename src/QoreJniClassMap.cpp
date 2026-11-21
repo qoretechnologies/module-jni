@@ -4950,11 +4950,51 @@ bool jni_governed_caller_reaches(const QoreProgram* pgm) {
         return true;
     }
     QoreProgram* code_pgm = qore_get_call_program_context();
+#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
+    // a module command that trusted code issued acts for its target Program, and only for it (qore#7041)
+    if (const QoreProgram* target = JniTrustedCommandScope::getTarget(code_pgm)) {
+        return pgm == target;
+    }
+#endif
     if (!code_pgm) {
         code_pgm = ::getProgram();
     }
     return pgm == code_pgm;
 }
+
+#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
+// the trusted module command that the thread's handler is handling, or nullptr (qore#7041)
+static thread_local const JniTrustedCommandScope* jni_trusted_command = nullptr;
+
+JniTrustedCommandScope::JniTrustedCommandScope() : prev(jni_trusted_command) {
+    const QoreModuleCommandContext* c = QoreModuleCommandContext::get();
+    if (c && c->getTargetProgram() && !c->isSandboxed()
+        && !c->hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS))) {
+        ctx = c;
+        target = c->getTargetProgram();
+        call_pgm = qore_get_call_program_context();
+        jni_trusted_command = this;
+    } else {
+        // fail closed: an untrusted command, or one whose issuer is unknown, hides an outer trusted command
+        jni_trusted_command = nullptr;
+    }
+}
+
+JniTrustedCommandScope::~JniTrustedCommandScope() {
+    jni_trusted_command = prev;
+}
+
+const QoreProgram* JniTrustedCommandScope::getTarget(const QoreProgram* call_pgm) {
+    const JniTrustedCommandScope* cmd = jni_trusted_command;
+    // only the command's own code: the command is still the thread's current command, and the call context and the
+    // current Program are the ones that the handler started with
+    if (!cmd || cmd->ctx != QoreModuleCommandContext::get() || cmd->call_pgm != call_pgm
+        || ::getProgram() != cmd->target) {
+        return nullptr;
+    }
+    return cmd->target;
+}
+#endif
 
 JniJavaProgramRef::JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader) {
     acquire(env, ptr, loader);

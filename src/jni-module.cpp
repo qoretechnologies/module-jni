@@ -1081,6 +1081,10 @@ static void jni_module_parse_cmd(const QoreString& cmd_arg, ExceptionSink* xsink
 
     // we must use "getProgram()" here for the parse context QoreProgram
     QoreProgram* pgm = getProgram();
+#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
+    // a command that trusted code issued acts for its target Program (qore#7041)
+    JniTrustedCommandScope trusted_command;
+#endif
     try {
         // creating the Program's JNI context can raise a Java exception, which must be converted below
         JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
