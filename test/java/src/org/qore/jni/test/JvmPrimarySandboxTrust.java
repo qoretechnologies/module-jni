@@ -217,6 +217,18 @@ public class JvmPrimarySandboxTrust {
         check(isRefused(rv), "sandboxed class loader operation " + what, rv);
     }
 
+    //! a class loader can be closed once the Qore library has been torn down, as a shutdown hook can do
+    private static void checkCloseAfterShutdown() throws Throwable {
+        QoreURLClassLoader loader = ClassLoaderAccessProbe.newDerived(
+            (QoreURLClassLoader)ClassLoader.getSystemClassLoader());
+        java.lang.reflect.Method shutdown = QoreURLClassLoader.class.getDeclaredMethod("shutdownContext0");
+        shutdown.setAccessible(true);
+        shutdown.invoke(null);
+        loader.close();
+        loader.clearCompilationCache();
+        System.out.println("closed after shutdown");
+    }
+
     //! the classes of a Kotlin script are attributed to the Program that evaluated it
     private static void checkKotlin(QoreObject pgm) throws Throwable {
         @SuppressWarnings("unchecked")
@@ -248,6 +260,10 @@ public class JvmPrimarySandboxTrust {
         pgm.callMethod("parse", DRIVER, "driver");
         if (args.length == 1 && "new-loader".equals(args[0])) {
             checkNewLoader(pgm);
+            return;
+        }
+        if (args.length == 1 && "close-after-shutdown".equals(args[0])) {
+            checkCloseAfterShutdown();
             return;
         }
         if (args.length == 1 && "kotlin".equals(args[0])) {

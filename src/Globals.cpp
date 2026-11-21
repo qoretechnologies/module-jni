@@ -2771,6 +2771,33 @@ static bool qore_cleanup_needs_jvm_shutdown_hook() {
     return Globals::getAlreadyInitialized();
 }
 
+//! True once the class loader that the JVM creates at its start has initialized the module (qore#7131)
+static std::atomic<bool> bootstrap_finalized{false};
+
+//! Refuses a new class loader to code that cannot reach the global Java context Program, before the object exists
+/** The class loader that the JVM creates at its start runs before any Qore code; with no global context Program yet,
+    no code that a sandbox governs exists either.  After the module's shutdown no Qore API is used: the constructor
+    then gets no Program (qore#7131)
+*/
+static void JNICALL qore_url_classloader_check_new_loader(JNIEnv* jenv, jclass jcls, jboolean bootstrap) try {
+    if ((bootstrap && !bootstrap_finalized.load(std::memory_order_acquire)) || q_libqore_shutdown()
+        || Globals::isShuttingDown()) {
+        return;
+    }
+    const QoreProgram* pgm = Globals::peekContextProgram();
+    if (!pgm) {
+        return;
+    }
+    QoreThreadAttachHelper attach_helper;
+    attach_helper.attach();
+    jni_check_governed_caller_reaches(pgm);
+} JNI_NATIVE_CATCH(jenv)
+
+//! Returns true once the Qore library or the module has been shut down; uses no Qore API that needs the library
+static jboolean JNICALL qore_url_classloader_module_shut_down(JNIEnv* jenv, jclass jcls) try {
+    return q_libqore_shutdown() || Globals::isShuttingDown() ? JNI_TRUE : JNI_FALSE;
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
 static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jclass jcls, jobject new_syscl,
         jobject created, jboolean finalize_init) try {
     Env env(jenv);
@@ -2786,7 +2813,6 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     // the Java flag stays set for the life of a JVM that uses this class as its system class loader: only the first
     // class loader, which the JVM creates at its start, is the system class loader and initializes the module; a later
     // one is an ordinary class loader, which changes neither and is checked below (qore#7131)
-    static std::atomic<bool> bootstrap_finalized{false};
     const bool finalize = finalize_init && !bootstrap_finalized.exchange(true, std::memory_order_acq_rel);
     if (finalize) {
         Globals::syscl = GlobalReference<jobject>::fromLocal(new_syscl);
@@ -3639,6 +3665,16 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
         const_cast<char*>("checkProgramAccess0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_url_classloader_check_program_access),
+    },
+    {
+        const_cast<char*>("checkNewLoader0"),
+        const_cast<char*>("(Z)V"),
+        reinterpret_cast<void*>(qore_url_classloader_check_new_loader),
+    },
+    {
+        const_cast<char*>("moduleShutDown0"),
+        const_cast<char*>("()Z"),
+        reinterpret_cast<void*>(qore_url_classloader_module_shut_down),
     },
     {
         const_cast<char*>("programReachable0"),

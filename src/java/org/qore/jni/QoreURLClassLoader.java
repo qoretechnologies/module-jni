@@ -115,6 +115,12 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! when the pointer is cleared: the Java code of its classes is attributed to that Program (qore#7023)
     private volatile long origin_ptr;
 
+    //! true if the class loader has no Program of its own and takes that of its parent class loader
+    /** Set only for class loaders made by createWithoutProgram() and those derived from them: any other class loader
+        with no Program pointer is unknown (qore#7131)
+    */
+    private volatile boolean inherits_program = false;
+
     //! true while pgm_ptr is the holder of the parent class loader; guarded by ptr_lock
     private boolean shared_ptr = false;
 
@@ -195,7 +201,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         will result in this constructor being called
      */
     public QoreURLClassLoader(ClassLoader parent) {
-        super("QoreURLClassLoader", new URL[]{}, parent);
+        super("QoreURLClassLoader", new URL[]{}, checkNewLoader(parent));
         enable_cache = true;
         setContextProgram(this);
         //System.out.printf("QoreURLClassLoader(ClassLoader parent: %s) this: %x (pgm: %x)\n",
@@ -213,11 +219,20 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! constructor for using this class as the boot classloader for the module
     public QoreURLClassLoader() {
-        super("QoreURLClassLoader", new URL[]{}, ClassLoader.getSystemClassLoader());
-        setContext();
+        super("QoreURLClassLoader", new URL[]{}, checkNewLoader(ClassLoader.getSystemClassLoader()));
         enable_cache = true;
         setContextProgram(this);
+        setContext();
         //System.out.printf("QoreURLClassLoader() this: %x (pgm: %x)\n", hashCode(), pgm_ptr);
+    }
+
+    //! Refuses a new class loader to code that cannot reach the global Java context Program; returns \a parent
+    /** Called for the argument of the base class constructor, so that no object exists when the creation is refused,
+        and no method of a subclass runs (qore#7131)
+    */
+    private static ClassLoader checkNewLoader(ClassLoader parent) {
+        checkNewLoader0(static_bootstrap);
+        return parent;
     }
 
     //! Thrown when Java code calls into Qore through a class loader whose Qore Program has been deleted
@@ -240,7 +255,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     public static QoreURLClassLoader createWithoutProgram(ClassLoader parent) {
         checkProgramAccess0(0);
-        return new QoreURLClassLoader(0, parent);
+        QoreURLClassLoader loader = new QoreURLClassLoader(0, parent);
+        loader.inherits_program = true;
+        return loader;
     }
 
     //! constructor for using this class as the boot classloader for the module
@@ -284,6 +301,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             }
             shared_ptr = true;
         }
+        inherits_program = parent.inherits_program;
         // set the current classloader as the thread context classloader
         setContext();
     }
@@ -323,10 +341,10 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! constructor with a name and a parent
     public QoreURLClassLoader(String name, ClassLoader parent) {
-        super(name, new URL[]{}, parent);
-        setContext();
+        super(name, new URL[]{}, checkNewLoader(parent));
         enable_cache = true;
         setContextProgram(this);
+        setContext();
         //System.out.printf("QoreURLClassLoader(name: '%s', ClassLoader parent: %s) this: %x (pgm: %x)\n",
         //    name, (parent == null ? "null" : parent.getClass().getCanonicalName()) + ")", hashCode(), pgm_ptr);
     }
@@ -1348,6 +1366,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         return ptr != 0L ? ptr : origin_ptr;
     }
 
+    //! Returns true if a class loader with no Program pointer takes the Program of its parent (qore#7131)
+    boolean inheritsProgram() {
+        return inherits_program;
+    }
+
     //! Refuses an operation on this class loader to code that cannot reach its Program (qore#7023)
     /** The Program pointer of a class loader names the Program that Java code of its classes runs for: code that a
         sandbox governs cannot change another Program's class loader (its classpath, its classes, its pointer), or
@@ -1359,6 +1382,12 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Throws the refusal of the jni module if the calling code cannot reach the Program \a ptr (qore#7023)
     static native void checkProgramAccess0(long ptr);
+
+    //! Refuses a new class loader to code that cannot reach the global Java context Program (qore#7131)
+    private static native void checkNewLoader0(boolean bootstrap);
+
+    //! Returns true once the Qore library or the module has been shut down; uses no Qore API
+    private static native boolean moduleShutDown0();
 
     public void add(final String qualifiedClassName, final QoreJavaFileObject javaFile) {
         checkAccess();
@@ -1401,8 +1430,36 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! Closes the class loader, for code that can reach its Program (qore#7131)
     @Override
     public void close() throws IOException {
-        checkAccess();
+        checkCloseAccess();
         super.close();
+    }
+
+    //! Refuses to close this class loader to code that cannot reach its Program
+    /** Once the module has been shut down, no Program is left to protect and Qore cannot be used for the check: the
+        class loader can then be closed, as the process is exiting
+    */
+    public void checkCloseAccess() {
+        if (!moduleShutDown0()) {
+            checkAccess();
+        }
+    }
+
+    //! Closes the class loader and clears its caches and Program pointer, for the compiler that owns it
+    /** After the access check, the caches and the pointer are always cleared, also if closing the JAR files fails.
+    */
+    public void closeAndClear() {
+        checkCloseAccess();
+        try {
+            super.close();
+        } catch (IOException e) {
+            // the class loader is being discarded, and there is no recovery action to take
+        } finally {
+            pendingClasses.clear();
+            classCache.clear();
+            classes.clear();
+            classInProgress.get().clear();
+            clearProgramPtrIntern();
+        }
     }
 
     //! Sets the default assertion status, for code that can reach the class loader's Program (qore#7131)
@@ -2403,6 +2460,12 @@ public class QoreURLClassLoader extends URLClassLoader {
         @note This method requires a valid program pointer.
     */
     public void clearCompilationCache() {
+        if (moduleShutDown0()) {
+            // the native caches are gone with the module, and Qore cannot be used for the check
+            classCache.clear();
+            classes.clear();
+            return;
+        }
         checkAccess();
         classCache.clear();
         classes.clear();

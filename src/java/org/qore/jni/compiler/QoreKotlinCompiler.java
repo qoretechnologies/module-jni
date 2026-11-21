@@ -612,17 +612,14 @@ public class QoreKotlinCompiler implements AutoCloseable {
         if (closed) {
             return;
         }
+        if (classLoader != null) {
+            // a refusal leaves the compiler open, with all of its resources
+            classLoader.checkCloseAccess();
+        }
         try {
             cleanupTempDir();
             if (classLoader != null) {
-                try {
-                    classLoader.close();
-                } catch (IOException e) {
-                    // Ignore close errors
-                } finally {
-                    classLoader.clearAllCaches();
-                    classLoader.clearProgramPtr();
-                }
+                classLoader.closeAndClear();
             }
         } finally {
             closed = true;

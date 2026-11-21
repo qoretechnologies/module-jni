@@ -332,8 +332,9 @@ public class QoreJavaApi {
     //! Returns the Program that the Java code of the classes of the class loader \a first is attributed to (qore#7023)
     /** @return 0 for a class loader of the JDK or of the JVM's classpath (trusted); for a QoreURLClassLoader, its
         Program pointer (the first pointer of a class loader whose pointer has been cleared, ex: one whose Program has
-        been deleted), or that of its nearest QoreURLClassLoader parent if it never had one; -1 for any other class
-        loader (unknown), which counts as a sandboxed Program
+        been deleted), or that of its nearest QoreURLClassLoader parent if it was made to have none with
+        QoreURLClassLoader.createWithoutProgram(); -1 for any other class loader (unknown), which counts as a sandboxed
+        Program
 
         A class loader that is not a QoreURLClassLoader inherits no Program from its parents: any code can create one
         with any parent (qore#7131).  Only objects of this module's QoreURLClassLoader class count: a class of another
@@ -353,10 +354,14 @@ public class QoreJavaApi {
             if (!(cl instanceof QoreURLClassLoader)) {
                 break;
             }
-            long ptr = ((QoreURLClassLoader)cl).getOriginPtr();
-            // a class loader that never had a Program is attributed to its parent's
+            QoreURLClassLoader qcl = (QoreURLClassLoader)cl;
+            long ptr = qcl.getOriginPtr();
             if (ptr != 0L) {
                 return ptr;
+            }
+            // only a class loader made to have no Program is attributed to its parent's
+            if (!qcl.inheritsProgram()) {
+                break;
             }
         }
         return -1L;

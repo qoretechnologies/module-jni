@@ -144,7 +144,8 @@ public class KotlinScriptEngine {
             Map<String, byte[]> output = (Map<String, byte[]>)in_memory.getMethod("getCompilerOutputFiles")
                 .invoke(module);
             files = output;
-        } catch (ReflectiveOperationException | NullPointerException | ClassCastException e) {
+        } catch (ReflectiveOperationException | IllegalArgumentException | NullPointerException
+                | ClassCastException e) {
             // the classes stay in Kotlin's class loader, which is unknown (fail closed)
             return;
         }

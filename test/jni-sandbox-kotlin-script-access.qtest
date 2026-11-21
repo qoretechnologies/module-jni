@@ -16,8 +16,9 @@
 %exec-class JniSandboxKotlinScriptAccessTest
 
 #! The classes of a Kotlin script belong to the Program that evaluated it (qoretechnologies/qore#7131)
-/** The test is skipped only if no Kotlin scripting JARs are installed: if they are found, scripting that does not work
-    is a failure.  The first test case runs before any sandboxed code has used Java.
+/** Outside CI, the test is skipped if no Kotlin scripting JARs are installed; in CI, missing JARs are an error.  If they
+    are found, scripting that does not work is a failure.  The first test case runs before any sandboxed code has used
+    Java.
 */
 class JniSandboxKotlinScriptAccessTest inherits QUnit::Test {
     public {
@@ -53,6 +54,7 @@ auto sub ev(string script) {
         addTestCase("evaluations of different Programs", \acrossProgramsTest());
         addTestCase("concurrent evaluations", \concurrentTest());
         addTestCase("bindings and script errors", \behaviorTest());
+        addTestCase("a compiled script of another form", \otherCompiledScriptTest());
         set_return_value(main());
     }
 
@@ -88,6 +90,9 @@ auto sub ev(string script) {
         }
         *list<string> jars = getScriptingJars();
         if (!jars) {
+            if (ENV.CI) {
+                throw "KOTLIN-MISSING", "the Kotlin scripting JARs are required in CI for this test";
+            }
             testSkip("the Kotlin scripting JARs are not installed");
         }
         QoreURLClassLoader loader = QoreURLClassLoader::getCurrent();
@@ -199,6 +204,14 @@ auto sub ev(string script) {
         start.dec();
         done.waitForZero();
         assertEq((), errs);
+    }
+
+    #! the classes of a script that cannot be taken from the compiler stay in Kotlin's class loader, which is unknown
+    otherCompiledScriptTest() {
+        checkKotlin();
+        object loader = ClassLoaderAccessProbe::newDerived(get_class_loader());
+        string rv = ClassLoaderAccessProbe::addOtherCompiledScript(loader);
+        assertEq("ok: no classes", rv, rv);
     }
 
     behaviorTest() {

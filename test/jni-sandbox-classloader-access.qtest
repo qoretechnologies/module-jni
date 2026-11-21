@@ -9,6 +9,8 @@
 %requires Util
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
 %module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
 %module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
 
@@ -51,6 +53,28 @@ string sub clear_loader(object loader) {
 string sub assert_loader(object loader) {
     return ClassLoaderAccessProbe::setAssertionStatus(loader);
 }
+string sub try_recording(object parent) {
+    return ClassLoaderAccessProbe::tryRecordingLoader(parent);
+}
+auto sub recorded_call() {
+    return ClassLoaderAccessProbe::recordedCall();
+}
+string sub close_compiler(object compiler) {
+    try {
+        compiler.close();
+        return \"closed\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"refused: %s: %s\", ex.err, ex.desc);
+    }
+}
+string sub compile_error(object compiler) {
+    try {
+        compiler.compile(\"BadSource\", \"this is not java\");
+        return \"compiled\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
 ";
         const NotGoverned = "JNI-ERROR.*cannot call into a Qore Program other than the one of the calling code";
     }
@@ -67,6 +91,8 @@ string sub assert_loader(object loader) {
         addTestCase("shared class registry", \sharedRegistryTest());
         addTestCase("class loaders of no Program", \foreignLoaderTest());
         addTestCase("other class loader state", \loaderStateTest());
+        addTestCase("a refused constructor", \refusedConstructorTest());
+        addTestCase("a compiler's own resources", \compilerResourcesTest());
         set_return_value(main());
     }
 
@@ -135,6 +161,33 @@ string sub assert_loader(object loader) {
 
         # the host's own Java code still reaches its Program
         assertEq("ok: host", GovernedProgramProbe::callIn(host_loader, "host_fn"));
+    }
+
+    refusedConstructorTest() {
+        string rv = getTenant().callFunction("try_recording", host_loader);
+        # no object of the refused constructor can define classes that count as the host's
+        auto call = getTenant().callFunction("recorded_call");
+        *string host_rv = call ? ClassLoaderAccessProbe::runCall(call) : NOTHING;
+        assertEq(NOTHING, host_rv);
+        assertRegex("^refused: .*" + NotGoverned + ".* \\| recorded=false context-unchanged=true$", rv, rv);
+    }
+
+    compilerResourcesTest() {
+        QoreJavaCompiler compiler(host_loader, NOTHING);
+        on_exit compiler.close();
+
+        # the error of a compilation is not replaced by a refusal of its cleanup
+        string rv = getTenant().callFunction("compile_error", compiler);
+        assertRegex("Compilation failed", rv, rv);
+
+        # a refused close leaves the compiler open for its owner
+        rv = getTenant().callFunction("close_compiler", compiler);
+        assertRegex("^refused: .*" + NotGoverned, rv, rv);
+        assertFalse(compiler.isClosed());
+
+        # the owner closes it
+        compiler.close();
+        assertTrue(compiler.isClosed());
     }
 
     loaderStateTest() {

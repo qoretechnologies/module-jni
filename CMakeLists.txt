@@ -1756,7 +1756,17 @@ add_test(NAME jvm_primary_new_class_loader COMMAND ${CMAKE_COMMAND} -E env
     -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
     org.qore.jni.test.JvmPrimarySandboxTrust new-loader)
 set_tests_properties(jvm_primary_new_class_loader PROPERTIES TIMEOUT 30)
-# Kotlin scripts in a JVM-primary process: registered only if the Kotlin scripting JARs are installed
+add_test(NAME jvm_primary_close_after_shutdown COMMAND ${CMAKE_COMMAND} -E env
+    QORE_LIBRARY=${QORE_LIBRARY}
+    QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    ${Java_JAVA_EXECUTABLE}
+    --enable-native-access=ALL-UNNAMED
+    -Djava.system.class.loader=org.qore.jni.QoreURLClassLoader
+    -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+    org.qore.jni.test.JvmPrimarySandboxTrust close-after-shutdown)
+set_tests_properties(jvm_primary_close_after_shutdown PROPERTIES TIMEOUT 30)
+# Kotlin scripts in a JVM-primary process: without the Kotlin scripting JARs, the test is not registered, except in CI,
+# where it fails
 set(JVM_PRIMARY_KOTLIN_CP "")
 foreach(kotlin_dir "$ENV{KOTLIN_SCRIPTING_JARS}" "$ENV{KOTLIN_HOME}/lib/scripting"
         "/usr/share/qore/java/kotlin/lib/scripting" "/opt/kotlin/lib/scripting")
@@ -1783,6 +1793,8 @@ if(JVM_PRIMARY_KOTLIN_CP)
         -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar:${JVM_PRIMARY_KOTLIN_CP}
         org.qore.jni.test.JvmPrimarySandboxTrust kotlin)
     set_tests_properties(jvm_primary_kotlin_script PROPERTIES TIMEOUT 120)
+elseif(DEFINED ENV{CI})
+    add_test(NAME jvm_primary_kotlin_script COMMAND ${CMAKE_COMMAND} -E false)
 endif()
 add_test(NAME java_provider_profile_validator
     COMMAND ${QORE_JAVA_PROVIDER_PYTHON}

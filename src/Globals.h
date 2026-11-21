@@ -675,6 +675,11 @@ public:
     */
     DLLLOCAL static void abandonGlobalContext();
 
+    //! Returns the global context Program if it exists, without creating it; only for comparing the pointer
+    DLLLOCAL static const QoreProgram* peekContextProgram() {
+        return context_pgm.load(std::memory_order_acquire);
+    }
+
     //! Returns true if the JNI module is shutting down
     /** Java background threads (e.g. ActiveMQ/JMS listeners) must check
         this before calling back into Qore — after shutdown starts, the
