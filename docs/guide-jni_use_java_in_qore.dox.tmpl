@@ -175,6 +175,47 @@ class Outer {
     Program inherited) is run by %Qore in that Program, the class's source Program, which %Qore enters for the call;
     a static method then uses the jni context of that Program, and the module does not enter another Program.
 
+    For code that a sandbox governs, Java's calls into %Qore by a Program that Java names (\c org.qore.jni.QoreJavaApi,
+    the class loader of a Program, the constructors, static methods, functions and constants of the Java classes
+    generated for the %Qore definitions of a Program) are made only in the Program of the %Qore code that called Java,
+    whatever Program owns the Java object whose method it called, and are otherwise refused with \c JNI-ERROR: a Java
+    object of another Program, and the objects that its methods return, do not give sandboxed code the reach of that
+    Program (qore#6845, qore#7023; with a %Qore library before qore#7028, a call of a method of a Java class of
+    another Program made by code that the other Program called directly, as a closure, is judged with the Program
+    that called that code).  %Qore code that a Program hands to other code as a callback still runs in its own
+    Program, as in %Qore: a %Qore closure, a %Qore object (also when Java calls its methods), and an interface that
+    the Program implements with a \c QoreInvocationHandler.
+
+    Java threads are restricted too, as their %Qore caller is not known: once code that a sandbox governs has called
+    Java in the process, a Java thread that no %Qore code calls (a \c Thread, an \c Executor, a \c Timer, a pool
+    thread, ...) reaches no Program by a Program pointer.  Trusted code applies this policy before any sandboxed code
+    runs with:
+    @code{.py}
+%module-cmd(jni) set-java-thread-policy strict
+    @endcode
+    The command cannot be undone, and code that has restricting parse options, or that a sandbox governs that does
+    not trust it with uncontrolled APIs, cannot issue it (code that a sandbox trusts with uncontrolled APIs enables
+    the policy anyway when it calls Java).  %Qore objects and closures that Java calls on any thread are callbacks, which run in their own Program and
+    are not restricted so; a Program whose work runs on Java threads hands Java a %Qore closure or object, or an
+    interface implemented with a \c QoreInvocationHandler.  A Java object used as a %Qore closure is a callback of the
+    code that obtained it from Java, and the Java code of a call of a Java object of another sandboxed Program (ex: a
+    tenant's object that a host calls) reaches no Program; Java code of the classes of a sandboxed Program's class
+    loader reaches only that Program, whatever code runs it, and code that cannot reach a Program cannot change or
+    create its class loaders.
+
+    @note Java objects have no Program of their own: when host code runs a Java object or closure that sandboxed code
+    supplied or could have built (a listener, a \c Runnable, \c toString(), a closure that it passes on), its calls into
+    %Qore are made with the host's authority if it is made only of classes of the JDK or of trusted class loaders.  A
+    host must therefore not run Java objects or closures that sandboxed code supplied; it wraps them in a %Qore closure
+    that it controls, or does not accept them.  A %Qore object or closure that Java code can find (ex: in a static
+    field) can be called with all of its methods, in its own Program; a host must not leave them in Java state that
+    sandboxed Java code can reach.
+
+    @warning A sandbox that allows uncontrolled APIs, and so Java, is not an isolation boundary against malicious
+    code: Java code has the rights of the JVM, which can read or change any state of the process.  The checks above
+    govern Java's calls into %Qore through this module and are defense in depth for code that a sandbox trusts with
+    Java; code that must be isolated is not given uncontrolled APIs.
+
     A call of a Java method or constructor, or of a Java object used as a %Qore closure, sets the thread's Java
     context - the %Qore Program that Java's calls into %Qore on the thread, such as
     \c org.qore.jni.QoreClosure.call(), resolve, together with the thread's context class loader - to the class
@@ -353,8 +394,8 @@ public class Fetcher {
     |\c import (also \c import \c pkg.*, whose classes are loaded when they are used)|\c PO_NO_UNCONTROLLED_APIS
     |\c add-classpath, \c add-relative-classpath|\c PO_NO_UNCONTROLLED_APIS, \c PO_NO_FILESYSTEM
     |\c define-class, \c define-pending-class, \c kotlin-eval|\c PO_NO_UNCONTROLLED_APIS, \c PO_NO_EMBEDDED_LOGIC
-    |\c global-add-classpath, \c global-add-relative-classpath, \c set-property, \c register-shared-class|every \
-      restricting parse option: they change state that every Program shares
+    |\c global-add-classpath, \c global-add-relative-classpath, \c set-property, \c register-shared-class, \
+      \c set-java-thread-policy|every restricting parse option: they change state that every Program shares
     |\c set-compat-types, \c mark-module-injected|none: they set flags of the Program the command applies to
 
     Code of a library module (a module from the module path) has no parse options, so only a sandbox restricts the
@@ -440,7 +481,8 @@ public class Fetcher {
       nothing of it is added.  The files that the class loader reads under a directory entry are not checked one by
       one, and the files are checked when the classpath is added, not again when the class loader opens them
     - the commands that change state of the JVM that every Program shares (\c global-add-classpath,
-      \c global-add-relative-classpath, \c set-property, \c register-shared-class) or that run Java code
+      \c global-add-relative-classpath, \c set-property, \c register-shared-class, \c set-java-thread-policy) or
+      that run Java code
       (\c kotlin-eval) raise \c JNI-SANDBOX-ERROR under a sandbox that does not allow uncontrolled APIs, also through
       a policy barrier or a system-policy capability, and in a Program with \c PO_NO_UNCONTROLLED_APIS, where the
       module's Java classes are not available

@@ -307,6 +307,22 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
     }
     info->setKeyValue("jdbc_option_setter", true, nullptr);
 #endif
+#ifdef _QORE_HAS_BUILTIN_CALL_SITE_PROGRAM
+    // "builtin_call_site_program": the Program of the code that calls Java is the call site's of the builtin call,
+    // also for code that another Program called directly (qore#7023, qore#7028; JniJavaCallerScope::callSite())
+    if (!info) {
+        info = new QoreHashNode(autoTypeInfo);
+    }
+    info->setKeyValue("builtin_call_site_program", true, nullptr);
+#endif
+#ifdef _QORE_HAS_PROGRAM_CREATOR_SANDBOX
+    // "program_creator_sandbox": a Program that code with a restricting sandbox created counts as sandboxed for the
+    // attribution of the Java code on the stack (qore#7023, qore#7028)
+    if (!info) {
+        info = new QoreHashNode(autoTypeInfo);
+    }
+    info->setKeyValue("program_creator_sandbox", true, nullptr);
+#endif
 #ifdef _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS
     // "jdbc_connect_choosers": the jdbc driver judges the code that chose a connection, also the code that set its
     // database name (qore#6142, QoreJdbcConnection::checkChoosers())
@@ -349,6 +365,7 @@ static void qore_jni_mc_mark_module_injected(const QoreString& arg, QoreProgram*
 static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram* pgm,
     JniExternalProgramData* jpc);
 static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
+static void qore_jni_mc_set_java_thread_policy(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc);
 
 // module cmds
 typedef std::map<std::string, qore_jni_module_cmd_t> mcmap_t;
@@ -365,6 +382,7 @@ static mcmap_t mcmap = {
     {"mark-module-injected", qore_jni_mc_mark_module_injected},
     {"register-shared-class", qore_jni_mc_register_shared_class},
     {"kotlin-eval", qore_jni_mc_kotlin_eval},
+    {"set-java-thread-policy", qore_jni_mc_set_java_thread_policy},
 };
 
 static void jni_thread_cleanup(void*) {
@@ -578,6 +596,19 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     });
 
     qore_set_module_option("jni", "jni-version", JNI_VERSION_21);
+
+    // fail closed: the options of a JVM that the host started cannot be checked or set (qore#7023)
+    {
+        QoreString restricted;
+        if (!SystemEnvironment::get("QORE_JNI_RESTRICTED_JVM", restricted) && q_parse_bool(restricted.c_str())) {
+            ValueHolder host_jvm(qore_get_module_option("jni", "jvm-ptr"), nullptr);
+            if (host_jvm->getType() == NT_INT) {
+                xsink.raiseException("MODULE-INIT-ERROR", "QORE_JNI_RESTRICTED_JVM is set, but the module was given "
+                    "a JVM that it did not start, whose options it cannot restrict");
+                return;
+            }
+        }
+    }
 
     sig_vec = jvm_sys_signals;
 #ifndef Q_WINDOWS
@@ -957,6 +988,7 @@ static const std::map<std::string, JniCommandIssuerRule> jni_command_issuer_rule
     // process-wide state
     {"set-property", {0, true, "sets a system property of the JVM"}},
     {"register-shared-class", {0, true, "makes the class of this Program the class of every Program"}},
+    {"set-java-thread-policy", {0, true, "sets the policy of the Java threads of the process"}},
 };
 
 #ifndef NDEBUG
@@ -1081,10 +1113,10 @@ static void jni_module_parse_cmd(const QoreString& cmd_arg, ExceptionSink* xsink
 
     // we must use "getProgram()" here for the parse context QoreProgram
     QoreProgram* pgm = getProgram();
-#ifdef QORE_JNI_HAS_COMMAND_CONTEXT
-    // a command that trusted code issued acts for its target Program (qore#7041)
-    JniTrustedCommandScope trusted_command;
-#endif
+    // a module command acts for the Program that it is issued in (its issuer has been checked above): the Java code
+    // that it runs (class loading, class definition) calls into that Program, also when trusted code issues it into a
+    // Program that a sandbox governs (qore#7023, qore#7041)
+    JniJavaCallerScope caller(pgm);
     try {
         // creating the Program's JNI context can raise a Java exception, which must be converted below
         JniExternalProgramData* jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
@@ -1533,6 +1565,19 @@ static void qore_jni_mc_set_compat_types(const QoreString& arg, QoreProgram* pgm
 
     bool compat_types = q_parse_bool(arg.c_str());
     jpc->overrideCompatTypes(compat_types);
+}
+
+// set-java-thread-policy strict: from now on, Java threads whose Qore caller is not known reach no Program by a Program
+// pointer, as once code that a sandbox governs has called Java in the process; it cannot be undone (qore#7023)
+static void qore_jni_mc_set_java_thread_policy(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {
+    jni_check_uncontrolled_cmd("set-java-thread-policy", pgm, "sets the policy of the Java threads of the process");
+    QoreString policy(arg);
+    policy.trim();
+    if (policy != "strict") {
+        throw QoreJniException("JNI-ERROR", "the 'set-java-thread-policy' command takes 'strict' as its argument; "
+            "got '%s'", policy.c_str());
+    }
+    jni_set_java_thread_policy_strict();
 }
 
 static void qore_jni_mc_set_property(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {

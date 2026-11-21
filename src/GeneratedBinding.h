@@ -79,7 +79,16 @@ private:
 // Never hold the registry mutex while acquiring a Program context or executing code.
 class GeneratedBindingContext {
 public:
-    DLLLOCAL GeneratedBindingContext(jlong handle, GeneratedBindingKind kind, ExceptionSink* xsink);
+    //! Holds the binding and enters its Programs
+    /** @param handle the binding's handle
+        @param kind the kind of binding expected
+        @param xsink the sink of the entries
+        @param check_program if not nullptr, called with the binding's Program before the Program is entered; it
+        throws to refuse the call (jni_check_governed_caller_reaches(), qore#7023), so that a refused call runs no code
+        of the Program
+    */
+    DLLLOCAL GeneratedBindingContext(jlong handle, GeneratedBindingKind kind, ExceptionSink* xsink,
+        void (*check_program)(const QoreProgram*) = nullptr);
 
     DLLLOCAL const GeneratedBinding* operator->() const {
         return binding.operator->();

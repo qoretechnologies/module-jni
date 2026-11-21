@@ -42,6 +42,11 @@
 #include "Globals.h"
 #include "QoreJniClassMap.h"
 
+#ifdef __linux__
+//! true if the JVM was started restricted, so it has no attach listener and no socket of its own (qore#7023)
+static bool jni_vm_no_attach_socket = false;
+#endif
+
 //! Ends the process for the JVM through %Qore's process exit (qore#6698)
 /** Set as the JVM's \c exit hook: Java's \c System.exit() and \c Runtime.halt() end the process with \c vm_exit(),
     which, after Java's shutdown hooks have run (for \c System.exit() only), brings the JVM to its final safepoint on
@@ -78,7 +83,7 @@ static void JNICALL jni_vm_exit_hook(jint code) {
     // removed instead, as by any cleanup that goes by the PID)
     char sock[64];
     int len = snprintf(sock, sizeof sock, "/tmp/.java_pid%d", static_cast<int>(getpid()));
-    if (len > 0 && len < static_cast<int>(sizeof sock)) {
+    if (!jni_vm_no_attach_socket && len > 0 && len < static_cast<int>(sizeof sock)) {
         unlink(sock);
     }
 #endif
@@ -284,6 +289,11 @@ QoreStringNode* Jvm::createVM() {
     bool disable_jit = false;
     bool enable_native_access = true;
     bool native_access_explicit = false;
+    // an explicit option gives native access to code of unnamed modules
+    bool native_access_all_unnamed = false;
+    // a restricted start (QORE_JNI_RESTRICTED_JVM): no native access for unnamed modules and no sun.misc.Unsafe memory
+    // access, for hosts that run Java code of sandboxed Programs (qore#7023); only set from Java 24
+    [[maybe_unused]] bool restricted = false;
 #if JAVA_VERSION_MAJOR >= 23
     bool suppress_unsafe_warnings = true;
     bool unsafe_warnings_explicit = false;
@@ -317,6 +327,20 @@ QoreStringNode* Jvm::createVM() {
             }
         }
     }
+    {
+        QoreString val;
+        if (!SystemEnvironment::get("QORE_JNI_RESTRICTED_JVM", val) && q_parse_bool(val.c_str())) {
+#if JAVA_VERSION_MAJOR < 24
+            // fail closed: the JVM options that deny native access and Unsafe memory access are not all available,
+            // and a host that asked for a restricted JVM must not get a JVM without the restrictions
+            return new QoreStringNodeMaker("QORE_JNI_RESTRICTED_JVM is set, but a restricted JVM needs Java 24 or "
+                "later; this module was built for Java %d", JAVA_VERSION_MAJOR);
+#else
+            restricted = true;
+            enable_native_access = false;
+#endif
+        }
+    }
 #if JAVA_VERSION_MAJOR >= 23
     {
         QoreString val;
@@ -341,14 +365,6 @@ QoreStringNode* Jvm::createVM() {
     {
         QoreString val;
         if (!SystemEnvironment::get("QORE_JNI_JVM_ARGS", val)) {
-            if (val.find("--enable-native-access") >= 0) {
-                native_access_explicit = true;
-            }
-#if JAVA_VERSION_MAJOR >= 23
-            if (val.find("--sun-misc-unsafe-memory-access") >= 0) {
-                unsafe_warnings_explicit = true;
-            }
-#endif
             // options are separated by spaces; empty parts (an empty value, or repeated, leading or trailing
             // spaces) are skipped, as the JVM does not start with an empty option
             size_t pos = 0;
@@ -364,17 +380,73 @@ QoreStringNode* Jvm::createVM() {
                 pos = end + 1;
             }
             num_options += strvec.size();
+            // an option counts as given only if a whole option has its name, not if another option's value has it
+            for (const std::string& opt : strvec) {
+                if (!opt.compare(0, strlen("--enable-native-access"), "--enable-native-access")) {
+                    native_access_explicit = true;
+                    if (opt.find("ALL-UNNAMED") != std::string::npos) {
+                        native_access_all_unnamed = true;
+                    }
+                }
+#if JAVA_VERSION_MAJOR >= 23
+                if (!opt.compare(0, strlen("--sun-misc-unsafe-memory-access"), "--sun-misc-unsafe-memory-access")) {
+                    unsafe_warnings_explicit = true;
+                }
+#endif
+            }
         }
     }
+#if JAVA_VERSION_MAJOR >= 24
+    if (restricted) {
+        // fail closed, with an allowlist: many JVM options can undo the restrictions (module options, agents, options
+        // files, in spellings that the JVM normalizes, and system properties that the JVM reads as options), so a
+        // restricted JVM takes none that are not known to be safe.
+        // The JVM reads these variables itself, so they must not be set at all
+        for (const char* var : {"JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS"}) {
+            QoreString val;
+            if (!SystemEnvironment::get(var, val)) {
+                val.trim();
+                if (!val.empty()) {
+                    return new QoreStringNodeMaker("QORE_JNI_RESTRICTED_JVM is set, but so is %s, whose options "
+                        "could undo the restrictions of the JVM", var);
+                }
+            }
+        }
+        if (!debug_cmd.empty()) {
+            return new QoreStringNode("QORE_JNI_RESTRICTED_JVM is set, but so is QORE_JNI_DEBUG, whose debugger "
+                "agent could undo the restrictions of the JVM");
+        }
+        for (const std::string& opt : strvec) {
+            bool allowed = false;
+            for (const char* prefix : {"-Xms", "-Xmx", "-Xss"}) {
+                if (!opt.compare(0, strlen(prefix), prefix)) {
+                    allowed = true;
+                    break;
+                }
+            }
+            if (!allowed) {
+                return new QoreStringNodeMaker("QORE_JNI_RESTRICTED_JVM is set, but QORE_JNI_JVM_ARGS has option "
+                    "'%s'; a restricted JVM takes only -Xms, -Xmx and -Xss options", opt.c_str());
+            }
+        }
+    }
+#endif
     if (enable_native_access && !native_access_explicit) {
         ++num_options;
     }
 #if JAVA_VERSION_MAJOR >= 23
-    if (suppress_unsafe_warnings && !unsafe_warnings_explicit) {
+    if (restricted || (suppress_unsafe_warnings && !unsafe_warnings_explicit)) {
         ++num_options;
     }
 #endif
-    native_access_option_enabled = enable_native_access;
+#if JAVA_VERSION_MAJOR >= 24
+    if (restricted) {
+        // --illegal-native-access=deny, -XX:+DisableAttachMechanism and -XX:-EnableDynamicAgentLoading
+        num_options += 3;
+    }
+#endif
+    // whether the JVM is given native access for code of unnamed modules: by the default option, or an explicit one
+    native_access_option_enabled = native_access_explicit ? native_access_all_unnamed : enable_native_access;
 #ifdef QORE_JNI_SUPPORT_CLASSPATH
     // this is disabled, because we use our own URLClassloader now to load all classes
     QoreString classpath;
@@ -416,10 +488,25 @@ QoreStringNode* Jvm::createVM() {
     }
 #if JAVA_VERSION_MAJOR >= 23
     QoreString unsafe_warning_opt;
-    if (suppress_unsafe_warnings && !unsafe_warnings_explicit) {
+    if (restricted) {
+        // a restricted start refuses the memory access methods of sun.misc.Unsafe
+        unsafe_warning_opt = "--sun-misc-unsafe-memory-access=deny";
+        options[vm_args.nOptions++].optionString = (char*)unsafe_warning_opt.c_str();
+    } else if (suppress_unsafe_warnings && !unsafe_warnings_explicit) {
         // suppress warnings about terminally deprecated sun.misc.Unsafe methods
         unsafe_warning_opt = "--sun-misc-unsafe-memory-access=allow";
         options[vm_args.nOptions++].optionString = (char*)unsafe_warning_opt.c_str();
+    }
+#endif
+#if JAVA_VERSION_MAJOR >= 24
+    if (restricted) {
+        // a restricted start refuses restricted native methods (ex: System.loadLibrary(), the FFM API) to code of
+        // unnamed modules, which is not given native access
+        options[vm_args.nOptions++].optionString = (char*)"--illegal-native-access=deny";
+        // an agent loaded into the running JVM, also by a helper process that Java code starts, could undo the
+        // restrictions
+        options[vm_args.nOptions++].optionString = (char*)"-XX:+DisableAttachMechanism";
+        options[vm_args.nOptions++].optionString = (char*)"-XX:-EnableDynamicAgentLoading";
     }
 #endif
     if (!strvec.empty()) {
@@ -456,6 +543,9 @@ QoreStringNode* Jvm::createVM() {
 
     vm_args.options = options;
 
+#ifdef __linux__
+    jni_vm_no_attach_socket = restricted;
+#endif
     int rc = JNI_CreateJavaVM(&vm, reinterpret_cast<void**>(&env), &vm_args);
     if (rc != JNI_OK) {
         return new QoreStringNodeMaker("JNI_CreateJavaVM() failed with error code %d", rc);

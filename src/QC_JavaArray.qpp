@@ -52,6 +52,8 @@ private:internal JavaArray::constructor() {
     @return the class of the object
  */
 Class JavaArray::getClass() [dom=UNCONTROLLED_API] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         jni::Env env;
         return new QoreObject(QC_CLASS, qore_get_call_program_context(),
@@ -67,6 +69,8 @@ Class JavaArray::getClass() [dom=UNCONTROLLED_API] {
     @return the length of the array
  */
 int JavaArray::length() {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         return array->length();
     } catch (jni::Exception &e) {
@@ -82,6 +86,8 @@ int JavaArray::length() {
     @throws JNI-ERROR if the index is out of bounds
  */
 auto JavaArray::get(int index) [flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         return array->get(index, self->getProgram(), false);
     } catch (jni::Exception &e) {
@@ -97,6 +103,8 @@ auto JavaArray::get(int index) [flags=NAMED_ARGS] {
     @throws JNI-ERROR if the index is out of bounds or if the value type is incompatible with the array type
  */
 nothing JavaArray::set(int index, auto value) [flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         array->set(index, value);
     } catch (jni::Exception &e) {
@@ -116,6 +124,8 @@ string str = a.toString();
     @since jni 1.1
 */
 string JavaArray::toString() [dom=UNCONTROLLED_API;flags=RET_VALUE_ONLY] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         return array->deepToString().release();
     } catch (jni::Exception &e) {
@@ -135,6 +145,8 @@ string str = a.deepToString();
     @since jni 1.1
 */
 string JavaArray::deepToString() [dom=UNCONTROLLED_API;flags=RET_VALUE_ONLY] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         return array->deepToString().release();
     } catch (jni::Exception &e) {
@@ -156,6 +168,8 @@ JavaArray a = JavaArray::get(binary_value: bin);
     @since jni 1.1
 */
 static JavaArray JavaArray::get(binary binary_value) [dom=UNCONTROLLED_API;flags=CONSTANT,NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     // qore#6789: attaching the thread and creating the array can fail with a C++ exception, which must not leave the
     // builtin
     try {

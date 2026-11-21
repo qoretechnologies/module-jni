@@ -1488,6 +1488,11 @@ public class GenericIteratorProbe {
                 disabled = Boolean::parseBoolean(env_val);
             }
         }
+        # a restricted JVM has no native access for code of unnamed modules either
+        *string restricted = System::getenv("QORE_JNI_RESTRICTED_JVM");
+        if (restricted && parse_boolean(restricted)) {
+            disabled = True;
+        }
 
         if (disabled) {
             assertEq(False, has_native_access);

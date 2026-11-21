@@ -1,0 +1,70 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+%module-cmd(jni) import java.util.concurrent.ExecutorService
+%module-cmd(jni) import java.util.concurrent.Executors
+
+%exec-class JniJavaThreadTrustedTest
+
+#! Java threads of a process in which no code that a sandbox governs has called Java (qoretechnologies/qore#7023)
+/** Java threads, whose Qore caller is not known, are restricted only once code that a sandbox governs has called Java
+    in the process: in a process with trusted code only, they call into any Program by a Program pointer, as before.
+    This test runs no sandboxed code, so that the restriction is never enabled.
+*/
+class JniJavaThreadTrustedTest inherits QUnit::Test {
+    public {
+        #! the code of a child Program that no sandbox governs
+        const ChildSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+string sub child_fn() {
+    return \"child\";
+}
+string sub thread_call_in(string mode, object loader, string func) {
+    return HostObjectProbe::threadCallIn(mode, loader, func);
+}
+object sub child_loader() {
+    return get_class_loader();
+}
+";
+    }
+
+    constructor() : QUnit::Test("jni Java threads of trusted code", "1.0") {
+        addTestCase("Java threads of the main Program", \mainTest());
+        addTestCase("Java threads of a child Program", \childTest());
+        set_return_value(main());
+    }
+
+    mainTest() {
+        auto loader = get_class_loader();
+        map assertEq("ok: host", HostObjectProbe::threadCallIn($1, loader, "host_fn"), $1),
+            ("thread", "virtual", "noinherit");
+        ExecutorService pool = Executors::newCachedThreadPool();
+        on_exit pool.shutdown();
+        assertEq("ok: host", HostObjectProbe::submitCallIn(pool, loader, "host_fn"));
+        # a pool thread that exists already
+        assertEq("ok: host", HostObjectProbe::submitCallIn(pool, loader, "host_fn"));
+    }
+
+    childTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/qore-jni-test.jar");
+        p.parse(ChildSource, "child");
+        object child_loader = p.callFunction("child_loader");
+        # a Java thread that the child's call creates reaches the child's Program and the main Program
+        assertEq("ok: child", p.callFunction("thread_call_in", "thread", child_loader, "child_fn"));
+        assertEq("ok: host", p.callFunction("thread_call_in", "virtual", get_class_loader(), "host_fn"));
+    }
+}
+
+string sub host_fn() {
+    return "host";
+}

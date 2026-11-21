@@ -177,6 +177,7 @@ GlobalReference<jclass> Globals::classQoreSandbox;
 jmethodID Globals::methodQoreSandboxResolveClasspath;
 jmethodID Globals::methodQoreSandboxExpandClasspath;
 jmethodID Globals::methodQoreJavaApiGetStackTrace;
+jmethodID Globals::methodQoreJavaApiGetStackProgramPtrs;
 GlobalReference<jclass> Globals::classJavaCollectionTypes;
 jmethodID Globals::methodJavaCollectionTypesIsStringKeyMap;
 jmethodID Globals::methodJavaCollectionTypesMayBeListOrMap;
@@ -1013,6 +1014,10 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
     }
     //printd(LogLevel, "java_api_call_function() '%s()' args: %p %d\n", fname.c_str(), *qore_args, len);
 
+    // the Program of the fallback below, decided before the caller of the call into Java is cleared for the Qore code
+    // that runs: for code that a sandbox governs, only the Program of the calling code (qore#7023)
+    QoreProgram* fallback_pgm = jni_java_api_fallback_program(pgm);
+
     QoreJniStackLocationHelper slh;
 
     ValueHolder rv(pgm->callFunction(fname.c_str(), *qore_args, &xsink), &xsink);
@@ -1023,8 +1028,8 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
     // workflow's program (the caller) has them.  Stays anchored to the loader's pgm in
     // the common case (kotlin.qtest etc).
     if (xsink) {
-        QoreProgram* call_pgm = qore_get_call_program_context();
-        if (call_pgm && call_pgm != pgm) {
+        QoreProgram* call_pgm = fallback_pgm;
+        if (call_pgm) {
             ExceptionSink fallback_xsink;
             ValueHolder fallback_rv(call_pgm->callFunction(fname.c_str(), *qore_args, &fallback_xsink),
                 &fallback_xsink);
@@ -1096,6 +1101,10 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
     JniContextProgramHolder ctx_holder;
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
 
+    // the Program of the class lookup fallback below, decided before the caller of the call into Java is cleared for
+    // the Qore code that runs: for code that a sandbox governs, only the Program of the calling code (qore#7023)
+    QoreProgram* fallback_pgm = jni_java_api_fallback_program(pgm);
+
     QoreJniStackLocationHelper slh;
 
     ExceptionSink xsink;
@@ -1138,8 +1147,8 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
                 // program (the caller).  We only do this on miss so the lookup remains
                 // anchored to the loader's pgm in the common case (e.g. kotlin.qtest's
                 // KotlinQoreApiTest tests, where the loader's pgm IS the right one).
-                QoreProgram* call_pgm = qore_get_call_program_context();
-                if (call_pgm && call_pgm != pgm) {
+                QoreProgram* call_pgm = fallback_pgm;
+                if (call_pgm) {
                     cls = call_pgm->findClass(cname.c_str(), &xsink);
                     if (cls) {
                         // re-anchor pgm + jpc so subsequent calls (method dispatch, arg
@@ -1218,6 +1227,9 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
     std::optional<JniJavaProgramRef> java_pgm;
     QoreProgram* pgm = qore_get_call_program_context();
     if (pgm) {
+        // for code that a sandbox governs, the object is created only in the Program of the calling code: a call of a
+        // Java method of an object of another Program has the object's Program as its Program context (qore#7023)
+        jni_check_governed_caller_reaches(pgm);
         printd(5, "java_api_new_object_save() using call context for new object: %p (ptr: %p)\n", pgm, (void*)ptr);
     } else {
         java_pgm.emplace(env, java_pgm_xsink, ptr);
@@ -1302,6 +1314,8 @@ static jboolean JNICALL java_api_register_java_thread(JNIEnv* jenv, jobject obj)
     jboolean rv;
     if (rc == QFT_OK) {
         printd(5, "java_api_register_java_thread(): thread attached to Qore\n");
+        // a thread that Java started (qore#7023)
+        jni_java_thread_attached(true);
         rv = true;
     } else {
         printd(5, "java_api_register_java_thread(): thread not attached to Qore (rc: %d)\n", rc);
@@ -1311,7 +1325,9 @@ static jboolean JNICALL java_api_register_java_thread(JNIEnv* jenv, jobject obj)
 } JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
 static void JNICALL java_api_deregister_java_thread(JNIEnv* jenv, jobject obj) try {
-    q_deregister_foreign_thread();
+    if (!q_deregister_foreign_thread()) {
+        jni_java_thread_attached(false);
+    }
 } JNI_NATIVE_CATCH(jenv)
 
 namespace {
@@ -1636,8 +1652,25 @@ static jobject qore_object_closure_call_java_ptr(JNIEnv* jenv, jclass jcls, jlon
         return nullptr;
     }
     ExceptionSink java_pgm_xsink;
-    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr);
-    return qore_object_closure_call_internal(jenv, jcls, java_pgm.get(), obj_ptr, save, mname, args);
+    // the method of an existing object, or the closure, is a callback, which runs in its own Program: a Program that
+    // Java names and that the calling code cannot reach is not used (qore#7023)
+    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr, true);
+    QoreProgram* pgm = java_pgm.get();
+    // a refused Program is not used: the call is made in the context of the callback's own Program, which is entered
+    // first (see jni_enter_call_program()), so that its jni data cannot be destroyed during the call; a Program with no
+    // jni data, or one that has been deleted, leaves the context of the calling code
+    ExceptionSink entry_xsink;
+    std::optional<QoreExternalProgramContextHelper> epch;
+    if (!pgm && ptr) {
+        pgm = mname
+            ? JniObjectHandle::fromJava(obj_ptr)->getObject()->getProgram()
+            : reinterpret_cast<const JniClosureHandle*>(obj_ptr)->getCall()->getProgram();
+        if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, &entry_xsink)) {
+            QoreToJava::wrapException(env, entry_xsink);
+            return nullptr;
+        }
+    }
+    return qore_object_closure_call_internal(jenv, jcls, pgm, obj_ptr, save, mname, args);
 }
 
 static jobject JNICALL qore_object_call_method(JNIEnv* jenv, jclass jcls, jlong ptr, jlong obj_ptr,
@@ -1832,8 +1865,9 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
 static jobject JNICALL java_class_builder_do_static_call(JNIEnv* jenv, jclass jcls, jstring mname, jlong class_handle,
         jlong program_id, jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
-        GeneratedBindingContext binding(method_handle, GeneratedBindingKind::StaticMethod, &xsink);
-        GeneratedBindingContext cls(class_handle, GeneratedBindingKind::Class, &xsink);
+        // a static method is called in the Program of the class (qore#7023)
+        GeneratedBindingContext binding(method_handle, GeneratedBindingKind::StaticMethod, &xsink, jni_check_governed_caller_reaches);
+        GeneratedBindingContext cls(class_handle, GeneratedBindingKind::Class, &xsink, jni_check_governed_caller_reaches);
         generated_program_context(binding->pgm, program_id);
         if (reserved || cls->cls != binding->cls) {
             throw std::runtime_error("Invalid class or variant in generated Qore static method call");
@@ -1847,7 +1881,8 @@ static jobject JNICALL java_class_builder_do_static_call(JNIEnv* jenv, jclass jc
 static jobject JNICALL java_class_builder_do_function_call(JNIEnv* jenv, jclass jcls, jlong program_id,
         jlong function_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
-        GeneratedBindingContext binding(function_handle, GeneratedBindingKind::Function, &xsink);
+        // a function is called in the Program of the function (qore#7023)
+        GeneratedBindingContext binding(function_handle, GeneratedBindingKind::Function, &xsink, jni_check_governed_caller_reaches);
         QoreProgram* pgm = binding->pgm;
         JniExternalProgramData* jpc = generated_program_context(pgm, program_id);
         if (reserved) {
@@ -1873,7 +1908,8 @@ static jobject JNICALL java_class_builder_get_constant_value(JNIEnv* jenv, jclas
         jlong constant_handle) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         JniExternalProgramData* caller_context = jni_get_context();
-        GeneratedBindingContext binding(constant_handle, GeneratedBindingKind::Constant, &xsink);
+        // the value of a constant of the Program of the class or namespace (qore#7023)
+        GeneratedBindingContext binding(constant_handle, GeneratedBindingKind::Constant, &xsink, jni_check_governed_caller_reaches);
         JniExternalProgramData* jpc = generated_program_context(binding->pgm, program_id, caller_context);
         ValueHolder val(binding->constant->getReferencedValue(), &xsink);
         return QoreToJava::toAnyObject(env, *val, jpc);
@@ -2757,6 +2793,12 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     // is not what "created" means to the caller here - see below.
     bool ignored_created;
     jlong rv = Globals::getContextProgram(finalize_init ? nullptr : new_syscl, ignored_created);
+    // a class loader for the global Java context Program is not created for code that cannot reach it (code that a
+    // sandbox governs, a thread that Java started once such code has called Java): its classes would be attributed
+    // to that trusted Program (qore#7023)
+    if (!finalize_init) {
+        jni_check_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(rv));
+    }
 
     // "created" tells Java to register the shutdown hook that runs the Qore library teardown.
     // getContextProgram() only reports creation when it makes the global context Program itself,
@@ -3018,6 +3060,16 @@ static jboolean JNICALL qore_url_classloader_program_reachable(JNIEnv* jenv, jcl
     return JNI_FALSE;
 } JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
+// refuses an operation on a class loader of the Program \a ptr (its classpath, its classes, its pointer) or the creation
+// of a class loader for it to code that cannot reach that Program (qore#7023; QoreURLClassLoader.checkAccess())
+static void JNICALL qore_url_classloader_check_program_access(JNIEnv* jenv, jclass jcls, jlong ptr) try {
+    // the calling code is read from the thread's Qore data; a thread that Java started is attached for the check, and
+    // its Qore caller is not known
+    QoreThreadAttachHelper attach_helper;
+    attach_helper.attach();
+    jni_check_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(ptr));
+} JNI_NATIVE_CATCH(jenv)
+
 static jobject JNICALL qore_url_classloader_debug(JNIEnv* jenv, jclass jcls, jlong ptr) try {
     return nullptr;
 } JNI_NATIVE_CATCH(jenv, nullptr)
@@ -3034,10 +3086,15 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
             // raises an exception during the module's shutdown, when no global context Program exists
             jni_get_context_unconditional(pgm, ctx_holder);
         }
-        GeneratedBindingContext binding(class_handle, GeneratedBindingKind::Class, &xsink);
+        // an object of a class of another Program, or created in another Program, is not created for code that a
+        // sandbox governs (qore#7023)
+        jni_check_governed_caller_reaches(pgm);
+        GeneratedBindingContext binding(class_handle, GeneratedBindingKind::Class, &xsink, jni_check_governed_caller_reaches);
         if (reserved_method || reserved_variant) {
             throw std::runtime_error("Invalid context or constructor binding; regenerate the class");
         }
+        // the constructor's Qore code records its own Program when it calls Java (see QoreJniStackLocationHelper)
+        JniJavaCallerScope caller_clear(JniJavaCallerScope::Clear);
         const QoreClass* qc = binding->cls;
         // see if "this" (in Java) is being instantiated for the Qore class directly or a child class; if it's a child
         // class, then create a new Qore class for the Java class
@@ -3107,6 +3164,9 @@ static void JNICALL qore_object_release(JNIEnv* jenv, jclass, jlong ptr) try {
         jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
         return;
     }
+    // releasing the last reference can run the object's destructor, Qore code that records its own Program when it
+    // calls Java (qore#7023)
+    JniJavaCallerScope caller_clear(JniJavaCallerScope::Clear);
     // releases the weak reference
     delete JniObjectHandle::fromJava(ptr);
 } JNI_NATIVE_CATCH(jenv)
@@ -3124,6 +3184,8 @@ static void JNICALL qore_object_destroy(JNIEnv* jenv, jclass, jlong ptr) try {
         return;
     }
 
+    // the destructor is Qore code that records its own Program when it calls Java (qore#7023)
+    JniJavaCallerScope caller_clear(JniJavaCallerScope::Clear);
     ExceptionSink xsink;
     try {
         std::unique_ptr<JniObjectHandle> handle(JniObjectHandle::fromJava(ptr));
@@ -3567,6 +3629,11 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
         const_cast<char*>("debug0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_url_classloader_debug),
+    },
+    {
+        const_cast<char*>("checkProgramAccess0"),
+        const_cast<char*>("(J)V"),
+        reinterpret_cast<void*>(qore_url_classloader_check_program_access),
     },
     {
         const_cast<char*>("programReachable0"),
@@ -4121,10 +4188,10 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         sizeof(qoreURLClassLoaderNativeMethods) / sizeof(JNINativeMethod));
 
     ctorQoreURLClassLoader = env.getMethod(classQoreURLClassLoader, "<init>", "(JLjava/lang/ClassLoader;)V");
-    methodQoreURLClassLoaderAddPath = env.getMethod(classQoreURLClassLoader, "addPath", "(Ljava/lang/String;)V");
+    methodQoreURLClassLoaderAddPath = env.getMethod(classQoreURLClassLoader, "addPathIntern", "(Ljava/lang/String;)V");
     methodQoreURLClassLoaderAddResolvedPath = env.getMethod(classQoreURLClassLoader, "addResolvedPath",
         "(Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;)V");
-    methodQoreURLClassLoaderAddParentPath = env.getMethod(classQoreURLClassLoader, "addParentPath",
+    methodQoreURLClassLoaderAddParentPath = env.getMethod(classQoreURLClassLoader, "addParentPathIntern",
         "(Ljava/lang/String;)V");
     methodQoreURLClassLoaderLoadClass = env.getMethod(classQoreURLClassLoader, "loadClass",
         "(Ljava/lang/String;)Ljava/lang/Class;");
@@ -4134,21 +4201,21 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         "(Ljava/lang/String;)Ljava/lang/Class;");
     methodQoreURLClassLoaderSetContext = env.getMethod(classQoreURLClassLoader, "setContext", "()V");
     methodQoreURLClassLoaderGetProgramPtr = env.getStaticMethod(classQoreURLClassLoader, "getProgramPtr", "()J");
-    methodQoreURLClassLoaderAddPendingClass = env.getMethod(classQoreURLClassLoader, "addPendingClass",
+    methodQoreURLClassLoaderAddPendingClass = env.getMethod(classQoreURLClassLoader, "addPendingClassIntern",
         "(Ljava/lang/String;[B)V");
-    methodQoreURLClassLoaderDefineResolveClass = env.getMethod(classQoreURLClassLoader, "defineResolveClass",
+    methodQoreURLClassLoaderDefineResolveClass = env.getMethod(classQoreURLClassLoader, "defineResolveClassIntern",
         "(Ljava/lang/String;[BII)Ljava/lang/Class;");
     methodQoreURLClassLoaderGetResolveClass = env.getMethod(classQoreURLClassLoader, "getResolveClass",
         "(Ljava/lang/String;)Ljava/lang/Class;");
-    methodQoreURLClassLoaderClearCache = env.getMethod(classQoreURLClassLoader, "clearCache", "()V");
-    methodQoreURLClassLoaderDefineClassUnconditional = env.getMethod(classQoreURLClassLoader, "defineClassUnconditional",
+    methodQoreURLClassLoaderClearCache = env.getMethod(classQoreURLClassLoader, "clearCacheIntern", "()V");
+    methodQoreURLClassLoaderDefineClassUnconditional = env.getMethod(classQoreURLClassLoader, "defineClassUnconditionalIntern",
         "(Ljava/lang/String;[B)Ljava/lang/Class;");
     methodQoreURLClassLoaderGetPtr = env.getMethod(classQoreURLClassLoader, "getPtr", "()J");
     methodQoreURLClassLoaderGetCurrent = env.getStaticMethod(classQoreURLClassLoader, "getCurrent",
         "()Lorg/qore/jni/QoreURLClassLoader;");
     methodQoreURLClassLoaderCheckInProgress = env.getMethod(classQoreURLClassLoader, "checkInProgress",
         "(Ljava/lang/String;)Z");
-    methodQoreURLClassLoaderClearProgramPtr = env.getMethod(classQoreURLClassLoader, "clearProgramPtr", "()V");
+    methodQoreURLClassLoaderClearProgramPtr = env.getMethod(classQoreURLClassLoader, "clearProgramPtrIntern", "()V");
     methodQoreURLClassLoaderClearContext = env.getMethod(classQoreURLClassLoader, "clearContext", "()V");
     methodQoreURLClassLoaderRegisterSharedDynamicClass = env.getMethod(classQoreURLClassLoader,
         "registerSharedDynamicClass", "(Ljava/lang/String;)V");
@@ -4360,6 +4427,7 @@ bool Globals::init() {
         sizeof(qoreJavaApiNativeMethods) / sizeof(JNINativeMethod));
     methodQoreJavaApiGetStackTrace = env.getStaticMethod(classQoreJavaApi, "getStackTrace",
         "()[Ljava/lang/StackTraceElement;");
+    methodQoreJavaApiGetStackProgramPtrs = env.getStaticMethod(classQoreJavaApi, "getStackProgramPtrs", "()[J");
 
     // the sandbox policy of Qore code for the I/O of Java code
     classQoreSandbox = findDefineClass(env, "org.qore.jni.QoreSandbox", nullptr, java_org_qore_jni_QoreSandbox_class,

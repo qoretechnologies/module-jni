@@ -63,5 +63,8 @@ private:
     SimpleRefHolder<BaseMethod> method;
     //! the Program whose code created the closure; a dependency reference keeps it allocated while the closure exists
     QoreProgram* src_pgm;
+    //! the record of the code that obtained the callable from Java, which governs Java's calls into Qore during its
+    //! calls (qore#7023); its Program is only compared, never used otherwise, and is dependency-referenced
+    JniJavaCallerRecord owner;
 };
 }
